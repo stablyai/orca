@@ -2,7 +2,10 @@ import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import {
+  installRemoteManagedAgentHooks,
+  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+} from './remote-managed-hook-installers'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 
 const tempHomes: string[] = []
@@ -34,18 +37,21 @@ describe('managed-hook local filesystem', () => {
   it('supports cold and warm aggregate installs without SFTP or temp-file residue', async () => {
     const home = await createTempHome()
     const filesystem = createManagedHookLocalFilesystem()
-    const options = { grokHomeDir: join(home, '.grok') }
+    const options = {
+      grokHomeDir: join(home, '.grok'),
+      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+    }
 
     const cold = await installRemoteManagedAgentHooks(filesystem, home, options)
     const warm = await installRemoteManagedAgentHooks(filesystem, home, options)
 
-    expect(cold).toHaveLength(14)
+    expect(cold).toHaveLength(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS.length)
     expect(cold.filter((result) => result.state === 'error')).toEqual([])
-    expect(warm).toHaveLength(14)
+    expect(warm).toHaveLength(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS.length)
     expect(warm.filter((result) => result.state === 'error')).toEqual([])
     const files = await listFiles(home)
     expect(files.filter((path) => path.endsWith('.tmp'))).toEqual([])
-    const scripts = files.filter((path) => path.includes(join('.orca', 'agent-hooks')))
+    const scripts = files.filter((path) => /\.(?:sh|cmd)$/.test(path))
     expect(scripts.length).toBeGreaterThanOrEqual(10)
     if (process.platform !== 'win32') {
       for (const script of scripts) {
@@ -61,13 +67,15 @@ describe('managed-hook local filesystem', () => {
     await writeFile(claudeConfig, '{"hooks": }', 'utf8')
 
     const results = await installRemoteManagedAgentHooks(createManagedHookLocalFilesystem(), home, {
-      grokHomeDir: join(home, '.grok')
+      grokHomeDir: join(home, '.grok'),
+      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
     })
 
-    expect(results).toHaveLength(14)
+    expect(results).toHaveLength(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS.length)
     expect(results.find((result) => result.agent === 'claude')?.state).toBe('error')
     expect(results.find((result) => result.agent === 'openclaude')?.state).toBe('installed')
     expect(results.find((result) => result.agent === 'kimi')?.state).toBe('installed')
+    expect(results.find((result) => result.agent === 'jcode')?.state).toBe('installed')
     expect(await readFile(claudeConfig, 'utf8')).toBe('{"hooks": }')
   })
 })

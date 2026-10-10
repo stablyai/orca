@@ -46,20 +46,12 @@ describe('locale-translation-policy zh round 5', () => {
     ).toBe('显示 Orca Mobile 按钮')
     expect(
       repairTranslatedValue({
-        key: 'auto.components.settings.GitPane.e02ea23a32',
-        enValue: 'Orca Attribution',
-        localeValue: 'Orca归属',
-        locale: 'zh'
-      })
-    ).toBe('Orca 归因')
-    expect(
-      repairTranslatedValue({
         key: 'auto.hooks.useSettingsNavigationMetadata.ab4b21b58e',
-        enValue: 'Branch naming, base refs, attribution, and Git AI Author.',
-        localeValue: '分支命名、基本引用、归属和 Git AI 作者。',
+        enValue: 'Branch naming, base refs, and Git AI Author.',
+        localeValue: '分支命名、基本引用和 Git AI 作者。',
         locale: 'zh'
       })
-    ).toBe('分支命名、基础引用、归因和 Git AI Author。')
+    ).toBe('分支命名、基础引用和 Git AI Author。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569',
@@ -148,7 +140,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '代理',
         locale: 'zh'
       })
-    ).toBe('代理')
+    ).toBe('智能体')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.28986b3747',
@@ -156,7 +148,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '已启动 AI 代理处理失败的检查。',
         locale: 'zh'
       })
-    ).toBe('已启动 AI 代理处理失败的检查。')
+    ).toBe('已启动 AI 智能体处理失败的检查。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef',

@@ -26,8 +26,9 @@ function findUnguardedSubstringReads(lines: readonly string[]): string[] {
       defined.add(guarded[1])
     }
     // A value is provably non-empty only if something outside an expansion survives:
-    // `set "V=%OTHER%"` may undefine V, `set "V=%V%."` cannot.
-    for (const [, name, value] of line.matchAll(/set "(\w+)=([^"]*)"/g)) {
+    // `set "V=%OTHER%"` may undefine V, `set "V=%V%."` cannot. The lazy value stops at
+    // the quote that closes the `set`, so a substitution like `%V:"=%` stays one token.
+    for (const [, name, value] of line.matchAll(/set "(\w+)=(.*?)"(?=\s|$)/g)) {
       if (value.replaceAll(/%[^%]*%/g, '') === '') {
         defined.delete(name)
       } else {
@@ -93,6 +94,7 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
     grokHome: string | null
     paneKey: string | null
     worktreeId: string | null
+    payload: string | null
   }
 
   const PANE_KEY = 'tab!1:pane!2'
@@ -149,7 +151,8 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
               stderr,
               grokHome: posted?.get('grokHome') ?? null,
               paneKey: posted?.get('paneKey') ?? null,
-              worktreeId: posted?.get('worktreeId') ?? null
+              worktreeId: posted?.get('worktreeId') ?? null,
+              payload: posted?.get('payload') ?? null
             })
           )
         })
@@ -186,6 +189,36 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
 
     expect(result.status).toBe(0)
     expect(result.grokHome).toBe('C:\\Users\\test\\.grok\\.')
+  })
+
+  // Why (#14221): `setx GROK_HOME "C:\path\"` stores `C:\path"` — the CRT turns the
+  // `\"` into a literal quote. That quote unbalanced the trailing-backslash `if`, so
+  // cmd aborted the whole script before curl and every Grok hook event failed.
+  it('exits 0 and strips a trailing quote from GROK_HOME', async () => {
+    const result = await runHook('C:\\Users\\test\\.grok"')
+
+    expect(result.stderr).not.toContain('unexpected at this time')
+    expect(result.status).toBe(0)
+    expect(result.grokHome).toBe('C:\\Users\\test\\.grok')
+    expect(result.payload).toBe('{"session_id":"s"}')
+  })
+
+  // Why: an embedded quote closed curl's `grokHome=` argument early, which swallowed
+  // the `^` continuation and dropped the `payload@-` line — a silent, exit-0 failure.
+  it('strips an embedded quote without truncating the curl arguments', async () => {
+    const result = await runHook('C:\\Users\\a"b\\.grok')
+
+    expect(result.status).toBe(0)
+    expect(result.grokHome).toBe('C:\\Users\\ab\\.grok')
+    expect(result.payload).toBe('{"session_id":"s"}')
+  })
+
+  it('posts an empty grokHome when GROK_HOME is only a quote', async () => {
+    const result = await runHook('"')
+
+    expect(result.status).toBe(0)
+    expect(result.grokHome).toBe('')
+    expect(result.payload).toBe('{"session_id":"s"}')
   })
 
   it('drops a GROK_HOME past the envelope limit', async () => {

@@ -8,7 +8,11 @@ export function canOpenDiffSectionPreviewToSide(params: {
   path: string
   status: string
   isCommitSurface: boolean
+  canOpenWorkspaceFileBrowser: boolean
 }): boolean {
+  if (!params.canOpenWorkspaceFileBrowser) {
+    return false
+  }
   if (params.isCommitSurface) {
     return false
   }

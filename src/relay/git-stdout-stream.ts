@@ -1,8 +1,11 @@
-import { spawn } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
+import { spawnProcess } from '@orca/process-host'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
+import { createChildTerminationReporter } from '@orca/process-host/child-termination-reporter'
+import { GitCommandTimeoutError, gitCommandTimeoutMs } from '../shared/git-command-timeout'
 import { expandTilde } from './context'
 import { buildRelayGitEnv } from './relay-command-env'
-import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
+import { acquireRelayGitAdmission } from './git-handler-command-termination'
 
 const DEFAULT_RELAY_GIT_STREAM_MAX_BYTES = 10 * 1024 * 1024
 
@@ -10,6 +13,7 @@ export type RelayGitStreamOptions = {
   disableOptionalLocks?: boolean
   signal?: AbortSignal
   maxBuffer?: number
+  timeout?: number
   onStdout: (chunk: string) => boolean | void
 }
 
@@ -28,26 +32,32 @@ function createAbortError(): Error {
 /** Stream Git stdout on the relay host and allow the consumer to stop it early. */
 export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, options) => {
   const maxBuffer = options.maxBuffer ?? DEFAULT_RELAY_GIT_STREAM_MAX_BYTES
+  const resolvedCwd = expandTilde(cwd)
+  const grant = await acquireRelayGitAdmission({ args, cwd: resolvedCwd, signal: options.signal })
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) {
+      grant.release()
       reject(createAbortError())
       return
     }
 
-    const env = buildRelayGitEnv()
-    if (options.disableOptionalLocks) {
-      env.GIT_OPTIONAL_LOCKS = '0'
-    }
-
+    const termination = createChildTerminationReporter(grant.release)
     let child
     try {
-      child = spawn('git', args, {
-        cwd: expandTilde(cwd),
+      const env = buildRelayGitEnv()
+      if (options.disableOptionalLocks) {
+        env.GIT_OPTIONAL_LOCKS = '0'
+      }
+      child = spawnProcess({
+        program: 'git',
+        args,
+        cwd: resolvedCwd,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
+        detached: process.platform !== 'win32'
       })
     } catch (error) {
+      termination.report()
       reject(error instanceof Error ? error : new Error(String(error)))
       return
     }
@@ -61,13 +71,13 @@ export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, option
     // stateful decoding keeps the porcelain record intact.
     const stdoutDecoder = new StringDecoder('utf8')
     const stderrDecoder = new StringDecoder('utf8')
+    let deadline: ReturnType<typeof setTimeout> | undefined
 
     const cleanup = (): void => {
       child.stdout.off('data', onStdoutData)
       child.stderr.off('data', onStderrData)
-      child.off('error', onError)
-      child.off('close', onClose)
       options.signal?.removeEventListener('abort', onAbort)
+      clearTimeout(deadline)
       stdoutDecoder.end()
       stderrDecoder.end()
     }
@@ -83,8 +93,16 @@ export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, option
         resolve({ stoppedEarly })
       }
     }
+    // Parser completion leaves the child holding admission until termination is observed.
+    const releaseChild = (): void => {
+      termination.report()
+      child.off('error', onError)
+      child.off('close', onClose)
+      child.stdout.off('error', onError)
+      child.stderr.off('error', onError)
+    }
     const stopWithError = (error: Error): void => {
-      terminateRelaySubprocessTree(child)
+      void forceTerminateProcessTree(child).catch(() => {})
       finish(error)
     }
 
@@ -103,7 +121,7 @@ export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, option
           // Why: the status cap is a successful partial result, so detach and
           // resolve immediately after stopping Git instead of awaiting close.
           stoppedEarly = true
-          terminateRelaySubprocessTree(child)
+          void forceTerminateProcessTree(child).catch(() => {})
           finish()
         }
       } catch (error) {
@@ -119,9 +137,16 @@ export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, option
       stderr += stderrDecoder.write(chunk)
     }
     function onError(error: Error): void {
+      if (!child.pid) {
+        releaseChild()
+      }
+      if (!settled && child.pid) {
+        void forceTerminateProcessTree(child).catch(() => {})
+      }
       finish(error)
     }
     function onClose(code: number | null): void {
+      releaseChild()
       if (stoppedEarly || code === 0) {
         finish()
       } else {
@@ -129,18 +154,23 @@ export const streamRelayGitStdout: RelayGitStreamExec = async (args, cwd, option
       }
     }
     function onAbort(): void {
-      if (!child.pid) {
-        // Why: failed spawn reports ENOENT after abort cleanup; handle it so it cannot crash the relay.
-        child.once('error', () => {})
-      }
       stopWithError(createAbortError())
     }
 
     child.stdout.on('data', onStdoutData)
     child.stderr.on('data', onStderrData)
+    child.stdout.on('error', onError)
+    child.stderr.on('error', onError)
     child.on('error', onError)
     child.on('close', onClose)
     options.signal?.addEventListener('abort', onAbort, { once: true })
+    const timeoutMs = gitCommandTimeoutMs(args, options.timeout)
+    if (timeoutMs !== undefined && timeoutMs > 0) {
+      deadline = setTimeout(() => {
+        stopWithError(Object.assign(new GitCommandTimeoutError(timeoutMs), { timedOut: true }))
+      }, timeoutMs)
+      deadline.unref()
+    }
     if (options.signal?.aborted) {
       onAbort()
     }

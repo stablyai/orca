@@ -13,9 +13,10 @@
  * grew monotonically. The single `removeWorktree` path already routes through
  * `purgeWorktreeTerminalState`; project removal did not.
  */
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const repo1: Repo = { id: 'repo-1', path: '/r1', displayName: 'R1', badgeColor: '#000', addedAt: 1 }
 const repo2: Repo = { id: 'repo-2', path: '/r2', displayName: 'R2', badgeColor: '#111', addedAt: 2 }
@@ -28,7 +29,7 @@ beforeEach(() => {
   ptyKill.mockReset()
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: reposRemove },
+      repos: { removeForHost: reposRemove },
       pty: { kill: ptyKill },
       runtimeEnvironments: { call: vi.fn() }
     }
@@ -50,7 +51,11 @@ function seedTwoProjects(store: ReturnType<typeof createTestStore>): void {
     groupsByWorktree: { [W1]: [], [W2]: [] },
     browserTabsByWorktree: { [W1]: [], [W2]: [] },
     gitStatusHugeByWorktree: { [W1]: { limit: 1000 }, [W2]: { limit: 2000 } },
-    everActivatedWorktreeIds: new Set([W1, W2])
+    everActivatedWorktreeIds: new Set([W1, W2]),
+    localDetectedAgentIdsByContext: {
+      'repo-1:windows-host': ['claude'],
+      'repo-2:windows-host': ['codex']
+    }
   })
 }
 
@@ -59,7 +64,7 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     const store = createTestStore()
     seedTwoProjects(store)
 
-    await store.getState().removeProject(repo1.id)
+    await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
     const s = store.getState()
     // Removed project's worktree is purged from every map.
@@ -68,13 +73,14 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     expect(s.browserTabsByWorktree[W1]).toBeUndefined()
     expect(s.gitStatusHugeByWorktree[W1]).toBeUndefined()
     expect(s.everActivatedWorktreeIds.has(W1)).toBe(false)
+    expect(s.localDetectedAgentIdsByContext['repo-1:windows-host']).toBeUndefined()
   })
 
   it('keeps per-worktree state for projects that are NOT removed', async () => {
     const store = createTestStore()
     seedTwoProjects(store)
 
-    await store.getState().removeProject(repo1.id)
+    await store.getState().removeProject(repo1.id, { hostId: getRepoExecutionHostId(repo1) })
 
     const s = store.getState()
     // Surviving project's worktree state is untouched (guard over-eviction).
@@ -83,5 +89,6 @@ describe('removeProject purges per-worktree state (leak regression)', () => {
     expect(s.browserTabsByWorktree[W2]).toBeDefined()
     expect(s.gitStatusHugeByWorktree[W2]).toEqual({ limit: 2000 })
     expect(s.everActivatedWorktreeIds.has(W2)).toBe(true)
+    expect(s.localDetectedAgentIdsByContext['repo-2:windows-host']).toEqual(['codex'])
   })
 })

@@ -48,6 +48,7 @@ export type GitHistoryItem = {
   displayId?: string
   author?: string
   authorEmail?: string
+  /** Epoch milliseconds (git %at seconds × 1000). */
   timestamp?: number
   statistics?: GitHistoryItemStatistics
   references?: GitHistoryItemRef[]

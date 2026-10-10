@@ -1,6 +1,8 @@
 // On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
-import type { GlobalSettings, Repo } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import { isFolderRepo } from '../../shared/repo-kind'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import {
@@ -12,7 +14,8 @@ import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-messa
 import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
 import { gitExecFileAsync } from '../git/runner'
 import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { resolveGitRouteForHost } from '../providers/execution-host-provider-dispatch'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import {
   probeBranchUpstream,
   renameCurrentBranch,
@@ -169,12 +172,20 @@ async function runAutoRename(
   if (!repo || !parsed) {
     return stop('unresolved repo or worktree id')
   }
+  if (isFolderRepo(repo)) {
+    return stop('folder project has no branch to rename', true)
+  }
   const worktreePath = parsed.worktreePath
 
-  const provider = repo.connectionId ? (getSshGitProvider(repo.connectionId) ?? null) : null
-  if (repo.connectionId && !provider) {
+  // Why: a runtime row's connectionId names the server's own SSH target; that host owns the branch, never this client.
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'runtime') {
+    return stop(`branch is owned by ${route.hostId}`)
+  }
+  if (route.kind === 'ssh' && !route.provider) {
     return retry('ssh provider unavailable')
   }
+  const provider = route.kind === 'ssh' ? route.provider : null
   const exec: GitExec = provider
     ? (args) => provider.exec(args, worktreePath)
     : (args) => gitExecFileAsync(args, { cwd: worktreePath })
@@ -207,7 +218,9 @@ async function runAutoRename(
   }
 
   const settings = deps.getSettings()
-  const hostKey = getCommitMessageModelDiscoveryHostKey(repo.connectionId ?? null)
+  const hostKey = getCommitMessageModelDiscoveryHostKey(
+    route.kind === 'ssh' ? route.connectionId : null
+  )
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
     // Why: a generation-step failure (vs a benign skip) is user-actionable, so surface it on the card.

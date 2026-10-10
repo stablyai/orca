@@ -1,1524 +1,584 @@
-/* eslint-disable max-lines -- Why: this file is the umbrella suite for the agent-status slice (freshness, tool/assistant fields, stateStartedAt, retention + prefix sweep). Splitting by sub-area would scatter shared helpers (createTestStore, fake timers); narrower edge-cases live in sibling agent-status-*.test.ts files already. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { AppState } from '../types'
+import { flushMicrotasks } from './agent-status-test-harness'
+import { createTestStore, makeTab } from './store-test-helpers'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status'
-import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
 
-// Why: queueMicrotask is used by the agent-status slice to schedule the
-// freshness timer after state updates. In tests we need to flush microtasks
-// before advancing fake timers so the setTimeout gets registered.
-function flushMicrotasks(): Promise<void> {
-  return new Promise((resolve) => queueMicrotask(resolve))
-}
+{
+  describe('agent status freshness expiry', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
 
-function stubGitHubPRRefreshApi() {
-  const enqueuePRRefresh = vi.fn().mockResolvedValue(undefined)
-  vi.stubGlobal('window', {
-    api: {
-      gh: { enqueuePRRefresh }
-    }
-  })
-  return enqueuePRRefresh
-}
+    it('advances agentStatusEpoch when a fresh entry crosses the stale threshold', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
 
-function seedAgentPRRefreshFixture(
-  store: ReturnType<typeof createTestStore>,
-  worktreeCardProperties: AppState['worktreeCardProperties']
-): void {
-  store.setState({
-    repos: [
-      {
-        id: 'repo-1',
-        path: '/repo',
-        displayName: 'Repo',
-        badgeColor: '#999999',
-        addedAt: 1,
-        kind: 'git'
-      }
-    ],
-    groupBy: 'repo',
-    rightSidebarOpen: false,
-    worktreeCardProperties,
-    worktreesByRepo: {
-      'repo-1': [
-        makeWorktree({
-          id: 'wt-1',
-          repoId: 'repo-1',
-          path: '/repo/worktrees/pr-from-agent',
-          branch: 'feature/pr-from-agent'
-        })
-      ]
-    },
-    tabsByWorktree: {
-      'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-    }
-  } as Partial<AppState>)
-}
+      const store = createTestStore()
+      store
+        .getState()
+        .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
 
-describe('agent status freshness expiry', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+      // setAgentStatus bumps epoch once synchronously
+      expect(store.getState().agentStatusEpoch).toBe(1)
 
-  it('advances agentStatusEpoch when a fresh entry crosses the stale threshold', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+      // Flush the queueMicrotask that schedules the freshness timer
+      await flushMicrotasks()
 
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
+      vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
 
-    // setAgentStatus bumps epoch once synchronously
-    expect(store.getState().agentStatusEpoch).toBe(1)
+      // Timer bump adds another increment
+      expect(store.getState().agentStatusEpoch).toBe(2)
+    })
 
-    // Flush the queueMicrotask that schedules the freshness timer
-    await flushMicrotasks()
+    it('cancels the scheduled freshness tick when the entry is removed first', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
 
-    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
+      const store = createTestStore()
+      store
+        .getState()
+        .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
+      // set bumps to 1, remove bumps to 2
+      store.getState().removeAgentStatus('tab-1:1')
+      expect(store.getState().agentStatusEpoch).toBe(2)
 
-    // Timer bump adds another increment
-    expect(store.getState().agentStatusEpoch).toBe(2)
-  })
+      // Flush microtask and advance past stale threshold
+      await flushMicrotasks()
+      vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
 
-  it('cancels the scheduled freshness tick when the entry is removed first', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+      // No additional bump since the entry was removed before the timer fires
+      expect(store.getState().agentStatusEpoch).toBe(2)
+    })
 
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Fix tests', agentType: 'codex' })
-    // set bumps to 1, remove bumps to 2
-    store.getState().removeAgentStatus('tab-1:1')
-    expect(store.getState().agentStatusEpoch).toBe(2)
+    it('arms freshness expiry for status rows written by an external mirror', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+      const store = createTestStore()
+      const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+      const now = Date.now()
 
-    // Flush microtask and advance past stale threshold
-    await flushMicrotasks()
-    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
-
-    // No additional bump since the entry was removed before the timer fires
-    expect(store.getState().agentStatusEpoch).toBe(2)
-  })
-
-  it('arms freshness expiry for status rows written by an external mirror', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
-    const store = createTestStore()
-    const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
-    const now = Date.now()
-
-    store.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          state: 'working',
-          prompt: 'Mirrored agent',
-          updatedAt: now,
-          stateStartedAt: now,
-          stateHistory: []
+      store.setState({
+        agentStatusByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            state: 'working',
+            prompt: 'Mirrored agent',
+            updatedAt: now,
+            stateStartedAt: now,
+            stateHistory: []
+          }
         }
-      }
-    })
-    store.getState().scheduleAgentStatusFreshness()
-    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
+      })
+      store.getState().scheduleAgentStatusFreshness()
+      vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
 
-    expect(store.getState().agentStatusEpoch).toBe(1)
-  })
-})
-
-describe('agent status routing attribution', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('stores worktree and tab attribution from accepted hook events', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-child:11111111-1111-4111-8111-111111111111',
-        { state: 'working', prompt: 'child agent', agentType: 'codex' },
-        undefined,
-        undefined,
-        { tabId: 'tab-child', worktreeId: 'wt-1', terminalHandle: 'term-child' }
-      )
-
-    expect(
-      store.getState().agentStatusByPaneKey['tab-child:11111111-1111-4111-8111-111111111111']
-    ).toMatchObject({
-      tabId: 'tab-child',
-      worktreeId: 'wt-1',
-      terminalHandle: 'term-child'
-    })
-  })
-})
-
-describe('agent status runtime orchestration metadata', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('fills runtime orchestration metadata into existing live entries', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex'
-    })
-    const epochBeforeRuntime = store.getState().agentStatusEpoch
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        taskTitle: 'Checkout race',
-        displayName: 'Fix checkout race',
-        parentPaneKey
-      }
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      taskTitle: 'Checkout race',
-      displayName: 'Fix checkout race',
-      parentPaneKey
-    })
-    expect(store.getState().agentStatusEpoch).toBe(epochBeforeRuntime + 1)
-  })
-
-  it('replaces stale live orchestration metadata when runtime dispatch identity changes', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const staleParentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-    const currentParentPaneKey = 'tab-parent:33333333-3333-4333-8333-333333333333'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentPaneKey: staleParentPaneKey,
-        parentTerminalHandle: 'term-stale'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-2',
-        dispatchId: 'ctx-2',
-        parentPaneKey: currentParentPaneKey,
-        parentTerminalHandle: 'term-current'
-      }
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-2',
-      dispatchId: 'ctx-2',
-      parentPaneKey: currentParentPaneKey,
-      parentTerminalHandle: 'term-current'
+      expect(store.getState().agentStatusEpoch).toBe(1)
     })
   })
 
-  it('uses existing orchestration fields only as fallback for the same runtime dispatch', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentPaneKey,
-        coordinatorHandle: 'term-stale-coordinator'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        coordinatorHandle: 'term-current-coordinator'
-      }
+  describe('agent status routing attribution', () => {
+    afterEach(() => {
+      vi.useRealTimers()
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentPaneKey,
-      coordinatorHandle: 'term-current-coordinator'
-    })
-  })
-
-  it('clears stale lineage when the authoritative runtime snapshot loses its Run binding', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        dispatchStatus: 'dispatched',
-        parentTerminalHandle: 'term-old-coordinator',
-        parentPaneKey: 'tab-parent:22222222-2222-4222-8222-222222222222',
-        coordinatorHandle: 'term-old-coordinator',
-        orchestrationRunId: 'run-1'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        dispatchStatus: 'dispatched',
-        orchestrationRunId: 'run-1'
-      }
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      dispatchStatus: 'dispatched',
-      orchestrationRunId: 'run-1'
-    })
-  })
-
-  it('updates runtime status for the same dispatch', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'done',
-      prompt: 'child agent',
-      agentType: 'claude',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        dispatchStatus: 'dispatched'
-      }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        dispatchStatus: 'completed'
-      }
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      dispatchStatus: 'completed'
-    })
-  })
-
-  it.each(['failed', 'circuit_broken'] as const)(
-    'updates runtime status to %s for the same dispatch',
-    (dispatchStatus) => {
+    it('stores worktree and tab attribution from accepted hook events', () => {
       vi.useFakeTimers()
       const store = createTestStore()
-      const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
 
-      store.getState().setAgentStatus(childPaneKey, {
-        state: 'done',
-        prompt: 'child agent',
-        agentType: 'claude',
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          dispatchStatus: 'dispatched'
-        }
-      })
-      store.getState().setRuntimeAgentOrchestrationByPaneKey({
-        [childPaneKey]: { taskId: 'task-1', dispatchId: 'ctx-1', dispatchStatus }
-      })
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-child:11111111-1111-4111-8111-111111111111',
+          { state: 'working', prompt: 'child agent', agentType: 'codex' },
+          undefined,
+          undefined,
+          { tabId: 'tab-child', worktreeId: 'wt-1', terminalHandle: 'term-child' }
+        )
 
       expect(
-        store.getState().agentStatusByPaneKey[childPaneKey].orchestration?.dispatchStatus
-      ).toBe(dispatchStatus)
-    }
-  )
-
-  it('keeps current payload orchestration ahead of a stale runtime map entry', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentTerminalHandle: 'term-stale'
-      }
-    })
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
-        taskId: 'task-2',
-        dispatchId: 'ctx-2',
-        parentTerminalHandle: 'term-current'
-      }
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-2',
-      dispatchId: 'ctx-2',
-      parentTerminalHandle: 'term-current'
+        store.getState().agentStatusByPaneKey['tab-child:11111111-1111-4111-8111-111111111111']
+      ).toMatchObject({
+        tabId: 'tab-child',
+        worktreeId: 'wt-1',
+        terminalHandle: 'term-child'
+      })
     })
   })
 
-  it('fills already-synced runtime orchestration metadata into new live entries', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentPaneKey
-      }
-    })
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex'
+  describe('agent status stateStartedAt', () => {
+    afterEach(() => {
+      vi.useRealTimers()
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentPaneKey
+    it('carries stateStartedAt forward across same-state pings', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+
+      const store = createTestStore()
+      store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1' }, 'claude')
+      const firstStart = store.getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
+
+      // Advance 5s and re-ping with same state but different prompt/tool fields
+      vi.setSystemTime(new Date('2026-04-09T12:00:05.000Z'))
+      store
+        .getState()
+        .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', toolName: 'Edit' }, 'claude')
+
+      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      // Why: stateStartedAt is the invariant we are protecting — it must survive
+      // tool/prompt pings within the same state, while updatedAt advances.
+      expect(entry.stateStartedAt).toBe(firstStart)
+      expect(entry.updatedAt).toBe(new Date('2026-04-09T12:00:05.000Z').getTime())
+    })
+
+    it('resets stateStartedAt when the state changes', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+
+      const store = createTestStore()
+      store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1' }, 'claude')
+      const workingStart = store.getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
+
+      vi.setSystemTime(new Date('2026-04-09T12:00:10.000Z'))
+      store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1' }, 'claude')
+
+      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      expect(entry.stateStartedAt).toBe(new Date('2026-04-09T12:00:10.000Z').getTime())
+      expect(entry.stateStartedAt).not.toBe(workingStart)
+      // history should capture the working state's true start
+      expect(entry.stateHistory).toHaveLength(1)
+      expect(entry.stateHistory[0].state).toBe('working')
+      expect(entry.stateHistory[0].startedAt).toBe(workingStart)
+    })
+
+    it('uses IPC snapshot timing instead of restamping restored entries as fresh', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
+
+      const store = createTestStore()
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:1',
+          { state: 'working', prompt: 'p1', agentType: 'claude' },
+          'claude',
+          {
+            updatedAt: new Date('2026-04-09T10:00:00.000Z').getTime(),
+            stateStartedAt: new Date('2026-04-09T09:55:00.000Z').getTime()
+          }
+        )
+
+      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      expect(entry.updatedAt).toBe(new Date('2026-04-09T10:00:00.000Z').getTime())
+      expect(entry.stateStartedAt).toBe(new Date('2026-04-09T09:55:00.000Z').getTime())
+    })
+
+    it('ignores an older snapshot when a newer live event already updated the pane', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:1',
+          { state: 'working', prompt: 'fresh', agentType: 'claude' },
+          'claude',
+          { updatedAt: 2_000, stateStartedAt: 2_000 }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-1:1',
+          { state: 'done', prompt: 'stale', agentType: 'claude' },
+          'claude',
+          { updatedAt: 1_000, stateStartedAt: 1_000 }
+        )
+
+      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      expect(entry.state).toBe('working')
+      expect(entry.prompt).toBe('fresh')
+      expect(entry.updatedAt).toBe(2_000)
     })
   })
+}
 
-  it('clears stale live orchestration when a reused pane starts non-orchestrated work', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
+{
+  describe('dropAgentStatus + retention suppressor', () => {
+    // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
+    // queueMicrotask. Use fake timers so the handle does not leak into the
+    // test process (see agent-status.ts line 90).
+    afterEach(() => {
+      vi.useRealTimers()
+    })
 
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'done',
-      prompt: 'finished child',
-      agentType: 'codex',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentTerminalHandle: 'term-parent'
+    it('on a live entry: removes it, writes a suppressor, and bumps both epochs', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store
+        .getState()
+        .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+
+      const agentEpochBefore = store.getState().agentStatusEpoch
+      const sortEpochBefore = store.getState().sortEpoch
+
+      store.getState().dropAgentStatus('tab-1:0')
+
+      const s = store.getState()
+      expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+      // Why: user-initiated dismissal must plant a one-shot suppressor so the
+      // retention sync does not resurrect the row on the next render frame.
+      expect(s.retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
+      expect(s.agentStatusEpoch).toBe(agentEpochBefore + 1)
+      expect(s.sortEpoch).toBe(sortEpochBefore + 1)
+    })
+
+    it('on a retained-only entry: removes retained row but does NOT write a suppressor and does NOT bump agentStatusEpoch', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      const now = Date.now()
+      const entry: AgentStatusEntry = {
+        state: 'done',
+        prompt: '',
+        updatedAt: now,
+        stateStartedAt: now,
+        paneKey: 'tab-retained:0',
+        stateHistory: []
       }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({})
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'manual follow-up',
-      agentType: 'codex'
-    })
-
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toBeUndefined()
-  })
-
-  it('preserves stale live orchestration for final done rows', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'working',
-      prompt: 'child agent',
-      agentType: 'codex',
-      orchestration: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentTerminalHandle: 'term-parent'
+      const retained: RetainedAgentEntry = {
+        entry,
+        worktreeId: 'wt-x',
+        tab: { id: 'tab-retained', title: 'claude' } as unknown as TerminalTab,
+        agentType: 'claude',
+        startedAt: now
       }
-    })
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({})
-    store.getState().setAgentStatus(childPaneKey, {
-      state: 'done',
-      prompt: 'child finished',
-      agentType: 'codex'
+      store.getState().retainAgents([retained])
+
+      const agentEpochBefore = store.getState().agentStatusEpoch
+      const sortEpochBefore = store.getState().sortEpoch
+
+      store.getState().dropAgentStatus('tab-retained:0')
+
+      const s = store.getState()
+      expect(s.retainedAgentsByPaneKey['tab-retained:0']).toBeUndefined()
+      // Why: the suppressor is consumed by collectRetainedAgentsOnDisappear,
+      // which only runs on live→gone transitions. A retained-only dismissal has
+      // no live entry to disappear, so writing a suppressor would leak forever.
+      expect(s.retentionSuppressedPaneKeys['tab-retained:0']).toBeUndefined()
+      // Why: hasLive is false, so no epoch bumps.
+      expect(s.agentStatusEpoch).toBe(agentEpochBefore)
+      expect(s.sortEpoch).toBe(sortEpochBefore)
     })
 
-    expect(store.getState().agentStatusByPaneKey[childPaneKey].orchestration).toEqual({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentTerminalHandle: 'term-parent'
+    it('drops both live and retained entries when the same paneKey has both', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      // Seed a live entry first.
+      store
+        .getState()
+        .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+      // Seed a retained entry for the SAME paneKey. The retainAgents path is
+      // what the production retention sync calls on live→gone transitions; here
+      // we invoke it directly to construct the "both live AND retained for the
+      // same paneKey" state that the dropAgentStatus hasLive+hasRetained branch
+      // (agent-status.ts lines 301-311) handles.
+      const now = Date.now()
+      const retainedEntry: AgentStatusEntry = {
+        state: 'done',
+        prompt: '',
+        updatedAt: now,
+        stateStartedAt: now,
+        paneKey: 'tab-1:0',
+        stateHistory: []
+      }
+      const retained: RetainedAgentEntry = {
+        entry: retainedEntry,
+        worktreeId: 'wt-x',
+        tab: { id: 'tab-1', title: 'claude' } as unknown as TerminalTab,
+        agentType: 'claude',
+        startedAt: now
+      }
+      store.getState().retainAgents([retained])
+
+      // Sanity-check the precondition: both maps carry the paneKey.
+      expect(store.getState().agentStatusByPaneKey['tab-1:0']).toBeDefined()
+      expect(store.getState().retainedAgentsByPaneKey['tab-1:0']).toBeDefined()
+
+      const agentEpochBefore = store.getState().agentStatusEpoch
+      const sortEpochBefore = store.getState().sortEpoch
+
+      store.getState().dropAgentStatus('tab-1:0')
+
+      const s = store.getState()
+      // Both maps drop the paneKey in the combined branch.
+      expect(s.agentStatusByPaneKey['tab-1:0']).toBeUndefined()
+      expect(s.retainedAgentsByPaneKey['tab-1:0']).toBeUndefined()
+      // Why: hasLive=true, so the suppressor IS planted (mirrors the live-only
+      // test above). The concurrent retained entry does not change that logic —
+      // the live→gone transition on the next frame still needs to be suppressed.
+      expect(s.retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
+      // Why: hasLive=true means both epochs bump in lockstep (same rationale
+      // as the live-only case).
+      expect(s.agentStatusEpoch).toBe(agentEpochBefore + 1)
+      expect(s.sortEpoch).toBe(sortEpochBefore + 1)
+    })
+
+    it('closeTab drops completed worktree-attributed orphan rows', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store.setState({
+        tabsByWorktree: {
+          'wt-1': [
+            makeTab({ id: 'tab-closed', worktreeId: 'wt-1' }),
+            makeTab({ id: 'tab-live', worktreeId: 'wt-1' })
+          ],
+          'wt-2': []
+        }
+      })
+      store
+        .getState()
+        .setAgentStatus('tab-closed:0', { state: 'done', prompt: 'closed', agentType: 'pi' })
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-orphan:0',
+          { state: 'done', prompt: 'orphan', agentType: 'pi' },
+          undefined,
+          undefined,
+          { worktreeId: 'wt-1' }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-active-child:0',
+          { state: 'working', prompt: 'active child', agentType: 'pi' },
+          undefined,
+          undefined,
+          { worktreeId: 'wt-1' }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-live:0',
+          { state: 'done', prompt: 'open tab', agentType: 'pi' },
+          undefined,
+          undefined,
+          { worktreeId: 'wt-1' }
+        )
+      store
+        .getState()
+        .setAgentStatus(
+          'tab-other-orphan:0',
+          { state: 'done', prompt: 'other worktree', agentType: 'pi' },
+          undefined,
+          undefined,
+          { worktreeId: 'wt-2' }
+        )
+
+      store.getState().closeTab('tab-closed')
+
+      const s = store.getState()
+      expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
+      expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
+      expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
+      // No suppressor for the orphan: its tab is already gone, so retention sync
+      // never re-surfaces it and a suppressor would leak permanently.
+      expect(s.retentionSuppressedPaneKeys['tab-orphan:0']).toBeUndefined()
+      expect(s.agentStatusByPaneKey['tab-active-child:0']).toBeDefined()
+      expect(s.agentStatusByPaneKey['tab-live:0']).toBeDefined()
+      expect(s.agentStatusByPaneKey['tab-other-orphan:0']).toBeDefined()
+    })
+
+    it('on a paneKey with neither live nor retained entry: no-op (same state reference, no epoch bumps)', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+
+      const agentEpochBefore = store.getState().agentStatusEpoch
+      const sortEpochBefore = store.getState().sortEpoch
+      const suppressorsBefore = store.getState().retentionSuppressedPaneKeys
+      const liveBefore = store.getState().agentStatusByPaneKey
+      const retainedBefore = store.getState().retainedAgentsByPaneKey
+
+      store.getState().dropAgentStatus('tab-missing:0')
+
+      const s = store.getState()
+      expect(s.agentStatusEpoch).toBe(agentEpochBefore)
+      expect(s.sortEpoch).toBe(sortEpochBefore)
+      // Why: the short-circuit `return s` must preserve object identity so
+      // consumers selecting on these slices do not re-render spuriously.
+      expect(s.retentionSuppressedPaneKeys).toBe(suppressorsBefore)
+      expect(s.agentStatusByPaneKey).toBe(liveBefore)
+      expect(s.retainedAgentsByPaneKey).toBe(retainedBefore)
+    })
+
+    it('setAgentStatus clears a pending suppressor so the row can be retained normally on next disappearance', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store
+        .getState()
+        .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+      store.getState().dropAgentStatus('tab-1:0')
+      expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBe(true)
+
+      store
+        .getState()
+        .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p2', agentType: 'claude' })
+
+      // Why: a new status event means the agent is live again — the one-shot
+      // suppressor must lift so the next disappearance can retain normally.
+      expect(store.getState().retentionSuppressedPaneKeys['tab-1:0']).toBeUndefined()
+    })
+
+    it('clearRetentionSuppressedPaneKeys removes present keys and returns a new map; absent keys are no-op (identity preserved)', () => {
+      vi.useFakeTimers()
+      const store = createTestStore()
+      store
+        .getState()
+        .setAgentStatus('tab-1:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+      store.getState().dropAgentStatus('tab-1:0')
+
+      const suppressorsBefore = store.getState().retentionSuppressedPaneKeys
+      expect(suppressorsBefore['tab-1:0']).toBe(true)
+
+      // Present-key removal: new map reference, key gone.
+      store.getState().clearRetentionSuppressedPaneKeys(['tab-1:0'])
+      const afterRemove = store.getState().retentionSuppressedPaneKeys
+      expect(afterRemove['tab-1:0']).toBeUndefined()
+      expect(afterRemove).not.toBe(suppressorsBefore)
+
+      // Absent-key clear: no-op, same object reference.
+      store.getState().clearRetentionSuppressedPaneKeys(['tab-does-not-exist:0'])
+      const afterNoop = store.getState().retentionSuppressedPaneKeys
+      // Why: preserving object identity on no-op clears avoids spurious
+      // re-renders in any selector subscribed to retentionSuppressedPaneKeys.
+      expect(afterNoop).toBe(afterRemove)
     })
   })
+}
 
-  it('fills runtime orchestration metadata into retained entries', () => {
-    const store = createTestStore()
-    const childPaneKey = 'tab-child:11111111-1111-4111-8111-111111111111'
-    const parentPaneKey = 'tab-parent:22222222-2222-4222-8222-222222222222'
-    const now = Date.now()
+{
+  /**
+   * Memory-leak regression: retainedAgentsByPaneKey must stay bounded.
+   *
+   * `retainedAgentsByPaneKey` is a Record keyed by ephemeral paneKey
+   * (`${tabId}:${leafId}`, where leafId is a fresh UUID minted per pane and never
+   * reused). Every agent that finishes and then vanishes from the live map is
+   * snapshotted here via `retainAgents`. Each snapshot is a full RetainedAgentEntry
+   * — an AgentStatusEntry (which carries an up-to-8KB lastAssistantMessage, an
+   * up-to-16KB interactivePrompt, a prompt, and up to 20 stateHistory rows) plus a
+   * full TerminalTab snapshot.
+   *
+   * Before the fix, `retainAgents` only ever wrote entries and never capped them,
+   * so the map grew monotonically with the number of distinct completed-agent
+   * paneKeys observed. The only removal paths are worktree removal
+   * (`pruneRetainedAgents`) and explicit user dismissal — neither of which runs
+   * while a long-lived worktree stays open. Under a multi-hour multi-agent /
+   * orchestration session (sub-agents complete continuously), this large-payload
+   * accumulator is the dominant driver of the renderer JS-heap OOM seen in the
+   * Windows crash bundles (heap climbing to the 3586 MB old-space limit).
+   *
+   * The fix caps it to MAX_RETAINED_AGENTS, evicting the oldest-retained keys
+   * (insertion order == retention order, so the newest completions survive).
+   */
+
+  // MAX_RETAINED_AGENTS is module-private; mirror its value here.
+  const MAX_RETAINED_AGENTS = 500
+
+  // Approximate the worst-case per-entry payload the production type permits, so
+  // the leak's byte weight (not just entry count) is visible in the assertions.
+  const BIG_ASSISTANT_MESSAGE = 'a'.repeat(8 * 1024)
+  const BIG_INTERACTIVE_PROMPT = 'q'.repeat(16 * 1024)
+
+  function makeRetained(index: number, worktreeId = 'wt-x'): RetainedAgentEntry {
+    const paneKey = `tab-${index}:leaf-${index}`
     const entry: AgentStatusEntry = {
       state: 'done',
-      prompt: 'child agent',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: childPaneKey,
-      stateHistory: []
+      prompt: `prompt ${index}`,
+      updatedAt: index,
+      stateStartedAt: index,
+      paneKey,
+      stateHistory: [],
+      lastAssistantMessage: BIG_ASSISTANT_MESSAGE,
+      interactivePrompt: BIG_INTERACTIVE_PROMPT
     }
-    const retained: RetainedAgentEntry = {
+    return {
       entry,
-      worktreeId: 'wt-1',
-      tab: makeTab({ id: 'tab-child', worktreeId: 'wt-1', title: 'codex' }),
-      agentType: 'codex',
-      startedAt: now
+      worktreeId,
+      tab: { id: `tab-${index}`, title: 'claude' } as unknown as TerminalTab,
+      agentType: 'claude',
+      startedAt: index
     }
+  }
 
-    store.getState().retainAgents([retained])
-    store.getState().setRuntimeAgentOrchestrationByPaneKey({
-      [childPaneKey]: {
-        taskId: 'task-1',
-        dispatchId: 'ctx-1',
-        parentPaneKey
+  describe('retainedAgentsByPaneKey stays bounded (leak regression)', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('caps retainedAgentsByPaneKey and keeps the most recently retained keys', () => {
+      const store = createTestStore()
+
+      // Drive the production retention path with more distinct ephemeral paneKeys
+      // than the cap allows — one call per completion, as production does.
+      const total = MAX_RETAINED_AGENTS + 200
+      for (let i = 0; i < total; i++) {
+        store.getState().retainAgents([makeRetained(i)])
       }
+
+      const retained = store.getState().retainedAgentsByPaneKey
+      // Bounded — not `total`. Without the cap this is MAX_RETAINED_AGENTS + 200.
+      expect(Object.keys(retained)).toHaveLength(MAX_RETAINED_AGENTS)
+
+      // The newest completions survive; the oldest are evicted.
+      expect(retained[`tab-${total - 1}:leaf-${total - 1}`]).toBeDefined()
+      expect(retained['tab-0:leaf-0']).toBeUndefined()
+      // The exact eviction boundary: everything before (total - cap) is gone.
+      expect(
+        retained[`tab-${total - MAX_RETAINED_AGENTS - 1}:leaf-${total - MAX_RETAINED_AGENTS - 1}`]
+      ).toBeUndefined()
+      expect(
+        retained[`tab-${total - MAX_RETAINED_AGENTS}:leaf-${total - MAX_RETAINED_AGENTS}`]
+      ).toBeDefined()
     })
 
-    expect(
-      store.getState().retainedAgentsByPaneKey[childPaneKey].entry.orchestration
-    ).toMatchObject({
-      taskId: 'task-1',
-      dispatchId: 'ctx-1',
-      parentPaneKey
-    })
-  })
-})
+    it('caps even when many completions are retained in a single batch', () => {
+      const store = createTestStore()
+      const total = MAX_RETAINED_AGENTS + 50
+      const batch = Array.from({ length: total }, (_, i) => makeRetained(i))
 
-describe('agent status tool + assistant fields', () => {
-  // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
-  // queueMicrotask. Without fake timers those handles leak into the test
-  // process and keep vitest alive past the run.
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+      store.getState().retainAgents(batch)
 
-  it('writes toolName, toolInput, and lastAssistantMessage straight onto the entry', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', {
-      state: 'working',
-      prompt: 'Edit the config',
-      agentType: 'claude',
-      toolName: 'Edit',
-      toolInput: '/src/config.ts',
-      lastAssistantMessage: 'Edited config.ts'
-    })
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.toolName).toBe('Edit')
-    expect(entry.toolInput).toBe('/src/config.ts')
-    expect(entry.lastAssistantMessage).toBe('Edited config.ts')
-  })
-
-  it('clears fields to undefined when a later payload omits them', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', {
-      state: 'working',
-      prompt: 'Edit the config',
-      agentType: 'claude',
-      toolName: 'Edit',
-      toolInput: '/src/config.ts',
-      lastAssistantMessage: 'Edited config.ts'
-    })
-    // Why: the main-process cache is the source of truth for tool/assistant
-    // fields — a fresh-turn reset surfaces as undefined on the payload, and
-    // the store must not fall back to the prior entry's values.
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'Next step', agentType: 'claude' })
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.toolName).toBeUndefined()
-    expect(entry.toolInput).toBeUndefined()
-    expect(entry.lastAssistantMessage).toBeUndefined()
-  })
-
-  it('preserves prior agentType when payload omits it', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'claude' })
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2' })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
-  })
-
-  it('preserves prior agentType when payload sends the "unknown" sentinel', () => {
-    // Why: 'unknown' is the sentinel for "agent didn't identify itself". A
-    // later ping that loses the identity must not stomp a well-known prior
-    // identity (e.g. 'claude' learned from an earlier hook ping), or the UI
-    // label/icon would flicker from "Claude" to the neutral "Agent".
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'claude' })
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'unknown' })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
-  })
-
-  it('preserves active pane agentType when a nested hook sends a different known value', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' })
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('codex')
-  })
-
-  it('ignores nested done while the parent pane agent is still active', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const setGeneratedTabTitleFromAgentPrompt = vi.fn()
-    store.setState({ setGeneratedTabTitleFromAgentPrompt } as Partial<AppState>)
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'parent codex', agentType: 'codex' },
-        'codex',
-        { updatedAt: 1_000, stateStartedAt: 1_000 }
-      )
-    const firstEpoch = store.getState().agentStatusEpoch
-
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'done',
-        prompt: 'nested claude',
-        agentType: 'claude',
-        toolName: 'Read',
-        toolInput: '00-review-context.md',
-        lastAssistantMessage: 'child finished'
-      },
-      'claude',
-      { updatedAt: 1_100, stateStartedAt: 1_100 }
-    )
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry).toMatchObject({
-      state: 'working',
-      prompt: 'parent codex',
-      agentType: 'codex',
-      updatedAt: 1_000,
-      stateStartedAt: 1_000
-    })
-    expect(entry.toolName).toBeUndefined()
-    expect(entry.toolInput).toBeUndefined()
-    expect(entry.lastAssistantMessage).toBeUndefined()
-    expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
-    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenCalledTimes(1)
-    expect(setGeneratedTabTitleFromAgentPrompt).toHaveBeenLastCalledWith('tab-1:1', 'parent codex')
-  })
-
-  it('does not let restored-unconfirmed identity suppress a live terminal status', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'working',
-        prompt: 'stale codex turn',
-        agentType: 'codex',
-        restoredUnconfirmed: true
-      },
-      'codex',
-      { updatedAt: 1_000, stateStartedAt: 1_000 }
-    )
-
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'done', prompt: 'live claude turn', agentType: 'claude' },
-        'claude',
-        { updatedAt: 1_100, stateStartedAt: 1_100 }
-      )
-
-    expect(store.getState().agentStatusByPaneKey['tab-1:1']).toMatchObject({
-      state: 'done',
-      prompt: 'live claude turn',
-      agentType: 'claude'
-    })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].restoredUnconfirmed).toBeUndefined()
-  })
-
-  it('allows pane agentType to change after the prior turn is done', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'codex' })
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p2', agentType: 'claude' })
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
-  })
-
-  it('allows stale active pane agentType to change', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', agentType: 'codex' }, 'codex', {
-        updatedAt: 1_000,
-        stateStartedAt: 1_000
-      })
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'p2', agentType: 'claude' },
-        'claude',
-        {
-          updatedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1,
-          stateStartedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1
-        }
-      )
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].agentType).toBe('claude')
-  })
-
-  it('keeps global epochs stable for fresh same-state working pings while updating the entry', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'p1', agentType: 'claude', toolName: 'Read' },
-        'claude',
-        { updatedAt: 1_000, stateStartedAt: 1_000 }
-      )
-    const firstEpoch = store.getState().agentStatusEpoch
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'p2', agentType: 'claude', toolName: 'Edit' },
-        'claude',
-        { updatedAt: 2_000, stateStartedAt: 1_000 }
-      )
-
-    const sameStateEntry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(sameStateEntry.prompt).toBe('p2')
-    expect(sameStateEntry.toolName).toBe('Edit')
-    expect(sameStateEntry.updatedAt).toBe(2_000)
-    // Why: same-state hook pings are high-frequency and already update the
-    // owning row through agentStatusByPaneKey. The global epochs are reserved
-    // for state/freshness/final-done changes that can affect aggregate
-    // dashboard/sidebar calculations.
-    expect(store.getState().agentStatusEpoch).toBe(firstEpoch)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch)
-
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p2', agentType: 'claude' }, 'claude', {
-        updatedAt: 3_000,
-        stateStartedAt: 3_000
-      })
-    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-
-  it('bumps aggregate epochs when a same-state entry gains worktree attribution', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p' }, 'claude', {
-      updatedAt: 1_000,
-      stateStartedAt: 1_000
-    })
-    const firstEpoch = store.getState().agentStatusEpoch
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'p' },
-        'claude',
-        { updatedAt: 2_000, stateStartedAt: 1_000 },
-        { worktreeId: 'wt-1', tabId: 'tab-1' }
-      )
-
-    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-
-  it('bumps the status epoch, not sort epoch, for same-state done updates', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'claude' }, 'claude', {
-        updatedAt: 1_000,
-        stateStartedAt: 1_000
-      })
-    const firstEpoch = store.getState().agentStatusEpoch
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'done',
-        prompt: 'p1',
-        agentType: 'claude',
-        lastAssistantMessage: 'final answer'
-      },
-      'claude',
-      { updatedAt: 1_000, stateStartedAt: 1_000 }
-    )
-
-    expect(store.getState().agentStatusByPaneKey['tab-1:1'].lastAssistantMessage).toBe(
-      'final answer'
-    )
-    // Why: retained rows need the final done snapshot, but done->done does not
-    // change smart-sort class, so only the status/retention epoch should tick.
-    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch)
-  })
-
-  it('bumps sort epoch when a same-state done update changes completion eligibility', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'done', prompt: 'p1', agentType: 'claude', interrupted: true },
-        'claude',
-        { updatedAt: 1_000, stateStartedAt: 1_000 }
-      )
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'claude' }, 'claude', {
-        updatedAt: 2_000,
-        stateStartedAt: 1_000
-      })
-
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-
-  it('bumps global epochs when a stale same-state entry refreshes', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'stale ping', agentType: 'claude' },
-        'claude',
-        { updatedAt: 1_000, stateStartedAt: 1_000 }
-      )
-    const firstEpoch = store.getState().agentStatusEpoch
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'fresh again', agentType: 'claude' },
-        'claude',
-        {
-          updatedAt: 1_000 + AGENT_STATUS_STALE_AFTER_MS + 1,
-          stateStartedAt: 1_000
-        }
-      )
-
-    const refreshedEntry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(refreshedEntry.prompt).toBe('fresh again')
-    // Why: a stale same-state refresh can promote the worktree back into a
-    // smart-sort attention class, so both freshness and sort epochs must tick.
-    expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-
-  it('bumps sort epoch when Command Code starts a new prompt while still working', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'first task', agentType: 'command-code' },
-        'command-code',
-        { updatedAt: 1_000, stateStartedAt: 1_000 }
-      )
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'second task', agentType: 'command-code' },
-        'command-code',
-        { updatedAt: 2_000, stateStartedAt: 2_000 }
-      )
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.prompt).toBe('second task')
-    expect(entry.stateStartedAt).toBe(2_000)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-
-  it('bumps sort epoch when Command Code reruns the same prompt with a new turn key', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'working',
-        prompt: 'same task',
-        agentType: 'command-code',
-        promptInteractionKey: 'command-code-transcript-a'
-      },
-      'command-code',
-      { updatedAt: 1_000, stateStartedAt: 1_000 }
-    )
-    const firstSortEpoch = store.getState().sortEpoch
-
-    store.getState().setAgentStatus(
-      'tab-1:1',
-      {
-        state: 'working',
-        prompt: 'same task',
-        agentType: 'command-code',
-        promptInteractionKey: 'command-code-transcript-b'
-      },
-      'command-code',
-      { updatedAt: 2_000, stateStartedAt: 2_000 }
-    )
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.prompt).toBe('same task')
-    expect(entry.promptInteractionKey).toBe('command-code-transcript-b')
-    expect(entry.stateStartedAt).toBe(2_000)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-
-  it('bumps sort epoch when main advances Command Code stateStartedAt without a renderer-visible key change', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    // First turn carries no interaction key (e.g. transcript read failed), so
-    // the renderer stores no promptInteractionKey to compare against.
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'same task', agentType: 'command-code' },
-        'command-code',
-        { updatedAt: 1_000, stateStartedAt: 1_000 }
-      )
-    const firstSortEpoch = store.getState().sortEpoch
-
-    // Main detected a new turn via interaction-key change and reset stateStartedAt,
-    // but the renderer can't see the key change (no key, identical prompt text).
-    // The authoritative stateStartedAt advance must still re-sort.
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'same task', agentType: 'command-code' },
-        'command-code',
-        { updatedAt: 2_000, stateStartedAt: 2_000 }
-      )
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.stateStartedAt).toBe(2_000)
-    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
-  })
-})
-
-describe('agent status PR refresh handoff', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-  })
-
-  it('enqueues an active PR refresh for the owning worktree when an agent completes', async () => {
-    vi.useFakeTimers()
-    const enqueuePRRefresh = stubGitHubPRRefreshApi()
-    const store = createTestStore()
-    seedAgentPRRefreshFixture(store, ['pr'])
-
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'create a PR', agentType: 'codex' })
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'done', prompt: 'create a PR', agentType: 'codex' })
-
-    await flushMicrotasks()
-
-    expect(enqueuePRRefresh).toHaveBeenCalledWith({
-      candidate: expect.objectContaining({
-        repoPath: '/repo',
-        branch: 'feature/pr-from-agent',
-        worktreeId: 'wt-1',
-        linkedPRNumber: null
-      }),
-      reason: 'active',
-      priority: 80
-    })
-  })
-
-  it('uses hook worktree attribution for PR refresh when the agent tab is not mounted', async () => {
-    vi.useFakeTimers()
-    const enqueuePRRefresh = stubGitHubPRRefreshApi()
-    const store = createTestStore()
-    seedAgentPRRefreshFixture(store, ['pr'])
-    store.setState({ tabsByWorktree: { 'wt-1': [] } } as Partial<AppState>)
-    const paneKey = 'tab-worker:11111111-1111-4111-8111-111111111111'
-
-    store
-      .getState()
-      .setAgentStatus(
-        paneKey,
-        { state: 'working', prompt: 'create a PR', agentType: 'codex' },
-        undefined,
-        undefined,
-        { tabId: 'tab-worker', worktreeId: 'wt-1', terminalHandle: 'term-worker' }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        paneKey,
-        { state: 'done', prompt: 'create a PR', agentType: 'codex' },
-        undefined,
-        undefined,
-        { tabId: 'tab-worker', worktreeId: 'wt-1', terminalHandle: 'term-worker' }
-      )
-
-    await flushMicrotasks()
-
-    expect(enqueuePRRefresh).toHaveBeenCalledWith({
-      candidate: expect.objectContaining({
-        repoPath: '/repo',
-        branch: 'feature/pr-from-agent',
-        worktreeId: 'wt-1',
-        linkedPRNumber: null
-      }),
-      reason: 'active',
-      priority: 80
-    })
-  })
-
-  it('does not spend a PR refresh when no status lane or PR surface is visible', async () => {
-    vi.useFakeTimers()
-    const enqueuePRRefresh = stubGitHubPRRefreshApi()
-    const store = createTestStore()
-    seedAgentPRRefreshFixture(store, ['comment'])
-
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'create a PR', agentType: 'codex' })
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'done', prompt: 'create a PR', agentType: 'codex' })
-
-    await flushMicrotasks()
-
-    expect(enqueuePRRefresh).not.toHaveBeenCalled()
-  })
-
-  it('does not repeat the refresh for same-state done detail updates', async () => {
-    vi.useFakeTimers()
-    const enqueuePRRefresh = stubGitHubPRRefreshApi()
-    const store = createTestStore()
-    seedAgentPRRefreshFixture(store, ['pr'])
-
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'working', prompt: 'create a PR', agentType: 'codex' })
-    store
-      .getState()
-      .setAgentStatus('tab-1:0', { state: 'done', prompt: 'create a PR', agentType: 'codex' })
-    store.getState().setAgentStatus('tab-1:0', {
-      state: 'done',
-      prompt: 'create a PR',
-      agentType: 'codex',
-      lastAssistantMessage: 'Opened https://github.com/acme/orca/pull/42'
+      const retained = store.getState().retainedAgentsByPaneKey
+      expect(Object.keys(retained)).toHaveLength(MAX_RETAINED_AGENTS)
+      expect(retained[`tab-${total - 1}:leaf-${total - 1}`]).toBeDefined()
+      expect(retained['tab-0:leaf-0']).toBeUndefined()
     })
 
-    await flushMicrotasks()
-
-    expect(enqueuePRRefresh).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('agent status stateStartedAt', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('carries stateStartedAt forward across same-state pings', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
-
-    const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1' }, 'claude')
-    const firstStart = store.getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
-
-    // Advance 5s and re-ping with same state but different prompt/tool fields
-    vi.setSystemTime(new Date('2026-04-09T12:00:05.000Z'))
-    store
-      .getState()
-      .setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1', toolName: 'Edit' }, 'claude')
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    // Why: stateStartedAt is the invariant we are protecting — it must survive
-    // tool/prompt pings within the same state, while updatedAt advances.
-    expect(entry.stateStartedAt).toBe(firstStart)
-    expect(entry.updatedAt).toBe(new Date('2026-04-09T12:00:05.000Z').getTime())
-  })
-
-  it('resets stateStartedAt when the state changes', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
-
-    const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p1' }, 'claude')
-    const workingStart = store.getState().agentStatusByPaneKey['tab-1:1'].stateStartedAt
-
-    vi.setSystemTime(new Date('2026-04-09T12:00:10.000Z'))
-    store.getState().setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1' }, 'claude')
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.stateStartedAt).toBe(new Date('2026-04-09T12:00:10.000Z').getTime())
-    expect(entry.stateStartedAt).not.toBe(workingStart)
-    // history should capture the working state's true start
-    expect(entry.stateHistory).toHaveLength(1)
-    expect(entry.stateHistory[0].state).toBe('working')
-    expect(entry.stateHistory[0].startedAt).toBe(workingStart)
-  })
-
-  it('uses IPC snapshot timing instead of restamping restored entries as fresh', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-04-09T12:00:00.000Z'))
-
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'p1', agentType: 'claude' },
-        'claude',
-        {
-          updatedAt: new Date('2026-04-09T10:00:00.000Z').getTime(),
-          stateStartedAt: new Date('2026-04-09T09:55:00.000Z').getTime()
-        }
-      )
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.updatedAt).toBe(new Date('2026-04-09T10:00:00.000Z').getTime())
-    expect(entry.stateStartedAt).toBe(new Date('2026-04-09T09:55:00.000Z').getTime())
-  })
-
-  it('ignores an older snapshot when a newer live event already updated the pane', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'working', prompt: 'fresh', agentType: 'claude' },
-        'claude',
-        { updatedAt: 2_000, stateStartedAt: 2_000 }
-      )
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-1:1',
-        { state: 'done', prompt: 'stale', agentType: 'claude' },
-        'claude',
-        { updatedAt: 1_000, stateStartedAt: 1_000 }
-      )
-
-    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
-    expect(entry.state).toBe('working')
-    expect(entry.prompt).toBe('fresh')
-    expect(entry.updatedAt).toBe(2_000)
-  })
-})
-
-describe('agent status retention + prefix sweep', () => {
-  // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
-  // queueMicrotask. Use fake timers so the handle does not leak into the
-  // test process.
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('removeAgentStatusByTabPrefix scopes by the ":" delimiter so tab-1 does not sweep tab-10', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    store.getState().setAgentStatus('tab-1:0', { state: 'working', prompt: 'p' }, 'claude')
-    store.getState().setAgentStatus('tab-1:1', { state: 'working', prompt: 'p' }, 'claude')
-    store.getState().setAgentStatus('tab-10:0', { state: 'working', prompt: 'p' }, 'claude')
-
-    store.getState().removeAgentStatusByTabPrefix('tab-1')
-
-    const map = store.getState().agentStatusByPaneKey
-    expect(map['tab-1:0']).toBeUndefined()
-    expect(map['tab-1:1']).toBeUndefined()
-    // Why: the ":" delimiter on the prefix guards against false-prefix matches
-    // across tab ids that share a leading substring (tab-1 vs tab-10).
-    expect(map['tab-10:0']).toBeDefined()
-  })
-
-  it('setAgentStatus clears a retained snapshot for the same paneKey', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const oldEntry: AgentStatusEntry = {
-      state: 'done',
-      prompt: 'old turn',
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      paneKey: 'tab-a:0',
-      stateHistory: [],
-      agentType: 'claude'
-    }
-    const siblingEntry: AgentStatusEntry = {
-      state: 'done',
-      prompt: 'sibling turn',
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      paneKey: 'tab-a:1',
-      stateHistory: [],
-      agentType: 'claude'
-    }
-    const retainedA: RetainedAgentEntry = {
-      entry: oldEntry,
-      worktreeId: 'wt-a',
-      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: 1_000
-    }
-    const retainedSibling: RetainedAgentEntry = {
-      entry: siblingEntry,
-      worktreeId: 'wt-a',
-      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: 1_000
-    }
-
-    store.getState().retainAgents([retainedA, retainedSibling])
-    store
-      .getState()
-      .setAgentStatus(
-        'tab-a:0',
-        { state: 'done', prompt: 'interrupted turn', agentType: 'claude', interrupted: true },
-        'claude',
-        { updatedAt: 2_000, stateStartedAt: 2_000 }
-      )
-
-    const state = store.getState()
-    expect(state.agentStatusByPaneKey['tab-a:0']).toMatchObject({
-      state: 'done',
-      prompt: 'interrupted turn',
-      interrupted: true
-    })
-    expect(state.retainedAgentsByPaneKey['tab-a:0']).toBeUndefined()
-    expect(state.retainedAgentsByPaneKey['tab-a:1']).toBe(retainedSibling)
-  })
-
-  it('dismissRetainedAgentsByWorktree removes only entries for the given worktreeId', () => {
-    const store = createTestStore()
-    const now = Date.now()
-    const entryA: AgentStatusEntry = {
-      state: 'done',
-      prompt: '',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: 'tab-a:0',
-      stateHistory: []
-    }
-    const entryB: AgentStatusEntry = {
-      state: 'done',
-      prompt: '',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: 'tab-b:0',
-      stateHistory: []
-    }
-    const retainedA: RetainedAgentEntry = {
-      entry: entryA,
-      worktreeId: 'wt-a',
-      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: now
-    }
-    const retainedB: RetainedAgentEntry = {
-      entry: entryB,
-      worktreeId: 'wt-b',
-      tab: makeTab({ id: 'tab-b', worktreeId: 'wt-b', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: now
-    }
-
-    store.getState().retainAgents([retainedA, retainedB])
-    store.getState().dismissRetainedAgentsByWorktree('wt-a')
-
-    const retained = store.getState().retainedAgentsByPaneKey
-    expect(retained['tab-a:0']).toBeUndefined()
-    expect(retained['tab-b:0']).toBeDefined()
-    expect(retained['tab-b:0'].worktreeId).toBe('wt-b')
-  })
-
-  it('dismissRetainedAgentsByWorktree plants retention suppressors for paneKeys that also have a live entry', () => {
-    // Why: regression guard for the "Dismiss all" resurrection bug. If a
-    // dismissed paneKey still has a live entry in agentStatusByPaneKey, the
-    // retention sync (collectRetainedAgentsOnDisappear) would re-retain the
-    // row the next time the live agent disappears — silently undoing the
-    // user's bulk dismissal. Mirror dismissRetainedAgent's hasLive-gated
-    // suppressor logic so the next live→gone transition is ignored.
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const now = Date.now()
-    const entryA: AgentStatusEntry = {
-      state: 'done',
-      prompt: '',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: 'tab-a:0',
-      stateHistory: []
-    }
-    const entryB: AgentStatusEntry = {
-      state: 'done',
-      prompt: '',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: 'tab-a:1',
-      stateHistory: []
-    }
-    const retainedA: RetainedAgentEntry = {
-      entry: entryA,
-      worktreeId: 'wt-a',
-      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: now
-    }
-    const retainedB: RetainedAgentEntry = {
-      entry: entryB,
-      worktreeId: 'wt-a',
-      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: now
-    }
-
-    // Set up a live entry for retainedA's paneKey only — retainedB is retained-only.
-    store
-      .getState()
-      .setAgentStatus('tab-a:0', { state: 'working', prompt: 'p', agentType: 'claude' })
-    store.getState().retainAgents([retainedA, retainedB])
-    store.getState().dismissRetainedAgentsByWorktree('wt-a')
-
-    const suppressed = store.getState().retentionSuppressedPaneKeys
-    // hasLive → suppressor planted, so the next live→gone will not re-retain.
-    expect(suppressed['tab-a:0']).toBe(true)
-    // retained-only (no live entry) → no suppressor, to avoid indefinite
-    // leaks when no live→gone transition will ever fire for this paneKey.
-    expect(suppressed['tab-a:1']).toBeUndefined()
-  })
-
-  it('dropAgentStatusByWorktree removes live entries attributed before their tab exists', () => {
-    vi.useFakeTimers()
-    const store = createTestStore()
-    const paneKey = 'tab-worker:11111111-1111-4111-8111-111111111111'
-
-    store
-      .getState()
-      .setAgentStatus(
-        paneKey,
-        { state: 'working', prompt: 'worker', agentType: 'codex' },
-        undefined,
-        undefined,
-        {
-          tabId: 'tab-worker',
-          worktreeId: 'wt-a',
-          terminalHandle: 'term-worker'
-        }
-      )
-    store.setState({
-      acknowledgedAgentsByPaneKey: { [paneKey]: Date.now() }
-    } as Partial<AppState>)
-
-    store.getState().dropAgentStatusByWorktree('wt-a')
-
-    expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
-    expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
-    expect(store.getState().retentionSuppressedPaneKeys[paneKey]).toBe(true)
-  })
-
-  it('pruneRetainedAgents keeps only entries whose worktreeId is in the valid set', () => {
-    const store = createTestStore()
-    const now = Date.now()
-    const entryA: AgentStatusEntry = {
-      state: 'done',
-      prompt: '',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: 'tab-a:0',
-      stateHistory: []
-    }
-    const entryB: AgentStatusEntry = {
-      state: 'done',
-      prompt: '',
-      updatedAt: now,
-      stateStartedAt: now,
-      paneKey: 'tab-b:0',
-      stateHistory: []
-    }
-    const retainedA: RetainedAgentEntry = {
-      entry: entryA,
-      worktreeId: 'wt-a',
-      tab: makeTab({ id: 'tab-a', worktreeId: 'wt-a', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: now
-    }
-    const retainedB: RetainedAgentEntry = {
-      entry: entryB,
-      worktreeId: 'wt-b',
-      tab: makeTab({ id: 'tab-b', worktreeId: 'wt-b', title: 'claude' }),
-      agentType: 'claude',
-      startedAt: now
-    }
-
-    store.getState().retainAgents([retainedA, retainedB])
-    store.getState().pruneRetainedAgents(new Set(['wt-a']))
-
-    const retained = store.getState().retainedAgentsByPaneKey
-    expect(retained['tab-a:0']).toBeDefined()
-    expect(retained['tab-a:0'].worktreeId).toBe('wt-a')
-    expect(retained['tab-b:0']).toBeUndefined()
-  })
-})
-
-describe('session-boundary done semantics (STA-3386)', () => {
-  const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
-
-  it('keeps the launch config registry entry alive across a session-boundary done', () => {
-    const store = createTestStore()
-    store.setState({
-      agentLaunchConfigByPaneKey: {
-        [PANE]: {
-          launchConfig: { agentArgs: '', agentEnv: {} },
-          identity: { agentType: 'claude' },
-          launchToken: 'token-1'
-        }
+    it('does not evict anything while under the cap', () => {
+      const store = createTestStore()
+      for (let i = 0; i < MAX_RETAINED_AGENTS; i++) {
+        store.getState().retainAgents([makeRetained(i)])
       }
-    } as unknown as Partial<AppState>)
-
-    store.getState().setAgentStatus(PANE, {
-      state: 'done',
-      prompt: '',
-      agentType: 'claude',
-      sessionBoundary: true
+      const retained = store.getState().retainedAgentsByPaneKey
+      expect(Object.keys(retained)).toHaveLength(MAX_RETAINED_AGENTS)
+      expect(retained['tab-0:leaf-0']).toBeDefined()
     })
-    // Why: the session just CONNECTED — the registered-launch-agent identity must survive
-    // or an idle resumed TUI loses its pane identity evidence at startup.
-    expect(store.getState().agentLaunchConfigByPaneKey[PANE]).toBeDefined()
 
-    store.getState().setAgentStatus(PANE, {
-      state: 'done',
-      prompt: 'fix bug',
-      agentType: 'claude',
-      lastAssistantMessage: 'Done.'
+    it('re-retaining an existing paneKey overwrites in place and never grows the count', () => {
+      const store = createTestStore()
+      const first = makeRetained(0)
+      store.getState().retainAgents([first])
+      // Same paneKey, fresh snapshot (e.g. a later status update for the same pane).
+      const updated = makeRetained(0)
+      updated.entry.prompt = 'updated'
+      store.getState().retainAgents([updated])
+
+      const retained = store.getState().retainedAgentsByPaneKey
+      expect(Object.keys(retained)).toHaveLength(1)
+      expect(retained['tab-0:leaf-0'].entry.prompt).toBe('updated')
     })
-    expect(store.getState().agentLaunchConfigByPaneKey[PANE]).toBeUndefined()
   })
-
-  it('pushes a real completion into history when a session boundary lands on it', () => {
-    const store = createTestStore()
-    store
-      .getState()
-      .setAgentStatus(PANE, { state: 'working', prompt: 'fix bug', agentType: 'claude' })
-    store.getState().setAgentStatus(PANE, {
-      state: 'done',
-      prompt: 'fix bug',
-      agentType: 'claude',
-      lastAssistantMessage: 'Done.'
-    })
-
-    store.getState().setAgentStatus(PANE, {
-      state: 'done',
-      prompt: '',
-      agentType: 'claude',
-      sessionBoundary: true
-    })
-
-    const entry = store.getState().agentStatusByPaneKey[PANE]
-    expect(entry.sessionBoundary).toBe(true)
-    // Why: the finished timestamp and unread badge fall through to history for boundary
-    // entries — losing the real done here erases an unacknowledged completion.
-    expect(entry.stateHistory.some((h) => h.state === 'done')).toBe(true)
-  })
-
-  it('never records a session boundary itself in state history', () => {
-    const store = createTestStore()
-    store.getState().setAgentStatus(PANE, {
-      state: 'done',
-      prompt: '',
-      agentType: 'claude',
-      sessionBoundary: true
-    })
-    store
-      .getState()
-      .setAgentStatus(PANE, { state: 'working', prompt: 'fix bug', agentType: 'claude' })
-
-    const entry = store.getState().agentStatusByPaneKey[PANE]
-    expect(entry.stateHistory.some((h) => h.state === 'done')).toBe(false)
-  })
-
-  it('carries the flag across metadata-less done repaints but yields to turn evidence', () => {
-    const store = createTestStore()
-    store.getState().setAgentStatus(PANE, {
-      state: 'done',
-      prompt: '',
-      agentType: 'claude',
-      sessionBoundary: true
-    })
-
-    // Why: OSC 9999 repaints and reconnect replays re-deliver a metadata-less done.
-    store.getState().setAgentStatus(PANE, { state: 'done', prompt: '', agentType: 'claude' })
-    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBe(true)
-
-    // Why: an assistant message proves a REAL completion — the flag must not suppress it.
-    store.getState().setAgentStatus(PANE, {
-      state: 'done',
-      prompt: '',
-      agentType: 'claude',
-      lastAssistantMessage: 'Done.'
-    })
-    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBeUndefined()
-  })
-})
+}

@@ -1,12 +1,9 @@
 import { cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserTab as BrowserTabState,
-  GitFileStatus,
-  TerminalTab,
-  TuiAgent
-} from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OpenFile } from '../../store/slices/editor'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import BrowserTab from './BrowserTab'
@@ -30,19 +27,28 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   Tooltip: ({ children }: { children: ReactNode }) => <div data-tooltip-root>{children}</div>,
   TooltipContent: ({
     children,
     className,
     side,
-    sideOffset
+    sideOffset,
+    variant
   }: {
     children: ReactNode
     className?: string
     side?: string
     sideOffset?: number
+    variant?: string
   }) => (
-    <div data-tooltip-content data-side={side} data-side-offset={sideOffset} className={className}>
+    <div
+      data-tooltip-content
+      data-variant={variant}
+      data-side={side}
+      data-side-offset={sideOffset}
+      className={className}
+    >
       {children}
     </div>
   ),
@@ -82,6 +88,7 @@ vi.mock('./shell-icons', () => ({
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
+  getAgentLabel: (agent: string) => (agent === 'claude' ? 'Claude' : agent),
   AgentIcon: ({ agent }: { agent: string }) => <span data-agent-catalog-icon={agent} />
 }))
 
@@ -114,7 +121,7 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 
-vi.mock('../browser-pane/browser-runtime', () => ({
+vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => 'https://live.example/not-the-tab-label'
 }))
 
@@ -135,14 +142,6 @@ vi.mock('@/lib/language-detect', () => ({
 
 vi.mock('@/components/editor/markdown-preview-controls', () => ({
   canOpenMarkdownPreview: () => false
-}))
-
-vi.mock('@/lib/local-path-open-guard', () => ({
-  showLocalPathOpenBlockedToast: vi.fn()
-}))
-
-vi.mock('./editor-tab-local-open-guard', () => ({
-  shouldBlockEditorTabLocalOpen: () => false
 }))
 
 function makeDragData(tabType: TabDragItemData['tabType'], visibleTabId: string): TabDragItemData {
@@ -190,18 +189,18 @@ function expectTabContainerWidth(markup: string, root: string): void {
   const container = firstOpeningTag(markup)
   // Why: pinned literally — a definite `w-*` is what stops live title updates from resizing
   // every tab, so asserting against the constant would let that guarantee be edited away.
-  const widthClasses = 'w-[180px] min-w-[88px] min-[1280px]:w-[220px]'
+  const widthClasses = 'w-[180px] min-w-[72px] min-[1280px]:w-[220px]'
   expect(container).toContain(widthClasses)
   expect(root).not.toContain('w-[180px]')
-  expect(root).not.toContain('min-w-[88px]')
+  expect(root).not.toContain('min-w-[72px]')
   expect(root).not.toContain('min-[1280px]:w-[220px]')
 }
 
 function expectTooltipContent(markup: string, text: string): void {
   expect(markup).toContain('data-tooltip-content="true"')
   expect(markup).toContain('data-side="bottom"')
-  expect(markup).toContain('data-side-offset="6"')
-  expect(markup).toContain('max-w-80 whitespace-normal break-words text-left')
+  expect(markup).toContain('data-variant="tab-preview" data-side="bottom" data-side-offset="0"')
+  expect(markup).toContain('data-variant="tab-preview"')
   expect(markup).toContain(text)
 }
 
@@ -282,9 +281,11 @@ describe('tab title tooltips', () => {
     )
 
     expectTooltipContent(markup, 'Custom terminal title')
+    expect(markup).toContain('>Terminal</span>')
     expect(markup).not.toContain('Runtime terminal title')
     expect(markup).toContain('data-tooltip-trigger="true"')
     const root = openingTag(markup, 'data-testid', 'sortable-tab')
+    expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
     expectTabContainerWidth(markup, root)
@@ -316,8 +317,9 @@ describe('tab title tooltips', () => {
       />
     )
 
-    expect(markup).toContain('data-agent-icon="claude"')
+    expect(markup.match(/data-agent-icon="claude"/g)).toHaveLength(2)
     expectTooltipContent(markup, 'Claude Code')
+    expect(markup).toContain('>Claude</span>')
     expect(markup).toContain('data-tooltip-trigger="true"')
     expect(markup).toContain('>Claude Code</span>')
     expect(markup).not.toContain('data-shell-icon="generic"')
@@ -327,7 +329,7 @@ describe('tab title tooltips', () => {
   it('uses the browser tab fallback label from the tab prop, not the live URL', () => {
     const markup = renderToStaticMarkup(
       <BrowserTab
-        tab={makeBrowserTab({ title: '' })}
+        tab={makeBrowserTab({ title: '', faviconUrl: 'https://example.com/favicon.ico' })}
         isActive={false}
         isPinned={false}
         hasTabsToRight={false}
@@ -345,6 +347,7 @@ describe('tab title tooltips', () => {
     )
 
     expectTooltipContent(markup, 'example.com/docs/long-browser-tab-path')
+    expect(markup.match(/src="https:\/\/example.com\/favicon.ico"/g)).toHaveLength(2)
     expect(markup).not.toContain('live.example')
     const root = openingTag(markup, 'data-sortable-id', 'browser-1')
     expect(root).toContain('data-tooltip-trigger="true"')
@@ -363,7 +366,7 @@ describe('tab title tooltips', () => {
         hasTabsToRight={false}
         hasTabsToLeft={false}
         tabCount={1}
-        statusByRelativePath={new Map<string, GitFileStatus>()}
+        gitStatus={null}
         onActivate={vi.fn()}
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}
@@ -377,6 +380,7 @@ describe('tab title tooltips', () => {
     )
 
     expectTooltipContent(markup, 'VeryLongEditorFileName.tsx')
+    expect(markup).toContain('>Editor</span>')
     expect(markup).toContain('line-through')
     expect(markup).toContain('renamed')
     const root = openingTag(markup, 'data-sortable-id', 'editor-tab-1')

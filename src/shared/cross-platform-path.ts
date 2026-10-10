@@ -21,11 +21,21 @@ export function isCaseInsensitiveRuntimeRoot(rootPath: string): boolean {
 }
 
 export function normalizeRuntimePathSeparators(value: string): string {
-  const normalized = value.replace(/\\/g, '/').replace(/\/+/g, '/')
+  const normalized = collapseRuntimePathSlashes(
+    value.includes('\\') ? value.replace(/\\/g, '/') : value
+  )
   if (value.startsWith('\\\\') || value.startsWith('//')) {
     return `//${normalized.replace(/^\/+/, '')}`
   }
   return normalized
+}
+
+/**
+ * Why the probe: `/\/+/g` can only change a string that contains `//`, and the scan is the
+ * dominant cost of every comparison key on the FS-event storm path (`includes` is ~30x cheaper).
+ */
+function collapseRuntimePathSlashes(value: string): string {
+  return value.includes('//') ? value.replace(/\/+/g, '/') : value
 }
 
 /**
@@ -45,7 +55,7 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
   // Why: backslash is a valid POSIX filename character; fold it only when the
   // path itself proves Windows drive/UNC semantics.
   const normalized = trimRuntimePathTrailingSlash(
-    isWindowsPath ? normalizeRuntimePathSeparators(value) : value.replace(/\/+/g, '/')
+    isWindowsPath ? normalizeRuntimePathSeparators(value) : collapseRuntimePathSlashes(value)
   )
   const wslUnc = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/[\s\S]*)?$/i)
   if (wslUnc) {
@@ -56,19 +66,76 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
   return isWindowsPath ? normalized.toLowerCase() : normalized
 }
 
-export function areLocalWindowsWslPathAliases(left: string, right: string): boolean {
-  const leftWslPath = parseWslUncPath(left)
-  const rightWslPath = parseWslUncPath(right)
-  if (!leftWslPath && !rightWslPath) {
+/**
+ * Whether `uncPath` is the WSL UNC spelling of `linuxPath` as the caller's own distro sees it.
+ *
+ * Why the distro must match and not just the Linux tail: every distro spells
+ * `/home/<user>/repo`, so a tail-only match lets a Debian caller resolve — and
+ * `worktree rm` then delete — an Ubuntu directory. The distro is proven by the
+ * caller's UNC cwd, never guessed.
+ */
+export function isWslUncPathForCallerLinuxPath(
+  uncPath: string,
+  linuxPath: string,
+  callerDistro: string
+): boolean {
+  const parsed = parseWslUncPath(uncPath)
+  if (!parsed) {
     return false
   }
-  const normalize = (value: string): string => {
-    const wslPath = parseWslUncPath(value)
-    return normalizeRuntimePathForComparison(
-      wslPath ? toWindowsWslPath(wslPath.linuxPath, wslPath.distro) : value
-    )
+  // Why the case split: Windows folds the distro name, the Linux tail it fronts is case-sensitive.
+  return (
+    parsed.distro.toLowerCase() === callerDistro.toLowerCase() &&
+    normalizeRuntimePathForComparison(parsed.linuxPath) ===
+      normalizeRuntimePathForComparison(linuxPath)
+  )
+}
+
+/**
+ * Whether a WSL UNC path fronts the same Windows-mounted `/mnt/<drive>` path.
+ *
+ * `/mnt/<drive>` is backed by the host drive and is shared across distros, so
+ * matching it does not require the caller's distro proof used for Linux paths.
+ */
+export function isWslUncPathForLinuxMountedPath(uncPath: string, linuxPath: string): boolean {
+  const parsed = parseWslUncPath(uncPath)
+  if (!parsed || !/^\/mnt\/[A-Za-z](?:\/|$)/.test(parsed.linuxPath)) {
+    return false
   }
-  return normalize(left) === normalize(right)
+  if (!/^\/mnt\/[A-Za-z](?:\/|$)/.test(linuxPath)) {
+    return false
+  }
+  return (
+    normalizeRuntimePathForComparison(toWindowsWslPath(parsed.linuxPath, parsed.distro)) ===
+    normalizeRuntimePathForComparison(toWindowsWslPath(linuxPath, parsed.distro))
+  )
+}
+
+export function areLocalWindowsWslPathAliases(left: string, right: string): boolean {
+  const leftIdentity = getLocalWindowsWslPathIdentity(left)
+  const rightIdentity = getLocalWindowsWslPathIdentity(right)
+  return (
+    (leftIdentity.isWslUnc || rightIdentity.isWslUnc) &&
+    leftIdentity.aliasComparisonPath === rightIdentity.aliasComparisonPath
+  )
+}
+
+export type LocalWindowsWslPathIdentity = {
+  normalizedPath: string
+  aliasComparisonPath: string
+  isWslUnc: boolean
+}
+
+export function getLocalWindowsWslPathIdentity(value: string): LocalWindowsWslPathIdentity {
+  const wslPath = parseWslUncPath(value)
+  const normalizedPath = normalizeRuntimePathForComparison(value)
+  return {
+    normalizedPath,
+    aliasComparisonPath: wslPath
+      ? normalizeRuntimePathForComparison(toWindowsWslPath(wslPath.linuxPath, wslPath.distro))
+      : normalizedPath,
+    isWslUnc: wslPath !== null
+  }
 }
 
 export function isRuntimePathAbsolute(
@@ -98,7 +165,8 @@ export function getRuntimePathBasename(value: string): string {
   if (!trimmed) {
     return ''
   }
-  return trimmed.split(/[\\/]/).findLast(Boolean) ?? ''
+  const separator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
+  return trimmed.slice(separator + 1)
 }
 
 /**
@@ -133,7 +201,7 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   const normalizedCandidate = trimRuntimePathTrailingSlash(
     isWindowsAbsolutePathLike(candidatePath.normalize('NFC'))
       ? normalizeRuntimePathSeparators(candidatePath)
-      : candidatePath.replace(/\/+/g, '/')
+      : collapseRuntimePathSlashes(candidatePath)
   )
   const comparisonRoot = normalizeRuntimePathForComparison(rootPath)
   const comparisonCandidate = normalizeRuntimePathForComparison(candidatePath)
@@ -185,6 +253,10 @@ function sliceCandidatePastRootSegments(root: string, candidate: string): string
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {
+  // Nothing to trim, and neither preserved-root case can match, unless the value ends in `/`.
+  if (!value.endsWith('/')) {
+    return value
+  }
   if (value === '/' || /^[A-Za-z]:\/$/.test(value)) {
     return value
   }

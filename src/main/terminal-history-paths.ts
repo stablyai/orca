@@ -1,29 +1,25 @@
-import { createHash } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../shared/app-environment'
 
 const HISTORY_DIR_NAME = 'terminal-history'
 const HISTORY_DIR_NAME_WSL = 'terminal-history-wsl'
 // Why: rename live history out of the way first so a quit mid-rm still leaves a durable tombstone GC can finish.
 export const PENDING_DELETE_DIR_NAME = '.pending-delete'
 
-/** First 16 hex chars of SHA-256 of the worktreeId. */
-export function hashWorktreeId(worktreeId: string): string {
-  return createHash('sha256').update(worktreeId).digest('hex').slice(0, 16)
-}
+export { hashWorktreeId } from './terminal-history-id'
 
 export function getHistoryRoot(): string {
-  return join(app.getPath('userData'), HISTORY_DIR_NAME)
+  return join(getAppEnvironment().getPath('userData'), HISTORY_DIR_NAME)
 }
 
 export function getHistoryRootWsl(distro: string): string {
-  return join(app.getPath('userData'), HISTORY_DIR_NAME_WSL, distro)
+  return join(getAppEnvironment().getPath('userData'), HISTORY_DIR_NAME_WSL, distro)
 }
 
 /** Every per-distro WSL history root that exists on disk; empty when WSL history was never written. */
 export function listWslHistoryRoots(): string[] {
-  const wslRoot = join(app.getPath('userData'), HISTORY_DIR_NAME_WSL)
+  const wslRoot = join(getAppEnvironment().getPath('userData'), HISTORY_DIR_NAME_WSL)
   if (!existsSync(wslRoot)) {
     return []
   }

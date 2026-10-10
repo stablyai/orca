@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import type { RefObject } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from '../transport/types'
@@ -8,19 +7,6 @@ import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
 } from './terminal-foreground-recovery'
-
-const sessionSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
-  'utf8'
-)
-
-function sliceSessionSource(startPattern: string, endPattern: string): string {
-  const start = sessionSource.indexOf(startPattern)
-  expect(start).toBeGreaterThanOrEqual(0)
-  const end = sessionSource.indexOf(endPattern, start)
-  expect(end).toBeGreaterThan(start)
-  return sessionSource.slice(start, end)
-}
 
 type RecoveryHarness = {
   activeHandleRef: RefObject<string | null>
@@ -141,36 +127,5 @@ describe('terminal foreground recovery', () => {
     harness.runScheduled()
 
     expect(harness.subscribeToTerminal).not.toHaveBeenCalled()
-  })
-
-  it('is wired to AppState foregrounding in the session screen', () => {
-    const foregroundPredicate = sliceSessionSource(
-      'const shouldRecover = shouldRecoverTerminalOnAppStateChange(',
-      'previousAppState = nextAppState'
-    )
-
-    expect(sessionSource).toContain('shouldRecoverTerminalOnAppStateChange')
-    expect(foregroundPredicate).toContain('Platform.OS')
-    expect(sessionSource).toContain('recoverActiveTerminalAfterForeground({')
-    expect(sessionSource).toContain("AppState.addEventListener('change'")
-    const readinessInvalidation = sessionSource.indexOf(
-      'terminalRef.prepareForForegroundRecovery()'
-    )
-    const replay = sessionSource.indexOf('recoverActiveTerminalAfterForeground({')
-    expect(readinessInvalidation).toBeGreaterThanOrEqual(0)
-    expect(replay).toBeGreaterThan(readinessInvalidation)
-  })
-
-  it('re-runs a deferred recovery once the session screen reconnects', () => {
-    // Why: resume usually lands mid-reconnect; the session screen must retry
-    // recovery on the connState→connected transition or blanked panes stay
-    // stale until a manual tab switch.
-    expect(sessionSource).toContain("pendingForegroundRecoveryRef.current = outcome === 'deferred'")
-    const reconnectRetry = sliceSessionSource(
-      "if (connState !== 'connected' || !pendingForegroundRecoveryRef.current)",
-      'recoverActiveTerminalAfterForeground({'
-    )
-    expect(reconnectRetry).toContain('pendingForegroundRecoveryRef.current = false')
-    expect(reconnectRetry).toContain("AppState.currentState !== 'active'")
   })
 })

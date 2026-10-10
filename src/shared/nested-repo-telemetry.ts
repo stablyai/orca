@@ -2,7 +2,8 @@ import type {
   NestedRepoScanResult,
   ProjectGroupImportMode,
   ProjectGroupImportResult
-} from './types'
+} from './project-group-types'
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
 
 export const NESTED_REPO_TELEMETRY_MAX_REPO_COUNT = 500
 
@@ -117,25 +118,8 @@ export function shouldEmitNestedRepoImportSubmitTelemetry(args: {
 }
 
 export function createNestedRepoTelemetryAttemptId(): string {
-  const cryptoApi = globalThis.crypto
-  if (typeof cryptoApi?.randomUUID === 'function') {
-    return cryptoApi.randomUUID()
-  }
-
-  const bytes = new Uint8Array(16)
-  if (typeof cryptoApi?.getRandomValues === 'function') {
-    cryptoApi.getRandomValues(bytes)
-  } else {
-    for (let i = 0; i < bytes.length; i++) {
-      bytes[i] = Math.floor(Math.random() * 256)
-    }
-  }
-
-  // Why: keep the fallback schema-compatible without deriving from any stable repo input.
-  bytes[6] = (bytes[6] & 0x0f) | 0x40
-  bytes[8] = (bytes[8] & 0x3f) | 0x80
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'))
-  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`
+  // Why a UUID: the attempt id must not derive from any stable repo input.
+  return createNonSecureContextUuid()
 }
 
 export function buildNestedRepoScanTelemetry(args: {

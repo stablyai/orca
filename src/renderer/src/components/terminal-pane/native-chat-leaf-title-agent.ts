@@ -1,4 +1,5 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 export type NativeChatLeafTitlePane = {
@@ -29,15 +30,15 @@ export function resolveNativeChatLeafTitleAgent({
     ? resolveCommittedTitleAgentType(runtimePaneTitlesByPaneId[targetPane.id] ?? '')
     : null
   if (paneAgent) {
-    return paneAgent
+    return isTuiAgent(paneAgent) ? paneAgent : null
   }
   // Tab titles can lag pane focus in split layouts, so use them only when there
   // is no sibling leaf they could accidentally describe.
   if (panes.length > 1) {
     return null
   }
-  return (
+  const agent =
     resolveCommittedTitleAgentType(tabLabel ?? '') ??
     resolveCommittedTitleAgentType(terminalTitle ?? '')
-  )
+  return isTuiAgent(agent) ? agent : null
 }

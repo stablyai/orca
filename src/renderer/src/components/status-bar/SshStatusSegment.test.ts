@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { connectRuntimeHostForNavigation } from './SshStatusSegment'
+import { connectRuntimeHostForNavigation } from './runtime-environment-explicit-connect'
 
 describe('connectRuntimeHostForNavigation', () => {
   it('loads the transient host catalog without writing Active Server', async () => {
@@ -20,7 +20,16 @@ describe('connectRuntimeHostForNavigation', () => {
 
     expect(fetchRepos).toHaveBeenCalledWith('windows-2')
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(1, 'repo-a', {
+      executionHostId: 'runtime:windows-2',
+      suppressRemoteLineageRefresh: true
+    })
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(2, 'repo-b', {
+      executionHostId: 'runtime:windows-2',
+      suppressRemoteLineageRefresh: true
+    })
     expect(fetchLineage).toHaveBeenCalledOnce()
+    expect(fetchLineage).toHaveBeenCalledWith({ executionHostId: 'runtime:windows-2' })
   })
 
   it('does not load a catalog when the server is unreachable', async () => {

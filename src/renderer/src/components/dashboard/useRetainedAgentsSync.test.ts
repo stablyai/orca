@@ -4,7 +4,10 @@ import {
   type AgentStatusEntry,
   type AgentStatusState
 } from '../../../../shared/agent-status-types'
-import type { FolderWorkspace, Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildRetainedAgentsSyncSnapshot } from './useRetainedAgents'

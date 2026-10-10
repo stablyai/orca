@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'
 
 function makeRepo(id: string, path: string): Repo {

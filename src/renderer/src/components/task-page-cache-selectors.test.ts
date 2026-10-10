@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 
-import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
+import { workItemsCacheKey } from '@/store/github/cache-identity'
+import type { CacheEntry } from '@/store/github/cache-model'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { LinearCollectionResult } from '../../../shared/linear/workspace-types'
 import {
   buildTaskPageRepoSourceState,
   selectTaskPageUnresolvedSourceRepos,
@@ -201,8 +204,35 @@ describe('task page cache selectors', () => {
     }
 
     expect(findTaskPageDialogWorkItem(cache, null)).toBeNull()
-    expect(findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-1' })).toBe(item)
-    expect(findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-2' })).toBeNull()
+    expect(
+      findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-1', url: item.url })
+    ).toBe(item)
+    expect(
+      findTaskPageDialogWorkItem(cache, { id: 'issue-1', repoId: 'repo-2', url: item.url })
+    ).toBeNull()
+  })
+
+  it('keeps the clicked repository when a source change refreshes the same issue number', () => {
+    const origin = {
+      ...workItem('issue:12', 'repo-1'),
+      url: 'https://github.com/fork-owner/widgets/issues/12'
+    }
+    const upstream = {
+      ...origin,
+      url: 'https://github.com/upstream-owner/widgets/issues/12'
+    }
+    const clickedIssue = { id: origin.id, repoId: origin.repoId, url: origin.url }
+    const upstreamCache = {
+      upstream: entry<GitHubWorkItem[]>([upstream])
+    }
+
+    expect(findTaskPageDialogWorkItem(upstreamCache, clickedIssue)).toBeNull()
+    expect(
+      findTaskPageDialogWorkItem(
+        { ...upstreamCache, origin: entry<GitHubWorkItem[]>([origin]) },
+        clickedIssue
+      )
+    ).toBe(origin)
   })
 
   it('reconciles paged table rows with patched work-item cache entries', () => {

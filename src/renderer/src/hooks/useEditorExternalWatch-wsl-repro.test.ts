@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/types'
+import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
@@ -10,7 +10,7 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { notifyEditorExternalFileChange } from '@/components/editor/editor-autosave'
-import { createExternalWatchEventHandler } from './useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 
 const worktreePath = '\\\\wsl.localhost\\Ubuntu\\workspace\\repo'
 const restoredPath = '//wsl.localhost/Ubuntu/workspace/repo/file.ts'

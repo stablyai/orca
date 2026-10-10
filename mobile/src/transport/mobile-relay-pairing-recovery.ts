@@ -1,14 +1,12 @@
 import { Platform } from 'react-native'
-import {
-  DeviceCredentialInstalledSchema,
-  PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
-import { loadHosts, saveHost } from './host-store'
+import { loadHosts, savePairedHost } from './host-store'
 import {
   promotePairingJournalCredential,
   readMobileRelayCredentialBundle,
@@ -27,7 +25,11 @@ import {
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
-import type { HostProfile, RpcResponse } from './types'
+import { relayHost } from './pairing-relay-host'
+import {
+  relayCredentialProvision,
+  relayPairingEndpointsRead
+} from './mobile-relay-pairing-operations'
 
 export type MobileRelayPairingRecoveryResult = 'none' | 'recovered' | 'deferred' | 'abandoned'
 
@@ -38,7 +40,7 @@ type RecoveryDependencies = {
   readCredentialBundle: typeof readMobileRelayCredentialBundle
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   loadHosts: typeof loadHosts
-  saveHost: typeof saveHost
+  savePairedHost: typeof savePairedHost
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   now: () => number
@@ -52,7 +54,7 @@ const defaultDependencies: RecoveryDependencies = {
   readCredentialBundle: readMobileRelayCredentialBundle,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   loadHosts,
-  saveHost,
+  savePairedHost,
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   now: Date.now,
@@ -96,7 +98,7 @@ async function runRecovery(
   const bundle = await dependencies.readCredentialBundle(journal.metadata.host.id).catch(() => null)
   const hosts = await dependencies.loadHosts().catch(() => [])
   const existing = hosts.find(({ id }) => id === journal!.metadata.host.id)
-  if (existing?.relayHostId === journal.metadata.relay.relayHostId && bundle) {
+  if (existing?.relay?.relayHostId === journal.metadata.relay.relayHostId && bundle) {
     await dependencies.clearJournal(journal.metadata.journalId)
     return 'recovered'
   }
@@ -131,14 +133,11 @@ async function runRecovery(
       }
       if (credential.kind === 'invite' && endpoints.installStatus?.state === 'not-found') {
         journal = await transitionToInviteAuthorization(journal, dependencies)
-        const installed = DeviceCredentialInstalledSchema.parse(
-          requireSuccess(
-            await client.sendRequest('pairing.provisionRelay', {
-              reqId: journal.metadata.installReqId,
-              newResumeTokenHash: journal.metadata.pendingResumeTokenHash
-            })
-          )
-        )
+        const installReply = await relayCredentialProvision.request(client, {
+          reqId: journal.metadata.installReqId,
+          newResumeTokenHash: journal.metadata.pendingResumeTokenHash
+        })
+        const installed = relayCredentialProvision.interpret(installReply)
         const reconciled = await getRecoveryStatus(client, journal, 'invite')
         assertCommitted(reconciled, installed)
         observedCommitted = true
@@ -234,14 +233,11 @@ async function getRecoveryStatus(
   journal: MobileRelayPairingJournal,
   kind: 'resume' | 'invite'
 ) {
-  return PairingGetEndpointsResultSchema.parse(
-    requireSuccess(
-      await client.sendRequest('pairing.getEndpoints', {
-        installReqId: journal.metadata.installReqId,
-        ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
-      })
-    )
-  )
+  const reply = await relayPairingEndpointsRead.request(client, {
+    installReqId: journal.metadata.installReqId,
+    ...(kind === 'resume' ? { resumeConfirmReqId: journal.metadata.resumeConfirmReqId } : {})
+  })
+  return relayPairingEndpointsRead.interpret(reply)
 }
 
 async function transitionToInviteAuthorization(
@@ -263,7 +259,7 @@ async function transitionToInviteAuthorization(
 
 async function publishCommitted(
   journal: MobileRelayPairingJournal,
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   dependencies: RecoveryDependencies
 ): Promise<void> {
   if (endpoints.installStatus?.state !== 'committed' || !endpoints.relay) {
@@ -284,40 +280,16 @@ async function publishCommitted(
   await dependencies.writeCredentialBundle(
     promotePairingJournalCredential({ journal: reconciledJournal, installed })
   )
-  await dependencies.saveHost(relayHost(reconciledJournal, endpoints.relay))
+  await dependencies.savePairedHost(relayHost(reconciledJournal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: url.toString() }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
 }
 
 function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
   return { ...journal.metadata.relay, inviteToken: journal.secrets.inviteToken }
 }
 
-function requireSuccess(response: RpcResponse): unknown {
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
-  }
-  return response.result
-}
-
 function assertCommitted(
-  endpoints: ReturnType<typeof PairingGetEndpointsResultSchema.parse>,
+  endpoints: PairingGetEndpointsResult,
   installed: DeviceCredentialInstalled
 ): void {
   if (

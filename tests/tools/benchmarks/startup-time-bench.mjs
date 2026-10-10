@@ -12,6 +12,7 @@
  *   node tests/tools/benchmarks/startup-time-bench.mjs --label baseline
  *     [--iterations 5] [--files 28000] [--fixture-dir <path>]
  *     [--state-profile none|restored-local-tabs] [--session-tabs 200]
+ *     [--ssh-unreachable-targets 1]
  *     [--github-repos 3] [--gh-hang-ms 30000]
  *     [--wait-for-event renderer-startup-hydration-done]
  *     [--exe <path-to-packaged-Orca>] [--timeout-ms 240000]
@@ -27,20 +28,14 @@
  * Results: tests/tools/benchmarks/results/startup-<label>-<timestamp>.json
  */
 import { spawn, spawnSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import os from 'node:os'
 import { delimiter, join, resolve } from 'node:path'
+import { writePersistedStateFixture } from './startup-bench-state-fixture.mjs'
 
 const scriptDir = import.meta.dirname
-const repoRoot = resolve(scriptDir, '..', '..')
+const repoRoot = resolve(scriptDir, '..', '..', '..')
 const require = createRequire(import.meta.url)
 
 function parseArgs(argv) {
@@ -53,6 +48,11 @@ function parseArgs(argv) {
     timeoutMs: 240000,
     stateProfile: 'none',
     sessionTabs: 0,
+    // Seeds N SSH targets pointed at TEST-NET-3 (RFC 5737, guaranteed
+    // unroutable) and lists them as live-at-shutdown, so startup reconnect
+    // dials a host that never answers. Reproduces "one asleep remote machine
+    // delays every local terminal".
+    sshUnreachableTargets: 0,
     githubRepos: 0,
     ghHangMs: 0,
     waitForEvent: 'did-finish-load',
@@ -88,6 +88,9 @@ function parseArgs(argv) {
       case '--session-tabs':
         args.sessionTabs = Number(next())
         break
+      case '--ssh-unreachable-targets':
+        args.sshUnreachableTargets = Number(next())
+        break
       case '--github-repos':
         args.githubRepos = Number(next())
         break
@@ -113,7 +116,7 @@ function parseArgs(argv) {
  * tiny. Layout mirrors Chromium cache dirs plus a few Orca-owned dirs.
  */
 function ensureFixture(fixtureDir, options) {
-  const { fileCount, stateProfile, sessionTabs, githubRepos } = options
+  const { fileCount, stateProfile, sessionTabs, githubRepos, sshUnreachableTargets } = options
   const manifestPath = join(fixtureDir, 'bench-fixture-manifest.json')
   if (existsSync(manifestPath)) {
     try {
@@ -122,7 +125,8 @@ function ensureFixture(fixtureDir, options) {
         manifest.files === fileCount &&
         manifest.stateProfile === stateProfile &&
         manifest.sessionTabs === sessionTabs &&
-        (manifest.githubRepos ?? 0) === githubRepos
+        (manifest.githubRepos ?? 0) === githubRepos &&
+        (manifest.sshUnreachableTargets ?? 0) === sshUnreachableTargets
       ) {
         console.log(`[fixture] reusing ${fixtureDir} (${fileCount} files, state=${stateProfile})`)
         return
@@ -157,7 +161,8 @@ function ensureFixture(fixtureDir, options) {
   const persistedStateBytes = writePersistedStateFixture(fixtureDir, {
     stateProfile,
     sessionTabs,
-    githubRepos
+    githubRepos,
+    sshUnreachableTargets
   })
   writeFileSync(
     manifestPath,
@@ -166,162 +171,12 @@ function ensureFixture(fixtureDir, options) {
       stateProfile,
       sessionTabs,
       githubRepos,
+      sshUnreachableTargets,
       persistedStateBytes,
       createdAt: Date.now()
     })
   )
   console.log(`[fixture] done in ${((Date.now() - started) / 1000).toFixed(1)}s`)
-}
-
-function initFixtureGitRepo(repoDir) {
-  mkdirSync(repoDir, { recursive: true })
-  if (!existsSync(join(repoDir, '.git'))) {
-    const init = spawnSync('git', ['init', repoDir], { stdio: 'ignore' })
-    if (init.status !== 0) {
-      throw new Error(`Failed to create git repo fixture at ${repoDir}`)
-    }
-  }
-  return realpathSync(repoDir)
-}
-
-/**
- * Seed repos whose hydration reaches the `gh` login probe: a GitHub `origin`
- * remote and no github.user/user.username config (the bench also points
- * GIT_CONFIG_GLOBAL away from the developer's real config at launch).
- */
-function buildGithubRepoFixtures(fixtureDir, githubRepos) {
-  const repos = []
-  for (let i = 0; i < githubRepos; i++) {
-    const repoPath = initFixtureGitRepo(join(fixtureDir, `bench-gh-repo-${i}`))
-    const remote = spawnSync(
-      'git',
-      [
-        '-C',
-        repoPath,
-        'remote',
-        'add',
-        'origin',
-        `https://github.com/orca-bench/bench-gh-repo-${i}.git`
-      ],
-      { stdio: 'ignore' }
-    )
-    // Exit 3 (remote exists) is fine on fixture reuse; anything else is not.
-    if (remote.status !== 0 && remote.status !== 3) {
-      throw new Error(`Failed to add GitHub remote to ${repoPath}`)
-    }
-    repos.push({
-      id: `bench-gh-repo-${i}`,
-      path: repoPath,
-      displayName: `Bench GH Repo ${i}`,
-      badgeColor: '#000000',
-      addedAt: 1,
-      externalWorktreeVisibility: 'show'
-    })
-  }
-  return repos
-}
-
-function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs, githubRepos }) {
-  const dataPath = join(fixtureDir, 'orca-data.json')
-  if (stateProfile === 'none' && githubRepos === 0) {
-    try {
-      unlinkSync(dataPath)
-    } catch {
-      // no persisted state fixture
-    }
-    return 0
-  }
-  if (!['none', 'restored-local-tabs'].includes(stateProfile)) {
-    throw new Error(`Unknown state profile: ${stateProfile}`)
-  }
-
-  const githubRepoEntries = buildGithubRepoFixtures(fixtureDir, githubRepos)
-  if (stateProfile === 'none') {
-    const state = {
-      schemaVersion: 1,
-      repos: githubRepoEntries,
-      settings: {
-        telemetry: {
-          installId: 'startup-bench',
-          optedIn: false,
-          existedBeforeTelemetryRelease: true
-        }
-      }
-    }
-    const json = JSON.stringify(state, null, 2)
-    writeFileSync(dataPath, json, 'utf-8')
-    return Buffer.byteLength(json)
-  }
-
-  const repoPath = initFixtureGitRepo(join(fixtureDir, 'bench-repo'))
-  const repoId = 'bench-repo'
-  const worktreeId = `${repoId}::${repoPath}`
-  const tabCount = Math.max(1, sessionTabs)
-  const tabs = []
-  const terminalLayoutsByTabId = {}
-  const activeTabIdByWorktree = {}
-  for (let i = 0; i < tabCount; i++) {
-    const tabId = `bench-tab-${String(i).padStart(5, '0')}`
-    const ptyId = `bench-pty-${String(i).padStart(5, '0')}`
-    tabs.push({
-      id: tabId,
-      ptyId,
-      worktreeId,
-      title: `Terminal ${i + 1}`,
-      customTitle: null,
-      color: null,
-      sortOrder: i,
-      createdAt: 1
-    })
-    terminalLayoutsByTabId[tabId] = {
-      root: null,
-      activeLeafId: null,
-      expandedLeafId: null
-    }
-  }
-  activeTabIdByWorktree[worktreeId] = tabs[0]?.id ?? null
-  const state = {
-    schemaVersion: 1,
-    repos: [
-      {
-        id: repoId,
-        path: repoPath,
-        displayName: 'Bench Repo',
-        badgeColor: '#000000',
-        addedAt: 1,
-        externalWorktreeVisibility: 'show'
-      },
-      ...githubRepoEntries
-    ],
-    settings: {
-      telemetry: {
-        installId: 'startup-bench',
-        optedIn: false,
-        existedBeforeTelemetryRelease: true
-      }
-    },
-    ui: {
-      lastActiveRepoId: repoId,
-      lastActiveWorktreeId: worktreeId
-    },
-    workspaceSession: {
-      activeRepoId: repoId,
-      activeWorktreeId: worktreeId,
-      activeTabId: tabs[0]?.id ?? null,
-      tabsByWorktree: {
-        [worktreeId]: tabs
-      },
-      terminalLayoutsByTabId,
-      activeTabIdByWorktree,
-      activeWorktreeIdsOnShutdown: [worktreeId],
-      defaultTerminalTabsAppliedByWorktreeId: {
-        [worktreeId]: true
-      }
-    }
-  }
-  const json = JSON.stringify(state, null, 2)
-  writeFileSync(dataPath, json, 'utf-8')
-  return Buffer.byteLength(json)
 }
 
 /**
@@ -385,12 +240,19 @@ function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
 }
 
 function killProcessTree(proc) {
-  if (proc.exitCode !== null || proc.signalCode !== null) {
+  if (process.platform === 'win32') {
+    if (proc.exitCode === null && proc.signalCode === null) {
+      spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
+    }
     return
   }
-  if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
-  } else {
+  // Why the whole group and not just the child: Electron's helper processes
+  // inherit the stderr pipe, so killing only the launcher leaves them holding it
+  // open — the harness then never sees EOF and never exits after its last run.
+  // Requires the `detached: true` spawn below.
+  try {
+    process.kill(-proc.pid, 'SIGKILL')
+  } catch {
     try {
       proc.kill('SIGKILL')
     } catch {
@@ -432,7 +294,10 @@ function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
     const startedAt = process.hrtime.bigint()
     const child = spawn(command, commandArgs, {
       env: launchEnv,
-      stdio: ['ignore', 'ignore', 'pipe']
+      stdio: ['ignore', 'ignore', 'pipe'],
+      // Why: gives the launcher its own process group so teardown can reap every
+      // Electron helper it spawned (see killProcessTree).
+      detached: process.platform !== 'win32'
     })
     let finished = false
     let buffer = ''
@@ -512,6 +377,12 @@ function derivePhases(events) {
       'renderer-startup-hydration-done'
     ),
     totalToWorkspaceReady: eventTime(events, 'renderer-startup-hydration-done', 'harness'),
+    // Time the terminal-restoration gate spent on SSH reconnect, and on the
+    // main-process barrier that used to fence worktree hydration.
+    rendererSshReconnectMs: eventDetailsNumber(events, 'renderer-ssh-reconnect-done', 'durationMs'),
+    rendererStartupBarrierMs:
+      eventDetailsNumber(events, 'renderer-git-environment-barrier-await-done', 'durationMs') ??
+      eventDetailsNumber(events, 'renderer-first-window-services-await-done', 'durationMs'),
     rendererReconnectTerminalsMs:
       eventDetailsNumber(events, 'renderer-reconnect-terminals-done', 'durationMs') ??
       delta(
@@ -585,7 +456,7 @@ async function main() {
       join(
         os.tmpdir(),
         'orca-startup-bench',
-        `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}-gh${args.githubRepos}`
+        `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}-gh${args.githubRepos}-ssh${args.sshUnreachableTargets}`
       )
   )
   mkdirSync(fixtureDir, { recursive: true })
@@ -593,7 +464,8 @@ async function main() {
     fileCount: args.files,
     stateProfile: args.stateProfile,
     sessionTabs: args.sessionTabs,
-    githubRepos: args.githubRepos
+    githubRepos: args.githubRepos,
+    sshUnreachableTargets: args.sshUnreachableTargets
   })
   const ghShimDir = writeGhShim(fixtureDir, args.ghHangMs)
   const launchEnv = buildLaunchEnvironment({

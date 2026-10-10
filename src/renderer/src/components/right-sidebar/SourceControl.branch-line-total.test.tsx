@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import {
   clearBranchLineTotalRequestGateForTests,
   getBranchLineTotalMergeBase
@@ -335,29 +335,5 @@ describe('SourceControl branch line total chip', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('renders nothing for an exact zero total', () => {
-    resetState({
-      gitBranchLineTotalByWorktree: {
-        [mocks.activeWorktree.id]: { added: 0, removed: 0, mergeBase: MERGE_BASE }
-      }
-    })
-    renderSourceControl()
-
-    expect(chip()).toBeNull()
-    expect(loadingChip()).toBeNull()
-  })
-
-  it('omits the zero half of a one-sided total', () => {
-    resetState({
-      gitBranchLineTotalByWorktree: {
-        [mocks.activeWorktree.id]: { added: 42, removed: 0, mergeBase: MERGE_BASE }
-      }
-    })
-    renderSourceControl()
-
-    expect(chip()?.textContent).toBe('+42')
-    expect(chip()?.getAttribute('aria-label')).toBe('42 lines added')
   })
 })

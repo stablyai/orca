@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { settingsForProjectRowOwner } from './github-project-row-owner'
 import { lookupReposBySlugFromCache } from '@/lib/repo-slug-cache'
 

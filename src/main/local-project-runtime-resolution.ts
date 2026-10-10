@@ -1,6 +1,9 @@
 import type { Store } from './persistence'
-import type { Project, Repo } from '../shared/types'
+import type { GlobalSettings } from '../shared/global-settings-types'
+import type { Project } from '../shared/project-types'
+import type { Repo } from '../shared/repo-types'
 import {
+  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../shared/project-execution-runtime'
@@ -10,21 +13,45 @@ import {
   hasCachedWslAvailability,
   hasCachedWslDistros
 } from './wsl'
-import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 
-function canResolveProjectRuntimeForRepo(store: Store): boolean {
+/**
+ * The slice of the store runtime resolution actually reads. Structural rather
+ * than the full `Store` so narrowed stores -- the Orca runtime's `RuntimeStore`,
+ * worktree root preparation -- resolve the same runtime the create path does
+ * instead of silently falling back to host placement.
+ *
+ * Members stay optional because those stores declare them optional; the
+ * `typeof` guards below are what actually decide whether resolution can run.
+ */
+export type ProjectRuntimeResolutionStore = {
+  getProjects?: Store['getProjects']
+  getRepo?: Store['getRepo']
+  getSettings?: () => Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
+}
+
+type ResolvableStore = ProjectRuntimeResolutionStore & {
+  getProjects: NonNullable<ProjectRuntimeResolutionStore['getProjects']>
+  getSettings: NonNullable<ProjectRuntimeResolutionStore['getSettings']>
+}
+
+function canResolveProjectRuntimeForRepo(
+  store: ProjectRuntimeResolutionStore
+): store is ResolvableStore {
   return typeof store.getProjects === 'function' && typeof store.getSettings === 'function'
 }
 
-function canResolveProjectRuntimeForWorktreeId(store: Store): boolean {
+function canResolveProjectRuntimeForWorktreeId(
+  store: ProjectRuntimeResolutionStore
+): store is ResolvableStore & { getRepo: NonNullable<ProjectRuntimeResolutionStore['getRepo']> } {
   return canResolveProjectRuntimeForRepo(store) && typeof store.getRepo === 'function'
 }
 
 function resolveLocalProjectRuntime(
-  store: Store,
-  project: Project,
-  settings: ReturnType<Store['getSettings']> = store.getSettings()
+  store: ResolvableStore,
+  project: Pick<Project, 'id' | 'localWindowsRuntimePreference'>,
+  settings: ReturnType<ResolvableStore['getSettings']> = store.getSettings()
 ): ProjectExecutionRuntimeResolution {
   const wslAvailable = hasCachedWslAvailability()
     ? (getCachedWslAvailability() ?? undefined)
@@ -41,7 +68,7 @@ function resolveLocalProjectRuntime(
 }
 
 export function resolveLocalProjectRuntimeForRepo(
-  store: Store,
+  store: ProjectRuntimeResolutionStore,
   repo: Repo
 ): ProjectExecutionRuntimeResolution | undefined {
   if (
@@ -57,8 +84,31 @@ export function resolveLocalProjectRuntimeForRepo(
   return resolveLocalProjectRuntime(store, project)
 }
 
+/** Same choice the renderer makes for a workspace: the project's runtime, else the distro of a
+ *  WSL-share path, else the global default. Works for a repo with no project too. */
+export function resolveLocalWorkspaceRuntime(
+  store: ProjectRuntimeResolutionStore,
+  repo: Repo,
+  workspacePath: string | null | undefined
+): ProjectExecutionRuntimeResolution | undefined {
+  if (
+    getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
+    !canResolveProjectRuntimeForRepo(store)
+  ) {
+    return undefined
+  }
+  const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
+  return resolveLocalProjectRuntime(store, {
+    id: project?.id ?? repo.id,
+    localWindowsRuntimePreference: getWorkspaceRuntimePreference(
+      project?.localWindowsRuntimePreference,
+      workspacePath
+    )
+  })
+}
+
 export function resolveLocalProjectRuntimesForRepos(
-  store: Store,
+  store: ProjectRuntimeResolutionStore,
   repos: readonly Repo[]
 ): ReadonlyMap<string, ProjectExecutionRuntimeResolution> {
   const runtimeByRepoId = new Map<string, ProjectExecutionRuntimeResolution>()
@@ -92,7 +142,7 @@ export function resolveLocalProjectRuntimesForRepos(
 }
 
 export function resolveLocalProjectRuntimeForWorktreeId(
-  store: Store | undefined,
+  store: ProjectRuntimeResolutionStore | undefined,
   worktreeId: string | undefined
 ): ProjectExecutionRuntimeResolution | undefined {
   if (!store || !worktreeId) {

@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 export type GitHubWorkItemStatusItem = Pick<GitHubWorkItem, 'type' | 'state'>
 

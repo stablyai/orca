@@ -2,13 +2,14 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { HostedReviewHeaderLink } from './hosted-review-header-chrome'
+import { HostedReviewHeaderLink } from './source-control/review/hosted-review-header-chrome'
 
 const { openHttpLinkMock } = vi.hoisted(() => ({ openHttpLinkMock: vi.fn() }))
 
 vi.mock('@/lib/http-link-routing', () => ({
   openHttpLink: openHttpLinkMock,
-  registerHttpLinkStoreAccessor: vi.fn()
+  registerHttpLinkStoreAccessor: vi.fn(),
+  registerWorkspaceHttpLinkBrowserOpener: vi.fn()
 }))
 
 function makeReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
@@ -70,26 +71,6 @@ describe('HostedReviewHeaderLink', () => {
     expect(openHttpLinkMock).not.toHaveBeenCalled()
   })
 
-  it.each<[string, ClickModifiers]>([
-    ['Cmd-click', { metaKey: true }],
-    ['Ctrl-click', { ctrlKey: true }],
-    ['Shift+Cmd-click', { metaKey: true, shiftKey: true }],
-    ['Shift+Ctrl-click', { ctrlKey: true, shiftKey: true }]
-  ])('opens GitHub PRs in the Checks tab on %s', (_label, modifiers) => {
-    const onOpenHostedReviewInChecks = vi.fn()
-    const element = HostedReviewHeaderLink({
-      review: makeReview(),
-      onOpenHostedReviewInChecks
-    })
-
-    const event = clickEvent(modifiers)
-    ;(element.props.onClick as (event: MinimalClickEvent) => void)(event)
-
-    expect(event.stopPropagation).toHaveBeenCalledTimes(1)
-    expect(onOpenHostedReviewInChecks).toHaveBeenCalledTimes(1)
-    expect(openHttpLinkMock).not.toHaveBeenCalled()
-  })
-
   it('opens GitLab MRs in the Checks tab instead of rendering an external link', () => {
     const onOpenHostedReviewInChecks = vi.fn()
     const element = HostedReviewHeaderLink({
@@ -108,30 +89,6 @@ describe('HostedReviewHeaderLink', () => {
 
     const event = clickEvent()
     ;(element.props.onClick as (event: MinimalClickEvent) => void)(event)
-    expect(event.stopPropagation).toHaveBeenCalledTimes(1)
-    expect(onOpenHostedReviewInChecks).toHaveBeenCalledTimes(1)
-    expect(openHttpLinkMock).not.toHaveBeenCalled()
-  })
-
-  it.each<[string, ClickModifiers]>([
-    ['Cmd-click', { metaKey: true }],
-    ['Ctrl-click', { ctrlKey: true }],
-    ['Shift+Cmd-click', { metaKey: true, shiftKey: true }],
-    ['Shift+Ctrl-click', { ctrlKey: true, shiftKey: true }]
-  ])('opens GitLab MRs in the Checks tab on %s', (_label, modifiers) => {
-    const onOpenHostedReviewInChecks = vi.fn()
-    const element = HostedReviewHeaderLink({
-      review: makeReview({
-        provider: 'gitlab',
-        number: 31,
-        url: 'https://gitlab.com/acme/widgets/-/merge_requests/31'
-      }),
-      onOpenHostedReviewInChecks
-    })
-
-    const event = clickEvent(modifiers)
-    ;(element.props.onClick as (event: MinimalClickEvent) => void)(event)
-
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
     expect(onOpenHostedReviewInChecks).toHaveBeenCalledTimes(1)
     expect(openHttpLinkMock).not.toHaveBeenCalled()

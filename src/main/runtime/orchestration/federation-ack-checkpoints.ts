@@ -21,6 +21,14 @@ export function clearFederationAckCheckpoints(runtime: OrcaRuntimeService): void
   federationAckStates.delete(runtime)
 }
 
+/** Drops one settled dispatch's checkpoint; the durable ack watermark keeps replay suppressed. */
+export function releaseFederationAckCheckpoint(
+  runtime: OrcaRuntimeService,
+  dispatchId: string
+): void {
+  federationAckStates.get(runtime)?.byDispatch.delete(dispatchId)
+}
+
 export function acquireFederationAckLease(
   runtime: OrcaRuntimeService,
   dispatchId: string

@@ -39,6 +39,21 @@ describe('MobileFilePreviewScreen', () => {
     ).toBe(false)
   })
 
+  it('treats native-chat artifact grants as read-only', () => {
+    expect(
+      isEditableMobileTerminalArtifactPreview(
+        {
+          status: 'ready',
+          kind: 'text',
+          content: '<h1>Result</h1>',
+          truncated: false,
+          byteLength: 15
+        },
+        true
+      )
+    ).toBe(false)
+  })
+
   it('keeps dirty terminal artifact drafts protected while preview is waiting for reconnect', () => {
     const sourceKey = sourceKeyForPreview({
       source: 'terminalArtifact',

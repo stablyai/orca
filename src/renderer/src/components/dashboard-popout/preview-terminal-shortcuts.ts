@@ -3,7 +3,8 @@ import {
   type MacOptionAsAlt,
   type TerminalShortcutAction
 } from '@/components/terminal-pane/terminal-shortcut-policy'
-import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
+import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
+import type { OptionKeyLocationState } from '@/lib/keyboard-layout/option-key-location-state'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import {
   normalizeTerminalShortcutPolicy,
@@ -15,21 +16,21 @@ export type PreviewShortcutContext = {
   clientPlatform: NodeJS.Platform
   macOptionAsAlt: MacOptionAsAlt
   /** Location of the physically held Option key (character keys report their own). */
-  optionKeyLocation: number
+  optionKeyLocations: OptionKeyLocationState
   keybindings: KeybindingOverrides | undefined
   /** Host-input facts relayed with the card; null falls back to client-OS routing. */
   terminalInput: DashboardCardTerminalInput | null
   /** Live kitty-protocol flags mirrored from this pty's output. */
-  kittyKeyboardActive: () => boolean
-  /** The user's setting; terminal-first yields the tab.close alias to the shell. */
+  getKittyKeyboardFlags: () => number
+  /** The user's policy for chords shared with shells and TUIs. */
   terminalShortcutPolicy: TerminalShortcutPolicy | null | undefined
 }
 
 /**
  * Runs the preview terminal's keys through the same policy a pane uses, so the
  * dashboard encodes word-kills, Option chords, and modified Enter identically.
- * Every pane-scoped verdict (splits, search, focus) still comes back — the
- * caller swallows those rather than leaking raw bytes to the agent.
+ * Active pane commands come back for the caller to handle; deferred TUI
+ * chords continue through xterm.
  */
 export function resolvePreviewShortcutAction(
   event: KeyboardEvent,
@@ -41,13 +42,13 @@ export function resolvePreviewShortcutAction(
     event,
     isMac,
     context.macOptionAsAlt,
-    context.optionKeyLocation,
+    context.optionKeyLocations,
     context.clientPlatform === 'win32',
     context.keybindings,
     // Why: PSReadLine on a local ConPTY binds Ctrl+←/→ itself; \eb/\ef would print stray b/f.
     () => context.terminalInput?.localWindowsConpty === true,
-    context.kittyKeyboardActive,
-    getLayoutBaseCharacterForCode,
+    context.getKittyKeyboardFlags,
+    getLayoutCharacterForCode,
     () => context.terminalInput?.windowsShiftEnterEncoding ?? 'alt-enter',
     // Why: byte protocols follow the pty's host, which differs from the client OS on remote runtimes.
     () => hostPlatform === 'win32',

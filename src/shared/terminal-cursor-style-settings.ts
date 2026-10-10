@@ -1,4 +1,4 @@
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 type TerminalCursorStyleSettings = Pick<
   GlobalSettings,

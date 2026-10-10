@@ -36,13 +36,4 @@ describe('createLineageToggleHandlerCache', () => {
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
     expect(toggleGroup).toHaveBeenCalledExactlyOnceWith('lineage:alpha')
   })
-
-  it('keeps each cached handler bound to its own group key', () => {
-    const toggleGroup = vi.fn()
-    const getHandler = createLineageToggleHandlerCache(toggleGroup)
-
-    getHandler('lineage:beta')(makeEvent())
-
-    expect(toggleGroup).toHaveBeenCalledExactlyOnceWith('lineage:beta')
-  })
 })

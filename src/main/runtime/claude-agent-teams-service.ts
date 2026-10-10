@@ -26,7 +26,8 @@ export class ClaudeAgentTeamsService {
     leaderHandle: string
     baseEnv: Record<string, string | undefined>
     shimDir: string
-    shimBin: string
+    /** Absolute path only; null leaves the var unset so the shim refuses to guess a cwd-relative CLI. */
+    shimBin: string | null
   }): AgentTeamsLaunchEnv {
     const teamId = `team-${randomUUID()}`
     const token = randomBytes(32).toString('base64url')
@@ -47,8 +48,10 @@ export class ClaudeAgentTeamsService {
       ORCA_AGENT_TEAMS_TEAM_ID: teamId,
       ORCA_AGENT_TEAMS_TOKEN: token,
       ORCA_AGENT_TEAMS_LEADER_PANE: leaderPane,
-      ORCA_AGENT_TEAMS_SHIM_DIR: args.shimDir,
-      ORCA_AGENT_TEAMS_SHIM_BIN: args.shimBin
+      ORCA_AGENT_TEAMS_SHIM_DIR: args.shimDir
+    }
+    if (args.shimBin) {
+      env.ORCA_AGENT_TEAMS_SHIM_BIN = args.shimBin
     }
     if (args.baseEnv.ORCA_PAIRING_CODE) {
       env.ORCA_PAIRING_CODE = args.baseEnv.ORCA_PAIRING_CODE

@@ -30,3 +30,12 @@ describe('readFileExplorerDirectory', () => {
     ])
   })
 })
+
+it('preserves the host directory classification with default Quick Open preferences', async () => {
+  readRuntimeDirectory.mockResolvedValueOnce([
+    { name: 'linked', isDirectory: true, isSymlink: true }
+  ])
+  const { entries } = await readFileExplorerDirectory('wt-1', '/w', '/w')
+  expect(entries).toEqual([{ name: 'linked', isDirectory: true, isSymlink: true }])
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', undefined)
+})

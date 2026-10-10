@@ -17,8 +17,8 @@ import { iterateTerminalHistorySeedChunks } from './terminal-history-seed-chunks
 // never armed mouse reporting, yet its snapshot re-arms it, so pointer motion
 // echoes literal SGR reports (^[[<35;col;rowM) into the prompt.
 //
-// This drives the REAL Session / HeadlessEmulator / TerminalMouseModeMirror /
-// buildRehydrateSequences / HistoryManager / HistoryReader, with a fake
+// This drives the REAL Session / HeadlessEmulator / buildRehydrateSequences /
+// HistoryManager / HistoryReader, with a fake
 // subprocess standing in for node-pty (a real PTY can't be SIGKILLed
 // deterministically mid-DECSET in vitest). The kill goes through Session.kill()'s
 // real teardown; only killWithDescendantSweep is stubbed so the test never
@@ -53,6 +53,7 @@ function createFakeSubprocess(foregroundProcess: string) {
     write: (data: string) => void written.push(data),
     resize: () => {},
     kill: () => {},
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill(this: { forceKilled: boolean }) {
       this.forceKilled = true
     },

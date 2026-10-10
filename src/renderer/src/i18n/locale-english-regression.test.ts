@@ -22,6 +22,23 @@ import zh from './locales/zh.json'
 
 const catalogs = { es, ja, ko, zh }
 
+const WORKSPACE_CLEANUP_BROWSE_TRANSLATIONS = {
+  zh: {
+    selectionWithheldOne: '当前筛选条件隐藏了 1 个已选工作区，已取消选择。',
+    selectionWithheld: '当前筛选条件隐藏了 {{value0}} 个已选工作区，已取消选择。',
+    selectAllCountOne: '选择 1 个通过安全检查的工作区',
+    selectAllCount: '选择全部 {{value0}} 个通过安全检查的工作区'
+  },
+  ko: {
+    selectionWithheldOne:
+      '선택한 워크스페이스 1개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.',
+    selectionWithheld:
+      '선택한 워크스페이스 {{value0}}개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.',
+    selectAllCountOne: '안전 검사를 통과한 워크스페이스 1개 선택',
+    selectAllCount: '안전 검사를 통과한 워크스페이스 {{value0}}개 모두 선택'
+  }
+} as const
+
 function lookup(catalog: unknown, key: string): string | undefined {
   const value = key
     .split('.')
@@ -67,4 +84,14 @@ describe('locale catalogs reverted by a stale branch base (#10770)', () => {
       'Recipes from orca.yaml and enabled plugins show up here, ready to launch a workspace on.'
     )
   })
+
+  it.each(Object.entries(WORKSPACE_CLEANUP_BROWSE_TRANSLATIONS))(
+    '%s retains the merged workspace cleanup browse translations',
+    (code, translations) => {
+      const catalog = code === 'zh' ? zh : ko
+      for (const [key, expected] of Object.entries(translations)) {
+        expect(lookup(catalog, `components.workspace.cleanup.browse.${key}`)).toBe(expected)
+      }
+    }
+  )
 })

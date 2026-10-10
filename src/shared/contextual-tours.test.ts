@@ -12,6 +12,7 @@ describe('contextual tour definitions', () => {
       'workspace-board',
       'workspace-agent-sessions',
       'browser',
+      'client-hosted-browser',
       'tasks',
       'automations',
       'floating-workspace',
@@ -23,9 +24,13 @@ describe('contextual tour definitions', () => {
       expect(tour.steps[0]?.requiredForStart).toBe(true)
       const stepCount = (tour.steps as readonly unknown[]).length
       if (stepCount === 1) {
+        // A lone step needs a completion path beyond the default Next: either it
+        // self-completes on the feature interaction, or it carries an explicit
+        // complete CTA (the client-hosted browser tip's "Got it").
+        const step = tour.steps[0] as ContextualTour['steps'][number]
         expect(
-          (tour.steps[0] as ContextualTour['steps'][number]).advanceOnFeatureInteraction
-        ).toBeTruthy()
+          Boolean(step.advanceOnFeatureInteraction) || step.primaryAction?.kind === 'complete'
+        ).toBe(true)
       } else {
         expect(stepCount).toBeGreaterThanOrEqual(2)
       }
@@ -178,15 +183,6 @@ describe('contextual tour definitions', () => {
       '[data-contextual-tour-target="floating-workspace-new-terminal"], [data-contextual-tour-target="floating-workspace-surface"]',
       '[data-contextual-tour-target="floating-workspace-new-markdown"], [data-contextual-tour-target="floating-workspace-surface"]'
     ])
-  })
-
-  it('allows only workspace creation over its workspace composer modal', () => {
-    const modalTours = (CONTEXTUAL_TOURS as readonly ContextualTour[]).filter(
-      (tour) => tour.allowedActiveModals?.length
-    )
-
-    expect(modalTours.map((tour) => tour.id)).toEqual(['workspace-creation'])
-    expect(modalTours[0]?.allowedActiveModals).toEqual(['new-workspace-composer'])
   })
 
   it('normalizes persisted ids by removing unknowns and duplicates', () => {

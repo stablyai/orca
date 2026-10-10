@@ -1,4 +1,4 @@
-import type { GitFileStatus, GitStatusEntry } from '../../../../shared/types'
+import type { GitFileStatus, GitStatusEntry } from '../../../../shared/git-status-types'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import { splitPathSegments } from './path-tree'
 
@@ -44,7 +44,7 @@ export function getDominantStatus(statuses: Iterable<GitFileStatus>): GitFileSta
   return dominantStatus
 }
 
-export function buildStatusMap(entries: GitStatusEntry[]): Map<string, GitFileStatus> {
+export function buildStatusMap(entries: readonly GitStatusEntry[]): Map<string, GitFileStatus> {
   const statusByPath = new Map<string, GitFileStatus>()
 
   for (const entry of entries) {
@@ -124,14 +124,17 @@ export function shouldShowIgnoredDecoration(
   return !nodeStatus && isPathIgnored(ignored, relativePath)
 }
 
-export function buildIgnoredSet(ignoredPaths: readonly string[] | undefined): Set<string> {
+export function buildIgnoredSet(
+  ignoredPaths: readonly string[] | undefined,
+  rootPath?: string | null
+): Set<string> {
   const set = new Set<string>()
   if (!ignoredPaths) {
     return set
   }
   for (const rawPath of ignoredPaths) {
-    const trimmed = rawPath.endsWith('/') ? rawPath.slice(0, -1) : rawPath
-    set.add(normalizeRelativePath(trimmed))
+    const path = normalizeRelativePath(rawPath, rootPath)
+    set.add(path.endsWith('/') ? path.slice(0, -1) : path)
   }
   return set
 }

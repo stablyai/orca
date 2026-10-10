@@ -1,933 +1,701 @@
-/* eslint-disable max-lines -- Activity feed builders share realistic fixture
-coverage in one file so status grouping stays tied to the event/thread adapter. */
-import { describe, expect, it } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { describe, expect, it, vi } from 'vitest'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   ACTIVITY_SEARCH_QUERY_MAX_BYTES,
-  activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
-  handleActivityFilterFocusShortcut,
-  isActivityFilterFocusShortcut,
-  shouldIgnoreActivityFilterFocusShortcutTarget,
   buildActivityThreadGroups,
-  buildActivityEvents,
-  buildAgentPaneThreads,
-  getActivityThreadGroup,
-  groupActivityThreadsByStatus,
   isActivitySearchQueryTooLarge
-} from './ActivityPrototypePage'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+} from './activity-thread-grouping'
+import {
+  activityThreadResponseRenderPreview,
+  activityThreadStatusId
+} from './activity-thread-presentation'
+import { buildActivityEvents } from './activity-event-builder'
+import { buildAgentPaneThreads } from './activity-thread-builder'
+import {
+  makeActivityResult,
+  makeRepo,
+  makeRetainedDoneEntry,
+  makeTab,
+  makeTabWithIds,
+  makeThreads,
+  makeWorkingEntryWithPriorDone,
+  makeWorkingEntryWithoutHistory,
+  makeWorktree,
+  PANE_KEY,
+  PANE_KEY_2,
+  PANE_KEY_3,
+  LEAF_ID
+} from './ActivityPrototypePage-test-fixtures'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
-const LEAF_ID_3 = '33333333-3333-4333-8333-333333333333'
-const LEAF_ID_UNKNOWN = '44444444-4444-4444-8444-444444444444'
-const LEAF_ID_A1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
-const LEAF_ID_B1 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
-const LEAF_ID_A2 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
-const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
-const PANE_KEY_2 = makePaneKey('tab-2', LEAF_ID_2)
-const PANE_KEY_3 = makePaneKey('tab-3', LEAF_ID_3)
-const UNKNOWN_PANE_KEY = makePaneKey('tab-unknown', LEAF_ID_UNKNOWN)
-const PANE_KEY_A1 = makePaneKey('tab-a1', LEAF_ID_A1)
-const PANE_KEY_B1 = makePaneKey('tab-b1', LEAF_ID_B1)
-const PANE_KEY_A2 = makePaneKey('tab-a2', LEAF_ID_A2)
+{
+  describe('buildActivityEvents', () => {
+    it('keeps every pane visible before applying the global activity cap', () => {
+      const repo = makeRepo()
+      const worktree = makeWorktree()
+      const tabs: TerminalTab[] = []
+      const entries: Record<string, AgentStatusEntry> = {}
 
-function makeRepo(): Repo {
-  return {
-    id: 'repo-1',
-    path: '/repo',
-    displayName: 'Repo',
-    badgeColor: '#000',
-    addedAt: 1
-  }
-}
-
-function makeWorktree(): Worktree {
-  return {
-    id: 'wt-1',
-    repoId: 'repo-1',
-    path: '/repo/wt-1',
-    head: 'abc123',
-    branch: 'feature',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1
-  }
-}
-
-function makeTab(): TerminalTab {
-  return {
-    id: 'tab-1',
-    ptyId: 'pty-1',
-    worktreeId: 'wt-1',
-    title: 'Claude',
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1
-  }
-}
-
-function makeWorktreeWithId(id: string, repoId = 'repo-1', displayName = id): Worktree {
-  return {
-    ...makeWorktree(),
-    id,
-    repoId,
-    path: `/repo/${id}`,
-    displayName
-  }
-}
-
-function makeTabWithIds(id: string, worktreeId: string, title = id): TerminalTab {
-  return {
-    ...makeTab(),
-    id,
-    ptyId: `pty-${id}`,
-    worktreeId,
-    title
-  }
-}
-
-function makeWorkingEntryWithPriorDone(): AgentStatusEntry {
-  return {
-    state: 'working',
-    prompt: 'Second prompt',
-    updatedAt: 2_000,
-    stateStartedAt: 2_000,
-    paneKey: PANE_KEY,
-    terminalTitle: 'Claude',
-    stateHistory: [
-      {
-        state: 'done',
-        prompt: 'First prompt',
-        startedAt: 1_000
-      }
-    ],
-    agentType: 'claude'
-  }
-}
-
-function makeWorkingEntryWithoutHistory(): AgentStatusEntry {
-  return {
-    state: 'working',
-    prompt: 'New run',
-    updatedAt: 3_000,
-    stateStartedAt: 3_000,
-    paneKey: PANE_KEY,
-    terminalTitle: 'Claude',
-    stateHistory: [],
-    agentType: 'claude'
-  }
-}
-
-function makeRetainedDoneEntry(tab: TerminalTab): RetainedAgentEntry {
-  return {
-    entry: {
-      state: 'done',
-      prompt: 'Retained prior run',
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      paneKey: PANE_KEY,
-      terminalTitle: 'Claude',
-      stateHistory: [],
-      agentType: 'claude',
-      lastAssistantMessage: 'Retained response preview'
-    },
-    worktreeId: 'wt-1',
-    tab,
-    agentType: 'claude',
-    startedAt: 1_000
-  }
-}
-
-function makeActivityResult(args: {
-  entries?: Record<string, AgentStatusEntry>
-  retained?: Record<string, RetainedAgentEntry>
-  tab?: TerminalTab
-  now?: number
-}): ReturnType<typeof buildActivityEvents> {
-  const repo = makeRepo()
-  const worktree = makeWorktree()
-  const tab = args.tab ?? makeTab()
-
-  return buildActivityEvents({
-    agentStatusByPaneKey: args.entries ?? {},
-    retainedAgentsByPaneKey: args.retained ?? {},
-    tabsByWorktree: {
-      [worktree.id]: [tab]
-    },
-    worktreeMap: new Map([[worktree.id, worktree]]),
-    repoMap: new Map([[repo.id, repo]]),
-    acknowledgedAgentsByPaneKey: {},
-    now: args.now ?? 3_000
-  })
-}
-
-function makeThreads(result: ReturnType<typeof buildActivityEvents>) {
-  return buildAgentPaneThreads({
-    events: result.events,
-    liveAgentByPaneKey: result.liveAgentByPaneKey
-  })
-}
-
-describe('buildActivityEvents', () => {
-  it('keeps every pane visible before applying the global activity cap', () => {
-    const repo = makeRepo()
-    const worktree = makeWorktree()
-    const tabs: TerminalTab[] = []
-    const entries: Record<string, AgentStatusEntry> = {}
-
-    for (let paneIndex = 0; paneIndex < 18; paneIndex += 1) {
-      const tabId = `tab-${paneIndex}`
-      const paneKey = makePaneKey(
-        tabId,
-        `00000000-0000-4000-8000-${String(paneIndex + 1).padStart(12, '0')}`
-      )
-      tabs.push(makeTabWithIds(tabId, worktree.id, `Agent ${paneIndex}`))
-      // Why: later pane indexes are older, so the pre-fix global 80-event cap
-      // would drop the final panes entirely when every pane had five events.
-      const newestTimestamp = 100_000 - paneIndex * 1_000
-      entries[paneKey] = {
-        state: 'done',
-        prompt: `Prompt ${paneIndex} current`,
-        updatedAt: newestTimestamp,
-        stateStartedAt: newestTimestamp,
-        paneKey,
-        terminalTitle: `Agent ${paneIndex}`,
-        stateHistory: [1, 2, 3, 4].map((offset) => ({
+      for (let paneIndex = 0; paneIndex < 18; paneIndex += 1) {
+        const tabId = `tab-${paneIndex}`
+        const paneKey = makePaneKey(
+          tabId,
+          `00000000-0000-4000-8000-${String(paneIndex + 1).padStart(12, '0')}`
+        )
+        tabs.push(makeTabWithIds(tabId, worktree.id, `Agent ${paneIndex}`))
+        // Why: later pane indexes are older, so the pre-fix global 80-event cap
+        // would drop the final panes entirely when every pane had five events.
+        const newestTimestamp = 100_000 - paneIndex * 1_000
+        entries[paneKey] = {
           state: 'done',
-          prompt: `Prompt ${paneIndex} history ${offset}`,
-          startedAt: newestTimestamp - offset
-        })),
-        agentType: 'claude'
-      }
-    }
-
-    const { events, liveAgentByPaneKey } = buildActivityEvents({
-      agentStatusByPaneKey: entries,
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: { [worktree.id]: tabs },
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      acknowledgedAgentsByPaneKey: {},
-      now: 100_000
-    })
-    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
-
-    expect(events).toHaveLength(80)
-    expect(threads).toHaveLength(18)
-    expect(new Set(threads.map((thread) => thread.paneKey)).size).toBe(18)
-  })
-
-  it('keeps a prior done event after the same pane starts working again', () => {
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: makeWorkingEntryWithPriorDone()
-      },
-      now: 2_000
-    })
-
-    expect(result.events).toHaveLength(1)
-    expect(result.events[0]).toMatchObject({
-      state: 'done',
-      timestamp: 1_000
-    })
-    expect(result.events[0].entry.prompt).toBe('First prompt')
-    expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
-    expect(result.liveAgentByPaneKey[PANE_KEY].entry.prompt).toBe('Second prompt')
-
-    const threads = makeThreads(result)
-
-    expect(threads).toHaveLength(1)
-    expect(threads[0].paneTitle).toBe('Second prompt')
-    expect(threads[0].latestTimestamp).toBe(2_000)
-    expect(threads[0].events[0].entry.prompt).toBe('First prompt')
-  })
-
-  it('does not turn a session boundary into an Agent finished event', () => {
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: {
-          ...makeWorkingEntryWithoutHistory(),
-          state: 'done',
-          prompt: '',
-          sessionBoundary: true,
-          stateHistory: [{ state: 'done', prompt: 'Real turn', startedAt: 1_000 }]
+          prompt: `Prompt ${paneIndex} current`,
+          updatedAt: newestTimestamp,
+          stateStartedAt: newestTimestamp,
+          paneKey,
+          terminalTitle: `Agent ${paneIndex}`,
+          stateHistory: [1, 2, 3, 4].map((offset) => ({
+            state: 'done',
+            prompt: `Prompt ${paneIndex} history ${offset}`,
+            startedAt: newestTimestamp - offset
+          })),
+          agentType: 'claude'
         }
       }
+
+      const { events, liveAgentByPaneKey } = buildActivityEvents({
+        agentStatusByPaneKey: entries,
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: { [worktree.id]: tabs },
+        worktreeMap: new Map([[worktree.id, worktree]]),
+        repoMap: new Map([[repo.id, repo]]),
+        acknowledgedAgentsByPaneKey: {},
+        now: 100_000
+      })
+      const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
+
+      expect(events).toHaveLength(80)
+      expect(threads).toHaveLength(18)
+      expect(new Set(threads.map((thread) => thread.paneKey)).size).toBe(18)
     })
 
-    // Why: the displaced real completion stays visible; the idle SessionStart does not add a second finish.
-    expect(result.events).toHaveLength(1)
-    expect(result.events[0]).toMatchObject({ state: 'done', timestamp: 1_000 })
-    expect(result.events[0].entry.prompt).toBe('Real turn')
-  })
+    it('keeps a prior done event after the same pane starts working again', () => {
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: makeWorkingEntryWithPriorDone()
+        },
+        now: 2_000
+      })
 
-  it('does not keep showing a stale live agent as running', () => {
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: makeWorkingEntryWithPriorDone()
-      },
-      now: 2_000 + AGENT_STATUS_STALE_AFTER_MS + 1
+      expect(result.events).toHaveLength(2)
+      expect(result.events[0]).toMatchObject({ state: 'working', timestamp: 2_000 })
+      expect(result.events[1]).toMatchObject({
+        state: 'done',
+        timestamp: 1_000
+      })
+      expect(result.events[1].entry.prompt).toBe('First prompt')
+      expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
+      expect(result.liveAgentByPaneKey[PANE_KEY].entry.prompt).toBe('Second prompt')
+
+      const threads = makeThreads(result)
+
+      expect(threads).toHaveLength(1)
+      expect(threads[0].paneTitle).toBe('Second prompt')
+      expect(threads[0].latestTimestamp).toBe(2_000)
+      expect(threads[0].events[1].entry.prompt).toBe('First prompt')
     })
 
-    expect(result.events).toHaveLength(1)
-    expect(result.liveAgentByPaneKey[PANE_KEY]).toBeUndefined()
-  })
-
-  it('creates a thread for a fresh running agent with no historical events', () => {
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: makeWorkingEntryWithoutHistory()
-      }
-    })
-
-    const threads = makeThreads(result)
-
-    expect(result.events).toHaveLength(0)
-    expect(threads).toHaveLength(1)
-    expect(threads[0]).toMatchObject({
-      paneKey: PANE_KEY,
-      paneTitle: 'New run',
-      currentAgentState: 'working',
-      latestTimestamp: 3_000,
-      latestEvent: null,
-      unread: false
-    })
-  })
-
-  it('uses orchestration display metadata for live thread titles', () => {
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: {
-          ...makeWorkingEntryWithoutHistory(),
-          prompt: 'You are working inside Orca, a multi-agent IDE.',
-          orchestration: {
-            taskId: 'task-1',
-            dispatchId: 'ctx-1',
-            taskTitle: 'Checkout race',
-            displayName: 'Fix checkout race'
+    it('does not turn a session boundary into an Agent finished event', () => {
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: {
+            ...makeWorkingEntryWithoutHistory(),
+            state: 'done',
+            prompt: '',
+            sessionBoundary: true,
+            stateHistory: [{ state: 'done', prompt: 'Real turn', startedAt: 1_000 }]
           }
         }
-      }
-    })
-
-    const threads = makeThreads(result)
-
-    expect(threads[0].paneTitle).toBe('Fix checkout race')
-    expect(
-      activityThreadMatchesSearchQuery({
-        thread: threads[0],
-        searchQuery: 'fix checkout race'
       })
-    ).toBe(true)
-    expect(
-      activityThreadMatchesSearchQuery({
-        thread: threads[0],
-        searchQuery: 'multi-agent ide'
-      })
-    ).toBe(true)
-  })
 
-  it('creates a thread for a repo-less floating terminal agent', () => {
-    const tab = makeTabWithIds('tab-1', FLOATING_TERMINAL_WORKTREE_ID, 'Claude')
-    const result = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [PANE_KEY]: makeWorkingEntryWithoutHistory()
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: {
-        [FLOATING_TERMINAL_WORKTREE_ID]: [tab]
-      },
-      worktreeMap: new Map(),
-      repoMap: new Map(),
-      acknowledgedAgentsByPaneKey: {},
-      now: 3_000
+      // Why: the displaced real completion stays visible; the idle SessionStart does not add a second finish.
+      expect(result.events).toHaveLength(1)
+      expect(result.events[0]).toMatchObject({ state: 'done', timestamp: 1_000 })
+      expect(result.events[0].entry.prompt).toBe('Real turn')
     })
 
-    const threads = makeThreads(result)
-
-    expect(result.events).toHaveLength(0)
-    expect(threads).toHaveLength(1)
-    expect(threads[0]).toMatchObject({
-      paneKey: PANE_KEY,
-      paneTitle: 'New run',
-      currentAgentState: 'working',
-      repo: null
-    })
-    expect(threads[0].worktree).toMatchObject({
-      id: FLOATING_TERMINAL_WORKTREE_ID,
-      displayName: 'Floating terminal'
-    })
-  })
-
-  it('matches a custom-titled live thread by its current prompt', () => {
-    const tab = { ...makeTab(), customTitle: 'Pinned agent title' }
-    const entry = {
-      ...makeWorkingEntryWithoutHistory(),
-      prompt: 'Investigate activity live prompt search'
-    }
-
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: entry
-      },
-      tab
-    })
-
-    const threads = makeThreads(result)
-
-    expect(threads[0].paneTitle).toBe('Pinned agent title')
-    expect(
-      activityThreadMatchesSearchQuery({
-        thread: threads[0],
-        searchQuery: 'live prompt search'
-      })
-    ).toBe(true)
-  })
-
-  it('surfaces the current live assistant response as the thread preview', () => {
-    const entry = {
-      ...makeWorkingEntryWithoutHistory(),
-      lastAssistantMessage: 'I updated the tests and checked the activity row.'
-    }
-
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: entry
-      }
-    })
-
-    const threads = makeThreads(result)
-
-    expect(threads[0].responsePreview).toBe('I updated the tests and checked the activity row.')
-    expect(
-      activityThreadMatchesSearchQuery({
-        thread: threads[0],
-        searchQuery: 'checked the activity row'
-      })
-    ).toBe(true)
-  })
-
-  it('caps rendered assistant response preview without changing searchable thread text', () => {
-    const longResponse = `${'Preview details '.repeat(80)}activity row searchable tail`
-    const entry = {
-      ...makeWorkingEntryWithoutHistory(),
-      lastAssistantMessage: longResponse
-    }
-
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: entry
-      }
-    })
-
-    const threads = makeThreads(result)
-    const renderedPreview = activityThreadResponseRenderPreview({
-      responsePreview: threads[0].responsePreview
-    })
-
-    expect(renderedPreview.length).toBeLessThan(longResponse.length)
-    expect(renderedPreview.endsWith('...')).toBe(true)
-    expect(
-      activityThreadMatchesSearchQuery({
-        thread: threads[0],
-        searchQuery: 'searchable tail'
-      })
-    ).toBe(true)
-  })
-
-  it('rejects oversized pasted searches before building thread search text', () => {
-    const oversizedQuery = 'secret-activity-search'.repeat(ACTIVITY_SEARCH_QUERY_MAX_BYTES)
-    const thread = {
-      get paneTitle(): string {
-        throw new Error('oversized activity searches must not scan thread text')
-      }
-    } as Parameters<typeof activityThreadMatchesSearchQuery>[0]['thread']
-
-    expect(isActivitySearchQueryTooLarge(oversizedQuery)).toBe(true)
-    expect(
-      activityThreadMatchesSearchQuery({
-        thread,
-        searchQuery: oversizedQuery
-      })
-    ).toBe(false)
-  })
-
-  it('rejects oversized whitespace before trimming activity searches', () => {
-    expect(
-      activityThreadMatchesSearchQuery({
-        thread: makeThreads(makeActivityResult({}))[0],
-        searchQuery: ' '.repeat(ACTIVITY_SEARCH_QUERY_MAX_BYTES + 1)
-      })
-    ).toBe(false)
-  })
-
-  it('does not leave a lone surrogate when capping the rendered response preview', () => {
-    const renderedPreview = activityThreadResponseRenderPreview({
-      responsePreview: `${'a'.repeat(319)}😀tail`
-    })
-    const beforeEllipsis = renderedPreview.slice(0, -3)
-    const lastCode = beforeEllipsis.charCodeAt(beforeEllipsis.length - 1)
-
-    expect(lastCode >= 0xd800 && lastCode <= 0xdbff).toBe(false)
-  })
-
-  it('surfaces the retained done assistant response as the thread preview', () => {
-    const tab = makeTab()
-
-    const result = makeActivityResult({
-      retained: {
-        [PANE_KEY]: makeRetainedDoneEntry(tab)
-      },
-      tab
-    })
-
-    const threads = makeThreads(result)
-
-    expect(threads[0].responsePreview).toBe('Retained response preview')
-  })
-
-  it('overlays fresh live state onto retained-only activity for a reused pane key', () => {
-    const tab = makeTab()
-
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: makeWorkingEntryWithoutHistory()
-      },
-      retained: {
-        [PANE_KEY]: makeRetainedDoneEntry(tab)
-      },
-      tab
-    })
-
-    expect(result.events).toHaveLength(1)
-    expect(result.events[0]).toMatchObject({
-      state: 'done',
-      timestamp: 1_000
-    })
-    expect(result.events[0].entry.prompt).toBe('Retained prior run')
-    expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
-
-    const threads = makeThreads(result)
-
-    expect(threads).toHaveLength(1)
-    expect(threads[0].paneTitle).toBe('New run')
-    expect(threads[0].responsePreview).toBe('')
-    expect(threads[0].latestTimestamp).toBe(3_000)
-    expect(threads[0].events[0].entry.prompt).toBe('Retained prior run')
-  })
-
-  it('groups visible threads by current status order', () => {
-    const repo = makeRepo()
-    const worktree = makeWorktree()
-    const workingTab = makeTab()
-    const blockedTab = { ...makeTab(), id: 'tab-2', ptyId: 'pty-2' }
-    const doneTab = { ...makeTab(), id: 'tab-3', ptyId: 'pty-3' }
-    const result = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [PANE_KEY]: makeWorkingEntryWithoutHistory(),
-        [PANE_KEY_2]: {
-          ...makeWorkingEntryWithoutHistory(),
-          state: 'blocked',
-          prompt: 'Needs approval',
-          updatedAt: 4_000,
-          stateStartedAt: 4_000,
-          paneKey: PANE_KEY_2
+    it('does not keep showing a stale live agent as running', () => {
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: makeWorkingEntryWithPriorDone()
         },
-        [PANE_KEY_3]: {
-          ...makeWorkingEntryWithoutHistory(),
-          state: 'done',
-          prompt: 'Finished work',
-          updatedAt: 5_000,
-          stateStartedAt: 5_000,
-          paneKey: PANE_KEY_3
-        }
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: {
-        [worktree.id]: [workingTab, blockedTab, doneTab]
-      },
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      acknowledgedAgentsByPaneKey: {},
-      now: 5_000
+        now: 2_000 + AGENT_STATUS_STALE_AFTER_MS + 1
+      })
+
+      expect(result.events).toHaveLength(1)
+      expect(result.liveAgentByPaneKey[PANE_KEY]).toBeUndefined()
+      // The pane's own row is still `working`, but only a fresh turn may say so.
+      expect(activityThreadStatusId(makeThreads(result)[0])).toBe('done')
     })
 
-    const groups = groupActivityThreadsByStatus(
-      buildAgentPaneThreads({
-        events: result.events,
-        liveAgentByPaneKey: result.liveAgentByPaneKey
+    it('creates a thread for a fresh running agent with no historical events', () => {
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: makeWorkingEntryWithoutHistory()
+        }
       })
-    )
 
-    expect(groups.map((group) => group.id)).toEqual(['working', 'blocked', 'done'])
-    expect(groups.map((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
-      [PANE_KEY],
-      [PANE_KEY_2],
-      [PANE_KEY_3]
-    ])
+      const threads = makeThreads(result)
+
+      expect(result.events).toHaveLength(1)
+      expect(threads).toHaveLength(1)
+      expect(threads[0]).toMatchObject({
+        paneKey: PANE_KEY,
+        paneTitle: 'New run',
+        currentAgentState: 'working',
+        latestTimestamp: 3_000,
+        latestEvent: { state: 'working', timestamp: 3_000 },
+        unread: true
+      })
+    })
+
+    it('projects monitoring into thread rows and status groups', () => {
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: {
+            ...makeWorkingEntryWithoutHistory(),
+            workingMode: 'monitoring'
+          }
+        }
+      })
+      const threads = makeThreads(result)
+      const groups = buildActivityThreadGroups(threads, 'status')
+
+      expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('monitoring')
+      expect(threads[0].currentAgentState).toBe('monitoring')
+      // A monitoring turn must not emit a `working` event that contradicts the live snapshot.
+      expect(result.events).toHaveLength(0)
+      expect(threads[0].latestEvent).toBeNull()
+      expect(groups[0]).toMatchObject({
+        key: 'monitoring',
+        label: 'Monitoring background tasks',
+        state: 'monitoring'
+      })
+    })
+
+    it('uses orchestration display metadata for live thread titles', () => {
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: {
+            ...makeWorkingEntryWithoutHistory(),
+            prompt: 'You are working inside Orca, a multi-agent IDE.',
+            orchestration: {
+              taskId: 'task-1',
+              dispatchId: 'ctx-1',
+              taskTitle: 'Checkout race',
+              displayName: 'Fix checkout race'
+            }
+          }
+        }
+      })
+
+      const threads = makeThreads(result)
+
+      expect(threads[0].paneTitle).toBe('Fix checkout race')
+      expect(
+        activityThreadMatchesSearchQuery({
+          thread: threads[0],
+          searchQuery: 'fix checkout race'
+        })
+      ).toBe(true)
+      expect(
+        activityThreadMatchesSearchQuery({
+          thread: threads[0],
+          searchQuery: 'multi-agent ide'
+        })
+      ).toBe(true)
+    })
+
+    it('creates a thread for a repo-less floating terminal agent', () => {
+      const tab = makeTabWithIds('tab-1', FLOATING_TERMINAL_WORKTREE_ID, 'Claude')
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: makeWorkingEntryWithoutHistory()
+        },
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: {
+          [FLOATING_TERMINAL_WORKTREE_ID]: [tab]
+        },
+        worktreeMap: new Map(),
+        repoMap: new Map(),
+        acknowledgedAgentsByPaneKey: {},
+        now: 3_000
+      })
+
+      const threads = makeThreads(result)
+
+      expect(result.events).toHaveLength(1)
+      expect(threads).toHaveLength(1)
+      expect(threads[0]).toMatchObject({
+        paneKey: PANE_KEY,
+        paneTitle: 'New run',
+        currentAgentState: 'working',
+        repo: null
+      })
+      expect(threads[0].worktree).toMatchObject({
+        id: FLOATING_TERMINAL_WORKTREE_ID,
+        displayName: 'Floating terminal'
+      })
+    })
+
+    it('matches a custom-titled live thread by its current prompt', () => {
+      const tab = { ...makeTab(), customTitle: 'Pinned agent title' }
+      const entry = {
+        ...makeWorkingEntryWithoutHistory(),
+        prompt: 'Investigate activity live prompt search'
+      }
+
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: entry
+        },
+        tab
+      })
+
+      const threads = makeThreads(result)
+
+      expect(threads[0].paneTitle).toBe('Pinned agent title')
+      expect(
+        activityThreadMatchesSearchQuery({
+          thread: threads[0],
+          searchQuery: 'live prompt search'
+        })
+      ).toBe(true)
+    })
+
+    it('surfaces the current live assistant response as the thread preview', () => {
+      const entry = {
+        ...makeWorkingEntryWithoutHistory(),
+        lastAssistantMessage: 'I updated the tests and checked the activity row.'
+      }
+
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: entry
+        }
+      })
+
+      const threads = makeThreads(result)
+
+      expect(threads[0].responsePreview).toBe('I updated the tests and checked the activity row.')
+      expect(
+        activityThreadMatchesSearchQuery({
+          thread: threads[0],
+          searchQuery: 'checked the activity row'
+        })
+      ).toBe(true)
+    })
+
+    it('caps rendered assistant response preview without changing searchable thread text', () => {
+      const longResponse = `${'Preview details '.repeat(80)}activity row searchable tail`
+      const entry = {
+        ...makeWorkingEntryWithoutHistory(),
+        lastAssistantMessage: longResponse
+      }
+
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: entry
+        }
+      })
+
+      const threads = makeThreads(result)
+      const renderedPreview = activityThreadResponseRenderPreview({
+        responsePreview: threads[0].responsePreview
+      })
+
+      expect(renderedPreview.length).toBeLessThan(longResponse.length)
+      expect(renderedPreview.endsWith('...')).toBe(true)
+      expect(
+        activityThreadMatchesSearchQuery({
+          thread: threads[0],
+          searchQuery: 'searchable tail'
+        })
+      ).toBe(true)
+    })
+
+    it('rejects oversized pasted searches before building thread search text', () => {
+      const oversizedQuery = 'secret-activity-search'.repeat(ACTIVITY_SEARCH_QUERY_MAX_BYTES)
+      const thread = {
+        get paneTitle(): string {
+          throw new Error('oversized activity searches must not scan thread text')
+        }
+      } as Parameters<typeof activityThreadMatchesSearchQuery>[0]['thread']
+
+      expect(isActivitySearchQueryTooLarge(oversizedQuery)).toBe(true)
+      expect(
+        activityThreadMatchesSearchQuery({
+          thread,
+          searchQuery: oversizedQuery
+        })
+      ).toBe(false)
+    })
+
+    it('rejects oversized whitespace before trimming activity searches', () => {
+      expect(
+        activityThreadMatchesSearchQuery({
+          thread: makeThreads(makeActivityResult({}))[0],
+          searchQuery: ' '.repeat(ACTIVITY_SEARCH_QUERY_MAX_BYTES + 1)
+        })
+      ).toBe(false)
+    })
+
+    it('does not leave a lone surrogate when capping the rendered response preview', () => {
+      const renderedPreview = activityThreadResponseRenderPreview({
+        responsePreview: `${'a'.repeat(319)}😀tail`
+      })
+      const beforeEllipsis = renderedPreview.slice(0, -3)
+      const lastCode = beforeEllipsis.charCodeAt(beforeEllipsis.length - 1)
+
+      expect(lastCode >= 0xd800 && lastCode <= 0xdbff).toBe(false)
+    })
+
+    it('surfaces the retained done assistant response as the thread preview', () => {
+      const tab = makeTab()
+
+      const result = makeActivityResult({
+        retained: {
+          [PANE_KEY]: makeRetainedDoneEntry(tab)
+        },
+        tab
+      })
+
+      const threads = makeThreads(result)
+
+      expect(threads[0].responsePreview).toBe('Retained response preview')
+    })
+
+    it('overlays fresh live state onto retained-only activity for a reused pane key', () => {
+      const tab = makeTab()
+
+      const result = makeActivityResult({
+        entries: {
+          [PANE_KEY]: makeWorkingEntryWithoutHistory()
+        },
+        retained: {
+          [PANE_KEY]: makeRetainedDoneEntry(tab)
+        },
+        tab
+      })
+
+      expect(result.events).toHaveLength(2)
+      expect(result.events[1]).toMatchObject({
+        state: 'done',
+        timestamp: 1_000
+      })
+      expect(result.events[1].entry.prompt).toBe('Retained prior run')
+      expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
+
+      const threads = makeThreads(result)
+
+      expect(threads).toHaveLength(1)
+      expect(threads[0].paneTitle).toBe('New run')
+      expect(threads[0].responsePreview).toBe('')
+      expect(threads[0].latestTimestamp).toBe(3_000)
+      expect(threads[0].events[1].entry.prompt).toBe('Retained prior run')
+    })
+
+    it('groups visible threads with attention states before working and done', () => {
+      const repo = makeRepo()
+      const worktree = makeWorktree()
+      const workingTab = makeTab()
+      const blockedTab = { ...makeTab(), id: 'tab-2', ptyId: 'pty-2' }
+      const doneTab = { ...makeTab(), id: 'tab-3', ptyId: 'pty-3' }
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: makeWorkingEntryWithoutHistory(),
+          [PANE_KEY_2]: {
+            ...makeWorkingEntryWithoutHistory(),
+            state: 'blocked',
+            prompt: 'Needs approval',
+            updatedAt: 4_000,
+            stateStartedAt: 4_000,
+            paneKey: PANE_KEY_2
+          },
+          [PANE_KEY_3]: {
+            ...makeWorkingEntryWithoutHistory(),
+            state: 'done',
+            prompt: 'Finished work',
+            updatedAt: 5_000,
+            stateStartedAt: 5_000,
+            paneKey: PANE_KEY_3
+          }
+        },
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: {
+          [worktree.id]: [workingTab, blockedTab, doneTab]
+        },
+        worktreeMap: new Map([[worktree.id, worktree]]),
+        repoMap: new Map([[repo.id, repo]]),
+        acknowledgedAgentsByPaneKey: {},
+        now: 5_000
+      })
+
+      const groups = buildActivityThreadGroups(
+        buildAgentPaneThreads({
+          events: result.events,
+          liveAgentByPaneKey: result.liveAgentByPaneKey
+        }),
+        'status'
+      )
+
+      expect(groups.map((group) => group.key)).toEqual(['blocked', 'working', 'done'])
+      expect(groups.map((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
+        [PANE_KEY_2],
+        [PANE_KEY],
+        [PANE_KEY_3]
+      ])
+    })
+
+    it('merges runtime orchestration context into activity events and entries', () => {
+      const repo = makeRepo()
+      const worktree = makeWorktree()
+      const tab1 = makeTabWithIds('tab-1', worktree.id)
+      const tab2 = makeTabWithIds('tab-2', worktree.id)
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: makeWorkingEntryWithoutHistory(),
+          [PANE_KEY_2]: {
+            ...makeWorkingEntryWithoutHistory(),
+            paneKey: PANE_KEY_2,
+            terminalHandle: 'terminal-child'
+          }
+        },
+        runtimeAgentOrchestrationByPaneKey: {
+          [PANE_KEY_2]: {
+            parentPaneKey: PANE_KEY,
+            parentTerminalHandle: 'terminal-parent',
+            taskId: 'task-counsel',
+            dispatchId: 'ctx-counsel'
+          }
+        },
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: {
+          [worktree.id]: [tab1, tab2]
+        },
+        worktreeMap: new Map([[worktree.id, worktree]]),
+        repoMap: new Map([[repo.id, repo]]),
+        acknowledgedAgentsByPaneKey: {},
+        now: 5_000
+      })
+
+      expect(result.liveAgentByPaneKey[PANE_KEY_2].entry.orchestration?.parentPaneKey).toBe(
+        PANE_KEY
+      )
+      expect(result.liveAgentByPaneKey[PANE_KEY_2].entry.orchestration?.parentTerminalHandle).toBe(
+        'terminal-parent'
+      )
+    })
   })
-})
+}
 
-describe('activity thread grouping', () => {
-  it('status grouping separates interrupted done from normal done and keeps Interrupted label', () => {
-    const repo = makeRepo()
-    const worktree = makeWorktree()
-    const tab1 = makeTabWithIds('tab-1', worktree.id)
-    const tab2 = makeTabWithIds('tab-2', worktree.id)
-    const sharedDone: Omit<
-      AgentStatusEntry,
-      'paneKey' | 'interrupted' | 'updatedAt' | 'stateStartedAt'
-    > = {
+{
+  const PANE_KEY = `tab-1:${LEAF_ID}`
+
+  function doneEntry(connectionId: string | null): AgentStatusEntry {
+    return {
       state: 'done',
-      prompt: 'Prompt',
-      terminalTitle: 'Claude',
+      prompt: 'Finished task',
+      updatedAt: 2_000,
+      stateStartedAt: 2_000,
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      connectionId,
       stateHistory: [],
       agentType: 'claude'
     }
-    const { events, liveAgentByPaneKey } = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [PANE_KEY]: {
-          ...sharedDone,
-          paneKey: PANE_KEY,
-          interrupted: true,
-          updatedAt: 3_000,
-          stateStartedAt: 3_000
+  }
+
+  describe('activity event host ownership', () => {
+    it('uses the status transport host when worktree and repo ids collide', () => {
+      const localRepo = makeRepo()
+      const remoteRepo = { ...makeRepo(), connectionId: 'builder', displayName: 'Remote repo' }
+      const localWorktree = makeWorktree()
+      const remoteWorktree = {
+        ...makeWorktree(),
+        hostId: 'ssh:builder' as const,
+        displayName: 'Remote worktree'
+      }
+      const tab = makeTab()
+      const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
+        executionHostId === 'ssh:builder' ? remoteWorktree : localWorktree
+      )
+
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: { [PANE_KEY]: doneEntry('builder') },
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: { [localWorktree.id]: [tab] },
+        worktreeMap: new Map([[localWorktree.id, localWorktree]]),
+        repoMap: new Map([[localRepo.id, localRepo]]),
+        repos: [localRepo, remoteRepo],
+        resolveWorktree,
+        acknowledgedAgentsByPaneKey: {},
+        now: 3_000
+      })
+
+      expect(resolveWorktree).toHaveBeenCalledWith(localWorktree.id, 'ssh:builder')
+      expect(result.events[0]?.worktree).toBe(remoteWorktree)
+      expect(result.events[0]?.repo).toBe(remoteRepo)
+    })
+
+    it('uses the mirrored tab host when paired-runtime status is host-local', () => {
+      const localRepo = makeRepo()
+      const runtimeRepo = {
+        ...makeRepo(),
+        executionHostId: 'runtime:env-1' as const,
+        displayName: 'Runtime repo'
+      }
+      const localWorktree = makeWorktree()
+      const runtimeWorktree = {
+        ...makeWorktree(),
+        hostId: 'runtime:env-1' as const,
+        runtimeOwnerEnvironmentId: 'env-1',
+        displayName: 'Runtime worktree'
+      }
+      const tab = makeTab()
+      const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
+        executionHostId === 'runtime:env-1' ? runtimeWorktree : localWorktree
+      )
+
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: { [PANE_KEY]: doneEntry(null) },
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: { [localWorktree.id]: [tab] },
+        unifiedTabsByWorktree: {
+          [localWorktree.id]: [
+            {
+              id: tab.id,
+              entityId: tab.id,
+              groupId: 'group-1',
+              worktreeId: localWorktree.id,
+              executionHostId: 'runtime:env-1',
+              contentType: 'terminal',
+              label: tab.title,
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
         },
-        [PANE_KEY_2]: {
-          ...sharedDone,
-          paneKey: PANE_KEY_2,
-          interrupted: false,
-          updatedAt: 2_000,
-          stateStartedAt: 2_000
-        }
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: { [worktree.id]: [tab1, tab2] },
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      acknowledgedAgentsByPaneKey: {},
-      now: 3_000
+        worktreeMap: new Map([[localWorktree.id, localWorktree]]),
+        repoMap: new Map([[localRepo.id, localRepo]]),
+        repos: [localRepo, runtimeRepo],
+        resolveWorktree,
+        acknowledgedAgentsByPaneKey: {},
+        now: 3_000
+      })
+
+      expect(resolveWorktree).toHaveBeenCalledWith(localWorktree.id, 'runtime:env-1')
+      expect(result.events[0]?.worktree).toBe(runtimeWorktree)
+      expect(result.events[0]?.repo).toBe(runtimeRepo)
     })
-    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
-    const groups = buildActivityThreadGroups(threads, 'status')
 
-    expect(groups).toHaveLength(2)
-    expect(groups[0].key).toBe('done:interrupted')
-    expect(groups[0].label).toBe('Interrupted')
-    expect(groups[1].key).toBe('done')
-    expect(groups[1].label).toBe('Done')
-  })
+    it('keeps retained folder-workspace activity after its terminal tab is gone', () => {
+      const folderWorktree = {
+        ...makeWorktree(),
+        id: folderWorkspaceKey('folder-1'),
+        repoId: 'folder-workspace:group-1',
+        hostId: 'local' as const,
+        displayName: 'Docs folder'
+      }
+      const tab = { ...makeTab(), worktreeId: folderWorktree.id }
+      const retained = makeRetainedDoneEntry(tab)
+      retained.worktreeId = folderWorktree.id
+      retained.entry = doneEntry(null)
 
-  it('project grouping falls back to unknown project when repo is missing', () => {
-    const worktree = makeWorktreeWithId('wt-unknown', 'missing-repo', 'unknown-wt')
-    const tab = makeTabWithIds('tab-unknown', worktree.id)
-    const { events, liveAgentByPaneKey } = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [UNKNOWN_PANE_KEY]: {
-          state: 'done',
-          prompt: 'Prompt',
-          updatedAt: 1_000,
-          stateStartedAt: 1_000,
-          paneKey: UNKNOWN_PANE_KEY,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        }
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: { [worktree.id]: [tab] },
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map(),
-      acknowledgedAgentsByPaneKey: {},
-      now: 1_000
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: {},
+        retainedAgentsByPaneKey: { [PANE_KEY]: retained },
+        tabsByWorktree: {},
+        worktreeMap: new Map(),
+        repoMap: new Map(),
+        resolveWorktree: (worktreeId, executionHostId) =>
+          worktreeId === folderWorktree.id && executionHostId === 'local'
+            ? folderWorktree
+            : undefined,
+        acknowledgedAgentsByPaneKey: {},
+        now: 3_000
+      })
+
+      expect(result.events[0]?.worktree).toBe(folderWorktree)
+      expect(result.events[0]?.worktree.displayName).toBe('Docs folder')
     })
-    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
-    const group = getActivityThreadGroup(threads[0], 'project')
 
-    expect(group).toEqual({ key: 'project:unknown', label: 'Unknown project' })
-  })
+    it('carries migrationUnsupportedPtyId on events built for un-migratable panes', () => {
+      const worktree = makeWorktree()
+      const repo = makeRepo()
+      const tab = makeTab()
 
-  it('worktree and agent grouping use expected keys and labels', () => {
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: makeWorkingEntryWithoutHistory()
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: {},
+        retainedAgentsByPaneKey: {},
+        migrationUnsupportedByPtyId: {
+          'pty-1': {
+            ptyId: 'pty-1',
+            paneKey: PANE_KEY,
+            tabId: tab.id,
+            reason: 'legacy-numeric-pane-key',
+            source: 'local',
+            updatedAt: 1_000
+          }
+        },
+        tabsByWorktree: { [worktree.id]: [tab] },
+        worktreeMap: new Map([[worktree.id, worktree]]),
+        repoMap: new Map([[repo.id, repo]]),
+        resolveWorktree: () => worktree,
+        acknowledgedAgentsByPaneKey: {},
+        now: 3_000
+      })
+
+      expect(result.events.length).toBeGreaterThan(0)
+      for (const event of result.events) {
+        expect(event.migrationUnsupportedPtyId).toBe('pty-1')
       }
     })
-    const threads = makeThreads(result)
 
-    expect(getActivityThreadGroup(threads[0], 'worktree')).toEqual({
-      key: 'worktree:wt-1',
-      label: 'feature'
-    })
-    expect(getActivityThreadGroup(threads[0], 'agent')).toEqual({
-      key: 'agent:claude',
-      label: formatAgentTypeLabel('claude')
-    })
-  })
-
-  it('keeps first-appearance group order and preserves intra-group thread order', () => {
-    const repo = makeRepo()
-    const wtA = makeWorktreeWithId('wt-a', repo.id, 'alpha')
-    const wtB = makeWorktreeWithId('wt-b', repo.id, 'beta')
-    const tabA1 = makeTabWithIds('tab-a1', wtA.id)
-    const tabB1 = makeTabWithIds('tab-b1', wtB.id)
-    const tabA2 = makeTabWithIds('tab-a2', wtA.id)
-    const { events, liveAgentByPaneKey } = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [PANE_KEY_A1]: {
-          state: 'done',
-          prompt: 'A1',
-          updatedAt: 3_000,
-          stateStartedAt: 3_000,
-          paneKey: PANE_KEY_A1,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        },
-        [PANE_KEY_B1]: {
-          state: 'done',
-          prompt: 'B1',
-          updatedAt: 2_000,
-          stateStartedAt: 2_000,
-          paneKey: PANE_KEY_B1,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        },
-        [PANE_KEY_A2]: {
-          state: 'done',
-          prompt: 'A2',
-          updatedAt: 1_000,
-          stateStartedAt: 1_000,
-          paneKey: PANE_KEY_A2,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        }
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: { [wtA.id]: [tabA1, tabA2], [wtB.id]: [tabB1] },
-      worktreeMap: new Map([
-        [wtA.id, wtA],
-        [wtB.id, wtB]
-      ]),
-      repoMap: new Map([[repo.id, repo]]),
-      acknowledgedAgentsByPaneKey: {},
-      now: 3_000
-    })
-    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
-    const groups = buildActivityThreadGroups(threads, 'worktree')
-
-    expect(groups.map((group) => group.key)).toEqual(['worktree:wt-a', 'worktree:wt-b'])
-    expect(groups[0].threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_A1, PANE_KEY_A2])
-    expect(groups[1].threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_B1])
-  })
-
-  it('returns no groups for empty thread input', () => {
-    expect(buildActivityThreadGroups([], 'status')).toEqual([])
-  })
-})
-
-describe('activity filter focus shortcut', () => {
-  it('matches Cmd+F on Mac and Ctrl+F elsewhere without extra modifiers', () => {
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false },
-        true
-      )
-    ).toBe(true)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'F', metaKey: false, ctrlKey: true, shiftKey: false, altKey: false },
-        false
-      )
-    ).toBe(true)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: false, ctrlKey: true, shiftKey: false, altKey: false },
-        true
-      )
-    ).toBe(false)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: false, shiftKey: true, altKey: false },
-        true
-      )
-    ).toBe(false)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
-        true
-      )
-    ).toBe(false)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
-        false
-      )
-    ).toBe(false)
-  })
-
-  it('prevents default, focuses, and selects only for handled filter shortcuts', () => {
-    let prevented = 0
-    let stopped = 0
-    let stoppedImmediate = 0
-    let focused = 0
-    let selected = 0
-    const input = {
-      focus: () => {
-        focused += 1
-      },
-      select: () => {
-        selected += 1
+    it('uses the retained terminal handle to preserve runtime host ownership after teardown', () => {
+      const localWorktree = makeWorktree()
+      const runtimeWorktree = {
+        ...makeWorktree(),
+        hostId: 'runtime:env-1' as const,
+        runtimeOwnerEnvironmentId: 'env-1',
+        displayName: 'Runtime worktree'
       }
-    } as Pick<HTMLInputElement, 'focus' | 'select'>
-    const activeElement = {
-      classList: { contains: () => false }
-    } as unknown as Element
-    const terminalElement = {
-      classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
-    } as unknown as Element
-    const terminalPortalTarget = {
-      contains: (target: Element) => target === terminalElement
-    } as unknown as HTMLElement
+      const tab = { ...makeTab(), ptyId: null }
+      const retained = makeRetainedDoneEntry(tab)
+      retained.entry = { ...doneEntry(null), terminalHandle: 'remote:env-1@@pty-1' }
+      const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
+        executionHostId === 'runtime:env-1' ? runtimeWorktree : localWorktree
+      )
 
-    expect(
-      handleActivityFilterFocusShortcut({
-        activeElement,
-        event: {
-          key: 'f',
-          metaKey: true,
-          ctrlKey: false,
-          shiftKey: false,
-          altKey: false,
-          preventDefault: () => {
-            prevented += 1
-          },
-          stopPropagation: () => {
-            stopped += 1
-          },
-          stopImmediatePropagation: () => {
-            stoppedImmediate += 1
-          }
-        },
-        input,
-        isMac: true,
-        terminalPortalTargets: []
+      const result = buildActivityEvents({
+        agentStatusByPaneKey: {},
+        retainedAgentsByPaneKey: { [PANE_KEY]: retained },
+        tabsByWorktree: {},
+        worktreeMap: new Map([[localWorktree.id, localWorktree]]),
+        repoMap: new Map(),
+        resolveWorktree,
+        acknowledgedAgentsByPaneKey: {},
+        now: 3_000
       })
-    ).toBe(true)
-    expect(prevented).toBe(1)
-    expect(stopped).toBe(1)
-    expect(stoppedImmediate).toBe(1)
-    expect(focused).toBe(1)
-    expect(selected).toBe(1)
 
-    expect(
-      handleActivityFilterFocusShortcut({
-        activeElement: terminalElement,
-        event: {
-          key: 'f',
-          metaKey: true,
-          ctrlKey: false,
-          shiftKey: false,
-          altKey: false,
-          preventDefault: () => {
-            prevented += 1
-          },
-          stopPropagation: () => {
-            stopped += 1
-          },
-          stopImmediatePropagation: () => {
-            stoppedImmediate += 1
-          }
-        },
-        input,
-        isMac: true,
-        terminalPortalTargets: [terminalPortalTarget]
-      })
-    ).toBe(false)
-    expect(prevented).toBe(1)
-    expect(stopped).toBe(1)
-    expect(stoppedImmediate).toBe(1)
-    expect(focused).toBe(1)
-    expect(selected).toBe(1)
+      expect(resolveWorktree).toHaveBeenCalledWith(localWorktree.id, 'runtime:env-1')
+      expect(result.events[0]?.worktree).toBe(runtimeWorktree)
+    })
   })
-
-  it('does not prevent default when the filter input is unavailable', () => {
-    let prevented = 0
-    const activeElement = {
-      classList: { contains: () => false }
-    } as unknown as Element
-
-    expect(
-      handleActivityFilterFocusShortcut({
-        activeElement,
-        event: {
-          key: 'f',
-          metaKey: true,
-          ctrlKey: false,
-          shiftKey: false,
-          altKey: false,
-          preventDefault: () => {
-            prevented += 1
-          },
-          stopPropagation: () => {
-            throw new Error('unavailable input must not stop propagation')
-          },
-          stopImmediatePropagation: () => {
-            throw new Error('unavailable input must not stop immediate propagation')
-          }
-        },
-        input: null,
-        isMac: true,
-        terminalPortalTargets: []
-      })
-    ).toBe(false)
-    expect(prevented).toBe(0)
-  })
-
-  it('ignores shortcut handling while terminal-owned elements have focus', () => {
-    const terminalTextarea = {
-      classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
-    } as unknown as Element
-    const portalChild = {
-      classList: { contains: () => false }
-    } as unknown as Element
-    const outside = {
-      classList: { contains: () => false }
-    } as unknown as Element
-    const portalTarget = {
-      contains: (target: Element) => target === portalChild || target === terminalTextarea
-    } as unknown as HTMLElement
-    const hiddenWorkbenchTerminal = {
-      classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
-    } as unknown as Element
-    expect(shouldIgnoreActivityFilterFocusShortcutTarget(terminalTextarea, [portalTarget])).toBe(
-      true
-    )
-    expect(shouldIgnoreActivityFilterFocusShortcutTarget(portalChild, [portalTarget])).toBe(true)
-    expect(shouldIgnoreActivityFilterFocusShortcutTarget(outside, [portalTarget])).toBe(false)
-    expect(
-      shouldIgnoreActivityFilterFocusShortcutTarget(hiddenWorkbenchTerminal, [portalTarget])
-    ).toBe(false)
-  })
-})
+}

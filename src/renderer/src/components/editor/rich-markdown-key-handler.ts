@@ -1,3 +1,4 @@
+import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -21,6 +22,14 @@ import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-de
 import { handleRichMarkdownTableBackspace } from './rich-markdown-table-row-delete'
 import { handleRichMarkdownTableEnter } from './rich-markdown-table-enter'
 import { handleRichMarkdownTableTab } from './rich-markdown-table-tab'
+import {
+  indentRichMarkdownListItem,
+  outdentRichMarkdownListItem
+} from './rich-markdown-list-indent'
+import {
+  outdentRichMarkdownCodeBlock,
+  RICH_MARKDOWN_CODE_BLOCK_INDENT
+} from './rich-markdown-code-block-indent'
 import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
@@ -62,7 +71,7 @@ export type KeyHandlerContext = {
 }
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
-  return event.isComposing || editor?.view.composing === true
+  return isImeOwnedKeyboardEvent(event) || editor?.view.composing === true
 }
 
 /**
@@ -73,6 +82,16 @@ export function createRichMarkdownKeyHandler(
   ctx: KeyHandlerContext
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
+    if (isImeOwnedKeyboardEvent(event)) {
+      return false
+    }
+    // Save must flush pending text even while the editor's composition state lingers.
+    if (handleRichMarkdownSaveShortcut(ctx, event)) {
+      return true
+    }
+    if (isComposingMarkdownInput(event, ctx.editorRef.current)) {
+      return false
+    }
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
     if (
       handleRichMarkdownCitationKey({
@@ -93,9 +112,6 @@ export function createRichMarkdownKeyHandler(
     ) {
       event.preventDefault()
       ctx.openSearchRef.current()
-      return true
-    }
-    if (handleRichMarkdownSaveShortcut(ctx, event)) {
       return true
     }
     if (handleRichMarkdownAddReviewNoteShortcut(ctx, event)) {
@@ -202,22 +218,20 @@ export function createRichMarkdownKeyHandler(
       }
 
       if (event.shiftKey) {
-        if (!ed.commands.liftListItem('listItem')) {
-          ed.commands.liftListItem('taskItem')
+        if (!outdentRichMarkdownCodeBlock(ed)) {
+          outdentRichMarkdownListItem(ed)
         }
         return true
       }
 
       if (ed.isActive('codeBlock')) {
-        ed.commands.insertContent('  ')
+        ed.commands.insertContent(RICH_MARKDOWN_CODE_BLOCK_INDENT)
         return true
       }
 
       // Why: sinkListItem succeeds when the item has a previous sibling;
       // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
-      if (!ed.commands.sinkListItem('listItem')) {
-        ed.commands.sinkListItem('taskItem')
-      }
+      indentRichMarkdownListItem(ed)
       return true
     }
 

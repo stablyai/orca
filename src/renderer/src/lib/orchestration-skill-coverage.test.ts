@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../shared/skills'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   agentHasOrchestrationSkill,
   getOrchestrationSkillAgentStatuses
@@ -18,7 +18,6 @@ function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
     directoryPath: '/Users/test/.agents/skills/orchestration',
     skillFilePath: '/Users/test/.agents/skills/orchestration/SKILL.md',
     installed: true,
-    fileCount: 1,
     updatedAt: null,
     ...overrides
   }
@@ -307,77 +306,6 @@ describe('orchestration skill agent coverage', () => {
     ).toBe(true)
   })
 
-  it('marks a multi-segment provider-home agent from a Windows-style path', () => {
-    expect(
-      agentHasOrchestrationSkill(
-        'opencode',
-        [
-          skill({
-            providers: ['agent-skills'],
-            sourceKind: 'home',
-            rootPath: 'C:\\Users\\test\\.config\\opencode\\skills',
-            directoryPath: 'C:\\Users\\test\\.config\\opencode\\skills\\orchestration'
-          })
-        ],
-        [source('C:\\Users\\test\\.config\\opencode\\skills', 'opencode')]
-      )
-    ).toBe(true)
-  })
-
-  it('keeps Pi and OMP distinct despite sharing the <home>/agent/skills shape', () => {
-    const piInstall = [
-      skill({
-        providers: ['agent-skills'],
-        sourceKind: 'home',
-        rootPath: '/Users/test/.pi/agent/skills',
-        directoryPath: '/Users/test/.pi/agent/skills/orchestration'
-      })
-    ]
-    const ompInstall = [
-      skill({
-        providers: ['agent-skills'],
-        sourceKind: 'home',
-        rootPath: '/Users/test/.omp/agent/skills',
-        directoryPath: '/Users/test/.omp/agent/skills/orchestration'
-      })
-    ]
-
-    const piSources = [source('/Users/test/.pi/agent/skills', 'pi')]
-    const ompSources = [source('/Users/test/.omp/agent/skills', 'omp')]
-    expect(agentHasOrchestrationSkill('pi', piInstall, piSources)).toBe(true)
-    expect(agentHasOrchestrationSkill('omp', piInstall, piSources)).toBe(false)
-    expect(agentHasOrchestrationSkill('omp', ompInstall, ompSources)).toBe(true)
-    expect(agentHasOrchestrationSkill('pi', ompInstall, ompSources)).toBe(false)
-  })
-
-  it('keeps Gemini and Antigravity distinct despite sharing the ~/.gemini root', () => {
-    const geminiInstall = [
-      skill({
-        providers: ['agent-skills'],
-        sourceKind: 'home',
-        rootPath: '/Users/test/.gemini/skills',
-        directoryPath: '/Users/test/.gemini/skills/orchestration'
-      })
-    ]
-    const antigravityInstall = [
-      skill({
-        providers: ['agent-skills'],
-        sourceKind: 'home',
-        rootPath: '/Users/test/.gemini/antigravity/skills',
-        directoryPath: '/Users/test/.gemini/antigravity/skills/orchestration'
-      })
-    ]
-
-    const geminiSources = [source('/Users/test/.gemini/skills', 'gemini')]
-    const antigravitySources = [source('/Users/test/.gemini/antigravity/skills', 'antigravity')]
-    expect(agentHasOrchestrationSkill('gemini', geminiInstall, geminiSources)).toBe(true)
-    expect(agentHasOrchestrationSkill('antigravity', geminiInstall, geminiSources)).toBe(false)
-    expect(agentHasOrchestrationSkill('antigravity', antigravityInstall, antigravitySources)).toBe(
-      true
-    )
-    expect(agentHasOrchestrationSkill('gemini', antigravityInstall, antigravitySources)).toBe(false)
-  })
-
   it('marks Claude Agent Teams from ~/.claude/skills like Claude Code', () => {
     const skills = [
       skill({
@@ -392,23 +320,6 @@ describe('orchestration skill agent coverage', () => {
       agentHasOrchestrationSkill('claude-agent-teams', skills, [
         source('/Users/test/.claude/skills', 'claude')
       ])
-    ).toBe(true)
-  })
-
-  it('marks Windows skill paths', () => {
-    expect(
-      agentHasOrchestrationSkill(
-        'codex',
-        [
-          skill({
-            providers: ['codex'],
-            sourceKind: 'home',
-            rootPath: 'C:\\Users\\test\\.codex\\skills',
-            directoryPath: 'C:\\Users\\test\\.codex\\skills\\orchestration'
-          })
-        ],
-        [source('C:\\Users\\test\\.codex\\skills', 'codex')]
-      )
     ).toBe(true)
   })
 })

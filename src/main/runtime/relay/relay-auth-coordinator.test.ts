@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -26,9 +27,53 @@ describe('RelayAuthCoordinator', () => {
       onStatus: (status) => statuses.push(status)
     })
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     expect(openBroker).not.toHaveBeenCalled()
     expect(statuses.at(-1)).toBe('standby')
+  })
+
+  it('republishes the owned broker cell instead of blanking what the broker set', async () => {
+    const broker = { closeNow: vi.fn(), endpoint: { cellUrl: 'https://c27.relay.example.test' } }
+    const onStatus = vi.fn()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: async () => broker,
+      onStatus
+    })
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+
+    // Why: the broker announces its cell, then the coordinator republishes the
+    // same status; a republish without the cell would erase it immediately.
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+  })
+
+  it('drops the cell from every status the host is not served on', async () => {
+    let demanded = true
+    const broker = { closeNow: vi.fn(), endpoint: { cellUrl: 'https://c27.relay.example.test' } }
+    const onStatus = vi.fn()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      hasDemand: () => demanded,
+      openBroker: async () => broker,
+      onStatus,
+      lingerMs: 0
+    })
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    demanded = false
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('standby', undefined))
+
+    coordinator.fenceAndCloseNow()
+    expect(onStatus).toHaveBeenLastCalledWith('offline', undefined)
+    for (const [status, cellUrl] of onStatus.mock.calls) {
+      expect(status === 'registered' || cellUrl === undefined).toBe(true)
+    }
   })
 
   it('opens on demand and lingers before closing the last control', async () => {
@@ -43,10 +88,10 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 250
     })
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     demanded = true
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
     await vi.waitFor(() => expect(statuses.at(-1)).toBe('standby'))
@@ -65,7 +110,7 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 20
     })
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
     demanded = true
@@ -85,10 +130,10 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 10_000
     })
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     current = { ...context, identity: { ...context.identity, profileId: 'profile-2' } }
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     expect(broker.closeNow).toHaveBeenCalledOnce()
   })
 
@@ -152,7 +197,7 @@ describe('RelayAuthCoordinator', () => {
 
   it('rejects a refresh result after capability removal', async () => {
     let current: RelayAuthContext | null = context
-    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    let refreshAccessToken: (() => Promise<RelayAccessTokenRefresh>) | null = null
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => current,
       openBroker: async (input) => {
@@ -165,7 +210,7 @@ describe('RelayAuthCoordinator', () => {
     await vi.waitFor(() => expect(refreshAccessToken).not.toBeNull())
     current = { ...context, relayEntitled: false }
     coordinator.reconcile()
-    await expect(refreshAccessToken!()).resolves.toBeNull()
+    await expect(refreshAccessToken!()).resolves.toEqual({ accessToken: null })
   })
 
   it('invalidates pending ownership immediately while broker opening is paused', async () => {
@@ -198,7 +243,7 @@ describe('RelayAuthCoordinator', () => {
     const refreshRead = deferred<RelayAuthContext | null>()
     let readCount = 0
     let current = context
-    let refreshAccessToken: (() => Promise<string | null>) | null = null
+    let refreshAccessToken: (() => Promise<RelayAccessTokenRefresh>) | null = null
     const coordinator = new RelayAuthCoordinator({
       readContext: () => {
         readCount += 1
@@ -217,7 +262,7 @@ describe('RelayAuthCoordinator', () => {
     coordinator.reconcile()
     refreshRead.resolve(context)
 
-    await expect(refreshing).resolves.toBeNull()
+    await expect(refreshing).resolves.toEqual({ accessToken: null })
     await vi.waitFor(() => expect(readCount).toBeGreaterThanOrEqual(3))
   })
 

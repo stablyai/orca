@@ -1,10 +1,15 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from './persistence-test-harness'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeFeatureInteractions } from '../shared/feature-interactions'
-import type { PersistedState } from '../shared/types'
+import type { PersistedState } from '../shared/persisted-state-types'
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
@@ -27,11 +32,12 @@ function createStore(name: string): { dataFile: string; store: Store } {
   const dir = mkdtempSync(join(tmpdir(), `orca-ui-broadcast-${name}-`))
   tempDirs.push(dir)
   const dataFile = join(dir, 'orca-data.json')
-  return { dataFile, store: new Store({ dataFile }) }
+  return { dataFile, store: createSqliteTestStore(Store, { dataFile }) }
 }
 
 describe('feature interaction UI broadcast benchmark', () => {
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -76,9 +82,12 @@ describe('feature interaction UI broadcast benchmark', () => {
     ).toBe(INTERACTIONS)
     optimizedStore.flush()
     expect(
-      new Store({ dataFile }).getUI().featureInteractions?.['agent-orchestration']?.interactionCount
+      createSqliteTestStore(Store, { dataFile }).getUI().featureInteractions?.[
+        'agent-orchestration'
+      ]?.interactionCount
     ).toBe(INTERACTIONS)
-    const persisted = JSON.parse(readFileSync(dataFile, 'utf8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile)) as PersistedState
     expect(persisted.featureInteractionTelemetryBuckets?.['agent-orchestration']).toBe(
       'count_200_499'
     )

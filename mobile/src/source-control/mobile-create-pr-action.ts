@@ -1,12 +1,12 @@
-import type { HostedReviewCreationEligibility } from '../../../src/shared/hosted-review'
+import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import { supportsHostedReviewCreation } from '../../../src/shared/hosted-review-creation-providers'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { getMobilePrCreateBlockMessage } from './mobile-pr-create'
 
 export type MobileCreatePrEligibilityState =
   | { kind: 'idle' }
-  | { kind: 'loading'; eligibility: HostedReviewCreationEligibility | null }
-  | { kind: 'ready'; eligibility: HostedReviewCreationEligibility }
+  | { kind: 'loading'; eligibility: MobileHostedReviewEligibilityReply | null }
+  | { kind: 'ready'; eligibility: MobileHostedReviewEligibilityReply }
   | { kind: 'error' }
 
 export type MobileCreatePrAction = {
@@ -72,7 +72,7 @@ export function buildMobileCreatePrAction({
   }
   // Why: mirror desktop's structural provider gate (supportsHostedReviewCreation)
   // instead of relying on the host always emitting a hidden blockedReason for
-  // non-creatable providers like bitbucket.
+  // non-creatable providers.
   if (!supportsHostedReviewCreation(eligibility.provider)) {
     return {
       visible: true,

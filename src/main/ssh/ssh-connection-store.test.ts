@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { SshConnectionStore } from './ssh-connection-store'
-import type { RemovedSshTargetTombstone, SshTarget } from '../../shared/ssh-types'
+import { createMockStore } from './ssh-connection-store-test-fixture'
+import type { SshTarget } from '../../shared/ssh-types'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -12,63 +13,6 @@ vi.mock('./ssh-config-parser', () => ({
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
 
-function createMockStore() {
-  const targets: SshTarget[] = []
-  let deletedAliases: string[] = []
-  const removedTombstones: RemovedSshTargetTombstone[] = []
-  const reassignments: { oldTargetId: string; newTargetId: string }[] = []
-
-  return {
-    getSshTargets: vi.fn(() => [...targets]),
-    getSshTarget: vi.fn((id: string) => targets.find((t) => t.id === id)),
-    addSshTarget: vi.fn((target: SshTarget) => targets.push(target)),
-    updateSshTarget: vi.fn((id: string, updates: Partial<Omit<SshTarget, 'id'>>) => {
-      const target = targets.find((t) => t.id === id)
-      if (!target) {
-        return null
-      }
-      Object.assign(target, updates)
-      return { ...target }
-    }),
-    removeSshTarget: vi.fn((id: string) => {
-      const idx = targets.findIndex((t) => t.id === id)
-      if (idx !== -1) {
-        targets.splice(idx, 1)
-      }
-    }),
-    getDeletedSshConfigAliases: vi.fn(() => [...deletedAliases]),
-    addDeletedSshConfigAlias: vi.fn((alias: string) => {
-      if (!deletedAliases.includes(alias)) {
-        deletedAliases.push(alias)
-      }
-    }),
-    removeDeletedSshConfigAlias: vi.fn((alias: string) => {
-      deletedAliases = deletedAliases.filter((entry) => entry !== alias)
-    }),
-    clearDeletedSshConfigAliases: vi.fn(() => {
-      deletedAliases = []
-    }),
-    removedTombstones,
-    reassignments,
-    getRemovedSshTargetTombstones: vi.fn(() => [...removedTombstones]),
-    addRemovedSshTargetTombstone: vi.fn((tombstone: RemovedSshTargetTombstone) => {
-      const filtered = removedTombstones.filter((t) => t.oldTargetId !== tombstone.oldTargetId)
-      removedTombstones.length = 0
-      removedTombstones.push(...filtered, tombstone)
-    }),
-    removeRemovedSshTargetTombstone: vi.fn((oldTargetId: string) => {
-      const kept = removedTombstones.filter((t) => t.oldTargetId !== oldTargetId)
-      removedTombstones.length = 0
-      removedTombstones.push(...kept)
-    }),
-    reassignSshTargetId: vi.fn((oldTargetId: string, newTargetId: string) => {
-      reassignments.push({ oldTargetId, newTargetId })
-      // Pretend one repo referenced the old id.
-      return ['repo-1']
-    })
-  }
-}
-
 describe('SshConnectionStore', () => {
   let mockStore: ReturnType<typeof createMockStore>
   let sshStore: SshConnectionStore
@@ -78,11 +22,6 @@ describe('SshConnectionStore', () => {
     sshStore = new SshConnectionStore(mockStore as never)
     loadUserSshConfigMock.mockReset()
     sshConfigHostsToTargetsMock.mockReset()
-  })
-
-  it('listTargets delegates to store', () => {
-    sshStore.listTargets()
-    expect(mockStore.getSshTargets).toHaveBeenCalled()
   })
 
   it('lists picker suppression aliases without consulting re-adoption tombstones', () => {
@@ -157,24 +96,42 @@ describe('SshConnectionStore', () => {
     expect(sshStore.listTargets()).toEqual([userTarget])
   })
 
-  it('updateTarget delegates to store', () => {
-    const original: SshTarget = {
-      id: 'ssh-1',
-      label: 'Old Name',
-      host: 'example.com',
-      port: 22,
-      username: 'user'
+  it('clears the runtime ladder decision when the runtime choice or endpoint changes', () => {
+    const resolution = {
+      rung: 'legacy' as const,
+      pinnedRefusal: 'missing_lib',
+      glibc: '2.31',
+      runtimeSha256: 'a'.repeat(64),
+      orcaMajor: 1
     }
-    mockStore.addSshTarget(original)
+    mockStore.addSshTarget({
+      id: 'ssh-ladder',
+      label: 'Ladder',
+      host: 'ladder.example.com',
+      port: 22,
+      username: 'user',
+      remoteRuntime: 'pinned-node',
+      remoteRuntimeResolution: resolution
+    })
 
-    const result = sshStore.updateTarget('ssh-1', { label: 'New Name' })
-    expect(result).toBeTruthy()
-    expect(mockStore.updateSshTarget).toHaveBeenCalledWith('ssh-1', { label: 'New Name' })
-  })
+    sshStore.updateTarget('ssh-ladder', { label: 'Renamed', remoteRuntime: 'pinned-node' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      label: 'Renamed',
+      remoteRuntime: 'pinned-node'
+    })
 
-  it('removeTarget delegates to store', () => {
-    sshStore.removeTarget('ssh-1')
-    expect(mockStore.removeSshTarget).toHaveBeenCalledWith('ssh-1')
+    sshStore.updateTarget('ssh-ladder', { remoteRuntime: 'legacy' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      remoteRuntime: 'legacy',
+      remoteRuntimeResolution: undefined
+    })
+
+    sshStore.updateTarget('ssh-ladder', { remoteRuntimeResolution: resolution })
+    sshStore.updateTarget('ssh-ladder', { host: 'other.example.com' })
+    expect(mockStore.updateSshTarget).toHaveBeenLastCalledWith('ssh-ladder', {
+      host: 'other.example.com',
+      remoteRuntimeResolution: undefined
+    })
   })
 
   describe('importFromSshConfig', () => {

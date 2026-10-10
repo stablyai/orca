@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
-import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
 import { getEligibleWorktreeParents, isEligibleWorktreeParent } from './worktree-parent-candidates'
 

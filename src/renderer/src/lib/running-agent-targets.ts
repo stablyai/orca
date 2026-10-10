@@ -1,26 +1,65 @@
 import type { AppState } from '@/store/types'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../shared/types'
+import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
+import { resolveUnifiedTabLabel } from '../../../shared/tab-title-resolution'
+import { isStructuredTab } from '@/components/native-chat/structured-agent-session-tabs'
 import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'
+import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from './runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,
-  'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
+  | 'agentStatusByPaneKey'
+  | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
+  | 'terminalLayoutsByTabId'
+  | 'ptyIdsByTabId'
 > &
   Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>>
 
-export type RunningAgentSendTarget = {
+type RunningAgentSendTargetEligibility = {
+  status: 'eligible' | 'disabled'
+  disabledReason?: string
+}
+
+export type TerminalAgentSendTarget = RunningAgentSendTargetEligibility & {
+  kind: 'terminal'
   paneKey: string
   tabId: string
   leafId: string
   tab: TerminalTab
   entry: AgentStatusEntry
   ptyId: string | null
-  status: 'eligible' | 'disabled'
-  disabledReason?: string
+}
+
+export type StructuredAgentSendTarget = RunningAgentSendTargetEligibility & {
+  kind: 'structured-session'
+  paneKey: string
+  /** The chat's workspace tab; it never appears in `tabsByWorktree`. */
+  tabId: string
+  sessionId: string
+  agentType: AgentType
+  title: string
+  /** Null before the chat's first turn (the host publishes no status before one); only the
+   *  notes menu lists such chats, as the sidebar has no row for them. */
+  entry: AgentStatusEntry | null
+}
+
+export type RunningAgentSendTarget = TerminalAgentSendTarget | StructuredAgentSendTarget
+
+export function runningAgentMessageTarget(target: RunningAgentSendTarget): AgentMessageTarget {
+  return target.kind === 'terminal'
+    ? { kind: 'terminal', tabId: target.tabId, leafId: target.leafId }
+    : { kind: 'structured-session', sessionId: target.sessionId }
+}
+
+export function runningAgentSendTargetAgentType(
+  target: RunningAgentSendTarget
+): AgentType | null | undefined {
+  return target.kind === 'terminal' ? target.entry.agentType : target.agentType
 }
 
 export function deriveRunningAgentSendTargets(
@@ -28,13 +67,32 @@ export function deriveRunningAgentSendTargets(
   worktreeId: string,
   now = Date.now()
 ): RunningAgentSendTarget[] {
+  return [
+    ...deriveTerminalAgentSendTargets(state, worktreeId, now),
+    ...deriveStructuredAgentSendTargets(state, worktreeId, 'with-status')
+  ]
+}
+
+/** Chats of the worktree that have not had their first turn yet, so no status entry exists. */
+export function deriveStatuslessStructuredAgentSendTargets(
+  state: RunningAgentTargetState,
+  worktreeId: string
+): StructuredAgentSendTarget[] {
+  return deriveStructuredAgentSendTargets(state, worktreeId, 'without-status')
+}
+
+function deriveTerminalAgentSendTargets(
+  state: RunningAgentTargetState,
+  worktreeId: string,
+  now: number
+): TerminalAgentSendTarget[] {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   if (tabs.length === 0) {
     return []
   }
 
   const tabsById = new Map(tabs.map((tab) => [tab.id, tab]))
-  const targets: RunningAgentSendTarget[] = []
+  const targets: TerminalAgentSendTarget[] = []
 
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
@@ -88,6 +146,7 @@ export function deriveRunningAgentSendTargets(
     }
 
     targets.push({
+      kind: 'terminal',
       paneKey,
       tabId: parsed.tabId,
       leafId: parsed.leafId,
@@ -99,6 +158,44 @@ export function deriveRunningAgentSendTargets(
     })
   }
 
+  return targets
+}
+
+// Why: a structured chat is a workspace tab with no PTY, so it is listed from the tab itself.
+// Chats without status stay out of the shared list, like status-less terminals: every sidebar
+// consumer of it (reveal, force-visible, row pills) needs a row to point at.
+function deriveStructuredAgentSendTargets(
+  state: RunningAgentTargetState,
+  worktreeId: string,
+  status: 'with-status' | 'without-status'
+): StructuredAgentSendTarget[] {
+  const targets: StructuredAgentSendTarget[] = []
+  for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
+    if (!isStructuredTab(tab) || !tab.agentSessionAgent) {
+      continue
+    }
+    const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    const entry = state.agentStatusByPaneKey[paneKey] ?? null
+    if ((entry !== null) !== (status === 'with-status')) {
+      continue
+    }
+    const disabledReason =
+      entry?.state === 'blocked' || entry?.state === 'waiting'
+        ? 'Agent needs permission'
+        : undefined
+    targets.push({
+      kind: 'structured-session',
+      paneKey,
+      tabId: tab.id,
+      sessionId: tab.entityId,
+      agentType: tab.agentSessionAgent,
+      // Why: false matches the tab strip, which labels a chat tab customLabel ?? label.
+      title: resolveUnifiedTabLabel(tab, false),
+      entry,
+      status: disabledReason ? 'disabled' : 'eligible',
+      ...(disabledReason ? { disabledReason } : {})
+    })
+  }
   return targets
 }
 

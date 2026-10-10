@@ -7,10 +7,11 @@ import {
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { Tab, TuiAgent } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
-import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -114,7 +115,7 @@ export function launchAgentInWebHostTab(args: {
       )
       return { delivered: false, failureNotified: true }
     }
-    useAppStore.getState().setActiveTabType('terminal')
+    useAppStore.getState().setActiveTabType('terminal', worktreeId)
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }
@@ -127,7 +128,7 @@ export function launchAgentInWebHostTab(args: {
       agent,
       promptAfterReady: pastePromptAfterReady,
       submitPrompt: submitPastedPrompt,
-      forcePromptPaste: promptDelivery === 'submit-after-ready'
+      forcePromptPaste: true
     }).then(handleCreation)
   }
   if (hasPrompt && promptDelivery === 'draft') {

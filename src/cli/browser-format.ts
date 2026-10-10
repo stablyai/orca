@@ -47,8 +47,7 @@ export function formatBrowserProfileList(result: BrowserProfileListResult): stri
     .map((profile) => {
       const marker = profile.scope === 'default' ? '* ' : '  '
       const source = profile.source?.browserFamily ?? 'none'
-      const userAgent = profile.userAgentMode === 'native' ? '  ua:native' : ''
-      return `${marker}${profile.id}  ${profile.label}  ${profile.scope}  source:${source}${userAgent}`
+      return `${marker}${profile.id}  ${profile.label}  ${profile.scope}  source:${source}`
     })
     .join('\n')
 }

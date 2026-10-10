@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import type { Repo } from '../../../../shared/repo-types'
 import type {
   DetectedWorktree,
   DetectedWorktreeListResult,
-  Repo,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
 
 const repo: Repo = {

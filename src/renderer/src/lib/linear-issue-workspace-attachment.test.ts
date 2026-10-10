@@ -3,10 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildLinearIssueWorkspaceAttachmentIndex,
   findLinearIssueWorkspaceAttachment,
-  findLinearIssueWorkspaceAttachmentInIndex,
-  getLinearIssueWorkspaceAttachmentLabel
+  findLinearIssueWorkspaceAttachmentInIndex
 } from './linear-issue-workspace-attachment'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -181,20 +180,34 @@ describe('Linear issue workspace attachment', () => {
     expect(findLinearIssueWorkspaceAttachmentInIndex(index, issue)?.id).toBe('match')
     expect(findLinearIssueWorkspaceAttachmentInIndex(index, { identifier: 'STA-9999' })).toBeNull()
   })
+})
 
-  it('labels attachments without exposing a full path when display or branch is available', () => {
+describe('multiple Linear attachments', () => {
+  it('indexes secondary identifiers and keeps organization scope', () => {
+    const attached = worktree({
+      linkedLinearIssue: 'STA-1',
+      linkedItems: [
+        {
+          provider: 'linear',
+          type: 'issue',
+          number: 0,
+          identifier: 'STA-2',
+          linearOrganizationUrlKey: 'acme'
+        }
+      ]
+    })
+    const index = buildLinearIssueWorkspaceAttachmentIndex([attached])
     expect(
-      getLinearIssueWorkspaceAttachmentLabel(worktree({ displayName: '  Named Linear  ' }))
-    ).toBe('Named Linear')
+      findLinearIssueWorkspaceAttachmentInIndex(index, {
+        identifier: 'STA-2',
+        url: 'https://linear.app/acme/issue/STA-2'
+      })
+    ).toBe(attached)
     expect(
-      getLinearIssueWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: 'refs/heads/fix-ci' })
-      )
-    ).toBe('fix-ci')
-    expect(
-      getLinearIssueWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: '', path: 'C:\\repo\\workspace-tail' })
-      )
-    ).toBe('workspace-tail')
+      findLinearIssueWorkspaceAttachmentInIndex(index, {
+        identifier: 'STA-2',
+        url: 'https://linear.app/other/issue/STA-2'
+      })
+    ).toBeNull()
   })
 })

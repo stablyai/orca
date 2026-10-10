@@ -5,7 +5,7 @@ import {
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { GitHubOwnerRepo } from '../../../../shared/types'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 
 export function addIssueCommentForRepo(args: {
   repoId?: string
@@ -25,6 +25,7 @@ export function addIssueCommentForRepo(args: {
         repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId),
         number: args.number,
         body: args.body,
+        ...(args.type ? { type: args.type } : {}),
         prRepo: args.prRepo ?? null
       },
       { timeoutMs: 30_000 }

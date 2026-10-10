@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE,
   isGitHubCheckDetailsTimeout
-} from '../../../shared/github-check-details-deadline'
+} from '../../../shared/github/check-details-deadline'
 
 export const GITHUB_CHECK_DETAILS_TIMEOUT_MS = 30_000
 

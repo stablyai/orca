@@ -1,15 +1,9 @@
 import { normalizeExecutionHostId } from './execution-host'
-import type { Repo, ProjectGroup, ProjectGroupCreatedFrom } from './types'
+import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
+import type { Repo } from './repo-types'
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
-
-function createProjectGroupId(): string {
-  const randomUUID = globalThis.crypto?.randomUUID
-  if (randomUUID) {
-    return randomUUID.call(globalThis.crypto)
-  }
-  return `project-group-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
 
 export function normalizeProjectGroupName(name: string, fallback = 'Untitled group'): string {
   const trimmed = name.trim()
@@ -27,7 +21,7 @@ export function createProjectGroup(input: {
 }): ProjectGroup {
   const now = input.now ?? Date.now()
   return {
-    id: createProjectGroupId(),
+    id: createNonSecureContextUuid(),
     name: normalizeProjectGroupName(input.name),
     parentPath: input.parentPath ?? null,
     connectionId: input.connectionId ?? null,
@@ -90,9 +84,8 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
   groups.sort(
     (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
   )
-  const groupIds = new Set(groups.map((group) => group.id))
   for (const group of groups) {
-    if (group.parentGroupId === group.id || !groupIds.has(group.parentGroupId ?? '')) {
+    if (group.parentGroupId === group.id || !seen.has(group.parentGroupId ?? '')) {
       group.parentGroupId = null
     }
   }
@@ -108,10 +101,12 @@ export function clearMissingProjectGroupMemberships(repos: Repo[], groups: Proje
   )
 }
 
-export function getProjectGroupSubtreeIds(
-  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
-  rootGroupId: string
-): Set<string> {
+export type ProjectGroupChildIndex = ReadonlyMap<string, string[]>
+
+/** Build once and reuse when collecting subtrees for more than one root. */
+export function buildProjectGroupChildIndex(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[]
+): ProjectGroupChildIndex {
   const childGroupsByParentId = new Map<string, string[]>()
   for (const group of groups) {
     if (!group.parentGroupId) {
@@ -121,7 +116,20 @@ export function getProjectGroupSubtreeIds(
     children.push(group.id)
     childGroupsByParentId.set(group.parentGroupId, children)
   }
+  return childGroupsByParentId
+}
 
+export function getProjectGroupSubtreeIds(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  rootGroupId: string
+): Set<string> {
+  return collectProjectGroupSubtreeIds(buildProjectGroupChildIndex(groups), rootGroupId)
+}
+
+export function collectProjectGroupSubtreeIds(
+  childGroupsByParentId: ProjectGroupChildIndex,
+  rootGroupId: string
+): Set<string> {
   const subtreeIds = new Set<string>()
   const pending = [rootGroupId]
   while (pending.length > 0) {

@@ -298,3 +298,42 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 })
+
+// Mobile native chat resolves with no root override (transcript-read-cache.ts:104),
+// while the account home a structured Claude session pins is
+// `CLAUDE_CONFIG_DIR || ~/.claude` (runtime-paths.ts:15). When the two disagree the
+// CLI writes one place and mobile reads another, and the chat goes dark with no
+// wire-level error — so the default root has to honour the same variable.
+describe('the default Claude transcript root mobile falls back to', () => {
+  it('follows CLAUDE_CONFIG_DIR, the same variable the pinned account home follows', async () => {
+    const configDir = await makeRoot('orca-native-chat-claude-config-dir-')
+    const slugDir = join(configDir, 'projects', '-repos-workspace-1')
+    await mkdir(slugDir, { recursive: true })
+    const transcript = join(slugDir, 'session-under-config-dir.jsonl')
+    await writeFile(transcript, '', 'utf8')
+    const previous = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = configDir
+
+    try {
+      // No `claudeProjectsDir` override: exactly the call mobile makes.
+      await expect(resolveSessionFilePath('claude', 'session-under-config-dir')).resolves.toBe(
+        transcript
+      )
+    } finally {
+      restoreEnv('CLAUDE_CONFIG_DIR', previous)
+    }
+  })
+
+  it('ignores a blank CLAUDE_CONFIG_DIR rather than resolving against the filesystem root', async () => {
+    const previous = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = '   '
+
+    try {
+      await expect(
+        resolveSessionFilePath('claude', 'session-that-does-not-exist')
+      ).resolves.toBeNull()
+    } finally {
+      restoreEnv('CLAUDE_CONFIG_DIR', previous)
+    }
+  })
+})

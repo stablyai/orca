@@ -1,4 +1,6 @@
 import type { Automation, AutomationRun, AutomationRunUsage } from '../../shared/automations-types'
+import type { Store } from '../persistence'
+import type { AutomationRunWriter } from './automation-run-writer'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 
@@ -96,4 +98,34 @@ export async function collectAutomationRunUsage({
     })
   }
   return unavailable(null, 'provider_unsupported', 'This agent does not report usage to Orca yet.')
+}
+
+/** Collects and writes the usage a just-finalized run earned, returning the row to answer with. */
+export async function writeAutomationRunUsage(input: {
+  store: Store
+  runs: AutomationRunWriter
+  run: AutomationRun
+  claudeUsage: ClaudeUsageStore | null
+  codexUsage: CodexUsageStore | null
+}): Promise<AutomationRun> {
+  const { store, run } = input
+  const usage = await collectAutomationRunUsage({
+    automation: store.listAutomations().find((entry) => entry.id === run.automationId),
+    run,
+    claudeUsage: input.claudeUsage,
+    codexUsage: input.codexUsage
+  })
+  // Why: the run is final during the await above, so a concurrent create-time
+  // retention prune may have evicted it — the usage write must not throw then.
+  if (!store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
+    return run
+  }
+  return input.runs.updateRun({
+    runId: run.id,
+    status: run.status,
+    workspaceId: run.workspaceId,
+    terminalSessionId: run.terminalSessionId,
+    usage,
+    error: run.error
+  })
 }

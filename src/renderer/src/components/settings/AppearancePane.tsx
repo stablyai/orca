@@ -2,7 +2,7 @@ import type React from 'react'
 import { useLayoutEffect, useState } from 'react'
 import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
 
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 import { AppearanceSection } from './AppearanceSection'
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
@@ -147,7 +147,9 @@ export function AppearancePane({
   ]
   const terminalSearchEntries = [
     { title: terminalTitle },
-    ...getTerminalAppearanceSearchEntries({ showWarpImport: !isWebClient })
+    ...getTerminalAppearanceSearchEntries({
+      showDesktopThemeImports: !isWebClient
+    })
   ]
   const windowSearchEntries = [
     {
@@ -228,12 +230,6 @@ export function AppearancePane({
           />
         </AppearanceSection>
       ) : null}
-
-      {/* Why: Code & Markdown is intentionally omitted. Orca has no Appearance-level
-          code/markdown settings — the Monaco editor reuses the terminal font and
-          there is no markdown-style or line-number setting — so a fourth row would
-          be empty. We surface only the three sections that hold real controls
-          rather than fabricate settings. */}
 
       {terminalMatches ? (
         <AppearanceSection

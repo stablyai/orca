@@ -1,121 +1,26 @@
-import { readdir } from 'node:fs/promises'
-import { basename as pathBasename, extname, isAbsolute, join, relative, resolve } from 'node:path'
-import type { MarkdownDocument } from '../../shared/types'
+import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
+import { stopBundledRipgrep } from '../ripgrep/bundled-ripgrep-stop'
+import { parseWslPath } from '../wsl'
+import {
+  collectMarkdownDocuments,
+  MARKDOWN_DOCUMENT_LISTING_ARGS
+} from '../../shared/node-markdown-document-listing'
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+export * from '../../shared/markdown-document-paths'
 
-function normalizeRelativePath(path: string): string {
-  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
-}
-
-export function isMarkdownDocumentName(name: string): boolean {
-  const extension = extname(name).toLowerCase()
-  return extension === '.md' || extension === '.mdx' || extension === '.markdown'
-}
-
-function basenameFromRelativePath(relativePath: string): string {
-  const normalizedPath = relativePath.replaceAll('\\', '/')
-  return normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
-}
-
-function isSafeRelativePath(relativePath: string): boolean {
-  return !relativePath.split('/').includes('..')
-}
-
-function hasParentTraversalSegment(relativePath: string): boolean {
-  return relativePath.split(/[\\/]+/).includes('..')
-}
-
-function rootRelativePath(rootPath: string, filePath: string): string | null {
-  const resolvedRoot = resolve(rootPath)
-  const resolvedFile = resolve(filePath)
-  const relativePath = relative(resolvedRoot, resolvedFile)
-  if (hasParentTraversalSegment(relativePath) || isAbsolute(relativePath)) {
-    return null
-  }
-  return normalizeRelativePath(relativePath)
-}
-
-export function markdownDocumentFromFilePath(
+export async function listMarkdownDocuments(
   rootPath: string,
-  filePath: string,
-  options: { outsideRootRelativePath?: 'basename' | 'relative' } = {}
-): MarkdownDocument {
-  const basename = pathBasename(filePath)
-  const extension = extname(basename)
-  const relativePath =
-    rootRelativePath(rootPath, filePath) ??
-    (options.outsideRootRelativePath === 'basename'
-      ? basename
-      : normalizeRelativePath(relative(rootPath, filePath)))
-  return {
-    filePath,
-    relativePath,
-    basename,
-    name: extension ? basename.slice(0, -extension.length) : basename
-  }
-}
-
-export function markdownDocumentFromRelativePath(
-  rootPath: string,
-  relativePath: string
-): MarkdownDocument | null {
-  const normalizedRelativePath = normalizeRelativePath(relativePath)
-  // Why: SSH providers should return root-relative paths; reject escape
-  // segments before building a synthetic absolute path for renderer use.
-  if (!isSafeRelativePath(normalizedRelativePath)) {
-    return null
-  }
-  const basename = basenameFromRelativePath(normalizedRelativePath)
-  if (!isMarkdownDocumentName(basename)) {
-    return null
-  }
-  const extension = extname(basename)
-  const normalizedRoot = rootPath.replace(/[\\/]+$/, '')
-  return {
-    filePath: `${normalizedRoot}/${normalizedRelativePath}`,
-    relativePath: normalizedRelativePath,
-    basename,
-    name: extension ? basename.slice(0, -extension.length) : basename
-  }
-}
-
-export function markdownDocumentsFromRelativePaths(
-  rootPath: string,
-  relativePaths: string[]
-): MarkdownDocument[] {
-  return relativePaths
-    .map((relativePath) => markdownDocumentFromRelativePath(rootPath, relativePath))
-    .filter((document): document is MarkdownDocument => document !== null)
-    .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
-}
-
-export async function listMarkdownDocuments(rootPath: string): Promise<MarkdownDocument[]> {
-  const documents: MarkdownDocument[] = []
-
-  async function visitDirectory(dirPath: string): Promise<void> {
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    for (const entry of entries) {
-      if (entry.isSymbolicLink()) {
-        continue
-      }
-
-      const entryPath = join(dirPath, entry.name)
-      if (entry.isDirectory()) {
-        if (entry.name === '.git' || entry.name === 'node_modules') {
-          continue
-        }
-        if (entry.name.startsWith('.') && entry.name !== '.github') {
-          continue
-        }
-        await visitDirectory(entryPath)
-        continue
-      }
-
-      if (entry.isFile() && isMarkdownDocumentName(entry.name)) {
-        documents.push(markdownDocumentFromFilePath(rootPath, entryPath))
-      }
-    }
-  }
-
-  await visitDirectory(rootPath)
-  return documents.sort((a, b) => a.relativePath.localeCompare(b.relativePath))
+  options: { wslDistro?: string; signal?: AbortSignal } = {}
+): Promise<MarkdownDocument[]> {
+  options.signal?.throwIfAborted()
+  const distro = parseWslPath(rootPath)?.distro ?? options.wslDistro
+  const child = spawnBundledRipgrep(MARKDOWN_DOCUMENT_LISTING_ARGS, {
+    cwd: rootPath,
+    wslDistro: options.wslDistro,
+    wslDistroForOutput: distro,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  return collectMarkdownDocuments(child, rootPath, Boolean(distro), options.signal, {
+    stopProcess: () => stopBundledRipgrep(child, Boolean(distro))
+  })
 }

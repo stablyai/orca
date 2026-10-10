@@ -1,0 +1,71 @@
+export type WebGitLabRouteKey =
+  | 'diagnoseAuth'
+  | 'rateLimit'
+  | 'listMRs'
+  | 'listWorkItems'
+  | 'listIssues'
+  | 'createIssue'
+  | 'updateIssue'
+  | 'addIssueComment'
+  | 'listLabels'
+  | 'todos'
+  | 'workItemDetails'
+  | 'closeMR'
+  | 'reopenMR'
+  | 'mergeMR'
+  | 'updateMR'
+  | 'updateMRReviewers'
+  | 'addMRComment'
+  | 'addMRInlineComment'
+  | 'resolveMRDiscussion'
+  | 'jobTrace'
+  | 'retryJob'
+  | 'workItemByPath'
+
+export type WebGitLabRuntimeMethod =
+  | 'gitlab.diagnoseAuth'
+  | 'gitlab.rateLimit'
+  | 'gitlab.listMRs'
+  | 'gitlab.listWorkItems'
+  | 'gitlab.listIssues'
+  | 'gitlab.createIssue'
+  | 'gitlab.updateIssue'
+  | 'gitlab.addIssueComment'
+  | 'gitlab.listLabels'
+  | 'gitlab.todos'
+  | 'gitlab.workItemDetails'
+  | 'gitlab.updateMRState'
+  | 'gitlab.mergeMR'
+  | 'gitlab.updateMR'
+  | 'gitlab.updateMRReviewers'
+  | 'gitlab.addMRComment'
+  | 'gitlab.addMRInlineComment'
+  | 'gitlab.resolveMRDiscussion'
+  | 'gitlab.jobTrace'
+  | 'gitlab.retryJob'
+  | 'gitlab.workItemByPath'
+
+export const GITLAB_WEB_RPC_METHODS = {
+  diagnoseAuth: 'gitlab.diagnoseAuth',
+  rateLimit: 'gitlab.rateLimit',
+  listMRs: 'gitlab.listMRs',
+  listWorkItems: 'gitlab.listWorkItems',
+  listIssues: 'gitlab.listIssues',
+  createIssue: 'gitlab.createIssue',
+  updateIssue: 'gitlab.updateIssue',
+  addIssueComment: 'gitlab.addIssueComment',
+  listLabels: 'gitlab.listLabels',
+  todos: 'gitlab.todos',
+  workItemDetails: 'gitlab.workItemDetails',
+  closeMR: 'gitlab.updateMRState',
+  reopenMR: 'gitlab.updateMRState',
+  mergeMR: 'gitlab.mergeMR',
+  updateMR: 'gitlab.updateMR',
+  updateMRReviewers: 'gitlab.updateMRReviewers',
+  addMRComment: 'gitlab.addMRComment',
+  addMRInlineComment: 'gitlab.addMRInlineComment',
+  resolveMRDiscussion: 'gitlab.resolveMRDiscussion',
+  jobTrace: 'gitlab.jobTrace',
+  retryJob: 'gitlab.retryJob',
+  workItemByPath: 'gitlab.workItemByPath'
+} as const satisfies Record<WebGitLabRouteKey, WebGitLabRuntimeMethod>

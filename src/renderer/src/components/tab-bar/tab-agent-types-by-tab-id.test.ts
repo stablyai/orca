@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
 import {
   createTabBarAgentProjectionSelector,
@@ -307,7 +307,7 @@ describe('selectTabAgentTypesByTabId', () => {
     expect(select({ settings: { experimentalNativeChat: true } })).toBe(first)
   })
 
-  it('releases enabled inputs on disable and rescans them after re-enabling', () => {
+  it('keeps agent evidence available for explicit chat toggles while the default is off', () => {
     const onStatusEntryVisited = vi.fn()
     const onAgentTypeLayoutVisited = vi.fn()
     const onUnsafeLayoutVisited = vi.fn()
@@ -323,16 +323,17 @@ describe('selectTabAgentTypesByTabId', () => {
     }
 
     const first = select(state)
-    select({ ...state, settings: { experimentalNativeChat: false } })
+    const disabled = select({ ...state, settings: { experimentalNativeChat: false } })
     const afterReenable = select(state)
 
+    expect(disabled.tabAgentTypesByTabId).toEqual({ 'tab-1': 'claude' })
     expect(afterReenable).not.toBe(first)
-    expect(onStatusEntryVisited).toHaveBeenCalledTimes(2)
-    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(2)
-    expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(2)
+    expect(onStatusEntryVisited).toHaveBeenCalledTimes(1)
+    expect(onAgentTypeLayoutVisited).toHaveBeenCalledTimes(1)
+    expect(onUnsafeLayoutVisited).toHaveBeenCalledTimes(1)
   })
 
-  it('production selector skips all map scans while native chat is disabled', () => {
+  it('production selector scans once and reuses agent evidence with Chat UI off', () => {
     let statusEnumerations = 0
     let layoutEnumerations = 0
     const statuses = new Proxy(
@@ -363,8 +364,8 @@ describe('selectTabAgentTypesByTabId', () => {
     for (let consumer = 0; consumer < 100; consumer++) {
       expect(selectTabBarAgentProjections(disabledState)).toBe(disabled)
     }
-    expect(statusEnumerations).toBe(0)
-    expect(layoutEnumerations).toBe(0)
+    expect(statusEnumerations).toBe(1)
+    expect(layoutEnumerations).toBe(2)
 
     const enabledState = {
       ...disabledState,

@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import type { CreateHostedReviewInput, CreateHostedReviewResult } from '../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
@@ -108,7 +110,7 @@ async function findExistingPullRequest(
 export async function createBitbucketPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'bitbucket') {
@@ -118,6 +120,9 @@ export async function createBitbucketPullRequest(
       error: 'Creating reviews for this provider is not supported yet.'
     }
   }
+
+  // The Bitbucket REST calls run on this client; only the git reads under them are routed.
+  const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const config = resolveBitbucketAuthConfig()
   if (!hasAuth(config)) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { getSourceControlAiControllerDiscoveryHostKey } from './use-source-control-ai'
+import { getSourceControlAiControllerDiscoveryHostKey } from './source-control/ai/use-ai'
 
 describe('getSourceControlAiControllerDiscoveryHostKey', () => {
   it('keys generation settings by the active workspace connection', () => {

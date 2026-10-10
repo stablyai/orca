@@ -29,6 +29,16 @@ describe('shortcut groups', () => {
     )
   })
 
+  it('exposes the agent dashboard toggle as a customizable Global row', () => {
+    const global = groupDefinitions([]).find((group) => group.title === 'Global')
+
+    expect(global?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'dashboard.toggle', title: 'Toggle Agent Dashboard' })
+      ])
+    )
+  })
+
   it('reports a plugin default that shadows a built-in shortcut', () => {
     const command: ActivePluginCommand = {
       pluginKey: 'orca-samples.tasks',
@@ -44,7 +54,8 @@ describe('shortcut groups', () => {
       disabledTuiAgents: [],
       pluginCommands: [command],
       keybindings: {},
-      platform: 'darwin'
+      platform: 'darwin',
+      missionControlConflictMessage: 'Blocked by Mission Control.'
     })
 
     expect(catalog.conflictByAction.get('plugin:orca-samples.tasks/open')).toEqual([

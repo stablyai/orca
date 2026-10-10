@@ -1,7 +1,6 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
-import { Separator } from '../ui/separator'
 import { CliSection } from './CliSection'
 import { GeneralEditorSettingsSection } from './GeneralEditorSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
@@ -18,11 +17,13 @@ import {
 } from './general-search'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { RecentTabOrderControl } from './RecentTabOrderControl'
+import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 export {
   createAutoSaveDelayDraftState,
@@ -79,6 +80,7 @@ const EMPTY_WSL_DISTROS: string[] = []
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
   fontSuggestions: string[]
   onRequestFontSuggestions?: () => void
   wslSupportedPlatform?: boolean
@@ -90,6 +92,7 @@ type GeneralPaneProps = {
 export function GeneralPane({
   settings,
   updateSettings,
+  updateSettingsOrThrow,
   fontSuggestions,
   onRequestFontSuggestions,
   wslSupportedPlatform,
@@ -98,6 +101,20 @@ export function GeneralPane({
   wslCapabilitiesLoading
 }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const sourceDefaultsSupportedRuntimeEnvironmentId = useAppStore(
+    (s) => s.worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId
+  )
+  const defaultsSupportedRuntimeEnvironmentId = useAppStore(
+    (s) => s.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId
+  )
+  const activeRuntimeTarget = getActiveRuntimeTarget(settings)
+  const defaultsSupported =
+    activeRuntimeTarget.kind === 'local' ||
+    activeRuntimeTarget.environmentId === defaultsSupportedRuntimeEnvironmentId
+  const sourceDefaultsSupported =
+    defaultsSupported &&
+    (activeRuntimeTarget.kind === 'local' ||
+      activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
   const projectRuntimeSearchEntries = wslSupportedPlatform
@@ -115,6 +132,34 @@ export function GeneralPane({
           keywords={tabOrderKeywords}
           updateSettings={updateSettings}
         />
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralPane.editor_preview_tabs',
+            'Reuse a preview tab when browsing files'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.editor_preview_tabs_description',
+            'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
+          )}
+          keywords={['preview', 'tab', 'editor', 'explorer', 'reuse', 'replace', 'italic']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.editor_preview_tabs',
+              'Reuse a preview tab when browsing files'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.editor_preview_tabs_description',
+              'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
+            )}
+            checked={settings.editorPreviewTabsEnabled ?? true}
+            onChange={() =>
+              updateSettings({
+                editorPreviewTabsEnabled: !(settings.editorPreviewTabsEnabled ?? true)
+              })
+            }
+          />
+        </SearchableSetting>
         <SearchableSetting
           title={translate(
             'auto.components.settings.GeneralPane.5cb5475664',
@@ -141,6 +186,35 @@ export function GeneralPane({
             }
           />
         </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+            'Confirm before closing running terminals'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+            'Ask before stopping a running agent or command when closing a terminal.'
+          )}
+          keywords={['terminal', 'agent', 'command', 'confirm', 'close', 'OMP']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.confirm_running_terminal_close',
+              'Confirm before closing running terminals'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.confirm_running_terminal_close_description',
+              'Ask before stopping a running agent or command when closing a terminal.'
+            )}
+            checked={!settings.skipCloseTerminalWithRunningProcessConfirm}
+            onChange={() =>
+              updateSettings({
+                skipCloseTerminalWithRunningProcessConfirm:
+                  !settings.skipCloseTerminalWithRunningProcessConfirm
+              })
+            }
+          />
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
@@ -148,6 +222,9 @@ export function GeneralPane({
         key="workspace"
         settings={settings}
         updateSettings={updateSettings}
+        updateSettingsOrThrow={updateSettingsOrThrow}
+        defaultsSupported={defaultsSupported}
+        sourceDefaultsSupported={sourceDefaultsSupported}
       />
     ) : null,
     shouldShowProjectRuntimeSection(
@@ -202,18 +279,15 @@ export function GeneralPane({
     // its own loading placeholder and its own collapsing Separator. Without
     // that separation, a dangling divider would remain above the collapsed
     // section.
-  ].filter(Boolean)
+  ]
 
   return (
     <div className="space-y-6">
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-6">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      <SettingsSectionStack sections={visibleSections} spacing="section" />
       {matchesSettingsSearch(searchQuery, getGeneralSupportSearchEntries()) ? (
-        <GeneralSupportSection hasPrecedingSections={visibleSections.length > 0} />
+        <GeneralSupportSection
+          hasPrecedingSections={visibleSections.some((section) => section !== null)}
+        />
       ) : null}
     </div>
   )

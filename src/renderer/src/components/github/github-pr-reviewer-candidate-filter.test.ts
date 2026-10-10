@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { GitHubAssignableUser } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 import {
   GITHUB_PR_REVIEWER_QUERY_MAX_BYTES,
   filterGitHubPRReviewerCandidates,
-  getGitHubPRReviewerQueryState,
-  isGitHubPRReviewerQueryTooLarge
+  getGitHubPRReviewerQueryState
 } from './github-pr-reviewer-candidate-filter'
 
 function user(login: string, name: string | null = null): GitHubAssignableUser {
@@ -38,7 +37,6 @@ describe('github-pr-reviewer-candidate-filter', () => {
     const query = 'é'.repeat(GITHUB_PR_REVIEWER_QUERY_MAX_BYTES)
 
     expect(query.length).toBe(GITHUB_PR_REVIEWER_QUERY_MAX_BYTES)
-    expect(isGitHubPRReviewerQueryTooLarge(query)).toBe(true)
     expect(getGitHubPRReviewerQueryState(query)).toEqual({ query: '', isTooLarge: true })
     expect(
       filterGitHubPRReviewerCandidates({
@@ -60,7 +58,6 @@ describe('github-pr-reviewer-candidate-filter', () => {
       avatarUrl: ''
     } as GitHubAssignableUser
 
-    expect(isGitHubPRReviewerQueryTooLarge(oversizedQuery)).toBe(true)
     expect(
       filterGitHubPRReviewerCandidates({
         candidates: [candidate],

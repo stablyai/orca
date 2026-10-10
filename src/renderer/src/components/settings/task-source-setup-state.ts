@@ -1,4 +1,4 @@
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import type { IntegrationStatusTone } from '@/components/integration-status-pill'
 
 export type TaskProviderReadiness = {
@@ -8,6 +8,8 @@ export type TaskProviderReadiness = {
   /** Linear only — agent skill install. Other providers leave this undefined. */
   skillInstalled?: boolean
   skillChecking?: boolean
+  /** The scan could not vouch for `skillInstalled: false`: an unread root, or an error before any answer. */
+  skillUnverifiable?: boolean
   visible: boolean
 }
 
@@ -16,6 +18,7 @@ export type TaskProviderSetupStatus =
   | 'ready'
   | 'connect-required'
   | 'skill-required'
+  | 'skill-unverified'
   | 'unavailable'
   | 'hidden'
   | 'incomplete'
@@ -30,6 +33,7 @@ export const TASK_PROVIDER_SETUP_STATUS_TONE: Record<
   hidden: 'neutral',
   'connect-required': 'attention',
   'skill-required': 'attention',
+  'skill-unverified': 'attention',
   unavailable: 'attention',
   incomplete: 'attention'
 }
@@ -82,6 +86,10 @@ export function getTaskProviderSetupStatus(
   }
   if (!readiness.connected) {
     return 'connect-required'
+  }
+  // Why before `skill-required`: that status offers Install, which reinstalls a skill that may be present.
+  if (readiness.skillUnverifiable) {
+    return 'skill-unverified'
   }
   if (readiness.skillInstalled === false) {
     return 'skill-required'

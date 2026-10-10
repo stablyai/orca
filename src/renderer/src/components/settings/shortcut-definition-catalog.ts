@@ -5,7 +5,11 @@ import {
   type KeybindingDefinition,
   type KeybindingOverrides
 } from '../../../../shared/keybindings'
-import type { TuiAgent } from '../../../../shared/types'
+import {
+  findMacSystemHotkeyConflicts,
+  type MacCapturedDigitChord
+} from '../../../../shared/macos-symbolic-hotkeys'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import { buildPluginCommandKeybindingDefinitions } from '@/lib/plugin-command-keybindings'
 import { disabledAgentTabActionIds, groupDefinitions, type ShortcutGroup } from './shortcut-groups'
@@ -23,6 +27,8 @@ export function buildShortcutDefinitionCatalog(options: {
   pluginCommands: readonly ActivePluginCommand[]
   keybindings: KeybindingOverrides
   platform: NodeJS.Platform
+  macCapturedDigitChords?: readonly MacCapturedDigitChord[]
+  missionControlConflictMessage: string
 }): ShortcutDefinitionCatalog {
   const pluginDefinitions = buildPluginCommandKeybindingDefinitions(options.pluginCommands)
   const groups = groupDefinitions(options.disabledTuiAgents, pluginDefinitions)
@@ -51,6 +57,21 @@ export function buildShortcutDefinitionCatalog(options: {
         `${formatKeybindingList([conflict.binding], options.platform)} conflicts with ${labels}.`
       ])
     }
+  }
+  const systemConflicts = findMacSystemHotkeyConflicts(
+    definitions,
+    options.platform,
+    options.keybindings,
+    options.macCapturedDigitChords ?? []
+  )
+  for (const conflict of systemConflicts) {
+    if (ignoredConflictActionIds.includes(conflict.actionId)) {
+      continue
+    }
+    conflictByAction.set(conflict.actionId, [
+      ...(conflictByAction.get(conflict.actionId) ?? []),
+      options.missionControlConflictMessage
+    ])
   }
   return {
     groups,

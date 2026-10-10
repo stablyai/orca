@@ -11,7 +11,7 @@ import {
 import { openSourceControlAiSettingsTarget } from '@/components/right-sidebar/source-control-ai-settings-navigation'
 import { getConnectionId } from '@/lib/connection-context'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
-import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../shared/source-control-launch-agent-selection'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -24,7 +24,7 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
 
 export {

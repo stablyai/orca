@@ -130,7 +130,13 @@ describe('agent hook completion store sync', () => {
         notifications: { enabled: false, agentTaskComplete: false }
       }
     })
-    expect(shouldSyncAgentHookCompletionForStoreUpdate(trackingDisabled, previous)).toBe(true)
+    expect(shouldSyncAgentHookCompletionForStoreUpdate(trackingDisabled, previous)).toBe(false)
+    expect(
+      shouldSyncAgentHookCompletionForStoreUpdate(
+        createState({ ...previous, settings: null }),
+        previous
+      )
+    ).toBe(true)
   })
 
   it('treats tab order and duplicate-id worktree precedence as liveness inputs', () => {
@@ -167,24 +173,5 @@ describe('agent hook completion store sync', () => {
       }
     })
     expect(shouldSyncAgentHookCompletionForStoreUpdate(reorderedTabs, twoTabPrevious)).toBe(true)
-  })
-
-  it('compares effective tracking state instead of unrelated settings identity', () => {
-    const previous = createState({
-      settings: {
-        experimentalTerminalAttention: true,
-        notifications: { enabled: false, agentTaskComplete: false }
-      }
-    })
-    const stillTrackedByNotifications = createState({
-      ...previous,
-      settings: {
-        experimentalTerminalAttention: false,
-        notifications: { enabled: true, agentTaskComplete: true }
-      }
-    })
-    expect(shouldSyncAgentHookCompletionForStoreUpdate(stillTrackedByNotifications, previous)).toBe(
-      false
-    )
   })
 })

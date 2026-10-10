@@ -8,13 +8,16 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import type { TuiAgent } from '../../../../shared/types'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
+import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
+import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -35,6 +38,10 @@ export type QuickLaunchAgentMenuItemsProps = {
   launchSource?: LaunchSource
   /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
   onPromptDelivered?: () => void
+  /** Given the launch's own delivery result while the prompt is still on its way. */
+  onPromptHandedOff?: (delivered: Promise<unknown>) => void
+  /** Nothing to send: e.g. every note is already on its way, so no agent is started. */
+  disabled?: boolean
 }
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
@@ -101,7 +108,9 @@ function QuickLaunchAgentMenuItemsInner({
   prompt,
   promptDelivery,
   launchSource,
-  onPromptDelivered
+  onPromptDelivered,
+  onPromptHandedOff,
+  disabled = false
 }: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
   // Why: resolving only the SSH connectionId here made paired-runtime
   // worktrees fall back to LOCAL detection, listing the client's agents
@@ -124,16 +133,23 @@ function QuickLaunchAgentMenuItemsInner({
 
   const runLaunch = useCallback(
     (agent: TuiAgent) => {
+      if (disabled) {
+        return
+      }
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
+        requestId: newAgentLaunchRequestId(),
         agent,
         worktreeId,
         groupId,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
-        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
+        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
+        // Notes keep their text until it goes out, so the new chat's composer never gets a copy.
+        ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {}),
+        freshNewTab: true
       })
       if (!result) {
         toast.error(
@@ -145,17 +161,35 @@ function QuickLaunchAgentMenuItemsInner({
         )
         return
       }
-      if (!result.tabId) {
-        // Why: paired web clients create the tab on the host; focus follows the
-        // next session-tabs snapshot instead of a local tab id.
+      if (onPromptHandedOff && result.promptDeliveryResult) {
+        const outcome = newAgentPromptOutcome({ delivery: result.promptDeliveryResult })
+        onPromptHandedOff(outcome)
+        // The notes keep the text, so they say once why it did not go, as a send to a chat does.
+        void outcome.then(({ failure }) => {
+          if (failure) {
+            toast.error(
+              translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
+                value0: label
+              }),
+              {
+                description: activeAgentNotesSendFailureMessage(failure.status, {
+                  explicitTarget: true,
+                  code: failure.code
+                })
+              }
+            )
+          }
+        })
+      }
+      if (result.surface.kind !== 'local-terminal') {
         return
       }
-      onFocusTerminal(result.tabId)
+      onFocusTerminal(result.surface.tabId)
 
       // Why: launch success means the terminal session exists. Agent readiness
       // can lag behind on slow machines, and prompt paste flows already own
       // their own readiness timeout once a PTY exists.
-      const launchedTabId = result.tabId
+      const launchedTabId = result.surface.tabId
       void waitForTerminalPty(launchedTabId, 5000).then((hasPty) => {
         if (hasPty) {
           return
@@ -173,7 +207,17 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
+    [
+      worktreeId,
+      groupId,
+      onFocusTerminal,
+      prompt,
+      promptDelivery,
+      launchSource,
+      onPromptDelivered,
+      onPromptHandedOff,
+      disabled
+    ]
   )
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
@@ -202,6 +246,7 @@ function QuickLaunchAgentMenuItemsInner({
         return (
           <DropdownMenuItem
             key={agent}
+            disabled={disabled}
             onSelect={() => runLaunch(agent)}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             title={translate(

@@ -1,6 +1,7 @@
 // ─── Events (Daemon → Client, on stream socket) ────────────────────
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type DataEvent = {
   type: 'event'
@@ -20,7 +21,9 @@ export type ExitEvent = {
   type: 'event'
   event: 'exit'
   sessionId: string
-  payload: { code: number; incarnationId?: PtyIncarnationId }
+  /** `cause` is additive: a daemon predating it omits the field and readers fall
+   *  back to `unknown` rather than reading meaning into `code` (STA-4536). */
+  payload: { code: number; incarnationId?: PtyIncarnationId; cause?: TerminalExitCause }
 }
 
 export type TerminalErrorEvent = {

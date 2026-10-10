@@ -5,7 +5,8 @@ import {
   type ExecutionHostScope
 } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import type { Project, ProjectHostSetup, Repo } from '../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../shared/project-types'
+import type { Repo } from '../../../shared/repo-types'
 import { resolveComposerRepoId } from './new-workspace-composer-repo'
 
 export type WorkspaceCreationTarget = {
@@ -245,6 +246,11 @@ export function resolveWorkspaceCreationTarget(
   }
   if (legacyTarget) {
     return { status: 'ready', target: legacyTarget }
+  }
+  if (input.draftRepoId && reposById.has(input.draftRepoId)) {
+    // Why: the draft named this repo. Swapping in any other ready project would create the
+    // workspace in a project, and on a host, the user never chose.
+    return { status: 'unavailable', reason: 'setup-not-found' }
   }
   const fallbackTarget = findReadySetupTarget(setups, reposById, () => true)
   return fallbackTarget

@@ -27,7 +27,6 @@ function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
     directoryPath: '/Users/test/.agents/skills/example-skill',
     skillFilePath: '/Users/test/.agents/skills/example-skill/SKILL.md',
     installed: true,
-    fileCount: 1,
     updatedAt: null,
     ...overrides
   }
@@ -280,6 +279,44 @@ describe('discoverInstalledAgentSkills', () => {
     expect(discover).toHaveBeenCalledTimes(2)
     expect(discover).toHaveBeenNthCalledWith(1, undefined)
     expect(discover).toHaveBeenNthCalledWith(2, { runtime: 'wsl', wslDistro: null })
+  })
+
+  it('forwards filters and isolates filtered discovery caches', async () => {
+    const orchestrationResult = discoveryResult([skill({ name: 'orchestration' })])
+    const computerUseResult = discoveryResult([skill({ name: 'computer-use' })])
+    const discover = vi
+      .fn()
+      .mockResolvedValueOnce(orchestrationResult)
+      .mockResolvedValueOnce(computerUseResult)
+    vi.stubGlobal('window', { api: { skills: { discover } } })
+
+    await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(
+      false,
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      undefined,
+      ['orchestration'],
+      GLOBAL_AGENT_SKILL_SOURCE_KINDS
+    )
+    await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(
+      false,
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      undefined,
+      ['computer-use'],
+      GLOBAL_AGENT_SKILL_SOURCE_KINDS
+    )
+
+    expect(discover).toHaveBeenNthCalledWith(1, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      names: ['orchestration'],
+      sourceKinds: ['home']
+    })
+    expect(discover).toHaveBeenNthCalledWith(2, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      names: ['computer-use'],
+      sourceKinds: ['home']
+    })
   })
 
   it('forwards project runtime targets to skill discovery', async () => {

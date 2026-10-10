@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as HostReadableTranscriptPathModule from './host-readable-transcript-path'
-
 const mocks = vi.hoisted(() => ({
   install: vi.fn(),
+  observe: vi.fn(),
+  observation: undefined as
+    | ((runningDistros: readonly string[]) => Promise<void> | void)
+    | undefined,
   resolve: vi.fn(),
+  stopObservation: vi.fn(),
   toHostReadable: vi.fn()
 }))
 
@@ -14,12 +18,16 @@ vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
   installTranscriptWatcher: mocks.install
 }))
-vi.mock('./host-readable-transcript-path', async (importOriginal) => ({
-  ...(await importOriginal<typeof HostReadableTranscriptPathModule>()),
-  toHostReadableTranscriptPath: mocks.toHostReadable
+vi.mock('./host-readable-transcript-path', async (importOriginal) => {
+  const actual = await importOriginal<typeof HostReadableTranscriptPathModule>()
+  return { ...actual, toHostReadableTranscriptPath: mocks.toHostReadable }
+})
+vi.mock('./wsl-transcript-running-observer', () => ({
+  observeRunningWslDistros: mocks.observe
 }))
 
 import { subscribeNativeChatTranscript } from './transcript-watch'
+import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 const realPlatform = process.platform
 
@@ -32,6 +40,12 @@ describe('native chat transcript resolve polling', () => {
     vi.useFakeTimers()
     mocks.install.mockReset().mockReturnValue(null)
     mocks.resolve.mockReset().mockResolvedValue(null)
+    mocks.observation = undefined
+    mocks.stopObservation.mockReset()
+    mocks.observe.mockReset().mockImplementation((callback) => {
+      mocks.observation = callback
+      return mocks.stopObservation
+    })
     mocks.toHostReadable.mockReset().mockResolvedValue(null)
     // Why: a POSIX exact path is a WSL guest path on win32 and is deliberately
     // never installed raw there, so pin the platform instead of inheriting the
@@ -67,9 +81,7 @@ describe('native chat transcript resolve polling', () => {
     expect(mocks.install).toHaveBeenCalledTimes(callsAfterUnsubscribe)
   })
 
-  it('retries the WSL translation on the slow cadence, never installing the raw guest path', async () => {
-    // Why: each translation probes the UNC twin per distro over the 9P
-    // share; doing it every fast tick would hammer the main process (#10326).
+  it('retries WSL translation from shared observations, never installing the raw guest path', async () => {
     setPlatform('win32')
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
@@ -79,13 +91,13 @@ describe('native chat transcript resolve polling', () => {
       onAppend: () => {}
     })
 
-    await vi.advanceTimersByTimeAsync(100)
+    await mocks.observation?.(['Ubuntu'])
     expect(mocks.toHostReadable).toHaveBeenCalledTimes(1)
     expect(mocks.install.mock.calls.some(([filePath]) => String(filePath).startsWith('/'))).toBe(
       false
     )
 
-    await vi.advanceTimersByTimeAsync(5_100)
+    await mocks.observation?.(['Ubuntu'])
     expect(mocks.toHostReadable).toHaveBeenCalledTimes(2)
 
     subscription.unsubscribe()
@@ -94,7 +106,9 @@ describe('native chat transcript resolve polling', () => {
   it('installs the translated UNC path once the WSL transcript becomes readable', async () => {
     setPlatform('win32')
     const unc = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-session-id.jsonl'
+    const engine = { unsubscribe: vi.fn(), watching: true }
     mocks.toHostReadable.mockResolvedValue(unc)
+    mocks.install.mockResolvedValue(engine)
 
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
@@ -104,10 +118,11 @@ describe('native chat transcript resolve polling', () => {
       onAppend: () => {}
     })
 
-    await vi.advanceTimersByTimeAsync(100)
+    await mocks.observation?.(['Ubuntu'])
     expect(mocks.install.mock.calls.some(([filePath]) => filePath === unc)).toBe(true)
-    // Memoized: a successful translation is not re-probed on later ticks.
+    // The resolve observer hands ownership to the installed watcher.
     expect(mocks.toHostReadable).toHaveBeenCalledTimes(1)
+    expect(mocks.stopObservation).toHaveBeenCalledOnce()
 
     subscription.unsubscribe()
   })
@@ -123,6 +138,41 @@ describe('native chat transcript resolve polling', () => {
     await vi.advanceTimersByTimeAsync(35)
     expect(mocks.resolve.mock.calls.length).toBeGreaterThan(1)
     subscription.unsubscribe()
+  })
+
+  it('degrades a gate-refused initial resolve to the poll fallback instead of failing', async () => {
+    const engine = { unsubscribe: vi.fn(), watching: true }
+    mocks.resolve
+      .mockRejectedValueOnce(new WslTranscriptFsError('unavailable', 'stuck permits'))
+      .mockResolvedValue('/home/ada/found.jsonl')
+    mocks.install.mockImplementation((filePath: string) => (filePath ? engine : null))
+
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session-id',
+      resolvePollIntervalMs: 10,
+      onAppend: () => {}
+    })
+    expect(subscription.watching).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(20)
+    expect(
+      mocks.install.mock.calls.some(([filePath]) => filePath === '/home/ada/found.jsonl')
+    ).toBe(true)
+    subscription.unsubscribe()
+    expect(engine.unsubscribe).toHaveBeenCalled()
+  })
+
+  it('still fails subscribe on non-gate resolver errors', async () => {
+    mocks.resolve.mockRejectedValueOnce(new Error('resolver crashed'))
+
+    await expect(
+      subscribeNativeChatTranscript({
+        agent: 'claude',
+        sessionId: 'session-id',
+        onAppend: () => {}
+      })
+    ).rejects.toThrow('resolver crashed')
   })
 
   it('cancels queued WSL resolution when the subscription closes', async () => {
@@ -143,10 +193,12 @@ describe('native chat transcript resolve polling', () => {
       onAppend: () => {}
     })
 
-    await vi.advanceTimersByTimeAsync(10)
+    const observation = mocks.observation?.(['Ubuntu'])
+    await vi.waitFor(() => expect(receivedSignal).toBeDefined())
     expect(receivedSignal?.aborted).toBe(false)
     subscription.unsubscribe()
     expect(receivedSignal?.aborted).toBe(true)
+    await observation
   })
 
   it('does not install after initial resolution is cancelled', async () => {

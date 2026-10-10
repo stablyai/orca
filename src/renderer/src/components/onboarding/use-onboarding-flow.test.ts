@@ -3,8 +3,8 @@ import { toast } from 'sonner'
 import {
   prepareSkippedOnboardingPreferences,
   remapOpenOnboardingLastCompletedStep
-} from './use-onboarding-flow'
-import { getDefaultOnboardingState } from '../../../../shared/constants'
+} from './onboarding-flow-state'
+import { getDefaultOnboardingState } from '../../../../shared/onboarding-defaults'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() }

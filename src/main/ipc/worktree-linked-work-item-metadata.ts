@@ -1,4 +1,5 @@
-import type { Worktree, WorktreeMeta } from '../../shared/types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { Worktree } from '../../shared/worktree/types'
 
 type LinkedWorkItemMetadata = Pick<
   Worktree,
@@ -8,6 +9,7 @@ type LinkedWorkItemMetadata = Pick<
   | 'linkedAzureDevOpsPR'
   | 'linkedGiteaPR'
   | 'linkedWorkItem'
+  | 'linkedItems'
   | 'linkedTaskSourceContext'
 >
 
@@ -19,6 +21,7 @@ export function getLinkedWorkItemMetadata(meta: WorktreeMeta | undefined): Linke
     linkedAzureDevOpsPR: meta?.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta?.linkedGiteaPR ?? null,
     linkedWorkItem: meta?.linkedWorkItem ?? null,
+    ...(meta?.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
     linkedTaskSourceContext: meta?.linkedTaskSourceContext ?? null
   }
 }

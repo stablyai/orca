@@ -26,7 +26,11 @@ export function useRichMarkdownEditorInstance(params: EditorConfigParams): Edito
       // Dependencies are the same as the params object keys
       // eslint-disable-next-line react-hooks/exhaustive-deps
       Object.values(params)
-    )
+    ),
+    // Keep the editor instance stable while its options change. Tiptap updates
+    // the live editor options when this list is empty, preserving selection and
+    // history instead of reparsing the initial content.
+    []
   )
   params.editorRef.current = editor ?? null
   return editor

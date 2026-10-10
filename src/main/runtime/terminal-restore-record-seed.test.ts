@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 // STA repro (post-restart blind orchestrator incident): after an app relaunch
 // the daemon survives and spawn reattaches silently, but the restore payload

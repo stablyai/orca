@@ -172,6 +172,27 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.stateSetters[0]).not.toHaveBeenCalledWith('local')
   })
 
+  it.each(['error', 'blocked'] as const)(
+    'has no paired-web fallback when the only host is %s',
+    async (health) => {
+      mocks.isWebClient = true
+      mocks.stateValues = ['runtime:env-1', false]
+      mocks.hostOptions = [
+        {
+          ...mocks.hostOptions[2],
+          health
+        }
+      ]
+      const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+      const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+      expect(result.hostOptions).toHaveLength(1)
+      expect(result.selectedHostId).toBeNull()
+      expect(result.selectedParsedHost).toBeNull()
+    }
+  )
+
   it('selects a local or SSH host without changing the durable active server', async () => {
     mocks.stateValues = ['runtime:env-1', false]
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
@@ -288,5 +309,57 @@ describe('useAddRepoHostSelection', () => {
       'env-vm'
     )
     expect(setStep).not.toHaveBeenCalled()
+  })
+
+  describe('an SSH host merged with its managed server', () => {
+    function mergedHosts(serverHealth: SidebarHostOption['health']): SidebarHostOption[] {
+      return [
+        mocks.hostOptions[0],
+        {
+          id: 'runtime:omarchy-server',
+          label: 'Omarchy',
+          detail: 'SSH',
+          kind: 'runtime',
+          health: serverHealth,
+          presence: 'project',
+          aliasHostIds: ['ssh:omarchy-target']
+        },
+        {
+          id: 'ssh:omarchy-target',
+          label: 'Omarchy',
+          detail: 'SSH',
+          kind: 'ssh',
+          health: 'available',
+          presence: 'configured',
+          mergedIntoHostId: 'runtime:omarchy-server'
+        }
+      ]
+    }
+
+    it('keeps the SSH id a connect saved on its server row once the server is up', async () => {
+      mocks.hostOptions = mergedHosts('available')
+      mocks.stateValues = ['ssh:omarchy-target', false]
+      mocks.refValues = [true]
+      const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+      const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+      expect(result.hostOptions.map((host) => host.id)).toEqual(['local', 'runtime:omarchy-server'])
+      expect(result.selectedHostId).toBe('runtime:omarchy-server')
+      expect(result.selectedParsedHost).toMatchObject({ kind: 'runtime' })
+    })
+
+    it('blocks the actions instead of falling back to local while the server comes up', async () => {
+      mocks.hostOptions = mergedHosts('connecting')
+      mocks.stateValues = ['ssh:omarchy-target', false]
+      mocks.refValues = [true]
+      const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+      const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+      expect(result.selectedHostId).toBeNull()
+      expect(result.selectedParsedHost).toBeNull()
+      expect(result.displayedHostId).toBe('runtime:omarchy-server')
+    })
   })
 })

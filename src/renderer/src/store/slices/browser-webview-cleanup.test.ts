@@ -1,22 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 
-vi.mock('../../components/browser-pane/webview-registry', () => ({
+vi.mock('../../components/browser-pane/host-guest/webview-registry', () => ({
   destroyPersistentWebview: vi.fn()
 }))
 
 import {
   collectBrowserWebviewIds,
-  destroyRemovedBrowserWebview,
   destroyWorkspaceWebviews,
   destroyWorktreeBrowserGuests
 } from './browser-webview-cleanup'
-import { destroyPersistentWebview } from '../../components/browser-pane/webview-registry'
+import { destroyPersistentWebview } from '../../components/browser-pane/host-guest/webview-registry'
 import {
   forgetExplicitBrowserPageZoomLevel,
   getExplicitBrowserPageZoomLevel,
   rememberExplicitBrowserPageZoomLevel
-} from '../../components/browser-pane/browser-page-zoom'
+} from '../../components/browser-pane/host-guest/browser-page-zoom'
 
 function workspace(id: string): BrowserWorkspace {
   return {
@@ -73,12 +72,6 @@ describe('collectBrowserWebviewIds', () => {
 describe('destroyWorkspaceWebviews', () => {
   beforeEach(() => {
     vi.mocked(destroyPersistentWebview).mockClear()
-  })
-
-  it('destroys the webview when the backing page is removed', () => {
-    destroyRemovedBrowserWebview('page-1')
-
-    expect(destroyPersistentWebview).toHaveBeenCalledWith('page-1')
   })
 
   it('destroys every page id for a multi-page workspace', () => {

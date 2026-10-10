@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/types'
+import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({
   useAppStore: { getState: vi.fn() }
@@ -14,10 +14,8 @@ vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   }
 })
 
-import {
-  createExternalWatchEventHandler,
-  verifyLatchedMoveDestinations
-} from './useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
+import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
 import { getOpenFilesForExternalFileChange } from '@/components/editor/editor-autosave'
 import { __clearSelfWriteRegistryForTests } from '@/components/editor/editor-self-write-registry'

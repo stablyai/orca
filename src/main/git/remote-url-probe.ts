@@ -1,8 +1,9 @@
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../providers/ssh-git-dispatch'
+import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import { gitExecFileAsync } from './runner'
+import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 /**
  * The `git remote get-url` probe every forge integration runs to decide whether
@@ -22,6 +23,7 @@ export type RemoteUrlProbeContext = {
   repoPath: string
   connectionId?: string | null
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 /** Reads a remote URL, or null when the repo's SSH runtime is not connected. */
@@ -42,7 +44,8 @@ export async function readRemoteUrl(
   const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
     cwd: context.repoPath,
     timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
+    ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
   })
   return stdout
 }
@@ -91,23 +94,21 @@ export function isTransientGitProbeError(error: unknown): boolean {
 }
 
 /**
- * Throws when the remote could not be read because the probe was wedged or its
- * transport was gone, and returns normally for every answer — including a repo
- * with no remote at all. Lets a caller that treats "nothing found" as a cacheable
- * answer tell that apart from a lookup that never got to ask.
+ * Throws when the remote could not be read, and returns normally for every
+ * answer — including a repo with no remote at all. Lets a caller that treats
+ * "nothing found" as cacheable tell that apart from a lookup that never got to ask.
  */
 export async function assertRemoteUrlReadable(
   context: RemoteUrlProbeContext,
   remoteName = 'origin'
 ): Promise<void> {
-  if (context.connectionId && !getSshGitProvider(context.connectionId)) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-  }
+  requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
   try {
     await readRemoteUrl(context, remoteName)
   } catch (error) {
-    if (isTransientGitProbeError(error)) {
-      throw error
+    if (isStableMissingGitRemoteError(error)) {
+      return
     }
+    throw error
   }
 }

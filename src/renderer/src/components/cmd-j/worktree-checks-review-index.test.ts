@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { searchWorktrees } from '@/lib/worktree-palette-search'
 import { buildWorktreeChecksReviewIndex } from './worktree-checks-review-index'
 
 const repo: Repo = {
@@ -36,7 +39,7 @@ const worktree: Worktree = {
   lastActivityAt: 0
 }
 
-function makePR(): PRInfo {
+function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
   return {
     number: 42,
     title: 'Search worktrees by their pull requests',
@@ -44,7 +47,8 @@ function makePR(): PRInfo {
     url: 'https://github.com/acme/orca/pull/42',
     checksStatus: 'success',
     updatedAt: '2026-07-12T00:00:00Z',
-    mergeable: 'MERGEABLE'
+    mergeable: 'MERGEABLE',
+    ...overrides
   }
 }
 
@@ -145,6 +149,180 @@ describe('buildWorktreeChecksReviewIndex', () => {
     expect(reviews.get(gitLabWorktree)).toBeNull()
   })
 
+  it('records matching GitHub suppression so Cmd+J cannot fall back to stale PR evidence', () => {
+    const suppressedWorktree = {
+      ...worktree,
+      linkedPR: null,
+      suppressedGitHubPR: 42
+    }
+    const prKey = getGitHubPRCacheKey(
+      repo.path,
+      repo.id,
+      'feature/search',
+      null,
+      repo.connectionId,
+      repo.executionHostId,
+      true
+    )
+    const prCache = {
+      [prKey]: { data: makePR(), fetchedAt: 1 },
+      [`${repo.path}::feature/search`]: { data: makePR(), fetchedAt: 1 }
+    }
+    const repoByHostIdentity = new Map([[getRepoHostIdentity(repo), repo]])
+
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [suppressedWorktree],
+      repoByHostIdentity,
+      prCache,
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(reviews.get(suppressedWorktree)).toBeNull()
+    expect(
+      searchWorktrees([suppressedWorktree], 'pull requests', new Map([[repo.id, repo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
+    expect(
+      searchWorktrees([suppressedWorktree], '#42', new Map([[repo.id, repo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
+  })
+
+  it('filters matching suppression from a legacy-only local PR cache', () => {
+    const localRepo = { ...repo, path: '/local/orca', executionHostId: 'local' as const }
+    const suppressedWorktree = {
+      ...worktree,
+      hostId: 'local' as const,
+      linkedPR: null,
+      suppressedGitHubPR: 42
+    }
+    const prCache = {
+      [`${localRepo.path}::feature/search`]: { data: makePR(), fetchedAt: 1 }
+    }
+    const repoByHostIdentity = new Map([[getRepoHostIdentity(localRepo), localRepo]])
+
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [suppressedWorktree],
+      repoByHostIdentity,
+      prCache,
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(reviews.has(suppressedWorktree)).toBe(false)
+    expect(
+      searchWorktrees([suppressedWorktree], 'pull requests', new Map([[repo.id, localRepo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
+    expect(
+      searchWorktrees([suppressedWorktree], '#42', new Map([[repo.id, localRepo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
+  })
+
+  it('keeps a different detected GitHub PR searchable after suppressing another identity', () => {
+    const suppressedWorktree = {
+      ...worktree,
+      linkedPR: null,
+      suppressedGitHubPR: 42
+    }
+    const prKey = getGitHubPRCacheKey(
+      repo.path,
+      repo.id,
+      'feature/search',
+      null,
+      repo.connectionId,
+      repo.executionHostId,
+      true
+    )
+    const repoByHostIdentity = new Map([[getRepoHostIdentity(repo), repo]])
+    const prCache = {
+      [prKey]: {
+        data: makePR({ number: 43, title: 'A different pull request' }),
+        fetchedAt: 1
+      }
+    }
+
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [suppressedWorktree],
+      repoByHostIdentity,
+      prCache,
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(reviews.get(suppressedWorktree)).toMatchObject({ number: 43 })
+    expect(
+      searchWorktrees([suppressedWorktree], '#43', new Map([[repo.id, repo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toHaveLength(1)
+  })
+
+  it('keeps an explicit PR authoritative over stale branch-cache evidence', () => {
+    const localRepo = { ...repo, path: '/local/orca', executionHostId: 'local' as const }
+    const explicitWorktree = { ...worktree, hostId: 'local' as const, linkedPR: 42 }
+    const prKey = getGitHubPRCacheKey(
+      localRepo.path,
+      localRepo.id,
+      'feature/search',
+      null,
+      localRepo.connectionId,
+      localRepo.executionHostId,
+      true
+    )
+    const stalePR = makePR({ number: 43, title: 'Stale branch PR' })
+    const prCache = {
+      [prKey]: { data: stalePR, fetchedAt: 1 },
+      [`${localRepo.path}::feature/search`]: { data: stalePR, fetchedAt: 1 }
+    }
+    const repoByHostIdentity = new Map([[getRepoHostIdentity(localRepo), localRepo]])
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [explicitWorktree],
+      repoByHostIdentity,
+      prCache,
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(
+      searchWorktrees([explicitWorktree], 'stale branch', new Map([[repo.id, localRepo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
+    expect(
+      searchWorktrees([explicitWorktree], '#43', new Map([[repo.id, localRepo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
+    expect(
+      searchWorktrees([explicitWorktree], '#42', new Map([[repo.id, localRepo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toHaveLength(1)
+  })
+
   it('keeps same-id worktrees isolated across execution hosts', () => {
     const localRepo: Repo = {
       ...repo,
@@ -176,6 +354,56 @@ describe('buildWorktreeChecksReviewIndex', () => {
 
     expect(reviews.has(localWorktree)).toBe(false)
     expect(reviews.get(sshWorktree)).toMatchObject({ provider: 'github', number: 42 })
+  })
+
+  it('does not expose a physical SSH review to its runtime-owned worktree', () => {
+    const runtimeRepo: Repo = {
+      ...repo,
+      path: '/remote/orca',
+      executionHostId: 'runtime:paired-host'
+    }
+    const runtimeWorktree: Worktree = {
+      ...worktree,
+      linkedPR: null,
+      runtimeOwnerEnvironmentId: 'paired-host'
+    }
+    const physicalKey = getGitHubPRCacheKey(
+      repo.path,
+      repo.id,
+      'feature/search',
+      null,
+      repo.connectionId,
+      repo.executionHostId,
+      true
+    )
+
+    const repoByHostIdentity = new Map([
+      [getRepoHostIdentity(repo), repo],
+      [getRepoHostIdentity(runtimeRepo), runtimeRepo]
+    ])
+    const prCache = {
+      [physicalKey]: { data: makePR(), fetchedAt: 1 },
+      '/remote/orca::feature/search': {
+        data: { ...makePR(), title: 'Physical legacy PR' },
+        fetchedAt: 1
+      }
+    }
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [runtimeWorktree],
+      repoByHostIdentity,
+      prCache,
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(reviews.has(runtimeWorktree)).toBe(false)
+    expect(
+      searchWorktrees([runtimeWorktree], 'physical legacy', new Map([[repo.id, repo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
   })
 
   it('skips a branch-less worktree instead of throwing', () => {

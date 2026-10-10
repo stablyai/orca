@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-platform'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import {
   cleanupOwnedRelayUploadStageCommand,
   parseReservedRelayUploadStage,
@@ -73,17 +74,19 @@ function runCommand(host: RemoteHostPlatform, command: string, prefix = '') {
   return spawnSync('/bin/sh', ['-c', `${prefix}\n${command}`], { encoding: 'utf8' })
 }
 
-function createStage(
-  host: RemoteHostPlatform,
+function createStage(host: RemoteHostPlatform, pool: string, index: number): string {
+  const reservation = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
+  expect(reservation.status, reservation.stderr).toBe(0)
+  return populateReservedStage(pool, index)
+}
+
+function populateReservedStage(
   pool: string,
   index: number,
-  stageOwner = owner,
+  replacementOwner?: string,
   stale = false,
   state: 'slot' | 'claim' | 'delete' = 'slot'
 ): string {
-  const reservedOwner = /^\.sftp-namespace-[0-9a-f]{32}$/u.test(stageOwner) ? stageOwner : owner
-  const reservation = runCommand(host, reserveRelayUploadStageCommand(host, pool, reservedOwner))
-  expect(reservation.status, reservation.stderr).toBe(0)
   const slot = join(pool, `slot-${index}`)
   const stage = join(pool, `${state}-${index}`)
   if (stage !== slot) {
@@ -91,8 +94,8 @@ function createStage(
     renameSync(slot, stage)
   }
   const marker = join(stage, '.orca-upload-owner')
-  if (stageOwner !== reservedOwner) {
-    writeFileSync(marker, stageOwner)
+  if (replacementOwner !== undefined) {
+    writeFileSync(marker, replacementOwner)
   }
   writeFileSync(join(stage, 'payload', 'relay.js'), `relay-${index}`)
   if (stale) {
@@ -102,11 +105,49 @@ function createStage(
   return stage
 }
 
+function createStages(host: RemoteHostPlatform, pool: string, count: number): void {
+  if (host.commandDialect !== 'powershell' || count < 2) {
+    for (let index = 0; index < count; index += 1) {
+      createStage(host, pool, index)
+    }
+    return
+  }
+  const command = reserveRelayUploadStageCommand(host, pool, owner)
+  // Only fixture setup shares a process; each unmodified script gets a fresh local scope.
+  const batch = powerShellCommand(
+    [
+      "$ErrorActionPreference = 'Stop'",
+      `$fixtureScript = ${powerShellLiteral(decodePowerShellCommand(command))}`,
+      '$reservation = [PowerShell]::Create()',
+      'try {',
+      `foreach ($fixtureIndex in 1..${count}) {`,
+      '$reservation.Commands.Clear()',
+      '$reservation.Streams.Error.Clear()',
+      '$null = $reservation.AddScript($fixtureScript, $true)',
+      '$reservation.Invoke()',
+      'if ($reservation.InvocationStateInfo.State -ne "Completed") { throw $reservation.InvocationStateInfo.Reason }',
+      '}',
+      '} finally { $reservation.Dispose() }'
+    ].join('\n')
+  )
+  const result = runCommand(host, batch)
+  expect(result.status, result.stderr).toBe(0)
+  const reservations = result.stdout.trim().split(/\r?\n/u)
+  expect(reservations).toHaveLength(count)
+  for (const [index, output] of reservations.entries()) {
+    expect(parseReservedRelayUploadStage(host, pool, owner, output).slotName).toBe(`slot-${index}`)
+    populateReservedStage(pool, index)
+  }
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+// Allow for real interpreter startup and file-identity probes under full-suite contention.
+const SPAWNED_INTERPRETER_TIMEOUT_MS = 240_000
 
 describe.each([
   ['POSIX', posix] as const,
@@ -114,109 +155,116 @@ describe.each([
     string,
     RemoteHostPlatform
   ])[])
-])('%s relay upload stage commands', (_label, host) => {
-  it.each([0, 1, 7, 8, 9])('bounds reservation with %i occupied entries', (count) => {
-    const pool = createPool()
-    for (let index = 0; index < Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT); index += 1) {
-      createStage(host, pool, index)
-    }
-    if (count > RELAY_UPLOAD_STAGE_SLOT_COUNT) {
-      mkdirSync(join(pool, 'foreign-extra'))
-    }
+])(
+  '%s relay upload stage commands',
+  { timeout: SPAWNED_INTERPRETER_TIMEOUT_MS },
+  (_label, host) => {
+    it.each([0, 1, 7, 8, 9])('bounds reservation with %i occupied entries', (count) => {
+      const pool = createPool()
+      createStages(host, pool, Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT))
+      if (count > RELAY_UPLOAD_STAGE_SLOT_COUNT) {
+        mkdirSync(join(pool, 'foreign-extra'))
+      }
 
-    const result = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
-    if (count < RELAY_UPLOAD_STAGE_SLOT_COUNT) {
-      expect(result.status, result.stderr).toBe(0)
-      expect(parseReservedRelayUploadStage(host, pool, owner, result.stdout).slotName).toBe(
-        `slot-${count}`
+      const result = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
+      if (count < RELAY_UPLOAD_STAGE_SLOT_COUNT) {
+        expect(result.status, result.stderr).toBe(0)
+        expect(parseReservedRelayUploadStage(host, pool, owner, result.stdout).slotName).toBe(
+          `slot-${count}`
+        )
+      } else {
+        expect(result.status).not.toBe(0)
+        expect(result.stderr).toContain('staging quota is full')
+      }
+    })
+
+    it('promotes only the post-claim owned payload and removes its fixed stage', () => {
+      const pool = createPool()
+      const destination = join(pool, 'destination')
+      mkdirSync(destination)
+      createStage(host, pool, 0)
+      const stage = parseReservedRelayUploadStage(
+        host,
+        pool,
+        owner,
+        `noise\n__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0\n`
       )
-    } else {
-      expect(result.status).not.toBe(0)
-      expect(result.stderr).toContain('staging quota is full')
-    }
-  })
 
-  it('promotes only the post-claim owned payload and removes its fixed stage', () => {
-    const pool = createPool()
-    const destination = join(pool, 'destination')
-    mkdirSync(destination)
-    createStage(host, pool, 0)
-    const stage = parseReservedRelayUploadStage(
-      host,
-      pool,
-      owner,
-      `noise\n__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0\n`
-    )
+      const result = runCommand(
+        host,
+        promoteOwnedRelayUploadStageCommand(host, stage, owner, destination)
+      )
 
-    const result = runCommand(
-      host,
-      promoteOwnedRelayUploadStageCommand(host, stage, owner, destination)
-    )
-
-    expect(result.status, result.stderr).toBe(0)
-    expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(true)
-    expect(readFileSync(join(destination, 'relay.js'), 'utf8')).toBe('relay-0')
-    expect(existsSync(join(pool, 'slot-0'))).toBe(false)
-    expect(existsSync(join(pool, 'claim-0'))).toBe(false)
-    expect(existsSync(join(pool, 'delete-0'))).toBe(false)
-  })
-
-  it('rejects a payload reparse point without copying or deleting it', () => {
-    const pool = createPool()
-    const destination = join(pool, 'destination')
-    const foreign = join(pool, 'foreign.js')
-    mkdirSync(destination)
-    const stagePath = createStage(host, pool, 0)
-    rmSync(join(stagePath, 'payload', 'relay.js'))
-    writeFileSync(foreign, 'foreign')
-    symlinkSync(foreign, join(stagePath, 'payload', 'relay.js'))
-    const stage = parseReservedRelayUploadStage(
-      host,
-      pool,
-      owner,
-      `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
-    )
-
-    const result = runCommand(
-      host,
-      promoteOwnedRelayUploadStageCommand(host, stage, owner, destination)
-    )
-
-    expect(result.status, result.stderr).toBe(0)
-    expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(false)
-    expect(existsSync(join(destination, 'relay.js'))).toBe(false)
-    expect(lstatSync(join(pool, 'slot-0', 'payload', 'relay.js')).isSymbolicLink()).toBe(true)
-    expect(readFileSync(foreign, 'utf8')).toBe('foreign')
-  })
-
-  it('reclaims one stale owned stage but preserves fresh and foreign stages', () => {
-    const pool = createPool()
-    createStage(host, pool, 0, owner, false)
-    createStage(host, pool, 1, '.foreign-owner', true)
-    createStage(host, pool, 2, owner, true)
-
-    const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))
-
-    expect(result.status, result.stderr).toBe(0)
-    expect(existsSync(join(pool, 'slot-0'))).toBe(true)
-    expect(existsSync(join(pool, 'slot-1'))).toBe(true)
-    expect(existsSync(join(pool, 'slot-2'))).toBe(false)
-  })
-
-  it('drains fixed stale claim and delete states across repeated deployments', () => {
-    const pool = createPool()
-    createStage(host, pool, 0, owner, true, 'claim')
-    createStage(host, pool, 1, owner, true, 'delete')
-
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))
       expect(result.status, result.stderr).toBe(0)
-    }
+      expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(true)
+      expect(readFileSync(join(destination, 'relay.js'), 'utf8')).toBe('relay-0')
+      expect(existsSync(join(pool, 'slot-0'))).toBe(false)
+      expect(existsSync(join(pool, 'claim-0'))).toBe(false)
+      expect(existsSync(join(pool, 'delete-0'))).toBe(false)
+    })
 
-    expect(existsSync(join(pool, 'claim-0'))).toBe(false)
-    expect(existsSync(join(pool, 'delete-1'))).toBe(false)
-  })
-})
+    // Why: symlink creation in the fixture needs privileges Windows CI doesn't grant.
+    it.skipIf(process.platform === 'win32')(
+      'rejects a payload reparse point without copying or deleting it',
+      () => {
+        const pool = createPool()
+        const destination = join(pool, 'destination')
+        const foreign = join(pool, 'foreign.js')
+        mkdirSync(destination)
+        const stagePath = createStage(host, pool, 0)
+        rmSync(join(stagePath, 'payload', 'relay.js'))
+        writeFileSync(foreign, 'foreign')
+        symlinkSync(foreign, join(stagePath, 'payload', 'relay.js'))
+        const stage = parseReservedRelayUploadStage(
+          host,
+          pool,
+          owner,
+          `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
+        )
+
+        const result = runCommand(
+          host,
+          promoteOwnedRelayUploadStageCommand(host, stage, owner, destination)
+        )
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(false)
+        expect(existsSync(join(destination, 'relay.js'))).toBe(false)
+        expect(lstatSync(join(pool, 'slot-0', 'payload', 'relay.js')).isSymbolicLink()).toBe(true)
+        expect(readFileSync(foreign, 'utf8')).toBe('foreign')
+      }
+    )
+
+    it('reclaims one stale owned stage but preserves fresh and foreign stages', () => {
+      const pool = createPool()
+      createStages(host, pool, 3)
+      populateReservedStage(pool, 1, '.foreign-owner', true)
+      populateReservedStage(pool, 2, undefined, true)
+
+      const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(existsSync(join(pool, 'slot-0'))).toBe(true)
+      expect(existsSync(join(pool, 'slot-1'))).toBe(true)
+      expect(existsSync(join(pool, 'slot-2'))).toBe(false)
+    })
+
+    it('drains fixed stale claim and delete states across repeated deployments', () => {
+      const pool = createPool()
+      createStages(host, pool, 2)
+      populateReservedStage(pool, 0, undefined, true, 'claim')
+      populateReservedStage(pool, 1, undefined, true, 'delete')
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const result = runCommand(host, recoverOneStaleRelayUploadStageCommand(host, pool, 60))
+        expect(result.status, result.stderr).toBe(0)
+      }
+
+      expect(existsSync(join(pool, 'claim-0'))).toBe(false)
+      expect(existsSync(join(pool, 'delete-1'))).toBe(false)
+    })
+  }
+)
 
 describe('POSIX ownership race fencing', () => {
   it('restores a replacement directory and preserves the original moved aside before claim', () => {
@@ -289,48 +337,52 @@ describe('POSIX ownership race fencing', () => {
   })
 })
 
-describe.runIf(powerShellExecutable)('PowerShell ownership race fencing', () => {
-  it('restores an old same-owner replacement whose persisted file ID does not match', () => {
-    const pool = createPool()
-    const destination = join(pool, 'destination')
-    mkdirSync(destination)
-    createStage(windows, pool, 0)
-    const stage = parseReservedRelayUploadStage(
-      windows,
-      pool,
-      owner,
-      `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
-    )
-    const prefix = [
-      '$script:raced = $false',
-      'function Move-Item {',
-      'param($LiteralPath, $Destination, $ErrorAction)',
-      'if (-not $script:raced) {',
-      '$script:raced = $true',
-      'Microsoft.PowerShell.Management\\Move-Item -LiteralPath $LiteralPath -Destination ($LiteralPath + ".original") -ErrorAction Stop',
-      '$null = New-Item -ItemType Directory -Path $LiteralPath',
-      '$null = New-Item -ItemType Directory -Path (Join-Path $LiteralPath "payload")',
-      '$newPath = (Get-Item -LiteralPath $LiteralPath).FullName',
-      '$originalPath = (Get-Item -LiteralPath ($LiteralPath + ".original")).FullName',
-      '[System.IO.File]::WriteAllText((Join-Path $newPath ".orca-upload-owner"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".orca-upload-owner")))',
-      '[System.IO.File]::WriteAllText((Join-Path $newPath ".orca-upload-identity"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".orca-upload-identity")))',
-      '(Get-Item -LiteralPath (Join-Path $newPath ".orca-upload-owner") -Force).LastWriteTimeUtc = [DateTime]::UtcNow.AddHours(-2)',
-      '[System.IO.File]::WriteAllText((Join-Path $newPath "foreign"), "foreign")',
-      '}',
-      'Microsoft.PowerShell.Management\\Move-Item -LiteralPath $LiteralPath -Destination $Destination -ErrorAction $ErrorAction',
-      '}'
-    ].join('\n')
+describe.runIf(powerShellExecutable)(
+  'PowerShell ownership race fencing',
+  { timeout: SPAWNED_INTERPRETER_TIMEOUT_MS },
+  () => {
+    it('restores an old same-owner replacement whose persisted file ID does not match', () => {
+      const pool = createPool()
+      const destination = join(pool, 'destination')
+      mkdirSync(destination)
+      createStage(windows, pool, 0)
+      const stage = parseReservedRelayUploadStage(
+        windows,
+        pool,
+        owner,
+        `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
+      )
+      const prefix = [
+        '$script:raced = $false',
+        'function Move-Item {',
+        'param($LiteralPath, $Destination, $ErrorAction)',
+        'if (-not $script:raced) {',
+        '$script:raced = $true',
+        'Microsoft.PowerShell.Management\\Move-Item -LiteralPath $LiteralPath -Destination ($LiteralPath + ".original") -ErrorAction Stop',
+        '$null = New-Item -ItemType Directory -Path $LiteralPath',
+        '$null = New-Item -ItemType Directory -Path (Join-Path $LiteralPath "payload")',
+        '$newPath = (Get-Item -LiteralPath $LiteralPath).FullName',
+        '$originalPath = (Get-Item -LiteralPath ($LiteralPath + ".original")).FullName',
+        '[System.IO.File]::WriteAllText((Join-Path $newPath ".orca-upload-owner"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".orca-upload-owner")))',
+        '[System.IO.File]::WriteAllText((Join-Path $newPath ".orca-upload-identity"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".orca-upload-identity")))',
+        '(Get-Item -LiteralPath (Join-Path $newPath ".orca-upload-owner") -Force).LastWriteTimeUtc = [DateTime]::UtcNow.AddHours(-2)',
+        '[System.IO.File]::WriteAllText((Join-Path $newPath "foreign"), "foreign")',
+        '}',
+        'Microsoft.PowerShell.Management\\Move-Item -LiteralPath $LiteralPath -Destination $Destination -ErrorAction $ErrorAction',
+        '}'
+      ].join('\n')
 
-    const result = runCommand(
-      windows,
-      promoteOwnedRelayUploadStageCommand(windows, stage, owner, destination),
-      prefix
-    )
+      const result = runCommand(
+        windows,
+        promoteOwnedRelayUploadStageCommand(windows, stage, owner, destination),
+        prefix
+      )
 
-    expect(result.status, result.stderr).toBe(0)
-    expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(false)
-    expect(existsSync(join(pool, 'slot-0', 'foreign'))).toBe(true)
-    expect(existsSync(join(pool, 'slot-0.original', '.orca-upload-owner'))).toBe(true)
-    expect(existsSync(join(destination, 'relay.js'))).toBe(false)
-  })
-})
+      expect(result.status, result.stderr).toBe(0)
+      expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(false)
+      expect(existsSync(join(pool, 'slot-0', 'foreign'))).toBe(true)
+      expect(existsSync(join(pool, 'slot-0.original', '.orca-upload-owner'))).toBe(true)
+      expect(existsSync(join(destination, 'relay.js'))).toBe(false)
+    })
+  }
+)

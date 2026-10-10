@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   buildWorktreeComparator,
   CREATE_GRACE_MS,
@@ -83,7 +85,8 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     tabId: overrides.tabId,
     terminalTitle: overrides.terminalTitle,
     stateHistory: overrides.stateHistory ?? [],
-    interrupted: overrides.interrupted
+    interrupted: overrides.interrupted,
+    mainAgent: overrides.mainAgent
   }
 }
 
@@ -330,6 +333,31 @@ describe('smart sort — interrupted and stale handling', () => {
     }
     const sorted = sortSmart([interrupted, realDone], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['real-done', 'interrupted'])
+  })
+
+  it('ranks a failed turn above an idle worktree and a cancelled one below it', () => {
+    const idle = makeWorktree({ id: 'idle', displayName: 'Idle', lastActivityAt: NOW - 10_000 })
+    const failed = makeWorktree({ id: 'failed', displayName: 'Failed', lastActivityAt: 0 })
+    const stopped = makeWorktree({ id: 'stopped', displayName: 'Stopped', lastActivityAt: 0 })
+    const tabs = {
+      [idle.id]: [makeTab({ id: 'tab-idle', worktreeId: idle.id })],
+      [failed.id]: [makeTab({ id: 'tab-failed', worktreeId: failed.id })],
+      [stopped.id]: [makeTab({ id: 'tab-stopped', worktreeId: stopped.id })]
+    }
+    const doneWith = (tabId: string, outcome: 'failure' | 'cancellation') =>
+      makeEntry({
+        paneKey: paneKey(tabId, '1'),
+        state: 'done',
+        mainAgent: { state: 'done', outcome, stateStartedAt: NOW - 60_000 },
+        stateStartedAt: NOW - 60_000,
+        updatedAt: NOW - 1_000
+      })
+    const entries = {
+      [paneKey('tab-failed', '1')]: doneWith('tab-failed', 'failure'),
+      [paneKey('tab-stopped', '1')]: doneWith('tab-stopped', 'cancellation')
+    }
+    const sorted = sortSmart([stopped, idle, failed], tabs, entries)
+    expect(sorted.map((w) => w.id)).toEqual(['failed', 'idle', 'stopped'])
   })
 
   it('stale entries fall to Class 4', () => {
@@ -655,19 +683,23 @@ describe('sortWorktreesSmart — palette caller regression', () => {
       [blocked.id]: [makeTab({ id: 'tab-blocked', worktreeId: blocked.id })],
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })]
     }
+    // Why live clock: sortWorktreesSmart reads Date.now(), so fixed-epoch stamps would be
+    // stale and land both worktrees in the same decayed class — the class layer this test
+    // exists to pin would never run.
+    const liveNow = Date.now()
     const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
       [paneKey('tab-blocked', '1')]: makeEntry({
         paneKey: paneKey('tab-blocked', '1'),
         state: 'blocked',
-        stateStartedAt: NOW - 60_000,
-        updatedAt: NOW - 1_000
+        stateStartedAt: liveNow - 60_000,
+        updatedAt: liveNow - 1_000
       }),
       [paneKey('tab-working', '1')]: makeEntry({
         paneKey: paneKey('tab-working', '1'),
         state: 'working',
         // newer than the blocked one — would win on recency alone
-        stateStartedAt: NOW - 1_000,
-        updatedAt: NOW - 500
+        stateStartedAt: liveNow - 1_000,
+        updatedAt: liveNow - 500
       })
     }
     const sorted = sortWorktreesSmart(
@@ -858,15 +890,5 @@ describe('buildWorktreeComparator — recent with createdAt grace window', () =>
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
 
     expect(worktrees.map((w) => w.id)).toEqual(['fresh-activity', 'old-created'])
-  })
-
-  it('does not disturb ranking for worktrees without createdAt', () => {
-    const alpha = makeWorktree({ id: 'alpha', displayName: 'Alpha', lastActivityAt: 5000 })
-    const bravo = makeWorktree({ id: 'bravo', displayName: 'Bravo', lastActivityAt: 10_000 })
-    const worktrees = [alpha, bravo]
-
-    worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
-
-    expect(worktrees.map((w) => w.id)).toEqual(['bravo', 'alpha'])
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRComment } from '../../../shared/types'
+import type { PRComment } from '../../../shared/github/comment-types'
 import { groupPRComments } from '../../../shared/pr-comment-groups'
 import {
   buildPRCommentsResolutionPrompt,

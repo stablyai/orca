@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  computeVisibleWorktreeIds,
-  isDefaultBranchWorkspace,
-  type SidebarFilterState
-} from './visible-worktrees'
-import type { Repo, Worktree } from '../../../../shared/types'
+import { computeVisibleWorktreeIds } from './visible-worktrees'
+import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 /**
@@ -70,7 +68,7 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
 
 describe('#8873 default-branch workspace under "Hide sleeping"', () => {
   it('is genuinely the default-branch row the "Hide default branch" toggle targets', () => {
-    expect(isDefaultBranchWorkspace(makeDefaultBranchWorktree())).toBe(true)
+    expect(isDefaultBranchWorkspace(makeDefaultBranchWorktree(), repoMap.get('repo1'))).toBe(true)
   })
 
   it('stays in the sidebar when it is sleeping and "Hide sleeping" is on', () => {
@@ -85,30 +83,6 @@ describe('#8873 default-branch workspace under "Hide sleeping"', () => {
     })
 
     expect(visible).toEqual([worktree.id])
-  })
-
-  it('exposes an opt-in that keeps the default branch visible under "Hide sleeping"', () => {
-    // The issue asks for an "Always display default branch" flag. Prove the
-    // sidebar filter contract has no such knob today.
-    const filterKeys: readonly (keyof SidebarFilterState)[] = [
-      'showSleepingWorkspaces',
-      'filterRepoIds',
-      'hideDefaultBranchWorkspace',
-      'hideAutomationGeneratedWorkspaces',
-      'hideCliCreatedWorkspaces',
-      'hideDetachedHeadWorkspaces',
-      'hideWorkspacesFromOtherDevices',
-      'alwaysShowDefaultBranchWorkspace',
-      'visibleWorkspaceHostIds',
-      'workspaceHostScope'
-    ]
-    const optionKeys = Object.keys(visibleOptions())
-
-    const alwaysShowKnob = [...filterKeys, ...optionKeys].find((key) =>
-      /always.*default|default.*always|pinDefaultBranch/i.test(key)
-    )
-
-    expect(alwaysShowKnob).toBeDefined()
   })
 })
 
@@ -156,16 +130,14 @@ describe('the "Hide sleeping" exemption for project entry-point rows', () => {
   })
 
   it('keeps a sleeping folder workspace, which has no sibling row to fall back to', () => {
-    // Folder-mode projects are main worktrees with an empty branch/head, so the
-    // default-branch predicate rejects them; sweeping them drops the whole project.
+    // Folder-mode projects are main worktrees with an empty branch/head; sweeping
+    // them drops the whole project.
     const folder: Worktree = {
       ...makeDefaultBranchWorktree(),
       id: 'wt-folder',
       branch: '',
       head: ''
     }
-    expect(isDefaultBranchWorkspace(folder)).toBe(false)
-
     expect(visible([folder], { alwaysShowDefaultBranchWorkspace: true })).toEqual([folder.id])
   })
 

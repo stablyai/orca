@@ -1,3 +1,4 @@
+import type * as WorkItemDetailsTestLookup from './work-item-details-test-lookup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 type RateLimitGuardResult =
@@ -52,8 +53,11 @@ vi.mock('./gh-utils', () => ({
   release: vi.fn()
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./client', async () => ({
   getWorkItem: getWorkItemMock,
+  getWorkItemWithRepository: (
+    await vi.importActual<typeof WorkItemDetailsTestLookup>('./work-item-details-test-lookup')
+  ).makeWorkItemDetailsLookupMock(getWorkItemMock),
   getWorkItemByOwnerRepo: vi.fn(),
   getPRChecks: getPRChecksMock,
   getPRComments: getPRCommentsMock
@@ -331,6 +335,36 @@ describe('getWorkItemDetails PR file listing', () => {
     expect(
       noteRepositoryRateLimitSpendMock.mock.calls.filter(([, bucket]) => bucket === 'core')
     ).toHaveLength(2)
+  })
+
+  it('skips an added file base read and preserves a head max-buffer overflow', async () => {
+    ghExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('stdout maxBuffer length exceeded'), { code: 'ENOBUFS' })
+    )
+
+    const contents = await getPRFileContents({
+      repoPath: '/repo-root',
+      prRepo: { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' },
+      prNumber: 7,
+      path: 'src/large.ts',
+      status: 'added',
+      headSha: 'head-sha',
+      baseSha: 'base-sha'
+    })
+
+    expect(contents).toEqual({
+      original: '',
+      modified: '',
+      originalIsBinary: false,
+      modifiedIsBinary: false,
+      originalTooLarge: undefined,
+      modifiedTooLarge: true
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledOnce()
+    expect(ghExecFileAsyncMock.mock.calls[0][0]).toContain(
+      'repos/team/orca/contents/src/large.ts?ref=head-sha'
+    )
+    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledOnce()
   })
 
   it('does not fetch raw PR file contents while the repository core budget is blocked', async () => {

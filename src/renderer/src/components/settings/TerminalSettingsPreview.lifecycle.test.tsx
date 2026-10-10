@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 type Cleanup = () => void
 
@@ -118,7 +118,7 @@ vi.mock('@/lib/pane-manager/pane-terminal-options', () => ({
   buildDefaultTerminalOptions: () => ({ scrollback: 0 })
 }))
 
-vi.mock('@/components/terminal-pane/layout-serialization', () => ({
+vi.mock('@/lib/monospace-font-family', () => ({
   buildFontFamily: (font: string) => `built:${font}`
 }))
 

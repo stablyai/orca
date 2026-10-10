@@ -1,3 +1,5 @@
+import { killSpawnedRipgrepProcess } from '../shared/ripgrep-process-availability'
+import { FileInventoryBudget, FileInventoryCapacityError } from '../shared/file-inventory-budget'
 /**
  * Git-based fallbacks for file listing and text search.
  *
@@ -8,7 +10,6 @@
  */
 import { spawn } from 'node:child_process'
 import { fileListingCancellationError } from '../shared/file-listing-cancellation'
-import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import {
   buildGitLsFilesArgsForQuickOpen,
   shouldExcludeQuickOpenRelPath,
@@ -18,14 +19,6 @@ import {
   expandQuickOpenGitFileListing,
   parseQuickOpenGitLsFilesEntry
 } from '../shared/quick-open-readdir-walk'
-import {
-  buildGitGrepArgs,
-  buildSubmatchRegex,
-  createAccumulator,
-  finalize,
-  ingestGitGrepLine,
-  SEARCH_TIMEOUT_MS
-} from '../shared/text-search'
 import { buildRelayGitEnv } from './relay-command-env'
 
 /**
@@ -46,6 +39,7 @@ export function listFilesWithGit(
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
+  const inventoryBudget = new FileInventoryBudget()
   const gitPaths = new Set<string>()
   const directoryPaths = new Set<string>()
   const directFileCandidates = new Set<string>()
@@ -65,6 +59,9 @@ export function listFilesWithGit(
       const processPath = (path: string): boolean => {
         if (!path) {
           return false
+        }
+        if (!gitPaths.has(path) && !directoryPaths.has(path)) {
+          inventoryBudget.record(path)
         }
         if (path.endsWith('/')) {
           directoryPaths.add(path)
@@ -135,7 +132,18 @@ export function listFilesWithGit(
         let start = 0
         let idx = buf.indexOf('\0', start)
         while (idx !== -1) {
-          if (processPath(buf.substring(start, idx))) {
+          let atLimit: boolean
+          try {
+            atLimit = processPath(buf.substring(start, idx))
+          } catch (error) {
+            killSpawnedRipgrepProcess(child)
+            rejectPass(error instanceof Error ? error : new FileInventoryCapacityError())
+            killSurvivors('git file inventory capacity exceeded')
+            gitPaths.clear()
+            directoryPaths.clear()
+            return
+          }
+          if (atLimit) {
             buf = ''
             finishAtLimit()
             return
@@ -225,6 +233,9 @@ export function listFilesWithGit(
     // Why: ignored files are supplementary — a failed or timed-out ignored
     // pass must not discard the primary listing the user actually needs.
     runGitLsFiles(ignoredPass).catch((err: Error) => {
+      if (err instanceof FileInventoryCapacityError) {
+        throw err
+      }
       if (!signal?.aborted) {
         console.warn(
           '[relay quick-open] git ignored-file pass failed; keeping primary results:',
@@ -251,6 +262,12 @@ export function listFilesWithGit(
       })
       // Why: directory placeholders are expanded after Git exits; restore
       // Git's path order for empty queries and fuzzy-score ties over SSH.
+      if (maxResults === undefined) {
+        const outputBudget = new FileInventoryBudget()
+        for (const path of files) {
+          outputBudget.record(path)
+        }
+      }
       return files.sort().slice(0, maxResults)
     })
     .catch((err) => {
@@ -265,84 +282,4 @@ export function listFilesWithGit(
     })
 }
 
-/**
- * Text search using `git grep`. Fallback when rg is not installed.
- */
-export function searchWithGitGrep(
-  rootPath: string,
-  query: string,
-  opts: SearchOptions
-): Promise<SearchResult> {
-  return new Promise((resolve) => {
-    const gitArgs = buildGitGrepArgs(query, opts)
-    const matchRegex = buildSubmatchRegex(query, opts)
-    const acc = createAccumulator()
-    let stdoutBuffer = ''
-    let done = false
-
-    const child = spawn('git', gitArgs, {
-      cwd: rootPath,
-      env: buildRelayGitEnv(),
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-    let killTimeout: ReturnType<typeof setTimeout>
-
-    function resolveOnce(): void {
-      if (done) {
-        return
-      }
-      done = true
-      clearTimeout(killTimeout)
-      // Why: child.kill() is advisory. If git ignores it, detach our
-      // closures so repeated relay searches do not retain old scans.
-      child.stdout!.off('data', handleStdoutData)
-      child.stderr!.off('data', handleStderrData)
-      child.off('error', handleError)
-      child.off('close', handleClose)
-      resolve(finalize(acc))
-    }
-
-    function processLine(line: string): void {
-      const verdict = ingestGitGrepLine(line, rootPath, matchRegex, acc, opts.maxResults)
-      if (verdict === 'stop') {
-        child.kill()
-      }
-    }
-
-    function handleStdoutData(chunk: string): void {
-      stdoutBuffer += chunk
-      const lines = stdoutBuffer.split('\n')
-      stdoutBuffer = lines.pop() ?? ''
-      for (const l of lines) {
-        processLine(l)
-      }
-    }
-
-    function handleStderrData(): void {
-      /* drain */
-    }
-
-    function handleError(): void {
-      resolveOnce()
-    }
-
-    function handleClose(): void {
-      if (stdoutBuffer) {
-        processLine(stdoutBuffer)
-      }
-      resolveOnce()
-    }
-
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', handleStdoutData)
-    child.stderr!.on('data', handleStderrData)
-    child.once('error', handleError)
-    child.once('close', handleClose)
-
-    killTimeout = setTimeout(() => {
-      acc.truncated = true
-      child.kill()
-      resolveOnce()
-    }, SEARCH_TIMEOUT_MS)
-  })
-}
+export { searchWithGitGrep } from './fs-handler-git-search'

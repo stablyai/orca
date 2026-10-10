@@ -1,3 +1,13 @@
+import {
+  RELAY_INSTALL_COMPLETE_FILENAME,
+  RELAY_PID_FILENAME,
+  relayArtifactFilenames
+} from '../../shared/relay-artifacts'
+import {
+  RELAY_INSTALL_MODEL,
+  remoteInstallListingRegexSource,
+  type RemoteInstallModel
+} from './remote-install-model'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
@@ -63,17 +73,18 @@ export function moveRemoteTreeCommand(
   )
 }
 
-export function promoteRemoteTreeContentsCommand(
+// A concurrent installer may already have recreated the original directory.
+export function restoreRemoteTreeCommand(
   host: RemoteHostPlatform,
-  sourcePath: string,
-  destinationPath: string
+  source: string,
+  destination: string
 ): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
+  if (isWindowsRemoteHost(host)) {
+    return powerShellCommand(
+      `if (-not (Test-Path -LiteralPath ${powerShellLiteral(destination)})) { Move-Item -LiteralPath ${powerShellLiteral(source)} -Destination ${powerShellLiteral(destination)} -ErrorAction Stop; 'MOVED' } else { 'BUSY' }`
+    )
   }
-  return powerShellCommand(
-    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
-  )
+  return `if [ ! -e ${shellEscape(destination)} ] && [ ! -L ${shellEscape(destination)} ]; then mv ${shellEscape(source)} ${shellEscape(destination)} && echo MOVED; else echo BUSY; fi`
 }
 
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
@@ -85,35 +96,49 @@ export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath
   )
 }
 
+/**
+ * A partial install must read as MISSING, so every file the manifest ships is
+ * probed — not a hand-kept subset. A relay that advertises the AI Vault title
+ * service but lacks the WSL transcript helper would otherwise pass this probe
+ * and then answer WSL title requests with silence.
+ */
 export function probeRelayInstalledCommand(
   host: RemoteHostPlatform,
   remoteRelayDir: string
 ): string {
-  const relayJs = joinRemotePath(host, remoteRelayDir, 'relay.js')
-  const relayWatcherJs = joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')
-  const relayAiVaultServiceJs = joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')
-  const managedHookRuntimeJs = joinRemotePath(host, remoteRelayDir, 'managed-hook-runtime.js')
-  const installComplete = joinRemotePath(host, remoteRelayDir, '.install-complete')
+  return probeRemoteInstallCompleteCommand(host, remoteRelayDir, [
+    ...relayArtifactFilenames(isWindowsRemoteHost(host)),
+    RELAY_INSTALL_COMPLETE_FILENAME
+  ])
+}
+
+/**
+ * The model-agnostic form: any install is complete when its directory exists and every
+ * named artifact is a regular file inside it.
+ *
+ * Why the caller passes the list: orcad and the relay ship different artifacts, and a probe
+ * that checked a shared subset would call a torn install complete.
+ */
+export function probeRemoteInstallCompleteCommand(
+  host: RemoteHostPlatform,
+  remoteInstallDir: string,
+  requiredFilenames: readonly string[]
+): string {
+  const remoteRelayDir = remoteInstallDir
+  const required = requiredFilenames.map((filename) =>
+    joinRemotePath(host, remoteRelayDir, filename)
+  )
   if (!isWindowsRemoteHost(host)) {
-    return (
-      `test -d ${shellEscape(remoteRelayDir)} ` +
-      `&& test -f ${shellEscape(relayJs)} ` +
-      `&& test -f ${shellEscape(relayWatcherJs)} ` +
-      `&& test -f ${shellEscape(relayAiVaultServiceJs)} ` +
-      `&& test -f ${shellEscape(managedHookRuntimeJs)} ` +
-      `&& test -f ${shellEscape(installComplete)} ` +
-      `&& echo OK || echo MISSING`
-    )
+    const fileTests = required.map((path) => `&& test -f ${shellEscape(path)} `).join('')
+    return `test -d ${shellEscape(remoteRelayDir)} ${fileTests}&& echo OK || echo MISSING`
   }
   return powerShellCommand(
     [
       `$dir = ${powerShellLiteral(remoteRelayDir)}`,
-      `$relay = ${powerShellLiteral(relayJs)}`,
-      `$watcher = ${powerShellLiteral(relayWatcherJs)}`,
-      `$aiVaultService = ${powerShellLiteral(relayAiVaultServiceJs)}`,
-      `$managedHooks = ${powerShellLiteral(managedHookRuntimeJs)}`,
-      `$complete = ${powerShellLiteral(installComplete)}`,
-      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $aiVaultService -PathType Leaf) -and (Test-Path -LiteralPath $managedHooks -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
+      `$required = @(${required.map((path) => powerShellLiteral(path)).join(', ')})`,
+      '$ok = Test-Path -LiteralPath $dir -PathType Container',
+      'foreach ($f in $required) { if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { $ok = $false } }',
+      "if ($ok) { 'OK' } else { 'MISSING' }"
     ].join('; ')
   )
 }
@@ -121,12 +146,28 @@ export function probeRelayInstalledCommand(
 export const MAX_RELAY_GC_LISTING_ENTRIES = 64
 
 export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
+  return listRemoteInstallBaseDirsCommand(host, baseDir, RELAY_INSTALL_MODEL)
+}
+
+/**
+ * List one model's version dirs (and its own tombstones) under `~/.orca-remote/`.
+ *
+ * The model scopes BOTH the `find`/`Get-ChildItem` glob and the validating regex. That
+ * double filter is the on-the-wire half of the GC ownership rule: an orcad GC pass never
+ * even receives a relay directory name, so it cannot delete one through a later bug.
+ */
+export function listRemoteInstallBaseDirsCommand(
+  host: RemoteHostPlatform,
+  baseDir: string,
+  model: RemoteInstallModel
+): string {
+  const namePattern = remoteInstallListingRegexSource(model)
   if (!isWindowsRemoteHost(host)) {
     const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
     return [
       `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
-      `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
-      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /^relay-(v?[0-9]+\.[0-9]+\.[0-9]+(\+[0-9a-f]+)?)(\.gc-tombstone\.[0-9]+\.[0-9]+)?$/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
+      `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name '${model.dirPrefix}-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
+      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /${namePattern}/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
     ].join(' ')
   }
   return powerShellCommand(
@@ -134,7 +175,9 @@ export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: stri
       "$ErrorActionPreference = 'Stop'",
       `$base = ${powerShellLiteral(baseDir)}`,
       'if (Test-Path -LiteralPath $base -PathType Container) {',
-      "Get-ChildItem -LiteralPath $base -Directory -Filter 'relay-*' -ErrorAction Stop | Where-Object { $_.Name -match '^relay-(v?[0-9]+\\.[0-9]+\\.[0-9]+(\\+[0-9a-f]+)?)(\\.gc-tombstone\\.[0-9]+\\.[0-9]+)?$' } | Select-Object -First " +
+      // Why the pattern goes in verbatim: a single-quoted PowerShell string is already
+      // literal, so `\.` reaches `-match` as the regex escape it is meant to be.
+      `Get-ChildItem -LiteralPath $base -Directory -Filter '${model.dirPrefix}-*' -ErrorAction Stop | Where-Object { $_.Name -match '${namePattern}' } | Select-Object -First ` +
         `${MAX_RELAY_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
       '}'
     ].join('\n')
@@ -159,10 +202,55 @@ export function probeFileExistsCommand(host: RemoteHostPlatform, remotePath: str
   )
 }
 
-type WindowsRelayLivenessOptions = {
+export type WindowsRelayLivenessOptions = {
   nodePath: string
   pipePaths: string[]
 }
+
+/**
+ * Design D5 on Windows: a recorded `.relay-pid` that is still running answers ALIVE before any
+ * pipe is touched (a connect would cancel an idling daemon's grace timer). Only a dead PID
+ * (ESRCH) plus every pipe refusing is DEAD/WAITING; any other kill(0) error is UNVERIFIABLE.
+ * Without a PID file the old marker/pipe rule stands.
+ */
+export const WINDOWS_RELAY_LIVENESS_JS = [
+  'const fs=require("fs"),path=require("path"),net=require("net");',
+  'const [dir,...seed]=process.argv.slice(1);',
+  'const answer=(token)=>{process.stdout.write(token);process.exit(0)};',
+  'let pidDead=false;',
+  'let rawPid=null;',
+  `try{rawPid=fs.readFileSync(path.join(dir,${JSON.stringify(RELAY_PID_FILENAME)}),"utf8").trim()}catch(e){if(e.code!=="ENOENT")answer("UNVERIFIABLE")}`,
+  'if(rawPid!==null){',
+  'if(!/^[1-9][0-9]*$/.test(rawPid))answer("UNVERIFIABLE");',
+  'try{process.kill(Number(rawPid),0)}catch(e){if(e.code!=="ESRCH")answer("UNVERIFIABLE");pidDead=true}',
+  'if(!pidDead)answer("ALIVE")',
+  '}',
+  'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
+  'const pipes=[];',
+  'let markerCount=0;',
+  'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
+  'try{for(const name of fs.readdirSync(dir)){',
+  'if(!name.startsWith(".windows-active-pipe-"))continue;',
+  'markerCount++;',
+  'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
+  'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
+  '}}catch{}',
+  'if(markerCount===0&&pipes.length===0)answer(pidDead?"DEAD":"ALIVE");',
+  'let i=0;',
+  'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
+  'function next(){',
+  'const pipe=pipes[i++];',
+  'if(!pipe)return done(false);',
+  'const s=net.connect(pipe);',
+  'let settled=false;',
+  'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
+  's.setTimeout(200);',
+  's.on("connect",()=>finish(true));',
+  's.on("timeout",()=>finish(false));',
+  's.on("error",()=>finish(false));',
+  '}',
+  'next();'
+].join('')
 
 export function relayLivenessProbeCommand(
   host: RemoteHostPlatform,
@@ -179,35 +267,7 @@ export function relayLivenessProbeCommand(
   if (!windowsOptions) {
     return powerShellCommand("'ALIVE'")
   }
-  const js = [
-    'const fs=require("fs"),path=require("path"),net=require("net");',
-    'const [dir,...seed]=process.argv.slice(1);',
-    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
-    'const pipes=[];',
-    'let markerCount=0;',
-    'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
-    'try{for(const name of fs.readdirSync(dir)){',
-    'if(!name.startsWith(".windows-active-pipe-"))continue;',
-    'markerCount++;',
-    'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
-    'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
-    '}}catch{}',
-    'if(markerCount===0&&pipes.length===0){process.stdout.write("ALIVE");process.exit(0)}',
-    'let i=0;',
-    'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
-    'function next(){',
-    'const pipe=pipes[i++];',
-    'if(!pipe)return done(false);',
-    'const s=net.connect(pipe);',
-    'let settled=false;',
-    'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
-    's.setTimeout(200);',
-    's.on("connect",()=>finish(true));',
-    's.on("timeout",()=>finish(false));',
-    's.on("error",()=>finish(false));',
-    '}',
-    'next();'
-  ].join('')
+  const js = WINDOWS_RELAY_LIVENESS_JS
   return commandWithNodePath(
     host,
     windowsOptions.nodePath,
@@ -219,19 +279,6 @@ export function relayLivenessProbeCommand(
       powerShellNativeArg(dir),
       ...windowsOptions.pipePaths.map((pipePath) => powerShellNativeArg(pipePath))
     ].join(' ')
-  )
-}
-
-export function commandInRemoteDirectory(
-  host: RemoteHostPlatform,
-  remoteDir: string,
-  command: string
-): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `cd ${shellEscape(remoteDir)} && ${command}`
-  }
-  return powerShellCommand(
-    `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}; ${command}`
   )
 }
 

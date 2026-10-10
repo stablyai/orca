@@ -8,7 +8,8 @@ import {
   type OrcaProfileIndex,
   type OrcaProfileKind
 } from '../../shared/orca-profiles'
-import type { PersistedState, Repo } from '../../shared/types'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import type { Repo } from '../../shared/repo-types'
 
 const testState = { dir: '' }
 

@@ -1,9 +1,33 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { getAgentDetectionTargetKeyForWorktree } from './useAgentDetectionTarget'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import {
+  getAgentDetectionTargetKeyForWorktree,
+  parseAgentDetectionTargetKey
+} from './useAgentDetectionTarget'
 
 describe('getAgentDetectionTargetKeyForWorktree', () => {
+  it('carries explicit local Floating Workspace authority into detection', () => {
+    const state = {
+      settings: { activeRuntimeEnvironmentId: 'active-wsl-project' },
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [],
+      worktreesByRepo: {}
+    } as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
+
+    const key = getAgentDetectionTargetKeyForWorktree(state, FLOATING_TERMINAL_WORKTREE_ID)
+
+    expect(parseAgentDetectionTargetKey(key)).toEqual({
+      kind: 'local',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contextKey: 'host'
+    })
+  })
+
   it('uses an explicit runtime owner without scanning ambiguous child SSH repos', () => {
     let projectGroupReads = 0
     const repos: readonly Repo[] = Array.from({ length: 100 }, (_, index) => {
@@ -46,7 +70,7 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
     } as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
 
     expect(getAgentDetectionTargetKeyForWorktree(state, folderWorkspaceKey('runtime-folder'))).toBe(
-      'runtime:owner-env'
+      `runtime:owner-env:${encodeURIComponent(folderWorkspaceKey('runtime-folder'))}`
     )
     expect(projectGroupReads).toBe(0)
   })
@@ -92,7 +116,14 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
       }
     } as unknown as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
 
-    expect(getAgentDetectionTargetKeyForWorktree(state, 'repo-1::worktree-1')).toBe('runtime:env-1')
+    const key = getAgentDetectionTargetKeyForWorktree(state, 'repo-1::worktree-1')
+    // The workspace rides along so the paired host resolves its runtime (#19885).
+    expect(key).toBe('runtime:env-1:repo-1%3A%3Aworktree-1')
+    expect(parseAgentDetectionTargetKey(key)).toEqual({
+      kind: 'runtime',
+      environmentId: 'env-1',
+      worktreeId: 'repo-1::worktree-1'
+    })
   })
 
   it('builds one owner index per cold worktree and repo snapshot', () => {
@@ -138,4 +169,13 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
     expect(worktreeIdReads).toBe(100)
     expect(repoIdReads).toBe(100)
   })
+})
+
+describe('parseAgentDetectionTargetKey', () => {
+  it.each(['local:missing-context', 'local:%:host'])(
+    'falls back to unscoped local detection for malformed key %s',
+    (key) => {
+      expect(parseAgentDetectionTargetKey(key)).toEqual({ kind: 'local' })
+    }
+  )
 })

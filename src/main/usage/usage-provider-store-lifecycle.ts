@@ -1,11 +1,26 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { AgentTokenUsageReporter } from './agent-token-usage-reporter'
+import type { AgentTokenSession } from './agent-token-usage'
+import type { AgentTokenUsage } from '../../shared/telemetry-agent-token-usage-schema'
+import { isTelemetryEnabled } from '../telemetry/client'
+import { join, parse } from 'node:path'
+import { AnalyticsSessionIdStore, type AnalyticsSessionId } from './analytics-session-id-store'
 import type { Store } from '../persistence'
 import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { createWorktreeRefs, getUsageWorktreeFingerprint } from './usage-worktree-refs'
+import {
+  usageSourceCachePath,
+  type UsageCacheSplitRequest,
+  type UsageCacheSplitResult,
+  type UsageSourceCacheRef
+} from './usage-source-cache-file'
 
 const STALE_MS = 5 * 60_000
+// Keep large cache parsing on the worker; small reports retain synchronous reads.
+const MAIN_THREAD_PARSE_MAX_BYTES = 8 * 1024 * 1024
 
 type UsageProviderScanState = {
   enabled: boolean
@@ -15,16 +30,12 @@ type UsageProviderScanState = {
 }
 
 type UsageProviderStoreState<SourceKey extends string> = {
+  schemaVersion: number
   worktreeFingerprint: string | null
   sessions: unknown[]
   dailyAggregates: unknown[]
   scanState: UsageProviderScanState
 } & Record<SourceKey, unknown[]>
-
-type UsageProviderScanProjection<
-  SourceKey extends string,
-  State extends UsageProviderStoreState<SourceKey>
-> = Pick<State, SourceKey | 'sessions' | 'dailyAggregates'>
 
 type UsageProviderStoreLifecycleConfig<
   SourceKey extends string,
@@ -37,11 +48,15 @@ type UsageProviderStoreLifecycleConfig<
   normalizeState: (state: State) => State
   sourceKey: SourceKey
   dataPresenceKey: DataPresenceKey
-  jsonIndent?: number
+  tokenUsage?: {
+    provider: AgentTokenUsage['provider']
+    selectSessions: (state: State) => AgentTokenSession[]
+  }
   scan: (
     worktrees: UsageScanWorktreeRef[],
-    previous: State[SourceKey]
-  ) => Promise<UsageProviderScanProjection<SourceKey, State>>
+    sourceCache: UsageSourceCacheRef
+  ) => Promise<Pick<State, 'sessions' | 'dailyAggregates'>>
+  splitCacheFile: (request: UsageCacheSplitRequest) => Promise<UsageCacheSplitResult>
 }
 
 type PublicUsageProviderScanState<DataPresenceKey extends string> = UsageProviderScanState & {
@@ -53,8 +68,13 @@ export abstract class UsageProviderStoreLifecycle<
   State extends UsageProviderStoreState<SourceKey>,
   DataPresenceKey extends string
 > {
+  // Per-source records belong to the worker and are excluded from report state.
   protected state: State
+  private readonly loaded: Promise<void>
+  private readonly schemaVersion: number
   private scanPromise: Promise<void> | null = null
+  private tokenReporter: AgentTokenUsageReporter | null = null
+  private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
 
   constructor(
@@ -62,7 +82,15 @@ export abstract class UsageProviderStoreLifecycle<
     private readonly config: UsageProviderStoreLifecycleConfig<SourceKey, State, DataPresenceKey>
   ) {
     this.writer = new UsageCacheSnapshotWriter(config.logTag, config.resolveCacheFile)
-    this.state = this.load()
+    const defaults = config.createDefaultState()
+    this.schemaVersion = defaults.schemaVersion
+    this.state = defaults
+    this.loaded = this.load()
+  }
+
+  /** Resolves once persisted state is in memory; synchronous readers must wait for it first. */
+  whenLoaded(): Promise<void> {
+    return this.loaded
   }
 
   getScanState(): PublicUsageProviderScanState<DataPresenceKey> {
@@ -74,18 +102,33 @@ export abstract class UsageProviderStoreLifecycle<
     } as PublicUsageProviderScanState<DataPresenceKey>
   }
 
+  /** Local identity only; callers must use the usage store on the execution host. */
+  getAnalyticsSessionIds(providerSessionIds: readonly string[]): Promise<AnalyticsSessionId[]> {
+    if (!this.analyticsSessionIds) {
+      const { dir, name } = parse(this.config.resolveCacheFile())
+      this.analyticsSessionIds = new AnalyticsSessionIdStore(
+        join(dir, `${name}-analytics-session-ids.json`)
+      )
+    }
+    return this.analyticsSessionIds.getOrCreate(providerSessionIds)
+  }
+
   /** Await queued cache writes so quit does not drop the final snapshot. */
-  flush(): Promise<void> {
-    return this.writer.flush()
+  async flush(): Promise<void> {
+    await this.loaded
+    await this.tokenReporter?.flush()
+    await Promise.all([this.writer.flush(), this.analyticsSessionIds?.flush()])
   }
 
   async setEnabled(enabled: boolean): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
+    await this.loaded
     this.state.scanState.enabled = enabled
     await this.writeToDisk()
     return this.getScanState()
   }
 
   async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
+    await this.loaded
     if (!this.state.scanState.enabled) {
       return this.getScanState()
     }
@@ -101,26 +144,67 @@ export abstract class UsageProviderStoreLifecycle<
   }
 
   protected writeToDisk(): Promise<void> {
-    return this.writer.write(() => JSON.stringify(this.state, null, this.config.jsonIndent))
+    return this.writer.write(() => {
+      const { [this.config.sourceKey]: _sources, ...report } = this.state
+      return JSON.stringify(report)
+    })
   }
 
-  private load(): State {
-    const defaults = this.config.createDefaultState()
+  private load(): Promise<void> {
+    const cacheFile = this.config.resolveCacheFile()
     try {
-      const cacheFile = this.config.resolveCacheFile()
-      if (!existsSync(cacheFile)) {
-        return defaults
+      if (statSync(cacheFile).size > MAIN_THREAD_PARSE_MAX_BYTES) {
+        return this.loadOnWorker(cacheFile)
       }
-      const parsed = JSON.parse(readFileSync(cacheFile, 'utf-8')) as State
-      return this.config.normalizeState({
-        ...defaults,
-        ...parsed,
-        scanState: { ...defaults.scanState, ...parsed.scanState }
-      })
+      const parsed: State = JSON.parse(readFileSync(cacheFile, 'utf-8'))
+      this.state = this.normalizeReport(parsed)
+      if (
+        Array.isArray(parsed[this.config.sourceKey]) &&
+        parsed[this.config.sourceKey].length > 0
+      ) {
+        return this.loadOnWorker(cacheFile)
+      }
+    } catch (error) {
+      if (!isMissingFileError(error)) {
+        console.error(
+          `${this.config.logTag} Failed to load persisted state, starting fresh:`,
+          error
+        )
+      }
+    }
+    return Promise.resolve()
+  }
+
+  private async loadOnWorker(cacheFile: string): Promise<void> {
+    try {
+      const { reportText, migrated } = await this.config
+        .splitCacheFile({ cacheFile, sourceKey: this.config.sourceKey })
+        .catch(async (error: unknown) => {
+          // Preserve usage history when the worker cannot start.
+          console.warn(`${this.config.logTag} Reading the usage cache on the main thread:`, error)
+          return { reportText: await readFile(cacheFile, 'utf-8'), migrated: false }
+        })
+      if (reportText === null) {
+        return
+      }
+      this.state = this.normalizeReport(JSON.parse(reportText))
+      if (migrated) {
+        // Future launches can read the compact report synchronously.
+        await this.writeToDisk().catch(() => {})
+      }
     } catch (error) {
       console.error(`${this.config.logTag} Failed to load persisted state, starting fresh:`, error)
-      return defaults
     }
+  }
+
+  private normalizeReport(parsed: State): State {
+    const defaults = this.config.createDefaultState()
+    return this.config.normalizeState({
+      ...defaults,
+      ...parsed,
+      [this.config.sourceKey]: [],
+      scanState: { ...defaults.scanState, ...parsed.scanState }
+    })
   }
 
   private async runScan(): Promise<void> {
@@ -138,13 +222,12 @@ export abstract class UsageProviderStoreLifecycle<
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
-        const result = await this.config.scan(
-          createWorktreeRefs(repos, worktreesByRepo),
-          this.state.worktreeFingerprint === worktreeFingerprint
-            ? this.state[this.config.sourceKey]
-            : this.config.createDefaultState()[this.config.sourceKey]
-        )
-        this.state[this.config.sourceKey] = result[this.config.sourceKey]
+        const result = await this.config.scan(createWorktreeRefs(repos, worktreesByRepo), {
+          path: usageSourceCachePath(this.config.resolveCacheFile()),
+          schemaVersion: this.schemaVersion,
+          worktreeFingerprint,
+          reuse: this.state.worktreeFingerprint === worktreeFingerprint
+        })
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
@@ -152,6 +235,7 @@ export abstract class UsageProviderStoreLifecycle<
         this.state.scanState.lastScanError = null
         // Persistence failures do not turn a successful source scan into a scan failure.
         await this.writeToDisk().catch(() => {})
+        await this.reportTokenUsage()
       } catch (error) {
         this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
         await this.writeToDisk().catch(() => {})
@@ -163,8 +247,35 @@ export abstract class UsageProviderStoreLifecycle<
     await this.scanPromise
   }
 
+  private async reportTokenUsage(): Promise<void> {
+    const config = this.config.tokenUsage
+    if (!config || !isTelemetryEnabled() || !this.state.scanState.enabled) {
+      return
+    }
+    try {
+      if (!this.tokenReporter) {
+        const { dir, name } = parse(this.config.resolveCacheFile())
+        this.tokenReporter = new AgentTokenUsageReporter(
+          join(dir, `${name}-token-usage.json`),
+          config.provider,
+          (ids) => this.getAnalyticsSessionIds(ids)
+        )
+      }
+      await this.tokenReporter.report(config.selectSessions(this.state))
+    } catch {
+      // Reporting failures must not invalidate a successful local usage scan.
+      console.warn(
+        '[agent-token-usage] Could not report token usage; will retry after the next scan'
+      )
+    }
+  }
+
   private async getCurrentWorktreeFingerprint(): Promise<string> {
     const repos = this.store.getRepos()
     return getUsageWorktreeFingerprint(loadKnownUsageWorktreesByRepo(this.store, repos))
   }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }

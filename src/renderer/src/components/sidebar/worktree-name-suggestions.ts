@@ -1,5 +1,12 @@
-import { MARINE_CREATURES } from '@/constants/marine-creatures'
-import { basename } from '@/lib/path'
+import {
+  normalizeSuggestedName,
+  selectSuggestedCreatureName,
+  suggestionPathBasename
+} from '../../../../shared/worktree-name-suggestion'
+import {
+  EMPTY_RETIRED_NAME_REGISTRY,
+  type RetiredNameRegistry
+} from '../../../../shared/worktree/retired-name-registry'
 
 type WorktreePathLike = {
   path: string
@@ -11,49 +18,39 @@ function collectUsedNames(worktreesByRepo: Record<string, WorktreePathLike[]>): 
   const usedNames = new Set<string>()
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
-      usedNames.add(normalizeSuggestedName(basename(worktree.path)))
+      // Shared basename, not `@/lib/path`'s: mobile keys collisions the same way, and two copies of
+      // the key could drift into suggesting a name that is in fact taken.
+      usedNames.add(normalizeSuggestedName(suggestionPathBasename(worktree.path)))
     }
   }
   return usedNames
 }
 
-function pickRandom<T>(items: readonly T[], random: () => number): T {
-  return items[Math.floor(random() * items.length)]
-}
-
+/** `retired` holds names already spent in the active repo, including ones whose workspace was
+ *  deleted. Reissuing one would place the new workspace on the prior occupant's path, where agent
+ *  CLIs would hand it that workspace's conversation history — so spent names are never offered
+ *  again, and the pool degrades to suffixed variants instead of recycling.
+ *
+ *  Its `exhaustedTiers` watermark stands in for the tiers the registry has compacted away; those
+ *  names are absent from `names` because they are all spent, not because they are available.
+ *
+ *  Live dedup stays cross-repo while retirement is per-repo: two live workspaces sharing a name
+ *  are confusing in a flat sidebar, but a name retired under one repo says nothing about the same
+ *  name under another, whose path never collided. */
 export function getSuggestedCreatureName(
   worktreesByRepo: Record<string, WorktreePathLike[]>,
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  retired: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
 ): string {
   const usedNames = collectUsedNames(worktreesByRepo)
-
-  // Why: names are lowercased (branch names are conventionally lowercase, e.g.
-  // fix/seahorse), and a random pick keeps fresh worktrees from all starting at
-  // the same creature and marching down the list in lockstep.
-  const available = MARINE_CREATURES.map(normalizeSuggestedName).filter(
-    (name) => !usedNames.has(name)
-  )
-  if (available.length > 0) {
-    return pickRandom(available, random)
+  for (const retiredName of retired.names) {
+    usedNames.add(normalizeSuggestedName(retiredName))
   }
-
-  // Every base name is taken — fall back to numbered variants.
-  let suffix = 2
-  while (true) {
-    const numbered = MARINE_CREATURES.map(
-      (name) => `${normalizeSuggestedName(name)}-${suffix}`
-    ).filter((name) => !usedNames.has(name))
-    if (numbered.length > 0) {
-      return pickRandom(numbered, random)
-    }
-    suffix += 1
-  }
+  return selectSuggestedCreatureName(usedNames, random, retired.exhaustedTiers)
 }
 
 export function shouldApplySuggestedName(name: string, previousSuggestedName: string): boolean {
   return !name.trim() || name === previousSuggestedName
 }
 
-export function normalizeSuggestedName(name: string): string {
-  return name.trim().toLowerCase()
-}
+export { normalizeSuggestedName }

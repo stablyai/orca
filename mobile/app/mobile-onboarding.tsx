@@ -1,12 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AccessibilityInfo,
-  Animated,
-  BackHandler,
-  Text,
-  useWindowDimensions,
-  View
-} from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { Animated, BackHandler, Text, View, type LayoutChangeEvent } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -17,12 +10,13 @@ import {
   type NotificationOnboardingChoice
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
+import { useReducedMotionEnabled } from '../src/onboarding/use-reduced-motion'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,
   type MobileSessionView
 } from '../src/storage/session-view-preferences'
-import { savePushNotificationsEnabled } from '../src/storage/preferences'
+import { setRemotePushEnabled } from '../src/notifications/push-registration'
 
 const SLIDE_DURATION_MS = 280
 
@@ -52,7 +46,9 @@ function MobileOnboardingFlow({
 }) {
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])
-  const { width } = useWindowDimensions()
+  // Why: an iPad modal is a centred sheet narrower than the window, so slides must
+  // follow the viewport; null holds the pager back until the first measurement.
+  const [width, setWidth] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [busyChoice, setBusyChoice] = useState<MobileOnboardingBusyChoice>(null)
   const [error, setError] = useState<string | null>(null)
@@ -85,7 +81,7 @@ function MobileOnboardingFlow({
       toValue: nextIndex,
       // Why: the carousel should preserve continuity without overriding the
       // device's reduced-motion preference.
-      duration: reducedMotionEnabled ? 0 : SLIDE_DURATION_MS,
+      duration: reducedMotionEnabled === true ? 0 : SLIDE_DURATION_MS,
       useNativeDriver: true
     }).start(() => {
       // Why: a cancelled cosmetic transition must not leave the next decision
@@ -127,7 +123,7 @@ function MobileOnboardingFlow({
       setError(null)
       try {
         const enabled = choice === 'enable' ? await ensureNotificationPermissions() : false
-        await savePushNotificationsEnabled(enabled)
+        await setRemotePushEnabled(enabled)
         advanceOrContinue()
       } catch {
         setError('Notification settings could not be updated. Try again.')
@@ -138,7 +134,17 @@ function MobileOnboardingFlow({
     [advanceOrContinue]
   )
 
-  const translateX = useMemo(() => Animated.multiply(slideProgress, -width), [slideProgress, width])
+  const translateX = useMemo(
+    () => Animated.multiply(slideProgress, -(width ?? 0)),
+    [slideProgress, width]
+  )
+  const onViewportLayout = useCallback((event: LayoutChangeEvent) => {
+    const measured = event.nativeEvent.layout.width
+    // Why: a transient zero-width pass must not collapse the slides to nothing.
+    if (measured > 0) {
+      setWidth(measured)
+    }
+  }, [])
 
   return (
     <SafeAreaView style={styles.container}>
@@ -163,26 +169,28 @@ function MobileOnboardingFlow({
         ) : null}
       </View>
 
-      <View style={styles.carouselViewport}>
-        <Animated.View
-          style={[
-            styles.carouselTrack,
-            { width: width * steps.length, transform: [{ translateX }] }
-          ]}
-        >
-          {steps.map((step, index) => (
-            <MobileOnboardingPage
-              key={step}
-              step={step}
-              width={width}
-              active={index === activeIndex}
-              busyChoice={busyChoice}
-              error={error}
-              onSessionChoice={(view) => void chooseSessionView(view)}
-              onNotificationChoice={(choice) => void chooseNotifications(choice)}
-            />
-          ))}
-        </Animated.View>
+      <View style={styles.carouselViewport} onLayout={onViewportLayout}>
+        {width === null ? null : (
+          <Animated.View
+            style={[
+              styles.carouselTrack,
+              { width: width * steps.length, transform: [{ translateX }] }
+            ]}
+          >
+            {steps.map((step, index) => (
+              <MobileOnboardingPage
+                key={step}
+                step={step}
+                width={width}
+                active={index === activeIndex}
+                busyChoice={busyChoice}
+                error={error}
+                onSessionChoice={(view) => void chooseSessionView(view)}
+                onNotificationChoice={(choice) => void chooseNotifications(choice)}
+              />
+            ))}
+          </Animated.View>
+        )}
       </View>
     </SafeAreaView>
   )
@@ -190,26 +198,4 @@ function MobileOnboardingFlow({
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
-}
-
-function useReducedMotionEnabled(): boolean {
-  const [enabled, setEnabled] = useState(false)
-
-  useEffect(() => {
-    let mounted = true
-    void AccessibilityInfo.isReduceMotionEnabled()
-      .then((nextEnabled) => {
-        if (mounted) {
-          setEnabled(nextEnabled)
-        }
-      })
-      .catch(() => undefined)
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setEnabled)
-    return () => {
-      mounted = false
-      subscription.remove()
-    }
-  }, [])
-
-  return enabled
 }

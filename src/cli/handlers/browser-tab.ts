@@ -15,6 +15,16 @@ import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
+  'open-url': async ({ flags, client, cwd, json }) => {
+    const url = getRequiredStringFlag(flags, 'url')
+    const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    const result = await client.call<{ browserPageId: string }>(
+      'browser.openUrl',
+      { url, worktree },
+      { timeoutMs: 60_000 }
+    )
+    printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
+  },
   'tab list': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
     const result = await client.call<BrowserTabListResult>('browser.tabList', { worktree })

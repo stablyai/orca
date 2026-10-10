@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
@@ -116,6 +116,32 @@ describe('getWorktreeCardPrDisplay', () => {
     ).toBe(pr)
   })
 
+  it('hides a matching suppressed branch-discovered GitHub PR', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: '',
+        suppressedGitHubPR: 123
+      })
+    ).toBeNull()
+  })
+
+  it('lets an explicit GitHub link override stale suppression metadata', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, 123, null, null, null, null, {
+        suppressedGitHubPR: 123
+      })
+    ).toBe(pr)
+  })
+
+  it('keeps a different branch-discovered GitHub PR visible', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: '',
+        suppressedGitHubPR: 999
+      })
+    ).toBe(pr)
+  })
+
   it('treats missing cache hints as unsafe for unlinked GitHub PR details', () => {
     expect(getWorktreeCardPrDisplay(pr, null)).toBeNull()
   })
@@ -141,7 +167,11 @@ describe('getWorktreeCardPrDisplay', () => {
   })
 
   it('preserves branch-discovered hosted reviews for providers without worktree metadata', () => {
-    expect(getWorktreeCardPrDisplay(bitbucketReview, null)).toBe(bitbucketReview)
+    expect(
+      getWorktreeCardPrDisplay(bitbucketReview, null, null, null, null, null, {
+        suppressedGitHubPR: bitbucketReview.number
+      })
+    ).toBe(bitbucketReview)
   })
 })
 

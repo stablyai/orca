@@ -12,8 +12,16 @@
 // Correctness invariant: applyAppends output deep-equals a full rebuild over
 // base ++ all-appends for every prefix (locked by the oracle differential test).
 
+import {
+  hasImagePromptMarker,
+  isImageSourceUserTurn
+} from '../../../../shared/native-chat-image-transcript-markers'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { compareMessages, mergeOne } from './native-chat-session-assembler'
+import {
+  compareMessages,
+  mergeOne,
+  sortForImageNormalization
+} from './native-chat-session-assembler'
 
 export type IncrementalChatAssembler = {
   byId: Map<string, NativeChatMessage>
@@ -37,7 +45,7 @@ export function reset(
   for (const message of base) {
     mergeOne(assembler.byId, assembler.byTurn, message)
   }
-  assembler.messages = Array.from(assembler.byId.values()).sort(compareMessages)
+  assembler.messages = [...sortForImageNormalization(Array.from(assembler.byId.values()))]
   return assembler.messages
 }
 
@@ -66,12 +74,12 @@ export function applyAppends(
   if (grewByBatch && isTailAppend(assembler.messages, incoming)) {
     // Every incoming message is new and sorts at/after the tail: splice the
     // batch in its own sorted order without touching the existing prefix.
-    const tail = [...incoming].sort(compareMessages)
+    const tail = [...sortForImageNormalization(incoming)]
     assembler.messages = [...assembler.messages, ...tail]
     return assembler.messages
   }
 
-  assembler.messages = Array.from(assembler.byId.values()).sort(compareMessages)
+  assembler.messages = [...sortForImageNormalization(Array.from(assembler.byId.values()))]
   return assembler.messages
 }
 
@@ -86,6 +94,14 @@ function isTailAppend(
   const last = current.at(-1)
   if (!last) {
     return true
+  }
+  if (
+    hasImagePromptMarker(last) &&
+    incoming[0]?.source === last.source &&
+    incoming[0]?.timestamp === last.timestamp &&
+    isImageSourceUserTurn(incoming[0]!)
+  ) {
+    return false
   }
   for (const message of incoming) {
     // Null timestamp (sorts to the front) can never be a tail append.

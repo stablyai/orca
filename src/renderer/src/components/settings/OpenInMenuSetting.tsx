@@ -1,7 +1,8 @@
 import type React from 'react'
 import { useState } from 'react'
 import { Check, ChevronDown, Pencil, Trash2 } from 'lucide-react'
-import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
 import { OPEN_IN_APPLICATIONS_MAX } from '../../../../shared/open-in-applications'
 import { Button } from '../ui/button'
 import {
@@ -22,6 +23,7 @@ import {
   type OpenInAppPreset
 } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type OpenInMenuSettingProps = {
   applications: OpenInApplication[] | undefined
@@ -35,9 +37,7 @@ type OpenInApplicationsDraftState = {
 
 function createOpenInApplication(): OpenInApplication {
   return {
-    id:
-      globalThis.crypto?.randomUUID?.() ??
-      `open-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
+    id: createBrowserUuid(),
     label: '',
     command: ''
   }

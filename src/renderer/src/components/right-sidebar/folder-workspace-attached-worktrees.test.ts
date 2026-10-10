@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  FolderWorkspace,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'

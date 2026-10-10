@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import {
   getPosixPtyForegroundGroup,
+  resetPosixPtyForegroundGroupOwnRowCache,
   signalPosixPtyForegroundGroup
 } from './posix-pty-foreground-group'
 
@@ -137,6 +138,10 @@ describe('signalPosixPtyForegroundGroup', () => {
 })
 
 describe('process table lookup', () => {
+  beforeEach(() => {
+    resetPosixPtyForegroundGroupOwnRowCache()
+  })
+
   it('asks ps for one pid at a time', () => {
     // Why pinned: macOS ps only takes its by-pid fast path for a SINGLE pid. Any list
     // form walks the whole process table (~3.6s on a busy machine vs ~3ms), which
@@ -167,6 +172,55 @@ describe('process table lookup', () => {
       }
       expect(timeoutBudget).toBeLessThanOrEqual(250)
     } finally {
+      kill.mockRestore()
+    }
+  })
+
+  it('forks ps once per pane after the first SIGWINCH of the process', () => {
+    // Why: `runPs(currentPid)` reads Orca's own controlling tty, which cannot change
+    // for the process lifetime and feeds only the "do we share this PTY" guard. The
+    // renderer fires SIGWINCH twice per revealed pane, so re-forking it made a 4-pane
+    // tab switch eight synchronous ~3ms `ps` calls on the main event loop.
+    const execFileSyncMock = vi.mocked(execFileSync)
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    const panes = [
+      { rootPid: 900, tty: 'ttys301' },
+      { rootPid: 901, tty: 'ttys302' },
+      { rootPid: 902, tty: 'ttys303' },
+      { rootPid: 903, tty: 'ttys304' }
+    ]
+
+    try {
+      execFileSyncMock.mockClear()
+      execFileSyncMock.mockImplementation(((_file: string, args: string[]) => {
+        const pid = Number(args[args.indexOf('-p') + 1])
+        if (pid === 4242) {
+          return '4242 4242 ttys002'
+        }
+        const pane = panes.find((entry) => entry.rootPid === pid)
+        return pane ? `${pane.rootPid} ${pane.rootPid + 50} ${pane.tty}` : ''
+      }) as never)
+
+      for (const pane of panes) {
+        // Two signals per revealed pane: hidden-restore snapshot + reattach repaint.
+        for (let signalIndex = 0; signalIndex < 2; signalIndex += 1) {
+          signalPosixPtyForegroundGroup(pane.rootPid, `/dev/${pane.tty}`, 'SIGWINCH', vi.fn(), {
+            platform: 'darwin',
+            currentPid: 4242
+          })
+        }
+      }
+
+      const pidArgs = execFileSyncMock.mock.calls.map((call) =>
+        Number((call[1] as string[])[(call[1] as string[]).indexOf('-p') + 1])
+      )
+      // 8 root-pid reads (one per signal) + exactly ONE read of Orca's own row.
+      expect(pidArgs.filter((pid) => pid === 4242)).toHaveLength(1)
+      expect(pidArgs).toHaveLength(9)
+      expect(kill).toHaveBeenCalledTimes(8)
+    } finally {
+      execFileSyncMock.mockReset()
+      execFileSyncMock.mockReturnValue('' as never)
       kill.mockRestore()
     }
   })

@@ -16,6 +16,7 @@ import {
   Palette,
   Rocket,
   Server,
+  // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
   Sparkles,
   SquareTerminal,
@@ -176,7 +177,10 @@ export function RepoIconGlyph({
   const Icon = getRepoLucideIcon(repoIcon?.type === 'lucide' ? repoIcon.name : 'Folder')
   return (
     <span className={cn('inline-flex items-center justify-center', className)}>
-      <Icon className={iconClassName} style={color ? { color } : undefined} />
+      {React.createElement(Icon, {
+        className: iconClassName,
+        style: color ? { color } : undefined
+      })}
     </span>
   )
 }

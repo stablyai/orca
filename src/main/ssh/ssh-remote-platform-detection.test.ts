@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConnection } from './ssh-connection'
+import { SSH_EXEC_TIMEOUT_CODE } from './ssh-relay-exec-command'
 
 const execCommandMock = vi.hoisted(() => vi.fn())
 
@@ -224,6 +225,32 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     expect((error as Error).message).toMatch(/open failed/iu)
     expect((error as Error).message).not.toMatch(/unsupported/iu)
     expect((error as Error).cause).toMatchObject({ reason: 2 })
+  })
+
+  it('does not call an unmappable uname unsupported when the PowerShell probe timed out', async () => {
+    // The timed-out channel is the better explanation, and it is identified by execCommand's typed
+    // code — matching "timed out after Ns" in the message let any look-alike claim the branch.
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command "pwsh" timed out after 30s'), {
+          code: SSH_EXEC_TIMEOUT_CODE
+        })
+      )
+
+    const error = await detectRemoteHostPlatform(conn).catch((err: unknown) => err)
+
+    expect(error).toBeInstanceOf(Error)
+    expect((error as Error).message).not.toMatch(/unsupported/iu)
+    expect((error as Error).cause).toMatchObject({ code: SSH_EXEC_TIMEOUT_CODE })
+  })
+
+  it('does not read a look-alike timeout message as a timed-out channel', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64\n')
+      .mockRejectedValueOnce(new Error('the agent it launched timed out after 30s'))
+
+    await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
   })
 
   it('falls through to PowerShell for a Cygwin uname it cannot map', async () => {

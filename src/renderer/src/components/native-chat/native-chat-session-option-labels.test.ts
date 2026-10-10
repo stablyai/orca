@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import { nativeChatModelPillLabel } from './native-chat-session-option-labels'
+import { describe, expect, it, vi } from 'vitest'
+import { translate } from '@/i18n/i18n'
+import {
+  nativeChatModelPillLabel,
+  nativeChatOptionsPillLabel,
+  nativeChatSessionChoiceLabel
+} from './native-chat-session-option-labels'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: vi.fn((_key: string, fallback: string) => fallback)
+}))
 
 function modelDescriptor(
   valueSource: SessionOptionDescriptor['valueSource'],
@@ -10,6 +19,7 @@ function modelDescriptor(
     id: 'model',
     label: 'Model',
     valueSource,
+    transport: 'catalog',
     settable: true,
     kind: {
       type: 'select',
@@ -39,5 +49,55 @@ describe('nativeChatModelPillLabel', () => {
     // A discovered list can drop an id the record still tracks; showing the id beats
     // showing "Model" while a real model is running.
     expect(nativeChatModelPillLabel(modelDescriptor('reported', 'grok-build'))).toBe('grok-build')
+  })
+})
+
+describe('nativeChatSessionChoiceLabel', () => {
+  it('routes ultra through the localized effort label', () => {
+    nativeChatSessionChoiceLabel({ value: 'ultra', label: 'Ultra' })
+
+    expect(translate).toHaveBeenCalledWith(
+      'components.native-chat.composer.optionValue.ultra',
+      'Ultra'
+    )
+  })
+})
+
+describe('nativeChatSessionChoiceLabel for speed', () => {
+  it('localizes Standard only inside the speed choice', () => {
+    nativeChatSessionChoiceLabel({ value: 'default', label: 'Standard' }, 'serviceTier')
+    expect(translate).toHaveBeenCalledWith(
+      'components.native-chat.composer.optionValue.standard',
+      'Standard'
+    )
+    expect(nativeChatSessionChoiceLabel({ value: 'default', label: 'Ask first' }, 'mode')).toBe(
+      'Ask first'
+    )
+  })
+})
+
+describe('nativeChatOptionsPillLabel', () => {
+  function speedDescriptor(currentValue: string): SessionOptionDescriptor {
+    return {
+      id: 'serviceTier',
+      label: 'Speed',
+      valueSource: 'reported',
+      transport: 'agent-session',
+      settable: true,
+      kind: {
+        type: 'select',
+        currentValue,
+        choices: [
+          { value: 'default', label: 'Standard' },
+          { value: 'priority', label: 'Fast' },
+          { value: 'ultrafast', label: 'Ultrafast' }
+        ]
+      }
+    }
+  }
+
+  it('names a faster tier and leaves Standard out, as Fast off was', () => {
+    expect(nativeChatOptionsPillLabel([speedDescriptor('ultrafast')])).toBe('Ultrafast')
+    expect(nativeChatOptionsPillLabel([speedDescriptor('default')])).toBe('Options')
   })
 })

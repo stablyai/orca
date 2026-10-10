@@ -1,4 +1,4 @@
-import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/types'
+import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { MobileGitBranchCompareResult } from '../source-control/mobile-branch-compare'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import type { MobileDiffLine } from './mobile-diff-lines'
@@ -9,7 +9,7 @@ import type {
 } from './mobile-diff-review-queue'
 import type { MobileDiffReviewFileDescriptor } from './mobile-diff-review-state'
 import type { MobileHighlightedDiffLine } from './mobile-file-syntax'
-import type { MobileReviewTerminalTab } from './mobile-diff-review-rpc'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 
 export type ReviewScreenState =
   | { kind: 'loading' }

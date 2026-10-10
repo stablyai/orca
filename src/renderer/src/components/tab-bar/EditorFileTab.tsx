@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, ChartColumn } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { basename, normalizeRelativePath } from '@/lib/path'
+import { TabHoverCard } from './TabHoverCard'
+import { basename } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
@@ -12,11 +12,11 @@ import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
-import type { GitFileStatus } from '../../../../shared/types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { OpenFile } from '../../store/slices/editor'
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
@@ -28,9 +28,11 @@ import {
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
-import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
+import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 
 export default function EditorFileTab({
   file,
@@ -39,7 +41,7 @@ export default function EditorFileTab({
   hasTabsToRight,
   hasTabsToLeft,
   tabCount,
-  statusByRelativePath,
+  gitStatus: tabStatus,
   onActivate,
   onClose,
   onCloseOthers,
@@ -58,7 +60,7 @@ export default function EditorFileTab({
   hasTabsToRight: boolean
   hasTabsToLeft: boolean
   tabCount: number
-  statusByRelativePath: Map<string, GitFileStatus>
+  gitStatus: GitFileStatus | null
   onActivate: () => void
   onClose: () => void
   onCloseOthers: () => void
@@ -87,7 +89,19 @@ export default function EditorFileTab({
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
+  const isChatVisual = file.mode === 'chat-visual'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+  const HoverIcon = isConflictReview
+    ? ShieldAlert
+    : isCheckDetails
+      ? ListChecks
+      : isChatVisual
+        ? ChartColumn
+        : isDiff
+          ? GitCompareArrows
+          : isMarkdownPreviewTab
+            ? Eye
+            : FileIcon
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
@@ -105,6 +119,10 @@ export default function EditorFileTab({
     diffSource: file.diffSource
   })
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  // Why: the stored flag outlives the setting (sessions persist it, other windows change it), so preview-ness is derived, never reconciled.
+  const isPreviewTab = useAppStore(
+    (s) => file.isPreview === true && s.settings?.editorPreviewTabsEnabled !== false
+  )
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isRenaming, setIsRenaming] = useState(false)
@@ -132,7 +150,6 @@ export default function EditorFileTab({
 
   const commitRename = (): void => {
     if (renameCancelledRef.current) {
-      renameCancelledRef.current = false
       setIsRenaming(false)
       return
     }
@@ -142,12 +159,12 @@ export default function EditorFileTab({
       return
     }
     const newName = input.value.trim()
+    // onBlur follows Enter when the input unmounts; consume that trailing event
+    // so one user action cannot start a second rename against the old path.
+    renameCancelledRef.current = true
     setIsRenaming(false)
-    if (!newName) {
-      return
-    }
     const oldName = basename(file.filePath)
-    if (newName === oldName) {
+    if (!newName || newName === oldName) {
       return
     }
     const worktreePath = getUntitledFileRoot(file, worktree?.path ?? null)
@@ -155,7 +172,9 @@ export default function EditorFileTab({
       oldPath: file.filePath,
       newName,
       worktreeId: file.worktreeId,
-      worktreePath
+      worktreePath,
+      // Why: a file opened outside every project may be renamed to any path, wherever it lives.
+      documentScoped: editorTabDocumentFolderAccess(useAppStore.getState(), file) !== undefined
     })
   }
 
@@ -169,8 +188,8 @@ export default function EditorFileTab({
       if (!input) {
         return
       }
-      // Why: Radix closes the context menu after onSelect; defer focus so its
-      // teardown cannot steal focus back or blur-commit the newly mounted input.
+      // Why: the tab re-lays out around the input; focus on the next frame so
+      // that swap has settled before selecting text.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
         if (renameInputRef.current !== input) {
@@ -189,10 +208,6 @@ export default function EditorFileTab({
     [file.filePath]
   )
 
-  const tabStatus =
-    file.relativePath === 'All Changes'
-      ? null
-      : (statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null)
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
   const tabLabel = getEditorDisplayLabel(file)
 
@@ -223,11 +238,13 @@ export default function EditorFileTab({
     onActivate,
     disabled: isRenaming
   })
+  const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
 
   const tabRoot = (
     <div
       ref={setNodeRef}
       data-tab-id={file.tabId ?? file.id}
+      data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
@@ -239,7 +256,7 @@ export default function EditorFileTab({
         )
       }}
       onDoubleClick={() => {
-        if (file.isPreview && onMakePermanent) {
+        if (isPreviewTab && onMakePermanent) {
           onMakePermanent()
         }
       }}
@@ -265,22 +282,14 @@ export default function EditorFileTab({
         <ShieldAlert
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
         />
-      ) : isCheckDetails ? (
-        <ListChecks
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
-      ) : isDiff ? (
-        <GitCompareArrows
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
       ) : isMarkdownPreviewTab ? (
         <Eye
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
-        <FileIcon
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
+        createElement(HoverIcon, {
+          className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
+        })
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
@@ -323,10 +332,10 @@ export default function EditorFileTab({
           />
         ) : (
           <span
-            className={`${TAB_LABEL_WIDTH_CLASSES}${file.isPreview ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
+            className={`${TAB_LABEL_WIDTH_CLASSES}${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
-              if (file.isPreview && onMakePermanent) {
+              if (isPreviewTab && onMakePermanent) {
                 e.stopPropagation()
                 onMakePermanent()
                 return
@@ -379,7 +388,7 @@ export default function EditorFileTab({
   return (
     <>
       <div
-        className={TAB_CONTAINER_WIDTH_CLASSES}
+        {...slotProps}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -390,16 +399,14 @@ export default function EditorFileTab({
         {isRenaming || menuOpen ? (
           tabRoot
         ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {tabLabel}
-            </TooltipContent>
-          </Tooltip>
+          <TabHoverCard
+            title={tabLabel}
+            programName={translate('tabHoverCard.editor', 'Editor')}
+            icon={createElement(HoverIcon, { className: 'size-4' })}
+            description={file.relativePath}
+          >
+            {tabRoot}
+          </TabHoverCard>
         )}
       </div>
 

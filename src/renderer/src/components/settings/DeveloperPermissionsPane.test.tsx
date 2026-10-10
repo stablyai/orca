@@ -24,11 +24,9 @@ beforeEach(() => {
   Object.assign(window, {
     api: {
       developerPermissions: {
-        getStatus: vi.fn(
-          async (): Promise<DeveloperPermissionState[]> => [
-            { id: 'full-disk-access', status: 'denied' }
-          ]
-        ),
+        getStatus: vi.fn(async (): Promise<DeveloperPermissionState[]> => [
+          { id: 'full-disk-access', status: 'denied' }
+        ]),
         request: vi.fn(async ({ id }: { id: string }) => ({
           id,
           status: 'unknown',

@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { GITHUB_REACTION_ORDER } from '@/lib/pr-comment-reactions'
-import type { GitHubReaction, GitHubReactionContent } from '../../../../shared/types'
+import type { GitHubReaction, GitHubReactionContent } from '../../../../shared/github/comment-types'
 
 const REACTION_EMOJI: Record<GitHubReaction['content'], string> = {
   '+1': '👍',

@@ -1,6 +1,7 @@
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { readLastTerminalInputAt } from './terminal-input-activity-coalescing'
@@ -113,7 +114,7 @@ export function createAutomationTerminalOwnership(
       consumed = true
       unsubscribe()
       observeTakeover()
-      if (args.runtimeKind !== 'desktop' || args.ptyId.startsWith('remote:') || userTookOver) {
+      if (args.runtimeKind !== 'desktop' || isRemoteRuntimePtyId(args.ptyId) || userTookOver) {
         return false
       }
       const state = args.store.getState()

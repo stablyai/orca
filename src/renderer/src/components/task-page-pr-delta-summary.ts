@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 export function formatPRDelta(item: GitHubWorkItem): string | null {
   const parts: string[] = []

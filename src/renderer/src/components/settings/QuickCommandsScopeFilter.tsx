@@ -1,6 +1,6 @@
 import { Check, ChevronsUpDown } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { Button } from '../ui/button'
 import { Command, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'

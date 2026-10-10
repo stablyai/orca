@@ -19,7 +19,7 @@ import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeStart
 } from '../../shared/ephemeral-vm-recipe-runner'
-import type { OrcaVmRecipe } from '../../shared/types'
+import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 
 export const VM_HANDLERS: Record<string, CommandHandler> = {
   'vm recipe doctor': async ({ flags, cwd, json }) => {

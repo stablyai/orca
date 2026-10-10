@@ -1,4 +1,5 @@
-import { createReadStream } from 'node:fs'
+import { readOpenCodeNativeChatTranscriptFull } from './transcript-opencode'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import type {
   AgentType,
   NativeChatMessage,
@@ -7,6 +8,8 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
+import { openTranscriptReadStream } from './wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
@@ -41,7 +44,17 @@ export async function readNativeChatTranscript(
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
-  const filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  if (resolveNativeChatTranscriptAgent(agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptFull(sessionId)
+  }
+  let filePath: string | null
+  try {
+    filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  } catch (err) {
+    // Why: gate refusal is transient unavailability with retry guidance —
+    // `notFound` would settle callers into a false "missing" state.
+    return { error: wslTranscriptFsRefusal(err).message }
+  }
   if (!filePath) {
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
@@ -63,7 +76,7 @@ export async function readNativeChatTranscript(
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
     // race as an unresolved path — keep it retry-worthy (#8401).
-    if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+    if (isENOENT(err)) {
       return { error: errorMessage(err), notFound: true }
     }
     return { error: errorMessage(err) }
@@ -74,7 +87,7 @@ async function readTranscript(
   filePath: string,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null
 ): Promise<NativeChatMessage[]> {
-  const stream = createReadStream(filePath, { encoding: 'utf-8' })
+  const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
   const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
   return messages
 }

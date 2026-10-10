@@ -8,6 +8,11 @@ type SidecarRequest = {
   params?: Record<string, unknown>
 }
 
+// Why disconnect carries the weight on Windows: the parent stops the sidecar
+// with kill('SIGTERM'), which is TerminateProcess there, so the SIGTERM handler
+// below never runs and teardown rides on the IPC channel closing instead. A
+// helper wedged inside a UI Automation call can still outlive that and deliver
+// input after teardown; only a real signal would preempt it.
 process.once('disconnect', shutdownProviders)
 process.once('SIGTERM', () => {
   shutdownProviders()

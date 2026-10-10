@@ -12,9 +12,10 @@ import {
  */
 export function resolvePaneDisplayTitle(
   title: string,
-  ownerAgentType: AgentType | null | undefined
+  ownerAgentType: AgentType | null | undefined,
+  ownerIsLaunch = false
 ): string {
-  return normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
+  return normalizeCompatibleAgentTitleForOwner(title, ownerAgentType, { ownerIsLaunch })
 }
 
 /**
@@ -35,6 +36,8 @@ export type ResolvePaneTitleDecisionInput = {
   /** Owner used for the display label — may include sticky/tab-scoped launch
    *  identity, which is correct for the visible label. */
   displayOwnerAgentType: AgentType | null | undefined
+  /** True when displayOwnerAgentType is user-selected launch ownership. */
+  displayOwnerIsLaunch?: boolean
   /** Owner used for the renderer veto — must be pane-scoped and current so a
    *  sibling/reused pane's launch identity cannot keep GPU for a genuine
    *  Gemini pane. */
@@ -45,7 +48,11 @@ export type ResolvePaneTitleDecisionInput = {
 }
 
 export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): PaneTitleDecision {
-  const displayTitle = resolvePaneDisplayTitle(input.normalizedTitle, input.displayOwnerAgentType)
+  const displayTitle = resolvePaneDisplayTitle(
+    input.normalizedTitle,
+    input.displayOwnerAgentType,
+    input.displayOwnerIsLaunch === true
+  )
   const rendererPolicy = resolvePaneRendererPolicy({
     rawTitle: input.rawTitle,
     ownerAgentType: input.rendererOwnerAgentType,

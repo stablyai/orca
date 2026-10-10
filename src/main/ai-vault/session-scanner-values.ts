@@ -1,6 +1,8 @@
 import { homedir } from 'node:os'
-import { basename, dirname, isAbsolute, join } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
+import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord } from './session-scanner-record-value'
 
 export { asRecord }
@@ -76,8 +78,15 @@ export async function readJsonObjectIfExists(
   filePath: string
 ): Promise<Record<string, unknown> | null> {
   try {
-    return asRecord(JSON.parse(await readFile(filePath, 'utf-8')) as unknown)
-  } catch {
+    return asRecord(JSON.parse(await wslGatedReadFile(filePath, 'utf-8', 'scan')) as unknown)
+  } catch (error) {
+    // A missing or malformed file is genuinely "no enrichment", but a gate
+    // refusal must reach `parseSessionCandidate` as an issue — degrading it to
+    // null caches the un-enriched session under an unchanged mtime, and the
+    // non-resumable agents that use this never re-read it.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return null
   }
 }
@@ -157,14 +166,14 @@ function defaultPrimeAgentSessionsDir(): string {
   return join(homedir(), '.prime', 'agent', 'sessions')
 }
 
-// Why: the CLI expands a leading `~` itself, so a value set outside a shell
-// (config file, plist, quoted assignment) still resolves against the home dir.
-// Returns null for anything that is not an absolute root, since a relative value
-// ('', '.', '..', 'sessions') would resolve against the main-process cwd.
+// Why: the Pi/Prime CLIs expand a leading `~` themselves, so a value set outside a
+// shell (config file, plist, quoted assignment) still resolves against the home dir.
+// That expansion is per-CLI and deliberately not in the shared absolute check — Grok,
+// for one, creates a literal `~` directory instead.
 function absoluteConfiguredDir(rawValue: string): string | null {
   const expanded = rawValue === '~' ? homedir() : rawValue.replace(/^~(?=[\\/])/, homedir())
   const normalized = expanded.replace(/[\\/]+$/, '')
-  return normalized && isAbsolute(normalized) ? normalized : null
+  return resolveAbsoluteDirOverride(normalized, '') || null
 }
 
 // Prime Agent takes PRIME_AGENT_CODING_AGENT_DIR verbatim as its agent config dir

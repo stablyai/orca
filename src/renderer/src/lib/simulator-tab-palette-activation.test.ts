@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
@@ -110,20 +111,64 @@ describe('activateSimulatorTabPaletteResult', () => {
     })
   })
 
-  it('picks the host that owns the row when the worktree id exists on two hosts', () => {
+  it('activates an SSH worktree through its paired-runtime owner alias', () => {
     seedStore({
       worktreesByRepo: {
-        'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })],
-        'repo-2': [makeWorktree({ repoId: 'repo-2', hostId: 'ssh:host-2', path: '/tmp/wt-1-b' })]
+        'repo-1': [
+          makeWorktree({
+            hostId: 'ssh:private-target',
+            runtimeOwnerEnvironmentId: 'paired-host'
+          })
+        ]
       }
     })
 
     expect(
-      activateSimulatorTabPaletteResult({ ...target, executionHostId: 'ssh:host-2' }).status
+      activateSimulatorTabPaletteResult({ ...target, executionHostId: 'runtime:paired-host' })
+        .status
     ).toBe('activated')
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      executionHostId: 'ssh:host-2'
+      executionHostId: 'runtime:paired-host'
     })
+  })
+
+  it('rejects colliding child ids before mutating either host', () => {
+    seedStore({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })],
+        'repo-2': [makeWorktree({ repoId: 'repo-2', hostId: 'ssh:host-2', path: '/tmp/wt-1-b' })]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeTab({ executionHostId: 'ssh:host-1', groupId: 'group-host-1' }),
+          makeTab({ executionHostId: 'ssh:host-2', groupId: 'group-host-2' })
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [makeGroup({ id: 'group-host-1' }), makeGroup({ id: 'group-host-2' })]
+      }
+    })
+
+    const before = useAppStore.getState()
+    expect(activateSimulatorTabPaletteResult({ ...target, executionHostId: 'ssh:host-2' })).toEqual(
+      { status: 'failed', reason: 'missing-tab' }
+    )
+    expect(useAppStore.getState()).toBe(before)
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('rejects a hostless tab when its worktree id exists on multiple hosts', () => {
+    seedStore({
+      worktreesByRepo: {
+        local: [makeWorktree()],
+        remote: [makeWorktree({ repoId: 'repo-2', hostId: 'ssh:remote', path: '/tmp/remote' })]
+      }
+    })
+
+    expect(activateSimulatorTabPaletteResult({ ...target, executionHostId: 'ssh:remote' })).toEqual(
+      { status: 'failed', reason: 'missing-tab' }
+    )
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('reports an unknown worktree without activating', () => {

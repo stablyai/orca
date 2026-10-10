@@ -1,0 +1,414 @@
+// What a client's retry sees around a failed attach settlement: a crash between
+// reserve and settlement replays into the original reservation, and a settled
+// failure refuses sends without ever re-dispatching on the user's behalf.
+
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type * as AgentSessionRecordRows from '../../runtime/agent-session-record-rows'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
+import type {
+  AgentSessionDispatchOutcome,
+  StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import {
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD as THREAD,
+  hostTestAttachParams,
+  hostTestMessage,
+  hostTestOperationId,
+  resetHostTestOperationIds
+} from './structured-agent-session-host-test-data'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+
+const CALLER = { callerKey: 'client-1' }
+
+const publishFault = vi.hoisted(() => ({ failOnPublish: 0, publishCount: 0 }))
+
+vi.mock('../../runtime/agent-session-record-rows', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentSessionRecordRows>()
+  return {
+    ...actual,
+    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
+      publishFault.publishCount += 1
+      if (publishFault.publishCount === publishFault.failOnPublish) {
+        throw new Error('simulated crash before failed-settlement publish')
+      }
+      return actual.writeAgentSessionStoreRows(...args)
+    }
+  }
+})
+
+let root: string
+let store: AgentSessionRecordStore
+let host: StructuredAgentSessionHost
+let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+let releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>
+let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
+
+function accepted(): AgentSessionDispatchOutcome {
+  return {
+    state: 'accepted',
+    providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
+  }
+}
+
+function adapter(): StructuredAgentSessionAdapter {
+  return {
+    acquire,
+    releaseAcquisition,
+    dispatch,
+    cancelTurn: vi.fn(async () => ({ cancelled: true })),
+    answerPrompt: vi.fn(async () => undefined),
+    setOption: vi.fn(async () => undefined)
+  }
+}
+
+function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
+  return {
+    sessionId: SESSION,
+    clientOperationId: hostTestOperationId(),
+    expectedRuntimeFence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+    payloadFingerprint: computeAgentSessionPayloadFingerprint({
+      method,
+      sessionId: SESSION,
+      fields
+    })
+  }
+}
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'orca-settled-attach-retry-'))
+  publishFault.failOnPublish = 0
+  publishFault.publishCount = 0
+  resetHostTestOperationIds()
+  acquire = vi.fn(async ({ fence }) => ({
+    process: {
+      hostId: 'local',
+      pid: 4242,
+      processStartTimeMs: 1_700_000_000_000,
+      spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
+    },
+    link: {
+      linkId: `link-${fence}`,
+      handle: codexProviderHandle(THREAD),
+      origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
+      mintedAtFence: fence,
+      observedAt: NOW
+    }
+  }))
+  releaseAcquisition = vi.fn(async () => true)
+  dispatch = vi.fn(async () => accepted())
+  store = await openTestAgentSessionRecordStore(root)
+  host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
+    logger: createStructuredAgentSessionLogger(),
+    store,
+    adapter: adapter(),
+    journalDatabase: openTestJournalHostDatabase(root),
+    claimKeyId: 'key-1',
+    mintSpawnToken: () => 'spawn-a',
+    now: () => NOW
+  })
+})
+
+afterEach(async () => {
+  publishFault.failOnPublish = 0
+  await host.flushAllStreamedEvents()
+  await rm(root, { recursive: true, force: true })
+})
+
+/** The host starting the agent with no message to deliver, as an operation that needs it does. */
+function startAgent(): Promise<unknown> {
+  return host['serialize'](SESSION, () => host['mutationContext']().ensureAgent(SESSION))
+}
+
+describe('settled attach retry', () => {
+  it('settles a post-acquisition journal failure and retries without a restart', async () => {
+    const journalDatabase = openTestJournalHostDatabase(root)
+    vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
+      new Error('journal path unavailable')
+    )
+    host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: adapter(),
+      journalDatabase,
+      claimKeyId: 'key-1',
+      mintSpawnToken: () => 'spawn-a',
+      now: () => NOW
+    })
+    const first = hostTestAttachParams(null)
+
+    await expect(host.attach(CALLER, first)).rejects.toThrow('journal path unavailable')
+    expect(releaseAcquisition).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      runtimeFence: 2
+    })
+    expect(
+      store.listOperationRows().find((row) => row.operationId === first.envelope.clientOperationId)
+        ?.outcome
+    ).toMatchObject({ status: 'failed' })
+
+    await expect(host.attach(CALLER, hostTestAttachParams(2))).resolves.toMatchObject({ ok: true })
+    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: null,
+      runtimeFence: 3
+    })
+  })
+
+  it('continues a safe same-host pending replay with the reserved token', async () => {
+    const spawnTokens: string[] = []
+    acquire.mockImplementation(async ({ fence, spawnToken }) => {
+      spawnTokens.push(spawnToken)
+      if (spawnTokens.length === 1) {
+        throw new Error('reply lost')
+      }
+      return {
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: 1_700_000_000_000,
+          spawnToken
+        },
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(THREAD),
+          origin: 'created',
+          mintedAtFence: fence,
+          observedAt: NOW
+        }
+      }
+    })
+    const mintSpawnToken = vi.fn(() => 'spawn-safe')
+    host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: adapter(),
+      journalDatabase: openTestJournalHostDatabase(root),
+      claimKeyId: 'key-1',
+      mintSpawnToken,
+      now: () => NOW
+    })
+    const params = hostTestAttachParams(null)
+    publishFault.failOnPublish = 2
+
+    await expect(host.attach(CALLER, params)).rejects.toThrow(
+      'agent session acquisition failure settlement failed'
+    )
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true, replayed: true })
+    expect(mintSpawnToken).toHaveBeenCalledOnce()
+    expect(spawnTokens).toEqual(['spawn-safe', 'spawn-safe'])
+  })
+
+  it('releases a reservation a crash left ownerless at restart, so the next start goes ahead', async () => {
+    const spawnTokens: string[] = []
+    acquire.mockImplementation(async ({ fence, spawnToken }) => {
+      spawnTokens.push(spawnToken)
+      if (spawnTokens.length === 1) {
+        throw new Error('reply lost')
+      }
+      return {
+        process: {
+          hostId: 'local',
+          pid: 4242,
+          processStartTimeMs: 1_700_000_000_000,
+          spawnToken
+        },
+        link: {
+          linkId: `link-${fence}`,
+          handle: codexProviderHandle(THREAD),
+          origin: 'created',
+          mintedAtFence: fence,
+          observedAt: NOW
+        }
+      }
+    })
+    let token = 0
+    const mintSpawnToken = vi.fn(() => `spawn-${++token}`)
+    host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: adapter(),
+      journalDatabase: openTestJournalHostDatabase(root),
+      claimKeyId: 'key-1',
+      mintSpawnToken,
+      // A host that cannot read another process's environment, so no scan can prove anything.
+      probeOwner: async () => ({
+        outcome: 'indeterminate',
+        reason: 'spawn token scan unavailable'
+      }),
+      now: () => NOW
+    })
+    const params = hostTestAttachParams(null)
+    publishFault.failOnPublish = 2
+
+    await expect(host.attach(CALLER, params)).rejects.toThrow(
+      'agent session acquisition failure settlement failed'
+    )
+    expect(publishFault.publishCount).toBe(2)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'reserved',
+      handoffStage: 'new-owner-proving',
+      runtimeFence: 1,
+      reservedSpawnToken: 'spawn-1',
+      ownerProcess: null
+    })
+
+    await host.flushAllStreamedEvents()
+    store = await openTestAgentSessionRecordStore(root)
+    host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: adapter(),
+      journalDatabase: openTestJournalHostDatabase(root),
+      claimKeyId: 'key-1',
+      mintSpawnToken,
+      // A host that cannot read another process's environment, so no scan can prove anything.
+      probeOwner: async () => ({
+        outcome: 'indeterminate',
+        reason: 'spawn token scan unavailable'
+      }),
+      now: () => NOW
+    })
+
+    await host.restoreReadableSessions()
+    expect(releaseAcquisition).toHaveBeenCalledTimes(1)
+    // No owner was recorded: released at restart, with no evidence, since nothing proved one.
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      reservedSpawnToken: null,
+      ownerProcess: null,
+      deathEvidence: null
+    })
+
+    // The interrupted operation's own retry continues it as a fresh reservation.
+    await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
+    expect(mintSpawnToken).toHaveBeenCalledTimes(2)
+    expect(spawnTokens).toEqual(['spawn-1', 'spawn-2'])
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      runtimeKind: 'native',
+      runtimeFence: 3,
+      handoffStage: null,
+      handoffOperationId: null,
+      ownerProcess: { spawnToken: 'spawn-2' }
+    })
+  })
+
+  it('settles a submission the host restart left pending, and never redelivers it', async () => {
+    expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
+    // Admitted: written to the child, acknowledgement still outstanding. The
+    // restart below is the process fact that ends the wait, not a stopwatch.
+    dispatch.mockImplementationOnce(async () => ({ state: 'admitted' as const }))
+    const body = hostTestMessage('written before the host died')
+    const unknownParams = {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    }
+    const first = await host.send(CALLER, unknownParams)
+    expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    // Handed over before the host dies: that is what makes the restart's answer doubt.
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+
+    await host.flushAllStreamedEvents()
+    store = await openTestAgentSessionRecordStore(root)
+    host = new StructuredAgentSessionHost({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: adapter(),
+      journalDatabase: openTestJournalHostDatabase(root),
+      claimKeyId: 'key-1',
+      mintSpawnToken: () => 'spawn-restarted',
+      probeOwner: async () => ({ outcome: 'pid-absent' }),
+      now: () => NOW
+    })
+    await host.restoreReadableSessions()
+    await startAgent()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: null,
+      runtimeFence: 3
+    })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+
+    const newBody = hostTestMessage('are you there?')
+    const sent = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body: newBody }),
+      body: newBody
+    })
+    if (!sent.ok) {
+      throw new Error(`unexpected restored send refusal: ${sent.refusal.message}`)
+    }
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2))
+    const restoredHistory = await host.history({ sessionId: SESSION, direction: 'tail' })
+    if (!restoredHistory.ok) {
+      throw new Error(`unexpected restored history reset: ${restoredHistory.reset}`)
+    }
+    expect(
+      restoredHistory.page.submissions.find(
+        (submission) => submission.clientMessageId === unknownParams.envelope.clientOperationId
+      )?.dispatchState
+    ).toBe('unknown')
+
+    // A restart ends the wait without proving the dead child never took the
+    // frame, so even an explicit retry replays rather than sending a second copy.
+    const explicitRetry = await host.send(CALLER, {
+      ...unknownParams,
+      envelope: {
+        ...unknownParams.envelope,
+        expectedRuntimeFence: store.getRecord(SESSION)?.lease.runtimeFence ?? 3
+      },
+      retryUnknown: true
+    })
+    expect(explicitRetry).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'unknown' } }
+    })
+    expect(dispatch).toHaveBeenCalledTimes(2)
+  })
+
+  it('records proven acquisition cleanup as durable death evidence', async () => {
+    acquire.mockRejectedValueOnce(new Error('resume rejected'))
+
+    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+      ok: false,
+      refusal: {
+        message: "Codex couldn't restart. Send your message to try again.",
+        ownerVerdict: 'exited'
+      }
+    })
+
+    expect(releaseAcquisition).toHaveBeenCalledTimes(1)
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      deathEvidence: {
+        kind: 'exit-observed',
+        detail: 'acquisition cleanup proved no provider child remains'
+      }
+    })
+  })
+})

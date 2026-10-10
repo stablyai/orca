@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { LinearComment, LinearIssue } from '../../../shared/types'
+import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
 import {
   buildLinearIssueContextSnapshot,
   LINEAR_ISSUE_CONTEXT_CAPS

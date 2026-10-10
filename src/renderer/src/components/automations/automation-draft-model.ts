@@ -1,7 +1,11 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
-import { buildAutomationCronSchedule } from '../../../../shared/automation-schedules'
-import type { Worktree } from '../../../../shared/types'
+import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
+import type { Worktree } from '../../../../shared/worktree/types'
+import {
+  hasExtraAgentArgs,
+  parseExtraAgentArgs
+} from '../../../../shared/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
 export const AUTOMATION_DEFAULT_TIME = '09:00'
@@ -17,8 +21,8 @@ export function formatTimeInput(hour: number, minute: number): string {
 export function parseDraftTime(time: string): { hour: number; minute: number } {
   const [rawHour, rawMinute] = time.split(':').map((part) => Number(part))
   return {
-    hour: Number.isFinite(rawHour) ? rawHour : 9,
-    minute: Number.isFinite(rawMinute) ? rawMinute : 0
+    hour: Number.isInteger(rawHour) && rawHour >= 0 && rawHour <= 23 ? rawHour : 9,
+    minute: Number.isInteger(rawMinute) && rawMinute >= 0 && rawMinute <= 59 ? rawMinute : 0
   }
 }
 
@@ -49,4 +53,29 @@ export function buildHermesCronSchedule(draft: AutomationDraft): string {
 
 export function getAgentLabel(agentId: string): string {
   return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
+}
+
+/** The field's error, or null when the draft's extras can be saved. */
+export function getDraftExtraAgentArgsError(
+  draft: Pick<AutomationDraft, 'agentId' | 'extraAgentArgs'>
+): string | null {
+  if (!hasExtraAgentArgs(draft.extraAgentArgs)) {
+    return null
+  }
+  const parsed = parseExtraAgentArgs({
+    agent: draft.agentId,
+    extraAgentArgs: draft.extraAgentArgs
+  })
+  return parsed.ok ? null : parsed.error
+}
+
+/** Reuse can't carry extras; the field offers a switch instead of flipping it silently. */
+export function draftExtraAgentArgsNeedFreshSession(
+  draft: Pick<AutomationDraft, 'extraAgentArgs' | 'reuseSession' | 'workspaceMode'>
+): boolean {
+  return (
+    hasExtraAgentArgs(draft.extraAgentArgs) &&
+    draft.workspaceMode === 'existing' &&
+    draft.reuseSession
+  )
 }

@@ -1,7 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
-import type { TerminalLayoutSnapshot } from '../../src/shared/types'
+import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
@@ -54,7 +54,7 @@ async function openClientTab(page: Page, worktreeId: string, tabId: string): Pro
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
       state?.setActiveTab(tabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', worktreeId)
     },
     { tabId, worktreeId }
   )

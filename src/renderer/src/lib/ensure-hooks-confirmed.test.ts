@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { PersistedTrustedOrcaHooks } from '../../../shared/types'
+import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   __resetTrustPromptChainForTests,
   ensureHooksConfirmed,
@@ -553,6 +553,36 @@ describe('ensureHooksConfirmed', () => {
 
     pending[1].resolve('run')
     await expect(second).resolves.toBe('run')
+  })
+
+  it('lets a queued prompt for the same script see the approval recorded by the one before it', async () => {
+    const created = createTestState()
+    const { pending } = created
+    let state = created.state
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { archive: 'echo bye' } },
+      mayNeedUpdate: false
+    })
+
+    const first = ensureHooksConfirmed(() => state, 'repo-1', 'archive')
+    const second = ensureHooksConfirmed(() => state, 'repo-1', 'archive')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // The store replaces its state when the dialog records trust, as zustand does.
+    state = {
+      ...state,
+      trustedOrcaHooks: {
+        'repo-1': {
+          archive: { contentHash: await hashOrcaHookScript('echo bye'), approvedAt: 1 }
+        }
+      }
+    }
+    pending[0].resolve('run')
+
+    await expect(first).resolves.toBe('run')
+    await expect(second).resolves.toBe('run')
+    expect(pending).toHaveLength(1)
   })
 
   it('fails closed when window.api.hooks.check throws', async () => {

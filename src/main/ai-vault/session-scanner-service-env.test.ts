@@ -32,11 +32,14 @@ describe('buildAiVaultServiceEnv', () => {
   it('keeps the agent-home variables the scanner discovers sessions through', () => {
     const env = buildAiVaultServiceEnv(
       {
+        CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
         CODEX_HOME: '/home/dev/.codex',
+        CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
         COPILOT_HOME: '/home/dev/.copilot',
         DEVIN_HOME: '/home/dev/.devin',
         GROK_HOME: '/home/dev/.grok',
         KIMI_CODE_HOME: '/home/dev/.kimi-code',
+        KIRO_HOME: '/home/dev/kiro-data',
         OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
         OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
         PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -48,11 +51,14 @@ describe('buildAiVaultServiceEnv', () => {
     )
 
     expect(env).toEqual({
+      CLAUDE_CONFIG_DIR: '/home/dev/claude-home',
       CODEX_HOME: '/home/dev/.codex',
+      CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
       COPILOT_HOME: '/home/dev/.copilot',
       DEVIN_HOME: '/home/dev/.devin',
       GROK_HOME: '/home/dev/.grok',
       KIMI_CODE_HOME: '/home/dev/.kimi-code',
+      KIRO_HOME: '/home/dev/kiro-data',
       OMP_CODING_AGENT_DIR: '/home/dev/.omp/agent/sessions',
       OPENCLAW_STATE_DIR: '/home/dev/.openclaw',
       PI_CODING_AGENT_DIR: '/home/dev/.pi/agent/sessions',
@@ -90,6 +96,12 @@ describe('buildAiVaultServiceEnv', () => {
     expect(env.PATH).toBe('C:\\bin')
   })
 
+  it('passes a relocated AppData through so Devin resolves its Windows data root', () => {
+    const env = buildAiVaultServiceEnv({ AppData: 'D:\\Roaming' }, 'win32')
+
+    expect(env.APPDATA).toBe('D:\\Roaming')
+  })
+
   it('spells SystemRoot the way Windows Node expects', () => {
     expect(buildAiVaultServiceEnv({ SystemRoot: 'C:\\Windows' }, 'win32').SystemRoot).toBe(
       'C:\\Windows'
@@ -105,6 +117,14 @@ describe('buildAiVaultServiceEnv', () => {
 })
 
 describe('buildRelayAiVaultServiceEnv', () => {
+  it('preserves the execution host Kiro home with Windows case folding', () => {
+    expect(buildRelayAiVaultServiceEnv({ KIRO_HOME: '/srv/kiro' }, 'linux')).toEqual({
+      KIRO_HOME: '/srv/kiro'
+    })
+    expect(buildRelayAiVaultServiceEnv({ kiro_home: 'D:\\kiro' }, 'win32')).toEqual({
+      KIRO_HOME: 'D:\\kiro'
+    })
+  })
   it('drops Node flag injection variables', () => {
     const env = buildRelayAiVaultServiceEnv(
       { NODE_OPTIONS: '--max-old-space-size=8192', NODE_PATH: '/tmp/evil', HOME: '/home/ada' },
@@ -130,5 +150,29 @@ describe('buildRelayAiVaultServiceEnv', () => {
 
   it('stays plain Node rather than an Electron child', () => {
     expect(buildRelayAiVaultServiceEnv({}, 'linux').ELECTRON_RUN_AS_NODE).toBeUndefined()
+  })
+})
+
+it('carries OMP root/profile inputs only to the desktop service, retaining empty canonical profile', () => {
+  const roots = {
+    OMP_PROFILE: '',
+    PI_PROFILE: 'work',
+    PI_CONFIG_DIR: '.config/omp',
+    PI_CODING_AGENT_DIR: '/home/dev/custom',
+    XDG_DATA_HOME: '/home/dev/data'
+  }
+  expect(buildAiVaultServiceEnv(roots, 'linux')).toEqual({ ...roots, ELECTRON_RUN_AS_NODE: '1' })
+  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({ XDG_DATA_HOME: '/home/dev/data' })
+})
+
+it('preserves execution-host OpenCode roots in the relay service', () => {
+  expect(
+    buildRelayAiVaultServiceEnv(
+      { XDG_DATA_HOME: '/srv/data', OPENCODE_DB: 'opencode-team.db' },
+      'linux'
+    )
+  ).toEqual({
+    XDG_DATA_HOME: '/srv/data',
+    OPENCODE_DB: 'opencode-team.db'
   })
 })

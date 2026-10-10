@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
 import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery'
-import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
+import { createTestStore, makeLayout, makeTab, makeWorktree } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo-ssh::/work/demo'
 const TAB_ID = 'tab-ssh'
@@ -62,6 +62,48 @@ function seedStore(ptyId: string | null = null) {
 }
 
 describe('direct SSH terminal retry ledger', () => {
+  // The relay-restart shape from tests/e2e/ssh-docker-transport-drop-recovery.spec.ts. The client's
+  // own maps are identical to a transport drop's — a hydrated tab whose leaf map still names the
+  // PTY of a relay generation that no longer exists — so only the host's answer can separate them.
+  describe('relay restart', () => {
+    const DEAD_PTY_ID = 'ssh:target@@pty2:dead-epoch:1'
+
+    function seedHydratedLeafBinding() {
+      const store = seedStore(null)
+      store.setState({
+        terminalLayoutsByTabId: {
+          [TAB_ID]: { ...makeLayout(), ptyIdsByLeafId: { leaf: DEAD_PTY_ID } }
+        },
+        ptyIdsByTabId: { [TAB_ID]: [DEAD_PTY_ID] }
+      })
+      return store
+    }
+
+    it('refuses the respawn while the host has not answered for the id', () => {
+      const store = seedHydratedLeafBinding()
+      expect(store.getState().retryDirectSshTargetPanes(authority())).toBe(0)
+      expect(store.getState().tabsByWorktree[WORKTREE_ID]?.[0]?.generation ?? 0).toBe(0)
+    })
+
+    it('respawns once the relay answers that the id is absent', () => {
+      const store = seedHydratedLeafBinding()
+      store.getState().markPtySourceDisowned(DEAD_PTY_ID)
+      expect(store.getState().disownedPtyIds[DEAD_PTY_ID]).toBe(true)
+      expect(store.getState().retryDirectSshTargetPanes(authority())).toBe(1)
+      expect(store.getState().tabsByWorktree[WORKTREE_ID]?.[0]?.generation ?? 0).toBe(1)
+    })
+
+    it('settles the absence record when a PTY answers to that id again', () => {
+      // A redeployed relay renumbers from pty-1, so a record that outlived its id would let a later
+      // reconnect respawn over a live shell.
+      const store = seedHydratedLeafBinding()
+      store.getState().markPtySourceDisowned(DEAD_PTY_ID)
+      store.getState().updateTabPtyId(TAB_ID, DEAD_PTY_ID)
+      expect(store.getState().disownedPtyIds[DEAD_PTY_ID]).toBeUndefined()
+      expect(store.getState().retryDirectSshTargetPanes(authority())).toBe(0)
+    })
+  })
+
   it('invalidates a non-null binding without current-authority evidence atomically', () => {
     const ptyId = 'ssh:target@@pty-old'
     const store = seedStore(ptyId)

@@ -9,6 +9,7 @@ import type {
 import { isPerAccountManagedCodexHome } from '../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
@@ -18,6 +19,7 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
@@ -27,7 +29,7 @@ const materializations = new Map<string, Promise<void>>()
 export async function prepareLegacySharedCodexSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: {
-    isHostSystemDefaultRealHome: () => boolean
+    isHostSystemDefaultRealHomeSelected: () => boolean
     getSelectedHostAccountCodexHomePath?: () => string | null
     legacyCodexHomePath?: string
     systemCodexHomePath?: string
@@ -45,7 +47,7 @@ export async function prepareLegacySharedCodexSessionResume(
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
     !sameRuntimePath(args.codexHome, legacyCodexHomePath) ||
-    !options.isHostSystemDefaultRealHome()
+    !options.isHostSystemDefaultRealHomeSelected()
   ) {
     return { useRealCodexHome: false }
   }
@@ -84,6 +86,32 @@ export async function prepareLegacySharedCodexSessionResume(
   return { useRealCodexHome: true }
 }
 
+/** Explicit account restarts must move the verified rollout before changing credentials. */
+export async function prepareCodexAccountRestartResume(args: {
+  sourceHome: string
+  transcriptPath: string
+  targetHome: string
+  systemCodexHomePath: string
+}): Promise<string> {
+  if (sameRuntimePath(args.sourceHome, args.targetHome)) {
+    return args.targetHome
+  }
+  const relativePath = relative(
+    resolve(join(args.sourceHome, 'sessions')),
+    resolve(args.transcriptPath)
+  )
+  if (!isDatedRolloutRelativePath(relativePath)) {
+    throw new Error(RETRYABLE_RESUME_ERROR)
+  }
+  const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
+  await materializeLegacyRollout(
+    args.transcriptPath,
+    join(args.targetHome, 'sessions', relativePath),
+    paths.auditLogPath
+  )
+  return args.targetHome
+}
+
 /**
  * Repins a per-account resume to the selected account's home, or null to keep
  * the session's own home.
@@ -103,6 +131,7 @@ async function resolveSelectedAccountCodexHomeForResume(
     args.agent !== 'codex' ||
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
+    parseWslUncPath(args.codexHome) !== null ||
     !isPerAccountManagedCodexHome(args.codexHome)
   ) {
     return null
@@ -120,8 +149,16 @@ async function resolveSelectedAccountCodexHomeForResume(
     const candidateStat = await lstat(candidatePath)
     // Why: the bridge is async, so an unbridged rollout is a real state — decline rather than pin a home codex cannot resume from.
     return candidateStat.isFile() && !candidateStat.isSymbolicLink() ? selectedCodexHome : null
-  } catch {
-    return null
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return null
+    }
+    // Why: a blanket catch here declined the SELECTED account on a briefly
+    // locked file and kept the source per-account home, resuming under another
+    // account's credentials while the UI still showed the selected one. Only a
+    // definitive absence means "not bridged here" (STA-4607).
+    throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
   }
 }
 

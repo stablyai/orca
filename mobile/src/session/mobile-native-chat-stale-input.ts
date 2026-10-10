@@ -1,5 +1,5 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
+import type { MobileNativeChatRpcSender } from './mobile-native-chat-send'
 
 // The condition tracked here — a bracketed image paste left sitting on the agent's
 // unsubmitted input line — lives on the HOST terminal, so it outlives any one
@@ -38,7 +38,7 @@ export function resetMobileNativeChatStaleInputForTests(): void {
  *  leaving the next real message to be corrupted by the paste. The host acks a
  *  write, never a cleared line, so consumption can't be made conditional on it. */
 export async function healMobileNativeChatStaleInput(args: {
-  readonly client: Pick<RpcClient, 'sendRequest'>
+  readonly client: MobileNativeChatRpcSender
   readonly terminal: string
   readonly deviceToken: string | null
   /** Budget shared with the write this heal precedes, so a hung clear can't spend a
@@ -55,6 +55,7 @@ export async function healMobileNativeChatStaleInput(args: {
       terminal: args.terminal,
       deviceToken: args.deviceToken,
       imagePaths: [],
+      followedByText: false,
       ...(args.deadline === undefined ? {} : { deadline: args.deadline })
     })
   } catch {

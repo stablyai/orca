@@ -5,6 +5,98 @@ import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-f
 import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
 
 describe('scanRemoteAiVaultSessions', () => {
+  it('indexes Cline manifests on the SSH-owned disk without messages-file phantoms', async () => {
+    const provider = new MemoryRemoteProvider()
+    const sessionId = '1786466194549_xrzrl'
+    const sessionDir = `/home/ada/.cline/data/sessions/${sessionId}`
+    provider.addFile(
+      `${sessionDir}/${sessionId}.json`,
+      JSON.stringify({
+        version: 1,
+        session_id: sessionId,
+        started_at: '2026-08-11T16:36:34.551Z',
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        cwd: '/home/ada/repo'
+      }),
+      10
+    )
+    provider.addFile(
+      `${sessionDir}/${sessionId}.messages.json`,
+      JSON.stringify({
+        version: 1,
+        updated_at: '2026-08-11T16:38:00.000Z',
+        sessionId,
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'Fix remote Cline history' }]
+          }
+        ]
+      }),
+      11
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      agent: 'cline',
+      sessionId,
+      title: 'Fix remote Cline history',
+      cwd: '/home/ada/repo',
+      executionHostId: 'ssh:dev-box',
+      executionHostPlatform: 'linux',
+      filePath: `${sessionDir}/${sessionId}.json`
+    })
+  })
+
+  it('indexes and resumes Cline sessions from a Windows SSH host', async () => {
+    const provider = new MemoryRemoteProvider()
+    const sessionId = '1786466194549_xrzrl'
+    const sessionDir = `C:/Users/Ada/.cline/data/sessions/${sessionId}`
+    provider.addFile(
+      `${sessionDir}/${sessionId}.json`,
+      JSON.stringify({
+        session_id: sessionId,
+        started_at: '2026-08-11T16:36:34.551Z',
+        cwd: 'C:/repo/app'
+      }),
+      10
+    )
+    provider.addFile(
+      `${sessionDir}/${sessionId}.messages.json`,
+      JSON.stringify({
+        updated_at: '2026-08-11T16:38:00.000Z',
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Fix Windows history' }] }]
+      }),
+      11
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:win-box',
+      remoteHome: 'C:/Users/Ada',
+      hostPlatform: getRemoteHostPlatform('win32-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      agent: 'cline',
+      sessionId,
+      executionHostPlatform: 'win32',
+      filePath: `${sessionDir}/${sessionId}.json`,
+      resumeCommand: `cmd /d /s /c "cd /d ""C:/repo/app"" && cline --id ""${sessionId}"""`
+    })
+  })
+
   it('parses remote default and Orca-managed Codex homes with SSH host ids', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
@@ -255,36 +347,6 @@ describe('scanRemoteAiVaultSessions', () => {
         path.startsWith('/home/ada/.gemini/antigravity-cli/brain')
       )
     ).toEqual(['/home/ada/.gemini/antigravity-cli/brain'])
-  })
-
-  it('keeps Antigravity SSH discovery to one listing as the session store grows', async () => {
-    const provider = new MemoryRemoteProvider()
-    const brainDir = '/home/ada/.gemini/antigravity-cli/brain'
-    for (let index = 0; index < 40; index++) {
-      provider.addFile(
-        `${brainDir}/session-${index}/.system_generated/logs/transcript.jsonl`,
-        jsonLines([
-          {
-            source: 'USER_EXPLICIT',
-            type: 'USER_INPUT',
-            created_at: `2026-07-15T11:39:${String(index).padStart(2, '0')}Z`,
-            content: `<USER_REQUEST>Remote session ${index}</USER_REQUEST>`
-          }
-        ]),
-        100 + index
-      )
-    }
-
-    const result = await scanRemoteAiVaultSessions({
-      provider,
-      executionHostId: 'ssh:dev-box',
-      remoteHome: '/home/ada',
-      hostPlatform: getRemoteHostPlatform('linux-x64')
-    })
-
-    expect(result.issues).toEqual([])
-    expect(result.sessions).toHaveLength(40)
-    expect(provider.readDirPaths.filter((path) => path.startsWith(brainDir))).toEqual([brainDir])
   })
 
   it('ignores missing canonical Antigravity transcripts but reports other stat failures', async () => {

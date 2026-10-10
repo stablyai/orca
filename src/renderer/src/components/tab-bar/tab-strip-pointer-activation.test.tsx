@@ -119,4 +119,42 @@ describe('useTabStripPointerActivation', () => {
 
     expect(onActivate).not.toHaveBeenCalled()
   })
+
+  // Why this is not that flush: an in-page <webview> holding the keyboard leaves the embedder
+  // blurred, so the press on the tab is itself what pulls window focus back. Treating it as an app
+  // switch is what shut the tab strip for anyone reading a browser page or a document preview.
+  it('still activates when the press is what pulled focus back from a guest', () => {
+    const onActivate = vi.fn()
+    const guest = document.createElement('webview')
+    document.body.append(guest)
+    guest.tabIndex = -1
+    guest.focus()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    act(() => window.dispatchEvent(new Event('focus')))
+    firePointer('pointerup', 11, 11)
+
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    guest.remove()
+  })
+
+  // The forgiveness is spent on that one handoff: a press held across a real app switch still
+  // flushes rather than activating whenever the release happens to land.
+  it('flushes a press that outlives the guest handoff it started with', () => {
+    const onActivate = vi.fn()
+    const guest = document.createElement('webview')
+    document.body.append(guest)
+    guest.tabIndex = -1
+    guest.focus()
+    const { result } = renderHook(() => useTabStripPointerActivation({ onActivate }))
+
+    act(() => result.current.onPointerDown(pointerDownEvent(10, 10)))
+    act(() => window.dispatchEvent(new Event('focus')))
+    act(() => window.dispatchEvent(new Event('focus')))
+    firePointer('pointerup', 11, 11)
+
+    expect(onActivate).not.toHaveBeenCalled()
+    guest.remove()
+  })
 })

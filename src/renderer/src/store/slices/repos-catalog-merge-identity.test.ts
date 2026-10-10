@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
-import type { FolderWorkspacePathStatusCacheEntry } from './repos'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { FolderWorkspacePathStatusCacheEntry } from '../repos/repo-state'
 import { createTestStore } from './store-test-helpers'
 
 const projectGroup: ProjectGroup = {

@@ -51,6 +51,14 @@ export class EmulatorSessionRegistry {
     return this.sessions.get(key)
   }
 
+  toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {
+    return toSessionInfo(session)
+  }
+
+  hasActiveWorktreeForSession(key: string): boolean {
+    return [...this.activeByWorktree.values()].some((activeKey) => activeKey === key)
+  }
+
   listSessions(): EmulatorSessionState[] {
     return [...this.sessions.values()]
   }

@@ -12,6 +12,16 @@ export class AiVaultServiceRestartPolicy {
     return this.timer !== null
   }
 
+  /** A forced refresh starts a fresh retry window immediately. */
+  clearCircuit(): void {
+    this.circuitUntil = 0
+    this.faults = []
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+  }
+
   startError(): Error | null {
     return this.now() < this.circuitUntil
       ? new Error('AI Vault service restart circuit is open.')
@@ -33,10 +43,13 @@ export class AiVaultServiceRestartPolicy {
     if (this.timer) {
       clearTimeout(this.timer)
     }
-    this.timer = setTimeout(() => {
-      this.timer = null
-      restart()
-    }, delay)
+    this.timer = setTimeout(
+      () => {
+        this.timer = null
+        restart()
+      },
+      Math.max(delay, this.circuitUntil - now)
+    )
     this.timer.unref?.()
   }
 

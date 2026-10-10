@@ -1,12 +1,13 @@
 import type {
-  GitBranchChangeEntry,
-  GitBranchCompareResult,
-  GitBranchCompareSummary
-} from '../../../src/shared/types'
+  MobileGitBranchChangeEntry,
+  MobileGitBranchCompareReply,
+  MobileGitBranchCompareSummary
+} from './git-compare-reply-schema'
 
-export type MobileGitBranchChangeEntry = GitBranchChangeEntry
-export type MobileGitBranchCompareSummary = GitBranchCompareSummary
-export type MobileGitBranchCompareResult = GitBranchCompareResult
+// The shapes mobile reads off the compare replies are the reply schemas' outputs, not the desktop
+// aggregates: a member with no reader in mobile/ is stripped rather than re-declared here.
+export type { MobileGitBranchChangeEntry, MobileGitBranchCompareSummary }
+export type MobileGitBranchCompareResult = MobileGitBranchCompareReply
 
 export type MobileBranchCompareSection<
   TEntry extends MobileGitBranchChangeEntry = MobileGitBranchChangeEntry
@@ -15,22 +16,20 @@ export type MobileBranchCompareSection<
   data: TEntry[]
 }
 
-function compareBranchEntries(
-  a: MobileGitBranchChangeEntry,
-  b: MobileGitBranchChangeEntry
-): number {
-  return a.path.localeCompare(b.path, undefined, { numeric: true })
-}
-
 export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchChangeEntry>(
   entries: readonly TEntry[]
 ): MobileBranchCompareSection<TEntry> | null {
   if (entries.length === 0) {
     return null
   }
+  const data = [...entries]
+  if (data.length > 1) {
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    data.sort((a, b) => collator.compare(a.path, b.path))
+  }
   return {
     title: 'Committed on Branch',
-    data: [...entries].sort(compareBranchEntries)
+    data
   }
 }
 

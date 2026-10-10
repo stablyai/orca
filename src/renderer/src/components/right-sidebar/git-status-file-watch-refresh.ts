@@ -7,11 +7,11 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../../../shared/cross-platform-path'
+import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type {
   ActiveRightSidebarTab,
-  FsChangedPayload,
   RightSidebarExplorerView
-} from '../../../../shared/types'
+} from '../../../../shared/ui-chrome-types'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,

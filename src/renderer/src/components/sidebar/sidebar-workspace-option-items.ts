@@ -1,4 +1,7 @@
-import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../../shared/types'
+import type {
+  AgentActivityDisplayMode,
+  WorktreeCardProperty
+} from '../../../../shared/ui-chrome-types'
 import { TASK_WORKTREE_CARD_PROPERTIES } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 
@@ -121,6 +124,13 @@ const BASE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
     }
   },
   {
+    id: 'host',
+    properties: ['host'],
+    get label() {
+      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host')
+    }
+  },
+  {
     id: 'branch',
     properties: ['branch'],
     get label() {
@@ -209,8 +219,6 @@ export function getWorktreeCardPropertyOptions({
     branchOption
   ]
 }
-
-export const WORKTREE_CARD_PROPERTY_OPTIONS = getWorktreeCardPropertyOptions()
 
 export const SORT_OPTIONS = [
   {

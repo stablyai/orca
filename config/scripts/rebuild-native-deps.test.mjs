@@ -1,23 +1,17 @@
-import { spawnSync } from 'node:child_process'
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 
-const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.mjs', import.meta.url))
-const sourceInstallScriptPath = fileURLToPath(
-  new URL('./install-electron-package-binary.mjs', import.meta.url)
-)
+import {
+  mkTempProject,
+  runRebuildScript,
+  writeFakeElectronExtractor,
+  writeFakeElectronGet,
+  writeFakeElectronPackage,
+  writeFakeElectronRebuild,
+  writeFakeUsableElectronPackage
+} from './rebuild-native-deps-test-fixtures.mjs'
 
 describe('rebuild-native-deps Electron install fallback', () => {
   it('continues non-strict postinstall when Electron retry download fails', () => {
@@ -26,7 +20,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
     try {
       writeFakeElectronPackage(projectDir)
       writeFakeElectronGet(projectDir, { downloadRejects: true })
-      writeFakeExtractZip(projectDir, { createExecutable: false })
+      writeFakeElectronExtractor(projectDir, { createExecutable: false })
       writeFakeElectronRebuild(projectDir)
 
       const result = runRebuildScript(projectDir, {
@@ -43,7 +37,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'download attempted\n'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -53,7 +47,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
     try {
       writeFakeElectronPackage(projectDir)
       writeFakeElectronGet(projectDir, { downloadRejects: true })
-      writeFakeExtractZip(projectDir, { createExecutable: false })
+      writeFakeElectronExtractor(projectDir, { createExecutable: false })
       writeFakeElectronRebuild(projectDir)
 
       const result = runRebuildScript(projectDir, {
@@ -67,7 +61,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'Continuing postinstall because Electron binary installation failed'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -77,7 +71,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
     try {
       writeFakeElectronPackage(projectDir)
       writeFakeElectronGet(projectDir, { downloadRejects: true })
-      writeFakeExtractZip(projectDir, { createExecutable: false })
+      writeFakeElectronExtractor(projectDir, { createExecutable: false })
       writeFakeElectronRebuild(projectDir)
 
       const result = runRebuildScript(projectDir)
@@ -88,17 +82,17 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'Continuing postinstall because Electron binary installation failed'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
-  it('clears partial Electron package contents before retrying install', () => {
+  it('preserves partial Electron package contents while retrying install', () => {
     const projectDir = mkTempProject()
 
     try {
       writeFakeElectronPackage(projectDir)
       writeFakeElectronGet(projectDir, { logPartialStateBeforeInstall: true })
-      writeFakeExtractZip(projectDir, { createExecutable: false })
+      writeFakeElectronExtractor(projectDir, { createExecutable: false })
       writeFakeElectronRebuild(projectDir)
       mkdirSync(join(projectDir, 'node_modules', 'electron', 'dist', 'locales'), {
         recursive: true
@@ -115,419 +109,129 @@ describe('rebuild-native-deps Electron install fallback', () => {
 
       expect(result.status).toBe(1)
       expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toBe(
-        'partial cleared\ndownload attempted\n'
+        'partial still present\ndownload attempted\n'
+      )
+      expect(existsSync(join(projectDir, 'node_modules/electron/dist/locales/stale.pak'))).toBe(
+        true
+      )
+      expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
+        'stale-path'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
-})
 
-describe('rebuild-native-deps patched node-pty rebuild', () => {
-  it.skipIf(process.platform !== 'win32')(
-    'repairs a missing ConPTY runtime before probing without recompiling node-pty',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
-        writeFakeWindowsRegistry(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: process.arch
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Restored node-pty ConPTY runtime files')
-        expect(result.stdout).toContain(
-          'Native modules already load in Electron; skipping rebuild.'
-        )
-        expect(existsSync(rebuildLogPath)).toBe(false)
-      } finally {
-        rmSync(projectDir, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it('restores the ConPTY runtime payload after a Windows Electron rebuild', () => {
+  it('passes the rebuild target to the Electron binary installer', () => {
     const projectDir = mkTempProject()
 
     try {
-      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir, { logTargetBeforeInstall: true })
+      writeFakeElectronExtractor(projectDir, { createExecutable: true })
       writeFakeElectronRebuild(projectDir)
-      writeFakeNodePtyConptyPayload(projectDir, 'x64')
 
       const result = runRebuildScript(
         projectDir,
-        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
-        ['--platform=win32', '--arch=x64', '--force']
+        { npm_config_platform: '', npm_config_arch: '' },
+        ['--platform=linux', '--arch=arm64', '--force']
       )
 
       expect(result.status, result.stderr).toBe(0)
-      expect(result.stdout).toContain('Restored node-pty ConPTY runtime files for win10-x64')
-      const runtimeDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release', 'conpty')
-      expect(readFileSync(join(runtimeDir, 'conpty.dll'), 'utf8')).toBe('conpty.dll x64')
-      expect(readFileSync(join(runtimeDir, 'OpenConsole.exe'), 'utf8')).toBe('OpenConsole.exe x64')
+      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toBe(
+        'platform=linux arch=arm64\ndownload attempted\n'
+      )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
-  it.skipIf(process.platform !== 'win32')(
-    'does not rebuild a healthy node-pty when another Windows addon fails its probe',
-    () => {
-      const projectDir = mkTempProject()
+  it('lets an explicit rebuild target win over inherited installer variables', () => {
+    const projectDir = mkTempProject()
 
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir)
-        writeFakeNodePtyConptyPayload(projectDir, process.arch)
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'linux' })
+      writeFakeElectronGet(projectDir, { logTargetBeforeInstall: true })
+      writeFakeElectronRebuild(projectDir)
 
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
-          npm_config_platform: 'win32',
-          npm_config_arch: process.arch
-        })
+      const result = runRebuildScript(
+        projectDir,
+        { ELECTRON_INSTALL_PLATFORM: 'win32', ELECTRON_INSTALL_ARCH: 'arm64' },
+        ['--platform=linux', '--arch=x64', '--force']
+      )
 
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: windows-native-registry')
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['windows-native-registry'])
-      } finally {
-        rmSync(projectDir, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'rebuilds when Electron can load node-pty but patched build artifacts are missing',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir)
-        writeNodePtyPatchFile(projectDir)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain(
-          'Patched node-pty build artifacts are missing; rebuilding from source.'
-        )
-
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
-        expect(rebuildCall.ignoreModules).toEqual(['cpu-features'])
-        expect(rebuildCall.force).toBe(true)
-      } finally {
-        rmSync(projectDir, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'keeps the Electron load-probe fast path once patched node-pty artifacts exist',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
-        writeNodePtyPatchFile(projectDir)
-        writePatchedNodePtyBuildArtifacts(projectDir)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain(
-          'Native modules already load in Electron; skipping rebuild.'
-        )
-        expect(existsSync(rebuildLogPath)).toBe(false)
-      } finally {
-        rmSync(projectDir, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'rebuilds when patched artifacts exist but Electron falls back to node-pty prebuilds',
-    () => {
-      const projectDir = mkTempProject()
-
-      try {
-        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
-        writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../prebuilds/darwin-arm64/' })
-        writeNodePtyPatchFile(projectDir)
-        writePatchedNodePtyBuildArtifacts(projectDir)
-
-        const result = runRebuildScript(projectDir, {
-          ORCA_REBUILD_TEST_LOG: rebuildLogPath
-        })
-
-        expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: node-pty')
-        expect(result.stdout).toContain("expected build/Release so Orca's node-pty patch is active")
-
-        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
-        expect(rebuildCall.force).toBe(true)
-      } finally {
-        rmSync(projectDir, { recursive: true, force: true })
-      }
-    }
-  )
-})
-
-function mkTempProject() {
-  const projectDir = mkdtempSync(join(tmpdir(), 'orca-rebuild-native-deps-'))
-  mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
-  copyFileSync(sourceScriptPath, join(projectDir, 'config', 'scripts', 'rebuild-native-deps.mjs'))
-  copyFileSync(
-    sourceInstallScriptPath,
-    join(projectDir, 'config', 'scripts', 'install-electron-package-binary.mjs')
-  )
-  return projectDir
-}
-
-function runRebuildScript(projectDir, extraEnv = {}, args = []) {
-  const env = {
-    ...process.env,
-    npm_config_platform: 'linux',
-    npm_config_arch: 'x64'
-  }
-  for (const key of Object.keys(env)) {
-    if (
-      key.toLowerCase() === 'orca_strict_electron_install' ||
-      key.toLowerCase() === 'npm_lifecycle_event'
-    ) {
-      delete env[key]
-    }
-  }
-  return spawnSync(process.execPath, ['config/scripts/rebuild-native-deps.mjs', ...args], {
-    cwd: projectDir,
-    encoding: 'utf8',
-    env: {
-      ...env,
-      ...extraEnv
+      expect(result.status, result.stderr).toBe(0)
+      expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
+    } finally {
+      removeTreeSync(projectDir)
     }
   })
-}
 
-function writeFakeElectronPackage(projectDir) {
-  const electronDir = join(projectDir, 'node_modules', 'electron')
-  mkdirSync(electronDir, { recursive: true })
-  writeFileSync(
-    join(electronDir, 'package.json'),
-    JSON.stringify({ name: 'electron', version: '41.5.0' })
-  )
-  writeFileSync(join(electronDir, 'checksums.json'), '{}')
-  writeFileSync(
-    join(electronDir, 'index.js'),
-    `
-const fs = require('node:fs')
-const path = require('node:path')
-const pathFile = path.join(__dirname, 'path.txt')
-if (!fs.existsSync(pathFile)) {
-  throw new Error('Electron failed to install correctly, please delete node_modules/electron and try installing again')
-}
-const electronPath = path.join(__dirname, 'dist', fs.readFileSync(pathFile, 'utf8'))
-if (!fs.existsSync(electronPath)) {
-  throw new Error('Electron failed to install correctly, please delete node_modules/electron and try installing again')
-}
-module.exports = electronPath
-`
-  )
-}
+  it('installs the inherited installer target when no rebuild target is passed', () => {
+    const projectDir = mkTempProject()
 
-function writeFakeElectronGet(
-  projectDir,
-  { downloadRejects = false, logPartialStateBeforeInstall = false } = {}
-) {
-  const getDir = join(projectDir, 'node_modules', 'electron', 'node_modules', '@electron', 'get')
-  mkdirSync(getDir, { recursive: true })
-  writeFileSync(
-    join(getDir, 'index.js'),
-    `
-const { appendFileSync, existsSync, mkdirSync, writeFileSync } = require('node:fs')
-const { join } = require('node:path')
-exports.downloadArtifact = async function downloadArtifact(details) {
-  if (${JSON.stringify(logPartialStateBeforeInstall)}) {
-    appendFileSync(
-      'electron-get.log',
-      existsSync('node_modules/electron/dist') || existsSync('node_modules/electron/path.txt')
-        ? 'partial still present\\n'
-        : 'partial cleared\\n'
-    )
-  }
-  appendFileSync('electron-get.log', 'download attempted\\n')
-  if (${JSON.stringify(downloadRejects)}) {
-    throw new Error('download failed')
-  }
-  mkdirSync(details.cacheRoot, { recursive: true })
-  const artifactPath = join(details.cacheRoot, 'electron.zip')
-  writeFileSync(artifactPath, 'fake zip')
-  return artifactPath
-}
-`
-  )
-}
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir, { logTargetBeforeInstall: true })
+      writeFakeElectronExtractor(projectDir, { createExecutable: true })
+      writeFakeElectronRebuild(projectDir)
 
-function writeFakeExtractZip(projectDir, { createExecutable }) {
-  const extractDir = join(projectDir, 'node_modules', 'electron', 'node_modules', 'extract-zip')
-  mkdirSync(extractDir, { recursive: true })
-  writeFileSync(
-    join(extractDir, 'index.js'),
-    `
-const { mkdirSync, writeFileSync } = require('node:fs')
-const { join } = require('node:path')
-module.exports = async function extract(_zipPath, options) {
-  mkdirSync(join(options.dir, 'locales'), { recursive: true })
-  if (${JSON.stringify(createExecutable)}) {
-    writeFileSync(join(options.dir, 'electron'), '')
-    writeFileSync(join(options.dir, 'version'), 'v41.5.0')
-  }
-}
-`
-  )
-  chmodSync(join(extractDir, 'index.js'), 0o755)
-}
+      const result = runRebuildScript(projectDir, {
+        ELECTRON_INSTALL_PLATFORM: 'win32',
+        ELECTRON_INSTALL_ARCH: 'arm64'
+      })
 
-function writeFakeElectronRebuild(projectDir, { logPathEnv = null } = {}) {
-  const rebuildDir = join(projectDir, 'node_modules', '@electron', 'rebuild')
-  mkdirSync(rebuildDir, { recursive: true })
-  writeFileSync(join(rebuildDir, 'package.json'), JSON.stringify({ type: 'module' }))
-  writeFileSync(
-    join(rebuildDir, 'index.js'),
-    logPathEnv
-      ? `
-import { appendFileSync } from 'node:fs'
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain(
+        'platform=win32 arch=arm64'
+      )
+      expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
+        'electron.exe'
+      )
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
 
-export async function rebuild(options) {
-  const logPath = process.env[${JSON.stringify(logPathEnv)}]
-  if (!logPath) {
-    return
-  }
-  appendFileSync(
-    logPath,
-    JSON.stringify({
-      arch: options.arch,
-      electronVersion: options.electronVersion,
-      force: options.force,
-      ignoreModules: options.ignoreModules,
-      onlyModules: options.onlyModules,
-      platform: options.platform
-    }) + '\\n'
-  )
-}
-`
-      : 'export async function rebuild() {}\n'
-  )
-}
+  it('falls back to npm config when no rebuild or installer target is set', () => {
+    const projectDir = mkTempProject()
 
-function writeFakeUsableElectronPackage(projectDir, { platform = 'linux' } = {}) {
-  writeFakeElectronPackage(projectDir)
-  const electronDir = join(projectDir, 'node_modules', 'electron')
-  const platformExecutable = platform === 'win32' ? 'electron.exe' : 'electron'
-  const electronPath = join(electronDir, 'dist', platformExecutable)
-  mkdirSync(join(electronDir, 'dist'), { recursive: true })
-  writeFileSync(join(electronDir, 'path.txt'), platformExecutable)
-  writeFileSync(join(electronDir, 'dist', 'version'), 'v41.5.0')
-  if (platform === 'win32') {
-    copyFileSync(process.execPath, electronPath)
-  } else {
-    writeFileSync(
-      electronPath,
-      `#!/usr/bin/env node
-const { spawnSync } = require('node:child_process')
+    try {
+      writeFakeElectronPackage(projectDir)
+      writeFakeElectronGet(projectDir, { logTargetBeforeInstall: true })
+      writeFakeElectronExtractor(projectDir, { createExecutable: true })
+      writeFakeElectronRebuild(projectDir)
 
-const result = spawnSync(process.execPath, process.argv.slice(2), {
-  cwd: process.cwd(),
-  env: process.env,
-  stdio: 'inherit'
+      // runRebuildScript defaults npm_config_platform=linux / npm_config_arch=x64.
+      const result = runRebuildScript(projectDir)
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toContain(
+        'platform=linux arch=x64'
+      )
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
+  it('repairs existing Electron path metadata without invoking the installer', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir)
+      writeFakeElectronRebuild(projectDir)
+      rmSync(join(projectDir, 'node_modules/electron/path.txt'))
+
+      const result = runRebuildScript(projectDir, {}, ['--platform=linux', '--force'])
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(readFileSync(join(projectDir, 'node_modules/electron/path.txt'), 'utf8')).toBe(
+        'electron'
+      )
+      expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
+      expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
 })
-
-if (result.error) {
-  console.error(result.error.message)
-  process.exit(1)
-}
-
-process.exit(result.status ?? 0)
-`
-    )
-    chmodSync(electronPath, 0o755)
-  }
-}
-
-function writeFakeNodePtyConptyPayload(projectDir, arch) {
-  const releaseDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
-  mkdirSync(releaseDir, { recursive: true })
-  writeFileSync(join(releaseDir, 'conpty.node'), 'native addon')
-  const sourceDir = join(
-    projectDir,
-    'node_modules',
-    'node-pty',
-    'third_party',
-    'conpty',
-    '0.1.0',
-    `win10-${arch}`
-  )
-  mkdirSync(sourceDir, { recursive: true })
-  writeFileSync(join(sourceDir, 'conpty.dll'), `conpty.dll ${arch}`)
-  writeFileSync(join(sourceDir, 'OpenConsole.exe'), `OpenConsole.exe ${arch}`)
-}
-
-function writeFakeLoadableNodePty(projectDir, { nativeDir = 'prebuilds/pty' } = {}) {
-  const nodePtyDir = join(projectDir, 'node_modules', 'node-pty')
-  mkdirSync(join(nodePtyDir, 'lib'), { recursive: true })
-  writeFileSync(join(nodePtyDir, 'index.js'), 'module.exports = {}\n')
-  writeFileSync(
-    join(nodePtyDir, 'lib', 'utils.js'),
-    `
-exports.loadNativeModule = function loadNativeModule(nativeName) {
-  return { dir: ${JSON.stringify(nativeDir)}, module: { nativeName } }
-}
-`
-  )
-}
-
-function writeFakeWindowsRegistry(projectDir) {
-  const registryDir = join(projectDir, 'node_modules', 'windows-native-registry')
-  mkdirSync(registryDir, { recursive: true })
-  writeFileSync(
-    join(registryDir, 'index.js'),
-    'exports.HK = { CU: 0x80000001 }; exports.getRegistryKey = () => ({})\n'
-  )
-}
-
-function writeNodePtyPatchFile(projectDir) {
-  mkdirSync(join(projectDir, 'config', 'patches'), { recursive: true })
-  writeFileSync(join(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch'), 'patch marker\n')
-}
-
-function writePatchedNodePtyBuildArtifacts(projectDir) {
-  const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
-  mkdirSync(buildDir, { recursive: true })
-  writeFileSync(join(buildDir, 'pty.node'), '')
-  if (process.platform === 'darwin') {
-    writeFileSync(join(buildDir, 'spawn-helper'), '')
-  }
-}

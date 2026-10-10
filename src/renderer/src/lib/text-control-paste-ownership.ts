@@ -30,6 +30,11 @@ export function findOwnedTextControlPasteTarget(
   if (!(activeElement instanceof Element)) {
     return null
   }
+  // xterm focuses a hidden helper textarea; it is terminal input, not a native
+  // text-control target for app-menu or large-paste ownership.
+  if (activeElement.closest('.xterm-helper-textarea')) {
+    return null
+  }
   const textControl = activeElement.closest('input, textarea')
   if (!textControl || !isPrimarySelectionTextControl(textControl)) {
     return null

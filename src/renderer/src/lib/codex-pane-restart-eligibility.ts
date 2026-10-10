@@ -3,8 +3,9 @@ import {
   recognizeAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
+import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
 
 function normalizeProcessName(processName: string | null): string | null {
   if (!processName) {
@@ -44,10 +45,10 @@ export function isCodexRestartEligiblePane(args: {
   inspection: RuntimeTerminalProcessInspection
   launchAgent: TuiAgent | undefined
 }): boolean {
-  const { foregroundProcess, hasChildProcesses, unavailable } = args.inspection
-  if (unavailable === true) {
+  if (isClientOnlyUnverifiableInspection(args.inspection)) {
     return false
   }
+  const { foregroundProcess, hasChildProcesses } = args.inspection
   if (isCodexForegroundProcess(foregroundProcess)) {
     return true
   }

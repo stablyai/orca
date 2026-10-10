@@ -10,6 +10,41 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('relay branchCompare', () => {
+  it.each([40, 64])(
+    'skips change and count reads for identical %i-character commit tips',
+    async (length) => {
+      const oid = 'a'.repeat(length)
+      const git = vi.fn<GitExec>(async (args) => {
+        if (args[0] === 'branch') {
+          return { stdout: 'feature\n', stderr: '' }
+        }
+        if (['rev-parse', 'merge-base'].includes(args[0] ?? '')) {
+          return { stdout: `${oid}\n`, stderr: '' }
+        }
+        throw new Error(`Unexpected git command: ${args.join(' ')}`)
+      })
+      const loadBranchChanges = vi.fn(async () => [])
+
+      await expect(branchCompare(git, '/repo', 'main', loadBranchChanges)).resolves.toEqual({
+        summary: {
+          baseRef: 'main',
+          baseOid: oid,
+          compareRef: 'feature',
+          headOid: oid,
+          mergeBase: oid,
+          changedFiles: 0,
+          commitsAhead: 0,
+          commitsBehind: 0,
+          status: 'ready'
+        },
+        entries: []
+      })
+      expect(git.mock.calls.some(([args]) => args[0] === 'merge-base')).toBe(true)
+      expect(loadBranchChanges).not.toHaveBeenCalled()
+      expect(git.mock.calls.some(([args]) => args[0] === 'rev-list')).toBe(false)
+    }
+  )
+
   it('launches independent Git reads before waiting for any result', async () => {
     const branch = deferred<{ stdout: string; stderr: string }>()
     const head = deferred<{ stdout: string; stderr: string }>()
@@ -29,7 +64,7 @@ describe('relay branchCompare', () => {
         return Promise.resolve({ stdout: 'merge-base\n', stderr: '' })
       }
       if (args[0] === 'rev-list') {
-        return Promise.resolve({ stdout: '1\n', stderr: '' })
+        return Promise.resolve({ stdout: '2\t1\n', stderr: '' })
       }
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
@@ -52,7 +87,13 @@ describe('relay branchCompare', () => {
     changes.resolve([{ path: 'file.ts' }])
 
     await expect(pending).resolves.toMatchObject({
-      summary: { compareRef: 'feature', changedFiles: 1, commitsAhead: 1, status: 'ready' }
+      summary: {
+        compareRef: 'feature',
+        changedFiles: 1,
+        commitsAhead: 1,
+        commitsBehind: 2,
+        status: 'ready'
+      }
     })
   })
 })

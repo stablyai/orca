@@ -6,7 +6,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
-import type { GlobalSettings } from '../../src/shared/types'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
 
 const QUESTION = 'Tabs or spaces?'
 
@@ -139,7 +139,13 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
 
       // The pre-fix build leaves the composer mounted here and never renders a
       // card, so this assertion is what actually gates the regression.
-      await expect(orcaPage.getByText(QUESTION)).toBeVisible({ timeout: 10_000 })
+      // Why (#20724): the transcript row renders the pending question in an
+      // awaiting-input row as well as the card, so gate on the card's own
+      // title node instead of any text match.
+      const cardQuestion = orcaPage
+        .getByTestId('native-chat-question-card-title')
+        .filter({ hasText: QUESTION })
+      await expect(cardQuestion).toBeVisible({ timeout: 10_000 })
       await expect(orcaPage.getByRole('button', { name: /Spaces/ })).toBeVisible()
       await orcaPage.screenshot({ path: path.join(screenshotDir, '01-question-card.png') })
 
@@ -151,8 +157,10 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
 
       await orcaPage.getByRole('button', { name: 'Submit' }).click()
       // The card owns the composer slot, so its disappearance is the visible
-      // signal that the answer was accepted and chat input came back.
-      await expect(orcaPage.getByText(QUESTION)).toHaveCount(0, { timeout: 20_000 })
+      // signal that the answer was accepted and chat input came back. The
+      // resolution receipt keeps the question in the transcript row, so only
+      // the card paragraph is expected to leave.
+      await expect(cardQuestion).toHaveCount(0, { timeout: 20_000 })
       await orcaPage.screenshot({ path: path.join(screenshotDir, '03-answered.png') })
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })

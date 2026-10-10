@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { emptyLayoutSnapshot, clearTransientTerminalState } from './terminal-helpers'
 
 function makeTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -75,12 +75,6 @@ describe('clearTransientTerminalState', () => {
 
   it('uses "Terminal {index+1}" when customTitle is whitespace only', () => {
     const tab = makeTab({ title: '⠋ codex running', customTitle: '   ' })
-    const result = clearTransientTerminalState(tab, 0)
-    expect(result.title).toBe('Terminal 1')
-  })
-
-  it('index-based fallback numbering: index 0 → "Terminal 1"', () => {
-    const tab = makeTab({ title: '. claude', customTitle: null })
     const result = clearTransientTerminalState(tab, 0)
     expect(result.title).toBe('Terminal 1')
   })

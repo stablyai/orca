@@ -95,9 +95,8 @@ test.describe('Workspace Back/Forward Navigation', () => {
     await expect(await getBackButton(orcaPage)).toBeVisible()
     await expect(await getForwardButton(orcaPage)).toBeVisible()
 
-    // Why: the Back/Forward pair is conditional on `activeView === 'terminal'`.
-    // Settings, Tasks, and Landing must not render the buttons at all (not just
-    // disable them) so the titlebar stays compact and the semantics unambiguous.
+    // Why: Settings and other views outside the navigation history stack must
+    // not render the buttons at all, rather than merely disabling them.
     await orcaPage.evaluate(() => {
       window.__store!.getState().openSettingsPage()
     })

@@ -8,6 +8,7 @@ import {
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 describe('remote runtime pty reattach after the bounded recovery window', () => {
   const runtimeCall = vi.fn()
@@ -198,7 +199,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
       expect(transport.getRecoveryState?.().phase).not.toBe('disconnected')
 
-      await vi.advanceTimersByTimeAsync(50_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       // The cutoff must not tear down the accepted-snapshot listener; it is the only path back.
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
@@ -227,7 +228,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       const { transport, onError } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
 
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       const listCallsAtCutoff = hostListCalls
 
@@ -277,7 +278,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       const { transport, onError } = await attachStalePane()
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
 
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
       const listCallsAtCutoff = hostListCalls
@@ -310,7 +311,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
 
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       const listCallsAtCutoff = hostListCalls
 
@@ -365,7 +366,7 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
         callbacks: { onError: vi.fn() }
       })
 
-      await vi.advanceTimersByTimeAsync(66_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       const callsBeforeRetry = runtimeCall.mock.calls.length
@@ -373,6 +374,62 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
       expect(retryAllRemoteRuntimePtyRecoveriesNow()).toBe(0)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       expect(runtimeCall.mock.calls.length).toBe(callsBeforeRetry)
+      transport.destroy?.()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // #12683: a fatal resubscribe latches the banner via markDisconnected(), but that latch is not
+  // evidence the auto-recovery window ran out, so it must not license reattaching a fenced handle.
+  it('does not reattach a fenced same handle when only a UI latch closed the window', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-tab-1',
+        leafId: 'pane:1',
+        onPtyExit: vi.fn(),
+        onPtyRebind: vi.fn()
+      })
+      transport.attach({
+        existingPtyId: 'remote:env-1@@terminal-stale',
+        cols: 80,
+        rows: 24,
+        callbacks: { onError: vi.fn() }
+      })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      emitSnapshot(latestSubscribePayload().streamId, 'live before the drop')
+
+      // The host keeps publishing the same handle, so no replacement can ever arrive.
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method !== 'session.tabs.list') {
+          return { ok: true, result: {} }
+        }
+        hostListCalls += 1
+        return { ok: true, result: hostSnapshot('terminal-stale', hostListCalls + 1, 'epoch-1') }
+      })
+      // The stream drops and the resubscribe fails fatally with a stale handle: markDisconnected()
+      // latches the banner, then stale routing fences the handle with require-replacement.
+      // Only that one attempt fails, so a later reattach would succeed and be observable.
+      runtimeSubscribe.mockImplementationOnce(async () => {
+        throw new Error('terminal_handle_stale')
+      })
+      subscriptionCallbacks?.onClose?.()
+      await vi.advanceTimersByTimeAsync(16_000)
+      expect(transport.getRecoveryState?.().phase).not.toBe('idle')
+
+      const subscribesBeforeRepublish = subscribedTerminalHandles().length
+      handleEvents.queueAcceptedWebSessionTerminalSnapshot(
+        hostSnapshot('terminal-stale', 9, 'epoch-2'),
+        'env-1'
+      )
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      // The recovery deadline never fired, so the fenced handle stays fenced.
+      expect(subscribedTerminalHandles()).toHaveLength(subscribesBeforeRepublish)
       transport.destroy?.()
     } finally {
       vi.useRealTimers()

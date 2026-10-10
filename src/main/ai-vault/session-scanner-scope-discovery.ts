@@ -1,13 +1,16 @@
-import { createReadStream } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
 import { createInterface } from 'node:readline'
 import { extname, join } from 'node:path'
 import {
-  isPathInsideOrEqual,
-  normalizeRuntimePathSeparators
-} from '../../shared/cross-platform-path'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+  openTranscriptReadStream,
+  wslGatedReaddir,
+  wslGatedStat
+} from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage, extractString, parseJsonObject } from './session-scanner-values'
 
@@ -15,10 +18,9 @@ import { errorMessage, extractString, parseJsonObject } from './session-scanner-
 // dir's cwd; cap both so a giant or cwd-less transcript can't stall the scan.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
 const REPRESENTATIVE_FILE_LIMIT = 3
-const CLAUDE_EXTENSIONS = new Set(['.jsonl'])
+const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 
-// A Claude project dir encodes exactly one cwd, so a resolved cwd never
-// changes; caching it spares each rescan the transcript-head reads.
+// Bucket encodings are lossy; retain Claude’s cache and verify other transcripts individually.
 const PROJECT_DIR_CWD_CACHE_MAX = 2048
 const projectDirCwdCache = new Map<string, string>()
 
@@ -26,7 +28,24 @@ export function resetProjectDirCwdCacheForTests(): void {
   projectDirCwdCache.clear()
 }
 
-async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
+// A gate refusal is a stalled WSL root, not an empty one: keep the existing
+// degrade-to-empty containment but make the gap visible in the scan issues.
+function recordRefusal(
+  issues: AiVaultScanIssue[],
+  path: string,
+  error: unknown,
+  agent: AiVaultAgent
+): void {
+  if (error instanceof WslTranscriptFsError) {
+    recordSessionScanIssue(issues, { agent, path, message: error.message })
+  }
+}
+
+async function cachedProjectDirCwd(
+  projectDir: string,
+  issues: AiVaultScanIssue[],
+  agent: AiVaultAgent
+): Promise<string | null> {
   const cached = projectDirCwdCache.get(projectDir)
   if (cached !== undefined) {
     // Refresh recency so hot in-scope dirs outlive one-off ones at the cap.
@@ -34,7 +53,7 @@ async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
     projectDirCwdCache.set(projectDir, cached)
     return cached
   }
-  const cwd = await readProjectDirCwd(projectDir)
+  const cwd = await readProjectDirCwd(projectDir, issues, agent)
   if (cwd) {
     if (projectDirCwdCache.size >= PROJECT_DIR_CWD_CACHE_MAX) {
       const oldest = projectDirCwdCache.keys().next()
@@ -47,35 +66,49 @@ async function cachedProjectDirCwd(projectDir: string): Promise<string | null> {
   return cwd
 }
 
-/**
- * Fully include the transcripts of Claude project directories whose cwd falls
- * inside the active workspace/project paths.
- *
- * Why: Claude organizes `~/.claude/projects/<cwd-encoded>/` one directory per
- * cwd. The global scan is recency-capped, so a project the user hasn't touched
- * recently can drop off the list entirely even though `claude --resume` still
- * finds it. For scoped panel views we resolve each project dir's cwd cheaply and
- * bypass the cap for the ones that belong to the active scope.
- */
-export async function discoverInScopeClaudeFiles(args: {
+type InScopeDiscoveryArgs = {
   rootDirs: readonly string[]
   scopePaths: readonly string[]
   limit: number
   excludedFilePaths: ReadonlySet<string>
   issues: AiVaultScanIssue[]
-}): Promise<FileWithMtime[]> {
+}
+
+/**
+ * Fully include the transcripts of cwd-bucket directories (Claude, Pi, CodeBuddy) whose cwd
+ * falls inside the active workspace/project paths.
+ *
+ * Why: these agents keep one directory per cwd, e.g. `~/.claude/projects/<cwd-encoded>/`.
+ * The global scan is recency-capped, so a project the user hasn't touched recently
+ * can drop off the list entirely even though the agent's own resume still finds it.
+ * For scoped panel views we resolve each bucket's cwd cheaply and bypass the cap for
+ * the ones that belong to the active scope.
+ */
+export async function discoverInScopeCwdBucketFiles(
+  layout: CwdBucketLayout,
+  args: InScopeDiscoveryArgs
+): Promise<FileWithMtime[]> {
   if (args.scopePaths.length === 0 || args.limit <= 0) {
     return []
   }
-  const scopeProjectPrefixes = claudeProjectScopePrefixes(args.scopePaths)
+  const scopeProjectPrefixes = cwdBucketScopePrefixes(layout, args.scopePaths)
   const collected = new Map<string, FileWithMtime>()
   for (const rootDir of args.rootDirs) {
-    for (const projectDir of await listProjectDirs(rootDir, scopeProjectPrefixes)) {
-      const cwd = await cachedProjectDirCwd(projectDir)
-      if (!cwd || !args.scopePaths.some((scopePath) => isCwdInsideScopePath(scopePath, cwd))) {
-        continue
+    for (const projectDir of await listProjectDirs(
+      layout,
+      rootDir,
+      scopeProjectPrefixes,
+      args.issues
+    )) {
+      if (layout.agent === 'claude') {
+        const cwd = await cachedProjectDirCwd(projectDir, args.issues, layout.agent)
+        if (!cwd || !args.scopePaths.some((scopePath) => isCwdInsideScopePath(scopePath, cwd))) {
+          continue
+        }
       }
-      await collectClaudeFiles({
+      await collectBucketFiles({
+        agent: layout.agent,
+        scopePaths: layout.agent !== 'claude' ? args.scopePaths : undefined,
         projectDir,
         issues: args.issues,
         collected,
@@ -87,11 +120,14 @@ export async function discoverInScopeClaudeFiles(args: {
   return [...collected.values()].sort((left, right) => right.mtimeMs - left.mtimeMs)
 }
 
-function claudeProjectScopePrefixes(scopePaths: readonly string[]): Set<string> {
+function cwdBucketScopePrefixes(
+  layout: CwdBucketLayout,
+  scopePaths: readonly string[]
+): Set<string> {
   const prefixes = new Set<string>()
   for (const scopePath of scopePaths) {
     for (const candidate of scopePathCandidates(scopePath)) {
-      for (const prefix of encodeClaudeProjectPaths(candidate)) {
+      for (const prefix of layout.encodeScopePrefixes(candidate)) {
         prefixes.add(prefix)
       }
     }
@@ -102,33 +138,6 @@ function claudeProjectScopePrefixes(scopePaths: readonly string[]): Set<string> 
 function scopePathCandidates(scopePath: string): string[] {
   const wslScopePath = parseWslUncPath(scopePath)
   return wslScopePath ? [scopePath, wslScopePath.linuxPath] : [scopePath]
-}
-
-/**
- * Why: Claude derives the directory name from the raw cwd, so encoding from the
- * comparison key would lowercase Windows paths and never match on disk. Encode
- * the raw path, plus its NFC spelling, since macOS hands us NFD (#10832).
- */
-function encodeClaudeProjectPaths(pathValue: string): string[] {
-  const raw = encodeClaudeProjectPath(pathValue)
-  const composed = encodeClaudeProjectPath(pathValue.normalize('NFC'))
-  return raw === composed ? [raw] : [raw, composed]
-}
-
-function encodeClaudeProjectPath(pathValue: string): string {
-  const separated = normalizeRuntimePathSeparators(pathValue)
-  const trimmed =
-    separated === '/' || /^[A-Za-z]:\/$/.test(separated) ? separated : separated.replace(/\/+$/, '')
-  return trimmed.replace(/[^a-zA-Z0-9]/g, '-')
-}
-
-function isClaudeProjectDirInScope(projectDirName: string, scopePrefixes: ReadonlySet<string>) {
-  for (const prefix of scopePrefixes) {
-    if (projectDirName === prefix || projectDirName.startsWith(`${prefix}-`)) {
-      return true
-    }
-  }
-  return false
 }
 
 function isCwdInsideScopePath(scopePath: string, cwd: string): boolean {
@@ -147,26 +156,31 @@ function isCwdInsideScopePath(scopePath: string, cwd: string): boolean {
 }
 
 async function listProjectDirs(
+  layout: CwdBucketLayout,
   rootDir: string,
-  scopeProjectPrefixes: ReadonlySet<string>
+  scopeProjectPrefixes: ReadonlySet<string>,
+  issues: AiVaultScanIssue[]
 ): Promise<string[]> {
   let entries
   try {
-    entries = await readdir(rootDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(rootDir, 'scan')
+  } catch (err) {
+    recordRefusal(issues, rootDir, err, layout.agent)
     return []
   }
   return entries
-    .filter(
-      (entry) => entry.isDirectory() && isClaudeProjectDirInScope(entry.name, scopeProjectPrefixes)
-    )
+    .filter((entry) => entry.isDirectory() && layout.isDirInScope(entry.name, scopeProjectPrefixes))
     .map((entry) => join(rootDir, entry.name))
 }
 
-async function readProjectDirCwd(projectDir: string): Promise<string | null> {
-  const files = await newestClaudeFilesInDir(projectDir)
+async function readProjectDirCwd(
+  projectDir: string,
+  issues: AiVaultScanIssue[],
+  agent: AiVaultAgent
+): Promise<string | null> {
+  const files = await newestTranscriptsInDir(projectDir, issues, agent)
   for (const file of files.slice(0, REPRESENTATIVE_FILE_LIMIT)) {
-    const cwd = await readFirstCwd(file)
+    const cwd = await readFirstCwd(file, issues, agent)
     if (cwd) {
       return cwd
     }
@@ -174,34 +188,44 @@ async function readProjectDirCwd(projectDir: string): Promise<string | null> {
   return null
 }
 
-async function newestClaudeFilesInDir(projectDir: string): Promise<string[]> {
+async function newestTranscriptsInDir(
+  projectDir: string,
+  issues: AiVaultScanIssue[],
+  agent: AiVaultAgent
+): Promise<string[]> {
   let entries
   try {
-    entries = await readdir(projectDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(projectDir, 'scan')
+  } catch (err) {
+    recordRefusal(issues, projectDir, err, agent)
     return []
   }
   const newest: { path: string; mtimeMs: number }[] = []
   for (const entry of entries) {
-    if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+    if (!entry.isFile() || !TRANSCRIPT_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
       continue
     }
     const path = join(projectDir, entry.name)
     try {
       addBoundedPath(newest, REPRESENTATIVE_FILE_LIMIT, {
         path,
-        mtimeMs: (await stat(path)).mtimeMs
+        mtimeMs: (await wslGatedStat(path, 'scan')).mtimeMs
       })
-    } catch {
+    } catch (err) {
       // Best effort: unreadable candidates are ignored here and reported during
       // full collection if the project directory proves in-scope.
+      recordRefusal(issues, path, err, agent)
     }
   }
   return newest.sort((left, right) => right.mtimeMs - left.mtimeMs).map((value) => value.path)
 }
 
-async function readFirstCwd(filePath: string): Promise<string | null> {
-  const input = createReadStream(filePath, { encoding: 'utf-8' })
+async function readFirstCwd(
+  filePath: string,
+  issues: AiVaultScanIssue[],
+  agent: AiVaultAgent
+): Promise<string | null> {
+  const input = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
   let read = 0
   try {
@@ -214,7 +238,8 @@ async function readFirstCwd(filePath: string): Promise<string | null> {
         return cwd
       }
     }
-  } catch {
+  } catch (err) {
+    recordRefusal(issues, filePath, err, agent)
     return null
   } finally {
     // readline.close() leaves the underlying stream open; destroy it so the early
@@ -225,7 +250,9 @@ async function readFirstCwd(filePath: string): Promise<string | null> {
   return null
 }
 
-async function collectClaudeFiles(args: {
+async function collectBucketFiles(args: {
+  agent: AiVaultAgent
+  scopePaths?: readonly string[]
   projectDir: string
   issues: AiVaultScanIssue[]
   collected: Map<string, FileWithMtime>
@@ -234,12 +261,13 @@ async function collectClaudeFiles(args: {
 }): Promise<void> {
   let entries
   try {
-    entries = await readdir(args.projectDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(args.projectDir, 'scan')
+  } catch (err) {
+    recordRefusal(args.issues, args.projectDir, err, args.agent)
     return
   }
   for (const entry of entries) {
-    if (!entry.isFile() || !CLAUDE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+    if (!entry.isFile() || !TRANSCRIPT_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
       continue
     }
     const path = join(args.projectDir, entry.name)
@@ -247,7 +275,13 @@ async function collectClaudeFiles(args: {
       continue
     }
     try {
-      const fileStat = await stat(path)
+      if (args.scopePaths) {
+        const cwd = await readFirstCwd(path, args.issues, args.agent)
+        if (!cwd || !args.scopePaths.some((scope) => isCwdInsideScopePath(scope, cwd))) {
+          continue
+        }
+      }
+      const fileStat = await wslGatedStat(path, 'scan')
       addBoundedFile(args.collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
@@ -255,7 +289,7 @@ async function collectClaudeFiles(args: {
         sizeBytes: fileStat.size
       })
     } catch (err) {
-      args.issues.push({ agent: 'claude', path, message: errorMessage(err) })
+      recordSessionScanIssue(args.issues, { agent: args.agent, path, message: errorMessage(err) })
     }
   }
 }

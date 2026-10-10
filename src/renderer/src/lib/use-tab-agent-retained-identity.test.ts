@@ -7,7 +7,8 @@ import { useAppStore } from '@/store'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AgentStatusEntry, AgentType } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
@@ -15,7 +16,7 @@ const FOCUSED_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const TAB_ID = 'tab-1'
 const WORKTREE_ID = 'wt-1'
-let latestAgent: TuiAgent | null | undefined
+let latestAgent: TerminalAgent | null | undefined
 let root: Root | null = null
 
 const baseTab: TerminalTab = {

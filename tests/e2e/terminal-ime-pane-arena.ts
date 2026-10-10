@@ -1,7 +1,8 @@
-import type { CDPSession, Page, TestInfo } from '@stablyai/playwright-test'
+import { expect, type CDPSession, type Page, type TestInfo } from '@stablyai/playwright-test'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
+  getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
@@ -25,6 +26,16 @@ export async function openTerminalImePaneArena(page: Page): Promise<TerminalImeP
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
   const ptyId = await waitForActivePanePtyId(page)
+  // The PTY binding precedes its initial snapshot replay; wait for the prompt before replacing the
+  // grid directly, otherwise that replay can overwrite the test row after composition starts.
+  await expect
+    .poll(() => getTerminalContent(page), {
+      // Matches the terminal-manager wait above: at default worker counts on a loaded runner
+      // this poll, not the assertion, is what times out first.
+      timeout: 30_000,
+      message: 'Active terminal did not render its initial PTY frame'
+    })
+    .not.toBe('')
   const session = await page.context().newCDPSession(page)
   await focusActiveTerminalInput(page)
   await installTerminalImeBoundaryProbe(page)

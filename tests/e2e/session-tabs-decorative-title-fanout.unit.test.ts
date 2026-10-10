@@ -11,11 +11,10 @@ import {
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS,
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS
 } from '../../src/main/runtime/mobile-session-tabs-agent-status-heartbeat'
-import {
-  applyFreshWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from '../../src/renderer/src/runtime/web-session-tabs-sync'
+import { applyFreshWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
+import { makeAgentStatusStoreWiring } from '../../src/main/runtime/agent-status-store-wiring.test-fixture'
 
 vi.mock('../../src/renderer/src/store', () => ({
   useAppStore: {
@@ -30,7 +29,7 @@ const DECORATIVE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧
 type RuntimeInternals = {
   mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
   ptysById: Map<string, { launchAgent: 'grok-build' | 'pi' | null }>
-  ptyDelayedForegroundSnapshotTitleObservations: Map<string, number>
+  ptyForegroundAgent: { hasDelayedSnapshot: (ptyId: string) => boolean }
   resetTrackedTerminalStateForProviderGeneration: (ptyId: string) => void
 }
 
@@ -429,7 +428,8 @@ describe('real PTY decorative session-tabs fanout', () => {
       agent: 'pi' as const,
       firstTitle: '⠋ π - project',
       heartbeatTitles: ['⠋ π - project', '⠙ π - project'],
-      expectedTitle: '⠋ Pi'
+      // Why: the π brand swaps for the owner label in place; session text survives.
+      expectedTitle: '⠋ Pi - project'
     },
     {
       agent: 'grok-build' as const,
@@ -486,11 +486,11 @@ describe('real PTY decorative session-tabs fanout', () => {
 
     expect(publications).toHaveLength(2)
     expect(
-      publications.every((snapshot) => {
+      publications.map((snapshot) => {
         const terminal = snapshot.tabs[0]
-        return terminal?.type === 'terminal' && terminal.title === testCase.expectedTitle
+        return terminal?.type === 'terminal' ? terminal.title : null
       })
-    ).toBe(true)
+    ).toEqual([testCase.expectedTitle, testCase.expectedTitle])
     const finalTerminal = publications.at(-1)?.tabs[0]
     const finalAgentStatus =
       finalTerminal?.type === 'terminal' ? finalTerminal.agentStatus : undefined
@@ -679,16 +679,18 @@ describe('real PTY decorative session-tabs fanout', () => {
 
     runtime.onPtyData(ptyId, '\x1b]0;⠋ Pi\x07', Date.now())
     await vi.advanceTimersByTimeAsync(0)
-    expect(internals.ptyDelayedForegroundSnapshotTitleObservations.has(ptyId)).toBe(true)
+    expect(internals.ptyForegroundAgent.hasDelayedSnapshot(ptyId)).toBe(true)
 
     internals.resetTrackedTerminalStateForProviderGeneration(ptyId)
-    expect(internals.ptyDelayedForegroundSnapshotTitleObservations.has(ptyId)).toBe(false)
+    expect(internals.ptyForegroundAgent.hasDelayedSnapshot(ptyId)).toBe(false)
     resolveForegroundProcess(null)
     await vi.advanceTimersByTimeAsync(0)
   })
 
   it('renews retained hook status without resetting its state start', () => {
-    const runtime = new OrcaRuntimeService()
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = new OrcaRuntimeService(null, undefined, statusWiring.deps)
+    const uninstallStatusRepublish = statusWiring.attach(runtime)
     const ptyId = seedWorktree(runtime, 0)
     const internals = runtime as unknown as RuntimeInternals
     const seededTab = internals.mobileSessionTabsByWorktree.get('workspace-0')?.tabs[0]
@@ -768,5 +770,7 @@ describe('real PTY decorative session-tabs fanout', () => {
       true
     )
     unsubscribe()
+    uninstallStatusRepublish()
+    statusWiring.statusStore.stop()
   })
 })

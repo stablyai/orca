@@ -1,5 +1,6 @@
+import { sessionTabsListRead } from './mobile-session-read-operations'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 
 export type SessionTabsApplyOutcome<Tab> =
   | { accepted: false }
@@ -19,6 +20,7 @@ type RequestOwner = {
 type RequestCohort = {
   promise: Promise<void>
   resolve: () => void
+  retry: boolean
 }
 
 type ControllerOptions<Result, Tab> = {
@@ -31,6 +33,7 @@ type ControllerOptions<Result, Tab> = {
     source: SessionTabsStreamSource
   ) => void
   hasRecoveryNeed: () => boolean
+  allowRecoveryPoll?: () => boolean
   getApplicationRevision?: () => number
   onFetchStarted?: () => void
   onFetchSucceeded?: (result: Result) => void
@@ -42,8 +45,6 @@ type StreamSubscription = {
   listener: (payload: unknown) => void
   cancel: () => void
 }
-
-type GenerationClient = RpcClient & { getGeneration?: () => number }
 
 export class MobileSessionTabsStreamHealth<Result, Tab> {
   private readonly inFlight = new Map<string, RequestCohort>()
@@ -84,15 +85,34 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
     return this.requestReconciliation()
   }
 
+  retryReconciliation(): Promise<void> {
+    this.syncGeneration()
+    const currentRequest = this.inFlight.get(`${this.generation}:${this.barrier}`)
+    if (currentRequest?.retry) {
+      return currentRequest.promise
+    }
+    this.requirementRevision += 1
+    this.barrier += currentRequest ? 1 : 0
+    return this.startCurrentRequest(true)
+  }
+
   poll(): Promise<void> | null {
     this.syncGeneration()
-    if (
-      !this.reconciliationActive ||
-      (this.health === 'live' &&
-        !this.options.hasRecoveryNeed() &&
-        this.requirementRevision <= this.satisfiedRevision)
-    ) {
+    if (!this.reconciliationActive) {
       return null
+    }
+    const recoveryNeeded = this.options.hasRecoveryNeed()
+    if (this.health === 'live') {
+      if (!recoveryNeeded && this.requirementRevision <= this.satisfiedRevision) {
+        return null
+      }
+      const currentRequest = this.inFlight.get(`${this.generation}:${this.barrier}`)
+      if (currentRequest) {
+        return currentRequest.promise
+      }
+      if (recoveryNeeded && this.options.allowRecoveryPoll?.() === false) {
+        return null
+      }
     }
     return this.ensureReconciliation()
   }
@@ -186,7 +206,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
     this.requirementRevision += 1
   }
 
-  private startCurrentRequest(): Promise<void> {
+  private startCurrentRequest(retry = false): Promise<void> {
     if (this.disposed || !this.reconciliationActive) {
       return Promise.resolve()
     }
@@ -199,7 +219,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
     const promise = new Promise<void>((resolve) => {
       resolveRequest = resolve
     })
-    const cohort = { promise, resolve: resolveRequest }
+    const cohort = { promise, resolve: resolveRequest, retry }
     this.inFlight.set(key, cohort)
     this.runCohortRequest(key, cohort)
     return promise
@@ -234,7 +254,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
   private async runRequest(owner: RequestOwner): Promise<boolean> {
     try {
       this.options.onFetchStarted?.()
-      const response = await this.options.client.sendRequest('session.tabs.list', {
+      const response = await sessionTabsListRead.request(this.options.client, {
         worktree: this.options.scope
       })
       if (!this.isCurrentGeneration(owner.generation)) {
@@ -246,7 +266,8 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
         }
         return false
       }
-      const result = (response as RpcSuccess).result as Result
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the snapshot's shape is the owner's type parameter, which no module-level reader can name.
+      const result = sessionTabsListRead.interpret(response) as Result
       if (owner.barrier !== this.barrier) {
         return false
       }
@@ -299,7 +320,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
   }
 
   private readGeneration(): number {
-    return (this.options.client as GenerationClient).getGeneration?.() ?? 0
+    return this.options.client.getGeneration?.() ?? 0
   }
 
   private readApplicationRevision(): number {

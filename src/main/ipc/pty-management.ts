@@ -1,5 +1,4 @@
 import { ipcMain } from 'electron'
-import { DaemonPtyRouter } from '../daemon/daemon-pty-router'
 import { DegradedDaemonPtyProvider } from '../daemon/degraded-daemon-pty-provider'
 import type { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
 import {
@@ -7,7 +6,18 @@ import {
   getDaemonProvider,
   restartDaemon
 } from '../daemon/daemon-init'
-import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-health'
+import { getAllDaemonAdapters, getCurrentDaemonAdapter } from '../daemon/daemon-provider-routing'
+import {
+  getDaemonFolderAccessMismatch,
+  refreshDaemonFolderAccessProbe,
+  type DaemonFolderAccessMismatchNotice
+} from '../daemon/daemon-folder-access-mismatch'
+import {
+  resetFolderAccessForDaemon,
+  type DaemonFolderAccessResetResult
+} from '../daemon/daemon-folder-access-reset'
+import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-tcc-attribution'
+import type { DaemonEndpointIdentity } from '../daemon/daemon-hello-protocol'
 import type { DaemonSessionInfo } from '../daemon/types'
 
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
@@ -20,13 +30,7 @@ function sleep(ms: number): Promise<void> {
 
 function getDaemonAdapters(): DaemonPtyAdapter[] {
   const provider = getDaemonProvider()
-  if (!provider) {
-    return []
-  }
-  if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
-    return [...provider.getAllAdapters()]
-  }
-  return [provider]
+  return provider ? [...getAllDaemonAdapters(provider)] : []
 }
 
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
@@ -36,6 +40,13 @@ function isDaemonDegraded(): boolean {
     provider instanceof DegradedDaemonPtyProvider &&
     provider.routesFreshSpawnsToLocalProvider === true
   )
+}
+
+// Why the current adapter only: evidence is keyed to the daemon now spawning terminals, so a
+// legacy adapter's daemon must never satisfy the identity match that keeps the notice up.
+function readCurrentDaemonIdentity(): DaemonEndpointIdentity | null {
+  const provider = getDaemonProvider()
+  return provider ? getCurrentDaemonAdapter(provider).getDaemonIdentity() : null
 }
 
 async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSessionInfo[]> {
@@ -57,15 +68,38 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.removeHandler('pty:management:killOne')
   ipcMain.removeHandler('pty:management:restart')
   ipcMain.removeHandler('pty:management:macTccAttribution')
+  ipcMain.removeHandler('pty:management:resetFolderAccess')
 
-  // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491).
+  // Why: lets Settings warn that macOS privacy grants no longer reach daemon terminals (STA-3491),
+  // and carries the folder-access evidence the notice needs (STA-7948) on the same focus-time poll.
   ipcMain.handle(
     'pty:management:macTccAttribution',
-    async (): Promise<{ health: MacDaemonTccAttributionHealth }> => {
+    async (): Promise<{
+      health: MacDaemonTccAttributionHealth
+      folderAccessMismatch: DaemonFolderAccessMismatchNotice | null
+    }> => {
+      // Why two guards: the two answers are independent evidence, and a failed health read must
+      // not present as "the folder evidence is gone".
+      const health = await getCurrentDaemonMacTccAttributionHealth().catch(
+        (): MacDaemonTccAttributionHealth => 'unknown'
+      )
+      const identity = readCurrentDaemonIdentity()
+      // Why re-probe on the poll: the fix dialog's first step completes in System Settings, and
+      // returning to Orca is the only moment anything can notice. The refresh owns when to skip.
+      await refreshDaemonFolderAccessProbe(identity).catch(() => {})
+      return { health, folderAccessMismatch: getDaemonFolderAccessMismatch(identity) }
+    }
+  )
+
+  // Why a separate channel from the poll: this one has a side effect — it clears Orca's TCC row and
+  // makes the app touch the folder so macOS re-prompts — and only a user click may trigger it.
+  ipcMain.handle(
+    'pty:management:resetFolderAccess',
+    async (): Promise<DaemonFolderAccessResetResult> => {
       try {
-        return { health: await getCurrentDaemonMacTccAttributionHealth() }
+        return await resetFolderAccessForDaemon(readCurrentDaemonIdentity())
       } catch {
-        return { health: 'unknown' }
+        return { outcome: 'unsupported' }
       }
     }
   )

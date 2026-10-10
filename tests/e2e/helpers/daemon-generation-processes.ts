@@ -145,27 +145,33 @@ export async function recordProcessTree(
   return recorded
 }
 
-async function terminateRecordedProcess(identity: RecordedProcessIdentity): Promise<void> {
+async function terminateRecordedProcess(identity: RecordedProcessIdentity): Promise<boolean> {
   try {
     if (process.platform === 'win32') {
       await execFileAsync('taskkill', ['/pid', String(identity.pid), '/f'], processQueryOptions)
     } else {
       process.kill(identity.pid, 'SIGKILL')
     }
+    return true
   } catch {
     // The exact process incarnation may exit between validation and signalling.
+    return false
   }
 }
 
-export async function terminateRecordedTree(identities: RecordedProcessIdentity[]): Promise<void> {
+/** Resolves to whether cleanup actually signalled a recorded process. */
+export async function terminateRecordedTree(
+  identities: RecordedProcessIdentity[]
+): Promise<boolean> {
   const unique = [...new Map(identities.map((identity) => [identity.pid, identity])).values()]
+  let signalled = false
   for (const identity of unique.toReversed()) {
     // Why: PID reuse between tree capture and cleanup must never authorize a
     // signal to a process incarnation the fixture did not create.
     if (!(await processIdentityIsAlive(identity))) {
       continue
     }
-    await terminateRecordedProcess(identity)
+    signalled = (await terminateRecordedProcess(identity)) || signalled
   }
   await waitForCondition(
     'recorded fixture process tree to be absent',
@@ -175,4 +181,5 @@ export async function terminateRecordedTree(identities: RecordedProcessIdentity[
     },
     5_000
   )
+  return signalled
 }

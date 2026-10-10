@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { TuiAgent } from './tui-agent'
 
 export type SyntheticAgentTitleProfile = {
   workingLabel: string
@@ -8,6 +9,18 @@ export type SyntheticAgentTitleProfile = {
   synthesizeTerminalTitle?: boolean
   synthesizeWorkingTitle?: boolean
 }
+
+export const SYNTHETIC_AGENT_TITLE_AGENTS = [
+  'codex',
+  'cursor',
+  'opencode',
+  'pi',
+  'omp',
+  'droid',
+  'hermes',
+  'devin',
+  'zcode'
+] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
   codex: {
@@ -34,13 +47,20 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Pi',
     permissionLabel: 'Pi - action required',
     idleLabel: 'Pi ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    // Why: Pi owns its working OSC title (`π ⠋ <session>`) and animates it itself. Synthesizing
+    // over it replaced the session label and fought its frames at 80ms. Terminal states still
+    // synthesize: they carry the pane's agent identity downstream, and Pi is quiet at rest.
+    synthesizeWorkingTitle: false
   },
   omp: {
     workingLabel: 'OMP',
     permissionLabel: 'OMP - action required',
     idleLabel: 'OMP ready',
-    titleIdentityGroup: 'pi-compatible'
+    titleIdentityGroup: 'pi-compatible',
+    // Why: on an Orca-hosted pane it is Orca's own injected titlebar extension writing the
+    // working title (src/main/pi/titlebar-extension-source.ts). See pi above.
+    synthesizeWorkingTitle: false
   },
   droid: {
     workingLabel: 'Droid',
@@ -56,7 +76,28 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Devin',
     permissionLabel: 'Devin - action required',
     idleLabel: 'Devin ready'
+  },
+  zcode: {
+    workingLabel: 'ZCode',
+    permissionLabel: 'ZCode - action required',
+    idleLabel: 'ZCode ready',
+    // Why every state synthesizes, unlike Codex/Pi: ZCode writes NO OSC title in any state
+    // — the captured transcript (`zcode-composer-ready.txt`) contains no OSC 0/1/2 at all —
+    // so there is no native title to fight with, and without this a `tui-idle` wait has no
+    // signal to settle on: ZCode also repaints its ASCII banner forever, so the quiescence
+    // lane never fires either.
+    synthesizeWorkingTitle: true
   }
+}
+
+const SYNTHETIC_PERMISSION_TITLES: ReadonlySet<string> = new Set(
+  Object.values(SYNTHETIC_AGENT_TITLE_PROFILES)
+    .filter((profile) => profile.synthesizeTerminalTitle !== false)
+    .map((profile) => profile.permissionLabel.toLowerCase())
+)
+
+export function isSyntheticAgentPermissionTitle(title: string): boolean {
+  return SYNTHETIC_PERMISSION_TITLES.has(title.trim().toLowerCase())
 }
 
 export function getSyntheticAgentTitleProfile(

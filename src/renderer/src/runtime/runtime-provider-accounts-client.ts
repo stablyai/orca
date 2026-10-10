@@ -1,8 +1,8 @@
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState,
-  GlobalSettings
-} from '../../../shared/types'
+  CodexRateLimitAccountsState
+} from '../../../shared/managed-account-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'

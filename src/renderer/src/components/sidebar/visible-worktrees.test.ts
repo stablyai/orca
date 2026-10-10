@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getPairedDeviceIdsByEnvironment } from './workspace-creator-visibility'
-import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
@@ -386,18 +389,18 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([feature.id])
   })
 
-  it('keeps folder-mode main worktrees visible when default branch workspaces are hidden', () => {
-    const folder = makeWorktree('folder')
-    folder.isMainWorktree = true
-    folder.branch = ''
+  it('keeps an empty-branch git main visible when default branch workspaces are hidden', () => {
+    const detached = makeWorktree('detached')
+    detached.isMainWorktree = true
+    detached.branch = ''
 
     const result = computeVisibleWorktreeIds(
-      { repo1: [folder] },
-      [folder.id],
+      { repo1: [detached] },
+      [detached.id],
       visibleOptions({ hideDefaultBranchWorkspace: true })
     )
 
-    expect(result).toEqual([folder.id])
+    expect(result).toEqual([detached.id])
   })
 
   it('filters worktrees to a selected SSH host scope', () => {

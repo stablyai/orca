@@ -1,18 +1,11 @@
 import React from 'react'
 import type { Badge } from '@/components/ui/badge'
 import type {
-  ExternalAutomationJob,
   ExternalAutomationManager,
   ExternalAutomationRun
 } from '../../../../shared/automations-types'
+import { EXTERNAL_AUTOMATION_SCOPE_CODES } from '../../../../shared/external-automation-scope'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
-
-export function getExternalAutomationKey(
-  manager: ExternalAutomationManager,
-  job: ExternalAutomationJob
-): string {
-  return `${manager.id}:${job.id}`
-}
 
 export function formatExternalDate(value: string | null, now: number): string {
   if (!value) {
@@ -63,5 +56,11 @@ export function getExternalRunContent(run: ExternalAutomationRun): string {
 
 export function isMissingExternalRunsApiError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  return /listExternalRuns|automations:listExternalRuns|No handler registered/i.test(message)
+  // The relay path now reports a code, which is exact. The patterns stay for the
+  // hosts that answer with no code at all: an unrouted IPC channel, and relays
+  // predating the code. Neither can be tightened without losing those hosts.
+  return (
+    message.includes(EXTERNAL_AUTOMATION_SCOPE_CODES.runsUnsupported) ||
+    /listExternalRuns|automations:listExternalRuns|No handler registered/i.test(message)
+  )
 }

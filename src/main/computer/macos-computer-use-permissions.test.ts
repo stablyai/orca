@@ -13,23 +13,57 @@ const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
 const helperAppPath = '/Applications/Orca Computer Use.app'
 const helperInfoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
 
+// The tccutil reset and the bundle-id read now run through `runProcess`, so the fake child has to
+// be one that promise settles on: stdout, then `close`.
+const plistBuddyStdout = vi.hoisted(() => ({ value: 'com.example.orca.computer-use\n' }))
+
+function fakeChild(stdout: string): Record<string, unknown> {
+  const stdoutData: ((chunk: Buffer) => void)[] = []
+  const finish = (callback: (status: number, signal: null) => void): void => {
+    queueMicrotask(() => {
+      for (const onData of stdoutData) {
+        onData(Buffer.from(stdout))
+      }
+      callback(0, null)
+    })
+  }
+  const child: Record<string, unknown> = {
+    pid: 4242,
+    stdin: { end: vi.fn(), on: vi.fn() },
+    stdout: {
+      on: vi.fn((event: string, callback: (chunk: Buffer) => void) => {
+        if (event === 'data') {
+          stdoutData.push(callback)
+        }
+      }),
+      off: vi.fn(),
+      setEncoding: vi.fn()
+    },
+    stderr: { on: vi.fn(), off: vi.fn(), setEncoding: vi.fn() },
+    on: vi.fn((event: string, callback: (status: number, signal: null) => void) => {
+      if (event === 'close') {
+        finish(callback)
+      }
+      return child
+    }),
+    once: vi.fn((event: string, callback: (status: number, signal: null) => void) => {
+      if (event === 'close') {
+        finish(callback)
+      }
+      return child
+    }),
+    off: vi.fn(() => child),
+    kill: vi.fn(),
+    unref: vi.fn()
+  }
+  return child
+}
+
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
-  spawn: vi.fn(() => {
-    const child = {
-      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      on: vi.fn((event: string, callback: (status: number) => void) => {
-        if (event === 'close') {
-          queueMicrotask(() => callback(0))
-        }
-        return child
-      }),
-      off: vi.fn(() => child),
-      unref: vi.fn()
-    }
-    return child
-  }),
+  spawn: vi.fn((file: string) =>
+    fakeChild(file === '/usr/libexec/PlistBuddy' ? plistBuddyStdout.value : '')
+  ),
   spawnSync: vi.fn()
 }))
 
@@ -213,7 +247,6 @@ describe('openComputerUsePermissions', () => {
     vi.mocked(readFile)
       .mockResolvedValueOnce('{"accessibility":"granted","screenshots":"granted"}')
       .mockResolvedValueOnce('{"accessibility":"not-granted","screenshots":"not-granted"}')
-    vi.mocked(execFileSync).mockReturnValueOnce('com.example.orca.computer-use\n')
     vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
 
     await expect(resetComputerUsePermissions()).resolves.toEqual({
@@ -226,20 +259,29 @@ describe('openComputerUsePermissions', () => {
         { id: 'screenshots', status: 'not-granted' }
       ]
     })
-    expect(execFileSync).toHaveBeenCalledWith(
+    // Argv is asserted exactly; the options belong to the shared spawn chokepoint these now run
+    // through, which owns and tests them.
+    const throughChokepoint = expect.objectContaining({ shell: false, windowsHide: true })
+    expect(spawn).toHaveBeenCalledWith(
       '/usr/libexec/PlistBuddy',
       ['-c', 'Print :CFBundleIdentifier', helperInfoPlistPath],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
+      throughChokepoint
     )
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawn).toHaveBeenCalledWith(
       '/usr/bin/tccutil',
       ['reset', 'Accessibility', 'com.example.orca.computer-use'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+      throughChokepoint
     )
-    expect(spawnSync).toHaveBeenCalledWith(
+    expect(spawn).toHaveBeenCalledWith(
       '/usr/bin/tccutil',
       ['reset', 'ScreenCapture', 'com.example.orca.computer-use'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+      throughChokepoint
+    )
+    // Why: a sync reset would hold main's event loop for both children.
+    expect(spawnSync).not.toHaveBeenCalledWith(
+      '/usr/bin/tccutil',
+      expect.anything(),
+      expect.anything()
     )
   })
 })

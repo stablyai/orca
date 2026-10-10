@@ -1,12 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Tab, TabContentType, TopLevelView } from '../../../../shared/types'
-
-export const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
-  'editor',
-  'diff',
-  'conflict-review',
-  'check-details'
-])
+import type { Tab } from '../../../../shared/tab-types'
+import type { TopLevelView } from '../../../../shared/ui-chrome-types'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 type EditorCmdSaveState = {
   activeFileId: string | null
@@ -28,7 +23,5 @@ export function getEditorCmdSaveFileId(
       : null
   }
   const activeTab = state.getActiveTab(FLOATING_TERMINAL_WORKTREE_ID)
-  return activeTab && EDITOR_TAB_CONTENT_TYPES.has(activeTab.contentType)
-    ? activeTab.entityId
-    : null
+  return activeTab && isEditorTabContentType(activeTab.contentType) ? activeTab.entityId : null
 }

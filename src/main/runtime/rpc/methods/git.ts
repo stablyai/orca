@@ -1,22 +1,16 @@
-/* eslint-disable max-lines -- Why: this table is the runtime git RPC contract; splitting it would make method coverage harder to audit. */
-import { defineMethod, type RpcMethod } from '../core'
-import type { GlobalSettings } from '../../../../shared/types'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
+import { defineMethod } from '../core'
+import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-generation-methods'
+import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
-  GitBranchDiff,
   GitBulkPaths,
+  GitBulkStage,
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
   GitCommitCompare,
-  GitCommitDiff,
-  GitDiscoverCommitMessageModels,
-  GitDiff,
   GitFilePath,
   GitForkSync,
-  GitGenerateCommitMessage,
-  GitGeneratePullRequestFields,
   GitHistory,
   GitPush,
   GitRebaseFromBase,
@@ -26,80 +20,30 @@ import {
   GitSubmoduleStatus,
   GitTargetedRemote,
   WorktreeSelector
-} from './git-params'
+} from '../../../../shared/rpc-contract/git-params'
 
-type CommitMessageGenerationOverride = {
-  commitMessageAi?: GlobalSettings['commitMessageAi']
-  sourceControlAi?: GlobalSettings['sourceControlAi']
-  sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
-  agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
-  enableGitHubAttribution?: boolean
-  commitMessageDiscoveryHostKey?: string
-}
-
-// Why: generateCommitMessage and generatePullRequestFields share the same optional
-// override fields; returning undefined when none are set keeps the no-override call path.
-function buildCommitMessageGenerationOverride(params: {
-  commitMessageAi?: unknown
-  sourceControlAi?: unknown
-  sourceControlAiResolvedParams?: unknown
-  agentCmdOverrides?: unknown
-  enableGitHubAttribution?: boolean
-  commitMessageDiscoveryHostKey?: string
-}): CommitMessageGenerationOverride | undefined {
-  if (
-    params.commitMessageAi === undefined &&
-    params.sourceControlAi === undefined &&
-    params.sourceControlAiResolvedParams === undefined &&
-    params.agentCmdOverrides === undefined &&
-    params.enableGitHubAttribution === undefined &&
-    params.commitMessageDiscoveryHostKey === undefined
-  ) {
-    return undefined
-  }
-  return {
-    ...(params.commitMessageAi !== undefined
-      ? { commitMessageAi: params.commitMessageAi as GlobalSettings['commitMessageAi'] }
-      : {}),
-    ...(params.sourceControlAi !== undefined
-      ? { sourceControlAi: params.sourceControlAi as GlobalSettings['sourceControlAi'] }
-      : {}),
-    ...(params.sourceControlAiResolvedParams !== undefined
-      ? {
-          sourceControlAiResolvedParams:
-            params.sourceControlAiResolvedParams as ResolvedSourceControlAiGenerationParams
-        }
-      : {}),
-    ...(params.agentCmdOverrides !== undefined
-      ? {
-          agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
-        }
-      : {}),
-    ...(params.enableGitHubAttribution !== undefined
-      ? { enableGitHubAttribution: params.enableGitHubAttribution }
-      : {}),
-    ...(params.commitMessageDiscoveryHostKey !== undefined
-      ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
-      : {})
-  }
-}
-
-export const GIT_METHODS: RpcMethod[] = [
+export const GIT_METHODS = [
   defineMethod({
     name: 'git.status',
+    permission: 'workspace',
     params: GitStatusParams,
     handler: async (params, { runtime, signal }) => {
       const options =
         params.includeIgnored === undefined &&
+        params.includeLineStats === undefined &&
         params.bypassEffectiveUpstreamNegativeCache === undefined &&
         params.reuseLineStats === undefined &&
         params.branchLineTotalMergeBase === undefined &&
+        params.admissionTier === undefined &&
         signal === undefined
           ? undefined
           : {
               ...(params.includeIgnored === undefined
                 ? {}
                 : { includeIgnored: params.includeIgnored }),
+              ...(params.includeLineStats === undefined
+                ? {}
+                : { includeLineStats: params.includeLineStats }),
               ...(params.bypassEffectiveUpstreamNegativeCache === true
                 ? { bypassEffectiveUpstreamNegativeCache: true }
                 : {}),
@@ -107,27 +51,31 @@ export const GIT_METHODS: RpcMethod[] = [
               ...(params.branchLineTotalMergeBase === undefined
                 ? {}
                 : { branchLineTotalMergeBase: params.branchLineTotalMergeBase }),
+              admissionTier: params.admissionTier ?? 'status',
               ...(signal ? { signal } : {})
             }
       return options === undefined
-        ? runtime.getRuntimeGitStatus(params.worktree)
+        ? runtime.getRuntimeGitStatus(params.worktree, { admissionTier: 'status' })
         : runtime.getRuntimeGitStatus(params.worktree, options)
     }
   }),
   defineMethod({
     name: 'git.checkIgnored',
+    permission: 'workspace',
     params: GitCheckIgnored,
     handler: async (params, { runtime }) =>
       runtime.checkRuntimeGitIgnoredPaths(params.worktree, params.paths)
   }),
   defineMethod({
     name: 'git.submoduleStatus',
+    permission: 'workspace',
     params: GitSubmoduleStatus,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitSubmoduleStatus(params.worktree, params.submodulePath, params.area)
   }),
   defineMethod({
     name: 'git.history',
+    permission: 'workspace',
     params: GitHistory,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitHistory(params.worktree, {
@@ -137,55 +85,53 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.conflictOperation',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.getRuntimeGitConflictOperation(params.worktree)
   }),
   defineMethod({
     name: 'git.abortMerge',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
   }),
   defineMethod({
     name: 'git.abortRebase',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
   }),
   defineMethod({
     name: 'git.checkout',
+    permission: 'workspace',
     params: GitCheckout,
     handler: async (params, { runtime }) =>
       runtime.checkoutRuntimeGitBranch(params.worktree, params.branch)
   }),
   defineMethod({
     name: 'git.localBranches',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
-  defineMethod({
-    name: 'git.diff',
-    params: GitDiff,
-    handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitDiff(
-        params.worktree,
-        params.filePath,
-        params.staged,
-        params.compareAgainstHead
-      )
-  }),
+  ...GIT_DIFF_METHODS,
   defineMethod({
     name: 'git.branchCompare',
+    permission: 'workspace',
     params: GitBranchCompare,
     handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitBranchCompare(params.worktree, params.baseRef)
+      runtime.getRuntimeGitBranchCompare(params.worktree, params.baseRef, params.admissionTier)
   }),
   defineMethod({
     name: 'git.commitCompare',
+    permission: 'workspace',
     params: GitCommitCompare,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitCommitCompare(params.worktree, params.commitId)
   }),
   defineMethod({
     name: 'git.upstreamStatus',
+    permission: 'workspace',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -194,6 +140,7 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.fetch',
+    permission: 'workspace',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -202,12 +149,14 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.forkSync',
+    permission: 'workspace',
     params: GitForkSync,
     handler: async (params, { runtime }) =>
       runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
   }),
   defineMethod({
     name: 'git.pull',
+    permission: 'workspace',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -216,6 +165,7 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.fastForward',
+    permission: 'workspace',
     params: GitTargetedRemote,
     handler: async (params, { runtime }) =>
       params.pushTarget === undefined
@@ -224,12 +174,14 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.rebaseFromBase',
+    permission: 'workspace',
     params: GitRebaseFromBase,
     handler: async (params, { runtime }) =>
       runtime.rebaseRuntimeGitFromBase(params.worktree, params.baseRef)
   }),
   defineMethod({
     name: 'git.push',
+    permission: 'workspace',
     params: GitPush,
     handler: async (params, { runtime }) =>
       runtime.pushRuntimeGit(
@@ -240,133 +192,65 @@ export const GIT_METHODS: RpcMethod[] = [
       )
   }),
   defineMethod({
-    name: 'git.branchDiff',
-    params: GitBranchDiff,
-    handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitBranchDiff(
-        params.worktree,
-        params.compare,
-        params.filePath,
-        params.oldPath
-      )
-  }),
-  defineMethod({
-    name: 'git.commitDiff',
-    params: GitCommitDiff,
-    handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitCommitDiff(params.worktree, {
-        commitOid: params.commitOid,
-        parentOid: params.parentOid,
-        filePath: params.filePath,
-        oldPath: params.oldPath
-      })
-  }),
-  defineMethod({
     name: 'git.commit',
+    permission: 'workspace',
     params: GitCommit,
     handler: async (params, { runtime }) =>
       runtime.commitRuntimeGit(params.worktree, params.message)
   }),
-  defineMethod({
-    name: 'git.generateCommitMessage',
-    params: GitGenerateCommitMessage,
-    handler: async (params, { runtime }) => {
-      const override = buildCommitMessageGenerationOverride(params)
-      if (override === undefined) {
-        return runtime.generateRuntimeCommitMessage(params.worktree)
-      }
-      return runtime.generateRuntimeCommitMessage(params.worktree, override)
-    }
-  }),
-  defineMethod({
-    name: 'git.discoverCommitMessageModels',
-    params: GitDiscoverCommitMessageModels,
-    handler: async (params, { runtime }) =>
-      runtime.discoverRuntimeCommitMessageModels(
-        params.worktree,
-        params.agentId,
-        params.agentCmdOverrides !== undefined
-          ? {
-              agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
-            }
-          : {}
-      )
-  }),
-  defineMethod({
-    name: 'git.cancelGenerateCommitMessage',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) =>
-      runtime.cancelRuntimeGenerateCommitMessage(params.worktree)
-  }),
-  defineMethod({
-    name: 'git.generatePullRequestFields',
-    params: GitGeneratePullRequestFields,
-    handler: async (params, { runtime }) => {
-      const input = {
-        base: params.base,
-        title: params.title,
-        body: params.body,
-        draft: params.draft,
-        provider: params.provider,
-        useTemplate: params.useTemplate
-      }
-      const override = buildCommitMessageGenerationOverride(params)
-      if (override === undefined) {
-        return runtime.generateRuntimePullRequestFields(params.worktree, input)
-      }
-      return runtime.generateRuntimePullRequestFields(params.worktree, input, override)
-    }
-  }),
-  defineMethod({
-    name: 'git.cancelGeneratePullRequestFields',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) =>
-      runtime.cancelRuntimeGeneratePullRequestFields(params.worktree)
-  }),
+  ...GIT_COMMIT_MESSAGE_GENERATION_METHODS,
   defineMethod({
     name: 'git.stage',
+    permission: 'workspace',
     params: GitFilePath,
     handler: async (params, { runtime }) =>
       runtime.stageRuntimeGitPath(params.worktree, params.filePath)
   }),
   defineMethod({
     name: 'git.bulkStage',
-    params: GitBulkPaths,
+    permission: 'workspace',
+    params: GitBulkStage,
     handler: async (params, { runtime }) =>
-      runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths)
+      runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths, params.scope)
   }),
   defineMethod({
     name: 'git.unstage',
+    permission: 'workspace',
     params: GitFilePath,
     handler: async (params, { runtime }) =>
       runtime.unstageRuntimeGitPath(params.worktree, params.filePath)
   }),
   defineMethod({
     name: 'git.bulkUnstage',
+    permission: 'workspace',
     params: GitBulkPaths,
     handler: async (params, { runtime }) =>
       runtime.bulkUnstageRuntimeGitPaths(params.worktree, params.filePaths)
   }),
   defineMethod({
     name: 'git.discard',
+    permission: 'workspace',
     params: GitFilePath,
     handler: async (params, { runtime }) =>
       runtime.discardRuntimeGitPath(params.worktree, params.filePath)
   }),
   defineMethod({
     name: 'git.bulkDiscard',
+    permission: 'workspace',
     params: GitBulkPaths,
     handler: async (params, { runtime }) =>
       runtime.bulkDiscardRuntimeGitPaths(params.worktree, params.filePaths)
   }),
   defineMethod({
     name: 'git.remoteFileUrl',
+    permission: 'workspace',
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
   }),
   defineMethod({
     name: 'git.remoteCommitUrl',
+    permission: 'workspace',
     params: GitRemoteCommitUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteCommitUrl(params.worktree, params.sha)

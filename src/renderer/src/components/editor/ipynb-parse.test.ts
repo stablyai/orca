@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  concatIpynbMultilineString,
   deleteIpynbCell,
   insertIpynbCell,
   moveIpynbCell,
-  parseIpynb,
-  translateKernelLanguageToMonaco,
+  clearIpynbOutputs,
   updateIpynbCellKind,
-  updateIpynbCellOutputs,
+  updateIpynbCellRun,
   updateIpynbCellSource,
-  updateIpynbCellSources
+  updateIpynbCellSources,
+  withIpynbCellIds
+} from './ipynb-cell-mutations'
+import {
+  concatIpynbMultilineString,
+  parseIpynb,
+  translateKernelLanguageToMonaco
 } from './ipynb-parse'
 
 afterEach(() => {
@@ -63,8 +67,6 @@ describe('ipynb parsing', () => {
       })
     )
 
-    expect(notebook.nbformat).toBe('4.5')
-    expect(notebook.kernelName).toBe('Python 3')
     expect(notebook.cells).toHaveLength(2)
     expect(notebook.cells[0]).toMatchObject({
       id: 'intro',
@@ -198,7 +200,7 @@ describe('ipynb parsing', () => {
     expect(moveIpynbCell(content, 2, 1)).toBe(content)
   })
 
-  it('writes Python run results as notebook outputs', () => {
+  it('writes a kernel run into the cell, storing stream text as lines', () => {
     const content = JSON.stringify({
       nbformat: 4,
       nbformat_minor: 5,
@@ -207,19 +209,34 @@ describe('ipynb parsing', () => {
     })
 
     const updated = JSON.parse(
-      updateIpynbCellOutputs(content, 0, {
-        stdout: 'hello\n',
-        stderr: '',
-        exitCode: 0
-      })
+      updateIpynbCellRun(
+        content,
+        0,
+        [
+          { output_type: 'stream', name: 'stdout', text: 'a\nb' },
+          {
+            output_type: 'execute_result',
+            execution_count: 7,
+            data: { 'text/plain': '42' },
+            metadata: {}
+          }
+        ],
+        7
+      )
     )
-    expect(updated.cells[0].execution_count).toBe(1)
+    expect(updated.cells[0].execution_count).toBe(7)
     expect(updated.cells[0].outputs).toEqual([
-      { output_type: 'stream', name: 'stdout', text: ['hello\n'] }
+      { output_type: 'stream', name: 'stdout', text: ['a\n', 'b'] },
+      {
+        output_type: 'execute_result',
+        execution_count: 7,
+        data: { 'text/plain': '42' },
+        metadata: {}
+      }
     ])
   })
 
-  it('serializes newline-heavy run output without regex match or split helpers', () => {
+  it('serializes newline-heavy stream output without regex match or split helpers', () => {
     const content = JSON.stringify({
       nbformat: 4,
       nbformat_minor: 5,
@@ -230,16 +247,55 @@ describe('ipynb parsing', () => {
     const match = vi.spyOn(String.prototype, 'match')
 
     const updated = JSON.parse(
-      updateIpynbCellOutputs(content, 0, {
-        stdout: `${'line\n'.repeat(5000)}tail`,
-        stderr: '',
-        exitCode: 0
-      })
+      updateIpynbCellRun(
+        content,
+        0,
+        [{ output_type: 'stream', name: 'stdout', text: `${'line\n'.repeat(5000)}tail` }],
+        1
+      )
     )
 
     expect(updated.cells[0].outputs[0].text).toHaveLength(5001)
     expect(updated.cells[0].outputs[0].text.at(-1)).toBe('tail')
     expect(split).not.toHaveBeenCalled()
     expect(match).not.toHaveBeenCalled()
+  })
+
+  it('clears every code cell output and count, leaving other cells alone', () => {
+    const content = JSON.stringify({
+      nbformat: 4,
+      nbformat_minor: 5,
+      metadata: {},
+      cells: [
+        { cell_type: 'markdown', metadata: {}, source: ['# hi'] },
+        {
+          cell_type: 'code',
+          metadata: {},
+          execution_count: 3,
+          outputs: [{ output_type: 'stream', name: 'stdout', text: ['x'] }],
+          source: []
+        }
+      ]
+    })
+    const cleared = JSON.parse(clearIpynbOutputs(content))
+    expect(cleared.cells[0]).toEqual({ cell_type: 'markdown', metadata: {}, source: ['# hi'] })
+    expect(cleared.cells[1]).toMatchObject({ execution_count: null, outputs: [] })
+  })
+
+  it('upgrades an nbformat 4.4 notebook to cell ids, keeping existing ones', () => {
+    const content = JSON.stringify({
+      nbformat: 4,
+      nbformat_minor: 4,
+      metadata: {},
+      cells: [
+        { id: 'kept', cell_type: 'markdown', metadata: {}, source: [] },
+        { cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: [] }
+      ]
+    })
+    const upgraded = JSON.parse(withIpynbCellIds(content))
+    expect(upgraded.nbformat_minor).toBe(5)
+    expect(upgraded.cells[0].id).toBe('kept')
+    expect(upgraded.cells[1].id).toMatch(/^[\w-]+$/)
+    expect(withIpynbCellIds(JSON.stringify(upgraded))).toBe(JSON.stringify(upgraded))
   })
 })

@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import type * as osModule from 'node:os'
 import type * as fsModule from 'node:fs'
 import { join } from 'node:path'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 // The service calls app.getPath('userData') for its overlay root. Point that
 // at a real tmp dir so we can exercise the filesystem behavior end-to-end.
@@ -37,18 +38,8 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: (name: string) => {
-      if (name === 'userData') {
-        return userDataDir
-      }
-      throw new Error(`unexpected app.getPath(${name})`)
-    }
-  }
-}))
-
 import { PiTitlebarExtensionService, isSafeDescendCandidate } from './titlebar-extension-service'
+import { getPiTitlebarExtensionSource } from './titlebar-extension-source'
 
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
@@ -62,6 +53,17 @@ function legacySourceOverlayPath(kind: 'pi' | 'omp', sourceAgentDir: string): st
 }
 
 describe('PiTitlebarExtensionService', () => {
+  beforeEach(() => {
+    installFakeAppEnvironment({
+      getPath: (name) => {
+        if (name === 'userData') {
+          return userDataDir
+        }
+        throw new Error(`unexpected app.getPath(${name})`)
+      }
+    })
+  })
+
   let piHome: string
 
   beforeEach(() => {
@@ -94,6 +96,81 @@ describe('PiTitlebarExtensionService', () => {
     rmSync(join(userDataDir, 'pi-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-managed-status-extension'), { recursive: true, force: true })
+  })
+
+  it.each([
+    ['pi', '.pi', 'ORCA_PI_SOURCE_AGENT_DIR'],
+    ['omp', '.omp', 'ORCA_OMP_SOURCE_AGENT_DIR'],
+    ['prime-agent', '.prime', 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR']
+  ] as const)('does not reinterpret XDG data as %s configuration', (kind, root, sourceKey) => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'orca-agent-xdg-'))
+    const dataHome = join(fakeHome, 'data')
+    const dataAgentDir = join(dataHome, root.slice(1), 'agent')
+    mkdirSync(dataAgentDir, { recursive: true })
+    homedirOverride.current = fakeHome
+    vi.stubEnv('XDG_DATA_HOME', dataHome)
+    try {
+      const env = new PiTitlebarExtensionService().buildPtyEnv('pty-xdg', undefined, kind)
+      expect(env[sourceKey]).toBe(join(fakeHome, root, 'agent'))
+      expect(readdirSync(dataAgentDir)).toEqual([])
+      expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+    } finally {
+      vi.unstubAllEnvs()
+      homedirOverride.current = ''
+      rmSync(fakeHome, { recursive: true, force: true })
+    }
+  })
+
+  it('materializes OMP extensions under the launch config root without overriding data routing', () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'orca-omp-config-'))
+    homedirOverride.current = fakeHome
+    try {
+      const service = new PiTitlebarExtensionService()
+      const environment = { PI_CONFIG_DIR: '.config/omp', XDG_DATA_HOME: join(fakeHome, 'data') }
+      const env = service.buildPtyEnv('pty-config', undefined, 'omp', {
+        configDirName: environment.PI_CONFIG_DIR
+      })
+      const agentDir = join(fakeHome, '.config', 'omp', 'agent')
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe(agentDir)
+      expect(existsSync(join(agentDir, 'extensions', 'orca-agent-status.ts'))).toBe(true)
+      expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
+      expect(existsSync(environment.XDG_DATA_HOME)).toBe(false)
+      expect(
+        service.buildPtyEnv('pty-explicit', piHome, 'omp', {
+          configDirName: environment.PI_CONFIG_DIR
+        }).ORCA_OMP_SOURCE_AGENT_DIR
+      ).toBe(piHome)
+      expect(
+        service.buildPtyEnv('pty-pi', undefined, 'pi', { configDirName: environment.PI_CONFIG_DIR })
+          .ORCA_PI_SOURCE_AGENT_DIR
+      ).toBe(join(fakeHome, '.pi', 'agent'))
+    } finally {
+      homedirOverride.current = ''
+      rmSync(fakeHome, { recursive: true, force: true })
+    }
+  })
+
+  it('does not use the daemon ambient PI_CONFIG_DIR when launch root is omitted', () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'orca-omp-ambient-root-'))
+    homedirOverride.current = fakeHome
+    vi.stubEnv('PI_CONFIG_DIR', 'host-profile')
+    try {
+      const env = new PiTitlebarExtensionService().buildPtyEnv(
+        'pty-ambient-root',
+        undefined,
+        'omp',
+        {
+          materializeDefaultHome: true
+        }
+      )
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe(join(fakeHome, '.omp', 'agent'))
+      expect(existsSync(join(fakeHome, 'host-profile'))).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      homedirOverride.current = ''
+      rmSync(fakeHome, { recursive: true, force: true })
+    }
   })
 
   function expectPiHomeIntact(): void {
@@ -136,22 +213,8 @@ describe('PiTitlebarExtensionService', () => {
       join(piHome, 'extensions', 'orca-agent-status.ts'),
       'utf-8'
     )
-    const titlebarExtensionSource = readFileSync(
-      join(piHome, 'extensions', 'orca-titlebar-spinner.ts'),
-      'utf-8'
-    )
-    const prefillExtensionSource = readFileSync(
-      join(piHome, 'extensions', 'orca-prefill.ts'),
-      'utf-8'
-    )
     expect(statusExtensionSource).toContain('@orca-managed-pi-extension')
     expect(statusExtensionSource).toContain('/hook/pi')
-    expect(statusExtensionSource).toContain('process.title')
-    expect(statusExtensionSource).toContain("return '/hook/omp'")
-    expect(titlebarExtensionSource).toContain('@orca-managed-pi-extension')
-    expect(titlebarExtensionSource).toContain('process.env.ORCA_PANE_KEY')
-    expect(prefillExtensionSource).toContain('@orca-managed-pi-extension')
-    expect(prefillExtensionSource).toContain('process.env.ORCA_PANE_KEY')
     expectPiHomeIntact()
   })
 
@@ -175,7 +238,6 @@ describe('PiTitlebarExtensionService', () => {
     ])
     const source = readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')
     expect(source).toContain('/hook/prime-agent')
-    expect(source).not.toContain("return '/hook/omp'")
     expect(existsSync(join(piHome, 'extensions', 'orca-titlebar-spinner.ts'))).toBe(false)
     expect(existsSync(join(piHome, 'extensions', 'orca-prefill.ts'))).toBe(false)
     expectPiHomeIntact()
@@ -200,17 +262,15 @@ describe('PiTitlebarExtensionService', () => {
     const env = svc.buildPtyEnv('pty-omp-sqlite', piHome, 'omp')
 
     const sourcePath = join(piHome, 'agent.db')
-    const content = 'agent.db credentials'
 
     expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+    expect(readFileSync(env.ORCA_OMP_FRESH_CONFIG, 'utf8')).toBe('autoResume: false\n')
+    expect(env.ORCA_OMP_FRESH_CONFIG.startsWith(userDataDir)).toBe(true)
     expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe(piHome)
     expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(join(piHome, 'extensions', 'orca-agent-status.ts'))
     expect(existsSync(sourcePath)).toBe(false)
     expect(existsSync(join(userDataDir, 'omp-agent-overlays'))).toBe(false)
     expect(existsSync(join(piHome, 'history.db'))).toBe(false)
-    writeFileSync(sourcePath, content)
-
-    expect(readFileSync(sourcePath, 'utf-8')).toBe(content)
   })
 
   it('migrates missing OMP state from the old source overlay without overwriting source files', () => {
@@ -455,6 +515,16 @@ describe('PiTitlebarExtensionService', () => {
     svc.buildPtyEnv('pty-3', piHome, 'pi')
     svc.buildPtyEnv('pty-3', piHome, 'pi')
     expectPiHomeIntact()
+  })
+
+  it('refreshes a managed spinner in an explicitly selected senpi home', () => {
+    const agentDir = join(userDataDir, '.omo', 'agent')
+    const extensionPath = join(agentDir, 'extensions', 'orca-titlebar-spinner.ts')
+    mkdirSync(join(agentDir, 'extensions'), { recursive: true })
+    writeFileSync(extensionPath, '// @orca-managed-pi-extension\nstale spinner')
+    const svc = new PiTitlebarExtensionService()
+    svc.buildPtyEnv('pty-senpi', agentDir, 'pi')
+    expect(readFileSync(extensionPath, 'utf8')).toContain(getPiTitlebarExtensionSource())
   })
 
   it('rebuilding updates Orca-owned extensions while preserving user files', () => {

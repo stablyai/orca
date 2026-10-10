@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Check, ChevronDown, KeyRound } from 'lucide-react'
-import type { LinearTeam, LinearWorkspace, LinearWorkspaceSelection } from '../../../shared/types'
+import type {
+  LinearTeam,
+  LinearWorkspace,
+  LinearWorkspaceSelection
+} from '../../../shared/linear/workspace-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
@@ -34,7 +38,7 @@ type LinearScopeTeamSelectionInput = {
 
 export const LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES = 2 * 1024
 
-export function isLinearScopeTeamFilterQueryTooLarge(
+function isLinearScopeTeamFilterQueryTooLarge(
   query: string,
   maxBytes = LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES
 ): boolean {

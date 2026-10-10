@@ -1,0 +1,9 @@
+ PID PPID PGID TPGID STAT COMMAND
+   1    0    1     0 Ss   /sbin/init
+   2    0    0    -1 S    [kthreadd]
+   3    2    0    -1 I    [pool_workqueue_release]
+   4    2    0    -1 I    [kworker/R-rcu_g]
+   5    2    0    -1 I    [kworker/R-sync_wq]
+   6    2    0    -1 I    [kworker/R-slub_]
+ 100    1  100   100 Ss+  /bin/bash -l
+ 101  100  101   101 S+   node /opt/codex

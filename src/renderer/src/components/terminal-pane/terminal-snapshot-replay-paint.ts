@@ -1,5 +1,10 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { readProposedPaneFitDimensions } from '@/lib/pane-manager/pane-fit'
+import {
+  ABORT_TRUNCATED_CONTROL_STRING,
+  buildSnapshotReplayPrologue
+} from '../../../../shared/terminal-mode-reset-profiles'
+import { splitAtAlternateScreenEntry } from '../../../../shared/terminal-alternate-screen-split'
 
 /**
  * Shared guards and write choreography for painting a main-model snapshot into
@@ -35,8 +40,8 @@ export function resolvePositiveTerminalDimensions(
  * The column count the post-replay fit will land on. Why not terminal.cols: a
  * pane that has not been fitted yet still reads xterm's 80-column default, so
  * comparing against it would drop frames whose width actually matches the
- * container. Returns undefined when the pane cannot be measured; callers with
- * a repaint owner can clear and defer, while offline preconnect paint cannot.
+ * container. Returns undefined when the pane cannot be measured, so replay can
+ * retain the frame at its capture grid until a final fit exists.
  */
 export function readProposedTerminalCols(pane: ManagedPane): number | undefined {
   return readProposedPaneFitDimensions(pane)?.cols
@@ -44,18 +49,52 @@ export function readProposedTerminalCols(pane: ManagedPane): number | undefined 
 
 export function shouldSkipAltFrameForWidthMismatch(
   snapshotCols: number | undefined,
-  targetCols: number | undefined,
-  options: { skipIfTargetUnknown?: boolean } = {}
+  targetCols: number | undefined
 ): boolean {
   if (typeof snapshotCols !== 'number' || !Number.isFinite(snapshotCols) || snapshotCols <= 0) {
     return false
   }
   if (typeof targetCols !== 'number' || !Number.isFinite(targetCols) || targetCols <= 0) {
-    // A hidden pane has no final grid; its live app can repaint after the deferred fit.
-    return options.skipIfTargetUnknown === true
+    // Keep the frame at its capture grid until a real fit can replace that grid.
+    return false
   }
   // Fixed-grid alt rows clip at narrower columns; normal history remains reflowable.
   return snapshotCols > targetCols
+}
+
+/** First write of a snapshot replay; CAN aborts a control string the gap truncated. */
+export function buildSnapshotReplayPreamble(
+  args: Parameters<typeof buildSnapshotReplayPrologue>[0]
+): string {
+  return `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue(args)}`
+}
+
+/**
+ * Writes for a remote image, which folds its normal buffer in ahead of its alt
+ * entry. An image with history replaces the pane's normal buffer and history,
+ * even over a live alt screen: a TUI can exit, the shell print and another TUI
+ * start inside the gap. A screen-only image over alt repaints only its alt
+ * payload, since it has no history to replace the pane's pre-TUI scrollback with.
+ */
+export function buildFoldedImageReplayWrites(
+  data: string,
+  paneOnAlternateScreen: boolean,
+  carriesHistory: boolean
+): { preamble: string; payload: string } {
+  const split = paneOnAlternateScreen && !carriesHistory ? splitAtAlternateScreenEntry(data) : null
+  if (split) {
+    return {
+      preamble: buildSnapshotReplayPreamble({
+        targetAlternateScreen: true,
+        paneOnAlternateScreen: true
+      }),
+      payload: split.alternateAnsi
+    }
+  }
+  return {
+    preamble: buildSnapshotReplayPreamble({ targetAlternateScreen: false, paneOnAlternateScreen }),
+    payload: data
+  }
 }
 
 /**
@@ -76,13 +115,29 @@ export function buildMainModelSnapshotReplayWrites(
     frameRestoreAnsi?: string
     alternateScreen?: boolean
     scrollbackAnsi?: string
+    carriesNormalBuffer?: boolean
   },
-  options: { skipAltFrame?: boolean } = {}
+  options: { skipAltFrame?: boolean; paneOnAlternateScreen: boolean }
 ): string[] {
-  if (!snapshot.alternateScreen) {
-    // Why: \x1b[3J wipes xterm scrollback; safe here because a normal-buffer
-    // snapshot carries its own history in data (mirrors pty-transport.ts).
-    return ['\x1b[2J\x1b[3J\x1b[H', snapshot.data]
+  const { paneOnAlternateScreen } = options
+  // The alt payload always follows a hop through the normal buffer in the split
+  // branch, so its own switch is judged from there, not from where we started.
+  const altPrologue = (fromAlternateScreen: boolean): string =>
+    buildSnapshotReplayPrologue({
+      targetAlternateScreen: true,
+      paneOnAlternateScreen: fromAlternateScreen
+    })
+  // Why the switch can be needed here: the gap can eat the TUI's own exit
+  // sequence, leaving the renderer on alt while the model moved to normal —
+  // the restored history would paint into the alt buffer, looking right while
+  // scrollback stays empty (STA-4042). An image carrying its normal buffer
+  // enters alt itself, so it needs the same start.
+  const normalPreamble = buildSnapshotReplayPreamble({
+    targetAlternateScreen: false,
+    paneOnAlternateScreen
+  })
+  if (!snapshot.alternateScreen || snapshot.carriesNormalBuffer) {
+    return [normalPreamble, snapshot.data]
   }
   // Older snapshot producers do not expose the mode/frame boundary. Keep their
   // composed data rather than dropping terminal modes together with the frame.
@@ -91,17 +146,15 @@ export function buildMainModelSnapshotReplayWrites(
       ? [snapshot.frameRestoreAnsi]
       : [snapshot.data]
   if (snapshot.scrollbackAnsi !== undefined) {
-    // Why: main serializes normal + alt buffers separately; rebuild normal
-    // while active, then return to a clean alt frame.
-    return [
-      '\x1b[?1049l\x1b[2J\x1b[3J\x1b[H',
-      snapshot.scrollbackAnsi,
-      '\x1b[0m\x1b[?1049h\x1b[2J\x1b[H',
-      ...altFrame
-    ]
+    // Why a prologue per payload: main serializes the buffers separately and
+    // each is diffed against the baseline. scrollbackAnsi used to replay before
+    // any reset at all, so the history inherited the stale state (STA-4042).
+    return [normalPreamble, snapshot.scrollbackAnsi, altPrologue(false), ...altFrame]
   }
-  // Why: the snapshot's ?1049h no-ops when already on alt screen and skips
-  // blank cells; clear the alt buffer so the pre-hide frame can't bleed
-  // through blank cells (spares normal-buffer scrollback).
-  return ['\x1b[0m\x1b[?1049h\x1b[2J\x1b[H', ...altFrame]
+  // Why the prologue clears: `?1049h` does not clear the alt buffer, so the
+  // pre-hide frame would bleed through the snapshot's blank cells.
+  return [
+    buildSnapshotReplayPreamble({ targetAlternateScreen: true, paneOnAlternateScreen }),
+    ...altFrame
+  ]
 }

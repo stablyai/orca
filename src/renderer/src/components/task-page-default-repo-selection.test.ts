@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import {
   getDefaultTaskRepoSelection,
   getTaskEligibleRepos,
   getTaskProjectPickerGroups,
-  getTaskProjectPickerRepos,
   normalizeTaskRepoSelection
 } from './task-page-default-repo-selection'
 
@@ -202,75 +201,6 @@ describe('getDefaultTaskRepoSelection', () => {
     ])
 
     expect([...selection]).toEqual(['local-claude-swap'])
-  })
-})
-
-describe('getTaskProjectPickerRepos', () => {
-  it('shows one picker row per logical GitHub project', () => {
-    const pickerRepos = getTaskProjectPickerRepos([
-      repo({
-        id: 'local-orca',
-        upstream: { owner: 'StablyAI', repo: 'Orca' }
-      }),
-      repo({
-        id: 'ssh-orca',
-        connectionId: 'builder',
-        upstream: { owner: 'stablyai', repo: 'orca' }
-      }),
-      repo({
-        id: 'other',
-        upstream: { owner: 'stablyai', repo: 'other' }
-      })
-    ])
-
-    expect(pickerRepos.map((candidate) => candidate.id)).toEqual(['local-orca', 'other'])
-  })
-
-  it('uses an explicitly selected remote source as the visible project row', () => {
-    const pickerRepos = getTaskProjectPickerRepos(
-      [
-        repo({
-          id: 'local-orca',
-          upstream: { owner: 'stablyai', repo: 'orca' }
-        }),
-        repo({
-          id: 'ssh-orca',
-          connectionId: 'builder',
-          upstream: { owner: 'stablyai', repo: 'orca' }
-        })
-      ],
-      new Set(['ssh-orca'])
-    )
-
-    expect(pickerRepos.map((candidate) => candidate.id)).toEqual(['ssh-orca'])
-  })
-
-  it('collapses legacy local and SSH rows that share a GitHub repo icon identity', () => {
-    const pickerRepos = getTaskProjectPickerRepos([
-      repo({
-        id: 'local-claude-swap',
-        displayName: 'claude-swap',
-        repoIcon: {
-          type: 'image',
-          src: 'https://github.com/stablyai.png?size=64',
-          source: 'github',
-          label: 'stablyai/claude-swap'
-        }
-      }),
-      repo({
-        id: 'ssh-claude-swap',
-        displayName: 'claude-swap',
-        connectionId: 'builder',
-        repoIcon: {
-          type: 'image',
-          src: 'https://github.com/stablyai.png?size=64',
-          source: 'github',
-          label: 'StablyAI/claude-swap'
-        }
-      })
-    ])
-
-    expect(pickerRepos.map((candidate) => candidate.id)).toEqual(['local-claude-swap'])
   })
 })
 

@@ -27,7 +27,10 @@ vi.mock('@/lib/browser-uuid', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn(),
+  activateAndRevealWorktree: vi.fn()
+}))
+
+vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
   ensureWorktreeHasInitialTerminal: vi.fn()
 }))
 
@@ -40,7 +43,7 @@ vi.mock('@/lib/new-workspace', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() }
+  toast: { error: vi.fn(), success: vi.fn() }
 }))
 
 vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({

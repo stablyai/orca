@@ -5,12 +5,22 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
+import {
+  hardenExistingSecureFile,
+  isUnreadableError,
+  writeSecureJsonFile
+} from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
+import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
+import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from './rpc/rpc-method-permission'
+import {
+  parseMobilePushRegistration,
+  type MobilePushRegistration
+} from '../../shared/mobile-push-contract'
 
 export type { DeviceScope }
 
@@ -26,6 +36,30 @@ export type DeviceEntry = {
   // Why: STA-2370 — a grant minted for "This computer only" proves nothing about off-host reach when its
   // client connects, so the bind decision must be able to tell it apart from a LAN/phone grant.
   pairingReach?: RuntimePairingReach
+  // Why: survives a desktop restart so the host can keep pushing without the phone
+  // re-registering. Absent on every registry written before background push existed.
+  pushRegistration?: MobilePushRegistration
+  // Why: administrative permissions are granted only when pairing; absent on older rows means none.
+  grants?: RuntimeDeviceGrant[]
+}
+
+const GRANTABLE: ReadonlySet<string> = new Set(RUNTIME_DEVICE_GRANTS)
+
+function isRuntimeDeviceGrant(value: unknown): value is RuntimeDeviceGrant {
+  return typeof value === 'string' && GRANTABLE.has(value)
+}
+
+function validGrants(value: unknown, scope: DeviceScope): RuntimeDeviceGrant[] | undefined {
+  if (scope !== 'runtime' || !Array.isArray(value)) {
+    return undefined
+  }
+  const grants = [...new Set(value.filter(isRuntimeDeviceGrant))].sort()
+  return grants.length > 0 ? grants : undefined
+}
+
+function sameGrants(entry: DeviceEntry, grants: readonly RuntimeDeviceGrant[]): boolean {
+  const current = entry.grants ?? []
+  return current.length === grants.length && current.every((grant) => grants.includes(grant))
 }
 
 function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding | undefined {
@@ -50,31 +84,41 @@ function validRelayBinding(value: unknown, deviceId: string): RelayDeviceBinding
 // Why: a lastSeen refresh is pure bookkeeping, so coalesce reconnect bursts into one write instead of
 // paying a secure-file rewrite (two synchronous PowerShell ACL spawns on Windows) per connection.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
+const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export class DeviceRegistry {
   private readonly registryPath: string
   private devices: DeviceEntry[] = []
+  /** Set when the registry exists but could not be read, which makes `devices` a lie to save from. */
+  private registryUnreadable = false
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
 
   constructor(userDataPath: string) {
     this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
+    // Why: a write killed between writeFile and rename (e.g. a hung icacls, #20497) orphans its temp forever.
+    void removeStaleDurableWriteTempFiles(this.registryPath, {
+      minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
+    })
     this.load()
   }
 
   addDevice(
     name: string,
     scope: DeviceScope = 'mobile',
-    pairingReach: RuntimePairingReach = 'network'
+    pairingReach: RuntimePairingReach = 'network',
+    grants: readonly RuntimeDeviceGrant[] = []
   ): DeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope, pairingReach)
+    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants)
   }
 
   private createAndPersistDevice(
     existingDevices: DeviceEntry[],
     name: string,
     scope: DeviceScope,
-    pairingReach: RuntimePairingReach
+    pairingReach: RuntimePairingReach,
+    grants: readonly RuntimeDeviceGrant[]
   ): DeviceEntry {
+    const validatedGrants = validGrants(grants, scope)
     const entry: DeviceEntry = {
       deviceId: randomUUID(),
       name,
@@ -82,7 +126,8 @@ export class DeviceRegistry {
       scope,
       pairedAt: Date.now(),
       lastSeenAt: 0,
-      pairingReach
+      pairingReach,
+      ...(validatedGrants ? { grants: validatedGrants } : {})
     }
     const nextDevices = [...existingDevices, entry]
     // Why: a credential is not valid until its durable registry write succeeds.
@@ -100,9 +145,14 @@ export class DeviceRegistry {
   getOrCreatePendingDevice(
     name: string,
     scope: DeviceScope = 'mobile',
-    pairingReach: RuntimePairingReach = 'network'
+    pairingReach: RuntimePairingReach = 'network',
+    grants: readonly RuntimeDeviceGrant[] = []
   ): DeviceEntry {
-    const existing = this.devices.find((d) => d.lastSeenAt === 0 && d.scope === scope)
+    // Why: a pending token is reused only for the same grants, so re-advertising never widens one.
+    const existing = this.devices.find(
+      (d) =>
+        d.lastSeenAt === 0 && d.scope === scope && sameGrants(d, validGrants(grants, scope) ?? [])
+    )
     if (existing) {
       // Why: the same pending token can be re-advertised at a broader reach; widen it but never narrow it,
       // or a link already handed out for off-host use would stop being served after the next launch.
@@ -110,7 +160,7 @@ export class DeviceRegistry {
         ? this.setPairingReach(existing, 'network')
         : existing
     }
-    return this.addDevice(name, scope, pairingReach)
+    return this.addDevice(name, scope, pairingReach, grants)
   }
 
   private setPairingReach(existing: DeviceEntry, pairingReach: RuntimePairingReach): DeviceEntry {
@@ -134,10 +184,11 @@ export class DeviceRegistry {
   rotatePendingDevice(
     name: string,
     scope: DeviceScope = 'mobile',
-    pairingReach: RuntimePairingReach = 'network'
+    pairingReach: RuntimePairingReach = 'network',
+    grants: readonly RuntimeDeviceGrant[] = []
   ): DeviceEntry {
     const retainedDevices = this.devices.filter((d) => d.lastSeenAt !== 0 || d.scope !== scope)
-    return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach)
+    return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach, grants)
   }
 
   removeDevice(deviceId: string): boolean {
@@ -168,6 +219,26 @@ export class DeviceRegistry {
     const nextDevices = this.devices.map((device, candidateIndex) =>
       candidateIndex === index ? { ...device, relayBinding: binding } : device
     )
+    this.save(nextDevices)
+    this.devices = nextDevices
+    return true
+  }
+
+  /** Passing null clears the registration (unregister, or a token the gateway reported dead). */
+  setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean {
+    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
+    if (index === -1 || this.devices[index]?.scope !== 'mobile') {
+      return false
+    }
+    const nextDevices = this.devices.map((device, candidateIndex) => {
+      if (candidateIndex !== index) {
+        return device
+      }
+      const { pushRegistration: _dropped, ...rest } = device
+      return registration ? { ...rest, pushRegistration: registration } : rest
+    })
+    // Why: persist before the memory swap so a failed write cannot leave the dispatcher
+    // pushing to a registration disk says is gone (or vice versa on reload).
     this.save(nextDevices)
     this.devices = nextDevices
     return true
@@ -286,19 +357,32 @@ export class DeviceRegistry {
         // Why: older registries only existed for phone pairing. Treat missing
         // scope as mobile so legacy device tokens do not gain new CLI powers.
         scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
+        grants: validGrants(device.grants, device.scope === 'runtime' ? 'runtime' : 'mobile'),
         relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
         mobilePairingConnectionMode:
           device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
         // Why: registries written before this field existed only ever held network-reach grants (phones and
         // LAN links), so a missing value must keep binding every interface on reconnect.
-        pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network'
+        pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
+        // Why: a malformed row must degrade to "no background push", never fail the load
+        // and strand every paired device.
+        pushRegistration: parseMobilePushRegistration(device.pushRegistration)
       }))
-    } catch {
+      this.registryUnreadable = false
+    } catch (error) {
+      // "Cannot read" is not "is empty". Saving an empty list over a registry we were merely
+      // denied would erase every paired device's bearer token, and the write would succeed.
+      this.registryUnreadable = isUnreadableError(error)
       this.devices = []
     }
   }
 
   private save(devices: DeviceEntry[]): void {
+    if (this.registryUnreadable) {
+      throw new Error(
+        `Cannot read the device registry at ${this.registryPath}: the read failed. Refusing to overwrite it, which would revoke every paired device.`
+      )
+    }
     writeSecureJsonFile(this.registryPath, devices)
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()

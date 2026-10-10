@@ -1,5 +1,6 @@
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import {
   acquireInstallLockParentCommand,
   lockAgeSecondsCommand,
@@ -10,7 +11,6 @@ import {
 import { isRelayGcClaimed } from './ssh-relay-gc-claim'
 import {
   getRemoteHostPlatform,
-  isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
 } from './ssh-remote-platform'
@@ -20,15 +20,6 @@ import { removeRemoteTreeCommand } from './ssh-remote-commands'
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 export type RelayRepairLockResult = 'acquired' | 'busy' | 'gc' | 'error'
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string,
-  signal?: AbortSignal
-): Promise<string> {
-  return execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(host), signal })
-}
 
 /**
  * Try once to acquire the install lock for best-effort repair work.
@@ -49,7 +40,12 @@ export async function tryAcquireRelayRepairLock(
       remoteRelayDir,
       host,
       options?.signal
-    ).catch(() => undefined)
+    ).catch((error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      return undefined
+    })
     options?.signal?.throwIfAborted()
     if (gcClaimedBeforeAcquire === true) {
       return 'gc'
@@ -57,17 +53,14 @@ export async function tryAcquireRelayRepairLock(
     if (gcClaimedBeforeAcquire !== false) {
       return 'error'
     }
-    await execHostCommand(
-      conn,
-      host,
-      acquireInstallLockParentCommand(host, remoteRelayDir),
-      options?.signal
-    )
+    await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir), {
+      signal: options?.signal
+    })
     const firstAttempt = await execHostCommand(
       conn,
       host,
       tryCreateInstallLockCommand(host, lockDir),
-      options?.signal
+      { signal: options?.signal }
     )
     if (firstAttempt.trim().endsWith('OK')) {
       return finishRepairLockAcquire(conn, remoteRelayDir, lockDir, host, options?.signal)
@@ -76,14 +69,17 @@ export async function tryAcquireRelayRepairLock(
       conn,
       host,
       tryStealInstallLockCommand(host, lockDir, INSTALL_LOCK_STALE_SECONDS),
-      options?.signal
+      { signal: options?.signal }
     )
     if (steal.trim().endsWith('OK')) {
       console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
       return finishRepairLockAcquire(conn, remoteRelayDir, lockDir, host, options?.signal)
     }
     return classifyRepairLockContention(conn, remoteRelayDir, lockDir, host, options?.signal)
-  } catch {
+  } catch (error) {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
     options?.signal?.throwIfAborted()
     return classifyRepairLockContention(conn, remoteRelayDir, lockDir, host, options?.signal)
   }
@@ -96,9 +92,12 @@ async function classifyRepairLockContention(
   host: RemoteHostPlatform,
   signal?: AbortSignal
 ): Promise<RelayRepairLockResult> {
-  const gcClaimed = await isRelayGcClaimed(conn, remoteRelayDir, host, signal).catch(
-    () => undefined
-  )
+  const gcClaimed = await isRelayGcClaimed(conn, remoteRelayDir, host, signal).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    return undefined
+  })
   signal?.throwIfAborted()
   if (gcClaimed === true) {
     return 'gc'
@@ -111,18 +110,25 @@ async function classifyRepairLockContention(
     conn,
     host,
     probeInstallLockExistsCommand(host, lockDir),
-    signal
-  ).catch(() => '')
+    { signal }
+  ).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    return ''
+  })
   signal?.throwIfAborted()
   if (lockProbe.trim() !== 'LOCKED') {
     return 'error'
   }
-  const ageOutput = await execHostCommand(
-    conn,
-    host,
-    lockAgeSecondsCommand(host, lockDir),
+  const ageOutput = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir), {
     signal
-  ).catch(() => '')
+  }).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    return ''
+  })
   signal?.throwIfAborted()
   const ageSeconds = Number.parseInt(ageOutput.trim(), 10)
   // Why: GC may remove stale locks, so only a positively observed fresh lock
@@ -139,15 +145,22 @@ async function finishRepairLockAcquire(
   host: RemoteHostPlatform,
   signal?: AbortSignal
 ): Promise<RelayRepairLockResult> {
-  const gcClaimed = await isRelayGcClaimed(conn, remoteRelayDir, host, signal).catch(
-    () => undefined
-  )
+  const gcClaimed = await isRelayGcClaimed(conn, remoteRelayDir, host, signal).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+    return undefined
+  })
   if (gcClaimed === false && !signal?.aborted) {
     return 'acquired'
   }
   // Why: GC may win its stable sibling claim while this command creates the
   // in-tree lock. Back out before npm can mutate a directory being renamed.
-  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
+  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch((error) => {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
+  })
   signal?.throwIfAborted()
   return gcClaimed ? 'gc' : 'error'
 }

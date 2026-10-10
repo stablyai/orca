@@ -10,6 +10,7 @@ const TOUR_SOURCES = {
   'workspace-board': 'workspace_board_visible',
   'workspace-agent-sessions': 'workspace_agent_sessions_visible',
   browser: 'browser_visible',
+  'client-hosted-browser': 'client_hosted_browser_visible',
   tasks: 'tasks_open',
   automations: 'automations_open',
   'floating-workspace': 'floating_workspace_visible',

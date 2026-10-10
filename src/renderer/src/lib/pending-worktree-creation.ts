@@ -1,16 +1,21 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type {
   CreateSparseCheckoutRequest,
+  SetupDecision
+} from '../../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
+import type {
   GitPushTarget,
-  SetupDecision,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus,
   WorkspaceLinkedItem,
-  WorktreeStartupLaunch
-} from '../../../shared/types'
+  WorkspaceStatus
+} from '../../../shared/worktree/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
+import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -21,15 +26,12 @@ export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
-/**
- * Everything needed to run a worktree create in the background and reproduce it
- * verbatim on retry. Captured at the composer's submit cut point — after all
- * interactive preflight (trust/setup decisions) has resolved — so the modal can
- * close immediately and the work outlives it. Must stay plain-serializable
- * (no closures/refs) so a pending entry can hold it for the panel's Retry.
- */
+/** Serializable creation intent, including any script checks deferred until
+ * after the composer closes. Retained by the pending panel for Retry. */
 export type WorktreeCreationRequest = {
   repoId: string
+  /** Execution owner retained after script preparation, including retries. */
+  executionHostId?: ExecutionHostId
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
@@ -45,31 +47,53 @@ export type WorktreeCreationRequest = {
   /** Runtime environment created from the VM's pairing code. Used to refresh
    *  live status immediately after the workspace takes ownership. */
   ephemeralVmRuntimeEnvironmentId?: string
+  /** Checkout ownership selected by the provisioned recipe. */
+  ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
+  /** Source-host commit captured before a provisioned-root recipe starts. */
+  ephemeralVmExpectedRefHead?: string
   /** Recipe to provision before creating the worktree. Kept serializable so
    *  retry can rerun the recipe after a failed create. */
   ephemeralVmRecipe?: {
     sourceRepoId: string
     recipeId: string
     projectId: string
+    checkoutMode?: 'orca-worktree' | 'provisioned-root'
   }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
   name: string
+  /** True only when `name` came from the creature-name generator; gates host-side retirement. */
+  nameWasGenerated?: boolean
   displayName?: string
+  displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
+  /** Inspect and confirm scripts on the captured host after the composer closes. */
+  hookPreparation?: {
+    executionHostId?: ExecutionHostId
+    confirmVmRecipe?: boolean
+    issueCommand?: {
+      provider: FolderWorkspaceLinkedTask['provider'] | null
+      issueNumber: number
+      artifactUrl: string | null
+    }
+  }
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource
   linkedIssue?: number
   linkedPR?: number
   pushTarget?: GitPushTarget
   agent: TuiAgent | null
+  /** Renderer-owned route decision captured at submit time and reused on retry. */
+  agentLaunchRoute?: AgentLaunchRoute
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
+  /** Parent picked in the composer's Advanced drawer. Sidebar nesting only, no git effect. */
+  parentWorktreeId?: string
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number
@@ -93,6 +117,9 @@ export type WorktreeCreationRequest = {
   /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
    *  startup paste); completion seeds the chat-composer copy from it. */
   launchDraftPrompt?: string
+  /** How a structured launch delivers `launchDraftPrompt ?? quickPrompt`; decided once by the
+   *  composer beside `agentLaunchRoute`, never re-derived from the prompt fields. */
+  promptDelivery?: 'draft' | 'auto-submit'
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */
@@ -150,7 +177,7 @@ export function findPendingLinkedWorkItemCreationId(
  *  loader and the sidebar row so the two never drift. Caller handles the error
  *  case; this only covers the in-progress states. */
 export function getCreationProgressLabel(
-  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate'>
+  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate' | 'request'>
 ): string {
   if (entry.phase === 'provisioning-vm') {
     return 'Provisioning VM…'

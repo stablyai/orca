@@ -2,8 +2,9 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
-import type { CustomPet } from '../../../../shared/types'
+import type { CustomPet } from '../../../../shared/pet-types'
 import { useAppStore } from '../../store'
+import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import {
   selectPetAnimationName,
@@ -23,10 +24,10 @@ function usePetAnimationName(
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
-
   // Re-render when the freshness scheduler ticks so stale live states stop
-  // driving pet animations even if no other store value changes.
-  void agentStatusEpoch
+  // driving pet animations even if no other store value changes, and read the
+  // boundary clock in render so the stale frame never paints.
+  const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 
   return selectPetAnimationName({
     entries: Object.values(agentStatusByPaneKey),
@@ -34,7 +35,7 @@ function usePetAnimationName(
     dragging,
     dragAnimation,
     hovering,
-    now: Date.now(),
+    now: agentStatusNow,
     staleAfterMs: AGENT_STATUS_STALE_AFTER_MS
   })
 }

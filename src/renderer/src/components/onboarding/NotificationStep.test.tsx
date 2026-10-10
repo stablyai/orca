@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { NotificationStep } from './NotificationStep'
 import { resolveMacNotificationPermissionState } from '../notifications/mac-notification-permission-card'
 
@@ -27,9 +27,9 @@ describe('NotificationStep', () => {
       <NotificationStep settings={createSettings()} updateSettings={vi.fn()} />
     )
 
-    expect(html).toContain('Notification Sound')
+    expect(html).toContain('Choose a sound')
     expect(html).toContain('role="combobox"')
-    expect(html).toContain('Send Test Notification')
+    expect(html).toContain('Send test notification')
     expect(html).not.toContain('aria-pressed')
     expect(html).not.toContain('Agent task complete')
     expect(html).not.toContain('Terminal bell')

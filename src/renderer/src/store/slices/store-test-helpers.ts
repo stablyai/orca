@@ -1,13 +1,6 @@
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  Worktree,
-  TerminalTab,
-  TerminalLayoutSnapshot,
-  Tab,
-  TabGroup
-} from '../../../../shared/types'
-import type { OpenFile } from './editor'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { createRepoSlice } from './repos'
 import { createSparsePresetsSlice } from './sparse-presets'
 import { createWorktreeSlice } from './worktrees'
@@ -28,6 +21,7 @@ import { createWorkspaceSpaceSlice } from './workspace-space'
 import {
   createClaudeUsageSlice,
   createCodexUsageSlice,
+  createMuseUsageSlice,
   createOpenCodeUsageSlice
 } from './usage-provider-slices'
 import { createBrowserSlice } from './browser'
@@ -42,6 +36,7 @@ import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
+import { createWorkspaceCleanupBrowseSlice } from './workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
@@ -49,18 +44,21 @@ import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
+import { createFeedbackDraftSlice } from './feedback-draft'
 import { createTaskCreationDraftsSlice } from './task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
-import { translate } from '@/i18n/i18n'
-
-export const TEST_REPO = {
-  id: 'repo1',
-  path: '/repo1',
-  displayName: 'Repo 1',
-  badgeColor: '#000',
-  addedAt: 0
-}
+import { createStructuredSessionLaunchDirectorySlice } from './structured-session-launch-directories'
+import '@/i18n/i18n'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
+export { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
+export {
+  makeTab,
+  makeLayout,
+  makeOpenFile,
+  makeUnifiedTab,
+  makeTabGroup
+} from './store-session-test-harness'
 
 export function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -84,6 +82,7 @@ export function createTestStore() {
     ...createClaudeUsageSlice(...a),
     ...createCodexUsageSlice(...a),
     ...createOpenCodeUsageSlice(...a),
+    ...createMuseUsageSlice(...a),
     ...createBrowserSlice(...a),
     ...createRateLimitSlice(...a),
     ...createSshSlice(...a),
@@ -96,6 +95,7 @@ export function createTestStore() {
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
+    ...createWorkspaceCleanupBrowseSlice(...a),
     ...createRuntimeStatusSlice(...a),
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a),
@@ -103,9 +103,11 @@ export function createTestStore() {
     ...createRecentlyClosedTabsSlice(...a),
     ...createOrcaProfilesSlice(...a),
     ...createNewIssueDraftSlice(...a),
+    ...createFeedbackDraftSlice(...a),
     ...createTaskCreationDraftsSlice(...a),
     ...createRemoteServerUpdatesSlice(...a),
-    ...createTerminalQuickCommandHostsSlice(...a)
+    ...createTerminalQuickCommandHostsSlice(...a),
+    ...createStructuredSessionLaunchDirectorySlice(...a)
   }))
 }
 
@@ -122,31 +124,6 @@ export function seedStore(
   })
 }
 
-export function makeWorktree(
-  overrides: Partial<Worktree> & { id: string; repoId: string }
-): Worktree {
-  return {
-    path: '/tmp/wt',
-    head: 'abc123',
-    branch: 'refs/heads/feature',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...overrides
-  }
-}
-
 export function makeRuntimeOwnedWorktree(
   overrides: Partial<Worktree> & { id: string; repoId: string },
   runtimeEnvironmentId = 'runtime-1'
@@ -156,60 +133,4 @@ export function makeRuntimeOwnedWorktree(
     hostId: overrides.hostId ?? 'local',
     runtimeOwnerEnvironmentId: runtimeEnvironmentId
   })
-}
-
-export function makeTab(
-  overrides: Partial<TerminalTab> & { id: string; worktreeId: string }
-): TerminalTab {
-  return {
-    ptyId: null,
-    title: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: Date.now(),
-    ...overrides
-  }
-}
-
-export function makeLayout(): TerminalLayoutSnapshot {
-  return { root: null, activeLeafId: null, expandedLeafId: null }
-}
-
-export function makeOpenFile(
-  overrides: Partial<OpenFile> & { id: string; worktreeId: string }
-): OpenFile {
-  return {
-    filePath: overrides.id,
-    relativePath: 'file.ts',
-    language: 'typescript',
-    isDirty: false,
-    mode: 'edit',
-    ...overrides
-  }
-}
-
-export function makeUnifiedTab(
-  overrides: Partial<Tab> & { id: string; worktreeId: string; groupId: string }
-): Tab {
-  return {
-    entityId: overrides.id,
-    contentType: 'terminal',
-    label: translate('auto.store.slices.store.test.helpers.b9a8117c33', 'Terminal 1'),
-    customLabel: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: Date.now(),
-    ...overrides
-  }
-}
-
-export function makeTabGroup(
-  overrides: Partial<TabGroup> & { id: string; worktreeId: string }
-): TabGroup {
-  return {
-    activeTabId: null,
-    tabOrder: [],
-    ...overrides
-  }
 }

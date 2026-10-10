@@ -296,25 +296,33 @@ describe('SshConnection SFTP namespace resolution', () => {
   })
 
   it('aborts a transfer stuck in discovery and reports a confirmed channel close', async () => {
-    const sftp = createFakeSftp({ pendingRealpath: true })
-    const conn = connectedTo([sftp])
-    const controller = new AbortController()
+    vi.useFakeTimers()
+    try {
+      const sftp = createFakeSftp({ pendingRealpath: true })
+      const conn = connectedTo([sftp])
+      const controller = new AbortController()
 
-    const write = conn.writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('.version'),
-      signal: controller.signal
-    })
-    await vi.waitFor(() => expect(sftp.realpathCalls).toHaveLength(1))
-    controller.abort()
+      const write = conn
+        .writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
+          hostPlatform: linux,
+          sftpNamespace: fileNamespace('.version'),
+          signal: controller.signal
+        })
+        .catch((err: Error) => err)
+      await vi.waitFor(() => expect(sftp.realpathCalls).toHaveLength(1))
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(5_000)
 
-    const error = (await write.catch((err: Error) => err)) as Error & {
-      sshChannelCloseConfirmed?: boolean
+      const error = (await write) as Error & {
+        sshChannelCloseConfirmed?: boolean
+      }
+      expect(error.name).toBe('AbortError')
+      expect(error.sshChannelCloseConfirmed).toBe(true)
+      expect(sftp.endCalls).toBe(1)
+      expect(sftp.writtenPaths).toEqual([])
+    } finally {
+      vi.useRealTimers()
     }
-    expect(error.name).toBe('AbortError')
-    expect(error.sshChannelCloseConfirmed).toBe(true)
-    expect(sftp.endCalls).toBe(1)
-    expect(sftp.writtenPaths).toEqual([])
   })
 
   it('reports an unconfirmed close when the aborted session never closes', async () => {
@@ -389,7 +397,9 @@ describe('SshConnection SFTP namespace resolution', () => {
           })
           .catch((err: Error) => err)
         await vi.waitFor(() => expect(sftp.pendingRealpathCallbacks).toHaveLength(1))
+        vi.useFakeTimers()
         controller.abort()
+        await vi.advanceTimersByTimeAsync(5_000)
 
         const error = (await write) as Error & { sshChannelCloseConfirmed?: boolean }
         expect(error).toMatchObject({
@@ -398,13 +408,15 @@ describe('SshConnection SFTP namespace resolution', () => {
         })
 
         completeRealpath(sftp.pendingRealpathCallbacks[0]!)
-        await new Promise<void>((resolve) => setImmediate(resolve))
+        await Promise.resolve()
+        await Promise.resolve()
 
         expect(unhandledRejection).not.toHaveBeenCalled()
         expect(sftp.writtenPaths).toEqual([])
         expect(sftp.endCalls).toBe(1)
       } finally {
         process.off('unhandledRejection', unhandledRejection)
+        vi.useRealTimers()
       }
     }
   )

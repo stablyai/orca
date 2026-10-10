@@ -1,14 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { dirname, join } from 'node:path'
-import { getOrcaManagedCodexHomePath } from './codex-home-paths'
+import { resolveOrcaManagedCodexHomePath } from './codex-home-paths'
 import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
 
-// Why: a grant session blocks launch prep, so it must not run on every pane
-// launch. This ledger records what a *verified* codex-side grant left behind
-// (per runtime home): the hook identity that was granted, the Codex-computed
-// hash, and the codex binary that computed it. Install skips the RPC while
-// all three still hold; any drift (hook edit, config wipe, codex upgrade)
-// re-triggers a grant before the pane launches.
+// Why: a grant session blocks launch prep, so it may not run on every pane
+// launch. This ledger
+// records what a *verified* codex-side grant left behind (per runtime home):
+// the hook identity that was granted, the Codex-computed hash, and the codex
+// binary that computed it. Install skips the RPC while all three still hold;
+// any drift (hook edit, config wipe, codex upgrade) re-triggers a grant.
 
 export type CodexTrustGrantBinaryStamp =
   | { kind: 'native'; path: string; size: number; mtimeMs: number }
@@ -32,21 +33,31 @@ type CodexTrustGrantLedgerFile = {
   homes: Record<string, CodexTrustGrantLedgerHome>
 }
 
+// Why resolved, not created: a read for ~/.codex must not make Orca's own home; a write makes the folder.
 export function getCodexTrustGrantLedgerPath(): string {
-  return join(dirname(getOrcaManagedCodexHomePath()), 'trust-grant-ledger.json')
+  return join(dirname(resolveOrcaManagedCodexHomePath()), 'trust-grant-ledger.json')
 }
 
 export function getCodexTrustGrantHomeKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
 }
 
-function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
+/**
+ * `null` means the ledger could not be READ, which is different from an absent
+ * or corrupt one. A write derived from `empty` persists a file containing only
+ * the home being written, destroying every other home's grants — so the write
+ * paths refuse on `null` while the read path keeps degrading.
+ */
+function readLedgerFileOrNull(ledgerPath: string): CodexTrustGrantLedgerFile | null {
   const empty: CodexTrustGrantLedgerFile = { version: 1, homes: {} }
-  if (!existsSync(ledgerPath)) {
-    return empty
+  let rawLedger: string
+  try {
+    rawLedger = readFileSync(ledgerPath, 'utf-8')
+  } catch (error) {
+    return isDefinitiveAbsence(error) ? empty : null
   }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(ledgerPath, 'utf-8'))
+    const parsed: unknown = JSON.parse(rawLedger)
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -65,6 +76,11 @@ function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
     // block hook install.
     return empty
   }
+}
+
+/** Corrupt or absent still degrades to empty — rebuilding those IS the intent. */
+function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
+  return readLedgerFileOrNull(ledgerPath) ?? { version: 1, homes: {} }
 }
 
 function persistLedgerFile(ledgerPath: string, file: CodexTrustGrantLedgerFile): void {
@@ -94,7 +110,13 @@ export function writeCodexTrustGrantLedgerHome(
   home: CodexTrustGrantLedgerHome,
   ledgerPath = getCodexTrustGrantLedgerPath()
 ): void {
-  const file = readLedgerFile(ledgerPath)
+  const file = readLedgerFileOrNull(ledgerPath)
+  if (!file) {
+    // Why: writing a file derived from `empty` would drop every other home's
+    // grants, and those homes would then be re-prompted for trust they had
+    // already granted. Skip this write; the next grant retries.
+    return
+  }
   file.homes[getCodexTrustGrantHomeKey(runtimeHomePath)] = home
   persistLedgerFile(ledgerPath, file)
 }
@@ -110,15 +132,6 @@ export function removeCodexTrustGrantLedgerHome(
   }
   delete file.homes[homeKey]
   persistLedgerFile(ledgerPath, file)
-}
-
-export function buildNativeCodexBinaryStamp(binaryPath: string): CodexTrustGrantBinaryStamp | null {
-  try {
-    const stat = statSync(binaryPath)
-    return { kind: 'native', path: binaryPath, size: stat.size, mtimeMs: stat.mtimeMs }
-  } catch {
-    return null
-  }
 }
 
 export function binaryStampsMatch(

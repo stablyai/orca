@@ -1,12 +1,12 @@
 // Why: Google binds a signed-in session to the browser identity that created it.
-// Cookies copied in from another browser (or sent under an Electron/Chrome-shaped
-// UA that doesn't match a real first-party browser) get flagged by anti-fraud on
-// accounts.google.com and expire within ~1h. Presenting a Firefox identity scoped
+// Cookies copied in from another browser (or sent under a UA that doesn't match a
+// real first-party browser) get flagged by anti-fraud on accounts.google.com and
+// expire within ~1h. Presenting a Firefox identity scoped
 // to Google's auth hosts lets the user sign in *inside* the embedded browser, so
 // Google issues cookies bound to THIS browser that self-refresh — instead of us
 // transplanting cookies that go stale. Scope is deliberately the auth hosts only:
 // post-auth app surfaces (mail.google.com, myaccount.google.com, drive, etc.) keep
-// the profile's real Chrome-shaped identity so nothing else about the session shifts.
+// the profile's real identity so nothing else about the session shifts.
 
 // Why: exact hostname match — subdomains such as myaccount.google.com are post-auth
 // app surfaces, not the sign-in flow, and must retain the profile's real identity.
@@ -18,6 +18,19 @@ export function isGoogleAuthUrl(rawUrl: string): boolean {
   } catch {
     return false
   }
+}
+
+export function shouldUseGoogleAuthIdentity(
+  url: string,
+  referrer: string,
+  resourceType: string
+): boolean {
+  if (isGoogleAuthUrl(url)) {
+    return true
+  }
+  // Why: early cross-host subresources can leave before the WebContents Firefox override lands;
+  // the auth referrer identifies their owning flow. Main-frame exits restore the process identity.
+  return resourceType !== 'mainFrame' && isGoogleAuthUrl(referrer)
 }
 
 // Why: rv:/Gecko/Firefox tokens must line up with a real released build and the

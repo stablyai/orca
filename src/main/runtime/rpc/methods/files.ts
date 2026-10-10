@@ -1,254 +1,109 @@
-/* oxlint-disable max-lines -- Why: file RPC routing coverage stays together so the dispatcher contract for read, write, mutation, and watch methods is easy to audit. */
-import { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
+import { FILE_MUTATION_METHODS } from './files-mutation-methods'
+import {
+  assertDirListingWithinRemoteBudget,
+  remoteFileContentBudget
+} from './files-remote-content-budget'
+import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/quick-open-transport-budget'
+import { FileOpen, WorktreeSelector } from '../../../../shared/rpc-contract/files-target-params'
+import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
+import {
+  FilePathsExist,
+  DocPreviewFileRead,
+  FileListAll,
+  FileOpenDiff,
+  FileOpenTab,
+  FilePathSearch,
+  FileReadChunk,
+  FileSearch,
+  FileTreePath,
+  FileUnwatch,
+  ResolveTerminalPath,
+  ServerDirectoryBrowse
+} from '../../../../shared/rpc-contract/files-params'
 
 let filesWatchSubscriptionSeq = 0
-const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
 
-function isValidRuntimeFileBase64(value: unknown): value is string {
-  return (
-    typeof value === 'string' && value.length % 4 !== 1 && RUNTIME_FILE_BASE64_PATTERN.test(value)
-  )
-}
-
-type SshMutationParams = {
-  expectedExecutionHostId?: string
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-}
-
-function sshMutationArguments(
-  params: SshMutationParams
-): [expectedGeneration?: number, expectedTargetId?: string, expectedExecutionHostId?: string] {
-  if (
-    params.expectedExecutionHostId === undefined &&
-    params.expectedSshTargetId === undefined &&
-    params.expectedSshConnectionGeneration === undefined
-  ) {
-    return []
-  }
-  return [
-    params.expectedSshConnectionGeneration,
-    params.expectedSshTargetId,
-    params.expectedExecutionHostId
-  ]
-}
-
-const WorktreeSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
-})
-
-const FilePathSearch = WorktreeSelector.extend({
-  query: z.string().max(256).default(''),
-  limit: z.number().int().positive().max(32).default(16)
-})
-
-const FileOpen = WorktreeSelector.extend({
-  relativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing relative path'))
-})
-
-const FileMutationOpen = FileOpen.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional()
-})
-
-const ResolveTerminalPath = WorktreeSelector.extend({
-  pathText: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing path text')),
-  terminal: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
-    .nullable()
-    .optional(),
-  cwd: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
-    .nullable()
-    .optional(),
-  crossWorkspace: z
-    .unknown()
-    .transform((v) => v === true)
-    .optional()
-})
-
-const TerminalArtifactFile = WorktreeSelector.extend({
-  grantId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing terminal artifact grant')),
-  absolutePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing terminal artifact path'))
-})
-
-const TerminalArtifactFileWrite = TerminalArtifactFile.extend({
-  content: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-})
-
-const FileOpenDiff = FileOpen.extend({
-  staged: z.boolean().optional()
-})
-
-const FileTreePath = WorktreeSelector.extend({
-  relativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string())
-})
-
-const ServerDirectoryBrowse = z.object({
-  path: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string())
-})
-
-// Why: write content must be a real string. Coercing a missing/non-string value
-// to '' silently truncated the target file to empty instead of erroring. An
-// explicit '' is still accepted (writing an empty file is legitimate).
-const FileWrite = FileMutationOpen.extend({
-  content: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-})
-
-const FileWriteBase64 = FileMutationOpen.extend({
-  contentBase64: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-    // Why: Buffer.from(..., 'base64') accepts malformed input by dropping
-    // invalid bytes, which can silently create empty or corrupt uploaded files.
-    .refine(isValidRuntimeFileBase64, 'File content must be base64')
-})
-
-const FileWriteBase64Chunk = FileWriteBase64.extend({
-  append: z.boolean().optional()
-})
-
-const FileReadChunk = FileOpen.extend({
-  offset: z.number().int().nonnegative(),
-  length: z
-    .number()
-    .int()
-    .positive()
-    .max(512 * 1024)
-})
-
-const FileRename = WorktreeSelector.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
-  oldRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing source path')),
-  newRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing destination path'))
-})
-
-const FileCopy = WorktreeSelector.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
-  sourceRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing source path')),
-  destinationRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing destination path'))
-})
-
-const FileCommitUpload = WorktreeSelector.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
-  tempRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing temporary path')),
-  finalRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing final path'))
-})
-
-const FileDelete = FileMutationOpen.extend({
-  recursive: z.boolean().optional()
-})
-
-const FileSearch = WorktreeSelector.extend({
-  query: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing search query')),
-  caseSensitive: z.boolean().optional(),
-  wholeWord: z.boolean().optional(),
-  useRegex: z.boolean().optional(),
-  includePattern: z.string().optional(),
-  excludePattern: z.string().optional(),
-  maxResults: z.number().int().positive().optional()
-})
-
-const FileListAll = WorktreeSelector.extend({
-  excludePaths: z.array(z.string()).optional()
-})
-
-const FileUnwatch = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
-
-export const FILE_METHODS: RpcAnyMethod[] = [
+export const FILE_METHODS = [
   defineMethod({
     name: 'files.list',
+    permission: 'workspace',
     params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.listMobileFiles(params.worktree)
+    handler: async (params, { runtime, signal }) =>
+      signal === undefined
+        ? runtime.listMobileFiles(params.worktree)
+        : runtime.listMobileFiles(params.worktree, { signal })
   }),
   defineMethod({
     name: 'files.searchPaths',
+    permission: 'workspace',
     params: FilePathSearch,
-    handler: async (params, { runtime }) =>
-      runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
+    handler: async (params, { runtime, signal, clientKind, requestId }) => {
+      if (params.mode !== 'quick-open') {
+        return runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
+      }
+      const result = await runtime.searchQuickOpenFilePaths(
+        params.worktree,
+        params.query,
+        params.limit,
+        params.excludePaths,
+        signal,
+        {
+          includeIgnored: params.includeIgnored,
+          followSymlinks: params.followSymlinks,
+          ...(params.allowLegacyIncludeIgnored ? { allowLegacyIncludeIgnored: true } : {})
+        }
+      )
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return maxContentBytes === undefined
+        ? result
+        : limitQuickOpenSearchReplyBySerializedBytes(result, maxContentBytes)
+    }
   }),
   defineMethod({
     name: 'files.open',
-    params: FileOpen,
+    permission: 'workspace',
+    params: FileOpenTab,
     handler: async (params, { runtime }) =>
-      runtime.openMobileFile(params.worktree, params.relativePath)
+      runtime.openMobileFile(params.worktree, params.relativePath, params.navigation)
   }),
   defineMethod({
     name: 'files.openDiff',
+    permission: 'workspace',
     params: FileOpenDiff,
     handler: async (params, { runtime }) =>
-      runtime.openMobileDiff(params.worktree, params.relativePath, params.staged === true)
+      runtime.openMobileDiff(
+        params.worktree,
+        params.relativePath,
+        params.staged === true,
+        params.navigation
+      )
   }),
   defineMethod({
     name: 'files.read',
+    permission: 'workspace',
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readMobileFile(params.worktree, params.relativePath)
   }),
   defineMethod({
+    name: 'files.readDocPreview',
+    permission: 'workspace',
+    params: DocPreviewFileRead,
+    handler: async (params, { runtime, clientKind, requestId }) =>
+      runtime.readDocPreviewFile(
+        params.worktree,
+        params.relativePath,
+        params.entryRelativePath,
+        params.implicitRootRelativePath,
+        params.authorizedRootRelativePaths,
+        remoteFileContentBudget(clientKind, requestId)
+      )
+  }),
+  defineMethod({
     name: 'files.resolveTerminalPath',
+    permission: 'workspace',
     params: ResolveTerminalPath,
     handler: async (params, { runtime, clientId }) =>
       runtime.resolveTerminalPath(
@@ -257,51 +112,25 @@ export const FILE_METHODS: RpcAnyMethod[] = [
         params.cwd ?? null,
         clientId,
         params.terminal ?? null,
-        params.crossWorkspace === true
+        params.crossWorkspace === true,
+        params.nativeChatContext ?? null
       )
   }),
-  defineMethod({
-    name: 'files.readTerminalArtifact',
-    params: TerminalArtifactFile,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.readTerminalArtifactFile(
-        params.worktree,
-        params.grantId,
-        params.absolutePath,
-        clientId
-      )
-  }),
-  defineMethod({
-    name: 'files.readTerminalArtifactPreview',
-    params: TerminalArtifactFile,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.readTerminalArtifactPreview(
-        params.worktree,
-        params.grantId,
-        params.absolutePath,
-        clientId
-      )
-  }),
-  defineMethod({
-    name: 'files.writeTerminalArtifact',
-    params: TerminalArtifactFileWrite,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.writeTerminalArtifactFile(
-        params.worktree,
-        params.grantId,
-        params.absolutePath,
-        params.content,
-        clientId
-      )
-  }),
+  ...FILE_TERMINAL_ARTIFACT_METHODS,
   defineMethod({
     name: 'files.readPreview',
+    permission: 'workspace',
     params: FileOpen,
-    handler: async (params, { runtime }) =>
-      runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+    handler: async (params, { runtime, clientKind, requestId }) => {
+      const budget = remoteFileContentBudget(clientKind, requestId)
+      return budget === undefined
+        ? runtime.readFileExplorerPreview(params.worktree, params.relativePath)
+        : runtime.readFileExplorerPreview(params.worktree, params.relativePath, budget)
+    }
   }),
   defineMethod({
     name: 'files.readChunk',
+    permission: 'workspace',
     params: FileReadChunk,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerChunk(
@@ -313,156 +142,84 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'files.readDir',
+    permission: 'workspace',
     params: FileTreePath,
-    handler: async (params, { runtime }) =>
-      runtime.readFileExplorerDir(params.worktree, params.relativePath)
+    handler: async (params, { runtime, clientKind, requestId }) =>
+      assertDirListingWithinRemoteBudget(
+        params.followSymlinks === undefined
+          ? await runtime.readFileExplorerDir(params.worktree, params.relativePath)
+          : await runtime.readFileExplorerDir(params.worktree, params.relativePath, {
+              followSymlinks: params.followSymlinks
+            }),
+        remoteFileContentBudget(clientKind, requestId)
+      )
   }),
   defineMethod({
     name: 'files.browseServerDir',
+    permission: 'workspace',
     params: ServerDirectoryBrowse,
     handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
-  defineMethod({
-    name: 'files.write',
-    params: FileWrite,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFile(
-        params.worktree,
-        params.relativePath,
-        params.content,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.writeBase64',
-    params: FileWriteBase64,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFileBase64(
-        params.worktree,
-        params.relativePath,
-        params.contentBase64,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.writeBase64Chunk',
-    params: FileWriteBase64Chunk,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFileBase64Chunk(
-        params.worktree,
-        params.relativePath,
-        params.contentBase64,
-        params.append === true,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.createFile',
-    params: FileMutationOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerFile(
-        params.worktree,
-        params.relativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.createDir',
-    params: FileMutationOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDir(
-        params.worktree,
-        params.relativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.createDirNoClobber',
-    params: FileMutationOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDirNoClobber(
-        params.worktree,
-        params.relativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.commitUpload',
-    params: FileCommitUpload,
-    handler: async (params, { runtime }) =>
-      runtime.commitFileExplorerUpload(
-        params.worktree,
-        params.tempRelativePath,
-        params.finalRelativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.rename',
-    params: FileRename,
-    handler: async (params, { runtime }) =>
-      runtime.renameFileExplorerPath(
-        params.worktree,
-        params.oldRelativePath,
-        params.newRelativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.copy',
-    params: FileCopy,
-    handler: async (params, { runtime }) =>
-      runtime.copyFileExplorerPath(
-        params.worktree,
-        params.sourceRelativePath,
-        params.destinationRelativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.delete',
-    params: FileDelete,
-    handler: async (params, { runtime }) =>
-      runtime.deleteFileExplorerPath(
-        params.worktree,
-        params.relativePath,
-        params.recursive,
-        ...sshMutationArguments(params)
-      )
-  }),
+  ...FILE_MUTATION_METHODS,
   defineMethod({
     name: 'files.search',
+    permission: 'workspace',
     params: FileSearch,
-    handler: async (params, { runtime }) =>
-      runtime.searchRuntimeFiles(params.worktree, {
-        query: params.query,
-        caseSensitive: params.caseSensitive,
-        wholeWord: params.wholeWord,
-        useRegex: params.useRegex,
-        includePattern: params.includePattern,
-        excludePattern: params.excludePattern,
-        maxResults: params.maxResults
-      })
+    handler: async (params, { runtime, signal }) =>
+      runtime.searchRuntimeFiles(
+        params.worktree,
+        {
+          query: params.query,
+          caseSensitive: params.caseSensitive,
+          wholeWord: params.wholeWord,
+          useRegex: params.useRegex,
+          includePattern: params.includePattern,
+          excludePattern: params.excludePattern,
+          maxResults: params.maxResults
+        },
+        { signal }
+      )
   }),
   defineMethod({
     name: 'files.listAll',
+    permission: 'workspace',
     params: FileListAll,
-    handler: async (params, { runtime }) =>
-      runtime.listRuntimeFiles(params.worktree, { excludePaths: params.excludePaths })
+    handler: async (params, { runtime, clientKind, requestId, signal }) => {
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return runtime.listRuntimeFiles(params.worktree, {
+        ...(params.candidatePaths === undefined ? {} : { candidatePaths: params.candidatePaths }),
+        excludePaths: params.excludePaths,
+        ...(params.includeIgnored === undefined ? {} : { includeIgnored: params.includeIgnored }),
+        ...(params.followSymlinks === undefined ? {} : { followSymlinks: params.followSymlinks }),
+        ...(params.maxResults === undefined ? {} : { maxResults: params.maxResults }),
+        ...(signal === undefined ? {} : { signal }),
+        ...(maxContentBytes === undefined ? {} : { maxContentBytes })
+      })
+    }
   }),
   defineMethod({
     name: 'files.listMarkdownDocuments',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeMarkdownDocuments(params.worktree)
   }),
   defineMethod({
+    name: 'files.pathsExist',
+    permission: 'workspace',
+    params: FilePathsExist,
+    handler: async (params, { runtime }) =>
+      runtime.pathsExistRuntimeFiles(params.worktree, params.relativePaths)
+  }),
+  defineMethod({
     name: 'files.stat',
+    permission: 'workspace',
     params: FileTreePath,
     handler: async (params, { runtime }) =>
       runtime.statRuntimeFile(params.worktree, params.relativePath)
   }),
   defineStreamingMethod({
     name: 'files.watch',
+    permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime, connectionId, signal }, emit) => {
       const seq = ++filesWatchSubscriptionSeq
@@ -479,6 +236,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'files.unwatch',
+    permission: 'workspace',
     params: FileUnwatch,
     handler: async (params, { runtime }) => {
       await runtime.cleanupSubscriptionAndWait(params.subscriptionId)

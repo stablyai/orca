@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
 import { ImagePlus, Mic } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -12,7 +13,7 @@ type MobileTerminalInputActionsProps = {
   readonly canSend: boolean
   readonly isAttaching: boolean
   readonly dictation: DictationState
-  readonly dictationMode: 'toggle' | 'hold'
+  readonly dictationMode: string | undefined
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly activeButtonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
@@ -74,7 +75,7 @@ export function MobileTerminalInputActions({
                   onDictationCancel()
                 }
               }
-            : undefined
+            : keepHeldPressThroughLongPress
         }
         accessibilityLabel={
           dictation.isRecording

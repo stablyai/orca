@@ -42,6 +42,8 @@ function setTabs(
 ): void {
   useAppStore.setState({
     tabsByWorktree: { 'wt-1': tabs },
+    terminalLayoutsByTabId: {},
+    agentStatusByPaneKey: {},
     worktreesByRepo: {
       'repo-1': [
         {
@@ -89,8 +91,7 @@ beforeEach(() => {
   useAppStore.setState({
     settings: {
       ...initialSettings,
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
+      experimentalNativeChat: true
     }
   })
 })
@@ -129,9 +130,8 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
     )
   })
 
-  it('moves a backend-spawned non-mirrorable draft out of an inherited chat view', () => {
+  it('preserves an explicit chat view while seeding a backend draft', () => {
     setTabs([{ id: 'agent-tab', launchAgent: 'claude', viewMode: 'chat' }])
-
     seedAgentTabStateAfterWorktreeCreate({
       request: { ...request, launchDraftPrompt: 'note\u2028https://github.com/o/r/issues/12' },
       worktreeId: 'wt-1',
@@ -139,13 +139,11 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
       startupTerminalTabId: 'agent-tab',
       backendSpawned: true
     })
-
-    expect(tabViewMode('agent-tab')).toBe('terminal')
+    expect(tabViewMode('agent-tab')).toBe('chat')
   })
 
-  it('opens a backend-spawned mirrorable draft in chat after host reconciliation', () => {
+  it('does not turn a backend terminal draft into terminal-backed chat', () => {
     setTabs([{ id: 'agent-tab', launchAgent: 'claude', viewMode: 'terminal' }])
-
     seedAgentTabStateAfterWorktreeCreate({
       request,
       worktreeId: 'wt-1',
@@ -153,31 +151,11 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
       startupTerminalTabId: 'agent-tab',
       backendSpawned: true
     })
-
-    expect(tabViewMode('agent-tab')).toBe('chat')
+    expect(tabViewMode('agent-tab')).toBe('terminal')
   })
 
-  it('still opens a local omp draft in chat, despite the local-transcript gate', () => {
-    // Why: omp discloses no hook transcript path, so it joins Grok in requiring a
-    // locally readable sessions root. This call site must therefore SUPPLY that
-    // readability flag for omp too — gating on Grok alone left it undefined and
-    // parked every omp draft in the terminal view, local workspace or not.
-    setTabs([{ id: 'agent-tab', launchAgent: 'omp', viewMode: 'terminal' }])
-
-    seedAgentTabStateAfterWorktreeCreate({
-      request: { ...request, agent: 'omp' as const },
-      worktreeId: 'wt-1',
-      primaryTabId: 'agent-tab',
-      startupTerminalTabId: 'agent-tab',
-      backendSpawned: true
-    })
-
-    expect(tabViewMode('agent-tab')).toBe('chat')
-  })
-
-  it('keys a raw backend tab id and updates the host before its tab mirror lands', async () => {
+  it('seeds a raw backend tab id without setting a default view on the host', () => {
     setTabs([], 'runtime-1')
-
     seedAgentTabStateAfterWorktreeCreate({
       request,
       worktreeId: 'wt-1',
@@ -185,20 +163,8 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
       startupTerminalTabId: 'host-agent-tab',
       backendSpawned: true
     })
-
     expect(seededTabIds()).toEqual(['web-terminal-host-agent-tab'])
-    await vi.waitFor(() =>
-      expect(mocks.setWebRuntimeTabProps).toHaveBeenCalledWith({
-        worktreeId: 'wt-1',
-        tabId: 'web-terminal-host-agent-tab',
-        viewMode: 'chat'
-      })
-    )
-    setTabs(
-      [{ id: 'web-terminal-host-agent-tab', launchAgent: 'claude', viewMode: 'chat' }],
-      'runtime-1'
-    )
-    expect(seededTabIds()).toEqual(['web-terminal-host-agent-tab'])
+    expect(mocks.setWebRuntimeTabProps).not.toHaveBeenCalled()
   })
 
   it('seeds the launchAgent-stamped tab when the renderer owns startup', () => {

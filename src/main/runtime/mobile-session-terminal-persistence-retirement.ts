@@ -1,14 +1,13 @@
-import type { WorkspaceSessionState, WorkspaceVisibleTabType } from '../../shared/types'
+import type { WorkspaceVisibleTabType } from '../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
   pruneTabGroupLayoutAfterRetirement,
   repairMobileSessionTabGroupsAfterRetirement,
   retireLeavesFromTerminalLayout,
   type RetiredTerminalSurface
 } from './mobile-session-terminal-retirement'
-import {
-  advanceTerminalTopologyRevision,
-  rebaseWorkspaceSessionTerminalMembership
-} from './workspace-session-terminal-membership-authority'
+import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../persistence/terminal-topology/terminal-topology-membership'
 
 function visibleTypeForContentType(
   contentType: string | undefined
@@ -71,7 +70,7 @@ export function retireTerminalSurfaceFromPersistence(
   }
   const persistedTabs = session.tabsByWorktree[surface.worktreeId] ?? []
   const persistedTab = persistedTabs.find((tab) => tab.id === surface.parentTabId)
-  const layout = session.terminalLayoutsByTabId[surface.parentTabId]
+  const layout = session.terminalLayoutsByTabId?.[surface.parentTabId]
   const exactLeafInLayout = Boolean(layout && layoutContainsLeaf(layout.root, surface.leafId))
   const leafPtyId = exactLeafInLayout ? layout?.ptyIdsByLeafId?.[surface.leafId] : undefined
   if (leafPtyId && leafPtyId !== surface.ptyId) {

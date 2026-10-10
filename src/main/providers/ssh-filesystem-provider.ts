@@ -1,6 +1,11 @@
+import { readSshDirectoryWithSftpFallback } from './ssh-directory-listing'
+import { readSshMarkdownDocuments } from './ssh-markdown-document-listing'
+import { readSshPathExistenceBatch } from './ssh-filesystem-path-existence'
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
+import { listSshFiles } from './ssh-file-listing'
 import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
 import {
   downloadFileViaSftp,
@@ -16,17 +21,29 @@ import {
 } from './ssh-filesystem-provider-watch'
 import type {
   IFilesystemProvider,
+  FileRangeReadResult,
+  FileReadLimits,
   FileStat,
   FileReadResult,
   FileUploadSession,
   TerminalArtifactAccessOptions
 } from './types'
-import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import {
+  probeSshQuickOpenSearchCapability,
+  probeSshRangedReadCapability
+} from './ssh-filesystem-provider-capabilities'
+import { readSshFileRange } from './ssh-filesystem-range-read'
+import {
+  readSshTerminalArtifact,
+  writeSshTerminalArtifact
+} from './ssh-filesystem-terminal-artifact'
+import { readSshDocPreviewFile } from './ssh-filesystem-doc-preview'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
-
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -83,18 +100,18 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return this.connectionId
   }
 
-  async readDir(dirPath: string): Promise<DirEntry[]> {
-    return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
+  async readDir(dirPath: string, options?: { followSymlinks?: boolean }): Promise<DirEntry[]> {
+    return readSshDirectoryWithSftpFallback(this.mux, dirPath, this.createSftp, options)
   }
 
-  async readFile(filePath: string): Promise<FileReadResult> {
+  async readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult> {
     // Why: streaming is the default path so previews above the legacy single-
     // frame budget (~12 MB after base64) don't hit MAX_MESSAGE_SIZE. Old relays
     // that don't implement fs.readFileStream surface as MethodNotFound; we fall
     // back to the legacy single-shot fs.readFile (which retains the old 10 MB
     // cap on those hosts).
     try {
-      return await readFileViaStream(this.mux, filePath)
+      return await readFileViaStream(this.mux, filePath, limits)
     } catch (err) {
       if (isMethodNotFoundError(err)) {
         if (!this.loggedStreamFallback) {
@@ -109,25 +126,38 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     }
   }
 
-  async readTerminalArtifact(
+  readDocPreviewFile(
+    request: Parameters<NonNullable<IFilesystemProvider['readDocPreviewFile']>>[0]
+  ): ReturnType<NonNullable<IFilesystemProvider['readDocPreviewFile']>> {
+    return readSshDocPreviewFile(this.mux, request)
+  }
+
+  readFileRange(
+    filePath: string,
+    position: number,
+    length: number,
+    options?: { signal?: AbortSignal }
+  ): Promise<FileRangeReadResult> {
+    return readSshFileRange(this.mux, filePath, position, length, options?.signal)
+  }
+
+  supportsFileRangeRead(options?: { signal?: AbortSignal }): Promise<boolean> {
+    return probeSshRangedReadCapability(this.mux, options?.signal)
+  }
+
+  readTerminalArtifact(
     filePath: string,
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult> {
-    try {
-      return (await this.mux.request('fs.readTerminalArtifact', {
-        filePath,
-        expectedRealPath: options.expectedRealPath,
-        expectedStatIdentity: options.expectedStatIdentity,
-        maxBytes: options.maxBytes
-      })) as FileReadResult
-    } catch (err) {
-      if (isMethodNotFoundError(err)) {
-        throw new Error(
-          'Remote terminal artifact access is unavailable. Reconnect the SSH target before retrying.'
-        )
-      }
-      throw err
-    }
+    return readSshTerminalArtifact(this.mux, filePath, options)
+  }
+
+  writeTerminalArtifact(
+    filePath: string,
+    content: string,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileStat> {
+    return writeSshTerminalArtifact(this.mux, filePath, content, options)
   }
 
   async downloadFile(sourcePath: string, destinationPath: string): Promise<void> {
@@ -161,34 +191,6 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     await this.mux.request('fs.writeFile', { filePath, content })
   }
 
-  async writeTerminalArtifact(
-    filePath: string,
-    content: string,
-    options: TerminalArtifactAccessOptions
-  ): Promise<FileStat> {
-    let result: { stat?: FileStat }
-    try {
-      result = (await this.mux.request('fs.writeTerminalArtifact', {
-        filePath,
-        content,
-        expectedRealPath: options.expectedRealPath,
-        expectedStatIdentity: options.expectedStatIdentity,
-        maxBytes: options.maxBytes
-      })) as { stat?: FileStat }
-    } catch (err) {
-      if (isMethodNotFoundError(err)) {
-        throw new Error(
-          'Remote terminal artifact access is unavailable. Reconnect the SSH target before retrying.'
-        )
-      }
-      throw err
-    }
-    if (!result.stat) {
-      throw new Error('terminal_file_grant_stale')
-    }
-    return result.stat
-  }
-
   async writeFileBase64(filePath: string, contentBase64: string): Promise<void> {
     await this.writeFileBase64Chunk(filePath, contentBase64, false)
   }
@@ -217,6 +219,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     } finally {
       sftp.end()
     }
+  }
+
+  pathsExist(filePaths: string[]): Promise<PathExistenceResult[]> {
+    return readSshPathExistenceBatch(this.mux, filePaths, (path) => this.stat(path))
   }
 
   async stat(filePath: string): Promise<FileStat> {
@@ -296,29 +302,27 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.realpath', { filePath })) as string
   }
 
-  async search(opts: SearchOptions): Promise<SearchResult> {
-    return (await this.mux.request('fs.search', opts)) as SearchResult
+  async search(opts: SearchOptions, options?: { signal?: AbortSignal }): Promise<SearchResult> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fs.search returns the relay's SearchResult contract; signal stays in local transport options.
+    return (await this.mux.request('fs.search', opts, { signal: options?.signal })) as SearchResult
   }
 
   async listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
+    options?: Parameters<IFilesystemProvider['listFiles']>[1]
   ): Promise<string[]> {
-    const params: Record<string, unknown> = { rootPath }
-    if (options?.excludePaths && options.excludePaths.length > 0) {
-      params.excludePaths = options.excludePaths
-    }
-    if (options?.maxResults !== undefined) {
-      params.maxResults = options.maxResults
-    }
-    // Why #7721: the signal lets a workspace switch send rpc.cancel so the
-    // relay aborts the full-tree scan instead of stacking abandoned scans
-    // that starve interactive fs.readDir/fs.stat on the shared SSH channel.
-    return (await this.mux.request('fs.listFiles', params, {
-      signal: options?.signal
-    })) as string[]
+    return listSshFiles(this.mux, rootPath, options)
   }
 
+  listMarkdownDocuments = (rootPath: string, options?: { signal?: AbortSignal }) =>
+    readSshMarkdownDocuments(this.mux, rootPath, options?.signal, () =>
+      this.listFiles(rootPath, { signal: options?.signal })
+    )
+
+  supportsQuickOpenSearch = (
+    options: { signal?: AbortSignal; minimumVersion?: number } = {}
+  ): Promise<boolean> =>
+    probeSshQuickOpenSearchCapability(this.mux, options.signal, options.minimumVersion)
   async watch(
     rootPath: string,
     callback: (events: FsChangeEvent[]) => void,

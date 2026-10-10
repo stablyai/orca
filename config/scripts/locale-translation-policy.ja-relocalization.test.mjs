@@ -79,6 +79,22 @@ describe('locale-translation-policy ja relocalization', () => {
     expect(ja('Open the browser', 'ブラウザーを開く')).toBe('ブラウザを開く')
   })
 
+  it('preserves translated Japanese Skills labels', () => {
+    expect(
+      ja(
+        'Filter by agent',
+        'エージェントで絞り込み',
+        'auto.components.skills.SkillsPage.filterProvider'
+      )
+    ).toBe('エージェントで絞り込み')
+  })
+
+  it('preserves the native chat subagent label', () => {
+    expect(ja('Subagent', 'サブエージェント', 'components.native-chat.tool.row.subagent')).toBe(
+      'サブエージェント'
+    )
+  })
+
   it('leaves ranges and token samples out of the ellipsis rule', () => {
     expect(ja('Compare main...HEAD', 'main...HEAD を比較')).toBe('main...HEAD を比較')
   })

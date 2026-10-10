@@ -14,7 +14,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import RepoBadgeLabel from './RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 

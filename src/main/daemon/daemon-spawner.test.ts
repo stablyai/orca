@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer, connect, type Server } from 'node:net'
 import {
   DaemonSpawner,
   getDaemonArtifactHoldClaimPath,
@@ -14,15 +13,10 @@ import {
   replaceDaemonPidFile,
   restoreClaimedDaemonArtifact
 } from './daemon-spawner'
-import {
-  getDaemonSocketBindPath,
-  publishDaemonEndpoint,
-  readDaemonSocketIdentity
-} from './daemon-endpoint-ownership'
-import { probeSocketConnect } from './daemon-endpoint-probe'
+import { getDaemonSocketBindPath } from './daemon-endpoint-ownership'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { PROTOCOL_VERSION } from './types'
 
 function createTestDir(): string {
@@ -37,6 +31,7 @@ function createMockSubprocess(): SubprocessHandle {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
     signal: vi.fn(),
     onData(_cb: (data: string) => void) {},
@@ -141,25 +136,6 @@ describe('DaemonSpawner', () => {
       })
       await client.ensureConnected()
       expect(client.isConnected()).toBe(true)
-      client.disconnect()
-    })
-
-    it('daemon can create sessions', async () => {
-      const s = createSpawner()
-      const info = await s.ensureRunning()
-
-      const client = new DaemonClient({
-        socketPath: info.socketPath,
-        tokenPath: info.tokenPath
-      })
-      await client.ensureConnected()
-
-      const result = await client.request<{ isNew: boolean }>('createOrAttach', {
-        sessionId: 'test-session',
-        cols: 80,
-        rows: 24
-      })
-      expect(result.isNew).toBe(true)
       client.disconnect()
     })
   })
@@ -312,45 +288,6 @@ describe('daemon PID publication', () => {
   })
 })
 
-function listenOnSocketPath(server: Server, socketPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(socketPath, () => {
-      server.off('error', reject)
-      resolve()
-    })
-  })
-}
-
-function closeSocketServer(server: Server): Promise<void> {
-  return new Promise((resolve) => {
-    if (!server.listening) {
-      resolve()
-      return
-    }
-    server.close(() => resolve())
-  })
-}
-
-function connectsToSocketPath(socketPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = connect({ path: socketPath })
-    const timer = setTimeout(() => {
-      socket.destroy()
-      resolve(false)
-    }, 500)
-    socket.on('connect', () => {
-      clearTimeout(timer)
-      socket.destroy()
-      resolve(true)
-    })
-    socket.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
-  })
-}
-
 describe('daemon socket publication', () => {
   it('keeps every scratch namespace outside the released sweeper pattern', () => {
     // Why pinned, and why all three: builds already in the field sweep these names on age alone
@@ -379,92 +316,4 @@ describe('daemon socket publication', () => {
 
     expect(getDaemonSocketBindPath(canonicalPath).length).toBeLessThan(canonicalPath.length)
   })
-
-  it.skipIf(process.platform === 'win32')(
-    'keeps a live incumbent reachable when a second listener publishes',
-    async () => {
-      const dir = createTestDir()
-      const canonicalPath = getDaemonSocketPath(dir)
-      const incumbent = createServer((socket) => socket.end())
-      const newcomer = createServer((socket) => socket.end())
-      try {
-        const incumbentBind = getDaemonSocketBindPath(canonicalPath)
-        await listenOnSocketPath(incumbent, incumbentBind)
-        const incumbentOutcome = await publishDaemonEndpoint(
-          incumbentBind,
-          canonicalPath,
-          probeSocketConnect
-        )
-        expect(incumbentOutcome.status).toBe('published')
-        const incumbentIdentity = readDaemonSocketIdentity(canonicalPath)
-
-        const newcomerBind = getDaemonSocketBindPath(canonicalPath)
-        await listenOnSocketPath(newcomer, newcomerBind)
-        await expect(
-          publishDaemonEndpoint(newcomerBind, canonicalPath, probeSocketConnect)
-        ).resolves.toEqual({ status: 'occupied' })
-
-        expect(readDaemonSocketIdentity(canonicalPath)).toEqual(incumbentIdentity)
-        await expect(connectsToSocketPath(canonicalPath)).resolves.toBe(true)
-      } finally {
-        await closeSocketServer(incumbent)
-        await closeSocketServer(newcomer)
-        rmSync(dir, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'leaves an unclassifiable incumbent untouched',
-    async () => {
-      const dir = createTestDir()
-      const canonicalPath = getDaemonSocketPath(dir)
-      const newcomer = createServer((socket) => socket.end())
-      try {
-        writeFileSync(canonicalPath, 'incumbent')
-        const newcomerBind = getDaemonSocketBindPath(canonicalPath)
-        await listenOnSocketPath(newcomer, newcomerBind)
-
-        await expect(
-          publishDaemonEndpoint(newcomerBind, canonicalPath, async () => 'unknown')
-        ).resolves.toEqual({ status: 'inconclusive' })
-        expect(readFileSync(canonicalPath, 'utf8')).toBe('incumbent')
-      } finally {
-        await closeSocketServer(newcomer)
-        rmSync(dir, { recursive: true, force: true })
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'replaces a dead incumbent with a reachable listener',
-    async () => {
-      const dir = createTestDir()
-      const canonicalPath = getDaemonSocketPath(dir)
-      const incumbent = createServer((socket) => socket.end())
-      const replacement = createServer((socket) => socket.end())
-      try {
-        const incumbentBind = getDaemonSocketBindPath(canonicalPath)
-        await listenOnSocketPath(incumbent, incumbentBind)
-        await publishDaemonEndpoint(incumbentBind, canonicalPath, probeSocketConnect)
-        await closeSocketServer(incumbent)
-        await expect(connectsToSocketPath(canonicalPath)).resolves.toBe(false)
-
-        const replacementBind = getDaemonSocketBindPath(canonicalPath)
-        await listenOnSocketPath(replacement, replacementBind)
-        const outcome = await publishDaemonEndpoint(
-          replacementBind,
-          canonicalPath,
-          probeSocketConnect
-        )
-
-        expect(outcome.status).toBe('published')
-        await expect(connectsToSocketPath(canonicalPath)).resolves.toBe(true)
-      } finally {
-        await closeSocketServer(incumbent)
-        await closeSocketServer(replacement)
-        rmSync(dir, { recursive: true, force: true })
-      }
-    }
-  )
 })

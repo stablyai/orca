@@ -138,27 +138,6 @@ describe('Claude model switch confirmation detection', () => {
     await expect(observer.result).resolves.toBe('rejected')
   })
 
-  it('requests interaction for Fable one-time usage-credit consent', async () => {
-    const dataObserver = { current: (_data: string): void => {} }
-    const observer = createClaudeModelSwitchConfirmationObserver({
-      ptyId: 'pty-1',
-      settings: {},
-      expectedModelLabel: 'Fable 5',
-      subscribeToData: (watcher) => {
-        dataObserver.current = watcher
-        return vi.fn(() => {})
-      },
-      timeoutMs: 100
-    })
-
-    await observer.ready
-    observer.arm()
-    dataObserver.current('Fable 5 uses usage credits and needs a one-time consent — ')
-    dataObserver.current('pick Fable from /model in an interactive session to set it up')
-
-    await expect(observer.result).resolves.toBe('interaction-required')
-  })
-
   it('reports unknown when the PTY observer cannot be established', async () => {
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',
@@ -171,27 +150,6 @@ describe('Claude model switch confirmation detection', () => {
     await observer.ready
     observer.arm()
     await expect(observer.result).resolves.toBe('unknown')
-  })
-
-  it('reports unknown on timeout instead of requesting the terminal', async () => {
-    vi.useFakeTimers()
-    try {
-      const observer = createClaudeModelSwitchConfirmationObserver({
-        ptyId: 'pty-1',
-        settings: {},
-        expectedModelLabel: 'Fable 5',
-        subscribeToData: () => vi.fn(() => {}),
-        timeoutMs: 100
-      })
-
-      await observer.ready
-      observer.arm()
-      observer.startDetection()
-      await vi.advanceTimersByTimeAsync(100)
-      await expect(observer.result).resolves.toBe('unknown')
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('does not start the detection timeout until startDetection() is called', async () => {

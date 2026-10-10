@@ -1,4 +1,4 @@
-import type { JiraProject } from '../../../shared/types'
+import type { JiraProject } from '../../../shared/jira-types'
 
 export function getJiraProjectSelectionKey(project: JiraProject): string {
   return `${project.siteId ?? 'selected'}:${project.id}`

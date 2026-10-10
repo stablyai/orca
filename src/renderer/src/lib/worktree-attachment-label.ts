@@ -1,4 +1,4 @@
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { basename } from './path'
 
 /** Shared by every "workspace attached to this work item" surface so GitHub, GitLab,

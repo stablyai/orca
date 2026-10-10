@@ -99,13 +99,13 @@ and the safety guards above would (correctly) refuse to run. **Isolated mode**
 real install.
 
 **The /D mechanism.** electron-builder's NSIS honors the standard NSIS `/D=<path>`
-override for the install *directory* (`node_modules/app-builder-lib/templates/nsis/multiUser.nsh`).
+override for the install _directory_ (`node_modules/app-builder-lib/templates/nsis/multiUser.nsh`).
 `/D` is special: it must be the **last** argument and **cannot be quoted**, so the
 path must be absolute and **spaces-free** (validated by `validateInstallDir`). The
 installer's kill-sweep only matches processes under its own `$INSTDIR`, so a
 separate directory never touches the real install's app or daemon processes.
 
-**Why registry/shortcut backup-restore exists.** `/D` relocates *files only*.
+**Why registry/shortcut backup-restore exists.** `/D` relocates _files only_.
 Regardless of `/D`, the installer writes `InstallLocation` + the uninstall entry to
 the **same per-user HKCU keys** as the real install
 (`HKCU\Software\<APP_GUID>` and
@@ -191,22 +191,22 @@ powershell -File tests/tools/win-update-e2e/window-enum.ps1
 
 ## Files
 
-| File                       | Responsibility                                                                |
-| -------------------------- | ----------------------------------------------------------------------------- |
-| `run.mjs`                  | Orchestrator + CLI entry                                                      |
-| `cli-args.mjs`             | Argument parsing / validation                                                 |
-| `preflight.mjs`            | win32/elevation checks, pre-existing-app refusal, baseline snapshot           |
-| `installer-steps.mjs`      | Silent install/update/uninstall, exe discovery, gh download                   |
-| `registry-shortcut-backup.mjs` | Isolated mode: snapshot/restore the shared HKCU keys + Orca shortcuts     |
-| `app-driver.mjs`           | Playwright Electron launch + terminal driving (production-safe DOM selectors) |
-| `interactivity-probes.mjs` | Sentinel-file echo / heartbeat / Ctrl+C probes                                |
-| `daemon-processes.mjs`     | Daemon PID discovery (command-line marker + pid file), scoped                 |
-| `window-enum.ps1`          | Shared visible-top-level-window enumerator (P/Invoke `EnumWindows`)           |
-| `window-watch.ps1`         | Background baseline-diff watch loop → JSONL                                   |
-| `window-watch.mjs`         | Node wrapper: start/stop watch, `--selftest`, baseline capture                |
-| `assertions.mjs`           | Window-event classification + profile PASS/FAIL table                         |
-| `platform-guard.mjs`       | `assertWin32`, elevation detection                                            |
-| `powershell-runner.mjs`    | Windows PowerShell 5.1 spawn helpers                                          |
+| File                           | Responsibility                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| `run.mjs`                      | Orchestrator + CLI entry                                                      |
+| `cli-args.mjs`                 | Argument parsing / validation                                                 |
+| `preflight.mjs`                | win32/elevation checks, pre-existing-app refusal, baseline snapshot           |
+| `installer-steps.mjs`          | Silent install/update/uninstall, exe discovery, gh download                   |
+| `registry-shortcut-backup.mjs` | Isolated mode: snapshot/restore the shared HKCU keys + Orca shortcuts         |
+| `app-driver.mjs`               | Playwright Electron launch + terminal driving (production-safe DOM selectors) |
+| `interactivity-probes.mjs`     | Sentinel-file echo / heartbeat / Ctrl+C probes                                |
+| `daemon-processes.mjs`         | Daemon PID discovery (command-line marker + pid file), scoped                 |
+| `window-enum.ps1`              | Shared visible-top-level-window enumerator (P/Invoke `EnumWindows`)           |
+| `window-watch.ps1`             | Background baseline-diff watch loop → JSONL                                   |
+| `window-watch.mjs`             | Node wrapper: start/stop watch, `--selftest`, baseline capture                |
+| `assertions.mjs`               | Window-event classification + profile PASS/FAIL table                         |
+| `platform-guard.mjs`           | `assertWin32`, elevation detection                                            |
+| `powershell-runner.mjs`        | Windows PowerShell 5.1 spawn helpers                                          |
 
 ## Known limitations
 

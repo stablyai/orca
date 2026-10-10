@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -147,6 +147,86 @@ describe('fetchReposForAllHosts generation', () => {
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo', 'remote-repo'])
   })
 
+  it('keeps an in-flight all-host remote result across a newer local refresh', async () => {
+    let resolveRemote!: (value: unknown) => void
+    let markRemoteStarted!: () => void
+    const remote = new Promise((resolve) => {
+      resolveRemote = resolve
+    })
+    const remoteStarted = new Promise<void>((resolve) => {
+      markRemoteStarted = resolve
+    })
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRemoteStarted()
+        return remote
+      }
+      return {
+        id: 'rpc-other',
+        ok: true,
+        result: { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+    const store = createTestStore()
+
+    const allHosts = store.getState().fetchReposForAllHosts()
+    await remoteStarted
+    await store.getState().fetchRepos({ runtimeEnvironmentId: null })
+    resolveRemote({
+      id: 'rpc-repo-list',
+      ok: true,
+      result: { repos: [remoteRepo] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await allHosts
+
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo', 'remote-repo'])
+  })
+
+  it('starts all-host remote loads after a newer local refresh replaces its local result', async () => {
+    let resolveOlderLocal!: (repos: Repo[]) => void
+    let resolveRemote!: (value: unknown) => void
+    let markRemoteStarted!: () => void
+    const olderLocal = new Promise<Repo[]>((resolve) => {
+      resolveOlderLocal = resolve
+    })
+    const remote = new Promise((resolve) => {
+      resolveRemote = resolve
+    })
+    const remoteStarted = new Promise<void>((resolve) => {
+      markRemoteStarted = resolve
+    })
+    reposList.mockReturnValueOnce(olderLocal)
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRemoteStarted()
+        return remote
+      }
+      return {
+        id: 'rpc-other',
+        ok: true,
+        result: { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+    const store = createTestStore()
+
+    const allHosts = store.getState().fetchReposForAllHosts()
+    await store.getState().fetchRepos({ runtimeEnvironmentId: null })
+    resolveOlderLocal([localRepo])
+    await remoteStarted
+    resolveRemote({
+      id: 'rpc-repo-list',
+      ok: true,
+      result: { repos: [remoteRepo] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    await allHosts
+
+    expect(store.getState().repos.map((repo) => repo.id)).toEqual(['local-repo', 'remote-repo'])
+  })
+
   it('keeps a newer Connect-flow catalog when an older all-host response resolves last', async () => {
     let resolveOlder!: (value: unknown) => void
     let markOlderStarted!: () => void
@@ -238,6 +318,147 @@ describe('fetchReposForAllHosts generation', () => {
     expect(store.getState().repos.find((repo) => repo.id === remoteRepo.id)?.path).toBe(
       freshRemoteRepo.path
     )
+  })
+
+  it('invalidates folder path statuses when an all-host repo catalog changes', async () => {
+    reposList.mockResolvedValueOnce([{ ...localRepo, path: '/local/changed' }])
+    const store = createTestStore()
+    store.setState({
+      repos: [localRepo],
+      folderWorkspacePathStatuses: {
+        cached: {
+          status: { path: '/local', exists: true },
+          checkedAt: 1,
+          requestSnapshot: 'before-change'
+        }
+      }
+    })
+
+    await store.getState().fetchReposForAllHosts({ remoteHosts: 'skip' })
+
+    expect(store.getState().folderWorkspacePathStatuses).toEqual({})
+  })
+
+  it('applies a targeted repo catalog that started before a reconnect', async () => {
+    const { promise: repoList, resolve: resolveRepoList } = Promise.withResolvers<unknown>()
+    const { promise: repoListStarted, resolve: markRepoListStarted } = Promise.withResolvers<void>()
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRepoListStarted()
+        return repoList
+      }
+      return {
+        id: `rpc-${args.method}`,
+        ok: true,
+        result: { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-before-reconnect' }
+      }
+    })
+    const store = createTestStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 1 } as never])
+
+    const pending = store.getState().fetchRepos({ runtimeEnvironmentId: 'env-1' })
+    await repoListStarted
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 2 } as never])
+    store.setState({
+      repos: [{ ...freshRemoteRepo, executionHostId: 'runtime:env-1' }]
+    })
+    resolveRepoList({
+      id: 'rpc-stale',
+      ok: true,
+      result: { repos: [staleRemoteRepo] },
+      _meta: { runtimeId: 'runtime-before-reconnect' }
+    })
+    await pending
+
+    // Current contract: targeted fetchRepos has only catalog-generation fencing.
+    expect(store.getState().repos[0]?.path).toBe(staleRemoteRepo.path)
+  })
+
+  it('applies an all-host repo result that started before a reconnect', async () => {
+    const { promise: repoList, resolve: resolveRepoList } = Promise.withResolvers<unknown>()
+    const { promise: repoListStarted, resolve: markRepoListStarted } = Promise.withResolvers<void>()
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRepoListStarted()
+        return repoList
+      }
+      return {
+        id: `rpc-${args.method}`,
+        ok: true,
+        result: { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-before-reconnect' }
+      }
+    })
+    const store = createTestStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 1 } as never])
+
+    const pending = store.getState().fetchReposForAllHosts()
+    await repoListStarted
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 2 } as never])
+    store.setState({
+      repos: [localRepo, { ...freshRemoteRepo, executionHostId: 'runtime:env-1' }]
+    })
+    resolveRepoList({
+      id: 'rpc-stale',
+      ok: true,
+      result: { repos: [staleRemoteRepo] },
+      _meta: { runtimeId: 'runtime-before-reconnect' }
+    })
+    await pending
+
+    // Current contract: all-host remote legs do not carry the reconnect fence.
+    expect(
+      store.getState().repos.find((repo) => repo.executionHostId === 'runtime:env-1')?.path
+    ).toBe(staleRemoteRepo.path)
+  })
+
+  it('drops a Connect-flow catalog and visibility defaults from before a reconnect', async () => {
+    const { promise: repoList, resolve: resolveRepoList } = Promise.withResolvers<unknown>()
+    const { promise: repoListStarted, resolve: markRepoListStarted } = Promise.withResolvers<void>()
+    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      if (args.method === 'repo.list') {
+        markRepoListStarted()
+        return repoList
+      }
+      return {
+        id: `rpc-${args.method}`,
+        ok: true,
+        result:
+          args.method === 'settings.get'
+            ? { settings: { worktreeVisibilityDefaults: { external: 'show' } } }
+            : { projects: [], setups: [] },
+        _meta: { runtimeId: 'runtime-before-reconnect' }
+      }
+    })
+    const store = createTestStore()
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 1 } as never])
+
+    const pending = store.getState().fetchRuntimeEnvironmentRepos('env-1')
+    await repoListStarted
+    store
+      .getState()
+      .setRuntimeEnvironments([{ id: 'env-1', createdAt: 1, pairingRevision: 2 } as never])
+    resolveRepoList({
+      id: 'rpc-stale',
+      ok: true,
+      result: { repos: [staleRemoteRepo] },
+      _meta: { runtimeId: 'runtime-before-reconnect' }
+    })
+
+    await expect(pending).resolves.toEqual([])
+    expect(store.getState().repos).toEqual([])
+    expect(store.getState().worktreeVisibilityDefaultsByHost['runtime:env-1']).toBeUndefined()
   })
 
   it('does not validate repo UI from a superseded refresh', async () => {

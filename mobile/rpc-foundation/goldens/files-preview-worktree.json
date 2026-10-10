@@ -1,0 +1,88 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "files.preview-load",
+  "family": "files.preview-load",
+  "namedDeltas": [],
+  "values": {
+    "1cf4496bc8c0": {
+      "name": "files.read#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "byteLength": 8,
+            "content": "# readme",
+            "truncated": false
+          }
+        }
+      }
+    },
+    "3f8bf3069e3d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "byteLength": 8,
+        "content": "# readme",
+        "kind": "markdown",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "47ef2e397e18": {
+      "preview": {
+        "byteLength": 8,
+        "content": "# readme",
+        "kind": "markdown",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "8423ff93fda2": {
+      "name": "files.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.read\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"docs/readme.md\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "files-preview-worktree",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["1cf4496bc8c0"],
+          "payloads": ["8423ff93fda2"],
+          "settlements": {
+            "load": "3f8bf3069e3d"
+          },
+          "state": "47ef2e397e18",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

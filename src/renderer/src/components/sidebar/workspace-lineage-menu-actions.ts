@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 
 type WorkspaceActivityMaps = {

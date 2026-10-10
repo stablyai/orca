@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../shared/developer-permissions-types'
 import type { SpeechModelManifest } from '../../../../shared/speech-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { handleVoiceDictationToggle, VoicePane } from './VoicePane'
 
@@ -270,7 +270,10 @@ describe('VoicePane', () => {
     )
     useShortcutLabelMock.mockReturnValue('Ctrl+Shift+Y')
     installWindowApi(vi.fn(async () => deniedMicrophoneResult))
-    window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({ configured: true }))
+    window.api.speech.getOpenAiApiKeyStatus = vi.fn(async () => ({
+      configured: true,
+      protection: 'sealed' as const
+    }))
     window.api.speech.clearOpenAiApiKey = vi.fn(() => clearing)
 
     const settingsWithKey = (enabled: boolean): GlobalSettings =>

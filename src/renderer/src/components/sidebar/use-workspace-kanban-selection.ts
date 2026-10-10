@@ -1,12 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
-  areWorktreeSelectionsEqual,
-  getWorktreeSelectionIntent,
-  pruneWorktreeSelection,
-  updateWorktreeAreaSelection,
-  updateWorktreeSelection
-} from './worktree-multi-selection'
+  areSelectionsEqual,
+  getSelectionIntent,
+  pruneSelection,
+  updateAreaSelection,
+  updateSelection
+} from '@/lib/list-multi-selection'
 
 /** Returns the first still-rendered selected id, or `null` if the anchor is fine. */
 function resolveRenderedAnchorId(
@@ -30,17 +31,20 @@ export function useWorkspaceKanbanSelection(
   renderedWorktrees: readonly Worktree[] = boardWorktrees
 ) {
   const boardWorktreeIds = useMemo(
-    () => boardWorktrees.map((worktree) => worktree.id),
+    () => boardWorktrees.map(getWorktreeHostIdentity),
     [boardWorktrees]
   )
   const renderedWorktreeIds = useMemo(
-    () => renderedWorktrees.map((worktree) => worktree.id),
+    () => renderedWorktrees.map(getWorktreeHostIdentity),
     [renderedWorktrees]
   )
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
   const selectedWorktrees = useMemo(
-    () => boardWorktrees.filter((worktree) => selectedWorktreeIds.has(worktree.id)),
+    () =>
+      boardWorktrees.filter((worktree) =>
+        selectedWorktreeIds.has(getWorktreeHostIdentity(worktree))
+      ),
     [boardWorktrees, selectedWorktreeIds]
   )
 
@@ -51,11 +55,11 @@ export function useWorkspaceKanbanSelection(
     if (selectionAnchorId !== null) {
       setSelectionAnchorId(null)
     }
-  } else {
-    const pruned = pruneWorktreeSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
+  } else if (selectedWorktreeIds.size > 0 || selectionAnchorId !== null) {
+    const pruned = pruneSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
     // Why: the drawer can keep rendering while rows are filtered/reordered.
     // Prune stale local selection before children see ids that no longer exist.
-    if (!areWorktreeSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
+    if (!areSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
       setSelectedWorktreeIds(pruned.selectedIds)
     }
     if (selectionAnchorId !== pruned.anchorId) {
@@ -65,9 +69,9 @@ export function useWorkspaceKanbanSelection(
 
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
-      const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
+      const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
       // Why: a search can hide the anchor while leaving the rest of the
-      // selection on screen. updateWorktreeSelection reads an anchor missing
+      // selection on screen. updateSelection reads an anchor missing
       // from visibleIds as "no anchor" and collapses the range to the click,
       // so re-anchor onto the first still-rendered selected card instead.
       const anchorId =
@@ -75,7 +79,7 @@ export function useWorkspaceKanbanSelection(
           ? (resolveRenderedAnchorId(renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId) ??
             selectionAnchorId)
           : selectionAnchorId
-      const result = updateWorktreeSelection({
+      const result = updateSelection({
         visibleIds: renderedWorktreeIds,
         previousSelectedIds: selectedWorktreeIds,
         previousAnchorId: anchorId,
@@ -94,11 +98,12 @@ export function useWorkspaceKanbanSelection(
 
   const selectForContextMenu = useCallback(
     (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
-      if (selectedWorktreeIds.has(worktree.id) && selectedWorktreeIds.size > 1) {
+      const worktreeIdentity = getWorktreeHostIdentity(worktree)
+      if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
         return selectedWorktrees
       }
-      setSelectedWorktreeIds(new Set([worktree.id]))
-      setSelectionAnchorId(worktree.id)
+      setSelectedWorktreeIds(new Set([worktreeIdentity]))
+      setSelectionAnchorId(worktreeIdentity)
       return [worktree]
     },
     [selectedWorktreeIds, selectedWorktrees]
@@ -111,7 +116,7 @@ export function useWorkspaceKanbanSelection(
       baseSelectedIds: ReadonlySet<string> = selectedWorktreeIds,
       baseAnchorId: string | null = selectionAnchorId
     ): void => {
-      const result = updateWorktreeAreaSelection({
+      const result = updateAreaSelection({
         visibleIds: renderedWorktreeIds,
         previousSelectedIds: baseSelectedIds,
         previousAnchorId: baseAnchorId,
@@ -119,7 +124,7 @@ export function useWorkspaceKanbanSelection(
         additive
       })
       setSelectedWorktreeIds((previous) =>
-        areWorktreeSelectionsEqual(previous, result.selectedIds) ? previous : result.selectedIds
+        areSelectionsEqual(previous, result.selectedIds) ? previous : result.selectedIds
       )
       setSelectionAnchorId((previous) =>
         previous === result.anchorId ? previous : result.anchorId

@@ -21,7 +21,11 @@ import type { AiVaultScanOptions } from './session-scanner-types'
 // Agents whose session IS the directory holding the scanned file: everything
 // beside it belongs to the same session (rovo's session_context.json, grok's
 // chat_history.jsonl), so the directory is the only complete delete unit.
-const AI_VAULT_DIRECTORY_SHAPED_DELETE_AGENTS = new Set<AiVaultDeletableAgent>(['rovo', 'grok'])
+const AI_VAULT_WHOLE_DIRECTORY_DELETE_AGENTS = new Set<AiVaultDeletableAgent>([
+  'rovo',
+  'grok',
+  'cline'
+])
 
 export type ValidateAiVaultSessionDeleteTargetArgs = {
   agent: AiVaultAgent
@@ -105,7 +109,7 @@ function sessionDeleteRemovals(args: {
 }): readonly AiVaultSessionDeleteRemoval[] | null {
   const { agent, resolvedPath, matchedRoot, roots } = args
 
-  if (AI_VAULT_DIRECTORY_SHAPED_DELETE_AGENTS.has(agent)) {
+  if (AI_VAULT_WHOLE_DIRECTORY_DELETE_AGENTS.has(agent)) {
     const sessionDir = dirname(resolvedPath)
     if (sessionDir === matchedRoot || !isPathInsideOrEqual(matchedRoot, sessionDir)) {
       return null

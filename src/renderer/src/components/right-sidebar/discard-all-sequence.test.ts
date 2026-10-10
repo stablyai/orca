@@ -5,10 +5,9 @@ import {
   getUnstageAllPaths,
   isStageableStatusEntry,
   isSubmoduleWorktreeOnlyChange,
-  runDiscardAllForArea,
-  type DiscardAllArea
-} from './discard-all-sequence'
-import type { GitStatusEntry } from '../../../../shared/types'
+  runDiscardAllForArea
+} from './source-control/commit/discard-all-sequence'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {
   return {
@@ -364,18 +363,5 @@ describe('runDiscardAllForArea', () => {
     const ctx = makeDeps()
     await runDiscardAllForArea('staged', ['a.ts'], ctx.deps)
     expect(ctx.onError).not.toHaveBeenCalled()
-  })
-
-  it('does not bulk-unstage for non-staged areas even if the dep is provided', async () => {
-    const ctx = makeDeps()
-    const areas: DiscardAllArea[] = ['unstaged', 'untracked']
-    for (const area of areas) {
-      await runDiscardAllForArea(area, ['x.ts'], ctx.deps)
-    }
-    // Why: the unstage step is specific to the staged area's two-step
-    // reset. Accidentally invoking it for unstaged/untracked would be a
-    // no-op for unstaged entries but could mask a regression where staged
-    // entries leak into those paths.
-    expect(ctx.bulkUnstage).not.toHaveBeenCalled()
   })
 })

@@ -90,6 +90,9 @@ export async function getRepoDefaultBranchName(
           : gitExecFileAsync(argv, {
               cwd: repoPath,
               ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+              ...(localGitOptions.admissionTier
+                ? { admissionTier: localGitOptions.admissionTier }
+                : {}),
               timeout: timeoutMs
             })
       })

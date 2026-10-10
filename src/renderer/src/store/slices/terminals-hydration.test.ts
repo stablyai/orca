@@ -91,7 +91,7 @@ const mockApi = {
 // @ts-expect-error -- mocked browser preload API
 globalThis.window = { api: mockApi }
 
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { SshProviderEpoch } from '../../../../shared/ssh-types'
 import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery-types'
 import {

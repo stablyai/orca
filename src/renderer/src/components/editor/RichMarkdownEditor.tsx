@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'

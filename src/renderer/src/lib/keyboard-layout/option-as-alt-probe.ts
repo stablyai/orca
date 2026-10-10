@@ -1,29 +1,15 @@
 /**
  * Runtime probe for the active macOS keyboard layout.
  *
- * Runs detectOptionAsAltFromLayoutMap() at boot and on every window focus-in.
+ * Runs at boot, on native macOS input-source notifications, and on focus as a
+ * fallback. The browser Keyboard API has no usable layout-change event.
  *
- * Why focus-in and not `layoutchange`: Chromium does not implement the W3C
- * Keyboard API's `layoutchange` event — its Blink IDL exposes only
- * `lock/unlock/getLayoutMap`
- * (chromium/src/third_party/blink/renderer/modules/keyboard/keyboard.idl).
- * Subscribing to `layoutchange` is a no-op. Fortunately every real-world
- * path to switching OS keyboard layout on macOS (Input Menu, Cmd+Space,
- * global shortcut) transfers focus out of Orca and back, so focus-in is a
- * reliable proxy. The only missed case is a layout change triggered by a
- * key pressed while Orca is focused (e.g. a Karabiner rule), which is
- * exceedingly rare and self-heals on the next blur/focus cycle.
- *
- * Why two signals (input source ID + fingerprint): the fingerprint can
- * only see the base (unshifted) layer, which is identical to US QWERTY
- * on a large set of Apple-shipped layouts — ABC, Polish Pro, US
- * Extended, ABC Extended, and every CJK Roman IME all trap on it. They
- * repurpose Option for dead-key composition (Option+A → å / ą), so
- * trusting the fingerprint alone makes macOptionIsMeta=true and
- * silently swallows those characters (issue #1205). On macOS we treat
- * the input source ID as authoritative and only fall back to the
- * fingerprint when the ID is unavailable (non-Darwin, sandboxed
- * defaults, IPC failure). See ./input-source-id.ts for the allowlist.
+ * The base-layer fingerprint cannot distinguish standard ABC/US from
+ * composition layouts such as Polish Pro, US Extended, ABC Extended,
+ * and CJK Roman IMEs. Native identity protects their Option text (#1205);
+ * macOS stays conservative without native identity; other platforms use
+ * the browser fingerprint as a fallback.
+ * See ./input-source-id.ts for the exact standard-layout allowlist.
  */
 import {
   detectOptionAsAltFromLayoutMap,
@@ -31,6 +17,8 @@ import {
   type LayoutMapLike
 } from './detect-option-as-alt'
 import { classifyInputSourceId } from './input-source-id'
+import type { KeyboardLayoutSnapshot } from '../../../../shared/keyboard-layout-snapshot'
+import type { KeyboardLayoutChangeEvent } from '../../../../shared/keyboard-layout-events'
 
 type NavigatorWithKeyboard = Navigator & {
   keyboard?: {
@@ -41,6 +29,9 @@ type NavigatorWithKeyboard = Navigator & {
 type Listener = (category: DetectedLayoutCategory) => void
 
 type InputSourceIdReader = () => Promise<string | null>
+type KeyboardLayoutChangeSubscriber = (
+  callback: (event?: KeyboardLayoutChangeEvent) => void
+) => () => void
 
 export type OptionAsAltProbe = {
   /** Current detected category. Starts `'unknown'` until the first probe
@@ -59,15 +50,45 @@ type CreateProbeOptions = {
    *  preload `window.api.app.getKeyboardInputSourceId` when available.
    *  Tests pass a stub to exercise the compose override deterministically. */
   readInputSourceId?: InputSourceIdReader
+  subscribeKeyboardLayoutChanged?: KeyboardLayoutChangeSubscriber
+}
+
+function defaultKeyboardLayoutChangeSubscriber(): KeyboardLayoutChangeSubscriber {
+  return (callback) =>
+    (
+      globalThis as {
+        window?: {
+          api?: { app?: { onKeyboardLayoutChanged?: KeyboardLayoutChangeSubscriber } }
+        }
+      }
+    ).window?.api?.app?.onKeyboardLayoutChanged?.(callback) ?? (() => undefined)
 }
 
 function defaultInputSourceIdReader(): InputSourceIdReader {
   return async () => {
     const api = (
       globalThis as {
-        window?: { api?: { app?: { getKeyboardInputSourceId?: () => Promise<string | null> } } }
+        window?: {
+          api?: {
+            app?: {
+              getKeyboardInputSourceId?: () => Promise<string | null>
+              getKeyboardLayoutSnapshot?: () => Promise<KeyboardLayoutSnapshot | null>
+            }
+          }
+        }
       }
     ).window?.api
+    const snapshotReader = api?.app?.getKeyboardLayoutSnapshot
+    if (snapshotReader) {
+      try {
+        const snapshot = await snapshotReader()
+        if (snapshot?.inputSourceId) {
+          return snapshot.inputSourceId
+        }
+      } catch {
+        // Fall through to the preference-backed reader.
+      }
+    }
     const reader = api?.app?.getKeyboardInputSourceId
     if (!reader) {
       return null
@@ -75,9 +96,7 @@ function defaultInputSourceIdReader(): InputSourceIdReader {
     try {
       return await reader()
     } catch {
-      // Why: the IPC can transiently reject during main-process teardown
-      // (e.g. app quitting mid-probe). Treat as no signal so the
-      // fingerprint remains the sole input.
+      // Missing identity stays conservative on macOS, including during teardown.
       return null
     }
   }
@@ -90,7 +109,13 @@ export function createOptionAsAltProbe(
   let current: DetectedLayoutCategory = 'unknown'
   const listeners = new Set<Listener>()
   let disposed = false
+  let probeGeneration = 0
+  let layoutChangeGeneration = 0
+  let layoutRefreshBlocked = false
+  const isMac = win.navigator.userAgent.includes('Mac')
   const readInputSourceId = options.readInputSourceId ?? defaultInputSourceIdReader()
+  const subscribeKeyboardLayoutChanged =
+    options.subscribeKeyboardLayoutChanged ?? defaultKeyboardLayoutChangeSubscriber()
 
   const notify = (next: DetectedLayoutCategory): void => {
     if (next === current) {
@@ -107,35 +132,27 @@ export function createOptionAsAltProbe(
   }
 
   const probe = async (): Promise<void> => {
-    if (disposed) {
+    if (disposed || layoutRefreshBlocked) {
       return
     }
+    const generation = ++probeGeneration
     const nav = win.navigator as NavigatorWithKeyboard
     const keyboard = nav?.keyboard
 
-    // Why: read the input-source ID first. On macOS this resolves to a
-    // concrete ID (e.g. com.apple.keylayout.ABC); on every other platform
-    // it resolves to null and we fall through to the fingerprint.
+    // Read current-source identity before trusting a potentially IME-backed base layer.
     let inputSourceId: string | null = null
     try {
       inputSourceId = await readInputSourceId()
     } catch {
-      // Treat errors as no signal — the fingerprint still runs below.
+      // Missing identity stays conservative on macOS.
       inputSourceId = null
     }
 
-    if (disposed) {
+    if (disposed || generation !== probeGeneration) {
       return
     }
 
-    // Why: when macOS returns a concrete input source ID, it's authoritative.
-    // The fingerprint can only see the base (unshifted) layer, which is
-    // US-identical on ABC, Polish Pro, US Extended, ABC Extended, and every
-    // CJK Roman IME — so trusting it flips macOptionIsMeta=true on all of
-    // them and silently swallows Option+letter compositions (#1205). The
-    // allowlist matches Ghostty: only com.apple.keylayout.US and
-    // com.apple.keylayout.USInternational-PC get Option-as-Meta; everything
-    // else composes via Option.
+    // Native input-source identity distinguishes composition layouts with a US-shaped base layer.
     const override = classifyInputSourceId(inputSourceId)
     if (override === 'meta') {
       notify('us')
@@ -143,6 +160,10 @@ export function createOptionAsAltProbe(
     }
     if (override === 'compose') {
       notify('non-us')
+      return
+    }
+    if (isMac) {
+      notify('unknown')
       return
     }
 
@@ -154,7 +175,7 @@ export function createOptionAsAltProbe(
     }
     try {
       const map = await keyboard.getLayoutMap()
-      if (disposed) {
+      if (disposed || generation !== probeGeneration) {
         return
       }
       notify(detectOptionAsAltFromLayoutMap(map))
@@ -170,7 +191,26 @@ export function createOptionAsAltProbe(
     void probe()
   }
 
+  const onKeyboardLayoutChanged = (event?: KeyboardLayoutChangeEvent): void => {
+    if (event && event.generation < layoutChangeGeneration) {
+      return
+    }
+    notify('unknown')
+    if (event?.phase === 'invalidated') {
+      layoutChangeGeneration = event.generation
+      layoutRefreshBlocked = true
+      ++probeGeneration
+      return
+    }
+    if (event) {
+      layoutChangeGeneration = event.generation
+    }
+    layoutRefreshBlocked = false
+    void probe()
+  }
+
   win.addEventListener('focus', onFocus)
+  const unsubscribeKeyboardLayoutChanged = subscribeKeyboardLayoutChanged(onKeyboardLayoutChanged)
 
   // Initial probe. Fire-and-forget; callers subscribe and pick up the
   // result as soon as Chromium's layout map resolves.
@@ -188,6 +228,7 @@ export function createOptionAsAltProbe(
     dispose: () => {
       disposed = true
       win.removeEventListener('focus', onFocus)
+      unsubscribeKeyboardLayoutChanged()
       listeners.clear()
     }
   }

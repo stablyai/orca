@@ -1,9 +1,6 @@
 import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
-import type {
-  GitHubRepositoryIdentity,
-  PRCheckDetail,
-  PRCheckRunDetails
-} from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 
 export type OpenCheckRunDetailsState = {
   contextKey: string

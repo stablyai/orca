@@ -1,3 +1,5 @@
+import { worktreeCreateGit } from '../git/worktree-create-git-executor'
+import { resolveGitAdmissionTier } from '../git/command-runner/git-operation-executor'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Why: these tests cover the §3.3 Lifecycle rules on
@@ -78,6 +80,41 @@ function mockFetchResults(results: unknown[]): void {
 }
 
 describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
+  it.each([undefined, 'Ubuntu'])(
+    'inherits create priority through fetch adapters on %s',
+    async (wslDistro) =>
+      worktreeCreateGit.run(async () => {
+        gitExecFileAsyncMock.mockImplementation(async (argv: string[]) => {
+          expect(resolveGitAdmissionTier()).toBe('interactive')
+          return {
+            stdout: argv[0] === 'remote' ? 'origin\n' : '/priority-repo/.git\n',
+            stderr: ''
+          }
+        })
+        const runtime = new OrcaRuntimeService()
+        const options = wslDistro ? { wslDistro } : {}
+        const base = await runtime.resolveRemoteTrackingBase(
+          '/priority-repo',
+          'origin/main',
+          options
+        )
+        expect(base).not.toBeNull()
+        if (!base) {
+          throw new Error('expected a remote base')
+        }
+        await expect(runtime.hasRemoteTrackingRef('/priority-repo', base, options)).resolves.toBe(
+          true
+        )
+        await expect(
+          runtime.getOrStartRemoteTrackingBaseRefresh('/priority-repo', base, options)
+        ).resolves.toEqual({ ok: true })
+        expect(fetchCallCount()).toBe(1)
+        for (const [, execOptions] of gitExecFileAsyncMock.mock.calls) {
+          expect(execOptions).toMatchObject({ cwd: '/priority-repo', ...options })
+        }
+      })
+  )
+
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
   })
@@ -133,9 +170,11 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     const first = runtime.fetchRemoteWithCache('/repo/c', 'origin')
     const second = runtime.fetchRemoteWithCache('/repo/c', 'origin')
 
-    // Allow both callers to register before we resolve.
-    await Promise.resolve()
-    await Promise.resolve()
+    // Allow both callers to register before we resolve. Each canonicalizes the
+    // repo key first, so the dispatch lands several microtasks in.
+    for (let tick = 0; tick < 8; tick += 1) {
+      await Promise.resolve()
+    }
     expect(fetchCallCount()).toBe(1)
 
     resolveFetch()
@@ -174,6 +213,27 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(caches.fetchLastCompletedAt.has('/repo/cache-0::origin')).toBe(false)
   })
 
+  it.each([
+    'main',
+    'a'.repeat(40),
+    'refs/remotes/main',
+    '',
+    'origin/',
+    '/main',
+    'refs/remotes/origin/',
+    'refs/remotes//main'
+  ])(
+    'does not launch Git for a base without both remote and branch components: %s',
+    async (base) => {
+      const runtime = new OrcaRuntimeService(null)
+      await expect(runtime.resolveRemoteTrackingBase('/repo/e', base)).resolves.toBeNull()
+      await expect(
+        runtime.resolveRemoteTrackingBase('/repo/e', base, { wslDistro: 'Ubuntu' })
+      ).resolves.toBeNull()
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    }
+  )
+
   it('resolves remote-tracking bases with longest configured remote matching', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'foo\nfoo/bar\norigin\n', stderr: '' })
     const runtime = new OrcaRuntimeService(null)
@@ -183,6 +243,33 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       branch: 'main',
       ref: 'refs/remotes/foo/bar/main',
       base: 'foo/bar/main'
+    })
+  })
+
+  it.each(['refs/heads/feature/加', 'refs/tags/release'])(
+    'does not reinterpret a qualified nonremote ref through a remote named refs: %s',
+    async (base) => {
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'refs\n', stderr: '' })
+      const runtime = new OrcaRuntimeService(null)
+      for (const options of [{}, { wslDistro: 'Ubuntu' }]) {
+        await expect(
+          runtime.resolveRemoteTrackingBase('/repo/e', base, options)
+        ).resolves.toBeNull()
+      }
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('preserves a qualified remote whose name begins with refs', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'refs/heads\n', stderr: '' })
+    const runtime = new OrcaRuntimeService(null)
+    await expect(
+      runtime.resolveRemoteTrackingBase('/repo/e', 'refs/remotes/refs/heads/feature/加')
+    ).resolves.toEqual({
+      remote: 'refs/heads',
+      branch: 'feature/加',
+      ref: 'refs/remotes/refs/heads/feature/加',
+      base: 'refs/heads/feature/加'
     })
   })
 

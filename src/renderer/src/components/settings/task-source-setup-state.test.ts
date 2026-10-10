@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { TaskProvider } from '../../../../shared/types'
+import type { TaskProvider } from '../../../../shared/task-providers'
 import {
+  TASK_PROVIDER_SETUP_STATUS_TONE,
   getAutoExpandedTaskProvider,
   getIncompleteVisibleTaskProviders,
   getStalledVisibleTaskProviders,
@@ -82,6 +83,46 @@ describe('task-source-setup-state', () => {
       })
     ).toBe(false)
     expect(isTaskProviderReady({ connected: true, checking: true, visible: true })).toBe(false)
+  })
+
+  // A skill scan that could not vouch for "not installed" is not a step the user
+  // left undone, so it must not read as `skill-required`.
+  it('reports an unverifiable skill scan as unknown rather than as a missing step', () => {
+    const unverifiable = {
+      connected: true,
+      checking: false,
+      skillInstalled: false,
+      skillChecking: false,
+      skillUnverifiable: true,
+      visible: true
+    }
+
+    expect(getTaskProviderSetupStatus(unverifiable)).toBe('skill-unverified')
+    expect(TASK_PROVIDER_SETUP_STATUS_TONE['skill-unverified']).toBe('attention')
+    expect(isTaskProviderReady(unverifiable)).toBe(false)
+    // The count reports confirmed steps, so it is unchanged by the unknown.
+    expect(getTaskProviderCompletedSteps(unverifiable)).toEqual({ completed: 2, total: 3 })
+  })
+
+  it('keeps an in-flight check and an unconnected provider ahead of an unverifiable scan', () => {
+    expect(
+      getTaskProviderSetupStatus({
+        connected: true,
+        checking: true,
+        skillInstalled: false,
+        skillUnverifiable: true,
+        visible: true
+      })
+    ).toBe('checking')
+    expect(
+      getTaskProviderSetupStatus({
+        connected: false,
+        checking: false,
+        skillInstalled: false,
+        skillUnverifiable: true,
+        visible: true
+      })
+    ).toBe('connect-required')
   })
 
   it('reports the first unmet step as the status', () => {

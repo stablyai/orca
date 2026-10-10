@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import Markdown from 'react-markdown'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import {
   createMarkdownDocumentIndex,
   createMarkdownDocLinkHref,

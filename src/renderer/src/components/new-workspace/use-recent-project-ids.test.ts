@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { orderProjectIdsByRecency } from './use-recent-project-ids'
 
 function worktree(partial: Partial<Worktree>): Worktree {

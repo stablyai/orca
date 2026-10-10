@@ -1,6 +1,15 @@
-import type { GitHubPRMergeMethod, PRInfo, Repo } from '../../../../shared/types'
+import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
+  GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE
+} from '../../../../shared/protocol-version'
+import {
+  assertRuntimeEnvironmentCapability,
+  callRuntimeRpc,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-rpc-client'
 
 type GitHubPRRepo = PRInfo['prRepo']
 
@@ -101,5 +110,36 @@ export async function updateGitHubHostedReviewState(args: {
     prNumber: args.prNumber,
     prRepo: args.prRepo ?? null,
     updates: { state: args.nextState }
+  })
+}
+
+export async function markGitHubHostedReviewReadyForReview(args: {
+  repo: Repo
+  prNumber: number
+  prRepo?: GitHubPRRepo | null
+}): Promise<Awaited<ReturnType<typeof window.api.gh.markPRReadyForReview>>> {
+  const target = getGitHubActionTarget(args.repo)
+  if (target.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
+      GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE
+    )
+    return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.markPRReadyForReview>>>(
+      target,
+      'github.markPRReadyForReview',
+      {
+        repo: args.repo.id,
+        prNumber: args.prNumber,
+        prRepo: args.prRepo ?? null
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.markPRReadyForReview({
+    repoPath: args.repo.path,
+    repoId: args.repo.id,
+    prNumber: args.prNumber,
+    prRepo: args.prRepo ?? null
   })
 }

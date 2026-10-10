@@ -4,7 +4,8 @@ import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type { GlobalSettings, Worktree } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export type FeatureWallSetupProgressInput = {
   ready?: boolean
@@ -41,14 +42,31 @@ function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree
   )
 }
 
+export type AgentCapabilitiesState = {
+  browserUseSkillInstalled: boolean
+  computerUseSkillInstalled: boolean
+  computerUseReady: boolean
+  computerUseUnavailable: boolean
+  orchestrationSkillInstalled: boolean
+}
+
+export function isAgentCapabilitiesDone(state: AgentCapabilitiesState): boolean {
+  return (
+    state.browserUseSkillInstalled &&
+    state.computerUseSkillInstalled &&
+    (state.computerUseReady || state.computerUseUnavailable) &&
+    state.orchestrationSkillInstalled
+  )
+}
+
 export function getFeatureWallSetupProgress(
   input: FeatureWallSetupProgressInput
 ): FeatureWallSetupProgress {
-  const agentCapabilitiesDone =
-    input.browserUseSkillInstalled &&
-    input.computerUseSkillInstalled &&
-    (input.computerUsePermissionsReady || input.computerUseUnavailable === true) &&
-    input.orchestrationSkillInstalled
+  const agentCapabilitiesDone = isAgentCapabilitiesDone({
+    ...input,
+    computerUseReady: input.computerUsePermissionsReady,
+    computerUseUnavailable: input.computerUseUnavailable === true
+  })
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
     'default-agent':
       Boolean(input.settings?.defaultTuiAgent) && input.settings?.defaultTuiAgent !== 'blank',

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { LinearTeam, LinearWorkspace } from '../../../shared/types'
+import type { LinearTeam, LinearWorkspace } from '../../../shared/linear/workspace-types'
 import {
   LINEAR_SCOPE_TEAM_FILTER_QUERY_MAX_BYTES,
   filterLinearScopeTeams,
   getLinearScopeTriggerLabel,
-  isLinearScopeTeamFilterQueryTooLarge,
   normalizeLinearScopeTeamSelection
 } from './linear-scope-selector'
 
@@ -125,7 +124,6 @@ describe('LinearScopeSelector helpers', () => {
       }
     ] as LinearTeam[]
 
-    expect(isLinearScopeTeamFilterQueryTooLarge(oversizedQuery)).toBe(true)
     expect(filterLinearScopeTeams(throwingTeams, oversizedQuery, new Map())).toEqual([])
   })
 

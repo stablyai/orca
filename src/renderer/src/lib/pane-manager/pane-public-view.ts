@@ -13,3 +13,17 @@ export function toPublicPane(pane: ManagedPaneInternal): ManagedPane {
     serializeAddon: pane.serializeAddon
   }
 }
+
+export function collectPublicPanes(
+  panes: Map<number, ManagedPaneInternal>,
+  limit: number
+): ManagedPane[] {
+  const collected: ManagedPane[] = []
+  for (const pane of panes.values()) {
+    if (collected.length >= limit) {
+      break
+    }
+    collected.push(toPublicPane(pane))
+  }
+  return collected
+}

@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRInfo,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getCheckRunDetailsFixDisabledReason,
   isCheckRunDetailsFixCandidate,
@@ -175,6 +172,20 @@ describe('check-run-details-fix-with-ai', () => {
       title: 'Fix CI',
       url: 'https://github.com/acme/widgets/pull/42'
     })
+  })
+
+  it('does not resolve a matching suppressed GitHub PR', () => {
+    storeState.worktreesByRepo = {
+      'repo-1': [
+        {
+          ...fixtures.worktree,
+          linkedPR: null,
+          suppressedGitHubPR: fixtures.pr.number
+        }
+      ]
+    }
+
+    expect(resolveHostedReviewForCheckRunDetailsFix(fixtures.worktree.id)).toBeNull()
   })
 
   it('requires a hosted review before launching an AI fix', () => {

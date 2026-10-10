@@ -103,9 +103,30 @@ export const EphemeralVmRecipeConnectionResultSchema = z
   })
   .strict()
 
+export const EphemeralVmRecipeProvisionedRootLegacyResultSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    checkoutMode: z.literal('provisioned-root'),
+    pairingCode: z.string().min(1),
+    projectRoot: z.string().min(1),
+    userData: z.record(z.string(), JsonValueSchema).optional()
+  })
+  .strict()
+
+export const EphemeralVmRecipeProvisionedRootConnectionResultSchema = z
+  .object({
+    schemaVersion: z.literal(2),
+    checkoutMode: z.literal('provisioned-root'),
+    connection: EphemeralVmRecipeConnectionSchema,
+    userData: z.record(z.string(), JsonValueSchema).optional()
+  })
+  .strict()
+
 export const EphemeralVmRecipeResultSchema = z.union([
   EphemeralVmRecipeLegacyResultSchema,
-  EphemeralVmRecipeConnectionResultSchema
+  EphemeralVmRecipeConnectionResultSchema,
+  EphemeralVmRecipeProvisionedRootLegacyResultSchema,
+  EphemeralVmRecipeProvisionedRootConnectionResultSchema
 ])
 
 export type EphemeralVmRecipeResult = z.infer<typeof EphemeralVmRecipeResultSchema>
@@ -171,6 +192,12 @@ export function getEphemeralVmRecipeResultConnection(
 
 export function getEphemeralVmRecipeResultProjectRoot(result: EphemeralVmRecipeResult): string {
   return getEphemeralVmRecipeResultConnection(result).projectRoot
+}
+
+export function getEphemeralVmRecipeResultCheckoutMode(
+  result: EphemeralVmRecipeResult
+): 'orca-worktree' | 'provisioned-root' {
+  return result.schemaVersion === 2 ? 'provisioned-root' : 'orca-worktree'
 }
 
 export function getEphemeralVmRecipeResultPairingCode(
