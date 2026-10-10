@@ -4,6 +4,10 @@ import {
   buildWrappedLogicalLine,
   rangeForParsedFileLink
 } from './wrapped-terminal-link-ranges'
+import {
+  extractTerminalFileLinkCandidates,
+  resolveTerminalFileLink
+} from '../../lib/terminal-links'
 
 type TestBufferLine = {
   isWrapped: boolean
@@ -42,6 +46,25 @@ function makeBufferLine(
       return text.slice(startColumn, endColumn)
     }
   }
+}
+
+function makeCjkCellColumns(text: string): number[] {
+  const columns = [0]
+  let terminalColumn = 0
+  for (let index = 0; index < text.length;) {
+    const codePoint = text.codePointAt(index)
+    if (codePoint === undefined) {
+      break
+    }
+    const codeUnitLength = codePoint > 0xffff ? 2 : 1
+    if (codeUnitLength === 2) {
+      columns.push(terminalColumn)
+    }
+    terminalColumn += codePoint > 0xff ? 2 : 1
+    columns.push(terminalColumn)
+    index += codeUnitLength
+  }
+  return columns
 }
 
 describe('buildWrappedLogicalLine', () => {
@@ -110,6 +133,74 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
       end: { x: middleEnd.length, y: 2 }
     })
   })
+
+  it.each([
+    {
+      name: 'CJK directory',
+      directory: '产物',
+      filename: 'final-article.html'
+    },
+    {
+      name: 'CJK filename',
+      directory: 'ascii',
+      filename: 'final-排版.html'
+    },
+    {
+      name: 'CJK-only filename',
+      directory: 'ascii',
+      filename: 'final-排版'
+    },
+    {
+      name: 'supplementary CJK filename',
+      directory: 'ascii',
+      filename: 'final-𠮷.html'
+    },
+    {
+      name: 'parentheses filename',
+      directory: 'ascii',
+      filename: 'final-(olive-journal).html'
+    }
+  ])(
+    'reconstructs a $name hard-wrapped path from either physical row',
+    ({ directory, filename }) => {
+      const expectedPath = `/tmp/orca-link-fixture/${directory}/${filename}`
+      const splitIndex = expectedPath.indexOf('final-') + 'final-'.length
+      const firstFragment = expectedPath.slice(0, splitIndex)
+      const secondFragment = expectedPath.slice(splitIndex)
+      const firstRow = `Rendered target: ${firstFragment}`
+      const secondRow = `  ${secondFragment} · /tmp/orca-link-fixture/neighbor/next.txt`
+      const firstRowColumns = makeCjkCellColumns(firstRow)
+      const secondRowColumns = makeCjkCellColumns(secondRow)
+      const secondRowStartIndex = secondRow.length - secondRow.trimStart().length
+      const rows = [
+        makeBufferLine(firstRow, { columns: firstRowColumns }),
+        makeBufferLine(secondRow, { columns: secondRowColumns })
+      ]
+      const buffer = { getLine: (y: number) => rows[y] }
+      const expectedRange = {
+        start: { x: firstRowColumns[firstRow.indexOf(firstFragment)] + 1, y: 1 },
+        end: { x: secondRowColumns[secondRowStartIndex + secondFragment.length], y: 2 }
+      }
+
+      for (const physicalRow of [1, 2]) {
+        const candidate = buildHardWrappedPathLogicalLineCandidates(buffer, physicalRow).find(
+          (item) => item.text === expectedPath
+        )
+
+        expect(candidate?.rows.map((row) => row.text)).toEqual([firstFragment, secondFragment])
+        expect(candidate?.text).not.toContain(' · ')
+
+        const parsedLink = extractTerminalFileLinkCandidates(candidate!.text).find(
+          (link) => link.pathText === expectedPath
+        )
+        expect(parsedLink?.pathText).toBe(expectedPath)
+        expect(resolveTerminalFileLink(parsedLink!, '/workspace')?.absolutePath).toBe(expectedPath)
+        expect(
+          rangeForParsedFileLink(candidate!, parsedLink!.startIndex, parsedLink!.endIndex)
+        ).toEqual(expectedRange)
+      }
+    }
+  )
 
   it.each([
     {
