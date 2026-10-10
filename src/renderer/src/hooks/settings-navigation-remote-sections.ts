@@ -1,4 +1,5 @@
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
+import { getBackupRestorePaneSearchEntries } from '@/components/settings/backup-restore-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
@@ -11,6 +12,7 @@ import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import {
+  ArchiveRestore,
   Blocks,
   Bug,
   Cable,
@@ -98,6 +100,25 @@ export function buildRemoteSettingsSections(
       searchEntries: getPrivacyPaneSearchEntries(),
       group: 'security'
     },
+    // Why: backups read and write local files through native dialogs, so web clients don't get it.
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'backup-restore',
+            title: translate(
+              'auto.hooks.useSettingsNavigationMetadata.backupRestore',
+              'Backup & Restore'
+            ),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.backupRestoreDescription',
+              'Move your settings to another computer and undo imports.'
+            ),
+            icon: ArchiveRestore,
+            searchEntries: getBackupRestorePaneSearchEntries(),
+            group: 'advanced'
+          }
+        ]
+      : []),
     ...(showDesktopOnlySettings
       ? [
           {

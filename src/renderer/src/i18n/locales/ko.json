@@ -1135,7 +1135,9 @@
         "artifactsDescription": "팀과 HTML 및 Markdown 파일을 공유하고 공개 링크를 관리하세요.",
         "shareSkillsTitle": "스킬 공유",
         "shareSkillsDescription": "비공개 링크로 기술을 공유하세요. 가지고 있는 사람이라면 누구나 설치할 수 있습니다.",
-        "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭."
+        "floatingWorkspaceWebDescription": "전역 터미널 및 markdown 탭.",
+        "backupRestore": "백업 및 복원",
+        "backupRestoreDescription": "설정을 다른 컴퓨터로 옮기고 가져오기를 되돌립니다."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -8336,7 +8338,9 @@
           "devDescription": "UI 상태를 시험해 보기 위한 개발 전용 도구입니다.",
           "linearTitle": "Linear",
           "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
-          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+          "backupRestore": "백업 및 복원",
+          "backupRestoreDescription": "설정을 다른 컴퓨터로 옮기고 가져오기를 되돌립니다."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
@@ -12445,6 +12449,69 @@
           "description": "이 호스트는 현재 상태 그대로 관리형 서버로 돌아갑니다. 이전 버전의 Orca가 여기에서 추가하거나 변경한 내용은 이동되지 않으며, 정리될 때까지 이 컴퓨터의 저장된 설정에만 남습니다.",
           "cancel": "취소",
           "confirm": "서버 버전 유지"
+        },
+        "BackupRestorePane": {
+          "exportTitle": "설정 내보내기",
+          "exportSearchDescription": "다른 컴퓨터에서 쓸 수 있도록 환경설정을 파일로 저장합니다.",
+          "keywordBackup": "백업",
+          "keywordExport": "내보내기",
+          "keywordSync": "동기화",
+          "keywordMigrate": "새 컴퓨터",
+          "importTitle": "설정 가져오기",
+          "importSearchDescription": "백업 파일의 설정을 검토하고 적용합니다.",
+          "keywordImport": "가져오기",
+          "keywordRestore": "복원",
+          "recoveryTitle": "복구 지점",
+          "recoverySearchDescription": "이전 설정을 복원해 가져오기를 되돌립니다.",
+          "keywordUndo": "되돌리기",
+          "keywordRollback": "롤백",
+          "exportSavedWithExclusions": "설정 {{value0}}개를 {{value1}}에 저장했습니다. 인증정보로 보이는 값 {{value2}}개는 제외했습니다.",
+          "exportSaved": "설정 {{value0}}개를 {{value1}}에 저장했습니다.",
+          "importApplied": "설정 {{value0}}개를 가져왔습니다. 복구 지점을 저장했으니 아래에서 되돌릴 수 있습니다.",
+          "importExpired": "검토 시간이 만료되었습니다. 파일을 다시 가져오세요.",
+          "importRolledBack": "가져오기에 실패해 이전 설정으로 복원했습니다.",
+          "importFailed": "가져오기에 실패했습니다. 설정을 확인하거나 아래 복구 지점을 복원하세요.",
+          "restoreDone": "설정 {{value0}}개를 복원했습니다.",
+          "restoreFailed": "복구 지점을 복원하지 못했습니다.",
+          "exportDescription": "다른 컴퓨터에서 가져올 수 있도록 환경설정을 파일로 저장합니다. 비밀번호, API 키, 토큰, 로그인한 계정, 허용한 권한은 포함되지 않습니다.",
+          "exportButton": "내보내기…",
+          "importDescription": "백업 파일을 선택하면 바뀔 내용을 먼저 보여줍니다. 확인하기 전에는 아무것도 적용되지 않으며, 적용 전에 복구 지점을 저장합니다.",
+          "importButton": "가져오기…",
+          "recoveryDescription": "이 컴퓨터에서 가져오기나 복원 직전 상태를 최근 10개까지 보관합니다.",
+          "recoveryEmpty": "아직 복구 지점이 없습니다.",
+          "recoveryBeforeImport": "가져오기 전 · 설정 {{value0}}개",
+          "recoveryBeforeRestore": "복원 전 · 설정 {{value0}}개",
+          "restoreButton": "복원",
+          "exportFailed": "백업 파일을 저장하지 못했습니다.",
+          "sectionAppearance": "모양",
+          "sectionTerminal": "터미널",
+          "sectionEditor": "편집기 및 파일",
+          "sectionGit": "Git 및 소스 제어",
+          "sectionAgents": "에이전트 및 AI",
+          "sectionBrowser": "브라우저",
+          "sectionNotifications": "알림",
+          "sectionGeneral": "일반",
+          "sectionExperimental": "실험 기능",
+          "sectionDevice": "이 기기 전용(경로, 셸, 런타임)",
+          "skipOtherPlatform": "다른 운영체제에서 만든 설정입니다. 적용 전에 확인하세요",
+          "skipSecret": "인증정보로 보여 가져오지 않습니다",
+          "skipUnsupported": "이 버전의 Orca에서 지원하지 않는 설정입니다",
+          "skipProtected": "계정, 비밀정보, 권한은 기기마다 직접 설정해야 합니다",
+          "skipInvalid": "백업에 든 값이 이 설정에 맞지 않습니다",
+          "invalidUnreadable": "파일을 읽을 수 없습니다.",
+          "invalidTooLarge": "Orca 설정 백업이라고 보기에는 파일이 너무 큽니다.",
+          "invalidFormat": "Orca 설정 백업 파일이 아닙니다.",
+          "invalidNewer": "더 최신 버전의 Orca에서 만든 백업입니다. Orca를 업데이트한 후 다시 시도하세요.",
+          "invalidIntegrity": "백업 파일이 손상되었거나 생성 후 수정되었습니다. 설정은 변경되지 않았습니다.",
+          "reviewTitle": "가져오기 검토",
+          "reviewDescription": "{{value0}} · {{value3}}의 Orca {{value2}}에서 {{value1}}에 생성",
+          "newerVersionNotice": "더 최신 버전의 Orca에서 만든 백업입니다. 이 버전이 모르는 설정은 건너뜁니다.",
+          "otherPlatformNotice": "다른 운영체제에서 만든 기기 전용 설정은 선택되지 않았습니다. 경로와 셸은 시스템마다 다른 경우가 많습니다.",
+          "nothingToImport": "가져올 항목이 없습니다. 현재 설정이 백업과 같습니다.",
+          "notImported": "가져오지 않는 항목",
+          "unchangedCount": "설정 {{value0}}개는 이미 같아 그대로 둡니다.",
+          "cancel": "취소",
+          "applySelected": "선택한 {{value0}}개 적용"
         }
       },
       "right": {
@@ -17903,8 +17970,7 @@
         "agentNotSignedIn": "{{agent}}에 로그인하세요.",
         "thenSendAgain": "그런 다음 메시지를 다시 보내세요.",
         "runCommandWhenDone": "작업이 끝나면 /{{command}}을(를) 실행하세요.",
-        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
-        "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다."
+        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",
@@ -19563,5 +19629,12 @@
   },
   "projectField": {
     "updateFailed": "프로젝트 필드를 업데이트하지 못했습니다"
+  },
+  "settingsBackup": {
+    "dialog": {
+      "fileFilter": "Orca 설정 백업",
+      "exportTitle": "Orca 설정 내보내기",
+      "importTitle": "Orca 설정 가져오기"
+    }
   }
 }
