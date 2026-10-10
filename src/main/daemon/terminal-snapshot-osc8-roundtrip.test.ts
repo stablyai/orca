@@ -2,6 +2,7 @@
 import './xterm-env-polyfill'
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
+import { Terminal as BrowserTerminal } from '@xterm/xterm'
 import { SerializeAddon } from '@xterm/addon-serialize'
 
 type TerminalHarness = { terminal: Terminal; addon: SerializeAddon }
@@ -39,6 +40,48 @@ function oscLinkAt(terminal: Terminal, row: number, col: number): OscLinkData | 
 }
 
 describe('OSC 8 hyperlink snapshot round-trip', () => {
+  it('serializes raw SGR underlines, not OSC 8 render decoration, in headless and always-on browser terminals', async () => {
+    const url = 'https://example.com/underline-replay'
+    const input = ['', '\x1b[4m', '\x1b[4:2m', '\x1b[4:3m']
+      .map((sgr, index) => `\x1b[0m${sgr}\x1b]8;;${url}\x1b\\${index}\x1b]8;;\x1b\\\x1b[0m.`)
+      .join('')
+    const sources = [
+      new Terminal({ cols: 80, rows: 5, allowProposedApi: true }),
+      new BrowserTerminal({ cols: 80, rows: 5, allowProposedApi: true, linkUnderlines: true })
+    ]
+    for (const source of sources) {
+      const addon = new SerializeAddon()
+      source.loadAddon(addon)
+      let restored: Terminal | undefined
+      try {
+        await new Promise<void>((resolve) => source.write(input, resolve))
+        const snapshot = addon.serialize()
+        expect(snapshot).not.toContain('\x1b[4:5m')
+        restored = await replay(snapshot)
+        expect(restored.buffer.active.getLine(0)?.translateToString(true)).toBe('0.1.2.3.')
+        for (const [index, style] of [0, 1, 2, 3].entries()) {
+          const cell = restored.buffer.active.getLine(0)?.getCell(index * 2) as unknown as {
+            fg: number
+            extended: { _ext: number }
+          }
+          expect((cell.fg & (1 << 28)) !== 0).toBe(style !== 0)
+          expect((cell.extended._ext >>> 26) & 7).toBe(style)
+          expect(oscLinkAt(restored, 0, index * 2)?.uri).toBe(url)
+          expect(
+            restored.buffer.active
+              .getLine(0)
+              ?.getCell(index * 2 + 1)
+              ?.isUnderline()
+          ).toBe(0)
+          expect(oscLinkAt(restored, 0, index * 2 + 1)).toBeNull()
+        }
+      } finally {
+        source.dispose()
+        restored?.dispose()
+      }
+    }
+  })
+
   it('retains a closed link URI without linking surrounding text', async () => {
     const url = 'https://github.com/stablyai/orca/issues/12345'
     const { terminal, addon } = createTerminal()

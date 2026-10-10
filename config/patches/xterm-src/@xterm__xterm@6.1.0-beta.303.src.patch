@@ -1247,6 +1247,30 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..17d6577e388eb2e4397338093e353738
    private _canvas: OffscreenCanvas | HTMLCanvasElement;
    private _ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
  
+diff --git a/src/browser/services/RenderService.ts b/src/browser/services/RenderService.ts
+index 75cd55418b0eac94c3f28273c73a26086e437a90..ddcbd103c8788bd9b48b2445902a5cde72fd26a0 100644
+--- a/src/browser/services/RenderService.ts
++++ b/src/browser/services/RenderService.ts
+@@ -99,6 +99,7 @@ export class RenderService extends Disposable implements IRenderService {
+       'drawBoldTextInBrightColors',
+       'letterSpacing',
+       'lineHeight',
++      'linkUnderlines',
+       'fontFamily',
+       'fontSize',
+       'fontWeight',
+diff --git a/src/common/InputHandler.ts b/src/common/InputHandler.ts
+index 995fe7670a10f11fb9b0b42332484b038ea6c989..435520a95b8dcac334746966c7605d5915e36b72 100644
+--- a/src/common/InputHandler.ts
++++ b/src/common/InputHandler.ts
+@@ -3136,6 +3136,7 @@ export class InputHandler extends Disposable implements IInputHandler {
+       id = parsedParams[idParamIndex].slice(3) || undefined;
+     }
+     this._curAttrData.extended = this._curAttrData.extended.clone();
++    this._curAttrData.extended.linkOptions = this._optionsService.rawOptions;
+     this._curAttrData.extended.urlId = this._oscLinkService.registerLink({ id, uri });
+     this._curAttrData.updateExtended();
+     return true;
 diff --git a/src/common/SortedList.ts b/src/common/SortedList.ts
 index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e550d96f915 100644
 --- a/src/common/SortedList.ts
@@ -1369,3 +1393,78 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
        this._flushDeletedTask.flush();
      }
    }
+diff --git a/src/common/buffer/AttributeData.ts b/src/common/buffer/AttributeData.ts
+index 3bcb22a00689361badb16152300ee45b42b9fe41..f470157b0cf76a1d9ec9e22826804980fee1e40c 100644
+--- a/src/common/buffer/AttributeData.ts
++++ b/src/common/buffer/AttributeData.ts
+@@ -138,6 +138,7 @@ export class AttributeData implements IAttributeData {
+  * Holds information about different underline styles and color.
+  */
+ export class ExtendedAttrs implements IExtendedAttrs {
++  public linkOptions?: { linkUnderlines?: boolean };
+   private _ext: number = 0;
+   public get ext(): number {
+     if (this._urlId) {
+@@ -151,11 +152,10 @@ export class ExtendedAttrs implements IExtendedAttrs {
+   public set ext(value: number) { this._ext = value; }
+ 
+   public get underlineStyle(): UnderlineStyle {
+-    // Always return the URL style if it has one
+-    if (this._urlId) {
+-      return UnderlineStyle.DASHED;
+-    }
+-    return (this._ext & ExtFlags.UNDERLINE_STYLE) >> 26;
++    const style = (this._ext & ExtFlags.UNDERLINE_STYLE) >> 26;
++    return style === UnderlineStyle.NONE && this._urlId && this.linkOptions?.linkUnderlines
++      ? UnderlineStyle.DASHED
++      : style;
+   }
+   public set underlineStyle(value: UnderlineStyle) {
+     this._ext &= ~ExtFlags.UNDERLINE_STYLE;
+@@ -199,7 +199,9 @@ export class ExtendedAttrs implements IExtendedAttrs {
+   }
+ 
+   public clone(): IExtendedAttrs {
+-    return new ExtendedAttrs(this._ext, this._urlId);
++    const attrs = new ExtendedAttrs(this._ext, this._urlId);
++    attrs.linkOptions = this.linkOptions;
++    return attrs;
+   }
+ 
+   /**
+diff --git a/src/common/buffer/Types.ts b/src/common/buffer/Types.ts
+index a7cf0685a3c34c54df912936cb8cd19adc568f78..b63ad1c5bd161950d26a2ad701f1a7d7f4a8efff 100644
+--- a/src/common/buffer/Types.ts
++++ b/src/common/buffer/Types.ts
+@@ -20,6 +20,7 @@ export interface IExtendedAttrs {
+   underlineColor: number;
+   underlineVariantOffset: number;
+   urlId: number;
++  linkOptions?: { linkUnderlines?: boolean };
+   clone(): IExtendedAttrs;
+   isEmpty(): boolean;
+ }
+diff --git a/src/common/services/OptionsService.ts b/src/common/services/OptionsService.ts
+index d14982e3ff8907fd3182c8c970d81afa74eba84b..8b590653d0048a319b4f46d4e17f850f565a1873 100644
+--- a/src/common/services/OptionsService.ts
++++ b/src/common/services/OptionsService.ts
+@@ -29,6 +29,7 @@ export const DEFAULT_OPTIONS: Readonly<Required<ITerminalOptions>> = {
+   lineHeight: 1.0,
+   letterSpacing: 0,
+   linkHandler: null,
++  linkUnderlines: false,
+   logLevel: 'info',
+   logger: null,
+   scrollback: 1000,
+diff --git a/src/common/services/Services.ts b/src/common/services/Services.ts
+index 8f0aeeed15d38aa8ab341577520db15d13788a52..1cd8d2bd124fe7f389ee0cfbfa11f1a1a54b4323 100644
+--- a/src/common/services/Services.ts
++++ b/src/common/services/Services.ts
+@@ -223,6 +223,7 @@ export interface ITerminalOptions {
+   letterSpacing?: number;
+   lineHeight?: number;
+   linkHandler?: ILinkHandler | null;
++  linkUnderlines?: boolean;
+   logLevel?: LogLevel;
+   logger?: ILogger | null;
+   macOptionIsMeta?: boolean;

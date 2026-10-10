@@ -40,6 +40,19 @@ describe('buildPreviewAppearanceOptions', () => {
     expect(buildPreviewAppearanceOptions(SETTINGS, false).macOptionIsMeta).toBe(false)
   })
 
+  it('forces OSC 8 underlines only for the always setting', () => {
+    expect(buildPreviewAppearanceOptions(null, false).linkUnderlines).toBe(false)
+    expect(buildPreviewAppearanceOptions(SETTINGS, false).linkUnderlines).toBe(false)
+    expect(
+      buildPreviewAppearanceOptions({ ...SETTINGS, terminalLinkUnderlines: 'hover' }, false)
+        .linkUnderlines
+    ).toBe(false)
+    expect(
+      buildPreviewAppearanceOptions({ ...SETTINGS, terminalLinkUnderlines: 'always' }, false)
+        .linkUnderlines
+    ).toBe(true)
+  })
+
   it('falls back to pane defaults with no settings hydrated', () => {
     const options = buildPreviewAppearanceOptions(null, false)
     expect(options.fontSize).toBe(14)
