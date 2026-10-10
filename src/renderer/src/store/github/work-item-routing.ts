@@ -3,7 +3,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../../../shared/github/work-item-types'
 import {
   getTaskSourceCacheScope,
-  getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import {
@@ -46,15 +45,37 @@ export function settingsForGitHubRepoOwner(
     return settings
   }
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
   // Why: local and SSH-owned GitHub lookups run on the desktop client; host focus must not redirect them to the selected runtime.
+  return withActiveRuntimeEnvironmentId(
+    settings,
+    parsed?.kind === 'runtime' ? parsed.environmentId : null
+  )
+}
+
+function withActiveRuntimeEnvironmentId(
+  settings: AppState['settings'],
+  activeRuntimeEnvironmentId: string | null
+): AppState['settings'] {
   return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+    ? { ...settings, activeRuntimeEnvironmentId }
+    : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing readers only consume activeRuntimeEnvironmentId before settings hydrate.
+      ({ activeRuntimeEnvironmentId } as AppState['settings'])
+}
+
+// Why: a source without a runtime host carries no owner, so it defers to the repo's own owner
+// instead of clobbering a runtime-owned repo to local (#7623); focus is never consulted.
+function settingsForGitHubTaskSource(
+  settings: AppState['settings'],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
+  sourceContext: TaskSourceContext
+): AppState['settings'] {
+  const sourceHost = parseExecutionHostId(sourceContext.hostId)
+  if (sourceHost?.kind === 'runtime') {
+    return withActiveRuntimeEnvironmentId(settings, sourceHost.environmentId)
+  }
+  return repo
+    ? settingsForGitHubRepoOwner(settings, repo)
+    : withActiveRuntimeEnvironmentId(settings, null)
 }
 
 export function settingsForGitHubFocusedRepoOwner(
@@ -112,10 +133,7 @@ export function getGitHubWorkItemSourceSettings(
   sourceContext?: TaskSourceContext | null
 ): AppState['settings'] {
   if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
+    return settingsForGitHubTaskSource(settings, repo, sourceContext)
   }
   return settingsForGitHubFocusedRepoOwner(settings, repo)
 }
@@ -126,10 +144,7 @@ export function getGitHubRepoSourceSettings(
   sourceContext?: TaskSourceContext | null
 ): AppState['settings'] {
   if (sourceContext?.provider === 'github') {
-    return {
-      ...settings,
-      ...getTaskSourceRuntimeSettings(sourceContext)
-    } as AppState['settings']
+    return settingsForGitHubTaskSource(settings, repo, sourceContext)
   }
   return settingsForGitHubRepoOwner(settings, repo)
 }

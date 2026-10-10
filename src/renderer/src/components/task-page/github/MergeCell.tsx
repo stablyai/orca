@@ -1,15 +1,12 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import {
-  type TaskSourceContext,
-  getTaskSourceRuntimeSettings
-} from '../../../../../shared/task-source-context'
-import React, { useState, useMemo } from 'react'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import React, { useState } from 'react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
 import { translate } from '@/i18n/i18n'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
@@ -42,18 +39,8 @@ export function PRMergeCell({
 }): React.JSX.Element {
   const [merging, setMerging] = useState(false)
   const confirm = useConfirmationDialog()
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingSettings(s, repo?.id ?? null, sourceContext))
   )
   if (item.type !== 'pr') {
     return (

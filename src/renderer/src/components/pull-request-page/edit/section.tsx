@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ArrowRight, ChevronDown, CircleDashed, CircleDot, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -7,10 +7,9 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useImmediateMutation, useRepoAssignees, useRepoLabels } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'
 import { translate } from '@/i18n/i18n'
 import type { PullRequestPageProjectOrigin } from '../page-types'
@@ -52,18 +51,8 @@ export function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
   // Why: patchWorkItem only updates workItemsCache; Project-view rows also need projectViewCache patched or the table stays stale. See docs/design/github-project-view-tasks.md.

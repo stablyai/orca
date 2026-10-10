@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  getGitHubMutationRoutingSettings,
+  getGitHubRepoRoutingSettings,
   getGitHubRuntimeRepoId
 } from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
@@ -56,9 +56,7 @@ export function PRActionsPanel({
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
   const sourceSettings = useAppStore(
-    useShallow((s) =>
-      getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
-    )
+    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext))
   )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const prRepo = resolvePullRequestRepo(item, projectOrigin)

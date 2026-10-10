@@ -1,14 +1,11 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import {
-  type TaskSourceContext,
-  getTaskSourceRuntimeSettings
-} from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import React, { useMemo, useState, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { translate } from '@/i18n/i18n'
@@ -31,18 +28,8 @@ export function GHAssigneesCell({
   sourceContext?: TaskSourceContext | null
   workItemMutation: TaskPageGitHubWorkItemMutationRunner
 }): React.JSX.Element {
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingSettings(s, repo?.id ?? null, sourceContext))
   )
   const [open, setOpen] = useState(false)
   const [pendingLogin, setPendingLogin] = useState<string | null>(null)
