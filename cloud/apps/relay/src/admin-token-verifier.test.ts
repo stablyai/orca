@@ -17,6 +17,7 @@ const mutationRoutes = [
   '/v1/admin/admission-selector/apply',
   '/v1/admin/admission-selector/add-migration-cells',
   '/v1/admin/cell-state',
+  '/v1/admin/cell-admit-mode',
   '/v1/admin/cell-fence-adopt-legacy',
   '/v1/admin/cell-fence-commit-legacy-adoption',
   '/v1/admin/cell-fence-attest',

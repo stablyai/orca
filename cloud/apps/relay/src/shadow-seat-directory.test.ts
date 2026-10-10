@@ -528,3 +528,31 @@ describe('RelayAssignmentStore.seatFeedCells', () => {
     ])
   })
 })
+
+describe('ShadowSeatDirectory.placementModeOf', () => {
+  const response = (
+    modes: { admitModeEffective?: 'db' | 'reserve'; admitModeRaw?: 'db' | 'reserve' } = {}
+  ): SeatFeedResponse => ({
+    v: 1,
+    cellId: 'cell-a',
+    incarnation: INCARNATION,
+    seq: 1,
+    at: 0,
+    counts: { seats: 0, controls: 0, bookings: 0, units: 0, ceiling: 500 },
+    intake: { perSec: 100, burst: 20, tokens: 20 },
+    flagsApplied: { generation: 3, flags: { admitMode: 'reserve' } },
+    full: [],
+    ...modes
+  })
+
+  // A tripped cell re-registering still reports reserve as effective; placement reads raw db.
+  it('reads the raw mode when the cell sends it, and the effective mode otherwise', () => {
+    const directory = new ShadowSeatDirectory()
+    directory.setCells(['cell-a'])
+    directory.apply('cell-a', response({ admitModeEffective: 'reserve', admitModeRaw: 'db' }), 1_000, 1_000)
+    expect(directory.placementModeOf('cell-a')).toBe('db')
+    expect(directory.admitModeOf('cell-a')).toBe('reserve')
+    directory.apply('cell-a', response({ admitModeEffective: 'reserve' }), 2_000, 2_000)
+    expect(directory.placementModeOf('cell-a')).toBe('reserve')
+  })
+})

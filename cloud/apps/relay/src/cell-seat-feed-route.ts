@@ -22,6 +22,8 @@ export function registerCellSeatFeedRoute(
     // A placing director's poll (reserver=1) feeds the cell's dead-man.
     onReserverPoll?: () => void
     admitModeEffective?: () => 'db' | 'reserve'
+    // Switch file and dead-man only: db the moment the cell trips, while re-registration runs.
+    admitModeRaw?: () => 'db' | 'reserve'
     // Step 5: what a director needs to estimate a seat and a booking here.
     reserveCounts?: () => {
       bookings: number
@@ -74,6 +76,7 @@ export function registerCellSeatFeedRoute(
       // Applied, never desired: generation 0 means no object has been read since boot.
       ...(input.cellFlags ? { flagsApplied: input.cellFlags() } : {}),
       ...(input.admitModeEffective ? { admitModeEffective: input.admitModeEffective() } : {}),
+      ...(input.admitModeRaw ? { admitModeRaw: input.admitModeRaw() } : {}),
       ...page
     })
   })
