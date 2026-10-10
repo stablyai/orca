@@ -3426,7 +3426,8 @@
             "ec2adf093e": "Iniciar {{value0}} en un nuevo terminal",
             "465e432ef1": "No se pudo generar el comando de inicio para {{value0}}.",
             "e518f544b1": "No se detectaron agentes",
-            "8dea9b5cdf": "No hay agentes habilitados"
+            "8dea9b5cdf": "No hay agentes habilitados",
+            "needsServerUpdate": "Actualiza Orca en este servidor para ver los agentes de este espacio de trabajo"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",

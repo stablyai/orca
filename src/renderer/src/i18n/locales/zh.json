@@ -3426,7 +3426,8 @@
             "ec2adf093e": "在新终端中启动 {{value0}}",
             "465e432ef1": "无法为 {{value0}} 构建启动命令。",
             "e518f544b1": "未检测到智能体",
-            "8dea9b5cdf": "没有启用智能体"
+            "8dea9b5cdf": "没有启用智能体",
+            "needsServerUpdate": "请更新此服务器上的 Orca 以列出此工作区的智能体"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",

@@ -281,6 +281,10 @@ export async function getRuntimeEnvironmentStatus(
   return entry.status
 }
 
+/** The status the last capability verdict read (e.g. its `hostPlatform`); null when none is cached. */
+export const getCachedRuntimeEnvironmentStatus = (environmentId: string): RuntimeStatus | null =>
+  runtimeCompatibilityChecks.get(environmentId.trim())?.status ?? null
+
 export async function runtimeEnvironmentSupportsCapability(
   environmentId: string,
   capability: RuntimeCapability,
@@ -332,6 +336,4 @@ export async function assertRuntimeEnvironmentCapability(
   }
 }
 
-export function clearRuntimeCompatibilityCacheForTests(): void {
-  clearRuntimeCompatibilityCache()
-}
+export { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests }

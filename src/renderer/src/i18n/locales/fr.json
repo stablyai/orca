@@ -3531,7 +3531,8 @@
             "ec2adf093e": "Lancer {{value0}} dans un nouveau terminal",
             "465e432ef1": "Impossible de construire la commande de lancement pour {{value0}}.",
             "e518f544b1": "Aucun agent détecté",
-            "8dea9b5cdf": "Aucun agent activé"
+            "8dea9b5cdf": "Aucun agent activé",
+            "needsServerUpdate": "Mettez à jour Orca sur ce serveur pour lister les agents de cet espace de travail"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
