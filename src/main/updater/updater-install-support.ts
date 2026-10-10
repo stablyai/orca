@@ -76,8 +76,16 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     this.quittingForUpdate = false
     this.updateInstallCommitted = false
     this.quitAndInstallNativeInvoked = false
+    this.clearMacDeferredStagingTimer()
     disarmUpdateInstallExitWatchdog()
     resetMacInstallState()
+  }
+
+  protected clearMacDeferredStagingTimer(): void {
+    if (this.macDeferredStagingTimer) {
+      clearTimeout(this.macDeferredStagingTimer)
+      this.macDeferredStagingTimer = null
+    }
   }
 
   /**
