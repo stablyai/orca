@@ -68,6 +68,8 @@ describe('repo slice runtime project groups', () => {
       {
         ...runtimeOrca,
         executionHostId: 'runtime:env-1',
+        authoritativeExecutionHostId: 'local',
+        catalogOwnerHostId: 'runtime:env-1',
         projectGroupId: 'group-orca'
       }
     ])

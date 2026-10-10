@@ -148,10 +148,16 @@ export const gitRepoModuleMock = () => ({
   }
 })
 
-export const githubClientModuleMock = () => ({
+export const githubClientModuleMock = (): {
+  getPRForBranch: RepoBranchMock
+  getWorkItem: ModuleMock
+  getPullRequestPushTarget: ModuleMock
+  createGitHubPullRequest: ModuleMock
+} => ({
   getPRForBranch: getPRForBranchMock,
   getWorkItem: getWorkItemMock,
-  getPullRequestPushTarget: getPullRequestPushTargetMock
+  getPullRequestPushTarget: getPullRequestPushTargetMock,
+  createGitHubPullRequest: vi.fn()
 })
 
 export const hostedReviewModuleMock = () => ({

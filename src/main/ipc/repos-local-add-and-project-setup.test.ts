@@ -268,13 +268,18 @@ describe('repos:add + repos:clone', () => {
       setupMethod: 'imported-existing-folder'
     })
 
-    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
-      upstream: {
-        owner: 'acme',
-        repo: 'orca',
-        host: 'github.acme-corp.com'
-      }
-    })
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(
+      1,
+      existing.id,
+      {
+        upstream: {
+          owner: 'acme',
+          repo: 'orca',
+          host: 'github.acme-corp.com'
+        }
+      },
+      'local'
+    )
   })
 
   it('sets up a folder when the selected project exists only on another host', async () => {
