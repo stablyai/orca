@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { detectLanguage } from './language-detect'
 
 describe('detectLanguage', () => {
+  it.each([
+    'src/Main.hs',
+    'src/Main.hsig',
+    'src/Main.hs-boot',
+    'C:\\src\\MAIN.HS',
+    '/remote folder/Main.hsig'
+  ])('maps Haskell source %s to the haskell language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('haskell')
+  })
   it('maps .vue files to the custom vue language id', () => {
     expect(detectLanguage('src/components/App.vue')).toBe('vue')
   })

@@ -1,0 +1,4 @@
+Source: https://github.com/haskell/language-haskell
+Version: 3.8.0 (commit 417bdaf7d997b8561d8d52066120faca395a1ec7)
+Grammar: syntaxes/haskell.YAML-tmLanguage, converted to JSON without changing its content.
+License: BSD-3-Clause; the full upstream license is in LICENSE.txt.
