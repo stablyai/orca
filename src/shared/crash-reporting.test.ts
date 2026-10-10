@@ -223,7 +223,7 @@ describe('crash-reporting shared helpers', () => {
     expect(text.indexOf('Check failure:')).toBeLessThan(text.indexOf('Details:'))
   })
 
-  it('decodes POSIX wait statuses in the exit code line and leaves Windows codes raw', () => {
+  it('decodes POSIX wait statuses and Windows status codes in the exit code line', () => {
     const report = (overrides: Partial<CrashReportRecord>): CrashReportRecord => ({
       id: 'crash-wait-status',
       createdAt: '2026-08-14T09:32:19.696Z',
@@ -253,17 +253,29 @@ describe('crash-reporting shared helpers', () => {
     expect(
       formatCrashReportText(report({ platform: 'darwin', reason: 'crashed', exitCode: 5 }))
     ).toContain('Exit code: 5 (SIGTRAP)')
-    // Windows codes are not wait statuses; they must render byte-identical to before.
+    // Windows codes are not wait statuses; they resolve through their own table.
+    // Exit 1 stays raw on purpose — a plain exit(1) and Task Manager's "End task"
+    // produce the same code, so naming it would mislabel ordinary failures.
     expect(formatCrashReportText(report({ platform: 'win32', exitCode: 1 }))).toContain(
       'Exit code: 1\n'
     )
     expect(
       formatCrashReportText(report({ platform: 'win32', reason: 'oom', exitCode: -536870904 }))
-    ).toContain('Exit code: -536870904\n')
-    // launch-failed carries a Chromium launch error, not a wait status — never decode it.
+    ).toContain('Exit code: -536870904 (0xE0000008, Chromium app-raised out-of-memory)\n')
+    expect(
+      formatCrashReportText(report({ platform: 'win32', reason: 'crashed', exitCode: -36863 }))
+    ).toContain(
+      'Exit code: -36863 (0xFFFF7001, crash handler unreachable; client self-terminated without a minidump)\n'
+    )
+    // launch-failed carries a Chromium launch error, not a wait status. On linux (this
+    // report's default platform) Chromium reports no sandbox stage, so it stays raw...
     expect(formatCrashReportText(report({ reason: 'launch-failed', exitCode: 18 }))).toContain(
       'Exit code: 18\n'
     )
+    // ...while on win32 the same number is a named sandbox stage (report a8562106).
+    expect(
+      formatCrashReportText(report({ platform: 'win32', reason: 'launch-failed', exitCode: 18 }))
+    ).toContain('Exit code: 18 (SBOX_ERROR_CREATE_PROCESS, error in creating process)\n')
     // A clean exit(0) must not grow an "(exit status 0)" suffix.
     expect(formatCrashReportText(report({ reason: 'crashed', exitCode: 0 }))).toContain(
       'Exit code: 0\n'
