@@ -33,6 +33,7 @@ export class GpuCrashFallbackTracker {
   // Newest-last crash times (ms since launch), pruned to the rolling window.
   private readonly recentCrashes: number[] = []
   private engaged = false
+  private crashesSinceLaunch = 0
 
   constructor(options: GpuCrashFallbackOptions) {
     this.windowMs = options.windowMs
@@ -54,6 +55,7 @@ export class GpuCrashFallbackTracker {
       // not recorded, so a reported crashesInWindow can understate the actual burst.
       return { shouldEngageFallback: false, crashesInWindow: this.recentCrashes.length }
     }
+    this.crashesSinceLaunch = Math.min(2, this.crashesSinceLaunch + 1)
     // Why: out-of-order arrivals would corrupt the sorted window, and a clock
     // that jumps backwards must not resurrect crashes already pruned.
     const at = Math.max(msSinceLaunch, this.recentCrashes.at(-1) ?? 0)
@@ -71,6 +73,10 @@ export class GpuCrashFallbackTracker {
     return { shouldEngageFallback: false, crashesInWindow: this.recentCrashes.length }
   }
 
+  hasRecordedExactlyOneCrash(): boolean {
+    return this.crashesSinceLaunch === 1
+  }
+
   hasEngaged(): boolean {
     return this.engaged
   }
@@ -86,7 +92,7 @@ export class GpuCrashFallbackTracker {
     this.engaged = false
   }
 
-  /** Crash times currently inside the window. Exposed to assert the pruning invariant. */
+  /** Recorded crash times; consumers must check their age against the current clock. */
   windowSnapshot(): readonly number[] {
     return [...this.recentCrashes]
   }
