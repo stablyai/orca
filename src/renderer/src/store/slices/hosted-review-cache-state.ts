@@ -6,8 +6,7 @@ import type {
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { AppState } from '../types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   runtimeTargetForOwnerHostId,
   type RuntimeClientTarget
@@ -211,26 +210,6 @@ export function withHostedReviewCacheEntry(
     pruned[key] = next[key]
   }
   return pruned
-}
-
-export function settingsForHostedReviewRepoOwner(
-  settings: AppState['settings'],
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined
-): AppState['settings'] {
-  if (!repo) {
-    return settings
-  }
-  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  if (parsed?.kind === 'runtime') {
-    return settings
-      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
-      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
-  }
-  // Why: local and SSH-owned reviews are served by the desktop client's local
-  // IPC path, even when the sidebar is focused on a runtime host.
-  return settings
-    ? { ...settings, activeRuntimeEnvironmentId: null }
-    : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
 /**

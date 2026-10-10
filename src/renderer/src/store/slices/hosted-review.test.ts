@@ -235,34 +235,20 @@ describe('hosted review slice', () => {
     ).toBeUndefined()
   })
 
-  it('routes active runtime review lookups through runtime RPC', async () => {
-    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+  it('keeps a review lookup for an unknown repo on this computer while a server is focused', async () => {
+    // Before: the focused server answered for a repo no row owns.
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review)
     const store = makeStore({
       activeRuntimeEnvironmentId: 'env-win'
     } as AppState['settings'])
 
-    await expect(
-      store.getState().fetchHostedReviewForBranch('C:\\repo', 'feature/windows', {
-        linkedGitHubPR: 12
-      })
-    ).resolves.toEqual(review)
+    await store.getState().fetchHostedReviewForBranch('C:\\repo', 'feature/windows', {
+      linkedGitHubPR: 12
+    })
 
-    expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
-    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-win' },
-      'hostedReview.forBranch',
-      {
-        repo: 'C:\\repo',
-        repoPath: 'C:\\repo',
-        branch: 'feature/windows',
-        currentHeadOid: null,
-        linkedGitHubPR: 12,
-        linkedGitLabMR: null,
-        linkedBitbucketPR: null,
-        linkedAzureDevOpsPR: null,
-        linkedGiteaPR: null
-      },
-      { timeoutMs: 30_000 }
+    expect(runtimeRpc.callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: 'C:\\repo', branch: 'feature/windows' })
     )
   })
 

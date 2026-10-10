@@ -22,9 +22,9 @@ import {
   getGitHubWorkItemRequestContext,
   getGitHubWorkItemSourceCacheScope,
   getGitHubWorkItemSourceHostId,
-  getGitHubWorkItemSourceSettings,
   getWorkItemsCacheKeyForOwner,
-  listGitHubWorkItemsForRepo
+  listGitHubWorkItemsForRepo,
+  getGitHubSourceTarget
 } from './work-item-routing'
 
 export const createWorkItemFetchActions = (
@@ -89,11 +89,6 @@ export const createWorkItemFetchActions = (
     }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
-    const requestSettings = getGitHubWorkItemSourceSettings(
-      requestState,
-      repo,
-      options?.sourceContext
-    )
     const ownerHostId = getGitHubWorkItemSourceHostId(requestState, repo, options?.sourceContext)
     const cacheScope = getGitHubWorkItemSourceCacheScope(requestState, repo, options?.sourceContext)
     const key = workItemsCacheKey(repoId, limit, query, cacheScope)
@@ -105,7 +100,7 @@ export const createWorkItemFetchActions = (
     const requestInvalidationNonce = requestState.workItemsInvalidationNonce
     const requestContext = getGitHubWorkItemRequestContext(
       requestState,
-      requestSettings,
+      getGitHubSourceTarget(requestState, repo, options?.sourceContext),
       repoId,
       repoPath,
       options?.sourceContext

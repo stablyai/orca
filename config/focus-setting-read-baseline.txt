@@ -5,7 +5,6 @@
 # Prune after removing reads: pnpm check:owner-routing-ratchet --prune
 2 src/renderer/src/App.tsx
 3 src/renderer/src/app-shell/use-app-shell-services.ts
-1 src/renderer/src/app-shell/use-visible-review-refresh-reporting.ts
 1 src/renderer/src/components/Landing.tsx
 1 src/renderer/src/components/LinearIssueWorkspace.tsx
 1 src/renderer/src/components/NativeChatResumeOnRestartGroups.tsx
@@ -491,14 +490,12 @@
 2 src/renderer/src/store/folder-workspaces/folder-workspace-catalog-actions.ts
 5 src/renderer/src/store/folder-workspaces/folder-workspace-mutations.ts
 1 src/renderer/src/store/folder-workspaces/folder-workspace-routing.ts
-1 src/renderer/src/store/github/pull-request-execution.ts
-2 src/renderer/src/store/github/refresh-routing-actions.ts
-3 src/renderer/src/store/github/repository-routing.ts
-2 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
+1 src/renderer/src/store/github/repository-routing.ts
+1 src/renderer/src/store/github/visible-hosted-review-refresh-targets.ts
 2 src/renderer/src/store/github/work-item-aggregate-actions.ts
 3 src/renderer/src/store/github/work-item-fetch-actions.ts
-3 src/renderer/src/store/github/work-item-routing.ts
-8 src/renderer/src/store/index.ts
+2 src/renderer/src/store/github/work-item-routing.ts
+7 src/renderer/src/store/index.ts
 6 src/renderer/src/store/project-groups/nested-repository-operations.ts
 2 src/renderer/src/store/project-groups/project-group-catalog-actions.ts
 7 src/renderer/src/store/project-groups/project-group-mutations.ts
@@ -534,9 +531,7 @@
 2 src/renderer/src/store/slices/editor/create-editor-slice.ts
 1 src/renderer/src/store/slices/editor/tabs/untitled-file-cleanup.ts
 1 src/renderer/src/store/slices/github-cache-key.ts
-1 src/renderer/src/store/slices/github-slice-test-harness.ts
 1 src/renderer/src/store/slices/hosted-review-cache-identity.ts
-1 src/renderer/src/store/slices/hosted-review.ts
 1 src/renderer/src/store/slices/jira-collection-read-actions.ts
 13 src/renderer/src/store/slices/jira-connection-actions.ts
 4 src/renderer/src/store/slices/jira-issue-read-actions.ts
@@ -562,7 +557,7 @@
 1 src/renderer/src/store/slices/runtime-status.ts
 1 src/renderer/src/store/slices/settings-owner-hydration-publication.ts
 5 src/renderer/src/store/slices/settings.ts
-7 src/renderer/src/store/slices/store-test-helpers.ts
+6 src/renderer/src/store/slices/store-test-helpers.ts
 2 src/renderer/src/store/slices/tabs/tabs-host-mirroring.ts
 2 src/renderer/src/store/slices/terminal-tab-retirement.ts
 1 src/renderer/src/store/slices/worktree-visibility-owner-settings.ts
