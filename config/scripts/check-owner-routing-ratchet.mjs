@@ -8,9 +8,8 @@ import { pathToFileURL } from 'node:url'
 // instead of by the resource's own host. Per-file counts may only go down.
 // - Owner routing: the three focus-routing helpers, counted together so renaming one into another
 //   never lowers the count.
-// - Focus reads: every read of the setting, including helpers that read it for the caller
-//   (`defaultCreationHost`, `getSettingsFocusedExecutionHostId`, …), so swapping one form for
-//   another never lowers it either.
+// - Focus reads: every read of the setting plus every call of an exported function that reads it
+//   for the caller (discovered, not hand-listed), so swapping one form for another never lowers it.
 
 const SCAN_ROOT = 'src/renderer/src'
 const HELPER_NAMES = 'getActiveRuntimeTarget|legacyRouteFromSettings|settingsForRuntimeOwner'
@@ -18,55 +17,101 @@ const HELPERS = `(?:${HELPER_NAMES})`
 const IMPORT_EXPORT_LIST = /\b(?:import|export)\s+(?:type\s+)?\{[^}]*\}/g
 // Calls and value uses (`.map(helper)`); definitions and type queries are not routing.
 const FOCUS_ROUTING_USE = new RegExp(`(?<!(?:function|typeof)\\s+)\\b${HELPERS}\\b`, 'g')
-// Helpers that read the setting on the caller's behalf, counted as reads by the focus ratchet.
-const FOCUS_READER_NAMES = new Set([
-  ...HELPER_NAMES.split('|'),
-  'defaultCreationHost',
-  'getSettingsFocusedExecutionHostId',
-  'getSingleFocusedRuntimeEnvironmentId'
-])
-const FOCUS_ROUTING_ALIAS = new RegExp(`\\b(?:${[...FOCUS_READER_NAMES].join('|')})\\s+as\\b`)
+// Seed readers; every function that reads the setting or calls a reader joins them by discovery.
+const SEED_FOCUS_READERS = [...HELPER_NAMES.split('|'), 'defaultCreationHost']
+const FOCUS_SCAN_ROOTS = [SCAN_ROOT, 'src/shared']
 
 /** Imports and re-exports are not uses; an aliased one is reported by {@link hasFocusRoutingAlias}. */
 export function countFocusRoutingCalls(sourceText) {
   return sourceText.replace(IMPORT_EXPORT_LIST, '').match(FOCUS_ROUTING_USE)?.length ?? 0
 }
 
-const FOCUS_READER_USE = new RegExp(
-  `(?<!(?:function|typeof)\\s+)\\b(?:${[...FOCUS_READER_NAMES].join('|')})\\b`,
-  'g'
-)
 // Element reads after a PascalCase name or `>` are indexed types (`GlobalSettings['…']`), not reads.
 const SETTING_MEMBER_READ =
   /\??\.\s*activeRuntimeEnvironmentId\b|(?<!(?:\b[A-Z][\w$]*|>)\s*)\[\s*['"]activeRuntimeEnvironmentId['"]\s*\]/g
-// `const { activeRuntimeEnvironmentId } = s` or `{ activeRuntimeEnvironmentId: id }: T = s`;
-// object literals and `({ … }) =>` parameters are not reads of the setting.
+// `const { activeRuntimeEnvironmentId } = s`, `{ activeRuntimeEnvironmentId: id }: T = s` or nested
+// `{ settings: { activeRuntimeEnvironmentId } } = state`; object literals and `({ … }) =>`
+// parameters are not reads of the setting.
 const SETTING_DESTRUCTURE_READ =
-  /\{[^{}]*\bactiveRuntimeEnvironmentId\b[^{}]*\}\s*(?::[^=;{}]*)?=(?![=>])/g
+  /\{[^{}]*\bactiveRuntimeEnvironmentId\b[^{}]*\}(?:\s*\})*\s*(?::[^=;{}]*)?=(?![=>])/g
+// A top-level declaration: `[export] [async] function name` or `[export] const|let name =`.
+const TOP_LEVEL_DECLARATION =
+  /^(export\s+)?(?:default\s+)?(?:async\s+)?(?:function\s*\*?\s*([\w$]+)|(?:const|let)\s+([\w$]+)\b)/gm
+const TOP_LEVEL_BOUNDARY =
+  /^(?:export|import|function|async|const|let|type|interface|class|enum)\b/gm
 
-/**
- * Reads of the setting (member, element and destructuring reads) plus every helper that reads it
- * on the caller's behalf. Object-literal keys are writes and are not counted.
- */
-export function countFocusSettingReads(sourceText) {
-  const body = sourceText.replace(IMPORT_EXPORT_LIST, '')
+function readerUsePattern(names) {
+  return names.size === 0
+    ? null
+    : new RegExp(
+        `(?<!(?:function|typeof|const|let)\\s*\\*?\\s+)\\b(?:${[...names].join('|')})\\b`,
+        'g'
+      )
+}
+
+function countSettingReads(body) {
   return (
     (body.match(SETTING_MEMBER_READ)?.length ?? 0) +
-    (body.match(SETTING_DESTRUCTURE_READ)?.length ?? 0) +
-    (body.match(FOCUS_READER_USE)?.length ?? 0)
+    (body.match(SETTING_DESTRUCTURE_READ)?.length ?? 0)
   )
 }
 
+/** Top-level declarations with their source text, up to the next top-level statement. */
+export function topLevelDeclarations(sourceText) {
+  const boundaries = [...sourceText.matchAll(TOP_LEVEL_BOUNDARY)].map((match) => match.index)
+  return [...sourceText.matchAll(TOP_LEVEL_DECLARATION)].map((match) => {
+    const end = boundaries.find((index) => index > match.index) ?? sourceText.length
+    return {
+      name: match[2] ?? match[3],
+      exported: Boolean(match[1]),
+      text: sourceText.slice(match.index, end)
+    }
+  })
+}
+
+/**
+ * Functions that read the setting for their caller: the seeds plus every exported top-level
+ * function whose own body reads the setting or calls a seed. Hand lists miss look-alikes such as
+ * a copy of `getActiveRuntimeTarget` under another name; discovery does not. One level only:
+ * following calls transitively pulls in most of the renderer.
+ */
+export function discoverFocusReaders(sources) {
+  const readers = new Set(SEED_FOCUS_READERS)
+  const seedUse = readerUsePattern(new Set(SEED_FOCUS_READERS))
+  for (const text of sources.values()) {
+    for (const { name, exported, text: body } of topLevelDeclarations(
+      text.replace(IMPORT_EXPORT_LIST, '')
+    )) {
+      seedUse.lastIndex = 0
+      if (exported && (countSettingReads(body) > 0 || seedUse.test(body))) {
+        readers.add(name)
+      }
+    }
+  }
+  return readers
+}
+
+/**
+ * Reads of the setting (member, element and destructuring reads) plus every call of a function
+ * that reads it for the caller. Object-literal keys are writes and are not counted.
+ */
+export function countFocusSettingReads(sourceText, readers = new Set(SEED_FOCUS_READERS)) {
+  const body = sourceText.replace(IMPORT_EXPORT_LIST, '')
+  const pattern = readerUsePattern(readers)
+  return countSettingReads(body) + (pattern ? (body.match(pattern)?.length ?? 0) : 0)
+}
+
 /** An alias hides later calls from the count, so it is refused outright. */
-export function hasFocusRoutingAlias(sourceText) {
-  return (sourceText.match(IMPORT_EXPORT_LIST) ?? []).some((list) => FOCUS_ROUTING_ALIAS.test(list))
+export function hasFocusRoutingAlias(sourceText, readers = new Set(SEED_FOCUS_READERS)) {
+  const alias = new RegExp(`\\b(?:${[...readers].join('|')})\\s+as\\b`)
+  return (sourceText.match(IMPORT_EXPORT_LIST) ?? []).some((list) => alias.test(list))
 }
 
 export const RATCHETS = [
   {
     name: 'owner-routing',
     baselinePath: 'config/owner-routing-baseline.txt',
-    count: countFocusRoutingCalls,
+    count: (text) => countFocusRoutingCalls(text),
     header: [
       '# Renderer call sites that route by the Active Server focus setting:',
       '# getActiveRuntimeTarget( + legacyRouteFromSettings( + settingsForRuntimeOwner(, per file.',
@@ -79,10 +124,10 @@ export const RATCHETS = [
   {
     name: 'focus-setting-read',
     baselinePath: 'config/focus-setting-read-baseline.txt',
-    count: countFocusSettingReads,
+    count: (text, _rel, readers) => countFocusSettingReads(text, readers),
     header: [
       '# Renderer reads of the Active Server setting (member, element and destructuring reads of',
-      '# activeRuntimeEnvironmentId) plus helpers that read it for the caller, per file.',
+      '# activeRuntimeEnvironmentId) plus calls of exported functions that read it, per file.',
       '# This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read',
       '# the default host, through defaultCreationHost. Everything else routes by the owner.',
       '# Prune after removing reads: pnpm check:owner-routing-ratchet --prune'
@@ -149,32 +194,45 @@ export function diffCounts(current, baseline) {
   return { grown: grown.sort(byFile), shrunk: shrunk.sort(byFile) }
 }
 
-export function collectCurrentCounts(root = process.cwd(), count = countFocusRoutingCalls) {
-  const tracked = execFileSync('git', ['ls-files', SCAN_ROOT], {
+function readTrackedSources(root, scanRoot) {
+  const tracked = execFileSync('git', ['ls-files', scanRoot], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024
   })
     .split('\n')
     .filter((rel) => rel && isScannedPath(rel))
+  const sources = new Map()
+  for (const rel of tracked) {
+    try {
+      sources.set(rel, fs.readFileSync(path.join(root, rel), 'utf8'))
+    } catch {
+      // Deleted in the working tree but still tracked.
+    }
+  }
+  return sources
+}
+
+export function collectCurrentCounts(root = process.cwd(), count = RATCHETS[0].count) {
+  const sources = new Map(
+    FOCUS_SCAN_ROOTS.flatMap((scanRoot) => [...readTrackedSources(root, scanRoot)])
+  )
+  const readers = discoverFocusReaders(sources)
   const counts = new Map()
   const aliased = []
-  for (const rel of tracked) {
-    let source
-    try {
-      source = fs.readFileSync(path.join(root, rel), 'utf8')
-    } catch {
+  for (const [rel, source] of sources) {
+    if (!rel.startsWith(`${SCAN_ROOT}/`)) {
       continue
     }
-    const found = count(source)
+    const found = count(source, rel, readers)
     if (found > 0) {
       counts.set(rel, found)
     }
-    if (hasFocusRoutingAlias(source)) {
+    if (hasFocusRoutingAlias(source, readers)) {
       aliased.push(rel)
     }
   }
-  return { counts, aliased }
+  return { counts, aliased, readers }
 }
 
 function total(counts) {

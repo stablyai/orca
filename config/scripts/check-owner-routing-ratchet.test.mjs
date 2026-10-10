@@ -4,6 +4,7 @@ import {
   countFocusRoutingCalls,
   countFocusSettingReads,
   diffCounts,
+  discoverFocusReaders,
   formatBaseline,
   hasFocusRoutingAlias,
   isScannedPath,
@@ -55,17 +56,51 @@ describe('countFocusSettingReads', () => {
     expect(countFocusSettingReads(src)).toBe(5)
   })
 
-  it('counts a shared focus helper, so wrapping one in an owner transport lowers nothing', () => {
+  it('discovers look-alike readers, so swapping a helper for one lowers nothing', () => {
+    const readers = discoverFocusReaders(
+      new Map([
+        [
+          'src/shared/execution-host.ts',
+          'export function getSettingsFocusedExecutionHostId(settings) {\n  return settings?.activeRuntimeEnvironmentId\n}\n'
+        ],
+        [
+          'src/renderer/src/a.ts',
+          [
+            'export function getAutomationListTarget(settings) {',
+            '  const id = settings?.activeRuntimeEnvironmentId?.trim()',
+            "  return id ? { kind: 'environment', environmentId: id } : { kind: 'local' }",
+            '}',
+            'export const cacheKey = (s) => `k:${getActiveRuntimeTarget(s).kind}`',
+            'function localOnly(s) {',
+            '  return s.activeRuntimeEnvironmentId',
+            '}',
+            'export function ownerTarget(row) {',
+            '  return row.owner',
+            '}'
+          ].join('\n')
+        ]
+      ])
+    )
+    expect(readers.has('getAutomationListTarget')).toBe(true)
+    expect(readers.has('getSettingsFocusedExecutionHostId')).toBe(true)
+    expect(readers.has('cacheKey')).toBe(true)
+    expect(readers.has('localOnly')).toBe(false)
+    expect(readers.has('ownerTarget')).toBe(false)
+    expect(countFocusSettingReads('const t = getAutomationListTarget(settings)', readers)).toBe(1)
     expect(
       countFocusSettingReads(
-        'const t = runtimeTargetForOwnerHostId(getSettingsFocusedExecutionHostId(s))'
+        'const t = runtimeTargetForOwnerHostId(getSettingsFocusedExecutionHostId(s))',
+        readers
       )
     ).toBe(1)
-    expect(countFocusSettingReads('const id = getSingleFocusedRuntimeEnvironmentId(state)')).toBe(1)
+    expect(countFocusSettingReads('export const cacheKey = (s) => s', readers)).toBe(0)
   })
 
   it('counts destructuring reads', () => {
     expect(countFocusSettingReads('const { activeRuntimeEnvironmentId } = s')).toBe(1)
+    expect(
+      countFocusSettingReads('const { settings: { activeRuntimeEnvironmentId } } = state')
+    ).toBe(1)
     expect(
       countFocusSettingReads(
         "const { theme, activeRuntimeEnvironmentId: id }: Pick<GlobalSettings, 'theme'> = s"
@@ -96,7 +131,10 @@ describe('hasFocusRoutingAlias', () => {
     ).toBe(true)
     expect(hasFocusRoutingAlias("import { defaultCreationHost as host } from './d'")).toBe(true)
     expect(
-      hasFocusRoutingAlias("import { getSettingsFocusedExecutionHostId as h } from './e'")
+      hasFocusRoutingAlias(
+        "import { getAutomationListTarget as h } from './e'",
+        new Set(['getAutomationListTarget'])
+      )
     ).toBe(true)
     expect(hasFocusRoutingAlias("import { getActiveRuntimeTarget } from './rpc'")).toBe(false)
   })
