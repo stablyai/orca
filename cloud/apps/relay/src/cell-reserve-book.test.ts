@@ -110,4 +110,22 @@ describe('cell reserve book', () => {
     book.clear()
     expect(capacity.held()).toBe(0)
   })
+
+  it('hands a booking unit to the host upgrade, so the host counts once until its hello', () => {
+    const capacity = units(2)
+    const book = new CellReserveBook(capacity, () => 100)
+    book.reserve('d1', item('a', 2), reserveMode)
+    expect(capacity.held()).toBe(1)
+    book.handOff('a', 'abcdefghijklmnop')
+    book.handOff('a', 'abcdefghijklmnop')
+    expect(capacity.held()).toBe(0)
+    // Still a booking for the hello, at its own epoch only.
+    expect(book.has('a', 'abcdefghijklmnop')).toBe(true)
+    expect(book.take('a', 'abcdefghijklmnop', 3)).toBeNull()
+    // A newer booking for a handed-off host needs a unit of its own.
+    expect(book.reserve('d1', item('a', 3), reserveMode).outcome).toBe('ok')
+    expect(capacity.held()).toBe(1)
+    expect(book.take('a', 'abcdefghijklmnop', 3)).toMatchObject({ epoch: 3 })
+    expect(capacity.held()).toBe(0)
+  })
 })

@@ -231,6 +231,7 @@ export const SQLITE_RUNTIME_INCLUDE = [
   'src/main/runtime/structured-agent-session-integration-replay.test.ts',
   'src/main/runtime/structured-agent-session-integration.test.ts',
   'src/main/runtime/structured-agent-session-mobile-restore.test.ts',
+  'src/main/runtime/structured-agent-session-paired-caller.test.ts',
   'src/main/runtime/structured-agent-session-rollback-compatibility.test.ts',
   'src/main/runtime/structured-agent-session-spawn-token-descendants.test.ts',
   'src/main/runtime/structured-agent-session-startup-reconcile.test.ts',

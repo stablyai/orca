@@ -3982,6 +3982,10 @@
             "compactTitle": "La visualización del uso ahora es compacta",
             "compactBody": "Una métrica principal por proveedor. Elige «<detailed>Detailed</detailed>» en el menú «Usage» para ver más límites."
           },
+          "usageUnitLabel": {
+            "used": "Usado",
+            "remaining": "Restante"
+          },
           "UsagePercentageDisplayChangeNotice": {
             "title": "Usage now shows % used",
             "body": "Prefer remaining? Change it in Settings.",

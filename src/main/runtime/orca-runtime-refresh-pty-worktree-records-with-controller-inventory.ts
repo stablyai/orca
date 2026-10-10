@@ -6,8 +6,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  toSshExecutionHostId
+  parseExecutionHostId
 } from '../../shared/execution-host'
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
@@ -77,13 +76,9 @@ export class OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory ext
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
         ? this.ptyController.listProcessesWithHostScope(providerListOpts)
-        : this.ptyController.listProcesses(connectionId, providerListOpts).then((processes) => {
-            const hostId: ExecutionHostId =
-              connectionId === undefined || connectionId === null
-                ? LOCAL_EXECUTION_HOST_ID
-                : toSshExecutionHostId(connectionId)
-            return { processes, hostIds: [hostId] }
-          })
+        : this.ptyController
+            .listProcesses(connectionId === undefined ? undefined : providerKey, providerListOpts)
+            .then((processes) => ({ processes, hostIds: [providerKey] }))
     const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
     if (!sessionsResult.ok) {
       return null

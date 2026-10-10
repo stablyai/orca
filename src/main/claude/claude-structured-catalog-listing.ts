@@ -56,7 +56,10 @@ export function wireClaudeModels(models: readonly ListedModel[]): WireClaudeMode
  *  of their own, so a row named by its id is the launch talking, not the account. */
 export function claudeCatalogListing(
   session: ClaudeSession,
-  discovered: ListedModel[]
+  discovered: ListedModel[],
+  /** `withConfiguredDefault`: only the start's settings readback says what the config resolved;
+   *  every later read omits it. */
+  options: { withConfiguredDefault?: boolean } = {}
 ): AgentModelCatalogLiveListing | undefined {
   if (discovered.length === 0) {
     return undefined
@@ -65,7 +68,9 @@ export function claudeCatalogListing(
   const launchOnly =
     launched !== null && discovered.some((row) => row.id === launched && row.label === row.id)
   const support = claudeFastModeSupport(discovered, undefined)
-  const configured = configuredClaudeDefault(session, discovered)
+  const configured = options.withConfiguredDefault
+    ? configuredClaudeDefault(session, discovered)
+    : undefined
   return {
     // No default effort here: the CLI's effort is a config fact, saved with the configured model.
     models: wireClaudeModels(discovered),

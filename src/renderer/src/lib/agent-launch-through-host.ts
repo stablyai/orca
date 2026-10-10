@@ -46,6 +46,8 @@ export type HostAgentLaunchArgs = {
   pendingActivationSpawn?: boolean
   /** The view the tab opens in, decided as for any new agent tab. */
   viewMode?: Tab['viewMode']
+  /** False keeps a floating launch from taking the main window's selection, as main's tab does. */
+  activate?: boolean
 }
 
 /** What became of the launch, as this window must tell it. */
@@ -102,7 +104,7 @@ function launchParams(args: HostAgentLaunchArgs) {
     ...stringSessionOptions(args.sessionOptions),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.groupId ? { placement: { groupId: args.groupId } } : {}),
-    presentation: 'focused'
+    presentation: args.activate === false ? 'background' : 'focused'
   }
 }
 
@@ -164,6 +166,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
     launchAgent: args.agent,
     quickCommandLabel: args.quickCommandLabel,
     ...(args.pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
+    ...(args.activate === false ? { activate: false } : {}),
     ...(args.viewMode ? { viewMode: args.viewMode } : {})
   })
   rememberAgentLaunchPanePrompt(tabId, args.prompt)

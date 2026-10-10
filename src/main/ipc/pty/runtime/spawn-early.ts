@@ -5,6 +5,7 @@ import { snapshotCodexPaneHomeRoutes, codexReattachedHomeRouteField } from '../h
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
 export function adoptMaterializedRuntimePtySpawn(
   ctx: RuntimePtySpawnState,
@@ -28,7 +29,9 @@ export function adoptMaterializedRuntimePtySpawn(
         )
       : new Map<string, CodexPaneHomeRoute | null>()
   }
-  const startupPromise = ctx.deps.getLocalPtyStartupPromise(args.connectionId)
+  const startupPromise = ctx.deps.getLocalPtyStartupPromise(
+    getConnectionExecutionHostId(args.connectionId)
+  )
   if (startupPromise && !startupAlreadyAwaited) {
     return startupPromise.then(() => adoptMaterializedRuntimePtySpawn(ctx, true))
   }

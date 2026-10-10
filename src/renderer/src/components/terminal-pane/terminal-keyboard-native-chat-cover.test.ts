@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { createTerminalKeyboardEventHandlers } from './terminal-keyboard-event-handlers'
 import type { TerminalShortcutAction } from './terminal-shortcut-policy'
@@ -10,14 +10,16 @@ function createHandlers(
   {
     action = { type: 'toggleSearch' },
     keybindings,
-    onClearPaneScrollback = vi.fn()
+    onClearPaneScrollback = vi.fn(),
+    terminal = {}
   }: {
     action?: TerminalShortcutAction
     keybindings?: KeybindingOverrides
     onClearPaneScrollback?: () => void
+    terminal?: { selectAll?: () => void; getSelection?: () => string }
   } = {}
 ) {
-  const pane = { id: 1, leafId: 'leaf-1', terminal: { element: scope } }
+  const pane = { id: 1, leafId: 'leaf-1', terminal: { element: scope, ...terminal } }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the complete find path; unused runtime dependencies intentionally remain absent.
   return createTerminalKeyboardEventHandlers({
     isMac: false,
@@ -82,7 +84,7 @@ function createHandlers(
   } as never)
 }
 
-function pressFind(
+function pressChord(
   target: HTMLElement,
   handlers: ReturnType<typeof createHandlers>,
   key = 'f'
@@ -99,6 +101,52 @@ function pressFind(
   return event
 }
 
+function mountCoveredPane(): { scope: HTMLElement; transcript: HTMLElement } {
+  const scope = document.createElement('div')
+  const cover = document.createElement('div')
+  cover.className = 'native-chat-pane-shell'
+  const transcript = document.createElement('div')
+  cover.append(transcript)
+  scope.append(cover)
+  document.body.append(scope)
+  return { scope, transcript }
+}
+
+describe('terminal selection under a native chat cover', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('leaves copy to the chat when the hidden terminal still holds a selection', () => {
+    const { scope, transcript } = mountCoveredPane()
+    const writeTerminalClipboardText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('api', { ui: { writeTerminalClipboardText } })
+    const handlers = createHandlers(scope, vi.fn(), {
+      action: { type: 'copySelection' },
+      terminal: { getSelection: () => 'hidden terminal text' }
+    })
+
+    expect(pressChord(transcript, handlers, 'c').defaultPrevented).toBe(false)
+    expect(writeTerminalClipboardText).not.toHaveBeenCalled()
+
+    expect(pressChord(scope, handlers, 'c').defaultPrevented).toBe(true)
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('hidden terminal text')
+  })
+
+  it('does not select the hidden terminal from the chat', () => {
+    const { scope, transcript } = mountCoveredPane()
+    const selectAll = vi.fn()
+    const handlers = createHandlers(scope, vi.fn(), {
+      action: { type: 'selectAll' },
+      terminal: { selectAll }
+    })
+
+    expect(pressChord(transcript, handlers, 'a').defaultPrevented).toBe(false)
+    expect(selectAll).not.toHaveBeenCalled()
+
+    pressChord(scope, handlers, 'a')
+    expect(selectAll).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('terminal find under a native chat cover', () => {
   it('leaves Mod+F to the chat instead of opening search over the hidden terminal', () => {
     const scope = document.createElement('div')
@@ -111,10 +159,10 @@ describe('terminal find under a native chat cover', () => {
     const setSearchOpen = vi.fn()
     const handlers = createHandlers(scope, setSearchOpen)
 
-    expect(pressFind(transcript, handlers).defaultPrevented).toBe(false)
+    expect(pressChord(transcript, handlers).defaultPrevented).toBe(false)
     expect(setSearchOpen).not.toHaveBeenCalled()
 
-    pressFind(scope, handlers)
+    pressChord(scope, handlers)
     expect(setSearchOpen).toHaveBeenCalledWith(true)
   })
 
@@ -133,10 +181,10 @@ describe('terminal find under a native chat cover', () => {
       onClearPaneScrollback
     })
 
-    expect(pressFind(transcript, handlers, 'k').defaultPrevented).toBe(false)
+    expect(pressChord(transcript, handlers, 'k').defaultPrevented).toBe(false)
     expect(onClearPaneScrollback).not.toHaveBeenCalled()
 
-    pressFind(scope, handlers, 'k')
+    pressChord(scope, handlers, 'k')
     expect(onClearPaneScrollback).toHaveBeenCalledTimes(1)
   })
 })
