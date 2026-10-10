@@ -8,6 +8,7 @@ import {
   resolveOpaqueTerminalBackground
 } from '@/lib/terminal-theme'
 import { stripSshReconnectOwnedErrorLines } from './TerminalErrorToast'
+import { agentLaunchPaneOutcomeForLeaf } from './agent-launch-pane-notice-text'
 import { mapPaneTerminalErrors, terminalErrorForPane } from './terminal-error-accumulation'
 import {
   nativeChatLaunchAgentForLeaf,
@@ -103,6 +104,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalErrorsByPaneId,
     activePane?.id ?? null
   )
+  const visibleLaunchRefusal = agentLaunchPaneOutcomeForLeaf(terminalTab, activePane?.leafId)
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
   const menuAgentSessionId = useAppStore((state) =>
@@ -196,6 +198,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     activePane,
     managedPanes,
     showSshReconnectOverlay,
+    visibleLaunchRefusal,
     visibleTerminalError,
     menuPaneHasCustomTitle,
     menuAgentSessionId,

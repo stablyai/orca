@@ -99,6 +99,7 @@ function assertMobileUploadOwner(
 export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.imageLease',
+    permission: 'workspace',
     params: ClipboardImageLease,
     handler: async (params, ctx) => {
       if (ctx.clientKind === 'mobile') {
@@ -114,11 +115,13 @@ export const CLIPBOARD_METHODS = [
   }),
   defineMethod({
     name: 'clipboard.imageLeaseAvailable',
+    permission: 'workspace',
     params: ClipboardImageLeaseAvailability,
     handler: () => ({ supported: true })
   }),
   defineMethod({
     name: 'clipboard.saveImageAsTempFile',
+    permission: 'workspace',
     params: SaveImageAsTempFile,
     handler: async (params, ctx) => {
       const clientId = mobileClientId(ctx)
@@ -140,6 +143,7 @@ export const CLIPBOARD_METHODS = [
   }),
   defineMethod({
     name: 'clipboard.startImageUpload',
+    permission: 'workspace',
     params: StartImageUpload,
     handler: (params, ctx) => {
       if (ctx.clientKind === 'mobile' && params.discardable) {
@@ -165,6 +169,7 @@ export const CLIPBOARD_METHODS = [
   }),
   defineMethod({
     name: 'clipboard.appendImageUploadChunk',
+    permission: 'workspace',
     params: AppendImageUploadChunk,
     handler: (params, ctx) => {
       const upload = getUpload(params.uploadId)
@@ -184,6 +189,7 @@ export const CLIPBOARD_METHODS = [
   }),
   defineMethod({
     name: 'clipboard.commitImageUpload',
+    permission: 'workspace',
     params: CommitImageUpload,
     handler: async (params, ctx) => {
       const upload = getUpload(params.uploadId)
@@ -212,6 +218,7 @@ export const CLIPBOARD_METHODS = [
   }),
   defineMethod({
     name: 'clipboard.abortImageUpload',
+    permission: 'workspace',
     params: AbortImageUpload,
     handler: (params, ctx) => {
       pruneExpiredUploads()

@@ -1,5 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { getStatus } = vi.hoisted(() => ({ getStatus: vi.fn() }))
+vi.mock('../git/status', () => ({ getStatus }))
+
 import { ExecutionHostNotDispatchableError } from '../providers/execution-host-provider-dispatch'
+import { createLocalGitProvider } from '../providers/local-git-provider'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   localGitOptionsForTarget,
@@ -47,9 +52,19 @@ describe('runtime Git target routing', () => {
     expect(requireRuntimeGitProvider(target({ executionHostId: 'ssh:openclaw' }))).toBe(openclaw)
   })
 
-  it('answers `local` with no provider, which is the only meaning `null` carries', () => {
-    expect(runtimeGitRouteForTarget(target({}))).toEqual({ kind: 'local' })
-    expect(requireRuntimeGitProvider(target({}))).toBeNull()
+  it('answers `local` with a provider bound to this worktree, built per call', async () => {
+    expect(runtimeGitRouteForTarget(target({}))).toEqual({
+      kind: 'local',
+      createProvider: createLocalGitProvider
+    })
+    const localTarget = target({ localGitOptions: { wslDistro: 'Ubuntu' } })
+    expect(requireRuntimeGitProvider(localTarget)).not.toBe(requireRuntimeGitProvider(localTarget))
+
+    await requireRuntimeGitProvider(localTarget).getStatus('/srv/app')
+    expect(getStatus).toHaveBeenCalledWith('/srv/app', {
+      wslDistro: 'Ubuntu',
+      admissionTier: 'status'
+    })
   })
 
   // Loss of contact is never evidence of locality (docs/reference/ssh-execution-boundary.md).

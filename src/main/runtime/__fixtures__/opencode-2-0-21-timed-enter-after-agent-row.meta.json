@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-04T05:49:55.163902Z",
+  "platform": "darwin",
+  "command": ["opencode", "--standalone"],
+  "cols": 120,
+  "rows": 40,
+  "note": "opencode v2.0.21 (Homebrew opencode-v2) on macOS 26 arm64, 120x40, alternate screen. Recorded with the timed Python PTY driver (each read stamped with ms since spawn; terminal queries answered like Orca's pane). One natural cold start, no other capture running; load average at start 2.76 / 4.63 / 7.28. --standalone with the user's own login and plugins read in place and the model opencode-go/deepseek-v4.1-flash set through OPENCODE_CONFIG_CONTENT (nothing on disk written by the recorder); OPENCODE_DISABLE_AUTOUPDATE=1, no ORCA_* vars; version and binary sha256 unchanged before and after. An 82-line, 6.6 KB brief was bracketed-pasted the moment the agent/model row painted (393 ms; box cursor at 273 ms) and Enter was sent 537 ms later (promptSentAtMs), Orca's submit delay of 500 ms plus paste time. OpenCode submitted it: the composer cleared and the brief and the reply were painted. <name>.timing.json holds each PTY read as [ms since spawn, UTF-16 length] and recordedUntilMs.",
+  "exitCode": null
+}

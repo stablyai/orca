@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type { AgentMessageSource } from '../../../../shared/agent-session-message-source'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { DISPATCH_REJECTED_WRITE_FAILED } from '../../../../shared/structured-agent-session-dispatch-rejection'
 
@@ -270,8 +271,41 @@ describe('structured worker dispatch preamble', () => {
     }
   }
 
+  const TASK_FROM: AgentMessageSource = {
+    kind: 'agent',
+    senders: [
+      {
+        party: { address: 'term_coord', terminalHandle: 'term_coord', orcaSessionId: null },
+        name: 'Coordinator'
+      }
+    ],
+    orchestration: { message: 'task', runId: 'r1', taskId: 't1', dispatchId: 'd1' }
+  }
+
   const send = (host: PreambleHost) =>
-    sendStructuredWorkerPreamble({ host, sessionId: 's1', dispatchId: 'd1', preamble: 'spec' })
+    sendStructuredWorkerPreamble({
+      host,
+      sessionId: 's1',
+      dispatchId: 'd1',
+      preamble: 'spec',
+      from: TASK_FROM
+    })
+
+  // No source and no person: a restart or a close rejects it, and orchestration re-derives it.
+  it('sends the preamble as no person’s', async () => {
+    const host = hostWithSubmission({ dispatchState: 'accepted', reason: null })
+    const sent = vi.spyOn(host, 'send')
+    await send(host)
+    expect(sent.mock.calls[0]?.[1]).not.toHaveProperty('source')
+    expect(sent.mock.calls[0]?.[1]).not.toHaveProperty('userSend')
+  })
+
+  it('names who the task is from on the turn it sends', async () => {
+    const host = hostWithSubmission({ dispatchState: 'accepted', reason: null })
+    const sent = vi.spyOn(host, 'send')
+    await send(host)
+    expect(sent.mock.calls[0]?.[1]).toMatchObject({ body: { from: TASK_FROM } })
+  })
 
   it('reports the preamble delivered only on an accepted submission', async () => {
     await expect(

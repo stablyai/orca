@@ -1,5 +1,4 @@
-import { runProcess } from '../../shared/child-process/run-process'
-import { resolveCodexCommand } from '../codex-cli/command'
+import { runProcess } from '@orca/process-host'
 import {
   buildWslCodexAppServerArgs,
   buildWslCodexIdentityProbe,
@@ -8,28 +7,21 @@ import {
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
 import {
   binaryStampsMatch,
-  buildNativeCodexBinaryStamp,
   readCodexTrustGrantLedgerHome,
   type CodexTrustGrantBinaryStamp,
   type CodexTrustGrantLedgerHome
 } from './codex-trust-grant-ledger'
 
-// Why: native sessions finish in ~100ms; WSL also pays cold-distro and
-// login-shell startup, but both stay hard-bounded on launch prep.
-const NATIVE_GRANT_TIMEOUT_MS = 10_000
+// Why: WSL pays cold-distro and login-shell startup, but stays hard-bounded on launch prep.
 const WSL_GRANT_TIMEOUT_MS = 30_000
 
-export type CodexTrustGrantHost =
-  | { kind: 'native' }
-  | { kind: 'wsl'; distro: string; linuxRuntimeHome: string }
+/** Only WSL runs a grant session; native homes approve with the hash Codex lists. */
+export type CodexTrustGrantHost = { kind: 'wsl'; distro: string; linuxRuntimeHome: string }
 
 type CodexTrustGrantRequestInput = {
   runtimeHomePath: string
   managedCommand: string
   expectedTrustKeys: string[]
-  useDefaultCodexHome?: boolean
-  /** Overrides the native deadline; WSL keeps its own. */
-  timeoutMs?: number
 }
 
 export type ResolvedCodexTrustGrantHost = {
@@ -46,50 +38,20 @@ export type ResolvedCodexTrustGrantHost = {
 export async function resolveCodexTrustGrantHost(
   host: CodexTrustGrantHost
 ): Promise<ResolvedCodexTrustGrantHost> {
-  if (host.kind === 'wsl') {
-    return {
-      binaryStamp: await buildWslCodexBinaryStamp(host.distro),
-      buildRequest: (input) => ({
-        invocation: {
-          command: 'wsl.exe',
-          // Why null: the guest resolves `codex` inside the distro, so a host path pairs nothing.
-          cliPath: null,
-          args: buildWslCodexAppServerArgs(host.distro, host.linuxRuntimeHome),
-          timeoutMs: WSL_GRANT_TIMEOUT_MS
-        },
-        hooksListCwd: host.linuxRuntimeHome,
-        expectedTrustKeys: input.expectedTrustKeys,
-        managedCommand: input.managedCommand
-      })
-    }
-  }
-
-  return resolveNativeCodexTrustGrantHost()
-}
-
-export function resolveNativeCodexTrustGrantHost(): ResolvedCodexTrustGrantHost {
-  // Why: command resolution scans PATH/version-manager directories. Resolve
-  // once per grant and reuse it for both the binary stamp and invocation.
-  const command = resolveCodexCommand()
   return {
-    binaryStamp: command === 'codex' ? null : buildNativeCodexBinaryStamp(command),
-    buildRequest: (input) => {
-      const useDefaultCodexHome = input.useDefaultCodexHome === true
-      return {
-        invocation: {
-          command,
-          args: ['app-server'],
-          cliPath: command,
-          ...(useDefaultCodexHome
-            ? { envToDelete: ['CODEX_HOME'] }
-            : { env: { CODEX_HOME: input.runtimeHomePath } }),
-          timeoutMs: input.timeoutMs ?? NATIVE_GRANT_TIMEOUT_MS
-        },
-        hooksListCwd: input.runtimeHomePath,
-        expectedTrustKeys: input.expectedTrustKeys,
-        managedCommand: input.managedCommand
-      }
-    }
+    binaryStamp: await buildWslCodexBinaryStamp(host.distro),
+    buildRequest: (input) => ({
+      invocation: {
+        command: 'wsl.exe',
+        // Why null: the guest resolves `codex` inside the distro, so a host path pairs nothing.
+        cliPath: null,
+        args: buildWslCodexAppServerArgs(host.distro, host.linuxRuntimeHome),
+        timeoutMs: WSL_GRANT_TIMEOUT_MS
+      },
+      hooksListCwd: host.linuxRuntimeHome,
+      expectedTrustKeys: input.expectedTrustKeys,
+      managedCommand: input.managedCommand
+    })
   }
 }
 
@@ -129,26 +91,4 @@ export function readCodexTrustGrantLedgerHomeMatchingStamp(
 ): CodexTrustGrantLedgerHome | null {
   const home = readCodexTrustGrantLedgerHome(runtimeHomePath)
   return home && binaryStampsMatch(home.binary, currentStamp) ? home : null
-}
-
-/** Native-only: the WSL stamp needs a subprocess, and status reads must stay
- *  synchronous for the hook-status readers that never target a distro. */
-export function readCurrentNativeCodexTrustGrantLedgerHome(
-  runtimeHomePath: string
-): CodexTrustGrantLedgerHome | null {
-  try {
-    const home = readCodexTrustGrantLedgerHome(runtimeHomePath)
-    if (!home) {
-      // Why: fallback-only installs have no ledger. Avoid a synchronous PATH
-      // and version-manager scan when there is no recorded stamp to validate.
-      return null
-    }
-    return binaryStampsMatch(home.binary, resolveNativeCodexTrustGrantHost().binaryStamp)
-      ? home
-      : null
-  } catch {
-    // Why: status is diagnostic and best-effort; unreadable ledger/binary
-    // paths must trigger conservative self-hash handling, not throw.
-    return null
-  }
 }

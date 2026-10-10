@@ -3,9 +3,9 @@ import {
   AgentJournalItemBodySchema,
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody,
-  isAdmissibleAgentJournalRenderItem,
-  isAdmissibleAgentJournalSubmission
+  isAdmissibleAgentJournalRenderItem
 } from './agent-session-journal-schemas'
+import { isAdmissibleAgentJournalSubmission } from './agent-session-journal-submission-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
@@ -23,6 +23,18 @@ const RESOLUTION = {
 // Canonical fixtures are typed: if a shape here stops compiling, the schema
 // audit below is validating the wrong model.
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
+  {
+    kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }]
+  },
+  {
+    kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }],
+    state: 'completed',
+    completedAt: 2_000
+  },
   {
     kind: 'message',
     role: 'user',
@@ -308,6 +320,7 @@ describe('optional notice metadata', () => {
   it.each([
     {},
     { presentation: 'compaction' },
+    { presentation: 'compaction-skipped', tone: 'warning' },
     { presentation: 'plan-document' },
     { tone: 'warning' },
     { tone: 'error' },
@@ -477,6 +490,14 @@ describe('thread goal fields', () => {
     ).toBe(true)
     expect(
       isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [],
+        state: 'paused'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
         kind: 'status',
         text: 'Goal archived',
         threadGoal: { state: 'archived' }
@@ -495,6 +516,8 @@ describe('thread goal fields', () => {
     for (const body of [
       { kind: 'message', role: 'user', blocks: [], sentAs: 5 },
       { kind: 'message', role: 'user', blocks: [], sentAs: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], state: '' },
+      { kind: 'message', role: 'reasoning', blocks: [], completedAt: 'later' },
       { kind: 'status', text: 'Goal set', threadGoal: { state: 'set' } },
       {
         kind: 'status',

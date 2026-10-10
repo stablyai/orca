@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { constants } from 'node:os'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { resolveOrcadInstallRoot } from './orcad-app-paths'
 import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -9,19 +9,10 @@ import {
   ORCAD_VERSION_FILENAME,
   orcadNodeRuntimeRelativePath
 } from '../../shared/orcad-artifacts'
-import {
-  NODE_RUNTIME_ASSETS,
-  NODE_RUNTIME_PIN,
-  SERVER_TARGETS,
-  type ServerTarget
-} from '../../shared/node-runtime-pin'
+import { NODE_RUNTIME_PIN, nodeRuntimeAsset } from '../../shared/node-runtime-pin'
 
 export class OrcadBundledRuntimeError extends Error {}
 export const ORCAD_BUNDLED_LAUNCHER_ENV = 'ORCA_BUNDLED_LAUNCHER_CHANNEL'
-
-function isServerTarget(value: string): value is ServerTarget {
-  return SERVER_TARGETS.some((target) => target === value)
-}
 
 /**
  * The pinned Node a packaged slot in `directory` runs on, or null for an unpackaged entry.
@@ -42,13 +33,15 @@ export function resolveBundledOrcadRuntime(directory: string): string | null {
     throw new OrcadBundledRuntimeError('The bundled Orca runtime reference is missing')
   }
   const target = readFileSync(targetPath, 'utf8').trim()
-  if (!isServerTarget(target)) {
+  // A compat target (design D6 rung B) runs the same Node version built for an older glibc.
+  const asset = nodeRuntimeAsset(target)
+  if (!asset) {
     throw new OrcadBundledRuntimeError(`The bundled Orca runtime target is invalid: ${target}`)
   }
   const executableSha256 = readFileSync(markerPath, 'utf8').trim()
   // Why the pin and not only a digest shape: the marker becomes a path segment, and a slot
   // naming another runtime was not built by this code.
-  if (executableSha256 !== NODE_RUNTIME_ASSETS[target].executableSha256) {
+  if (executableSha256 !== asset.executableSha256) {
     throw new OrcadBundledRuntimeError(
       `The bundled Orca runtime reference does not name Node ${NODE_RUNTIME_PIN.version}`
     )
@@ -69,6 +62,23 @@ export function resolveBundledOrcadSlot(script = process.argv[1]): string {
 export function isRunningAsBundledOrcadRuntime(directory: string): boolean {
   const runtime = resolveBundledOrcadRuntime(directory)
   return runtime !== null && realpathSync(process.execPath) === realpathSync(runtime)
+}
+
+/** Refuse an old or substituted runtime before the server opens any profile state. */
+export function assertOrcadServerRuntime(): void {
+  if (Number(process.versions.node.split('.')[0]) < 18) {
+    throw new OrcadBundledRuntimeError('The Orca server requires Node.js 18 or newer')
+  }
+  const directory = resolveBundledOrcadSlot()
+  const runtime = resolveBundledOrcadRuntime(directory)
+  if (runtime && !isRunningAsBundledOrcadRuntime(directory)) {
+    throw new OrcadBundledRuntimeError('Start the Orca server with its bundled Node.js runtime')
+  }
+  if (runtime && process.versions.node !== NODE_RUNTIME_PIN.version) {
+    throw new OrcadBundledRuntimeError(
+      `The bundled Orca runtime must be Node ${NODE_RUNTIME_PIN.version}`
+    )
+  }
 }
 
 /** Keep old Node service commands usable without letting a host Node open the profile. */

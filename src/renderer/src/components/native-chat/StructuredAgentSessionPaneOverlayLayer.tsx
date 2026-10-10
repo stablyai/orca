@@ -1,7 +1,6 @@
 import { memo, useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { useAppStore } from '@/store'
 import {
   structuredAgentSessionOwnerForTab,
@@ -9,6 +8,7 @@ import {
 } from '@/runtime/structured-agent-session-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
+import { isStructuredTab } from './structured-agent-session-tabs'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -84,12 +84,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       [groups]
     )
     const structuredTabs = useMemo(
-      () =>
-        unifiedTabs.filter(
-          (tab): tab is StructuredAgentSessionTab =>
-            tab.contentType === 'agent-session' &&
-            isAgentSessionHandleProvider(tab.agentSessionAgent)
-        ),
+      () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
       [unifiedTabs]
     )
 

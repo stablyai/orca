@@ -18,6 +18,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
+  '@orca/process-host',
   '@parcel/watcher',
   'electron-updater',
   'i18next',
@@ -25,8 +26,6 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'node-pty',
   'posthog-node',
   'proper-lockfile',
-  // serve-sim (for CLI JS entry + closure + state/middleware + to make packaged require('serve-sim') + its internal relatives work; mirrors other runtime JS like ws/yaml/zod. Natives/dylibs still via extraResources + the node_modules/serve-sim copy in resources from builder. Client if added too.
-  'serve-sim',
   'qrcode',
   'ssh2',
   'tweetnacl',
@@ -34,6 +33,9 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'yaml',
   'zod'
 ]
+// Why macOS only: serve-sim drives the iOS Simulator, and its native addon is a Mach-O that
+// Windows signing rejects as a PE file.
+const DARWIN_PACKAGED_RUNTIME_PACKAGE_ROOTS = ['serve-sim']
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
   '@orca/windows-registry'
@@ -180,6 +182,7 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
   // Why: cross-builds must select native dependencies from the artifact target, not the build host.
   const packageRoots = [
     ...PACKAGED_RUNTIME_PACKAGE_ROOTS,
+    ...(electronPlatformName === 'darwin' ? DARWIN_PACKAGED_RUNTIME_PACKAGE_ROOTS : []),
     ...(electronPlatformName === 'win32' ? WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS : [])
   ]
   for (const packageName of packageRoots) {
@@ -212,8 +215,53 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
 function createPackagedRuntimeNodeModuleResources(electronPlatformName = process.platform) {
   return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => ({
     from: packageDir,
-    to: join('node_modules', ...packageName.split('/'))
+    to: join('node_modules', ...packageName.split('/')),
+    ...(packageName === '@orca/process-host' ? { filter: ['package.json', 'dist/**/*'] } : {})
   }))
+}
+
+function listProcessHostModules(directory, extension, prefix = '') {
+  if (!existsSync(directory)) {
+    return []
+  }
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const relativePath = `${prefix}${entry.name}`
+    if (entry.isDirectory()) {
+      return entry.name === '__fixtures__'
+        ? []
+        : listProcessHostModules(join(directory, entry.name), extension, `${relativePath}/`)
+    }
+    return entry.name.endsWith(extension) && !entry.name.endsWith(`.test${extension}`)
+      ? [relativePath.slice(0, -extension.length)]
+      : []
+  })
+}
+
+// Why: the resource filter copies whatever dist holds, so a missing, partial, or stale build
+// would ship a package main cannot load. Mirrors the package tsconfig include/exclude.
+function assertProcessHostOutputBuilt(packageDir = readPackage('@orca/process-host').packageDir) {
+  const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+  const publicTargets = [
+    manifest.main,
+    ...Object.values(manifest.exports ?? {}).map((target) =>
+      typeof target === 'string' ? target : target?.default
+    )
+  ].filter((target) => typeof target === 'string')
+  const sources = listProcessHostModules(join(packageDir, 'src'), '.ts')
+  const sourceSet = new Set(sources)
+  const missing = [
+    ...new Set([...publicTargets, ...sources.map((module) => `./dist/${module}.js`)])
+  ].filter((target) => !existsSync(join(packageDir, target)))
+  const stale = listProcessHostModules(join(packageDir, 'dist'), '.js')
+    .filter((module) => !sourceSet.has(module))
+    .map((module) => `./dist/${module}.js`)
+  if (missing.length > 0 || stale.length > 0) {
+    throw new Error(
+      `@orca/process-host output in ${packageDir} does not match its source ` +
+        `(missing: ${missing.join(', ') || 'none'}; stale: ${stale.join(', ') || 'none'}). ` +
+        'Run `pnpm build:packages` before packaging.'
+    )
+  }
 }
 
 function normalizeAsarEntryPath(entry) {
@@ -615,6 +663,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
 module.exports = {
   PACKAGED_RUNTIME_PACKAGE_ROOTS,
   assertPackagedNativeVariantsInstalled,
+  assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   isPackagedExternalSpecifier,

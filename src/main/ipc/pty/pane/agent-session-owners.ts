@@ -2,13 +2,10 @@ import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import {
-  localProvider,
-  sshProviders,
-  tryGetProviderForAgentSessionOwner
-} from '../provider/registry'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { registeredPtyProviders, tryGetProviderForPty } from '../provider/registry'
 
 // Why: one main process can route the same remote provider namespace through
 // multiple SSH relays; coordinate claims above every provider boundary too.
@@ -66,14 +63,10 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
     return await agentSessionOwnerReconciliation
   }
   const reconciliation = (async () => {
-    const providers: { provider: IPtyProvider; connectionId: string | null }[] = [
-      { provider: localProvider, connectionId: null },
-      ...Array.from(sshProviders, ([connectionId, provider]) => ({ provider, connectionId }))
-    ]
     const deadlineMs = Date.now() + OWNER_LISTING_DEADLINE_MS
     const listings = await Promise.all(
-      providers.map(async ({ provider, connectionId }) => ({
-        connectionId,
+      registeredPtyProviders().map(async ({ provider, hostId }) => ({
+        hostId,
         sessions: await provider.listProcesses({ deadlineMs }).catch(() => {
           throw new Error('agent_session_ownership_unknown')
         })
@@ -82,10 +75,10 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
     const advertisedOwners: AgentSessionOwnerBinding[] = []
     const advertisedOwnerSessions: {
       id: string
-      connectionId: string | null
+      hostId: ExecutionHostId
       incarnationId: string
     }[] = []
-    for (const { connectionId, sessions } of listings) {
+    for (const { hostId, sessions } of listings) {
       for (const session of sessions) {
         const incarnationId = session.incarnationId
         let hasAdvertisedOwner = false
@@ -98,7 +91,7 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
           hasAdvertisedOwner = true
         }
         if (hasAdvertisedOwner && isPtyIncarnationId(incarnationId)) {
-          advertisedOwnerSessions.push({ id: session.id, connectionId, incarnationId })
+          advertisedOwnerSessions.push({ id: session.id, hostId, incarnationId })
         }
       }
     }
@@ -106,12 +99,12 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
       // Why: an unregistered relay can still own a live PTY during reconnect;
       // only providers that serialize claims may make listing absence authoritative.
       isInAuthoritativeScope: (owner) => {
-        const provider = tryGetProviderForAgentSessionOwner(owner.ptyId)
+        const provider = tryGetProviderForPty(owner.ptyId)
         return provider?.providesAgentSessionOwnerListings?.(owner.ptyId) === true
       }
     })
     for (const session of advertisedOwnerSessions) {
-      ptyOwnership.set(session.id, session.connectionId)
+      ptyOwnership.set(session.id, session.hostId)
       ptyIncarnationById.set(session.id, session.incarnationId)
     }
   })()

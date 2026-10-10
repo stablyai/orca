@@ -1,17 +1,160 @@
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
-import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
+import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
+import type {
+  AgentLaunchPaneAddress,
+  AgentLaunchPaneVerdict
+} from '../../shared/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktree-change-invalidators'
+import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { peekOpenedAgentSessionRecordStore } from './agent-session-record-store-slot'
+import { createAgentLaunchRecordWarmupGate } from './agent-launch-record-warmup-gate'
+import { WorkspaceLayoutStream } from './workspace-layout-stream'
+import {
+  shouldWatchLayoutRoundTrip,
+  watchLayoutRoundTrip
+} from './workspace-layout-round-trip-watch'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
+import {
+  listReferenceWorkspaces,
+  selectReferenceWorkspace,
+  listWorkspaceReferences
+} from './runtime-reference-catalog'
+import { findWorkspaceReferences } from './runtime-reference-find'
+import { createReferenceAgentIndex, referenceConnectionHosts } from './runtime-reference-agents'
+import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-contracts'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 
-class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithResolveWaiter>) {
+class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {
+  private async selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
+    const catalog = listReferenceWorkspaces(
+      this.requireStore(),
+      this.resolvedWorktrees.peek()?.worktrees
+    )
+    try {
+      return selectReferenceWorkspace(catalog, selector, cwd)
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'selector_not_found') {
+        throw error
+      }
+      // Why: unsaved worktrees and cold-cache branches only resolve after a worktree scan.
+      const warmed = listReferenceWorkspaces(
+        this.requireStore(),
+        await this.listResolvedWorktrees()
+      )
+      return selectReferenceWorkspace(warmed, selector, cwd)
+    }
+  }
+
+  async listWorkspaceReferences(selector: string, cwd?: string) {
+    return listWorkspaceReferences(await this.selectReferenceCatalogWorkspace(selector, cwd))
+  }
+
+  async findWorkspaceReferences(params: RuntimeReferenceFindParams) {
+    if (params.worktree && params.repo) {
+      throw new Error('--repo and --worktree cannot be combined')
+    }
+    let workspaces = params.worktree
+      ? [await this.selectReferenceCatalogWorkspace(params.worktree, params.cwd)]
+      : listReferenceWorkspaces(this.requireStore(), this.resolvedWorktrees.peek()?.worktrees)
+    if (params.repo) {
+      const repo = await this.resolveRepoSelector(params.repo)
+      workspaces = workspaces.filter(
+        (row) =>
+          row.kind === 'worktree' &&
+          row.repoId === repo.id &&
+          row.hostId === getRepoExecutionHostId(repo)
+      )
+    }
+    return findWorkspaceReferences(params, {
+      workspaces,
+      agents: async (workspaceKeys) =>
+        createReferenceAgentIndex(
+          this,
+          this.getOrchestrationDbIfAvailable(),
+          await this.openAgentSessionRecordStore(),
+          workspaceKeys,
+          referenceConnectionHosts(this.listRepos())
+        )
+    })
+  }
+
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithMigrationCatalog>) {
     super(...args)
     // Why: the runtime listing re-runs a scan the worktree-change generation overtook and re-lists
     // through this runtime's scan cache, so a worktree change must reach both. The desktop IPC
     // module registers the generation bump at load; a headless host never loads it.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+    if (this.store && shouldWatchLayoutRoundTrip()) {
+      watchLayoutRoundTrip(this.store)
+    }
+  }
+
+  /** Whether a window owns the layout and can show a launch's tab ahead of its process. */
+  canPublishAgentLaunchTab(): boolean {
+    return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
+  }
+
+  /** Shows an agent launch's tab before its process exists, in the window that owns the layout;
+   *  null when no window does, and the launch's tab then appears when it spawns, as before. */
+  publishAgentLaunchTab(
+    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
+  ): Promise<AgentLaunchTabPublished> | null {
+    if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
+      return null
+    }
+    return this.notifier.publishAgentLaunchTab(request)
+  }
+
+  /** Tells the window a launch pane's fate: it keeps a final one on the tab, clears a settled one,
+   *  and takes a withdrawn pane back (the pane alone when the user split the tab). */
+  reportAgentLaunchPaneVerdict(
+    pane: AgentLaunchPaneAddress,
+    verdict: AgentLaunchPaneVerdict
+  ): void {
+    this.notifier?.agentLaunchPaneVerdict?.({ ...pane, verdict })
+  }
+
+  private readonly agentLaunchRecordWarmup = createAgentLaunchRecordWarmupGate({
+    isOpen: () => peekOpenedAgentSessionRecordStore() !== null,
+    open: () => this.openAgentSessionRecordStore()
+  })
+
+  /** Startup is done; the launch record may open once a client that can launch is here too. */
+  noteAgentLaunchStartupSettled(): void {
+    this.agentLaunchRecordWarmup.startupSettled()
+  }
+
+  /** A client that can call `agent.launch` connected; its first launch should not open the record. */
+  noteAgentLaunchClientReady(): void {
+    this.agentLaunchRecordWarmup.launchClientReady()
+  }
+
+  /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
+  hasLiveTerminalForPaneKey(paneKey: string): boolean {
+    return this.getPtyRecordForPaneKey(paneKey)?.connected === true
+  }
+
+  private readonly workspaceLayoutStream = new WorkspaceLayoutStream({
+    store: () => this.store,
+    homeHostId: (key) => this.tryGetWorkspaceSessionHostIdForWorktree(key)
+  })
+
+  /** The read-only layout stream (`layout.subscribe`, not advertised yet). */
+  subscribeWorkspaceLayouts(
+    listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
+  ): ReturnType<WorkspaceLayoutStream['subscribe']> {
+    return this.workspaceLayoutStream.subscribe(listener)
+  }
+
+  /** The launch record when it is already open, for a reader that must not wait for it. */
+  openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
+    return peekOpenedAgentSessionRecordStore()
   }
 }
 type OrcaRuntimeServiceExport = RuntimeCommandSurfaceHost<OrcaRuntimeService>

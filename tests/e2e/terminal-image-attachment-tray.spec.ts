@@ -145,9 +145,12 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
   await paste()
   await tray.getByRole('button', { name: 'Add to Codex', exact: true }).click()
   await waitForTerminalOutput(page, 'IMAGE_INPUT_COUNT=2', 10_000)
-  const settlements = await electronApp.evaluate(() =>
-    Reflect.get(globalThis, 'orcaImagePreviewTestSettlements')
-  )
+  const settlements = await electronApp.evaluate(() => {
+    if ('orcaImagePreviewTestSettlements' in globalThis) {
+      return globalThis.orcaImagePreviewTestSettlements
+    }
+    throw new Error('Missing image preview settlements')
+  })
   expect(settlements).toEqual([
     ...Array.from({ length: 4 }, () => expect.objectContaining({ retain: false, release: false })),
     expect.objectContaining({ retain: true, release: false }),
@@ -167,5 +170,61 @@ test('stages, previews, removes, cancels and explicitly adds clipboard images', 
   await page.locator('.xterm-helper-textarea').first().dispatchEvent('paste')
   await expect(page.getByText(/Image paste failed:.*fixture save failed/)).toBeVisible()
   await expect(tray).toHaveCount(0)
+  await sendToTerminal(page, ptyId, '\x03')
+})
+
+test('captures real clipboard bytes and adds multiple images without submitting the draft', async ({
+  orcaPage: page,
+  electronApp,
+  testRepoPath
+}) => {
+  await waitForSessionReady(page)
+  await waitForActiveWorktree(page)
+  await ensureTerminalVisible(page)
+  await waitForActiveTerminalManager(page, 30_000)
+  const ptyId = await waitForActivePanePtyId(page)
+  const script = path.join(testRepoPath, 'real-clipboard-recorder.cjs')
+  writeFileSync(script, recorder)
+  await sendToTerminal(page, ptyId, `node ${JSON.stringify(script)}\r`)
+  await waitForTerminalOutput(page, 'READY_IMAGE_TRAY', 10_000)
+  await setCodexAuthority(page, true)
+  // Only the isolated display's clipboard changes; production IPC handlers stay installed.
+  await electronApp.evaluate(({ clipboard, nativeImage }) => {
+    clipboard.clear()
+    clipboard.writeImage(
+      nativeImage.createFromDataURL(
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4AWPQ0PjwHwAD/AJA63QQFQAAAABJRU5ErkJggg=='
+      )
+    )
+  })
+  const tray = page.locator('[data-terminal-image-attachments]')
+  const input = page.locator('.xterm-helper-textarea').first()
+  const paste = async () => {
+    await input.focus()
+    await input.dispatchEvent('paste')
+    await expect(tray).toBeVisible()
+  }
+  await paste()
+  await expect(tray.locator('img')).toHaveCount(1)
+  await tray.getByRole('button', { name: 'View image: Pasted image' }).click()
+  await expect(page.getByRole('dialog').getByRole('img')).toHaveAttribute(
+    'src',
+    /^data:image\/png;base64,/
+  )
+  await page.keyboard.press('Escape')
+  await tray.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(tray).toHaveCount(0)
+  await paste()
+  await paste()
+  await expect(tray.locator('img')).toHaveCount(2)
+  await tray.getByRole('button', { name: 'Remove attachment' }).first().click()
+  await expect(tray.locator('img')).toHaveCount(1)
+  await paste()
+  await expect(tray.locator('img')).toHaveCount(2)
+  await sendToTerminal(page, ptyId, 'draft-preserved')
+  await tray.getByRole('button', { name: 'Add to Codex', exact: true }).click()
+  await expect(tray).toHaveCount(0)
+  await waitForTerminalOutput(page, 'IMAGE_INPUT_COUNT=2', 10_000)
+  await electronApp.evaluate(({ clipboard }) => clipboard.clear())
   await sendToTerminal(page, ptyId, '\x03')
 })

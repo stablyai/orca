@@ -26,6 +26,7 @@ import {
 } from '../../shared/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
+import type { TuiAgent } from '../../shared/tui-agent'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle
@@ -43,9 +44,14 @@ export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 
 export type StructuredWorkerIdentity = {
   handle: string
+  /**
+   * The session minted for the worker: its conversation id and `/clear` lineage root, which keys
+   * the handle, pane key and incarnation. Not necessarily the session running it now; worker-level
+   * readers and actors resolve that through `structuredWorkerSession`.
+   */
   sessionId: string
   /** Null when the entry was rehydrated from the durable row, which does not carry the provider. */
-  agent: 'claude' | 'codex' | null
+  agent: TuiAgent | null
   paneKey: string
   processIncarnation: string
   worktreeId: string

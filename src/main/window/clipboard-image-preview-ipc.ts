@@ -11,6 +11,7 @@ import {
   type SaveClipboardImageAsTempFileArgs
 } from './clipboard-image-temp-file'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { readClipboardImageSource } from './clipboard-image-source'
 
 export function registerClipboardImagePreviewHandlers({
   assertTrustedSender,
@@ -23,22 +24,20 @@ export function registerClipboardImagePreviewHandlers({
     'clipboard:saveImagePreview',
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedSender(event)
+      const source = readClipboardImageSource(clipboard)
+      if (!source) {
+        return null
+      }
       const image = clipboard.readImage()
       let buffer: Buffer
       if (image.isEmpty()) {
-        if (process.platform !== 'win32') {
+        if (!source.windowsFileFormats) {
           return null
         }
-        const copied = await readWindowsClipboardImageFileAsPng(
-          {
-            fileNameW: clipboard.readBuffer('FileNameW'),
-            shellIdListArray: clipboard.readBuffer('Shell IDList Array')
-          },
-          {
-            createImageFromBuffer: (bytes) => nativeImage.createFromBuffer(bytes),
-            openFile: (filePath) => open(filePath, 'r')
-          }
-        )
+        const copied = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
+          createImageFromBuffer: (bytes) => nativeImage.createFromBuffer(bytes),
+          openFile: (filePath) => open(filePath, 'r')
+        })
         if (!copied) {
           return null
         }

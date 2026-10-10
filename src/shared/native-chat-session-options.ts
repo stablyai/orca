@@ -85,6 +85,17 @@ export function sessionOptionValueMarker(
   return descriptor.valueSource === 'unknown' ? 'unreported' : null
 }
 
+/** Like Fast off, the standard tier adds nothing to a summary pill. */
+export function isDefaultServiceTier(
+  descriptor: Pick<SessionOptionDescriptor, 'id' | 'kind'>
+): boolean {
+  return (
+    descriptor.id === 'serviceTier' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === 'default'
+  )
+}
+
 export type SessionOptionSetResult = {
   snapshot: SessionOptionDescriptor[]
 }

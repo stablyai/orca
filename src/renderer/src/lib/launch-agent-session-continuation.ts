@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
@@ -27,7 +28,7 @@ export async function detectAgentSessionContinuationAgents(
   return connectionId
     ? state.ensureRemoteDetectedAgents(connectionId)
     : runtimeEnvironmentId
-      ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId)
+      ? state.ensureRuntimeDetectedAgents(runtimeEnvironmentId, worktreeId)
       : state.ensureDetectedAgents(worktreeId)
 }
 
@@ -84,6 +85,7 @@ export async function launchAgentSessionContinuation({
   // could vanish silently (#22479).
   let deliveryUnconfirmed = false
   const result = launchAgentInNewTab({
+    requestId: newAgentLaunchRequestId(),
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),

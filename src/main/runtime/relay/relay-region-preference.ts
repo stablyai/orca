@@ -56,6 +56,11 @@ const RelayRegionCacheSchema = z
 
 type RelayRegionCache = z.infer<typeof RelayRegionCacheSchema>
 
+// Sign-out removes what Relay use left behind; the next Relay session re-measures.
+export function clearRelayRegionPreferenceCache(userDataPath: string): void {
+  rmSync(join(userDataPath, RELAY_REGION_CACHE_FILENAME), { force: true })
+}
+
 type RelayRegionPreferenceOptions = {
   directorUrl: string
   userDataPath: string

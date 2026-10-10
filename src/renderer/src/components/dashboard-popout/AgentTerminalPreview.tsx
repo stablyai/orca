@@ -33,8 +33,7 @@ import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
-// Why: main only ever serializes PREVIEW_SCROLLBACK_ROWS of history into this
-// terminal, so the pane's user-configured scrollback would only cost memory.
+// Preview snapshots bound history; pane scrollback would only cost memory.
 const PREVIEW_SCROLLBACK_BUFFER_ROWS = 1000
 const FALLBACK_COLS = 80
 const FALLBACK_ROWS = 24
@@ -130,7 +129,6 @@ export function AgentTerminalPreview({
     const pendingLivePayloads: Extract<TerminalPreviewDataPayload, { type: 'data' }>[] = []
 
     const boxFit = createPreviewBoxFit({ container, getTerminal: () => terminal })
-    const scheduleFit = boxFit.schedule
 
     const gridClaim = createPreviewGridClaim({
       ptyId,
@@ -142,7 +140,7 @@ export function AgentTerminalPreview({
       typeof ResizeObserver === 'undefined'
         ? null
         : new ResizeObserver(() => {
-            scheduleFit()
+            boxFit.schedule()
             gridClaim.schedule()
           })
     if (container.parentElement) {
@@ -162,7 +160,7 @@ export function AgentTerminalPreview({
       replayDepth++
       terminal?.write(chunk, () => {
         replayDepth--
-        scheduleFit()
+        boxFit.schedule()
         onDone?.()
       })
     }
@@ -317,7 +315,7 @@ export function AgentTerminalPreview({
         // Queue behind every replay write so replacement never clears a half-parsed frame.
         writeReplayed('', requestRefresh)
       }
-      scheduleFit()
+      boxFit.schedule()
       gridClaim.schedule()
       terminal.focus()
     }
@@ -392,6 +390,7 @@ export function AgentTerminalPreview({
 
     return () => {
       disposed = true
+      boxFit.dispose()
       if (retryTimer) {
         clearTimeout(retryTimer)
       }

@@ -8,10 +8,28 @@
 // the async boundary every awaiting caller was written against.
 
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
+import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { journalOpenRefusalError } from '../native-chat/agent-session-journal/journal-open-failure'
 import { AgentSessionJournalError } from '../native-chat/agent-session-journal/journal-write-guards'
-import type { AgentSessionStoreState } from './agent-session-record-store-file'
-import { writeAgentSessionStoreRows } from './agent-session-record-rows'
+import type { AgentSessionStoreState } from './agent-session-store-state'
+import {
+  insertAgentSessionOperationRowsIfAbsent,
+  writeAgentSessionStoreRows
+} from './agent-session-record-rows'
+import { readCommandReceipt } from '../native-chat/agent-session-journal/command-receipt-table'
+import type { CommandReceiptScope } from '../native-chat/agent-session-journal/command-receipt-schema'
+import {
+  agentSessionRuntimeIncarnation,
+  attributeAgentSessionRuntime
+} from './agent-session-runtime-attribution'
+import {
+  beginAgentSessionRuntimeRecord,
+  readAgentSessionRuntimeEnds
+} from './agent-session-runtime-end-record'
+import {
+  agentSessionReplacedRuntimes,
+  type AgentSessionReplacedRuntime
+} from './agent-session-replaced-runtime'
 import {
   agentSessionStoreDraftRowWrites,
   draftAgentSessionStoreState,
@@ -72,13 +90,29 @@ type StagedStoreTransaction<T> = {
 export class AgentSessionStoreTransactions {
   private queue: Promise<unknown> = Promise.resolve()
   private published: AgentSessionStoreState
+  /** What this runtime took over from the runtimes before it, as loaded; never changes after. */
+  readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
   constructor(
     private readonly journalDatabase: JournalHostDatabase,
-    loaded: AgentSessionStoreState
+    loaded: AgentSessionStoreState,
+    hostId: string
   ) {
     freezeRows(loaded, null)
-    this.published = loaded
+    this.published = {
+      ...loaded,
+      runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
+    }
+    this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
+      hostId,
+      incarnation: agentSessionRuntimeIncarnation()
+    })
+    // Before any owner this runtime records: a crash is concluded only from a recorded start.
+    beginAgentSessionRuntimeRecord(
+      journalDatabase.stateDirectory,
+      agentSessionRuntimeIncarnation(),
+      Date.now()
+    )
   }
 
   /** The committed state. A transaction in flight never shows here until its rows have landed. */
@@ -88,6 +122,10 @@ export class AgentSessionStoreTransactions {
 
   get readOnly(): boolean {
     return this.journalDatabase.readOnly
+  }
+
+  readCommandReceipt(scope: CommandReceiptScope, operationId: string) {
+    return readCommandReceipt(this.journalDatabase.db, scope, operationId)
   }
 
   /**
@@ -102,6 +140,39 @@ export class AgentSessionStoreTransactions {
     const run = this.queue.then(() => this.commit(apply, options.inMemoryWhenReadOnly === true))
     this.queue = run.catch(() => {})
     return run
+  }
+
+  /**
+   * `apply`'s rows, written inside a journal transaction the caller runs and adopted once it
+   * commits. Exact without the queue: `write` and `committed` run in one synchronous step, so no
+   * store transaction can commit between the draft's staging and its adoption.
+   */
+  receipt(
+    apply: (draft: AgentSessionStoreState) => void,
+    options: { insertOperationsIfAbsent?: true } = {}
+  ): JournalOperationReceipt {
+    let staged: StagedStoreTransaction<void> | null = null
+    return {
+      write: (db) => {
+        if (this.journalDatabase.readOnly) {
+          throw readOnlyStoreRefusal()
+        }
+        staged = this.stage(apply)
+        const writes = staged.writes
+        if (writes) {
+          // TEMPORARY: ledger co-write preserves cross-family identity until every mutation uses receipts.
+          if (options.insertOperationsIfAbsent) {
+            insertAgentSessionOperationRowsIfAbsent(db, writes.operations.upsert)
+          } else {
+            writeAgentSessionStoreRows(db, writes)
+          }
+        }
+      },
+      committed: () => {
+        staged?.adopt()
+        staged = null
+      }
+    }
   }
 
   private commit<T>(apply: (draft: AgentSessionStoreState) => T, inMemoryWhenReadOnly: boolean): T {
@@ -122,6 +193,7 @@ export class AgentSessionStoreTransactions {
     const published = this.published
     const draft = draftAgentSessionStoreState(published)
     const result = apply(draft)
+    attributeAgentSessionRuntime(published, draft)
     const writes = agentSessionStoreDraftRowWrites(published, draft)
     return {
       result,

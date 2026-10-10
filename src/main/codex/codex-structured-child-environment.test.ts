@@ -10,6 +10,7 @@ import {
 } from '../runtime/structured-worker-identity'
 
 const DEV_CLI_BIN_FIRST = /^[^:;]*[\\/]cli[\\/]bin[:;]/
+const DEV_CLI_BIN_DIR = /^[^:;]*[\\/]cli[\\/]bin$/
 // The dev launcher by absolute path: a login shell's profile cannot reorder it behind a global.
 const DEV_CLI_LAUNCHER = /^[^:;]*[\\/]cli[\\/]bin[\\/]orca-dev$/
 
@@ -23,7 +24,11 @@ describe('buildCodexStructuredChildEnvironment', () => {
           cwd: '/worktree',
           codexHome: '/pinned/home',
           resumeThreadId: null,
-          env: { EXAMPLE_GATEWAY_TOKEN: 'shell-exported', CODEX_HOME: '/shell/home' }
+          env: {
+            EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
+            CODEX_HOME: '/shell/home',
+            ORCA_CLI_BIN_DIR: '/inherited/unowned-cli'
+          }
         },
         'spawn-token',
         'session-not-a-worker'
@@ -35,6 +40,9 @@ describe('buildCodexStructuredChildEnvironment', () => {
       ORCA_AGENT_SESSION_ID: 'session-not-a-worker',
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
+      ...(process.platform !== 'win32'
+        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
+        : {}),
       ORCA_USER_DATA_PATH: expect.any(String),
       // The test host is unpackaged, so this app's CLI is the dev launcher dir, first on PATH.
       PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
@@ -57,6 +65,9 @@ describe('buildCodexStructuredChildEnvironment', () => {
       ORCA_AGENT_SESSION_ID: sessionId,
       ORCA_STRUCTURED_SESSION: '1',
       ORCA_CLI_COMMAND: expect.stringMatching(DEV_CLI_LAUNCHER),
+      ...(process.platform !== 'win32'
+        ? { ORCA_CLI_BIN_DIR: expect.stringMatching(DEV_CLI_BIN_DIR) }
+        : {}),
       ORCA_USER_DATA_PATH: expect.any(String),
       PATH: expect.stringMatching(DEV_CLI_BIN_FIRST)
     })
@@ -97,6 +108,7 @@ const ENV_REPORTING_APP_SERVER = String.raw`
         result: {
           sessionId: process.env.ORCA_AGENT_SESSION_ID ?? null,
           cliCommand: process.env.ORCA_CLI_COMMAND ?? null,
+          cliBinDir: process.env.ORCA_CLI_BIN_DIR ?? null,
           path: process.env.PATH ?? process.env.Path ?? null
         }
       })
@@ -135,6 +147,7 @@ describe('the spawned Codex child', () => {
       await expect(connection.request('test/env')).resolves.toEqual({
         sessionId,
         cliCommand: expect.stringMatching(DEV_CLI_LAUNCHER),
+        cliBinDir: process.platform === 'win32' ? null : expect.stringMatching(DEV_CLI_BIN_DIR),
         path: expect.stringMatching(DEV_CLI_BIN_FIRST)
       })
     } finally {

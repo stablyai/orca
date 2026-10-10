@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import {
@@ -34,7 +34,7 @@ describe('quit during failed profile maintenance', () => {
     const failed = expect(store.beginProfileMaintenance()).rejects.toThrow('SQLITE_BUSY')
     await started.promise
     store.markSshRemotePtyLeasesForShutdown('remote', 'detached')
-    const final = store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+    const final = store.flushFinalOrThrowAsync()
     const result = final.catch((error: unknown) => error)
     release.resolve()
     await failed
@@ -44,7 +44,7 @@ describe('quit during failed profile maintenance', () => {
       settings: { theme: 'dark' },
       sshRemotePtyLeases: [expect.objectContaining({ state: 'detached' })]
     })
-    expect(JSON.parse(readFileSync(dataFile, 'utf8'))).toEqual(readState())
+    expect(existsSync(dataFile)).toBe(false)
   })
 
   it.each(['indeterminate', 'changed-source'] as const)(

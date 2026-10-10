@@ -2,7 +2,7 @@ import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/st
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
-import { TerminalSend } from './unary-schemas'
+import { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {
   assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,
@@ -22,6 +22,7 @@ import {
 export const TERMINAL_SEND_METHODS = [
   defineMethod({
     name: 'terminal.send',
+    permission: 'workspace',
     params: TerminalSend,
     handler: async (
       params,
@@ -237,6 +238,7 @@ export const TERMINAL_SEND_METHODS = [
                 signal,
                 // Why: a wire write carries no provenance beyond a client's own query reply.
                 inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
+                ...(params.requireWriteSettlement ? { requireWriteSettlement: true as const } : {}),
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

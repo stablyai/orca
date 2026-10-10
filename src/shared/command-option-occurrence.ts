@@ -2,7 +2,7 @@ function matchesOption(token: string, aliases: readonly string[]): boolean {
   return aliases.some(
     (alias) =>
       token === alias ||
-      token.startsWith(`${alias}=`) ||
+      (alias !== '--' && token.startsWith(`${alias}=`)) ||
       (alias.startsWith('-') &&
         !alias.startsWith('--') &&
         token.startsWith(alias) &&
@@ -11,9 +11,10 @@ function matchesOption(token: string, aliases: readonly string[]): boolean {
 }
 
 export function findOptionOccurrence(
-  tokens: string[],
+  tokens: readonly string[],
   aliases: readonly string[],
-  stopAtTerminator: boolean
+  stopAtTerminator: boolean,
+  valueOptions: readonly string[] = []
 ): { index: number; consumed: number; value?: string } | null {
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
@@ -21,6 +22,10 @@ export function findOptionOccurrence(
       break
     }
     if (!matchesOption(token, aliases)) {
+      // Required option values can look like flags, including `--`.
+      if (valueOptions.includes(token)) {
+        index += 1
+      }
       continue
     }
     const nextToken = tokens[index + 1]

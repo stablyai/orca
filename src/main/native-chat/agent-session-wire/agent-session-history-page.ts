@@ -9,6 +9,7 @@
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import { latestStructuredAgentSessionTurn } from '../../../shared/structured-agent-session-live-turn'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
@@ -21,6 +22,7 @@ import {
   type AgentSessionHistoryPage,
   type AgentSessionHistoryRequest,
   type AgentSessionHistoryResult,
+  type AgentSessionLatestTurn,
   type AgentSessionSubagentRosterEntry
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -80,9 +82,6 @@ export function readAgentSessionHistory(
   snapshot: AgentJournalSnapshot = journal.snapshot(),
   scope: AgentSessionHistoryScope = 'every-agent'
 ): AgentSessionHistoryResult {
-  if (journal.isReadOnly) {
-    return historyReset(snapshot, 'schema_unreadable')
-  }
   const limit = resolveHistoryLimit(request.limit)
   if (request.direction === 'after') {
     return readForward(journal, snapshot, request.cursor, limit)
@@ -311,6 +310,20 @@ function buildPage(input: {
     liveCursor: input.snapshot.cursor,
     hasOlder: input.hasOlder,
     hasNewer: input.hasNewer,
-    ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster })
+    ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
+    // From the whole timeline, never the page: a long turn's record sits below any window.
+    latestTurn: snapshotLatestTurn(input.snapshot)
   }
+}
+
+// A catch-up run pages one snapshot many times; its scan back to the turn record is paid once.
+const latestTurnBySnapshot = new WeakMap<AgentJournalSnapshot, AgentSessionLatestTurn | null>()
+
+function snapshotLatestTurn(snapshot: AgentJournalSnapshot): AgentSessionLatestTurn | null {
+  let latest = latestTurnBySnapshot.get(snapshot)
+  if (latest === undefined) {
+    latest = latestStructuredAgentSessionTurn(snapshot.items)
+    latestTurnBySnapshot.set(snapshot, latest)
+  }
+  return latest
 }

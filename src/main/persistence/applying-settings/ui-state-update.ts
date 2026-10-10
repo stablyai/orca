@@ -39,6 +39,7 @@ import {
 } from './ui-selection-normalization'
 import {
   mergeContextualTourSeenIds,
+  mergeFeatureTipSeenIds,
   mergeFeatureInteractions,
   stripMainOwnedTelemetryMarkerFromUI
 } from './ui-interaction-merge'
@@ -181,9 +182,13 @@ export function updatePersistedUI(
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
+    // Why: a stale renderer or paired client must not erase a dismissal, or a one-time tip replays.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
-        ? normalizeFeatureTipIds(sanitizedUpdates.featureTipsSeenIds)
+        ? mergeFeatureTipSeenIds(
+            operations.state.ui?.featureTipsSeenIds,
+            sanitizedUpdates.featureTipsSeenIds
+          )
         : normalizeFeatureTipIds(operations.state.ui?.featureTipsSeenIds),
     // Why: renderer and paired clients can mark different tours seen from stale snapshots; union so completed tours stay suppressed.
     contextualToursSeenIds:

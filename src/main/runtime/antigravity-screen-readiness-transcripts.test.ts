@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID,
+  waitForTranscriptIdle
+} from './agent-transcript-pane-test-harness'
 import {
   finalReplayFrame,
   readRuntimeFixture,
@@ -112,9 +116,8 @@ describe('Antigravity 1.2.14 readiness from captured bytes', () => {
       data: `${String.fromCharCode(27)}]0;agy${String.fromCharCode(7)}${readRuntimeFixture('antigravity-1-2-14-model-picker')}`,
       size: { cols: 120, rows: 40 }
     })
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5_000 })
-    ).rejects.toThrow(/timeout/)
+    await runtime.readTerminal(handle, { screen: true })
+    await expect(waitForTranscriptIdle({ runtime, handle }, 5_000)).rejects.toThrow(/timeout/)
   }, 15_000)
 
   // Why this recording: only the screen reads it ready, so settling proves the grid is trusted.
@@ -133,11 +136,8 @@ describe('Antigravity 1.2.14 readiness from captured bytes', () => {
       runtime.onExternalPtyResize(TRANSCRIPT_PANE_PTY_ID, cols, rows)
     }
     const settles = async () =>
-      (
-        await runtime
-          .waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5_000 })
-          .catch(() => ({ satisfied: false }))
-      ).satisfied
+      (await waitForTranscriptIdle({ runtime, handle }, 5_000).catch(() => ({ satisfied: false })))
+        .satisfied
     options.size = { cols: 120, rows: 40 }
     runtime.reflowHeadlessTerminalToPtyGrid(TRANSCRIPT_PANE_PTY_ID, 120, 40)
     await runtime.readTerminal(handle, { screen: true })

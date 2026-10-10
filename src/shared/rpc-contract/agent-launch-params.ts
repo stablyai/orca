@@ -18,6 +18,7 @@ import { isValidHostTerminalTabId } from '../terminal-tab-id'
 import { isTuiAgent } from '../tui-agent-config'
 import type { TuiAgent } from '../tui-agent'
 import { WorktreeCreate } from './worktree-create-params'
+import { FolderWorkspaceCreate } from './folder-workspace-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { TerminalTabIdParam } from './agent-session-params'
 import { SessionId } from './structured-agent-session-params'
@@ -35,6 +36,12 @@ const LaunchAgent = z
 
 /** The launch's fields without the cross-field check, for building an older host's shape in tests;
  *  every receiver parses `AgentLaunch` or `AgentLaunchReplay`. */
+/** A layout id the caller may get wrong without failing the launch: anything but a string is dropped. */
+const tolerantTabLayoutId = z
+  .unknown()
+  .transform((value): string | undefined => (typeof value === 'string' ? value : undefined))
+  .optional()
+
 export const AgentLaunchFields = z.object({
   agent: LaunchAgent,
   /**
@@ -63,6 +70,11 @@ export const AgentLaunchFields = z.object({
       /** The `worktree.create` request verbatim, so a caller migrating to this method keeps its
        *  existing payload; the agent fields in it are stripped rather than honoured. */
       create: WorktreeCreate
+    }),
+    z.object({
+      kind: z.literal('create-folder-workspace'),
+      /** The `folderWorkspace.create` request verbatim; its `createdWithAgent` is the launch's own. */
+      create: FolderWorkspaceCreate
     })
   ]),
   prompt: z
@@ -108,7 +120,28 @@ export const AgentLaunchFields = z.object({
    * exists. Ignored when the launch settles as a terminal; the outcome's `sessionId` says which
    * session really exists.
    */
-  sessionId: SessionId.optional()
+  sessionId: SessionId.optional(),
+  /**
+   * Where the new tab goes in the workspace's layout: a group, the host tab it should follow, or
+   * both. About the view, not the effect, so it is outside the replay fingerprint and never fails a
+   * launch: a group that is gone falls back to the anchor's group, then the active one, and keys
+   * this host does not know are dropped. The receipt's `placement` says where it landed. Read by
+   * hosts advertising `agent.launch.placement.v1`; older hosts drop it.
+   */
+  placement: z
+    .object({ groupId: tolerantTabLayoutId, afterTabId: tolerantTabLayoutId })
+    .optional()
+    .catch(undefined),
+  /** `terminal.create`'s field, with its meaning: `focused` selects the new tab, `background` moves
+   *  nothing; absent reveals it, as before. Whose view that is follows main's navigation default for
+   *  the caller, so a paired device moves only its own selection. Outside the fingerprint for the
+   *  same reason as `placement`, and open like it: a word this host does not know reads as absent. */
+  presentation: z
+    .unknown()
+    .transform((value): 'focused' | 'background' | undefined =>
+      value === 'focused' || value === 'background' ? value : undefined
+    )
+    .optional()
 })
 
 /** A caller-minted session id must be shaped like every id the host mints, so an id still names

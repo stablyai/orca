@@ -21,6 +21,10 @@ import {
 import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-retention'
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -87,7 +91,7 @@ function handleLink(
 ): AgentSessionProviderHandleLink {
   return {
     linkId: 'link-1',
-    handle: { provider: 'claude', sessionId: 'provider-session-1', leafUuid: 'leaf-1' },
+    handle: claudeProviderHandle('provider-session-1', 'leaf-1'),
     origin: 'created',
     mintedAtFence: 1,
     observedAt: NOW,
@@ -218,7 +222,7 @@ describe('acquisition path', () => {
         sessionId: 'session-alpha',
         fence: 1,
         link: handleLink({
-          handle: { provider: 'codex', threadId: 'thread-1' }
+          handle: codexProviderHandle('thread-1')
         }),
         now: NOW
       })
@@ -737,6 +741,29 @@ describe('claim keys and unreadable rows', () => {
       corrupt(persisted.records['session-alpha'])
     })
     expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
+  })
+
+  it('sets aside a row whose handle is in both stored forms and never rewrites it', async () => {
+    const first = await open()
+    await establishOwner(first)
+    let ambiguous: PersistedAgentSessionRecord | undefined
+    await editPersistedTestAgentSessionStore(directory, (persisted) => {
+      ambiguous = persisted.records['session-alpha']
+      Object.assign(ambiguous.providerHandleChain[0].handle, {
+        transport: 'acp',
+        agent: 'grok',
+        nativeId: 'acp-thread',
+        resumeCursor: 'resume-token'
+      })
+    })
+    const reopened = await open()
+    expect(reopened.isSessionUnreadable('session-alpha')).toBe(true)
+    // Another chat's write must carry the set-aside row through untouched.
+    await establishOwner(reopened, { sessionId: 'session-beta', claimKeyId: 'key-2' })
+    expect((await open()).isSessionUnreadable('session-alpha')).toBe(true)
+    expect((await readPersistedTestAgentSessionStore(directory)).records['session-alpha']).toEqual(
+      ambiguous
+    )
   })
 
   it('refuses to write a store a newer Orca wrote, with the refusal clients print as "update"', async () => {

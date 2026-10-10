@@ -7,13 +7,13 @@ import {
   recordWebSessionBrowserPlacement,
   takeWebSessionBrowserPlacementGroup
 } from './web-session-browser-placement'
+import { acceptReplayedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-lifecycle'
 import {
-  acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshot,
-  resolveHostSessionTabIdForWebSessionTab,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshot
+} from './web-session-tabs-sync/snapshot-api'
+import { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync/tracking-mappings'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   HOST_SURFACE_ID,

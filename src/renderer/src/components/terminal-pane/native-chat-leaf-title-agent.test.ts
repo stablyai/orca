@@ -7,6 +7,16 @@ const panes = [
 ]
 
 describe('resolveNativeChatLeafTitleAgent', () => {
+  it('does not offer recognition-only DeepSeek Build as a native chat agent', () => {
+    expect(
+      resolveNativeChatLeafTitleAgent({
+        leafId: 'leaf-1',
+        panes: [panes[0]],
+        runtimePaneTitlesByPaneId: { 1: 'DeepSeek Build' }
+      })
+    ).toBeNull()
+  })
+
   it('uses the target split leaf runtime title', () => {
     expect(
       resolveNativeChatLeafTitleAgent({

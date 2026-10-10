@@ -19,7 +19,6 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { journalDirectoryFor, journalPathSegment } from './journal-paths'
 import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import {
@@ -29,13 +28,14 @@ import {
   deleteTestJournalRow
 } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 let root: string
@@ -294,7 +294,7 @@ describe('replay', () => {
     expect(reopened.snapshot().items).toHaveLength(0)
   })
 
-  it('keeps the intact prefix and drops the rejected suffix', async () => {
+  it('refuses a journal with a gap and keeps every row', async () => {
     const journal = await open()
     for (let index = 0; index < 4; index += 1) {
       await journal.appendItem(item(index), body(`m${index}`), {
@@ -302,22 +302,18 @@ describe('replay', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     }
-    const before = journal.epoch
     await journal.close()
     await withJournalDatabase(root, (db) => {
       deleteTestJournalRow(db, IDENTITY.sessionId, 3)
     })
 
-    const reopened = await open()
-    expect(reopened.epoch).toBe(before)
-    expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([body('m0')])
-    // Sequences 4 and 5 are VALID rows that the gap at 3 made unreplayable.
-    // Nothing preserves them; recovery rebuilds the epoch from provider history.
+    await expect(open()).rejects.toMatchObject({
+      refusal: { details: { reason: 'journalCorrupt' } }
+    })
     await withJournalDatabase(root, (db) => {
       const rows = liveTestJournalRows(db, IDENTITY.sessionId)
-      expect(rows.map((row) => row.seq)).toEqual([1, 2])
+      expect(rows.map((row) => row.seq)).toEqual([1, 2, 4, 5])
     })
-    expect(reopened.repair).toEqual({ malformedRows: 0 })
   })
 })
 
@@ -441,27 +437,6 @@ describe('lifecycle batches', () => {
             )
         )
     ).toBe(false)
-  })
-})
-
-describe('journal location', () => {
-  it('keys by workspace and session id rather than by a path in the working tree', () => {
-    const dir = journalDirectoryFor('/state', { workspaceId: 'ws/1', sessionId: 'sess:2' })
-    expect(dir).toBe(
-      join(
-        '/state',
-        'agent-session-journal',
-        journalPathSegment('ws/1'),
-        journalPathSegment('sess:2')
-      )
-    )
-    expect(dir).not.toContain('ws/1')
-  })
-
-  it('separates two sessions in one workspace', () => {
-    const a = journalDirectoryFor('/state', { workspaceId: 'ws', sessionId: 'a' })
-    const b = journalDirectoryFor('/state', { workspaceId: 'ws', sessionId: 'b' })
-    expect(a).not.toBe(b)
   })
 })
 

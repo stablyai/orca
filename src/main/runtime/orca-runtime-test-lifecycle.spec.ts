@@ -1,6 +1,7 @@
 import * as mocks from './orca-runtime-test-mocks.spec'
 import { awaitBackgroundRemovalsInRuntimeTests } from './orca-runtime-background-removal-test-support'
 import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
+import { _resetCanonicalRepoKeyCacheForTests } from '../git/canonical-repo-key'
 
 const { MOCK_GIT_WORKTREES, RuntimeBrowserCommands, _resetTerminalViewAttributesForTest } = mocks
 const { addGitHubIssueCommentMock, addGitHubPRReviewCommentMock } = mocks
@@ -63,11 +64,14 @@ const { updateGitLabIssueMock, updateGitLabMRMock, updateGitLabMRReviewersMock, 
 awaitBackgroundRemovalsInRuntimeTests(mocks.OrcaRuntimeService.prototype as never)
 
 function resetRuntimeTestMocks(): void {
+  _resetCanonicalRepoKeyCacheForTests()
   _resetPendingWorktreeRemovalsForTests()
   // Why: constructing the browser commands is what pulls the Chromium cluster in, so
   // production installs this at the Electron entry. A Node host installs none and the
   // browser RPCs reject rather than silently succeeding.
-  setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
+  setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+    clientHosting: true
+  })
   setRuntimeBrowserUnavailableCause(null)
   setRuntimeTerminalUnavailableCause(null)
   // Why: the runtime's notification, window lookup and tab-create-reply channel are

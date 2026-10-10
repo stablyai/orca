@@ -1,4 +1,10 @@
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from '../persistence-test-harness'
+import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 /**
  * An update may not move a record to another host unless it was asked to.
  *
@@ -20,7 +26,7 @@ import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-conflict'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -120,6 +126,10 @@ async function createStore() {
     }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
@@ -144,6 +154,8 @@ function projectedSelector(store: Store, id: string) {
 const ORPHAN = { selector: { kind: 'orphan' } } as const
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-retarget-'))
 })
 

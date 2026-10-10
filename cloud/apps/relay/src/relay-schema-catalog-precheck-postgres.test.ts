@@ -190,6 +190,47 @@ describePostgres('relay boot-time schema against PostgreSQL', () => {
     }
   })
 
+  it('throttles the reservations vacuum, deferring it while a vacuum holds the table', async () => {
+    const reservationOptions = async (): Promise<unknown> =>
+      (
+        await pool.query(`SELECT reloptions FROM pg_class WHERE oid = to_regclass($1)`, [
+          `${schema}.${LOCKED_TABLE}`
+        ])
+      ).rows[0]?.reloptions
+    const cold = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
+    opened.push(cold)
+    expect(await reservationOptions()).toEqual([
+      'autovacuum_vacuum_cost_delay=20',
+      'autovacuum_vacuum_cost_limit=200'
+    ])
+    await pool.query(
+      `ALTER TABLE ${schema}.${LOCKED_TABLE}
+         RESET (autovacuum_vacuum_cost_delay, autovacuum_vacuum_cost_limit)`
+    )
+
+    // The lock a running (auto)vacuum holds; the boot must yield to it rather than fail.
+    const holder = new pg.Client({ connectionString: url })
+    await holder.connect()
+    await holder.query('BEGIN')
+    await holder.query(`LOCK TABLE ${LOCKED_TABLE} IN SHARE UPDATE EXCLUSIVE MODE`)
+    try {
+      const behindVacuum = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
+      opened.push(behindVacuum)
+    } finally {
+      await holder.query('ROLLBACK')
+      await holder.end()
+    }
+    expect(await reservationOptions()).toBeNull()
+
+    const next = await openRelayDatabase({ databaseUrl: url, dataDir: '' })
+    opened.push(next)
+    expect(await reservationOptions()).toEqual([
+      'autovacuum_vacuum_cost_delay=20',
+      'autovacuum_vacuum_cost_limit=200'
+    ])
+    await pool.end()
+  })
+
   it('defers the activity-lease migrations and still boots while their table is locked', async () => {
     // The migration boot, reproduced: the index is there, the table is locked by someone else, and
     // all the drop can do is time out. It has to leave the statement for the next boot rather than

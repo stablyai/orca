@@ -7,13 +7,17 @@ import {
 } from '../../shared/secure-file'
 import { removeStaleDurableWriteTempFiles } from '../durable-file-write'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
+import type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
+import {
+  isStructuredAttentionOrigin,
+  type StructuredAttentionOrigin
+} from '../../shared/agent-session-attention'
 
-export type DeliveredNotificationIdentity = {
-  notificationId: string
-  notificationEpoch: string
-  notificationSeq: number
+export type { DeliveredNotificationIdentity } from '../../shared/mobile-notification-identity'
+export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
+  structuredOrigin?: StructuredAttentionOrigin
 }
-type RecordEntry = DeliveredNotificationIdentity & { dismissedThrough: number; expiresAt: number }
+type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
 const LIMIT = 4096
 const RETENTION_MS = 7 * 86400_000
 const STALE_WRITE_TEMP_AGE_MS = 86400_000
@@ -30,7 +34,7 @@ export class MobileNotificationDismissalStore {
       hardenExistingSecureFile(this.path)
       const value: unknown = JSON.parse(readFileSync(this.path, 'utf8'))
       if (Array.isArray(value)) {
-        this.entries = value.filter(isEntry).slice(-LIMIT)
+        this.entries = value.flatMap(readEntry).slice(-LIMIT)
       }
     } catch (error) {
       this.unreadable = isUnreadableError(error)
@@ -50,13 +54,26 @@ export class MobileNotificationDismissalStore {
       entry.notificationId === event.notificationId &&
       entry.notificationEpoch === event.notificationEpoch
     let next: RecordEntry[]
-    if (event.type === 'notification') {
+    if (event.type === 'dismiss' && event.dismissedDelivery) {
+      const target = event.dismissedDelivery
+      next = kept.map((entry) =>
+        entry.notificationId === target.notificationId &&
+        entry.notificationEpoch === target.notificationEpoch
+          ? {
+              ...entry,
+              dismissedThrough: Math.max(entry.dismissedThrough, target.notificationSeq),
+              expiresAt: now + RETENTION_MS
+            }
+          : entry
+      )
+    } else if (event.type === 'notification') {
       next = [
         ...kept.filter((entry) => !same(entry)),
         {
           notificationId: event.notificationId,
           notificationEpoch: event.notificationEpoch,
           notificationSeq: event.notificationSeq,
+          ...(event.structuredOrigin ? { structuredOrigin: event.structuredOrigin } : {}),
           dismissedThrough: kept.find(same)?.dismissedThrough ?? -1,
           expiresAt: now + RETENTION_MS
         }
@@ -78,10 +95,27 @@ export class MobileNotificationDismissalStore {
       })
     }
     next = next.slice(-LIMIT)
+    this.entries = next
     if (!this.unreadable) {
       writeSecureJsonFile(this.path, next)
     }
-    this.entries = next
+  }
+
+  liveDeliveries(prefix = ''): DeliveredNotificationRecord[] {
+    const now = Date.now()
+    return this.entries
+      .filter(
+        (entry) =>
+          entry.expiresAt > now &&
+          entry.notificationId.startsWith(prefix) &&
+          entry.dismissedThrough < entry.notificationSeq
+      )
+      .map(({ notificationId, notificationEpoch, notificationSeq, structuredOrigin }) => ({
+        notificationId,
+        notificationEpoch,
+        notificationSeq,
+        ...(structuredOrigin ? { structuredOrigin } : {})
+      }))
   }
 
   reconcile(delivered: readonly DeliveredNotificationIdentity[]): DeliveredNotificationIdentity[] {
@@ -99,7 +133,18 @@ export class MobileNotificationDismissalStore {
   }
 }
 
-function isEntry(value: unknown): value is RecordEntry {
+/** An origin this build cannot read (a newer cause kind) degrades to none; the record survives. */
+function readEntry(value: unknown): RecordEntry[] {
+  if (!isEntry(value)) {
+    return []
+  }
+  const { structuredOrigin, ...entry } = value
+  return [isStructuredAttentionOrigin(structuredOrigin) ? { ...entry, structuredOrigin } : entry]
+}
+
+function isEntry(
+  value: unknown
+): value is Omit<RecordEntry, 'structuredOrigin'> & { structuredOrigin?: unknown } {
   if (!value || typeof value !== 'object') {
     return false
   }

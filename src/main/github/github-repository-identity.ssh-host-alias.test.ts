@@ -26,7 +26,8 @@ vi.mock('../git/runner', async (importOriginal) => ({
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: getSshGitProviderGenerationMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'Remote connection dropped.'
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'Remote connection dropped.',
+  sshGitProviderMissingError: () => new Error('Remote connection dropped.')
 }))
 
 vi.mock('./local-git-config-signature', () => ({

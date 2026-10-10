@@ -434,10 +434,12 @@ describe('OrcaRuntimeService', () => {
     const webContents: {
       isDestroyed: () => boolean
       setBackgroundThrottling: ReturnType<typeof vi.fn>
+      capturePage: ReturnType<typeof vi.fn>
       send: ReturnType<typeof vi.fn>
     } = {
       isDestroyed: () => false,
       setBackgroundThrottling: vi.fn(),
+      capturePage: vi.fn(async () => null),
       send: vi.fn()
     }
     webContents.send.mockImplementation(
@@ -484,10 +486,12 @@ describe('OrcaRuntimeService', () => {
     const webContents: {
       isDestroyed: () => boolean
       setBackgroundThrottling: typeof setBackgroundThrottling
+      capturePage: ReturnType<typeof vi.fn>
       send: ReturnType<typeof vi.fn>
     } = {
       isDestroyed: () => false,
       setBackgroundThrottling,
+      capturePage: vi.fn(async () => null),
       send: vi.fn()
     }
     webContents.send.mockImplementation((_channel: string, payload: { requestId: string }) => {
@@ -633,7 +637,12 @@ describe('OrcaRuntimeService', () => {
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
-        webContents: { isDestroyed: () => false, send, setBackgroundThrottling: vi.fn() }
+        webContents: {
+          isDestroyed: () => false,
+          send,
+          setBackgroundThrottling: vi.fn(),
+          capturePage: vi.fn(async () => null)
+        }
       })
       if (graphStatus === 'reloading') {
         runtime.markRendererReloading(1)
@@ -668,7 +677,12 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { isDestroyed: () => false, send, setBackgroundThrottling }
+      webContents: {
+        isDestroyed: () => false,
+        send,
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
+      }
     })
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     let resolutionStarted = (): void => {}
@@ -714,7 +728,12 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
-      webContents: { isDestroyed: () => false, send, setBackgroundThrottling }
+      webContents: {
+        isDestroyed: () => false,
+        send,
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
+      }
     })
     abort.abort()
 

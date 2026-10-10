@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -16,7 +17,7 @@ function makeRuntime(): OrcaRuntimeService {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime members these RPCs read are staged.
   return {
     getRuntimeId: () => 'test-runtime',
-    getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: false })),
+    getClientSettings: vi.fn(() => ({ experimentalNativeChat: false })),
     restoreStructuredAgentSessionTabs: vi.fn(),
     listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot())
   } as unknown as OrcaRuntimeService

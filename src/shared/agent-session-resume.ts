@@ -27,7 +27,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'muse',
   'zcode',
   'dsh',
-  'jcode'
+  'jcode',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -229,6 +230,8 @@ export function extractAgentProviderSession(
     }
     // Why: DSH's hook bridge always sends an empty `transcript_path` (its persistence seam
     // exposes no artifact path), so the session id alone carries the resume target.
+    // Why: Kiro's hooks send no transcript path; the id alone feeds `--resume-id`.
+    case 'kiro':
     case 'dsh': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
@@ -286,4 +289,4 @@ export function extractAgentProviderSession(
 }
 
 // Re-exported so the 18 existing call sites keep one import path.
-export { getAgentResumeArgv } from './agent-resume-argv'
+export { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'

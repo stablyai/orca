@@ -1,5 +1,9 @@
+import {
+  GitGrepRecordCapacityError,
+  GIT_GREP_MAX_RECORD_BYTES
+} from '../shared/git-grep-record-limit'
 import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
-import { spawnProcess } from '../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { abortSignalReason } from '../shared/abort-signal-reason'
 import type { SearchOptions, SearchResult } from './fs-handler-utils'
 import {
@@ -32,7 +36,7 @@ export function searchWithGitGrep(
     const gitArgs = buildGitGrepArgs(query, opts)
     const matchRegex = buildSubmatchRegex(query, opts)
     const acc = createAccumulator()
-    const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
+    const lines = new SearchSubprocessLineAccumulator(GIT_GREP_MAX_RECORD_BYTES)
     let done = false
     let processErrorObserved = false
 
@@ -90,8 +94,15 @@ export function searchWithGitGrep(
       }
     }
 
-    function handleStdoutData(chunk: string): void {
-      lines.push(chunk, processLine)
+    function handleStdoutData(chunk: Buffer | string): void {
+      if (!lines.push(chunk, processLine) && settle()) {
+        try {
+          killSpawnedRipgrepProcess(child)
+        } catch {
+          // Release the request even when the host refuses the kill.
+        }
+        reject(new GitGrepRecordCapacityError())
+      }
     }
 
     function handleStderrData(): void {
@@ -111,7 +122,6 @@ export function searchWithGitGrep(
       resolveOnce()
     }
 
-    child.stdout!.setEncoding('utf-8')
     child.stdout!.on('data', handleStdoutData)
     child.stderr!.on('data', handleStderrData)
     child.once('error', handleError)

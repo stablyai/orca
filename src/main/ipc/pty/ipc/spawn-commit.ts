@@ -1,6 +1,5 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { agentHookServer } from '../../../agent-hooks/server'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
 import { registerPty } from '../../../memory/pty-registry'
 import type { PtySpawnResult } from '../../../providers/types'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
@@ -22,8 +21,13 @@ import { admitPtyReattachOwnership, registerPersistedPtySpawn } from '../pane/sp
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
 import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
+  return commitPtyWithOpenCodePromptIntent(ctx, () => commitReservedPtyIpcSpawn(ctx))
+}
+
+async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
   admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   if (ctx.nativeWindowsConptySpawn) {
@@ -100,6 +104,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     ctx.pendingRegistrationPtyId = null
   }
   publishPtyIpcSpawnCommit(ctx, committedSize)
+
   // Admission must precede reflow: a replaced spawn cannot resize its successor's model.
   reflowHeadlessTerminalToCommittedGrid({
     result: ctx.result,
@@ -118,9 +123,6 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.result.id,
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
   // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.

@@ -1,4 +1,5 @@
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -8,7 +9,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setSecretStore } from '../../../shared/secret-store'
 import { profileStateStorage } from '../../orca-profiles/profile-project-state-file'
@@ -38,6 +39,11 @@ import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database
 import { createProfileStateStore } from './profile-state-store-factory'
 import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
+import {
+  ensureProfileStateAuthorityMarker,
+  hasProfileStateAuthorityMarker,
+  profileStateAuthorityMarkerPath
+} from './profile-state-authority-marker'
 import {
   buildRecoveryCrashProcess,
   killRecoveryAt,
@@ -84,7 +90,7 @@ const selectedJson = JSON.stringify(selectedState)
 const oldJson = JSON.stringify(oldState)
 
 beforeAll(() => {
-  bundle = buildRecoveryCrashProcess(suiteRoot)
+  bundle = buildRecoveryCrashProcess(suiteRoot).bundle
 })
 beforeEach(() => {
   setSecretStore({
@@ -103,13 +109,25 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true })
   }
 })
-afterAll(() => rmSync(suiteRoot, { recursive: true, force: true }))
+afterAll(() => {
+  try {
+    for (const seed of seededFixtures.values()) {
+      for (const [suffix, bytes] of seed.originalFamily) {
+        expect(readFileSync(`${seed.databasePath}${suffix}`).equals(bytes)).toBe(true)
+      }
+      expect(readFileSync(seed.backupPath).equals(seed.backupBytes)).toBe(true)
+      expect(readFileSync(seed.exportPath, 'utf8')).toBe(selectedJson)
+    }
+  } finally {
+    rmSync(suiteRoot, { recursive: true, force: true })
+  }
+})
 
 type Fixture = RecoveryCrashOptions & { backupBytes: Buffer; originalFamily: Map<string, Buffer> }
+const seededFixtures = new Map<string, Fixture>()
 
-async function fixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixture> {
-  const root = mkdtempSync(join(suiteRoot, 'profile-'))
-  fixtureRoots.push(root)
+async function seedFixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixture> {
+  const root = mkdtempSync(join(suiteRoot, 'seed-'))
   const directory = join(root, 'profiles', profileId)
   mkdirSync(directory, { recursive: true })
   writeFileSync(
@@ -134,6 +152,7 @@ async function fixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixt
     kind
   }
   const source = openProfileStateDatabase(databasePath, profileId)
+  ensureProfileStateAuthorityMarker(databasePath)
   try {
     importProfileStateJson(source.db, oldJson)
     importProfileStateJson(source.db, oldJson)
@@ -173,6 +192,39 @@ async function fixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixt
   return { ...options, backupBytes: readFileSync(backupPath), originalFamily }
 }
 
+function cloneFixture(seed: Fixture): Fixture {
+  const root = mkdtempSync(join(suiteRoot, 'profile-'))
+  fixtureRoots.push(root)
+  cpSync(seed.root, root, { recursive: true })
+  const options = {
+    ...seed,
+    root,
+    dataFile: join(root, relative(seed.root, seed.dataFile)),
+    databasePath: join(root, relative(seed.root, seed.databasePath)),
+    exportPath: join(root, relative(seed.root, seed.exportPath)),
+    backupPath: join(root, relative(seed.root, seed.backupPath)),
+    markerPath: join(root, relative(seed.root, seed.markerPath))
+  }
+  const originalFamily = new Map(
+    ['', '-wal', '-shm', '-journal'].map((suffix) => [
+      suffix,
+      readFileSync(`${options.databasePath}${suffix}`)
+    ])
+  )
+  return { ...options, backupBytes: readFileSync(options.backupPath), originalFamily }
+}
+
+async function fixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixture> {
+  const key = `${kind}/${accepted}`
+  let seed = seededFixtures.get(key)
+  if (!seed) {
+    // The seed child's close event has fired before its WAL family is copied.
+    seed = await seedFixture(kind, accepted)
+    seededFixtures.set(key, seed)
+  }
+  return cloneFixture(seed)
+}
+
 function readSqlite(path: string): unknown {
   const opened = openProfileStateDatabaseReadOnly(path, profileId)
   try {
@@ -182,7 +234,7 @@ function readSqlite(path: string): unknown {
   }
 }
 
-function assertQuarantine(profile: Fixture): void {
+function assertQuarantine(profile: Fixture, hasMarker = true): void {
   const quarantine = readdirSync(dirname(profile.databasePath)).find((name) =>
     name.startsWith('profile-state-corrupt-')
   )
@@ -190,12 +242,22 @@ function assertQuarantine(profile: Fixture): void {
     throw new Error('Recovery did not preserve a quarantine')
   }
   const directory = join(dirname(profile.databasePath), quarantine)
+  const archivedMarker = join(
+    directory,
+    basename(profileStateAuthorityMarkerPath(profile.databasePath))
+  )
+  expect(existsSync(archivedMarker)).toBe(hasMarker)
+  if (hasMarker) {
+    expect(readFileSync(archivedMarker, 'utf8')).toBe('sqlite\n')
+  }
   // Check exact family bytes before opening the copied WAL snapshot.
   for (const [suffix, bytes] of profile.originalFamily) {
-    expect(readFileSync(join(directory, `profile-state.db${suffix}`))).toEqual(bytes)
+    expect(readFileSync(join(directory, `profile-state.db${suffix}`)).equals(bytes)).toBe(true)
   }
   expect(readFileSync(join(directory, basename(profile.exportPath)), 'utf8')).toBe(selectedJson)
-  expect(readFileSync(join(directory, basename(profile.backupPath)))).toEqual(profile.backupBytes)
+  expect(
+    readFileSync(join(directory, basename(profile.backupPath))).equals(profile.backupBytes)
+  ).toBe(true)
   expect(readSqlite(join(directory, 'profile-state.db'))).toEqual(oldState)
 }
 
@@ -267,6 +329,7 @@ const JSON_BOUNDARIES = [
   'other-export',
   'first-export',
   'backup',
+  'authority-marker',
   'selected-export',
   'restore-returned',
   'marker-publish:before',
@@ -284,6 +347,7 @@ function stage(profile: Fixture, name: string): string {
     'first-export': profileStateJsonExportPath(profile.dataFile, 1),
     'marker-invalidated': profile.markerPath,
     backup: profile.backupPath,
+    'authority-marker': profileStateAuthorityMarkerPath(profile.databasePath),
     'selected-export': profile.exportPath,
     json: profile.dataFile
   }
@@ -312,6 +376,7 @@ describe.each([false, true])('JSON recovery process death, accepted prior JSON=%
           ? 'old'
           : 'refused'
       if (finished) {
+        expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(false)
         expect(readFileSync(profile.dataFile, 'utf8')).toBe(selectedJson)
         expect(profileStateJsonExportPaths(profile.dataFile)).toEqual([])
         expect(profileStateDatabaseBackups(profile.databasePath)).toEqual([])
@@ -326,6 +391,22 @@ describe.each([false, true])('JSON recovery process death, accepted prior JSON=%
 })
 
 describe('SQLite recovery process death', () => {
+  it.each(['before', 'after'] as const)(
+    'preserves the original family through authority-marker publication %s rename',
+    async (boundary) => {
+      const profile = await fixture('sqlite', true)
+      rmSync(profileStateAuthorityMarkerPath(profile.databasePath))
+      await killRecoveryAt(bundle, profile, `authority-publish:${boundary}`)
+      assertQuarantine(profile, false)
+      expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(boundary === 'after')
+      for (const [suffix, bytes] of profile.originalFamily) {
+        expect(readFileSync(`${profile.databasePath}${suffix}`)).toEqual(bytes)
+      }
+      assertRestart(profile, 'old')
+      retry(profile)
+    }
+  )
+
   it.each([
     'marker-invalidated',
     'selected-export',
@@ -345,8 +426,9 @@ describe('SQLite recovery process death', () => {
   ])('preserves full state and its immutable retry backup at %s', async (boundary) => {
     const profile = await fixture('sqlite', true)
     await killRecoveryAt(bundle, profile, stage(profile, boundary))
+    expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(true)
     assertQuarantine(profile)
-    expect(readFileSync(profile.backupPath)).toEqual(profile.backupBytes)
+    expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
     const expected = [
       'marker-invalidated',
       'selected-export',
@@ -365,7 +447,7 @@ describe('SQLite recovery process death', () => {
         : 'refused'
     assertRestart(profile, expected)
     retry(profile)
-    expect(readFileSync(profile.backupPath)).toEqual(profile.backupBytes)
+    expect(readFileSync(profile.backupPath).equals(profile.backupBytes)).toBe(true)
   })
 
   it.skipIf(process.platform === 'win32')(
@@ -378,3 +460,61 @@ describe('SQLite recovery process death', () => {
     }
   )
 })
+
+describe('seeded recovery fixture copies', () => {
+  it.each([
+    ['json', false],
+    ['json', true],
+    ['sqlite', true]
+  ] as const)(
+    'isolates %s/accepted=%s through corruption and WAL reopen',
+    async (kind, accepted) => {
+      const first = await fixture(kind, accepted)
+      const second = await fixture(kind, accepted)
+      const seed = seededFixtures.get(`${kind}/${accepted}`)
+      if (!seed) {
+        throw new Error('Seed fixture was not retained')
+      }
+      expect(new Set([first.root, second.root, seed.root]).size).toBe(3)
+      for (const [suffix, bytes] of seed.originalFamily) {
+        expect(readFileSync(`${first.databasePath}${suffix}`).equals(bytes)).toBe(true)
+        writeFileSync(`${first.databasePath}${suffix}`, 'corrupted-copy')
+        expect(readFileSync(`${second.databasePath}${suffix}`).equals(bytes)).toBe(true)
+        expect(readFileSync(`${seed.databasePath}${suffix}`).equals(bytes)).toBe(true)
+      }
+      const third = await fixture(kind, accepted)
+      expect(readSqlite(third.databasePath)).toEqual(oldState)
+      expect(readFileSync(seed.backupPath).equals(seed.backupBytes)).toBe(true)
+      expect(readFileSync(seed.exportPath, 'utf8')).toBe(selectedJson)
+    }
+  )
+
+  it('rejects an incomplete copied WAL family before a recovery child starts', async () => {
+    const incomplete = await fixture('json', false)
+    rmSync(`${incomplete.databasePath}-wal`)
+    expect(() => cloneFixture(incomplete)).toThrow(/ENOENT/)
+  })
+})
+
+it.each(['first-export', 'authority-marker'] as const)(
+  'keeps current-JSON rollback safe through %s removal',
+  async (boundary) => {
+    const seeded = await fixture('json', true)
+    const profile = { ...seeded, exportPath: seeded.dataFile }
+    await killRecoveryAt(bundle, profile, stage(profile, boundary))
+    assertQuarantine(profile)
+    expect(profileStateJsonExportPaths(profile.dataFile)).toEqual([])
+    expect(profileStateDatabaseBackups(profile.databasePath)).toEqual([])
+    expect(hasProfileStateAuthorityMarker(profile.databasePath)).toBe(boundary === 'first-export')
+    assertRestart(profile, boundary === 'first-export' ? 'refused' : 'selected')
+    if (boundary === 'first-export') {
+      const maintenance = acquireProfileStateMaintenance(profile.root)
+      try {
+        restoreProfileStateJsonExport({ ...profile, maintenance })
+      } finally {
+        maintenance.release()
+      }
+      assertRestart(profile, 'selected')
+    }
+  }
+)

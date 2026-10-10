@@ -1,4 +1,5 @@
 /** What the host-side runtime-store scripts print, shared by the POSIX and Windows installers. */
+import { RelayHostAnsweredError } from './ssh-relay-host-answered-failure'
 
 export const REMOTE_NODE_RUNTIME_READY = 'ORCA_NODE_RUNTIME_READY'
 export const REMOTE_NODE_RUNTIME_MISSING = 'ORCA_NODE_RUNTIME_MISSING'
@@ -9,7 +10,7 @@ export const REMOTE_NODE_RUNTIME_EXIT_PREFIX = 'ORCA_RUNTIME_EXIT='
 export const REMOTE_NODE_RUNTIME_VERIFIED_MARKER = '.verified'
 
 /** The pinned runtime ran on the host and did not report its version: a host verdict, with evidence. */
-export class RemoteNodeRuntimeSelfTestError extends Error {
+export class RemoteNodeRuntimeSelfTestError extends RelayHostAnsweredError {
   constructor(
     readonly exitStatus: number | null,
     readonly output: string
@@ -22,7 +23,7 @@ export class RemoteNodeRuntimeSelfTestError extends Error {
 }
 
 /** The host answered, and what it answered is that something rewrote or removed our verified bytes. */
-export class RemoteNodeRuntimeSecurityModifiedError extends Error {
+export class RemoteNodeRuntimeSecurityModifiedError extends RelayHostAnsweredError {
   constructor(readonly detail: string) {
     super(`Security software on the host removed or modified the pinned Node runtime: ${detail}`)
     this.name = 'RemoteNodeRuntimeSecurityModifiedError'
@@ -65,6 +66,8 @@ export function assertRemoteNodeRuntimePromoted(promoted: string): void {
     )
   }
   if (promoted.trim().split(/\r?\n/).at(-1)?.trim() !== REMOTE_NODE_RUNTIME_READY) {
-    throw new Error(`The host did not verify the pinned Node runtime: ${promoted.trim()}`)
+    throw new RelayHostAnsweredError(
+      `The host did not verify the pinned Node runtime: ${promoted.trim()}`
+    )
   }
 }

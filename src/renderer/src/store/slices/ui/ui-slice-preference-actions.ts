@@ -1,8 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import {
-  DEFAULT_AGENTS_GROUP_BY,
-  DEFAULT_AGENTS_READ_FILTER
-} from '../../../../../shared/agents-view-thread-filters'
+import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
@@ -70,9 +67,6 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeExecutionHostScope(scope)
       const visibleWorkspaceHostIds = normalized === 'all' ? null : [normalized]
       set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
-      window.api.ui
-        .set({ workspaceHostScope: normalized, visibleWorkspaceHostIds })
-        .catch(console.error)
     },
     visibleWorkspaceHostIds: null,
     setVisibleWorkspaceHostIds: (ids) => {
@@ -85,9 +79,6 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         workspaceHostScope = normalized[0]
       }
       set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
-      window.api.ui
-        .set({ visibleWorkspaceHostIds: normalized, workspaceHostScope })
-        .catch(console.error)
     },
     workspaceHostOrder: [],
     setWorkspaceHostOrder: (ids) => {
@@ -167,42 +158,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
-    agentsVisibleHostIds: null,
-    setAgentsVisibleHostIds: (ids) => {
-      const agentsVisibleHostIds = normalizeVisibleExecutionHostIds(ids)
-      set({ agentsVisibleHostIds })
-      window.api.ui.set({ agentsVisibleHostIds }).catch(console.error)
-    },
-    agentsFilterRepoIds: [],
-    setAgentsFilterRepoIds: (ids) => {
-      set({ agentsFilterRepoIds: ids })
-      window.api.ui.set({ agentsFilterRepoIds: [...ids] }).catch(console.error)
-    },
-    agentsShowChildAgents: false,
-    setAgentsShowChildAgents: (v) => {
-      set({ agentsShowChildAgents: v })
-      window.api.ui.set({ agentsShowChildAgents: v }).catch(console.error)
-    },
-    agentsCompactMode: true,
-    setAgentsCompactMode: (v) => {
-      set({ agentsCompactMode: v })
-      window.api.ui.set({ agentsCompactMode: v }).catch(console.error)
-    },
-    agentsShowSearch: true,
-    setAgentsShowSearch: (v) => {
-      set({ agentsShowSearch: v })
-      window.api.ui.set({ agentsShowSearch: v }).catch(console.error)
-    },
-    agentsReadFilter: DEFAULT_AGENTS_READ_FILTER,
-    setAgentsReadFilter: (v) => {
-      set({ agentsReadFilter: v })
-      window.api.ui.set({ agentsReadFilter: v }).catch(console.error)
-    },
-    agentsGroupBy: DEFAULT_AGENTS_GROUP_BY,
-    setAgentsGroupBy: (v) => {
-      set({ agentsGroupBy: v })
-      window.api.ui.set({ agentsGroupBy: v }).catch(console.error)
-    },
+    ...createAgentsViewPreferenceActions(set),
 
     collapsedGroups: new Set<string>(),
     toggleCollapsedGroup: (key) =>
@@ -312,8 +268,15 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)
-      window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
-      set({ statusBarUsageMode: normalized })
+      // Why: choosing either mode discovers the selector; old hosts never arm the new notice.
+      const updates = {
+        statusBarUsageMode: normalized,
+        ...(!get().statusBarCompactChangeNoticeDismissed
+          ? { statusBarCompactChangeNoticeDismissed: true }
+          : {})
+      }
+      window.api.ui.set(updates).catch(console.error)
+      set(updates)
     }
   }
 }

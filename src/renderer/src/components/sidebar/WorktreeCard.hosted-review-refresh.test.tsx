@@ -67,7 +67,6 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu',
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
 }))
@@ -133,30 +132,15 @@ describe('WorktreeCard hosted review refresh', () => {
     vi.useRealTimers()
   })
 
-  it('polls visible hosted review cards after a cached branch miss', async () => {
+  it('leaves repeating metadata reads to the central visible-review scheduler', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
-
     act(() => {
       root?.render(<WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />)
     })
-
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(1)
-
-    act(() => {
-      vi.advanceTimersByTime(60_000)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15 * 60_000)
     })
-
-    expect(fetchHostedReviewForBranch).toHaveBeenCalledTimes(2)
-    expect(fetchHostedReviewForBranch).toHaveBeenLastCalledWith('/repo', 'feature/branch', {
-      repoId: 'repo-1',
-      linkedGitHubPR: null,
-      currentHeadOid: 'abc123',
-      linkedGitLabMR: null,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null,
-      staleWhileRevalidate: true
-    })
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
   })
 
   it('does not poll hosted reviews when status and PR surfaces are hidden', async () => {

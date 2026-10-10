@@ -5,16 +5,17 @@ import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import {
   claudeProviderFrameKind,
-  createClaudeProviderFrameFallback
+  createClaudeProviderFrameFallback,
+  isClaudeProgressFrame
 } from './claude-structured-provider-fallback'
 import { taskFrameSentence } from './claude-background-task-frames'
 import { ClaudeBackgroundTaskRows } from './claude-background-task-rows'
 import { ClaudeToolOriginRegistry } from './claude-tool-origin-registry'
 import { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
+import { createClaudeStreamedThinking } from './claude-streamed-thinking'
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { ClaudeJournaledRoster } from './claude-subagent-journaled-roster'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
@@ -33,6 +34,8 @@ import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 import { journalClaudeResult, type ClaudeResultJournalContext } from './claude-result-journaling'
+import { ClaudeAuthenticationFailures } from './claude-authentication-failures'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 
 export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
@@ -43,22 +46,7 @@ export type ClaudeJournalTranslatorDeps = {
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
   fallbackIdPrefix?: string
   onBackgroundTaskJournalFailure?: (error: Error) => void
-}
-
-export function createClaudeSessionJournalTranslator(
-  sink: StructuredAgentSessionEventSink | undefined,
-  prompts: ClaudePromptRegistry,
-  fallbackIdPrefix: string,
-  onBackgroundTaskJournalFailure?: (error: Error) => void
-): ClaudeJournalTranslator | null {
-  return sink
-    ? createClaudeJournalTranslator({
-        sink,
-        fallbackIdPrefix,
-        ...(onBackgroundTaskJournalFailure ? { onBackgroundTaskJournalFailure } : {}),
-        bindPromptItemId: (itemId, promptKey) => prompts.bindJournalItemId(itemId, promptKey)
-      })
-    : null
+  account?: () => AgentSessionAccountKind | undefined
 }
 
 export function createClaudeJournalTranslator(
@@ -76,6 +64,7 @@ export function createClaudeJournalTranslator(
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
     settleChildren: (groupKey) => subagents.settleTurn(groupKey),
+    endOpenWork: (completedAt) => streamedThinking.finishOpen(completedAt),
     onOpen: () => context.markActivity()
   })
   const context = new ClaudeContextFacts(turn, deps.sink)
@@ -135,6 +124,15 @@ export function createClaudeJournalTranslator(
       deps.sink.publish()
     }
   })
+  const streamedThinking = createClaudeStreamedThinking({
+    ...deps,
+    producer: subagents.linkage,
+    turnScope
+  })
+  const flush = (): void => {
+    streamedText.flush()
+    streamedThinking.flush()
+  }
 
   const publishActivity = (kind: string, payload: unknown): void => {
     const turnId = turn.id
@@ -148,16 +146,17 @@ export function createClaudeJournalTranslator(
   }
 
   const handleStream = (message: Record<string, unknown>, observedAt: number): boolean => {
-    const delta = streamedBlocks.observe(message)
-    // `message_start` is the provider's turn boundary. Keep the first text
+    const delta = streamedBlocks.observe(message, observedAt)
+    const thinking = streamedThinking.observe(message, observedAt)
+    // `message_start` is the provider's turn boundary. Keep the first content
     // delta as a compatibility fallback for streams that omit it.
-    const source = delta ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
+    const source =
+      delta || thinking ? claudeStreamTurnSource(message) : claudeStreamTurnStartSource(message)
     turn.ensureOpen(message, source, observedAt)
-    if (!delta) {
-      return false
+    if (delta) {
+      streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
     }
-    streamedText.append(delta.identity, delta.text, delta.parentToolUseId)
-    return true
+    return delta !== null || thinking
   }
 
   const messageContext: ClaudeMessageJournalContext = {
@@ -165,12 +164,14 @@ export function createClaudeJournalTranslator(
     tools,
     streamedBlocks,
     streamedText,
+    streamedThinking,
     subagents,
     toolOrigins,
     backgroundTasks,
     providerFallback,
     corrections,
-    turn
+    turn,
+    authenticationFailures: new ClaudeAuthenticationFailures(deps.account)
   }
 
   const resultContext: ClaudeResultJournalContext = { ...messageContext, prompts, context }
@@ -179,16 +180,14 @@ export function createClaudeJournalTranslator(
     message: Record<string, unknown>,
     startsTurn: boolean,
     observedAt: number,
-    requestedAt?: number,
-    openedBy?: string
-  ): boolean =>
-    journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt, openedBy)
+    requestedAt?: number
+  ): boolean => journalClaudeMessage(messageContext, message, startsTurn, observedAt, requestedAt)
 
   return {
     handle: (event) => {
       if (event.type === 'ended') {
         prompts.retryPendingCancellations()
-        streamedText.flush()
+        flush()
         subagents.settleSession()
         backgroundTasks.settleSession()
         // The host saw the child end, so the turn's end is observed, not lost. Whether it was a
@@ -227,10 +226,14 @@ export function createClaudeJournalTranslator(
       // writes, so an announcement landing in this same pass has to be visible
       // to it or the row is stamped provisionally one line too early.
       const announced = event.type === 'message' && subagents.observeSystemFrame(event.message)
-      streamedText.flush()
+      // Only ahead of a frame that can write a row: one per thinking token rewrote the whole row.
+      if (!(event.type === 'message' && isClaudeProgressFrame(event.message))) {
+        flush()
+      }
       if (announced) {
         corrections.retry()
         streamedText.reattribute()
+        streamedThinking.reattribute()
       }
       if (event.type === 'prompt') {
         prompts.handle(event)
@@ -250,8 +253,7 @@ export function createClaudeJournalTranslator(
             event.message,
             event.startsTurn === true,
             event.observedAt ?? Date.now(),
-            event.requestedAt,
-            event.clientMessageId
+            event.requestedAt
           )
         ) {
           providerFallback.append(
@@ -292,12 +294,12 @@ export function createClaudeJournalTranslator(
     get openTurnInLiveProviderCycle() {
       return turn.openedInLiveProviderCycle
     },
-    flush: streamedText.flush,
+    flush,
     childToolOwner: childQueries.childToolOwner,
     childActivity: childQueries.childActivity,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),
     get pendingStreamedBlocks() {
-      return streamedText.pending
+      return streamedText.pending + streamedThinking.pending
     },
     get contextActivity() {
       return context.activityRevision
@@ -308,9 +310,10 @@ export function createClaudeJournalTranslator(
     modelMayHaveChanged: () => context.modelMayHaveChanged(),
     modelWritten: (model) => context.modelWritten(model),
     dispose: () => {
-      streamedText.flush()
+      flush()
       context.dispose()
       streamedText.dispose()
+      streamedThinking.dispose()
       tools.clear()
       prompts.clear()
       streamedBlocks.clear()

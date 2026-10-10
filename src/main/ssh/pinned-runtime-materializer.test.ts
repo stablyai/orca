@@ -11,12 +11,13 @@ import {
   type ServerTarget
 } from '../../shared/node-runtime-pin'
 import { setMainHttpClient } from '../network/http-client'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { materializeCachedNodeRuntime } from './pinned-runtime-materializer'
+import { RUNTIME_ARCHIVE_RETRY_DELAYS_MS } from './runtime-archive-download'
 
 const extraction = vi.hoisted(() => ({ executable: new Uint8Array(), member: '' }))
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(async (spec: { args: string[] }) => {
     const flag = spec.args.includes('-C') ? '-C' : '-d'
     const extracted = join(spec.args[spec.args.indexOf(flag) + 1]!, ...extraction.member.split('/'))
@@ -164,7 +165,7 @@ describe('materializeCachedNodeRuntime', () => {
     await writeFile(join(cacheRoot, 'plain-file'), 'not a directory')
     const { runProcess: spawnForReal } = await vi.importActual<{
       runProcess: typeof runProcess
-    }>('../../shared/child-process/run-process')
+    }>('@orca/process-host')
     vi.mocked(runProcess).mockImplementationOnce(spawnForReal)
     vi.stubEnv('ORCA_UNZIP_BIN', path())
 
@@ -273,15 +274,26 @@ it('allows a progressing download to exceed two minutes', async () => {
   expect(await readFile(await pending)).toEqual(Buffer.from(extraction.executable))
 })
 
-it('aborts a stalled body and removes the unfinished download', async () => {
+it('retries a stalled body, then gives up and removes the unfinished download', async () => {
   vi.useFakeTimers()
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const cancel = vi.fn()
   const fetcher = vi.fn<typeof fetch>(async () => new Response(new ReadableStream({ cancel })))
   const pending = materializeCachedNodeRuntime(TARGET, cacheRoot, { fetcher })
   const rejected = expect(pending).rejects.toThrow('Node download stalled')
-  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
-  await vi.advanceTimersByTimeAsync(120_000)
+  const attempts = RUNTIME_ARCHIVE_RETRY_DELAYS_MS.length + 1
+  // Real file I/O sits between the timers, so step the clock until each attempt shows.
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(fetcher).toHaveBeenCalledTimes(attempt)
+    })
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(cancel).toHaveBeenCalledTimes(attempt)
+    })
+  }
   await rejected
-  expect(cancel).toHaveBeenCalledOnce()
+  expect(fetcher).toHaveBeenCalledTimes(attempts)
   expect(await readdir(runtimeDirFor())).toEqual([])
 })

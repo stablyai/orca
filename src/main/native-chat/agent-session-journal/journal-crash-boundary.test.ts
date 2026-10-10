@@ -26,13 +26,14 @@ import {
   type ProviderHistoryWindow
 } from './journal-submission-reconciler'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const TURN_ID = '019fd8ca-edbe-7c43-b231-4c7aea3a2d89'

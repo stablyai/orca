@@ -3,9 +3,9 @@
 // child back: the host accepts the message, and its delivery restarts the child and hands the
 // message to the new owner, instead of parking it behind a lease nothing would ever re-acquire.
 //
-// A child is published before it has proven its start, and it owns the send from that moment: the
-// message is handed to it. When the child exits first, the exit settlement rejects the message and
-// writes the cause into the chat, once, and the next send is a fresh restart.
+// A child is published before it has proven its start, and the host holds the send until it does,
+// then hands it over. When the child exits first, the message was never handed over: it is rejected
+// with the cause, written into the chat once, and the next send is a fresh restart.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -30,6 +30,8 @@ import {
 } from './structured-agent-session-host-test-data'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -62,7 +64,8 @@ function sendEnvelope(
   }
 }
 
-/** A send is accepted at once and handed to the child delivery finds or starts. */
+/** A send is accepted at once; delivery finds or starts its child and holds it until that child
+ *  proves its start. */
 async function send(
   text: string,
   fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -75,10 +78,16 @@ async function send(
     value: { submission: { dispatchState: 'pending', handoverRecorded: true } }
   })
   const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
+  await eventually(() =>
+    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
+  )
+  return clientMessageId
+}
+
+async function handedOver(clientMessageId: string): Promise<void> {
   await eventually(async () =>
     expect((await submission(clientMessageId))?.handedOverAt).toBeDefined()
   )
-  return clientMessageId
 }
 
 /** The child of the current acquisition, as the adapter would identify it in a lifecycle event. */
@@ -95,7 +104,8 @@ function proveStarted(): Promise<void> {
     type: 'started',
     ...currentChild(),
     reportedOptions: { model: 'sonnet' },
-    restoreSkippedOptions: []
+    restoreSkippedOptions: [],
+    optionRevision: host.collaboratorsForTests().runtimeState.optionRevisions.current(SESSION)
   })
 }
 
@@ -135,7 +145,7 @@ beforeEach(async () => {
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     link: {
       linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
+      handle: codexProviderHandle(THREAD),
       // A re-acquire resumes the thread the first child minted, as a real adapter does.
       origin: generation === 0 ? ('created' as const) : ('resumed' as const),
       mintedAtFence: fence,
@@ -147,6 +157,7 @@ beforeEach(async () => {
   dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
+    agents: NO_STRUCTURED_AGENTS,
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter: {
@@ -181,21 +192,31 @@ describe('a send into a published session whose child ended before startup', () 
     expect(acquire).toHaveBeenCalledOnce()
   })
 
-  it('restarts the child and admits the message against it before it has proven its start', async () => {
+  it('restarts the child and holds the message for it until it proves its start', async () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
-    await send('hello again', releasedFence)
+    const first = await send('hello again', releasedFence)
 
-    // Accepted at the lost owner's fence and handed to the child delivery started, once.
+    // Accepted at the lost owner's fence, held for the child delivery started.
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
-    expect(dispatch).toHaveBeenCalledOnce()
+    expect(dispatch).not.toHaveBeenCalled()
     const current = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     expect(current).toBeGreaterThan(releasedFence)
 
-    // Once proven, the next send meets a live owner and restarts nothing.
+    // Proven, the child is handed the message, once.
     await proveStarted()
-    await send('and again', current)
+    await handedOver(first)
+    expect(dispatch).toHaveBeenCalledOnce()
+
+    // The next send meets a live owner and restarts nothing. The child echoes the first message,
+    // as a live one does, so the next is not held behind a turn still opening.
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: first,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
+    })
+    await handedOver(await send('and again', current))
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenCalledTimes(2)
   })
@@ -207,8 +228,10 @@ describe('a send into a published session whose child ended before startup', () 
     const held = await send('still not signed in', releasedFence)
     await exitBeforeProof()
 
-    // The child never proved its start, so it accepted nothing: the exit rejects the message this
-    // host admitted, so nothing pins the session and Retry stays offered, and one row names the cause.
+    // The child never proved its start, so it was handed nothing: the message is rejected, so
+    // nothing pins the session and Retry stays offered, and one row names the cause.
+    await eventually(async () => expect((await submission(held))?.dispatchState).toBe('rejected'))
+    expect((await submission(held))?.handedOverAt).toBeUndefined()
     expect(await submission(held)).toMatchObject({
       dispatchState: 'rejected',
       reason: 'Codex stopped before it finished starting. Send your message to try again.',
@@ -236,23 +259,27 @@ describe('a send into a published session whose child ended before startup', () 
     // One spawn per user action: nothing restarted it a second time.
     expect(acquire).toHaveBeenCalledTimes(2)
 
-    // Retry is a fresh action: it restarts once and is handed to the new child.
-    await send('signed in now')
+    // Retry is a fresh action: it restarts once and is handed to the new child once it proves itself.
+    const retry = await send('signed in now')
     expect(acquire).toHaveBeenCalledTimes(3)
-    expect(dispatch).toHaveBeenCalledTimes(2)
+    await proveStarted()
+    await handedOver(retry)
+    expect(dispatch).toHaveBeenCalledOnce()
     expect((await journalStatuses()).slice(rowsBefore)).toHaveLength(1)
   })
 })
 
 describe('a send while the child of the first start is still proving itself', () => {
-  it('is handed to the starting child, and nothing restarts it', async () => {
-    await send('hello')
+  it('is held for the starting child, handed over once it proves its start, and restarts nothing', async () => {
+    const id = await send('hello')
 
-    expect(dispatch).toHaveBeenCalledOnce()
+    expect(dispatch).not.toHaveBeenCalled()
     expect(acquire).toHaveBeenCalledOnce()
 
     await proveStarted()
 
+    await handedOver(id)
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(acquire).toHaveBeenCalledOnce()
     expect(await journalStatuses()).toEqual([])
   })
@@ -263,6 +290,7 @@ describe('a send while the child of the first start is still proving itself', ()
 
     await exitBeforeProof()
 
+    await eventually(async () => expect((await submission(held))?.dispatchState).toBe('rejected'))
     expect(await submission(held)).toMatchObject({
       dispatchState: 'rejected',
       reason: 'Codex stopped before it finished starting. Send your message to try again.',
@@ -279,7 +307,7 @@ describe('a send while the child of the first start is still proving itself', ()
   it('leaves a send against a proven child alone', async () => {
     await proveStarted()
 
-    await send('hello')
+    await handedOver(await send('hello'))
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(dispatch).toHaveBeenCalledOnce()

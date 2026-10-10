@@ -53,7 +53,6 @@ function createHandlerParams(toggleDir: (worktreeId: string, dirPath: string) =>
     toggleDir,
     loadDir: vi.fn().mockResolvedValue(true),
     statPath: vi.fn().mockResolvedValue({ isDirectory: true }),
-    authorizeExternalPath: vi.fn(),
     markPathAsDirectory: vi.fn(),
     setSelectedPath: vi.fn(),
     scrollRef: createRef<HTMLDivElement>()

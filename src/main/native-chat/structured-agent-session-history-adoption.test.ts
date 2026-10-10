@@ -10,6 +10,10 @@ import {
   structuredAdoptionConflictError,
   type StructuredAgentSessionAdoptionOwnership
 } from './structured-agent-session-history-adoption'
+import {
+  claudeProviderHandle,
+  codexProviderHandle
+} from '../../shared/agent-session-provider-handle-encoding'
 
 const OPERATION = '1800000000000-00000000000000000000000000000001'
 
@@ -30,7 +34,7 @@ function committedReplay(overrides: { callerKey?: string; operationId?: string }
           origin: 'adopted',
           mintedAtFence: 1,
           observedAt: 1_800_000_000_000,
-          handle: { provider: 'codex', threadId: 'thread-1' }
+          handle: codexProviderHandle('thread-1')
         }
       ],
       accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex-original' }
@@ -128,11 +132,7 @@ describe('findCommittedStructuredAgentSessionAdoptionReplay', () => {
     record.providerHandleChain[0] = {
       ...record.providerHandleChain[0]!,
       origin: 'adopted',
-      handle: {
-        provider: 'claude',
-        sessionId: 'provider-session-alpha-1',
-        leafUuid: 'leaf-1'
-      }
+      handle: claudeProviderHandle('provider-session-alpha-1', 'leaf-1')
     }
 
     expect(

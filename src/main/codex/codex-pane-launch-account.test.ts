@@ -75,34 +75,6 @@ describe('resolveCodexPaneLaunchAccount', () => {
     })
   })
 
-  it('records a non-comparable route for a pane-local custom home', () => {
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: false,
-        launchCodexHomePath: '/data/codex-runtime-home/home',
-        recordComparableHomeRoute: false,
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: settings({ host: null }),
-        target: { runtime: 'host' }
-      })
-    ).toEqual({ selectionKey: 'host', accountId: null, homeRoute: 'custom-home' })
-  })
-
-  it('keeps an account-owned route comparable when a pane override is ignored', () => {
-    const accounts = [managedAccount({ id: 'account-a' })]
-
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: false,
-        launchCodexHomePath: '/data/codex-accounts/account-a/home',
-        recordComparableHomeRoute: false,
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: settings({ host: 'account-a', accounts }),
-        target: { runtime: 'host' }
-      })
-    ).toEqual({ selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' })
-  })
-
   it('maps a resume redirected to the real system home to the system-default account', () => {
     expect(
       resolveCodexPaneLaunchAccount({

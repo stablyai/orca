@@ -19,7 +19,6 @@ import {
   beginPtySpawnForWorktree
 } from '../host-env/fresh-spawn-routing'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../../pty/pi-process-owner-env'
 import { resolveConfiguredTerminalShellArgs } from '../configured-terminal-shell-args'
@@ -28,6 +27,7 @@ import { planCodexNoDaemonLaunch } from '../../../pty/codex-no-daemon-launch-com
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { getStartupTerminalIngressIntent } from '../../terminal-startup-color-query-replies'
 import {
+  joinPaneSpawn,
   makePaneSpawnReservationKey,
   reservePaneSpawn,
   paneSpawnReservationsByOwnerKey
@@ -35,6 +35,7 @@ import {
 import type { RuntimePtySpawnState } from './spawn-state'
 import { applyAgentWorkspaceTrustToSpawn } from '../../../agent-workspace-trust-spawn'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
+import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 
 /** Headless spawns need the same host-side environment isolation as desktop spawns. */
 export async function buildRuntimePtySpawnOptions(
@@ -46,9 +47,6 @@ export async function buildRuntimePtySpawnOptions(
 
   // Why here: every provider (local, daemon, SSH relay, WSL) spawns from this env.
   ctx.env = withCodexTerminalServerIsolationEnv(ctx.env, ctx.deps.getSettings?.())
-  const authEnvToDelete = ctx.claudeAuth?.stripAuthEnv
-    ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
-    : undefined
   ctx.spawnOptions = {
     cols: args.cols,
     rows: args.rows,
@@ -73,7 +71,6 @@ export async function buildRuntimePtySpawnOptions(
     args.onPtySpawnCommitted?.()
   }
   ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
-    authEnvToDelete,
     args.envToDelete ?? [],
     // Persistent daemons and older SSH hosts must not resurrect a parent Pi's ownership.
     PI_PROCESS_OWNER_ENV_KEYS,
@@ -85,20 +82,12 @@ export async function buildRuntimePtySpawnOptions(
       ? getLegacyOpenCodeEnvKeysToDelete(ctx.env, getAppEnvironment().getPath('userData'))
       : [],
     // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
-    getInheritedAgentSessionStampEnvKeysToDelete(ctx.env)
-  )
-  if (ctx.skipCodexHomeEnv) {
-    ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(
-      ctx.spawnOptions.envToDelete,
-      CODEX_HOME_ENV_KEYS
-    )
-  } else if (ctx.stripInheritedOrcaCodexHome) {
+    getInheritedAgentSessionStampEnvKeysToDelete(ctx.env),
+    ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the daemon owns a persistent inherited environment that may
     // differ from main. ORCA_CODEX_HOME asks it to compare/delete the pair.
-    ctx.spawnOptions.envToDelete = mergePtyEnvDeletions(ctx.spawnOptions.envToDelete, [
-      'ORCA_CODEX_HOME'
-    ])
-  }
+    ctx.stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
+  )
   if (ctx.codexResumeHomeSelected) {
     ctx.spawnOptions.envToDelete = removeCodexHomeDeletionRequests(ctx.spawnOptions.envToDelete)
   }
@@ -111,6 +100,21 @@ export async function buildRuntimePtySpawnOptions(
     env: ctx.env,
     envToDelete: ctx.spawnOptions.envToDelete
   })
+  const openCodeLaunch = await prepareOpenCodePtyLaunch({
+    command: ctx.launchCommand,
+    agent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+    env: ctx.env,
+    envToDelete: (ctx.spawnOptions.envToDelete ??= []),
+    cwd: ctx.cwd,
+    connectionId: args.connectionId,
+    isFreshLaunch: !ctx.preAdoptedStablePane && ctx.launchCommand !== undefined,
+    ...(ctx.codexSelectionTarget.runtime === 'wsl'
+      ? { wsl: { distro: ctx.expectedWslDistro ?? undefined } }
+      : {})
+  })
+  ctx.env = openCodeLaunch.env
+  ctx.launchCommand = openCodeLaunch.command
+  ctx.spawnOptions.env = ctx.env
   promoteAgentTeamsShimPath(ctx.env, ctx.requestedAgentTeamsPath)
   const noDaemonLaunch = planCodexNoDaemonLaunch({
     command: ctx.launchCommand,
@@ -250,8 +254,8 @@ export async function buildRuntimePtySpawnOptions(
     const existingPaneSpawn = ctx.spawnIdentityPaneKey
       ? paneSpawnReservationsByOwnerKey.get(resolvedPaneSpawnReservationKey!)
       : undefined
-    if (existingPaneSpawn) {
-      const concurrentResult = await existingPaneSpawn.promise
+    const concurrentResult = existingPaneSpawn ? await joinPaneSpawn(existingPaneSpawn) : null
+    if (concurrentResult) {
       const concurrentOwner = resolveStablePaneOwner(
         ctx.deps.runtime,
         ctx.deps.store,

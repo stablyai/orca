@@ -19,6 +19,8 @@ import {
   failedAcquisitionSettlement
 } from './structured-agent-session-failed-create-refusal'
 import { withObservedProviderExit } from './structured-agent-session-failure-text'
+import { withMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
+import { providerDiagnostic, withProviderDiagnostic } from '../../../shared/agent-session-failure'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 
 const CLAUDE_CREATE = {
@@ -35,6 +37,22 @@ function replay(outcome: Parameters<typeof resolveAgentSessionReplayOutcome>[0][
 }
 
 describe('a ledger replay names the details its first answer did', () => {
+  it('keeps ACP startup detail and direct-create guidance in the first reply and replay', () => {
+    const error = withProviderDiagnostic(
+      new AgentSessionAcquisitionRefusal('signed out', 'notSignedIn'),
+      providerDiagnostic('Grok needs its API key.', 'person')
+    )
+    const wording = {
+      record: { ...agentSessionRecordFixture(), provider: 'grok' as const },
+      newSession: true
+    }
+    const first = failedAcquisitionRefusal(error, wording)
+    const replayed = replay(failedAcquisitionSettlement(error, wording).outcome)
+    expect(first?.refusal.message).toBe(
+      'Sign in to Grok with `grok login` on the computer running this chat. Grok needs its API key.'
+    )
+    expect(replayed).toMatchObject({ refusal: { message: first?.refusal.message } })
+  })
   it.each([
     [new AgentSessionAcquisitionRefusal('not signed in', 'notSignedIn'), 'notSignedIn'],
     [
@@ -44,7 +62,14 @@ describe('a ledger replay names the details its first answer did', () => {
       'providerStartFailed'
     ],
     // Gone now, with no exit observed: no situation, on the first answer or the replay.
-    [new AgentSessionAcquisitionExitProvenError(new Error('spawn codex ENOENT')), undefined]
+    [new AgentSessionAcquisitionExitProvenError(new Error('spawn codex ENOENT')), undefined],
+    // Its own spawn found no executable: the CLI is not installed.
+    [
+      new AgentSessionAcquisitionExitProvenError(
+        withObservedProviderExit(withMissingProviderExecutable(new Error('exited (code 127)')))
+      ),
+      'cliMissing'
+    ]
   ])('for a failed create: %s', (error, reason) => {
     const first = failedAcquisitionRefusal(error, CLAUDE_CREATE)
     const replayed = replay(failedAcquisitionSettlement(error, CLAUDE_CREATE).outcome)
@@ -57,6 +82,24 @@ describe('a ledger replay names the details its first answer did', () => {
       expect(replayed).not.toHaveProperty('refusal.details')
     }
   })
+
+  it.each(['managed', 'system'] as const)(
+    'keeps %s sign-in instructions in the first reply and ledger replay',
+    (account) => {
+      const error = new AgentSessionAcquisitionRefusal('signed out', 'notSignedIn', account)
+      const first = failedAcquisitionRefusal(error, CLAUDE_CREATE)
+      const replayed = replay(failedAcquisitionSettlement(error, CLAUDE_CREATE).outcome)
+      expect(first?.refusal.details).toEqual({ reason: 'notSignedIn', account })
+      expect(replayed).toMatchObject({
+        refusal: { details: first?.refusal.details, message: first?.refusal.message }
+      })
+      expect(first?.refusal.message).toContain(
+        account === 'system'
+          ? 'Run `claude auth login`'
+          : 'Sign in again in Claude Accounts settings.'
+      )
+    }
+  )
 
   it('for a create whose cleanup could not prove the child gone', () => {
     const outcome = failedAcquisitionSettlement(
@@ -86,7 +129,7 @@ describe('a ledger replay names the details its first answer did', () => {
         'Claude is not signed in for the selected account. Sign in with the Claude CLI for this CLAUDE_CONFIG_DIR, then retry.',
         'notSignedIn'
       ),
-      'Claude is not signed in for the selected account. Sign in, then send your message again.'
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings."
     ],
     [
       AgentSessionAcquisitionRefusal.historyTooLarge(

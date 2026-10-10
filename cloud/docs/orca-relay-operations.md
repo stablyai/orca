@@ -513,6 +513,28 @@ pause through `applyRegionalRehomeControl` waits 1 s for that row, 3 attempts,
 so it can fail during one commit: retry a pause that fails once, and do not
 treat that as a fault.
 
+Each hold site also reports its own p99: `inventoryHoldMsP99`,
+`rehomeTargetRowHoldMsP99` and `isolatedReplacementHoldMsP99`, the last being
+the regional target rows a drain return locks; a site with no holds in the
+interval reports 0, so read these filtered to values above 0. Directors also
+report lane slot times (`stickyServiceMsP50/P99`, `drainReturnServiceMsP50/P95`,
+omitted when the lane served nothing; a sticky slot held only for a drain-return
+or unverified host's verification read counts too, so its p50 moves with that
+share), every `/v1/assign` 503 by cause in
+`assign503sByCauseDelta`, and `assignNonDrain503sDelta`, which leaves out the
+scheduled `drain-return-deferred` answers a fast drain produces by design.
+Every 5 s each director samples `pg_stat_activity` for relay backends waiting
+on a lock, keyed by waiter role, table and holder role
+(`dbLockWaitersByKeyDelta`). The holder is the root of the wait chain, and the
+table is the first relay table the waiting statement names. The sample runs
+on the director's own 3-connection pool, so when every connection is waiting on
+a lock it queues behind them and undercounts director waiters; a dedicated
+sampler connection would fix that. Summed waiters divided by `dbLockWaitSamplesDelta`
+is the mean number waiting, i.e. lock-wait seconds per second; directors and
+cells share one database user, so Query Insights cannot make this split.
+Reconciliation logs `orca_relay_reservation_drift` for each cell whose
+`reserved_requests` it corrected.
+
 `host-cooldown-ms` is the minimum gap between two rehomes of one host. It bounds the damage from
 a desktop whose region probe flips: without it the host would be dragged back across the ocean on
 every flip, since the preference age never expires while the host keeps reconnecting.

@@ -110,6 +110,9 @@ describe('dashboard popout clipboard access', () => {
       'Unauthorized clipboard IPC sender'
     )
     expect(() =>
+      handlers.get('clipboard:restoreNativeChatPastes')?.(popoutEvent, ['/etc/passwd'])
+    ).toThrow('Unauthorized clipboard IPC sender')
+    expect(() =>
       handlers.get('clipboard:writeFile')?.(popoutEvent, {
         filePath: '/tmp/copied-file.txt',
         connectionId: 'ssh-secret'

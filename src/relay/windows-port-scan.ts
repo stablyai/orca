@@ -1,9 +1,9 @@
 import { readWindowsProcessTable } from '../main/windows/windows-process-table'
-import { runProcess } from '../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import {
   windowsPowerShellPath,
   windowsSystem32Binary
-} from '../shared/child-process/windows-system-binary'
+} from '@orca/process-host/windows-system-binary'
 import { getProcessOutputFields } from '../shared/process-output-field-scanner'
 import type { DetectedPort } from './port-scan-handler'
 import { buildRelayCommandEnv } from './relay-command-env'

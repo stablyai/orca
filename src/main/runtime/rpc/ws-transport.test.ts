@@ -1,10 +1,12 @@
 import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, afterEach, vi } from 'vitest'
 import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
+import { rejectNodeWebSocketOverCapacity } from './node-websocket-lifecycle'
 import { loadOrCreateTlsCertificate } from '../tls-certificate'
 
 // Why: disable TLS verification for self-signed certs in tests.
@@ -433,9 +435,7 @@ describe('WebSocketTransport', () => {
 
     vi.useFakeTimers()
     try {
-      ;(transport as unknown as { rejectOverCapacity(ws: WebSocket): void }).rejectOverCapacity(
-        serverSocket!
-      )
+      rejectNodeWebSocketOverCapacity(serverSocket!)
       vi.advanceTimersByTime(1_000)
     } finally {
       vi.useRealTimers()
@@ -453,6 +453,24 @@ describe('WebSocketTransport', () => {
     await transport.start()
 
     await transport.stop()
+  })
+
+  it('stops while an HTTP client holds an unanswered request open', async () => {
+    const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    transports.push(transport)
+    await transport.start()
+    const socket = connect(transport.resolvedPort, '127.0.0.1')
+    await new Promise<void>((resolve) => socket.once('connect', () => resolve()))
+    socket.on('error', () => {})
+    // Why: the server's automatic 100 Continue proves the request is parsed and in flight.
+    const continued = new Promise<void>((resolve) => socket.once('data', () => resolve()))
+    socket.write(
+      'POST /unanswered HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 1\r\nExpect: 100-continue\r\n\r\n'
+    )
+    await continued
+
+    await transport.stop()
+    socket.destroy()
   })
 
   it('is safe to stop without starting', async () => {
@@ -727,6 +745,28 @@ describe('WebSocketTransport', () => {
         )
 
       await expect(transport.start()).rejects.toThrow('open EACCES')
+    })
+
+    it('tries the deterministic ladder before an OS-assigned port (#15490)', async () => {
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: 6768,
+        fallbackPort: 62944,
+        fallbackLadder: [6769, 6770, 6771]
+      })
+      transports.push(transport)
+      const attempted: number[] = []
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      withListen.tryListen = async (port: number) => {
+        attempted.push(port)
+        if (port !== 6770) {
+          throw Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' })
+        }
+      }
+
+      await transport.start()
+      expect(attempted).toEqual([62944, 6768, 6769, 6770])
+      expect(transport.persistedFallbackFailed).toBe(true)
     })
 
     it('retries the persisted fallback port before an OS-assigned one', async () => {

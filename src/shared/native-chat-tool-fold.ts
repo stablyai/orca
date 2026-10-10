@@ -4,12 +4,17 @@ import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
-  type NativeChatMessage,
-  type NativeChatToolCallBlock,
-  type NativeChatToolResultBlock
+  type NativeChatMessage
 } from './native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
+import {
+  CODEX_PLAN_UPDATED_FRAME_KIND,
+  isWordlessProviderFrameMessage
+} from './native-chat-provider-frame-summary'
+import { FoldedToolResultSources } from './native-chat-folded-tool-results'
+
+export { pairToolBlocks, type NativeChatToolPair } from './native-chat-tool-pairs'
 
 function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
@@ -48,34 +53,25 @@ function isBackgroundTaskMessage(message: NativeChatMessage): boolean {
   return message.blocks.some(isBackgroundTaskBlock)
 }
 
+/** A stored-only provider event draws nothing, so it must not split the run around it. A plan
+ *  update still does: the desktop draws it in place as the task list. */
+function isUndrawnProviderFrameMessage(message: NativeChatMessage): boolean {
+  return (
+    isWordlessProviderFrameMessage(message) &&
+    !message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        block.providerFrame?.provider === 'codex' &&
+        block.providerFrame.kind === CODEX_PLAN_UPDATED_FRAME_KIND
+    )
+  )
+}
+
 function isInterruptionBoundary(message: NativeChatMessage): boolean {
   return message.blocks.some(
     (block) =>
       block.type === 'text' && block.text.trim().toLowerCase().startsWith('[request interrupted')
   )
-}
-
-/** Drop tool results the renderer cannot pair within their folded message. */
-function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMessage | null {
-  let blocks: NativeChatBlock[] | undefined
-  let unansweredCalls = 0
-  for (let index = 0; index < message.blocks.length; index++) {
-    const block = message.blocks[index]
-    if (isToolCallBlock(block)) {
-      unansweredCalls += 1
-    } else if (isToolResultBlock(block)) {
-      if (unansweredCalls === 0) {
-        blocks ??= message.blocks.slice(0, index)
-        continue
-      }
-      unansweredCalls -= 1
-    }
-    blocks?.push(block)
-  }
-  if (!blocks) {
-    return message
-  }
-  return blocks.length > 0 ? { ...message, blocks } : null
 }
 
 /** A run drawn at its assistant row can hold calls newer than rows drawn below it. */
@@ -88,18 +84,27 @@ function recordFoldedPosition(target: NativeChatMessage, folded: NativeChatMessa
 /** Fold consecutive tool-only messages into their preceding assistant turn. */
 export function foldToolMessages(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
   const output: NativeChatMessage[] = []
+  const sources = new FoldedToolResultSources(messages)
   let mutableAssistantIndex = -1
   let clonedAssistantIndex = -1
   for (const message of messages) {
+    if (message.unpairedToolResults) {
+      output.push(message)
+      mutableAssistantIndex = -1
+      clonedAssistantIndex = -1
+      continue
+    }
     if (isHarnessSidecarToolMessage(message) && mutableAssistantIndex >= 0) {
       const index = mutableAssistantIndex
       const assistant = output[index]
       if (assistant?.role === 'assistant') {
+        const results = message.blocks.filter(isToolResultBlock)
+        sources.append(index, assistant, message, results, output.length, output.length)
         if (clonedAssistantIndex !== index) {
           output[index] = { ...assistant, blocks: [...assistant.blocks] }
           clonedAssistantIndex = index
         }
-        output[index].blocks.push(...message.blocks.filter(isToolResultBlock))
+        output[index].blocks.push(...results)
         recordFoldedPosition(output[index], message)
         output.push({
           ...message,
@@ -116,6 +121,7 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
         mutableAssistantIndex = -1
         continue
       }
+      sources.append(index, assistant, message, message.blocks, output.length)
       if (clonedAssistantIndex !== index) {
         output[index] = { ...assistant, blocks: [...assistant.blocks] }
         clonedAssistantIndex = index
@@ -131,73 +137,14 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
     } else if (
       !isSubagentRosterMessage(message) &&
       !isBackgroundTaskMessage(message) &&
+      !isUndrawnProviderFrameMessage(message) &&
       (!isNoiseMessage(message) || isInterruptionBoundary(message))
     ) {
       mutableAssistantIndex = -1
       clonedAssistantIndex = -1
     }
   }
-  const attributedOutput: NativeChatMessage[] = []
-  for (const message of output) {
-    const attributed = dropUnattributableToolResults(message)
-    if (attributed) {
-      attributedOutput.push(attributed)
-    }
-  }
-  return attributedOutput
-}
-
-export type NativeChatToolPair = {
-  call?: NativeChatToolCallBlock
-  result?: NativeChatToolResultBlock
-}
-
-/** Where in `unanswered` (oldest first) the call `result` answers is, or -1 for none. */
-function answeredToolCallIndex<T>(
-  unanswered: readonly T[],
-  result: NativeChatToolResultBlock,
-  callIdOf: (entry: T) => string | undefined
-): number {
-  if (result.callId === undefined) {
-    return unanswered.length > 0 ? 0 : -1
-  }
-  return unanswered.findIndex((entry) => callIdOf(entry) === result.callId)
-}
-
-/** Pair results to calls by `answeredToolCallIndex`. Every reader of a run pairs through this
- *  (`pairNativeChatToolResults` included), so they all agree on who owns an output. */
-export function pairToolBlocks(
-  blocks: readonly NativeChatBlock[],
-  limit = Infinity
-): NativeChatToolPair[] {
-  const pairs: NativeChatToolPair[] = []
-  /** Slots of retained calls not yet answered, oldest first. */
-  const callSlots: number[] = []
-  for (const block of blocks) {
-    if (pairs.length >= limit && callSlots.length === 0) {
-      break
-    }
-    if (block.type === 'tool-call') {
-      if (pairs.length < limit) {
-        callSlots.push(pairs.length)
-        pairs.push({ call: block })
-      }
-      continue
-    }
-    if (block.type !== 'tool-result') {
-      continue
-    }
-    const answered = answeredToolCallIndex(callSlots, block, (slot) => pairs[slot]?.call?.callId)
-    const [slot] = answered === -1 ? [] : callSlots.splice(answered, 1)
-    if (slot === undefined) {
-      if (pairs.length < limit) {
-        pairs.push({ result: block })
-      }
-    } else {
-      pairs[slot]!.result = block
-    }
-  }
-  return pairs
+  return sources.project(output)
 }
 
 export function splitNativeChatBlocks(blocks: readonly NativeChatBlock[]): {

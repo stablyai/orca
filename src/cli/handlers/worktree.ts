@@ -24,8 +24,8 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { printLineageSummary } from './worktree-lineage-summary'
+import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
@@ -33,24 +33,15 @@ import {
 } from '../worktree-project-target'
 import {
   assertWorktreeParentFlagsCompatible,
+  getEnvParentWorkspace,
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 import { getOptionalWorktreeUnreadFlag } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
+import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
-
-function getEnvParentWorkspace(): string | undefined {
-  const workspaceId = process.env.ORCA_WORKSPACE_ID
-  if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
-    return workspaceId
-  }
-  const worktreeId = process.env.ORCA_WORKTREE_ID
-  if (typeof worktreeId === 'string' && worktreeId.length > 0) {
-    return isWorkspaceKey(worktreeId) ? worktreeId : worktreeWorkspaceKey(worktreeId)
-  }
-  return undefined
-}
+import { assertReferenceWritesSupported, getCreateReferences } from '../reference-input'
 
 function getPresentStringFlag(
   flags: Map<string, string | boolean>,
@@ -142,7 +133,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       { limit: getOptionalPositiveIntegerFlag(flags, 'limit') }
     )
     await annotateOmittedHostScope(client, result.result)
-    printResult(result, json, formatWorktreePs)
+    const worktrees = result.result.worktrees.map(projectWorktreePsTerminalVerdict)
+    printResult({ ...result, result: { ...result.result, worktrees } }, json, () =>
+      formatWorktreePs(result.result)
+    )
   },
   'worktree list': async ({ flags, client, json }) => {
     const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreeListResult>>(
@@ -168,6 +162,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
+    const linkedItems = getCreateReferences(flags)
     assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
     const reviewLinks = getReviewTargetLinkFlags(flags)
@@ -206,38 +201,43 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const name = getRequiredStringFlag(flags, 'name')
     const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { repo })
-    const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo,
-      name,
-      displayName: name,
-      displayNameKind: 'user',
-      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      ...reviewLinks,
-      ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
-      runHooks: flags.get('run-hooks') === true,
-      activate,
-      // Why: the CLI pairs as a runtime device but is not a viewer, so caller-scoped
-      // delivery would make --activate a no-op against a remote runtime.
-      ...(activate ? { navigation: 'all' as const } : {}),
-      ...(setupDecision ? { setupDecision } : {}),
-      parentWorktree: explicitParentWorktree,
-      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
-      ...(envParentWorkspace ? { envParentWorkspace } : {}),
-      ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
-      noParent,
-      callerTerminalHandle,
-      // Why: marks the workspace as CLI-created so the sidebar can badge and
-      // filter it. Sent on every `worktree create` — hand-typed or agent-run.
-      cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
-      ...(startupAgent
-        ? {
-            startupAgent,
-            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
-            launchSource: 'cli'
-          }
-        : {})
-    })
+    if (linkedItems) {
+      await assertReferenceWritesSupported(client)
+    }
+    const result = await withSetupDecisionRecovery(
+      client.call<RuntimeWorktreeCreateResult>('worktree.create', {
+        repo,
+        name,
+        displayName: name,
+        displayNameKind: 'user',
+        baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+        ...reviewLinks,
+        ...linearIssueLink,
+        ...(linkedItems ? { linkedItems } : {}),
+        comment: getOptionalStringFlag(flags, 'comment'),
+        runHooks: flags.get('run-hooks') === true,
+        activate,
+        // CLI activation targets its runtime's desktop, never unrelated paired viewers.
+        ...(activate ? { navigation: 'host' as const } : {}),
+        ...(setupDecision ? { setupDecision } : {}),
+        parentWorktree: explicitParentWorktree,
+        ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
+        ...(envParentWorkspace ? { envParentWorkspace } : {}),
+        ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
+        noParent,
+        callerTerminalHandle,
+        // Why: marks the workspace as CLI-created so the sidebar can badge and
+        // filter it. Sent on every `worktree create` — hand-typed or agent-run.
+        cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
+        ...(startupAgent
+          ? {
+              startupAgent,
+              startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '',
+              launchSource: 'cli'
+            }
+          : {})
+      })
+    )
     printHookWarning(result.result, json)
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)

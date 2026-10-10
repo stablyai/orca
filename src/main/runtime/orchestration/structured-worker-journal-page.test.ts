@@ -17,6 +17,7 @@ import {
   readStructuredJournalPage,
   STRUCTURED_JOURNAL_PAGE_LIMIT
 } from './structured-worker-journal-page'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const host = vi.hoisted(() => {
   const state: { journal: AgentSessionJournal | null } = { journal: null }
@@ -71,7 +72,7 @@ beforeEach(async () => {
       workspaceId: 'ws-1',
       hostId: 'host-1',
       agent: 'claude',
-      providerHandle: { kind: 'claude', sessionId: 'claude-1', leafUuid: null }
+      providerHandle: claudeProviderHandle('claude-1', null)
     },
     stateDirectory: root,
     now: () => ++clock,

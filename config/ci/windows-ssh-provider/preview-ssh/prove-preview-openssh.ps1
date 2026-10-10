@@ -2,7 +2,7 @@
 # -HiddenTools: the private accounts are denied every machine PATH directory holding one of these
 # executables, and their own PATH carries logging shims for them, so SSH sessions have no host toolchain.
 # -HostCellProbe receives a context hashtable (accounts, port, keys, shim log) once provisioning passes.
-param([Parameter(Mandatory=$true)][string]$Receipt,[string]$Archive,[Parameter(Mandatory=$true)][ValidateSet('arm64','x64')][string]$Arch,[ValidateSet('preview','inbox')][string]$Server='preview',[scriptblock]$ProductionRouteProbe,[ValidateRange(1,4)][int]$Accounts=1,[string[]]$HiddenTools=@(),[scriptblock]$HostCellProbe,[string]$InboxPreparationReceipt)
+param([Parameter(Mandatory=$true)][string]$Receipt,[string]$Archive,[Parameter(Mandatory=$true)][ValidateSet('arm64','x64')][string]$Arch,[ValidateSet('preview','inbox')][string]$Server='preview',[scriptblock]$ProductionRouteProbe,[ValidateRange(1,6)][int]$Accounts=1,[ValidateRange(0,6)][int]$ForwardingAccounts=0,[string[]]$HiddenTools=@(),[scriptblock]$HostCellProbe,[string]$InboxPreparationReceipt)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows-ssh-capability.ps1')
 $target=@{arm64=@{os='Arm64';folder='OpenSSH-ARM64';machine='0xAA64';archive='698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42'};x64=@{os='X64';folder='OpenSSH-Win64';machine='0x8664';archive='23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5'}}[$Arch]
@@ -246,6 +246,7 @@ PermitTunnel no
 PermitTTY no
 Subsystem sftp "$sftpServerPosix"
 LogLevel DEBUG1
+$(@($accountNames | Select-Object -Last $ForwardingAccounts | ForEach-Object {"Match User $_`n  AllowTcpForwarding local"}) -join "`n")
 "@ | Set-Content -LiteralPath $config -Encoding ascii
   Write-Stage 'server-config-validate-start'
   Invoke-Bounded $sshd @('-t','-f',$config) | Out-Null

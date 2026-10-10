@@ -11,7 +11,7 @@
  */
 import { createHash } from 'node:crypto'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
-import { unixSocketPathByteLimit } from '../../shared/unix-socket-path-limit'
+import { unixSocketPathByteLimit, unixSocketPathFits } from '../../shared/unix-socket-path-limit'
 
 export function remoteUnixSocketPathByteLimit(host: RemoteHostPlatform): number | null {
   if (isWindowsRemoteHost(host)) {
@@ -21,8 +21,10 @@ export function remoteUnixSocketPathByteLimit(host: RemoteHostPlatform): number 
 }
 
 export function remoteSocketPathFitsLimit(host: RemoteHostPlatform, sockPath: string): boolean {
-  const limit = remoteUnixSocketPathByteLimit(host)
-  return limit === null || Buffer.byteLength(sockPath, 'utf8') <= limit
+  return (
+    isWindowsRemoteHost(host) ||
+    unixSocketPathFits(sockPath, host.os === 'darwin' ? 'darwin' : 'linux')
+  )
 }
 
 /** Fixed-length, per-uid base. `/tmp` is the only POSIX directory whose length is not user-dependent. */

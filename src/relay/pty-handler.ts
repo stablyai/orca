@@ -4,7 +4,15 @@ import { resolveSynchronizedOutputSafeSplit } from '../shared/terminal-synchroni
 import { restoreManagedDataAccountEnvironment } from '../shared/managed-data-account-environment'
 import { createTerminalTitleTracker } from '../shared/terminal-output-side-effects'
 import { getDecorativeTitleGateKey } from '../shared/agent-decorative-title-signature'
+import type { ClaudeTerminalEvidence } from '../shared/claude-terminal-interrupt'
 import { FreebuffStatusProjection } from './freebuff-status-projection'
+import { probeOpenCodeLaunchCapabilities } from '../main/opencode/opencode-launch-capabilities'
+import type { OpenCodeCliCapabilities } from '../shared/opencode-cli-version'
+import {
+  applyOpenCodePluginSelection,
+  restoreOpenCodeCapabilities
+} from './opencode-plugin-selection'
+import { resolveCommandPathForRelay } from './preflight-handler'
 import { applyRelayAgentWorkspaceTrust } from './agent-workspace-trust-spawn'
 import type { IPty } from 'node-pty'
 import { killWithDescendantSweep } from '../main/pty-descendant-termination'
@@ -28,6 +36,13 @@ import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { applyScrubSafeAgentEnvAliases } from '../shared/agent-hook-scrub-safe-env'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import {
+  OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+  OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+  OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+  OPENCODE_STARTUP_PROMPT_BODY_ENV,
+  OPENCODE_STARTUP_PROMPT_SHELL_ENV
+} from '../shared/opencode-startup-prompt'
+import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
 } from '../shared/terminal-image-protocol'
@@ -35,6 +50,12 @@ import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
+import {
+  discardStagedStartupCommand,
+  stageStartupCommand,
+  startupStagingFailureNotice,
+  type StartupCommandStaging
+} from '../shared/startup-command-staging'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   isPathInsideOrEqual,
@@ -218,6 +239,7 @@ function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | 
 }
 
 type ManagedPty = {
+  openCodeCapabilities?: OpenCodeCliCapabilities
   freebuffStatus?: FreebuffStatusProjection
   id: string
   incarnationId: string
@@ -255,6 +277,8 @@ type ManagedPty = {
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
+  /** Kept past delivery: the typed line may never run if the shell dies first. */
+  stagedStartupCommand?: StartupCommandStaging
   /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
    *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
    *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
@@ -278,6 +302,7 @@ type ManagedPty = {
 }
 
 type RelayAgentSessionCreateResult = {
+  openCodeCapabilities?: OpenCodeCliCapabilities
   id: string
   incarnationId: string
   replay?: string
@@ -288,7 +313,6 @@ type RelayAgentSessionCreateResult = {
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
-const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
 
 type PendingPtyOutput = RelayPtySourceOutput & {
   data: string
@@ -334,6 +358,7 @@ function disposeManagedPty(managed: ManagedPty): void {
     return
   }
   managed.disposed = true
+  discardStagedStartupCommand(managed.stagedStartupCommand)
   // Why: clear the SIGKILL fallback timer so it can't fire pty.kill on an already-disposed instance.
   if (managed.killTimer) {
     clearTimeout(managed.killTimer)
@@ -449,6 +474,7 @@ type PtyProcessSummary = {
 }
 
 type SerializedPtyEntry = {
+  openCodeCapabilities?: OpenCodeCliCapabilities
   id: string
   pid: number
   cols: number
@@ -736,6 +762,16 @@ export class PtyHandler {
     this.agentPresenceTrigger = listener
   }
 
+  private claudeTerminalEvidenceListener:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null = null
+
+  setClaudeTerminalEvidenceListener(
+    listener: ((paneKey: string, evidence: ClaudeTerminalEvidence) => void) | null
+  ): void {
+    this.claudeTerminalEvidenceListener = listener
+  }
+
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
@@ -1008,12 +1044,11 @@ export class PtyHandler {
     if (heldBytes) {
       managed.startupIngress?.accept(heldBytes)
     }
-    const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
-    const payload = buildStartupCommandSubmission(startup.command, {
-      submit,
-      bracketedPasteSafe: startup.waitForShellReady
-    })
+    const payload = buildStartupCommandSubmission(
+      managed.stagedStartupCommand?.command ?? startup.command,
+      { bracketedPasteSafe: startup.waitForShellReady }
+    )
     managed.startupCommand = undefined
     managed.pty.write(payload)
   }
@@ -1094,6 +1129,9 @@ export class PtyHandler {
     let lastTitleGateKey: string | null = null
     const presenceTriggers = createTerminalTitleTracker({
       onTitle: (normalizedTitle, rawTitle, meta) => {
+        if (managed.paneKey && !meta?.staleWorkingTitleClear) {
+          this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'title', title: rawTitle })
+        }
         // Why: spinner frames arrive several times a second; only a real title change re-checks.
         const gateKey = getDecorativeTitleGateKey(rawTitle, normalizedTitle)
         if (gateKey !== lastTitleGateKey && !meta?.staleWorkingTitleClear) {
@@ -1127,6 +1165,9 @@ export class PtyHandler {
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       presenceTriggers.dispose()
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'reset' })
+      }
       managed.physicalExit?.markExited()
       if (managed.disposed) {
         return
@@ -1836,9 +1877,6 @@ export class PtyHandler {
       const { sourceActivation: _staleActivation, ...stableResult } = result
       return { ...stableResult, ...(sourceActivation ? { sourceActivation } : {}) }
     }
-    if (this.agentSessionCreateOperations.size >= AGENT_SESSION_CREATE_OPERATION_LIMIT) {
-      throw new Error('agent_session_operation_capacity')
-    }
     const operation = this.spawnOnce(params, context)
     this.agentSessionCreateOperations.set(operationId, operation)
     try {
@@ -1954,6 +1992,9 @@ export class PtyHandler {
         id: managed.id,
         incarnationId: managed.incarnationId,
         agentSessionEnsure: result,
+        ...(result.disposition === 'created' && managed.openCodeCapabilities
+          ? { openCodeCapabilities: managed.openCodeCapabilities }
+          : {}),
         ...(sourceActivation ? { sourceActivation } : {}),
         ...(adoptedReplay ? { replay: adoptedReplay } : {}),
         ...(managed.shellReadyArmed !== undefined
@@ -1982,6 +2023,7 @@ export class PtyHandler {
     incarnationId: string
     sourceActivation?: PtySourceReceivingActivation
     shellReadyArmed?: boolean
+    openCodeCapabilities?: OpenCodeCliCapabilities
   }> {
     const pty = await this.loadPty()
     if (!pty) {
@@ -2027,6 +2069,32 @@ export class PtyHandler {
       env,
       { id, paneKey, shell, command, launchAgent },
       envToDelete
+    )
+    delete spawnEnv.ORCA_OPENCODE_PLUGIN_API
+    // Relay input streams lack driving-input provenance, so native intent is unavailable.
+    for (const key of [
+      OPENCODE_STARTUP_PROMPT_SHA256_ENV,
+      OPENCODE_STARTUP_PROMPT_NONCE_ENV,
+      OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV,
+      OPENCODE_STARTUP_PROMPT_BODY_ENV,
+      OPENCODE_STARTUP_PROMPT_SHELL_ENV
+    ]) {
+      delete spawnEnv[key]
+    }
+    const openCodeCapabilities = await probeOpenCodeLaunchCapabilities({
+      command,
+      agent: launchAgent,
+      env: spawnEnv,
+      cwd,
+      hostIdentity: `relay:${process.platform}`,
+      resolveExecutable: (executable) => resolveCommandPathForRelay(executable, { env: spawnEnv }),
+      ...(isRelayWslShell(shell) ? { wsl: { distro: terminalWindowsWslDistro ?? undefined } } : {})
+    })
+    applyOpenCodePluginSelection(
+      spawnEnv,
+      envToDelete,
+      openCodeCapabilities,
+      isRelayWslShell(shell)
     )
     await applyRelayAgentWorkspaceTrust(params.agentWorkspaceTrust, launchAgent, spawnEnv, {
       wslShell: isRelayWslShell(shell)
@@ -2129,6 +2197,7 @@ export class PtyHandler {
     const ownerClientInstanceId =
       context === undefined ? null : (this.consumerIdentityResolver?.(context.clientId) ?? null)
     const managed: ManagedPty = {
+      ...(openCodeCapabilities ? { openCodeCapabilities } : {}),
       ...(launchAgent === 'freebuff'
         ? { freebuffStatus: new FreebuffStatusProjection(cols, rows) }
         : {}),
@@ -2183,11 +2252,28 @@ export class PtyHandler {
           }
         : {})
     }
+    if (managed.startupCommand?.providerDelivery && managed.startupCommand.command) {
+      managed.stagedStartupCommand = stageStartupCommand({
+        command: managed.startupCommand.command,
+        shellPath: shell,
+        orcaBuiltLine: launchAgent !== undefined
+      })
+      if (managed.stagedStartupCommand.failure) {
+        process.stderr.write(
+          `[pty-handler] Could not stage startup command for ${id}; typing it in full: ${managed.stagedStartupCommand.failure}\n`
+        )
+      }
+    }
     this.retiredIncarnations.delete(id)
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
       context && this.sourcePublication?.receivingActivation?.(id, context.clientId)
     this.wireAndStore(managed)
+    const stagingNotice =
+      managed.stagedStartupCommand && startupStagingFailureNotice(managed.stagedStartupCommand)
+    if (stagingNotice) {
+      managed.startupIngress?.accept(stagingNotice)
+    }
     if (context?.isStale() && !params.agentSessionEnsure && !params.agentSessionCreateOperationId) {
       // Why: if the client reconnected while pty.spawn was in flight, the
       // response is discarded and no renderer can own this PTY. Shut it down
@@ -2208,7 +2294,8 @@ export class PtyHandler {
       id,
       incarnationId: managed.incarnationId,
       ...(sourceActivation ? { sourceActivation } : {}),
-      shellReadyArmed: rendererShellReadySupported
+      shellReadyArmed: rendererShellReadySupported,
+      ...(openCodeCapabilities ? { openCodeCapabilities } : {})
     }
   }
 
@@ -2349,6 +2436,9 @@ export class PtyHandler {
         return
       }
       managed.pty.write(data)
+      if (managed.paneKey) {
+        this.claudeTerminalEvidenceListener?.(managed.paneKey, { kind: 'input', data })
+      }
     }
   }
 
@@ -3055,12 +3145,14 @@ export class PtyHandler {
               }
             )
           : undefined
+      const hostAgeMs = Math.max(0, Date.now() - managed.createdAt)
+      const agentSessionOwners = this.agentSessionOwners.listForPty(id)
       results.push({
         id,
         incarnationId: managed.incarnationId,
         cwd: managed.initialCwd,
         title,
-        hostAgeMs: Math.max(0, Date.now() - managed.createdAt),
+        hostAgeMs,
         paneBound: Boolean(managed.paneKey ?? managed.attachIdentity?.paneKey),
         ...(managed.ownerClientInstanceId
           ? { ownerClientInstanceId: managed.ownerClientInstanceId }
@@ -3068,9 +3160,7 @@ export class PtyHandler {
         ...(managed.worktreeId ? { worktreeId: managed.worktreeId } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {}),
         ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
-        ...(this.agentSessionOwners.listForPty(id).length
-          ? { agentSessionOwners: this.agentSessionOwners.listForPty(id) }
-          : {})
+        ...(agentSessionOwners.length ? { agentSessionOwners } : {})
       })
     }
     return results
@@ -3097,6 +3187,9 @@ export class PtyHandler {
         worktreeId: managed.worktreeId,
         ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
         envToDelete: managed.envToDelete,
+        ...(managed.openCodeCapabilities
+          ? { openCodeCapabilities: managed.openCodeCapabilities }
+          : {}),
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
         ...(managed.historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
         // Why serialized: revive re-spawns the shell, and without these a WSL
@@ -3191,6 +3284,8 @@ export class PtyHandler {
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
+    const openCodeCapabilities = restoreOpenCodeCapabilities(entry.openCodeCapabilities)
+    applyOpenCodePluginSelection(spawnEnv, envToDelete, openCodeCapabilities, wslShell)
     if (
       historyIsolationEnabled &&
       entry.worktreeId &&
@@ -3268,6 +3363,7 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(openCodeCapabilities ? { openCodeCapabilities } : {}),
       ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       shellPath: shell,
       // Why re-stored: a revived pane can be serialized again, and losing the

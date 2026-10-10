@@ -1,3 +1,4 @@
+import { mobileFileMedia, type MobileFileMedia } from './mobile-file-media'
 import { buildImageDataUri } from '../../../src/shared/image-data-uri'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { buildMobileDiffLines, type MobileDiffLine } from '../session/mobile-diff-lines'
@@ -12,6 +13,7 @@ import {
 // The ready doc a session file tab renders. Mirrors the ready arm of the route's
 // FileDocState; kept in src so the loader stays testable without the route.
 export type MobileFileTabDoc =
+  | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
   | { status: 'ready'; kind: 'file'; content: string; truncated: boolean; byteLength: number }
   | { status: 'ready'; kind: 'diff'; lines: MobileDiffLine[]; truncated: boolean }
   | { status: 'ready'; kind: 'image'; dataUri: string }
@@ -51,6 +53,10 @@ export async function resolveMobileFileTabDoc(
     return { status: 'ready', kind: 'diff', lines: diff.lines, truncated: diff.truncated }
   }
 
+  const media = mobileFileMedia(request.worktreeId, relativePath)
+  if (media) {
+    return { status: 'ready', kind: 'media', media }
+  }
   const artifactKind = classifyMobileArtifact(relativePath)
   if (artifactKind === 'image') {
     const preview = await fileTabImageRead.request(client, { worktree, relativePath })

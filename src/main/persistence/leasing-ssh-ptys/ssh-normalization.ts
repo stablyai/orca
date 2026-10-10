@@ -11,6 +11,7 @@ import {
   SSH_REMOTE_RUNTIMES
 } from '../../../shared/ssh-types'
 import { normalizeSshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
+import { getLegacyManagedOrcadOwnerEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
@@ -65,7 +66,83 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   if (remoteRuntimeResolution) {
     normalized.remoteRuntimeResolution = remoteRuntimeResolution
   }
-  return normalized
+  return normalizeManagedServerMoveOffered(
+    normalizeAppVersionNote(
+      normalizeAppVersionNote(
+        migrateLegacyManagedOrcadOwner(normalized),
+        'managedServerUnavailable'
+      ),
+      'managedServerUpdateFailure'
+    )
+  )
+}
+
+/**
+ * Phase-3 builds fenced a managed host through `owner`, which shipped builds hide. Moving the fence
+ * to `orcadFence` keeps the host visible, and reachable over its relay, after a downgrade.
+ */
+function migrateLegacyManagedOrcadOwner(target: SshTarget): SshTarget {
+  const environmentId = getLegacyManagedOrcadOwnerEnvironmentId(target.owner)
+  if (!environmentId) {
+    return normalizeOrcadFence(target)
+  }
+  const { owner: _legacyOwner, ...rest } = target
+  const fenced = normalizeOrcadFence(rest)
+  // A malformed fence must not discard the owner's valid environment id.
+  return fenced.orcadFence ? fenced : { ...fenced, orcadFence: { environmentId } }
+}
+
+// Unknown keys pass through every note below, so a newer build's optional fields survive this one.
+function noteFields(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : null
+}
+
+function normalizeAppVersionNote(
+  target: SshTarget,
+  key: 'managedServerUnavailable' | 'managedServerUpdateFailure'
+): SshTarget {
+  if (target[key] === undefined) {
+    return target
+  }
+  const note = noteFields(target[key])
+  if (typeof note?.reason === 'string' && typeof note.appVersion === 'string') {
+    return { ...target, [key]: { ...note, reason: note.reason, appVersion: note.appVersion } }
+  }
+  const { [key]: _malformed, ...rest } = target
+  return rest
+}
+
+function normalizeManagedServerMoveOffered(target: SshTarget): SshTarget {
+  if (target.managedServerMoveOffered === undefined) {
+    return target
+  }
+  const note = noteFields(target.managedServerMoveOffered)
+  if (typeof note?.appVersion === 'string') {
+    return { ...target, managedServerMoveOffered: { ...note, appVersion: note.appVersion } }
+  }
+  const { managedServerMoveOffered: _malformed, ...rest } = target
+  return rest
+}
+
+function normalizeOrcadFence(target: SshTarget): SshTarget {
+  if (target.orcadFence === undefined) {
+    return target
+  }
+  const fence = noteFields(target.orcadFence)
+  const environmentId = fence?.environmentId
+  if (fence && typeof environmentId === 'string' && environmentId.length > 0) {
+    const { sourceChangedAt, ...unknownAndId } = fence
+    return {
+      ...target,
+      orcadFence: {
+        ...unknownAndId,
+        environmentId,
+        ...(typeof sourceChangedAt === 'string' ? { sourceChangedAt } : {})
+      }
+    }
+  }
+  const { orcadFence: _malformed, ...rest } = target
+  return rest
 }
 
 // Why strict: a malformed cache entry is dropped, which only costs one rung A attempt.
@@ -73,6 +150,7 @@ const SshRemoteRuntimeResolutionSchema = z
   .object({
     rung: z.enum(SSH_REMOTE_RUNTIME_RUNGS),
     pinnedRefusal: z.string().max(64).optional(),
+    refusedAt: z.number().int().nonnegative().optional(),
     glibc: z
       .string()
       .regex(/^\d+\.\d+$/)

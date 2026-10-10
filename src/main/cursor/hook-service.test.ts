@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { findGitBash } from '../agent-hooks/windows-git-bash-path.test-fixture'
 
 const { homedirMock } = vi.hoisted(() => ({

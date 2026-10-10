@@ -1,7 +1,9 @@
 import { powerMonitor } from 'electron'
+import { recoverOrcadManagedTunnelsAfterHostResume } from '../ssh/orcad-managed-tunnel'
 import type { SshRelaySession } from '../ssh/ssh-relay-session'
 import { activeSessions } from './ssh-active-relay-sessions'
 import { connectionManager } from './ssh-ipc-context'
+import { errorMessage } from '../../shared/error-message'
 
 let powerMonitorUnsubscribe: (() => void) | null = null
 
@@ -32,7 +34,7 @@ async function isRelayLinkAliveAfterResume(session: SshRelaySession): Promise<bo
   return false
 }
 
-export function registerPowerMonitorReconnect(): void {
+export function registerPowerMonitorReconnect(getUserDataPath?: () => string): void {
   powerMonitorUnsubscribe?.()
   const onSuspend = (): void => {
     for (const session of activeSessions.values()) {
@@ -59,12 +61,21 @@ export function registerPowerMonitorReconnect(): void {
           await manager?.reconnect(targetId)
         } catch (err) {
           console.warn(
-            `[ssh] Failed to reconnect ${targetId} after system resume: ${
-              err instanceof Error ? err.message : String(err)
-            }`
+            `[ssh] Failed to reconnect ${targetId} after system resume: ${errorMessage(err)}`
           )
         }
       })()
+    }
+    // Why separate: managed tunnels ride their own connections, not relay sessions.
+    if (getUserDataPath) {
+      void recoverOrcadManagedTunnelsAfterHostResume(getUserDataPath(), {
+        attempts: RESUME_PROBE_ATTEMPTS,
+        timeoutMs: RESUME_PROBE_TIMEOUT_MS
+      }).catch((err) => {
+        console.warn(
+          `[ssh] Failed to recover a managed Orca tunnel after system resume: ${errorMessage(err)}`
+        )
+      })
     }
   }
   powerMonitor.on('suspend', onSuspend)

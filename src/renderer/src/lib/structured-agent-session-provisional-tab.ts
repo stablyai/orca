@@ -11,14 +11,14 @@ import type {
 } from '@/lib/structured-agent-launch-settlement'
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
-  beginPairedStructuredLaunch,
+  beginHostAdmittedStructuredLaunch,
   openDeclinedStructuredLaunchTerminal,
   type DeclinedStructuredLaunchTerminalOptions,
-  type PairedStructuredLaunch,
+  type HostAdmittedStructuredLaunch,
   type StructuredLaunchTerminal
-} from '@/lib/structured-agent-session-paired-admission'
+} from '@/lib/structured-agent-session-launch-admission'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
@@ -27,17 +27,17 @@ import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 type LocalProvisionalLaunch = StructuredAgentLaunchHandle & { tab: Tab }
 
-/** A local chat has its tab at once; a paired server's has none until the server admits it. */
+/** A chat's tab opens once its host admits it; a launch with no host to ask takes the direct path. */
 export type StructuredAgentSessionProvisionalLaunch =
   | LocalProvisionalLaunch
-  | PairedStructuredLaunch
+  | HostAdmittedStructuredLaunch
 
 export function openStructuredAgentSessionProvisionalTab(args: {
   worktreeId: string
   /** The host the chat is created on; every later operation on the tab reads it. */
   executionHostId: ExecutionHostId
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: TuiAgent
   targetGroupId?: string
   activate?: boolean
 }): Tab {
@@ -72,8 +72,8 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   return tab
 }
 
-/** The paired server a structured launch would run on, which admits the chat before it exists. */
-export function structuredLaunchPairedOwner(
+/** The host a structured launch would run on, which admits the chat before it exists. */
+export function structuredLaunchOwner(
   plan: Pick<AgentSessionLaunchPlan, 'route' | 'executionHostId'>,
   worktreeId: string,
   target?: AgentSessionLaunchTarget
@@ -86,9 +86,7 @@ export function structuredLaunchPairedOwner(
     plan.executionHostId ??
     resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   const hostTarget = structuredAgentSessionTargetForHost(executionHostId)
-  return executionHostId && hostTarget?.kind === 'environment'
-    ? { executionHostId, target: hostTarget }
-    : null
+  return executionHostId && hostTarget ? { executionHostId, target: hostTarget } : null
 }
 
 type ProvisionalLaunchArgs = {
@@ -97,44 +95,43 @@ type ProvisionalLaunchArgs = {
   target?: AgentSessionLaunchTarget
   targetGroupId?: string
   activate?: boolean
-  /** Lets workspace flows reveal before the chat's tab is owned; a paired launch reveals before its
-   *  server is asked, when no session id exists yet. */
+  /** Lets workspace flows reveal before the chat's tab is owned: before its host is asked, when no
+   *  session id exists yet. */
   beforeOpen?: (sessionId?: string) => boolean | void
-  /** The terminal a paired server's "no" opens; a caller without one gets a new agent tab's. */
-  onHostDeclined?: () => Promise<StructuredLaunchTerminal> | StructuredLaunchTerminal
+  /** The terminal the host's "no" opens; a caller without one gets a new agent tab's. */
+  onHostDeclined?: (
+    target: RuntimeClientTarget
+  ) => Promise<StructuredLaunchTerminal> | StructuredLaunchTerminal
   /** What that default terminal carries from the caller, e.g. a recipe's saved CLI arguments. */
   declinedTerminal?: DeclinedStructuredLaunchTerminalOptions
 }
 
-/** Binds the launch to a chat tab: at once locally, after the server admits it on a paired host. */
+/** Binds the launch to a chat tab once its host, this machine included, admits the chat. */
 export function beginStructuredAgentSessionProvisionalLaunch(
   args: ProvisionalLaunchArgs
 ): StructuredAgentSessionProvisionalLaunch | null {
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  const agent = args.plan.agent
-  const paired =
-    worktreeId && isAgentSessionHandleProvider(agent)
-      ? structuredLaunchPairedOwner(args.plan, worktreeId, args.target)
-      : null
-  if (!paired || !worktreeId || !isAgentSessionHandleProvider(agent)) {
+  const owner = worktreeId ? structuredLaunchOwner(args.plan, worktreeId, args.target) : null
+  if (!owner || !worktreeId) {
+    // No host to ask: the launch path refuses it with its own message.
     return beginLocalProvisionalLaunch(args)
   }
   if (args.beforeOpen?.() === false) {
     return null
   }
-  return beginPairedStructuredLaunch({
-    plan: { ...args.plan, agent },
+  return beginHostAdmittedStructuredLaunch({
+    plan: args.plan,
     hooks: args.hooks,
     worktreeId,
-    executionHostId: paired.executionHostId,
-    target: paired.target,
+    executionHostId: owner.executionHostId,
+    target: owner.target,
     openAdmitted: (seedOptions) =>
       beginLocalProvisionalLaunch({
         ...args,
         target: {
           ...args.target,
           worktreeId,
-          executionHostId: paired.executionHostId,
+          executionHostId: owner.executionHostId,
           ...(seedOptions ? { seedOptions } : {})
         },
         beforeOpen: undefined
@@ -157,8 +154,8 @@ function beginLocalProvisionalLaunch(args: ProvisionalLaunchArgs): LocalProvisio
     return null
   }
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  if (!worktreeId || (args.plan.agent !== 'claude' && args.plan.agent !== 'codex')) {
-    throw new Error('A provisional structured launch needs its workspace and provider.')
+  if (!worktreeId) {
+    throw new Error('A provisional structured launch needs its workspace.')
   }
   try {
     if (args.beforeOpen?.(handle.sessionId) === false) {

@@ -255,89 +255,129 @@ describe('Claude live prompt ownership', () => {
     ).toBe(false)
   })
 
-  it('rejects a grouped prompt batch without partially revising its first row', () => {
-    const tombstones: string[] = []
-    const appendTombstone = vi.fn(
-      (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
-        tombstones.push(agentJournalItemKey(identity))
-      }
-    )
-    let rowAdmission = 0
-    const tryAppendTombstone = vi.fn(
-      (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
-        rowAdmission += 1
-        if (rowAdmission === 2) {
+  it.each([0, 1, null] as const)(
+    'rejects a grouped prompt batch without partial revision after row %s admission refusal',
+    async (refusedAt) => {
+      const tombstones: string[] = []
+      const appendTombstone = vi.fn(
+        (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
+          tombstones.push(agentJournalItemKey(identity))
+        }
+      )
+      let rowAdmission = 0
+      const tryAppendTombstone = vi.fn(
+        (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
+          rowAdmission += 1
+          if (rowAdmission === 2) {
+            return { accepted: false as const, reason: 'backpressure' as const }
+          }
+          appendTombstone(identity)
+          return { accepted: true as const }
+        }
+      )
+      const tryAppendLifecycleBatch = vi.fn(
+        (
+          _settlementId: string,
+          mutations: Parameters<
+            NonNullable<StructuredAgentSessionEventSink['tryAppendLifecycleBatch']>
+          >[1]
+        ) => {
+          expect(mutations[1]).toMatchObject({
+            kind: 'item',
+            body: { resolution: { state: 'cancelled' } }
+          })
           return { accepted: false as const, reason: 'backpressure' as const }
         }
-        appendTombstone(identity)
-        return { accepted: true as const }
+      )
+      const admittedRows = new Map<string, AgentJournalItemBody>()
+      let admissionAttempts = 0
+      const tryAppendItem = vi.fn(
+        (
+          identity: Parameters<StructuredAgentSessionEventSink['appendItem']>[0],
+          body: AgentJournalItemBody
+        ) => {
+          if (admissionAttempts++ === refusedAt) {
+            return { accepted: false as const, reason: 'backpressure' as const }
+          }
+          admittedRows.set(agentJournalItemKey(identity), body)
+          return { accepted: true as const }
+        }
+      )
+      const bindPromptItemId = vi.fn()
+      const written = vi.fn(async () => ({ ok: true as const }))
+      const prompts = new ClaudeJournalPrompts({
+        sink: {
+          appendItem: () => {},
+          tryAppendItem,
+          appendTombstone,
+          tryAppendTombstone,
+          tryAppendLifecycleBatch,
+          publish: () => {},
+          written
+        },
+        bindPromptItemId,
+        producerOf: () => ({ agentId: 'agent-grouped', producerKind: 'agent' }),
+        questionItems: (input) => {
+          const item = claudeQuestionItems(input)[0]
+          return item
+            ? [
+                {
+                  ...item,
+                  identity: { provider: 'orca', clientMessageId: 'group:first' }
+                },
+                {
+                  ...item,
+                  identity: { provider: 'orca', clientMessageId: 'group:second' }
+                }
+              ]
+            : []
+        },
+        turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
+      })
+      const prompt: ClaudePendingPrompt = {
+        requestId: 'grouped-request',
+        promptKey: 'grouped-request',
+        toolUseId: 'tool-grouped',
+        toolName: 'AskUserQuestion',
+        kind: 'question',
+        input: {
+          questions: [
+            { question: 'First?', options: [{ label: 'Yes' }] },
+            { question: 'Second?', options: [{ label: 'No' }] }
+          ]
+        },
+        suggestions: [],
+        questionIds: ['First?', 'Second?'],
+        settle: vi.fn()
       }
-    )
-    const tryAppendLifecycleBatch = vi.fn(
-      (
-        _settlementId: string,
-        mutations: Parameters<
-          NonNullable<StructuredAgentSessionEventSink['tryAppendLifecycleBatch']>
-        >[1]
-      ) => {
-        expect(mutations[1]).toMatchObject({
-          kind: 'item',
-          body: { resolution: { state: 'cancelled' } }
-        })
-        return { accepted: false as const, reason: 'backpressure' as const }
-      }
-    )
-    const prompts = new ClaudeJournalPrompts({
-      sink: {
-        appendItem: () => {},
-        appendTombstone,
-        tryAppendTombstone,
-        tryAppendLifecycleBatch,
-        publish: () => {}
-      },
-      questionItems: (input) => {
-        const item = claudeQuestionItems(input)[0]
-        return item
-          ? [
-              {
-                ...item,
-                identity: { provider: 'orca', clientMessageId: 'group:first' }
-              },
-              {
-                ...item,
-                identity: { provider: 'orca', clientMessageId: 'group:second' }
-              }
-            ]
-          : []
-      },
-      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
-    })
-    const prompt: ClaudePendingPrompt = {
-      requestId: 'grouped-request',
-      promptKey: 'grouped-request',
-      toolUseId: 'tool-grouped',
-      toolName: 'AskUserQuestion',
-      kind: 'question',
-      input: {
-        questions: [
-          { question: 'First?', options: [{ label: 'Yes' }] },
-          { question: 'Second?', options: [{ label: 'No' }] }
-        ]
-      },
-      suggestions: [],
-      questionIds: ['First?', 'Second?'],
-      settle: vi.fn()
-    }
-    prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
+      prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
+      await prompts.whenWritten(prompt.promptKey)
 
-    expect(prompts.cancel(prompt.promptKey)).toEqual({
-      accepted: false,
-      reason: 'backpressure'
-    })
-    expect(tryAppendLifecycleBatch).toHaveBeenCalledOnce()
-    expect(tryAppendTombstone).not.toHaveBeenCalled()
-    expect(tombstones).toEqual([])
-  })
+      expect(tryAppendItem.mock.calls.map(([identity]) => agentJournalItemKey(identity))).toEqual([
+        'orca:group%3Afirst',
+        'orca:group%3Asecond'
+      ])
+      expect([...admittedRows.keys()]).toEqual(
+        ['orca:group%3Afirst', 'orca:group%3Asecond'].filter((_, index) => index !== refusedAt)
+      )
+      expect(bindPromptItemId.mock.calls).toEqual([
+        ['orca:group%3Afirst', prompt.promptKey],
+        ['orca:group%3Asecond', prompt.promptKey]
+      ])
+      expect(written).toHaveBeenCalledTimes(refusedAt === null ? 1 : 0)
+      expect([...prompts.openCards()]).toEqual(
+        refusedAt === null ? [{ promptKey: prompt.promptKey, asker: 'agent-grouped' }] : []
+      )
+
+      expect(prompts.cancel(prompt.promptKey)).toEqual({
+        accepted: false,
+        reason: 'backpressure'
+      })
+      expect(tryAppendLifecycleBatch).toHaveBeenCalledOnce()
+      expect(tryAppendTombstone).not.toHaveBeenCalled()
+      expect(tombstones).toEqual([])
+    }
+  )
 
   it('keeps every backpressured prompt cancellation retry in its owned entry', () => {
     let backpressured = true

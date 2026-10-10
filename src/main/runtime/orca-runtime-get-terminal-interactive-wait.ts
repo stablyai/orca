@@ -19,6 +19,11 @@ import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-termi
 import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from './orchestration/configured-worker-agent-selector'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-options'
+
+import { prepareOpenCodeModelStartupInputs } from '../opencode/opencode-model-startup-plan'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 
 export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   async getTerminalInteractiveWait(
@@ -221,6 +226,58 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       })
     )
     return this.resolveOrchestrationAgentLauncher(selector, platform, shell)
+  }
+
+  async probeOrchestrationOpenCodeModelLaunchSupport(target: {
+    worktree?: string
+    model?: string
+  }): Promise<boolean> {
+    if (!target.model || !target.worktree) {
+      return false
+    }
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
+    const executionRepo = workspace?.repo
+    if (
+      workspace?.connectionId ||
+      (executionRepo?.executionHostId && executionRepo.executionHostId !== 'local')
+    ) {
+      return false
+    }
+    const store = this.requireStore()
+    const settings = store.getSettings()
+    const path = workspace?.path
+    const unc = path ? parseWslUncPath(path) : null
+    const projectRuntime = executionRepo
+      ? resolveLocalProjectRuntimeForRepo(store, executionRepo)
+      : null
+    if (projectRuntime?.status === 'repair-required') {
+      return false
+    }
+    const wsl = unc
+      ? { distro: unc.distro }
+      : projectRuntime?.runtime.kind === 'wsl'
+        ? { distro: projectRuntime.runtime.distro }
+        : undefined
+    if (!path) {
+      return false
+    }
+    try {
+      await prepareOpenCodeModelStartupInputs({
+        inputs: resolveAgentStartupPlanInputs({
+          agent: 'opencode',
+          settings,
+          platform: wsl ? 'linux' : process.platform,
+          isRemote: false,
+          sessionOptions: { model: target.model }
+        }),
+        cwd: path,
+        isWsl: Boolean(wsl),
+        hostIdentity: this.getRuntimeId()
+      })
+      return true
+    } catch {
+      return false
+    }
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {

@@ -123,7 +123,8 @@ describe('the chat strip and the session list read the same host child records',
       hostId: 'local',
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => root,
-      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
       resolveCodexCommand: () => 'codex',
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       openCodexConnection: openConnection,
@@ -210,7 +211,7 @@ describe('the chat strip and the session list read the same host child records',
       source: 'unifiedExecStartup',
       status: 'inProgress'
     })
-    // Every command the child runs is a live record under it, whatever Codex tagged it.
+    // Foreground shell records keep status live; surfaces show the child's tool instead.
     both([
       {
         kind: 'agent',
@@ -218,20 +219,6 @@ describe('the chat strip and the session list read the same host child records',
         state: 'working',
         membership: 'live',
         tool: 'Bash: npm run dev'
-      },
-      {
-        kind: 'command',
-        description: 'npm test',
-        state: 'working',
-        membership: 'live',
-        owner: 'review'
-      },
-      {
-        kind: 'command',
-        description: 'npm run dev',
-        state: 'working',
-        membership: 'live',
-        owner: 'review'
       }
     ])
 
@@ -251,13 +238,6 @@ describe('the chat strip and the session list read the same host child records',
         state: 'working',
         membership: 'live',
         tool: 'Bash: npm run dev'
-      },
-      {
-        kind: 'command',
-        description: 'npm run dev',
-        state: 'working',
-        membership: 'live',
-        owner: 'review'
       }
     ])
 

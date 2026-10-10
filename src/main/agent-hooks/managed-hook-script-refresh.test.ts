@@ -2,6 +2,7 @@
 // Orca's script while the presence gate skips install() forever. These tests pin the
 // repair — existing scripts come current, missing ones are never created.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexHookHashLookup from '../codex/codex-hook-hash-lookup'
 import {
   existsSync,
   chmodSync,
@@ -40,8 +41,11 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-vi.mock('../codex/codex-hook-trust-grant', () => ({
-  grantManagedCodexHookTrust: async () => ({ lane: 'fallback', reason: 'unsupported' })
+// Why: stands in for asking a real Codex for its hook hashes, as the grant stub once did.
+vi.mock('../codex/codex-hook-hash-lookup', async (importOriginal) => ({
+  ...(await importOriginal<typeof CodexHookHashLookup>()),
+  resolveCodexHookAnswerForLaunch: async () =>
+    (await import('../codex/hook-service-test-harness')).codexHookAnswerForTests()
 }))
 
 vi.mock('electron', () => ({
@@ -147,12 +151,15 @@ describe('managed hook script refresh', () => {
     homedirMock.mockReturnValue(home)
     const previousGrokHome = process.env.GROK_HOME
     const previousKimiHome = process.env.KIMI_CODE_HOME
+    const previousXdgConfigHome = process.env.XDG_CONFIG_HOME
     delete process.env.GROK_HOME
     delete process.env.KIMI_CODE_HOME
+    delete process.env.XDG_CONFIG_HOME
     try {
-      await withPlatform('win32', () => {
+      // Why awaited: the Codex installer waits for Codex's hook hashes before it writes.
+      await withPlatform('win32', async () => {
         for (const [, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
-          install()
+          await install()
         }
       })
       const hooksDir = join(home, '.orca', 'agent-hooks')
@@ -186,6 +193,11 @@ describe('managed hook script refresh', () => {
         delete process.env.KIMI_CODE_HOME
       } else {
         process.env.KIMI_CODE_HOME = previousKimiHome
+      }
+      if (previousXdgConfigHome === undefined) {
+        delete process.env.XDG_CONFIG_HOME
+      } else {
+        process.env.XDG_CONFIG_HOME = previousXdgConfigHome
       }
       rmSync(home, { recursive: true, force: true })
     }

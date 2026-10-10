@@ -19,13 +19,14 @@ import {
   liveTestJournalRows,
   updateTestJournalRowJson
 } from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'claude',
-  providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: null }
+  providerHandle: claudeProviderHandle('claude-session', null)
 }
 
 const USAGE = {
@@ -104,7 +105,6 @@ describe('context facts on replayed turn rows', () => {
     await journal.close()
 
     const reopened = await open()
-    expect(reopened.repair.malformedRows).toBe(0)
     expect(reopened.snapshot().items.map((item) => item.body)).toEqual(written)
     expect(written).toHaveLength(FACTS.length)
   })
@@ -132,7 +132,6 @@ describe('context facts on replayed turn rows', () => {
     }
 
     const reopened = await open()
-    expect(reopened.repair.malformedRows).toBe(0)
     expect(reopened.snapshot().items.map((item) => item.body)).toEqual([
       turn('turn-0'),
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'after' }] }

@@ -4,8 +4,11 @@ import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
 export type PtySpawnResult = {
+  /** Execution-host probe; absent on older hosts and reattachments. */
+  openCodeCapabilities?: OpenCodeCliCapabilities
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** App-facing PTY id. Remote providers must return globally routable ids,
    *  not relay-local handles, because renderer/runtime IPC routes by this key. */

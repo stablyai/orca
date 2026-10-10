@@ -1,11 +1,12 @@
 import { expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   ephemeralVmCleanup,
   ephemeralVmListRuntimes,
   installReposRuntimeRoutingHarness,
-  reposRemove,
+  reposRemoveForHost,
   sshRepo
 } from './repos-runtime-routing-fixture'
 import { createTestStore } from './store-test-helpers'
@@ -38,10 +39,13 @@ it('retains a runtime-owned SSH project when VM cleanup fails', async () => {
   const store = createTestStore()
   store.setState({ repos: [runtimeRepo], activeRepoId: runtimeRepo.id })
 
-  await store.getState().removeProject(runtimeRepo.id, { errorFeedback: 'toast' })
+  await store.getState().removeProject(runtimeRepo.id, {
+    hostId: getRepoExecutionHostId(runtimeRepo),
+    errorFeedback: 'toast'
+  })
 
   expect(store.getState().repos).toEqual([runtimeRepo])
-  expect(reposRemove).not.toHaveBeenCalled()
+  expect(reposRemoveForHost).not.toHaveBeenCalled()
   expect(toast.error).toHaveBeenCalledWith(
     expect.any(String),
     expect.objectContaining({ description: expect.stringContaining('Retry cleanup') })

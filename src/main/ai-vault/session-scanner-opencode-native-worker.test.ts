@@ -73,8 +73,13 @@ describe('OpenCode reads through the production shared worker', () => {
           throw new Error('Expected the bounded native page')
         }
         expect(page.items.map((item) => item.rowid)).toEqual([2, 3])
+        expect(page.items[0]?.message.role).toBe('system')
         expect(page.items[0]?.message.blocks).toEqual([
-          { type: 'text', text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'] }
+          {
+            type: 'text',
+            text: AGENT_SESSION_HOST_STATUS_COPY['history-item-too-large'],
+            presentation: 'history-item-too-large'
+          }
         ])
         const repeat = await client.readNativeChat(args)
         expect(repeat).toEqual(page)

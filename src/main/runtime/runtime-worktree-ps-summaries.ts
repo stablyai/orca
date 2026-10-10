@@ -1,6 +1,7 @@
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
+import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 
@@ -64,12 +65,14 @@ export function buildRuntimeWorktreePsSummaries(args: {
       linkedLinearIssue: meta?.linkedLinearIssue ?? null,
       linkedGitLabMR: meta?.linkedGitLabMR ?? null,
       linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
+      linkedItems: getWorkspaceAttachments(meta ?? worktree),
       comment: meta?.comment ?? '',
       isPinned: meta?.isPinned ?? false,
       isActive: false,
       unread: meta?.isUnread ?? false,
       liveTerminalCount: 0,
       hasAttachedPty: false,
+      unverifiableTerminalCount: 0,
       lastOutputAt: null,
       preview: '',
       status: 'inactive',
@@ -110,12 +113,14 @@ export function buildRuntimeWorktreePsSummaries(args: {
       linkedLinearIssue: worktree.linkedLinearIssue ?? null,
       linkedGitLabMR: worktree.linkedGitLabMR ?? null,
       linkedGitLabIssue: worktree.linkedGitLabIssue ?? null,
+      linkedItems: getWorkspaceAttachments(worktree),
       comment: worktree.comment,
       isPinned: worktree.isPinned,
       isActive: false,
       unread: worktree.isUnread,
       liveTerminalCount: 0,
       hasAttachedPty: false,
+      unverifiableTerminalCount: 0,
       lastOutputAt: null,
       preview: '',
       status: 'inactive',

@@ -171,7 +171,8 @@ export function renderWorktreeSectionHeaderRow(args: {
         projectGroupId: folderBackedProjectGroup.id
       })
     : null
-  const isHeaderCollapsed = ctx.collapsedGroups.has(row.key)
+  const collapseKey = row.collapseKey ?? row.key
+  const isHeaderCollapsed = ctx.collapsedGroups.has(collapseKey)
   // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
   const showHeaderCollapseAffordance =
     row.count > 0 &&
@@ -284,7 +285,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           if (shouldIgnoreRepoHeaderToggle(event)) {
             return
           }
-          ctx.toggleGroupWithScrollAnchor(row.key)
+          ctx.toggleGroupWithScrollAnchor(collapseKey)
         }}
         onKeyDown={(e) => {
           if (shouldIgnoreRepoHeaderToggle(e)) {
@@ -292,7 +293,7 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
-            ctx.toggleGroupWithScrollAnchor(row.key)
+            ctx.toggleGroupWithScrollAnchor(collapseKey)
           }
         }}
       >
@@ -350,7 +351,7 @@ export function renderWorktreeSectionHeaderRow(args: {
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
-                ctx.toggleGroupWithScrollAnchor(row.key)
+                ctx.toggleGroupWithScrollAnchor(collapseKey)
               }}
             >
               <ChevronDown

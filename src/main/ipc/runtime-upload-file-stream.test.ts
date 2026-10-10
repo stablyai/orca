@@ -35,7 +35,6 @@ vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: Parameters<typeof callRuntimeEnvironment>) =>
     callRuntimeEnvironment(...args)
 }))
-vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
 // Why: see filesystem-runtime-upload-staging.test.ts — a real over-limit fixture
 // would allocate gigabytes on Windows.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({

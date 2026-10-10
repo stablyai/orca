@@ -6,11 +6,12 @@ import { getTuiAgentRestSignal } from '../../shared/tui-agent-rest-signal'
 import { isKnownReadyPromptBody } from './terminal-wait-detection'
 import {
   evaluateAgentStateRules,
+  hookAuthority,
   readsTrustedScreen
 } from './agent-state-rules/agent-state-rules-engine'
 import {
   evaluateTuiIdle,
-  hasFreshDoneFirstPartyStatus,
+  quietForegroundLaneForTerminalAgent,
   hasQuietReadyScreen,
   isTuiIdleReadyVerdict,
   nameOnlyIdleNeedsCorroboration,
@@ -178,6 +179,11 @@ describe('evaluateTuiIdle ranking', () => {
 
   // Why: a launched agent whose title Orca cannot classify has no other lane; closing this
   // one for every known agent left `worker start` failing at agent_readiness (STA-7440).
+  it('leaves the lane open for recognized dsb instead of reading a missing launch config', () => {
+    expect(quietForegroundLaneForTerminalAgent('dsb')).toBe('open')
+    expect(quietForegroundLaneForTerminalAgent('codex')).toBe('closed')
+  })
+
   it('keeps the quiet-foreground lane for an agent with no other rest signal, after it paints', () => {
     for (const agent of ['amp', 'goose', 'crush', 'kimi', 'qwen-code', 'rovo', 'aug'] as const) {
       expect(evaluateTuiIdle(input({ ...noMuse, agent }))).toEqual({
@@ -200,8 +206,15 @@ describe('evaluateTuiIdle ranking', () => {
 describe('rest signal agrees with the lanes that can settle a wait', () => {
   it.each(Object.keys(TUI_AGENT_CONFIG).filter(isTuiAgent))('%s', (agent) => {
     const signal = getTuiAgentRestSignal(agent)
-    const hookDone = hasFreshDoneFirstPartyStatus(agent, { state: 'done', updatedAt: Date.now() })
-    expect(hookDone).toBe(signal === 'hook-done')
+    // Why both ways: a `hook-done` agent rests only through the hook lane, and a trusted hook
+    // lane is a stronger signal than the quiet foreground `none` reopens.
+    const trustsHooks = hookAuthority(agent) !== 'identity-only'
+    if (signal === 'hook-done') {
+      expect(trustsHooks).toBe(true)
+    }
+    if (trustsHooks) {
+      expect(signal).not.toBe('none')
+    }
     let screenRead = false
     isKnownReadyPromptBody(
       '',
@@ -255,6 +268,10 @@ describe('rest signal agrees with the lanes that can settle a wait', () => {
 })
 
 describe('nameOnlyIdleNeedsCorroboration', () => {
+  it('keeps recognition-only DSB titles outside managed idle-title policies', () => {
+    expect(nameOnlyIdleNeedsCorroboration(null, 'DeepSeek Build')).toBe(false)
+  })
+
   it('holds agents that announce rest with an explicit title, native or synthesized', () => {
     expect(nameOnlyIdleNeedsCorroboration('claude')).toBe(true)
     expect(nameOnlyIdleNeedsCorroboration('codex')).toBe(true)
@@ -267,47 +284,6 @@ describe('nameOnlyIdleNeedsCorroboration', () => {
   it("names an adopted pane's agent from a shell auto-title", () => {
     expect(nameOnlyIdleNeedsCorroboration(null, 'claude')).toBe(true)
     expect(nameOnlyIdleNeedsCorroboration(null, 'claude ~/p/repo')).toBe(true)
-  })
-})
-
-describe('a DSH pane settles tui-idle on its own hook', () => {
-  const base = {
-    record: { lastAgentStatus: null, lastOutputAt: null, lastOscTitle: '\u2726 \u{1F40B} repo' },
-    rendererTitle: undefined,
-    readPositiveBodyEvidence: () => false,
-    readQuietReadyBodyEvidence: () => false,
-    readAgentRuleVerdict: () => null,
-    readScreenInputVeto: () => null,
-    titleObservedAtEpochMs: null,
-    readTailBlockedReason: () => null,
-    agent: 'dsh' as const,
-    firstPartyStatus: { state: 'done' as const, updatedAt: Date.now() },
-    quiescenceMs: 1_000
-  } satisfies TuiIdleEvaluationInput
-
-  const ready = (over: Partial<TuiIdleEvaluationInput> = {}) =>
-    isTuiIdleReadyVerdict(evaluateTuiIdle({ ...base, ...over }))
-
-  it('settles on a fresh first-party done', () => {
-    // The regression: DSH's title carries no idle (its rest glyph is Gemini's working one),
-    // so every title-reading tier failed and `terminal wait --for tui-idle` ran to timeout
-    // against an already-ready composer.
-    expect(ready()).toBe(true)
-  })
-
-  it('does not settle while the same pane reports working', () => {
-    expect(ready({ firstPartyStatus: { state: 'working', updatedAt: Date.now() } })).toBe(false)
-  })
-
-  it('does not settle on a stale done', () => {
-    expect(
-      ready({ firstPartyStatus: { state: 'done', updatedAt: Date.now() - 31 * 60 * 1000 } })
-    ).toBe(false)
-  })
-
-  it('leaves other agents on the title lanes', () => {
-    // Scoped on purpose: an agent whose hooks report child turns can emit `done` mid-turn.
-    expect(ready({ agent: 'claude' })).toBe(false)
   })
 })
 

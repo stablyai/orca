@@ -27,10 +27,11 @@ export class ManagedDataAccountProfileRemoval {
     if (!z.uuid().safeParse(accountId).success) {
       throw new Error('Managed account not found.')
     }
-    const directory = join(this.root, provider, accountId)
-    const pendingDirectory = join(this.root, provider, '.pending-delete', accountId)
+    const pathId = accountId.toLowerCase()
+    const directory = join(this.root, provider, pathId)
+    const pendingDirectory = join(this.root, provider, '.pending-delete', pathId)
     const metadataPath = join(this.root, provider, 'accounts.json')
-    const rollbackPath = `${metadataPath}.${accountId}.rollback`
+    const rollbackPath = `${metadataPath}.${pathId}.rollback`
     if (!state.accounts.some((account) => account.id === accountId)) {
       if (state.accounts.some((account) => account.id.toLowerCase() === accountId.toLowerCase())) {
         throw new Error('Managed account not found.')

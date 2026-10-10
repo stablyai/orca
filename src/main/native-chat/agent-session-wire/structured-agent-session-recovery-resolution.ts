@@ -4,9 +4,10 @@
  * evicted on proof. A live one is stopped by identity and evicted once
  * proven gone. One that outlives the stop, or whose identity cannot be verified, is released
  * anyway: its transport died with the runtime that held it, so nothing can drive it, and no signal
- * is sent to a pid that cannot be verified as the one recorded. Only a conflicted claim, which is
- * how a terminal owner an older build recorded now loads, is waited out and never stopped: it is
- * the user's own agent, and its exit is its way out.
+ * is sent to a pid that cannot be verified as the one recorded. Windows never signals a saved pid
+ * at all: Orca stops a Windows tree only through a child it still holds. Only a conflicted claim,
+ * which is how a terminal owner an older build recorded now loads, is waited out and never
+ * stopped: it is the user's own agent, and its exit is its way out.
  */
 
 import {
@@ -15,7 +16,7 @@ import {
   type AgentSessionOwnerProbe
 } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../codex/codex-app-server-posix-supervisor'
+import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { releaseUnprovenAgentSessionOwner } from '../../runtime/agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 
@@ -27,11 +28,13 @@ export type StructuredSessionRecoveryResolutionDeps = {
   now: () => number
   stopOwnerProcess?: (pid: number, signal: StructuredSessionRecoveryStopSignal) => void
   delay?: (ms: number) => Promise<void>
+  platform?: NodeJS.Platform
 }
 
 const STOP_PROBE_INTERVAL_MS = 250
-// A POSIX structured owner is its provider supervisor, which exits only after its provider
-// group. A SIGKILL that lands first leaves the group running, so SIGTERM outlasts its stop.
+// POSIX only: Windows never signals a recorded owner. The owner is its provider supervisor, which
+// exits only after its provider group. A SIGKILL that lands first leaves the group running, so
+// SIGTERM outlasts its stop.
 const STOP_PROBES: Record<StructuredSessionRecoveryStopSignal, number> = {
   SIGTERM: Math.ceil(PROVIDER_SUPERVISOR_MAX_STOP_MS / STOP_PROBE_INTERVAL_MS) + 1,
   SIGKILL: 4
@@ -62,7 +65,9 @@ export async function resolveStructuredSessionRecovery(
     if (owner.hostId !== deps.store.hostId) {
       return 'unresolved'
     }
-    probe = await stopOwnerAndReprobe(deps, record, owner.pid)
+    if ((deps.platform ?? process.platform) !== 'win32') {
+      probe = await stopOwnerAndReprobe(deps, record, owner.pid)
+    }
   }
   try {
     await (owner && !isProvenDeadProbe(probe)

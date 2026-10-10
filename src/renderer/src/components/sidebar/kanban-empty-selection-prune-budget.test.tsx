@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { makeWorktree } from '../worktree-jump-palette-test-fixtures'
-import * as policy from './worktree-multi-selection'
+import * as policy from '@/lib/list-multi-selection'
 import { useWorkspaceKanbanSelection } from './use-workspace-kanban-selection'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -113,8 +113,8 @@ beforeEach(() => {
   budget = { calls: 0, ids: 0 }
   gestureReturn = undefined
   contextReturn = undefined
-  const original = policy.pruneWorktreeSelection
-  vi.spyOn(policy, 'pruneWorktreeSelection').mockImplementation((selected, anchor, ids) => {
+  const original = policy.pruneSelection
+  vi.spyOn(policy, 'pruneSelection').mockImplementation((selected, anchor, ids) => {
     budget.calls += 1
     const iterator = ids[Symbol.iterator]()
     const next = iterator.next.bind(iterator)
@@ -274,8 +274,8 @@ describe('Kanban empty selection pruning budget', () => {
     })
     render({ ...props, rendered: [] })
     state(board, [], null)
-    const a = policy.pruneWorktreeSelection(new Set(), null, ids)
-    const b = policy.pruneWorktreeSelection(new Set(), null, ids)
+    const a = policy.pruneSelection(new Set(), null, ids)
+    const b = policy.pruneSelection(new Set(), null, ids)
     expect(a).toEqual(b)
     expect(a).not.toBe(b)
     expect(a.selectedIds).not.toBe(b.selectedIds)

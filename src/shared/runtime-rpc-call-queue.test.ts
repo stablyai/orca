@@ -69,6 +69,26 @@ describe('runtime RPC call queue', () => {
     await expect(Promise.all(deletes)).resolves.toEqual(['rm-1', 'rm-2', 'rm-3'])
   })
 
+  it('runs foreground calls while model catalog reads wait on a host listing', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const release: (() => void)[] = []
+    const waits = Array.from({ length: 8 }, () =>
+      queue.enqueue('web-runtime', 'agentSession.modelCatalog', async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return 'listed'
+      })
+    )
+    await vi.waitFor(() => expect(release).toHaveLength(8))
+
+    const send = queue.enqueue('web-runtime', 'agentSession.send', async () => 'sent')
+    await expect(send).resolves.toBe('sent')
+
+    for (const resolve of release) {
+      resolve()
+    }
+    await expect(Promise.all(waits)).resolves.toEqual(Array(8).fill('listed'))
+  })
+
   it('frees the queue slot when a runtime call throws synchronously', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
     const first = queue.enqueue('web-runtime', 'status.get', () => {

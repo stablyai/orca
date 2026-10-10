@@ -13,7 +13,7 @@ import { buildWorkspaceSessionPayload } from '../../../src/renderer/src/lib/work
 import { buildHeadlessMobileSessionTerminalTabs } from '../../../src/main/runtime/mobile-session-terminal-projection'
 import { setRuntimeDesktopSurface } from '../../../src/main/runtime/runtime-desktop-surface'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { advanceTerminalTopologyRevision } from '../../../src/main/runtime/workspace-session-terminal-membership-authority'
+import { advanceTerminalTopologyRevision } from '../../../src/main/persistence/terminal-topology/terminal-topology-membership'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 class AuditRuntime extends OrcaRuntimeService {

@@ -129,6 +129,21 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
+  it('reports, instead of writing, approvals a mirrored inline hooks.state cannot take', async () => {
+    const systemCodexHome = join(homes.tmpHome, '.codex')
+    mkdirSync(systemCodexHome, { recursive: true })
+    writeFileSync(join(systemCodexHome, 'config.toml'), 'hooks = { state = {} }\n', 'utf-8')
+
+    const status = await new CodexHookService().install()
+
+    expect(status).toMatchObject({
+      state: 'error',
+      detail: expect.stringContaining('defines hook approvals in a form Orca cannot add to')
+    })
+    const managedToml = join(homes.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+    expect(readFileSync(managedToml, 'utf-8')).not.toContain('[hooks.state.')
+  })
+
   it('installs managed hooks + trust into a per-account self-contained home, not the shared mirror', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     mkdirSync(systemCodexHome, { recursive: true })

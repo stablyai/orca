@@ -5,6 +5,7 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   isPlainObject,
+  isSafeUnicodeWindowsBatchHookPath,
   MANAGED_HOOK_TIMEOUT_SECONDS,
   removeManagedCommands,
   wrapWindowsPowerShellEncodedCommand,
@@ -42,8 +43,8 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   usesWindowsCompatLauncher: false
 }
 
-export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS): string {
-  return join(homedir(), settings.configDirName, 'settings.json')
+export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
+  return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
 }
 
 export function getStatusLineScriptBaseName(settings = CLAUDE_HOOK_SETTINGS): string {
@@ -120,7 +121,9 @@ export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandC
   }
   return {
     type: 'command',
-    command: wrapWindowsPowerShellEncodedCommand(getWindowsPowerShellLifecycleCommand(scriptPath)),
+    command: wrapWindowsPowerShellEncodedCommand(getWindowsPowerShellLifecycleCommand(scriptPath), {
+      useProcessPolicyEnvironment: isSafeUnicodeWindowsBatchHookPath(scriptPath)
+    }),
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS
   }
 }

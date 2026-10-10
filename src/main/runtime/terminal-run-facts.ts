@@ -18,7 +18,7 @@ export type TerminalRunFacts = {
 const TERMINAL_FOCUS_REPORTS_ONLY_RE = new RegExp('^(?:\\u001b\\[[IO])+$')
 
 /** Input with no provenance that no person typed: a whole terminal reply or only focus reports. */
-function isUntypedTerminalInput(payload: string): boolean {
+export function isUntypedTerminalInput(payload: string): boolean {
   return isTerminalQueryReply(payload) || TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
 }
 
@@ -42,12 +42,38 @@ export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
   private readonly lastInputAtByPtyId = new Map<string, number>()
+  private readonly pendingByPtyId = new Map<
+    string,
+    { incarnationId: string | null; firstInputAt: number | null }
+  >()
+
+  reserveSpawnCommit(commit: TerminalSpawnCommit): void {
+    if (!commit.incarnationId) {
+      return
+    }
+    const prior = this.pendingByPtyId.get(commit.id)
+    this.pendingByPtyId.set(commit.id, {
+      incarnationId: commit.incarnationId,
+      firstInputAt:
+        prior?.incarnationId === null || prior?.incarnationId === commit.incarnationId
+          ? prior.firstInputAt
+          : null
+    })
+  }
+
+  discardSpawnCommit(commit: TerminalSpawnCommit): void {
+    if (this.pendingByPtyId.get(commit.id)?.incarnationId === (commit.incarnationId ?? null)) {
+      this.pendingByPtyId.delete(commit.id)
+    }
+  }
 
   /** Once per process: a re-registration of the same incarnation keeps its facts, and so does a
    *  reattach or adoption of the running process unless its incarnation shows another process. */
   recordSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
     const incarnationId = commit.incarnationId ?? null
     const previous = this.runsByPtyId.get(commit.id)
+    const pending = this.pendingByPtyId.get(commit.id)
+    this.pendingByPtyId.delete(commit.id)
     if (incarnationId !== null && previous?.incarnationId === incarnationId) {
       return
     }
@@ -60,7 +86,11 @@ export class TerminalRunFactsRegister {
     this.runsByPtyId.set(commit.id, {
       incarnationId,
       spawnOrigin: origin === 'spawn' && commit.coldRestore !== undefined ? 'cold-restore' : origin,
-      firstUserInputAt: sameProcess ? (previous?.firstUserInputAt ?? null) : null
+      firstUserInputAt: sameProcess
+        ? (previous?.firstUserInputAt ?? null)
+        : pending?.incarnationId === incarnationId
+          ? pending.firstInputAt
+          : null
     })
   }
 
@@ -73,6 +103,14 @@ export class TerminalRunFactsRegister {
     }
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)
+    if (inputKind === 'driving') {
+      const pending = this.pendingByPtyId.get(ptyId)
+      if (pending) {
+        pending.firstInputAt ??= now
+      } else if (!run) {
+        this.pendingByPtyId.set(ptyId, { incarnationId: null, firstInputAt: now })
+      }
+    }
     if (run && inputKind === 'driving') {
       run.firstUserInputAt ??= now
     }
@@ -99,5 +137,6 @@ export class TerminalRunFactsRegister {
   delete(ptyId: string): void {
     this.runsByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
+    this.pendingByPtyId.delete(ptyId)
   }
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalWait } from '../../../../../../shared/runtime-terminal-contracts'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
-describe('ZCode first dispatch readiness', () => {
+describe('composer-marker first dispatch readiness', () => {
   const h = createOrchestrationWorkerReleaseHarness()
   afterEach(() => h.cleanup())
 

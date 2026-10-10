@@ -35,11 +35,12 @@ export type StructuredAgentTurnHost = Pick<
 >
 
 export type StructuredSessionTurn = {
+  /** Carries its sender as `from`, which the chat shows and no fingerprint covers. */
   body: AgentJournalMessageItem
-  delivery: AgentTurnDelivery
   /** Reused on a retry, so the host replays its recorded answer instead of sending twice. */
   operationId: string
   expectedRuntimeFence: number
+  delivery: AgentTurnDelivery
 }
 
 export type StructuredSessionTurnSend = {
@@ -79,6 +80,8 @@ export type TerminalTurnSend<TReceipt> = {
   runtime: TerminalAgentTurnRuntime<TReceipt>
   handle: string
   turn: TerminalTurn
+  /** Runs before each PTY write; throwing refuses it (`createWorkerBriefWriteGuard`). */
+  beforeWrite?: DispatchPreambleSendOptions['beforeWrite']
 }
 
 /**
@@ -103,11 +106,10 @@ export function sendAgentTurn<TReceipt>(
       return sendStructuredSessionTurn(send)
     case 'terminal':
       // Not async: the caller awaits the runtime's own promise.
-      return send.runtime.sendTerminalAgentPrompt(
-        send.handle,
-        send.turn.body,
-        terminalTurnOptions(send.turn)
-      )
+      return send.runtime.sendTerminalAgentPrompt(send.handle, send.turn.body, {
+        ...terminalTurnOptions(send.turn),
+        ...(send.beforeWrite ? { beforeWrite: send.beforeWrite } : {})
+      })
   }
 }
 
@@ -122,16 +124,14 @@ async function sendStructuredSessionTurn(
   send: StructuredSessionTurnSend
 ): Promise<StructuredSessionTurnOutcome> {
   const { turn } = send
-  const result = await send.host.send(
-    { callerKey: send.callerKey },
-    structuredAgentSessionMessageSendMutation({
-      sessionId: send.sessionId,
-      clientOperationId: turn.operationId,
-      expectedRuntimeFence: turn.expectedRuntimeFence,
-      body: turn.body,
-      delivery: turn.delivery === 'queue' ? 'queue-if-active' : undefined
-    })
-  )
+  const message = structuredAgentSessionMessageSendMutation({
+    sessionId: send.sessionId,
+    clientOperationId: turn.operationId,
+    expectedRuntimeFence: turn.expectedRuntimeFence,
+    body: turn.body,
+    delivery: turn.delivery === 'queue' ? 'queue-if-active' : undefined
+  })
+  const result = await send.host.send({ callerKey: send.callerKey }, message)
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }
   }

@@ -1,3 +1,4 @@
+import { getDeepSeekBuildTitleStatus } from './dsb-terminal-title'
 import { qoderTitleStatus } from './qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
@@ -130,6 +131,9 @@ export function createAgentStatusTracker(
  * Normalize high-churn agent titles into stable display labels before storage.
  */
 export function normalizeTerminalTitle(title: string): string {
+  if (getDeepSeekBuildTitleStatus(title)) {
+    return title
+  }
   const qoderStatus = qoderTitleStatus(title)
   if (qoderStatus) {
     const label = title.includes('Qoder CLI CN') ? 'Qoder CLI CN' : 'Qoder CLI'
@@ -149,7 +153,9 @@ export function normalizeTerminalTitle(title: string): string {
     if (status === 'working') {
       return `${GEMINI_WORKING} Gemini CLI`
     }
-    if (status === 'idle') {
+    // Why only with the glyph: a bare `gemini` title (a shell auto-title) reads idle by default,
+    // and stamping Gemini's rest glyph on it turned a name into explicit readiness.
+    if (status === 'idle' && title.includes(GEMINI_IDLE)) {
       return `${GEMINI_IDLE} Gemini CLI`
     }
   }
@@ -187,6 +193,10 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
 }
 
 function computeAgentStatusFromTitle(title: string): AgentStatus | null {
+  const buildStatus = getDeepSeekBuildTitleStatus(title)
+  if (buildStatus) {
+    return buildStatus
+  }
   const qoderStatus = qoderTitleStatus(title)
   if (qoderStatus) {
     return qoderStatus

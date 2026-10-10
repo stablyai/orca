@@ -10,7 +10,6 @@ import {
   stampWslOrchestrationCompatibilityHost
 } from '../../../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import {
   getCompatibleSelectedCodexHomePath,
@@ -89,6 +88,7 @@ export function configureLocalPtyProvider(args: {
         }),
         launchCommand: ctx?.command,
         launchAgent: ctx?.launchAgent,
+        shellPath: ctx?.shellPath,
         isWsl: ctx?.isWsl,
         wslDistro: ctx?.wslDistro ?? null,
         agentStatusHooksEnabled: isAgentStatusHooksEnabled(ptySettings),
@@ -125,7 +125,6 @@ export function configureLocalPtyProvider(args: {
       }
       clearProviderPtyState(id)
       ptyOwnership.delete(id)
-      markClaudePtyExited(id)
       runtime?.onPtyExit(id, code, incarnationId, {
         providerExitObserved: true,
         ...(cause ? { cause } : {})

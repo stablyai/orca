@@ -1,22 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
+import type { AgentSessionRewindSupport } from '../../../../shared/agent-session-rewind'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
 import {
-  getAgentSessionOptionCatalog,
-  type AgentSessionOptionCatalog
-} from '../../../../shared/agent-session-option-catalog'
-import {
+  applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { readHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import {
   createCoalescedPollRunner,
   type CoalescedPollRunner
 } from '../right-sidebar/coalesced-poll-runner'
+
+/** The first frame: the host's saved list when the renderer already holds it, else the seed,
+ *  which shows the quiet placeholder until the host answers. */
+function firstFrameOptionState(
+  agent: AgentType,
+  target: RuntimeClientTarget,
+  launch: { newLaunch: boolean; worktree?: string; seedsModel: boolean }
+): StructuredAgentSessionOptionState {
+  const seed = structuredAgentSessionSeedCatalog(agent)
+  const seeded = createStructuredAgentSessionOptionState(agent, seed)
+  const snapshot = readHostModelCatalogSnapshot(target, agent, launch)
+  return snapshot ? applyStructuredAgentSessionModelCatalog(seeded, seed, snapshot, launch) : seeded
+}
 
 /** The picker's option state for one session: seeded, reset at each fence, re-read each turn. */
 export function useStructuredAgentSessionOptionState(args: {
@@ -26,6 +40,11 @@ export function useStructuredAgentSessionOptionState(args: {
   fence: number | null
   sessionId: string
   target: RuntimeClientTarget
+  /** Whether this is a new chat, where it runs and whether it names its model: what the
+   *  host's saved list is read for. */
+  newLaunch: boolean
+  worktree?: string
+  seedsModel: boolean
   providerVisible: boolean
   providerStarting: boolean
   readsBeforeStart: boolean
@@ -36,27 +55,42 @@ export function useStructuredAgentSessionOptionState(args: {
     agent,
     fence,
     identity,
+    newLaunch,
     optionCatalog,
+    seedsModel,
     providerStarting,
     providerVisible,
     readsBeforeStart,
     sessionId,
     target,
-    turnId
+    turnId,
+    worktree
   } = args
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
     threadGoal: AgentSessionOptionsResult['threadGoal']
     contextUsage: AgentSessionOptionsResult['contextUsage']
+    rewind: AgentSessionRewindSupport
+    /** The fence the read answered for; rewind support is only that runtime's. */
+    fence: number | null
   } | null>(null)
   // A revision the loaded window dropped can move the host's whole-journal context facts.
   const contextRefresh = conversationSupport?.contextUsage ? (args.unloadedTurnRevisions ?? 0) : 0
-  // Seeded from the first frame: the picker renders the static catalog while
-  // create, attach and the first live options read are still running.
+  // The first frame is the final one when the renderer holds the host's list; otherwise the quiet
+  // placeholder stands until the host answers, never a built-in label the host may replace.
   const [optionState, setOptionState] = useState(() =>
-    createStructuredAgentSessionOptionState(agent, optionCatalog)
+    firstFrameOptionState(agent, target, {
+      newLaunch,
+      seedsModel,
+      ...(worktree ? { worktree } : {})
+    })
   )
+  // Read only when a fence or session resets the state, so a new target alone resets nothing.
+  const firstFrameLaunch = useRef({ target, newLaunch, worktree, seedsModel })
+  useEffect(() => {
+    firstFrameLaunch.current = { target, newLaunch, worktree, seedsModel }
+  }, [newLaunch, seedsModel, target, worktree])
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
   const pendingOptionRef = useRef<string | null>(null)
@@ -74,13 +108,15 @@ export function useStructuredAgentSessionOptionState(args: {
     const previous = optionStateRef.current
     const sameSession = optionIdentityRef.current === identity
     optionIdentityRef.current = identity
-    const seeded = createStructuredAgentSessionOptionState(
-      agent,
-      getAgentSessionOptionCatalog(agent)
-    )
-    // A host catalog is the account's, not the fence's: keep it rather than blank the default.
+    const launch = firstFrameLaunch.current
+    const seeded = firstFrameOptionState(agent, launch.target, {
+      newLaunch: launch.newLaunch,
+      seedsModel: launch.seedsModel,
+      ...(launch.worktree ? { worktree: launch.worktree } : {})
+    })
+    // A host answer is the account's, not the fence's: keep it rather than blank the default.
     const next =
-      sameSession && previous.catalogSource === 'host'
+      sameSession && (previous.catalogSource === 'host' || previous.catalogSource === 'builtin')
         ? { ...seeded, catalog: previous.catalog, catalogSource: previous.catalogSource }
         : seeded
     optionMutationGeneration.current += 1
@@ -110,7 +146,10 @@ export function useStructuredAgentSessionOptionState(args: {
           sessionId,
           commands: result.conversationCommands ?? [],
           threadGoal: result.threadGoal,
-          contextUsage: result.contextUsage
+          contextUsage: result.contextUsage,
+          // A host that predates rewind does not name it.
+          rewind: result.rewind ?? { supported: false, reason: 'unsupported' },
+          fence
         })
         updateOptionState((current) =>
           current.record === activeOptionRecordRef.current

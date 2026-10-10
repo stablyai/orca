@@ -1,9 +1,13 @@
 import { memo, useEffect, useRef } from 'react'
-import { Loader2, Package, RotateCcw } from 'lucide-react'
+import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
+import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -44,17 +48,13 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
     autocomplete.skillErrorKind === 'unavailable'
       ? translate(
           'components.native-chat.composer.skillsUnavailableHost',
-          "Skills aren't available in SSH chats"
+          "Skills can't be listed in SSH chats"
         )
       : translate('components.native-chat.composer.skillsLoadFailed', "Couldn't load skills")
 
   let optionIndex = 0
   return (
-    <div
-      id={listboxId}
-      role="listbox"
-      className="scrollbar-sleek absolute bottom-full left-0 right-0 z-20 mb-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-    >
+    <PickerListbox id={listboxId}>
       {showCommandsHeading ? <PickerGroupHeading kind="commands" /> : null}
       {commands.map((item) => {
         const index = optionIndex++
@@ -73,7 +73,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       {showSkillsHeading ? <PickerGroupHeading kind="skills" /> : null}
       {autocomplete.skillStatus === 'loading' ? (
         <PickerStatus>
-          <Loader2 className="size-3.5 animate-spin" />
+          <LoadingSpinner className="size-3.5" />
           {translate('components.native-chat.composer.loadingSkills', 'Loading skills...')}
         </PickerStatus>
       ) : null}
@@ -128,7 +128,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
                     .join('. ')
                 : ''}
       </div>
-    </div>
+    </PickerListbox>
   )
 })
 
@@ -181,24 +181,18 @@ function PickerOption({
   onChoose: (item: NativeChatPickerItem) => void
 }): React.JSX.Element {
   const annotation = getPickerAnnotation(item)
-  const selected = index === activeIndex
+  const description =
+    item.kind === 'command' &&
+    item.name === 'clear' &&
+    item.description === 'Clear conversation context'
+      ? translate('components.native-chat.composer.clearDescription', 'Clear conversation context')
+      : item.description
   return (
-    <button
+    <PickerOptionButton
       id={`${listboxId}-option-${index}`}
-      ref={selected ? activeItemRef : null}
-      role="option"
-      aria-selected={selected}
-      type="button"
-      onPointerDown={(event) => {
-        // Why: the textarea owns query and caret state, so pointer acceptance
-        // must run before the browser transfers focus to this row.
-        event.preventDefault()
-        onChoose(item)
-      }}
-      className={cn(
-        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-[13px] hover:bg-accent hover:text-accent-foreground',
-        selected && 'border-border bg-accent text-accent-foreground'
-      )}
+      selected={index === activeIndex}
+      activeItemRef={activeItemRef}
+      onChoose={() => onChoose(item)}
     >
       {item.kind === 'skill' ? (
         <Package className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
@@ -212,8 +206,8 @@ function PickerOption({
             </span>
           ) : null}
         </span>
-        {item.description ? (
-          <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
+        {description ? (
+          <span className="block truncate text-xs text-muted-foreground">{description}</span>
         ) : null}
         {annotation ? (
           <span className="block truncate text-[11px] text-muted-foreground">{annotation}</span>
@@ -224,6 +218,62 @@ function PickerOption({
           {scopeLabel(item.sources[0]?.sourceKind)}
         </span>
       ) : null}
+    </PickerOptionButton>
+  )
+}
+
+function PickerListbox({
+  id,
+  children
+}: {
+  id: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div
+      id={id}
+      role="listbox"
+      className="scrollbar-sleek absolute bottom-full left-0 right-0 z-20 mb-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+    >
+      {children}
+    </div>
+  )
+}
+
+function PickerOptionButton({
+  id,
+  selected,
+  activeItemRef,
+  onChoose,
+  children
+}: {
+  id: string
+  selected: boolean
+  activeItemRef: React.MutableRefObject<HTMLButtonElement | null>
+  onChoose: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <button
+      id={id}
+      ref={selected ? activeItemRef : null}
+      role="option"
+      aria-selected={selected}
+      type="button"
+      onPointerDown={(event) => {
+        // Why: the textarea owns query and caret state, so pointer acceptance
+        // must run before the browser transfers focus to this row.
+        event.preventDefault()
+        if (event.button === 0) {
+          onChoose()
+        }
+      }}
+      className={cn(
+        'flex w-full items-start gap-2 rounded-md border border-transparent px-2 py-1.5 text-left text-[13px] hover:bg-accent hover:text-accent-foreground',
+        selected && 'border-border bg-accent text-accent-foreground'
+      )}
+    >
+      {children}
     </button>
   )
 }
@@ -257,27 +307,60 @@ function scopeLabel(sourceKind: SkillSourceKind | undefined): string {
   return sourceKind ? (labels[sourceKind] ?? '') : ''
 }
 
-export function NativeChatMentionHint({
-  query,
-  onAccept
+export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
+  mention,
+  activeIndex,
+  listboxId,
+  onChoose
 }: {
-  query: string
-  onAccept: () => void
+  mention: NativeChatMentionFiles
+  activeIndex: number
+  listboxId: string
+  onChoose: (path: string) => void
 }): React.JSX.Element {
+  const activeItemRef = useRef<HTMLButtonElement | null>(null)
+  const { files } = mention
+  const selectedIndex = Math.min(activeIndex, files.length - 1)
+
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [selectedIndex, files])
+
+  const statusText =
+    files.length > 0
+      ? null
+      : mention.loading
+        ? translate('components.native-chat.composer.loadingFiles', 'Loading files...')
+        : mention.failed
+          ? translate('components.native-chat.composer.filesLoadFailed', "Couldn't load files")
+          : translate('components.native-chat.composer.noFiles', 'No matching files')
+
   return (
-    <button
-      type="button"
-      onPointerDown={(event) => {
-        event.preventDefault()
-        onAccept()
-      }}
-      // Why z-20: matches the slash picker. The composer shell below is a paint
-      // containment boundary (#10481), so it now paints at z-index 0 in tree
-      // order and would otherwise cover this hint's drop shadow.
-      className="absolute bottom-full left-3 right-3 z-20 mb-1 flex w-auto items-center gap-2 rounded-md border border-border bg-popover px-3 py-1.5 text-left text-xs text-muted-foreground shadow-md sm:left-4 sm:right-4"
-    >
-      {translate('components.native-chat.composer.mentionHint', 'Referencing file:')}{' '}
-      <span className="font-medium text-foreground">@{query || '…'}</span>
-    </button>
+    <PickerListbox id={listboxId}>
+      {files.map((path, index) => {
+        const FileIcon = getFileTypeIcon(path)
+        return (
+          <PickerOptionButton
+            key={path}
+            id={`${listboxId}-option-${index}`}
+            selected={index === selectedIndex}
+            activeItemRef={activeItemRef}
+            onChoose={() => onChoose(path)}
+          >
+            <FileIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+            <FilenameFirstPath path={path} />
+          </PickerOptionButton>
+        )
+      })}
+      {statusText ? (
+        <PickerStatus>
+          {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}
+          {statusText}
+        </PickerStatus>
+      ) : null}
+      <div aria-live="polite" className="sr-only">
+        {statusText ?? ''}
+      </div>
+    </PickerListbox>
   )
-}
+})

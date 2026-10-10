@@ -16,6 +16,7 @@ import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
 
 const structuredPlan: AgentSessionLaunchPlan = adoptAgentSessionLaunchVerdict({
+  requestId: 'request-1',
   route: 'structured-native-chat',
   agent: 'codex',
   worktreeId: 'worktree-1',
@@ -69,7 +70,10 @@ describe('beginDirectWorkItemStructuredLaunch', () => {
   it('skips structured opening for non-structured routes', () => {
     expect(
       beginDirectWorkItemStructuredLaunch({
-        plan: adoptAgentSessionLaunchVerdict({ ...structuredPlan, route: 'legacy-native-chat' }),
+        plan: adoptAgentSessionLaunchVerdict({
+          ...structuredPlan,
+          route: 'terminal-tui'
+        }),
         primaryTabId: null,
         beforeOpen: vi.fn()
       })

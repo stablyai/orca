@@ -14,7 +14,7 @@ on:
       - '.github/actions/prepare-native-runtime/**'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache*'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
@@ -44,12 +44,11 @@ on:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-headless-compiler/**'
-      - 'config/scripts/headless-detector-compiler-cache*'
+      - 'config/scripts/headless-detector-compiler-cache.mjs'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'
       - 'config/docker/daemon-shutdown-descendants/**'
-      - 'config/scripts/ci-cache-warmup-workflow.test.mjs'
 
 permissions:
   contents: read

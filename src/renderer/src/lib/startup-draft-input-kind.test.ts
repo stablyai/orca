@@ -3,10 +3,17 @@
 // startup paste, or the draft helper that waits for the agent. Both must write it as launch input.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { bindSettlePaneSerializer } from '@/components/terminal-pane/pty-connection/pane-serializer-settle'
 import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from '@/components/terminal-pane/pty-connection/pty-connect-limits'
 import { pasteDraftToAgentPtyWhenReady, submitPromptToAgentPty } from './agent-paste-draft'
+
+const { onTimeout } = vi.hoisted(() => ({ onTimeout: vi.fn() }))
+vi.mock('./launch-agent-paste-timeout-notice', () => ({
+  createPasteReadinessTimeoutNotice: () => ({ onTimeout })
+}))
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -38,8 +45,7 @@ function stubPtyApi(): { kinds: TerminalInputKind[] } {
   return { kinds }
 }
 
-/** The pane route: the pane's transport pastes the draft once the agent's composer is ready. */
-async function paneRouteKinds(): Promise<TerminalInputKind[]> {
+function createPaneDraftSession(agent?: 'codex') {
   const { kinds } = stubPtyApi()
   const transport = {
     getPtyId: () => 'pty-1',
@@ -56,12 +62,20 @@ async function paneRouteKinds(): Promise<TerminalInputKind[]> {
     ownsStartupDraftPaste: true,
     shouldDeliverStartupViaTerminalPaste: false,
     startupDraftPrompt: DRAFT,
+    startupDraftAgent: agent,
+    startupDraftAgentConfig: agent ? TUI_AGENT_CONFIG[agent] : undefined,
     recordTerminalInputForHibernation: () => {},
     deps: { worktreeId: 'wt-1', paneTransportsRef: { current: new Map([[pane.id, transport]]) } }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the session is an any-typed bag; the draft path reads only the fields above.
   const session = bag as unknown as ConnectPanePtySession
   bindSettlePaneSerializer(session)
+  return { session, kinds }
+}
+
+/** The pane route: the pane's transport pastes the draft once the agent's composer is ready. */
+async function paneRouteKinds(): Promise<TerminalInputKind[]> {
+  const { session, kinds } = createPaneDraftSession()
   session.observeStartupDraftPasteReadiness('\x1b[?2004h')
   await vi.advanceTimersByTimeAsync(STARTUP_DRAFT_PASTE_QUIET_MS)
   await vi.runAllTimersAsync()
@@ -85,6 +99,7 @@ async function helperRouteKinds(): Promise<TerminalInputKind[]> {
 describe('a created worktree’s startup draft', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    onTimeout.mockClear()
   })
 
   afterEach(() => {
@@ -109,5 +124,18 @@ describe('a created worktree’s startup draft', () => {
 
     await expect(submitted).resolves.toBe(true)
     expect(new Set(kinds)).toEqual(new Set(['driving']))
+  })
+
+  it('never delivers a pane-owned Codex draft after readiness times out', async () => {
+    const { session, kinds } = createPaneDraftSession('codex')
+    session.observeStartupDraftPasteReadiness('\x1b[?2004hWaiting for Codex...')
+    await vi.advanceTimersByTimeAsync(resolveDraftPasteReadyTimeoutMs('codex'))
+
+    expect(onTimeout).toHaveBeenCalledOnce()
+    expect(kinds).toEqual([])
+    session.observeStartupDraftPasteReadiness('\x1b[2K› ')
+    await vi.runAllTimersAsync()
+    expect(kinds).toEqual([])
+    expect(onTimeout).toHaveBeenCalledOnce()
   })
 })

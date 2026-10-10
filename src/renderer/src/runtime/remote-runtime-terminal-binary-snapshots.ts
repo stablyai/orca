@@ -17,7 +17,10 @@ import {
   concatBytes,
   decodeSnapshotInfo
 } from './remote-runtime-terminal-snapshot-state'
-import type { RemoteRuntimeMultiplexedTerminalState } from './remote-runtime-terminal-multiplexer-types'
+import type {
+  RemoteRuntimeMultiplexedTerminalCallbacks,
+  RemoteRuntimeMultiplexedTerminalState
+} from './remote-runtime-terminal-multiplexer-types'
 
 export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntimeTerminalResponseController {
   protected handleSnapshotOrErrorFrame(
@@ -72,6 +75,22 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
           ? info.requestId === pendingRequest.requestId
           : stream.initialSnapshotReceived)
       if (snapshotApplied) {
+        const pushedMeta: NonNullable<
+          Parameters<RemoteRuntimeMultiplexedTerminalCallbacks['onSnapshot']>[1]
+        > = {
+          pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
+          seq: info?.seq,
+          kittyKeyboardFlags: info?.kittyKeyboardFlags,
+          alternateScreen: info?.alternateScreen,
+          terminalOwner: info?.terminalOwner,
+          // Why: the image encodes wraps and cursor moves against the host's
+          // grid, so the restorer must replay it there — the request path has
+          // always carried these; the pushes silently dropped them.
+          cols: info?.cols,
+          rows: info?.rows,
+          // Absent counts as none: older hosts push desktop images screen-only.
+          carriesHistory: (info?.scrollbackRows ?? 0) > 0
+        }
         if (matchesPendingRequest) {
           pendingRequest.resolve({
             availability: classifySnapshotAvailability(stream.snapshotOverflowed, info),
@@ -84,41 +103,25 @@ export abstract class RemoteRuntimeTerminalBinarySnapshots extends RemoteRuntime
               kittyKeyboardFlags: info?.kittyKeyboardFlags,
               alternateScreen: info?.alternateScreen,
               terminalOwner: info?.terminalOwner,
-              pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+              pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
+              // The host folds the normal buffer into `data` (see terminal-snapshot-publication.ts).
+              carriesNormalBuffer: true
             }
           })
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
-          stream.callbacks.onSnapshot(data ?? '', {
-            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
-            seq: info?.seq,
-            kittyKeyboardFlags: info?.kittyKeyboardFlags,
-            alternateScreen: info?.alternateScreen,
-            terminalOwner: info?.terminalOwner,
-            // Why: the image encodes wraps and cursor moves against the host's
-            // grid, so the restorer must replay it there — the request path has
-            // always carried these; the pushes silently dropped them.
-            cols: info?.cols,
-            rows: info?.rows
-          })
+          stream.callbacks.onSnapshot(data ?? '', pushedMeta)
         } else if (target === 'recovery') {
-          // Why: a server-pushed recovery snapshot replaces terminal state
-          // mid-session; clear the screen and scrollback before applying it.
+          // Why: a server-pushed recovery snapshot follows dropped output, so the
+          // pane's history ends before this image; clear screen and scrollback
+          // rather than splice them with a silent gap (P2-5).
           // An empty snapshot is still applied so stale dropped output does
           // not linger on a terminal the model says is blank.
           // RELEASE_SYNCHRONIZED_OUTPUT: \x1b[2J does not clear mode 2026, so a pane
           // holding an open latch would not paint this recovery snapshot at all.
           stream.callbacks.onSnapshot(
             `${RELEASE_SYNCHRONIZED_OUTPUT}\x1b[2J\x1b[3J\x1b[H${data ?? ''}`,
-            {
-              pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
-              seq: info?.seq,
-              kittyKeyboardFlags: info?.kittyKeyboardFlags,
-              alternateScreen: info?.alternateScreen,
-              terminalOwner: info?.terminalOwner,
-              cols: info?.cols,
-              rows: info?.rows
-            }
+            pushedMeta
           )
         }
       } else if (matchesPendingRequest) {

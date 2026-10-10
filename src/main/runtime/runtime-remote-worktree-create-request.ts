@@ -55,6 +55,7 @@ export async function requestRuntimeRemoteWorktree(
         : {}),
       ...(args.linkedGiteaPR != null ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
       ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+      ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
       ...(args.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
         : {}),

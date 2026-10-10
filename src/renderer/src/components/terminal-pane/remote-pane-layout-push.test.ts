@@ -70,6 +70,27 @@ describe('createRemotePaneLayoutPusher', () => {
     })
   })
 
+  it('adds only the intent field to a gesture push', () => {
+    const layout = makeLayout()
+    createRemotePaneLayoutPusher().push({ worktreeId: 'wt-1', tabId: 'tab-1', layout })
+    createRemotePaneLayoutPusher().push({
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      layout,
+      intent: 'gesture'
+    })
+    const [[unmarked], [marked]] = updateWebRuntimePaneLayout.mock.calls
+    expect(unmarked).not.toHaveProperty('intent')
+    expect(marked).toEqual({ ...unmarked, intent: 'gesture' })
+  })
+
+  it('dedupes a gesture push of an unchanged layout like any other push', () => {
+    const pusher = createRemotePaneLayoutPusher()
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout() })
+    pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout(), intent: 'gesture' })
+    expect(updateWebRuntimePaneLayout).toHaveBeenCalledTimes(1)
+  })
+
   it('omits titlesByLeafId when the layout carries no titles', () => {
     const pusher = createRemotePaneLayoutPusher()
     pusher.push({

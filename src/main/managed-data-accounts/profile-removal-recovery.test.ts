@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -64,6 +65,43 @@ async function finishStartup(service: ManagedDataAccountService) {
 
 describe('interrupted managed account removal recovery', () => {
   it.each(['devin', 'opencode'] as const)(
+    'quarantines the canonical %s directory registered with an uppercase UUID',
+    async (provider) => {
+      const fixture = interruptedRemoval(provider)
+      const id = fixture.id.toUpperCase()
+      const registered = {
+        accounts: [{ ...fixture.before.accounts[0], id }],
+        activeAccountId: id
+      }
+      expect(writeSecureFile(fixture.metadataPath, JSON.stringify(registered))).toBe(true)
+      const cleanup = vi.fn(() => {
+        throw new Error('cleanup deferred')
+      })
+      const service = new ManagedDataAccountService(storage, cleanup)
+
+      await expect(service.remove(provider, id)).resolves.toEqual({
+        accounts: [],
+        activeAccountId: null
+      })
+
+      const pendingRoot = join(fixture.providerRoot, '.pending-delete')
+      const pendingDirectory = join(pendingRoot, fixture.id)
+      expect(cleanup).toHaveBeenCalledWith(pendingDirectory)
+      expect(readdirSync(pendingRoot)).toEqual([fixture.id])
+      expect(existsSync(fixture.directory)).toBe(false)
+      expect(readFileSync(join(pendingDirectory, 'data', 'test-credentials'), 'utf8')).toBe(
+        'private-test-only-credential'
+      )
+      expect(existsSync(fixture.rollbackPath)).toBe(false)
+
+      const restarted = new ManagedDataAccountService(storage)
+      await finishStartup(restarted)
+      expect(existsSync(pendingDirectory)).toBe(false)
+      expect(restarted.list(provider)).toEqual({ accounts: [], activeAccountId: null })
+    }
+  )
+
+  it.each(['devin', 'opencode'] as const)(
     'quarantines a committed %s removal left before quarantine on restart',
     async (provider) => {
       const fixture = interruptedRemoval(provider)
@@ -77,39 +115,48 @@ describe('interrupted managed account removal recovery', () => {
     }
   )
 
-  it('recovers after both quarantine and metadata rollback fail without the removed id', async () => {
-    const source = join(root, 'source')
-    mkdirSync(join(source, 'devin'), { recursive: true })
-    writeFileSync(join(source, 'devin', 'credentials.toml'), 'windsurf_api_key = "test-only"')
-    const service = new ManagedDataAccountService(storage)
-    const before = await service.add('devin', source, 'Work')
-    const id = before.accounts[0].id
-    const directory = join(storage, 'devin', id)
-    const credentialsPath = join(directory, 'data', 'devin', 'credentials.toml')
-    const metadataPath = join(storage, 'devin', 'accounts.json')
-    const rollbackPath = `${metadataPath}.${id}.rollback`
-    const credentials = readFileSync(credentialsPath)
-    const original = readFileSync(metadataPath)
-    const rename = fileSystem.renameSync
-    const failingRename = vi.spyOn(fileSystem, 'renameSync').mockImplementation((from, to) => {
-      if (from === directory || from === rollbackPath) {
-        throw new Error('injected removal and rollback lock')
+  it.each(['lowercase', 'uppercase'] as const)(
+    'recovers after quarantine and rollback fail for a %s registered UUID',
+    async (spelling) => {
+      const source = join(root, 'source')
+      mkdirSync(join(source, 'devin'), { recursive: true })
+      writeFileSync(join(source, 'devin', 'credentials.toml'), 'windsurf_api_key = "test-only"')
+      const service = new ManagedDataAccountService(storage)
+      const added = await service.add('devin', source, 'Work')
+      const directoryId = added.accounts[0].id
+      const id = spelling === 'uppercase' ? directoryId.toUpperCase() : directoryId
+      const before = {
+        accounts: [{ ...added.accounts[0], id }],
+        activeAccountId: id
       }
-      return rename(from, to)
-    })
-    await expect(service.remove('devin', id)).rejects.toBeInstanceOf(AggregateError)
-    expect(service.list('devin')).toEqual({ accounts: [], activeAccountId: null })
-    expect(readFileSync(credentialsPath)).toEqual(credentials)
-    expect(readFileSync(rollbackPath)).toEqual(original)
-    failingRename.mockRestore()
+      const directory = join(storage, 'devin', directoryId)
+      const credentialsPath = join(directory, 'data', 'devin', 'credentials.toml')
+      const metadataPath = join(storage, 'devin', 'accounts.json')
+      const rollbackPath = `${metadataPath}.${directoryId}.rollback`
+      expect(writeSecureFile(metadataPath, JSON.stringify(before))).toBe(true)
+      const credentials = readFileSync(credentialsPath)
+      const original = readFileSync(metadataPath)
+      const rename = fileSystem.renameSync
+      const failingRename = vi.spyOn(fileSystem, 'renameSync').mockImplementation((from, to) => {
+        if (from === directory || from === rollbackPath) {
+          throw new Error('injected removal and rollback lock')
+        }
+        return rename(from, to)
+      })
+      await expect(service.remove('devin', id)).rejects.toBeInstanceOf(AggregateError)
+      expect(service.list('devin')).toEqual({ accounts: [], activeAccountId: null })
+      expect(readFileSync(credentialsPath)).toEqual(credentials)
+      expect(readFileSync(rollbackPath)).toEqual(original)
+      failingRename.mockRestore()
 
-    const restarted = new ManagedDataAccountService(storage)
-    await finishStartup(restarted)
-    expect(existsSync(directory)).toBe(false)
-    expect(existsSync(rollbackPath)).toBe(false)
-    expect(restarted.list('devin')).toEqual({ accounts: [], activeAccountId: null })
-    expect(readFileSync(join(source, 'devin', 'credentials.toml'), 'utf8')).toContain('test-only')
-  })
+      const restarted = new ManagedDataAccountService(storage)
+      await finishStartup(restarted)
+      expect(existsSync(directory)).toBe(false)
+      expect(existsSync(rollbackPath)).toBe(false)
+      expect(restarted.list('devin')).toEqual({ accounts: [], activeAccountId: null })
+      expect(readFileSync(join(source, 'devin', 'credentials.toml'), 'utf8')).toContain('test-only')
+    }
+  )
 
   it('retains recovery evidence when quarantine is locked and continues other removals', async () => {
     const locked = interruptedRemoval()

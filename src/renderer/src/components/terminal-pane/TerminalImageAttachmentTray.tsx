@@ -105,7 +105,7 @@ export function TerminalImageAttachmentTray({ container }: { container: HTMLElem
         <Button size="sm" disabled={busy} onClick={() => void attach()}>
           {translate('terminal.imageAttachments.attach', 'Add to Codex')}
         </Button>
-        <Button size="sm" variant="outline" disabled={busy} onClick={cancelAll}>
+        <Button size="sm" variant="ghost" disabled={busy} onClick={cancelAll}>
           {translate('terminal.imageAttachments.cancel', 'Cancel')}
         </Button>
       </div>

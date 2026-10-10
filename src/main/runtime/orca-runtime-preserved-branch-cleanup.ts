@@ -1,5 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTerminalDrivers } from './orca-runtime-terminal-drivers'
+import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from './run-terminal-client-use'
+import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostScope } from '../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from './runtime-preserved-branch-cleanup'
 import type { IPtyProvider } from '../providers/types'
 import type {
@@ -9,6 +11,7 @@ import type {
   RuntimeTerminalAgentStatusEvent
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
+import type { ClaudeTerminalEvidence } from '../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
@@ -29,7 +32,6 @@ import { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
-import type { Store } from '../persistence'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
@@ -43,6 +45,7 @@ import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-c
 import { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
+import { countRepoTerminalsNotKnownExited } from './project-removal-impact'
 
 export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
   protected readonly preservedBranchCleanup = new RuntimePreservedBranchCleanup(() =>
@@ -60,6 +63,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     | null
 
   protected readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
+
+  protected readonly onClaudeTerminalEvidence:
+    | ((paneKey: string, evidence: ClaudeTerminalEvidence) => void)
+    | null
 
   protected terminalSideEffectLocalConsumerAvailable = false
 
@@ -79,6 +86,30 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
 
+  /** See run-terminal-client-use.ts. */
+  readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown' {
+    return readRunTerminalClientUse(this, ptyId)
+  }
+
+  confirmTerminalShellAlone(ptyId: string): Promise<boolean> {
+    return confirmRunTerminalShellAlone(this.ptyController, ptyId)
+  }
+
+  /** The PTY a terminal handle drives now; a restarted pane answers with its new PTY. */
+  getTerminalPtyIdForHandle(handle: string): string | null {
+    return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
+  }
+
+  /** Every provider-session row this host holds, resume-identity-only rows included. */
+  getAgentProviderSessionRows(): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.() ?? []
+  }
+
+  /** Agent status rows this host holds for a pane, from hooks, OSC and titles alike. */
+  getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
+  }
+
   protected readonly attestAgentHookCompatibilityAuthorityFn:
     | ((candidate: {
         paneKey: string
@@ -96,6 +127,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
 
   protected readonly reconcileAgentStatusForEndedProcessFn:
     | ((paneKeys: Iterable<string>) => void)
+    | null
+
+  protected readonly dropAgentStatusForRemovedWorktreeFn:
+    | ((worktreeId: string, host?: ExecutionHostScope) => void)
     | null
 
   protected readonly canRecoverPersistentLocalPtysFn: () => boolean
@@ -117,6 +152,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly resolveCodexStructuredLaunchHomeFn:
     | ((input: { launchEnv: NodeJS.ProcessEnv }) => string | null | Promise<string | null>)
     | null
+
+  protected readonly prepareCodexCatalogProbeHomeFn: ((homePath: string) => void) | null
 
   protected readonly agentSessionClaimSigner: AgentSessionClaimSigner
 
@@ -148,7 +185,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     )
 
   protected readonly legacyWorkerRecovery = new RuntimeLegacyWorkerTerminalRecoveryController({
-    preparePlan: () => this.legacyWorkerRecoveryPersistence.prepare(),
+    preparePlan: (dispatchIds) => this.legacyWorkerRecoveryPersistence.prepare(dispatchIds),
     resolveWorkspace: async (candidate) => {
       const scope = await this.resolveTerminalWorkspaceLaunchScope(`id:${candidate.worktreeId}`)
       const resolved = scope.folderWorkspace
@@ -161,7 +198,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
         worktrees,
         null,
         undefined,
-        connectionId
+        connectionId,
+        false,
+        { includeForegroundProcessEvidence: false, refreshForegroundAgents: false }
       ),
     runMutation: (worktreeId, operation) => this.runWorktreeTerminalMutation(worktreeId, operation),
     getActivation: (worktreeId) => this.getLegacyWorkerRecoveryActivation(worktreeId),
@@ -180,6 +219,9 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     notifyResolution: (candidate, resolution) =>
       this.notifier?.resolveLegacyWorkerTerminalRecovery?.(candidate.paneKey, resolution),
     canRecoverPersistentLocalPtys: () => this.canRecoverPersistentLocalPtysFn(),
+    isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
+    hasRequestedReleases: () =>
+      this.getOrchestrationDb().listWorkerTerminalReleaseBacklog(1).length > 0,
     reconcileRequestedReleases: () =>
       reconcileRequestedWorkerTerminalReleases(this as RuntimeCommandSurfaceHost<this>),
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
@@ -211,7 +253,7 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       (this as RuntimeCommandSurfaceHost<this>).addRepo(path, kind, hostId),
     addRemoteRepo: async (remote) => {
       // The same registration the desktop IPC handler uses, so both surfaces agree on SSH hosts.
-      const result = await addRemoteRepoFromPath(this.requireStore() as unknown as Store, remote)
+      const result = await addRemoteRepoFromPath(this.requireStore(), remote)
       if ('error' in result) {
         throw new Error(result.error)
       }
@@ -224,7 +266,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       (this as RuntimeCommandSurfaceHost<this>).cloneRepo(url, destination, hostId),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
-    notifyReposChanged: () => this.notifyReposChanged()
+    notifyReposChanged: () => this.notifyReposChanged(),
+    countLiveTerminalsForRepo: (repo) =>
+      countRepoTerminalsNotKnownExited(repo, this.ptysById.values(), (ptyId) =>
+        this.isPtyKnownExited(ptyId)
+      )
   })
 
   protected readonly projectGroups = new RuntimeProjectGroupController({
@@ -247,6 +293,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       if (this.store) {
         this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
       }
+      // Why every host after the local-only hub: this store mints folder ids, so none is shared.
+      this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
     }
   })
 

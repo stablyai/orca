@@ -25,14 +25,24 @@ import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-r
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
 import { agentHookServer } from '../agent-hooks/server'
-import {
-  isRealHomeCodexHookLaneUsable,
-  setRealHomeCodexHooksEnabledReader
-} from '../codex/codex-real-home-hook-install'
-import { isAgentStatusHooksEnabledForAgent } from '../agent-hooks/managed-agent-hook-controls'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { browserManager } from '../browser/browser-manager'
+import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent-model-catalog-wiring'
+import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { mainProcessState as state } from './main-process-state'
+
+// Settings that change which account or binary a new chat's agent runs under.
+const MODEL_CATALOG_ACCOUNT_SETTINGS = [
+  'activeCodexManagedAccountId',
+  'activeCodexManagedAccountIdsByRuntime',
+  'codexManagedAccounts',
+  'activeClaudeManagedAccountId',
+  'activeClaudeManagedAccountIdsByRuntime',
+  'claudeManagedAccounts',
+  'agentDefaultEnv',
+  'agentCmdOverrides'
+] as const
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
@@ -48,12 +58,6 @@ export function initializeMainProcessAccountServices(): void {
   state.rateLimits = new RateLimitService()
   state.codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
-  // Why: an incapable trust-grant host must fall back to the managed home for
-  // every consumer (PTY env, rate limits, commit messages) in one place.
-  state.codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
-  setRealHomeCodexHooksEnabledReader(() =>
-    isAgentStatusHooksEnabledForAgent(store.getSettings(), 'codex')
-  )
   state.codexSessionMigration = createCodexSessionMigrationScheduler({
     isEligible: () =>
       state.codexRuntimeHome?.isHostSystemDefaultSessionMigrationEligible() === true,
@@ -88,11 +92,20 @@ export function initializeMainProcessAccountServices(): void {
     state.rateLimits,
     store.getSettings()
   )
+  const expireModelCatalogs = createAgentModelCatalogSettingsExpiry(
+    agentModelCatalogStore,
+    store.getSettings()
+  )
   store.onSettingsChanged((updates, settings) => {
+    expireModelCatalogs(updates, settings)
     // Why: auto is a live policy; retarget only providers whose settings-derived runtime changed.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
     )
+    // An account switch would otherwise leave the next chat's picker on a cold catalog.
+    if (MODEL_CATALOG_ACCOUNT_SETTINGS.some((key) => key in updates)) {
+      prewarmStructuredAgentModelCatalogs()
+    }
     if ('opencodeSessionCookie' in updates || 'opencodeWorkspaceId' in updates) {
       state.rateLimits?.invalidateOpenCodeGoCredentialState()
       void state.rateLimits?.refresh().catch((error: unknown) => {
@@ -190,7 +203,6 @@ export function initializeMainProcessAccountServices(): void {
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
-        managedAuthPath: account.managedAuthPath,
         managedAuthRuntime: account.managedAuthRuntime,
         wslDistro: account.wslDistro,
         wslLinuxAuthPath: account.wslLinuxAuthPath

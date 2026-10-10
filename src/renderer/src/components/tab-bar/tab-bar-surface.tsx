@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 import TabBarCreateEntry from './TabBarCreateEntry'
 import { TabStripScrollIndicator } from './TabStripScrollIndicator'
+import { TabStripTooltipProvider } from './TabStripTooltipProvider'
 import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
 import type { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import type { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
@@ -36,7 +37,8 @@ export function renderTabBarSurface({
   tabStripNavigation,
   tabStripDragScroll,
   activeClientHostedBrowserRowId,
-  itemActions
+  itemActions,
+  surfaceRef
 }: {
   props: TabBarProps
   runtime: TabBarRuntimeModel
@@ -46,6 +48,7 @@ export function renderTabBarSurface({
   tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
   activeClientHostedBrowserRowId: string | null
   itemActions: TabBarItemActions
+  surfaceRef: (node: HTMLDivElement | null) => void
 }): React.JSX.Element {
   const {
     worktreeId,
@@ -80,7 +83,6 @@ export function renderTabBarSurface({
     handleSelectCreateMenuOption,
     launchAgentFromNewTabEntry,
     runPendingNewTabMenuFocusAfterClose,
-    clearPendingNewTabMenuFocusOnUnmount,
     queueNewActiveTerminalFocusAfterNewTabMenuClose,
     queueTerminalTabFocusAfterNewTabMenuClose,
     queueFocusAfterNewTabMenuClose,
@@ -88,8 +90,13 @@ export function renderTabBarSurface({
   } = createMenu
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
-  const { tabStripRef, tabStripOverflowState, activeTabDockSide, scrollTabStrip } =
-    tabStripNavigation
+  const {
+    tabStripRef,
+    tabStripOverflowState,
+    activeTabDockSide,
+    scrollTabStrip,
+    subscribeToStripResize
+  } = tabStripNavigation
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
     items: orderedItems,
@@ -102,12 +109,7 @@ export function renderTabBarSurface({
   })
 
   return (
-    <div
-      ref={clearPendingNewTabMenuFocusOnUnmount}
-      className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
-      // Why: preload routes native OS drops by this marker — only the tab strip opens files in the editor, not terminal panes.
-      data-native-file-drop-target="editor"
-    >
+    <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -154,20 +156,23 @@ export function renderTabBarSurface({
               .filter(Boolean)
               .join(' ')}
           >
-            {renderedItems}
-            {clientHostedBrowserRows.length > 0 ? (
-              <ClientHostedBrowserTabRows
-                rows={clientHostedBrowserRows}
-                worktreeId={worktreeId}
-                groupId={resolvedGroupId}
-                groupActiveTabId={props.groupActiveTabId ?? null}
-                includeTopTabBorder={includeTopTabBorder}
-              />
-            ) : null}
+            <TabStripTooltipProvider>
+              {renderedItems}
+              {clientHostedBrowserRows.length > 0 ? (
+                <ClientHostedBrowserTabRows
+                  rows={clientHostedBrowserRows}
+                  worktreeId={worktreeId}
+                  groupId={resolvedGroupId}
+                  groupActiveTabId={props.groupActiveTabId ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
+                />
+              ) : null}
+            </TabStripTooltipProvider>
           </div>
           <TabStripScrollIndicator
-            metrics={tabStripOverflowState}
+            hasOverflow={tabStripOverflowState.hasOverflow}
             scrollContainerRef={tabStripRef}
+            subscribeToStripResize={subscribeToStripResize}
             disabled={tabStripDragScroll.isTabDragActive}
           />
         </div>

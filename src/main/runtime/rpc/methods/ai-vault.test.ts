@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -224,6 +225,30 @@ describe('aiVault.prepareSessionResume', () => {
       codexHome: '/managed',
       executionHostId: 'local'
     })
+  })
+
+  it('carries a fork request through to the host preparation', async () => {
+    const prepareAiVaultSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: false })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime members.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
+      prepareAiVaultSessionResume
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('aiVault.prepareSessionResume', {
+        agent: 'codex',
+        filePath: '/managed/sessions/rollout-a.jsonl',
+        codexHome: '/managed',
+        fork: true
+      })
+    )
+
+    expect(prepareAiVaultSessionResume).toHaveBeenCalledWith(
+      expect.objectContaining({ fork: true, executionHostId: 'local' })
+    )
   })
 })
 

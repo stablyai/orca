@@ -18,7 +18,7 @@ import {
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
-import { writeClaudeTurnRow } from './claude-turn-row-revision'
+import { writeAgentJournalTurnRow } from '../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 
@@ -26,6 +26,8 @@ export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink
   /** Settles the superseded turn's children; they get no later event of their own. */
   settleChildren: (groupKey: string | null) => void
+  /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
+  endOpenWork: (completedAt: number) => void
   /** A turn opening moves the conversation on. */
   onOpen?: () => void
 }
@@ -60,11 +62,6 @@ export class ClaudeOpenTurn {
   }
 
   /** The open turn's row, where a fact about the running turn lands. */
-  /** The submission that opened the open turn, when known (`ClaudeCurrentTurn.openedBy`). */
-  get openedBy(): string | null {
-    return this.current?.openedBy ?? null
-  }
-
   get identity(): AgentJournalItemIdentity | null {
     return this.current ? claudeCurrentTurnIdentity(this.current) : null
   }
@@ -116,6 +113,7 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.settleChildren(this.groupKey)
+      this.deps.endOpenWork(observedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: observedAt,
@@ -133,6 +131,7 @@ export class ClaudeOpenTurn {
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.settleChildren(this.groupKey)
+      this.deps.endOpenWork(turn.startedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: turn.startedAt,
@@ -173,6 +172,8 @@ export class ClaudeOpenTurn {
   settle(end: ClaudeTurnEnd, contextUsage?: AgentSessionContextUsage): void {
     // Every settle is a provider cycle ending (result, idle, child exit).
     this.cycleWorkObserved = false
+    // Even with no turn open: work a suppressed turn produced still ends here.
+    this.deps.endOpenWork(end.completedAt)
     if (this.current) {
       this.publish(this.current, end, contextUsage)
       this.current = null
@@ -203,7 +204,7 @@ export class ClaudeOpenTurn {
     contextUsage?: AgentSessionContextUsage
   ): void {
     const item = claudeTurnLifecycleItem(turn, end)
-    writeClaudeTurnRow(
+    writeAgentJournalTurnRow(
       this.deps.sink,
       { identity: item.identity },
       { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) },

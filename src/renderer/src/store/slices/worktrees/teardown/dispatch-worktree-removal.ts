@@ -1,3 +1,4 @@
+import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/nested-worktree-preserved-branches-toast'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { callRuntimeRpc, type getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
@@ -29,7 +30,9 @@ export async function dispatchWorktreeRemoval(args: {
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
   try {
-    return await requestWorktreeRemoval(args)
+    const result = await requestWorktreeRemoval(args)
+    showNestedWorktreePreservedBranchesToast(result?.nestedPreservedBranches)
+    return result
   } catch (error) {
     if (args.options?.mode === 'forget-local' || !isWorktreeRemovalReplyLost(error)) {
       throw error
@@ -61,11 +64,19 @@ async function requestWorktreeRemoval(
       worktreeId,
       hostId,
       force,
+      ...(options?.approvedNestedWorktrees
+        ? { approvedNestedWorktrees: options.approvedNestedWorktrees }
+        : {}),
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
       allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
       ...snapshotPruneBatch
     })
+  }
+  if (options?.approvedNestedWorktrees) {
+    throw new Error(
+      'Nested worktree deletion is not supported by this runtime. Delete its children individually first.'
+    )
   }
   const effectiveHostId =
     options?.sameIdSurvivingHostId != null ? hostId : qualifyRuntimeCallHost(target, hostId)

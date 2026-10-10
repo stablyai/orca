@@ -1,9 +1,15 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mergeOrcadPrebuildTrees } from './merge-orcad-prebuilds.mjs'
-import { findSlotProblems, mergeManifest, sha256Of } from './orcad-prebuild-slot-contents.mjs'
+import {
+  COMPAT_SLOT_ADDONS,
+  findSlotProblems,
+  isCompatSlot,
+  mergeManifest,
+  sha256Of
+} from './orcad-prebuild-slot-contents.mjs'
 
 const dirs = []
 function temp() {
@@ -20,15 +26,20 @@ afterEach(() => {
 /** One CI lane's `out/orcad-prebuilds`: a single slot plus its manifest. */
 function laneTree(slot, { version = '1.1.0', nodeHeaders = '24.21.0', bytes = slot } = {}) {
   const dir = temp()
-  mkdirSync(join(dir, slot), { recursive: true })
-  const binary = join(dir, slot, 'pty.node')
-  writeFileSync(binary, bytes)
+  const files = {}
+  // A compat slot also carries its own addons.
+  for (const file of ['pty.node', ...(isCompatSlot(slot) ? Object.keys(COMPAT_SLOT_ADDONS) : [])]) {
+    const binary = join(dir, slot, ...file.split('/'))
+    mkdirSync(dirname(binary), { recursive: true })
+    writeFileSync(binary, bytes)
+    files[file] = sha256Of(binary)
+  }
   const manifest = mergeManifest(null, {
     slot,
     version,
     napi: 8,
     nodeHeaders,
-    entry: { napi: 8, files: { 'pty.node': sha256Of(binary) } }
+    entry: { napi: 8, files }
   })
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest))
   return dir

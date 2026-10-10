@@ -97,7 +97,8 @@ export function markCopilotFolderTrusted(workspacePath: string, home: string): v
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })
   }
-  writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
+  // Why: config.json can hold copilotTokens, so it must stay owner-only (also on shared SSH hosts).
+  writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
 }
 
 /**

@@ -5,7 +5,7 @@ import type {
   AgentSessionOptionsResult
 } from '../../../../shared/agent-session-wire'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
 import {
   applyStructuredAgentSessionOptions,
@@ -14,9 +14,9 @@ import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionPicks,
   structuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionView,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
+import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
@@ -42,6 +42,7 @@ export function useStructuredAgentSessionOptions(args: {
   isVisible: boolean
   providerVisible: boolean
   providerStarting?: boolean
+  providerRunning?: boolean
   fence: number | null
   turnId: string | null
   unloadedTurnRevisions: number | undefined
@@ -63,7 +64,7 @@ export function useStructuredAgentSessionOptions(args: {
   const held = launch?.heldOptions ?? NO_HELD_OPTIONS
   // Published but not attached: the launch no longer holds picks and there is no fence to send one.
   const acceptsPicks = !transportEnabled || fence !== null
-  const optionCatalog = useMemo(() => getAgentSessionOptionCatalog(agent), [agent])
+  const optionCatalog = useMemo(() => structuredAgentSessionSeedCatalog(agent), [agent])
   const identity = `${agent}:${sessionId}`
   const {
     optionState,
@@ -80,6 +81,9 @@ export function useStructuredAgentSessionOptions(args: {
     fence,
     sessionId,
     target,
+    newLaunch: launch?.kind === 'new',
+    ...(launch?.worktree ? { worktree: launch.worktree } : {}),
+    seedsModel: launchSeedOptions?.model !== undefined,
     providerVisible,
     providerStarting: args.providerStarting ?? false,
     // A new chat's host knows nothing of its model before the provider starts; a resumed one's
@@ -89,17 +93,22 @@ export function useStructuredAgentSessionOptions(args: {
     unloadedTurnRevisions: args.unloadedTurnRevisions
   })
 
-  useHostModelCatalogUpgrade({
+  const hostCatalog = useHostModelCatalogUpgrade({
     agent,
     sessionId,
     target,
     optionCatalog,
     enabled: args.isVisible,
-    // A resumed conversation may keep its own model, so only a new one runs the listed default —
-    // and only Codex's listing names the configured model; Claude's settings or env may pick another.
-    namesDefault: launch?.kind === 'new' && agent === 'codex',
+    // A resumed conversation may keep its own model, so only a new one runs the listed default.
+    newLaunch: launch?.kind === 'new',
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
     fence,
+    turnId,
+    reportedUnpickedModel:
+      launch?.kind === 'new' &&
+      launchSeedOptions?.model === undefined &&
+      optionState.catalogSource === 'live',
+    ...(args.providerRunning ? { providerRunning: true } : {}),
     activeOptionRecordRef,
     updateOptionState
   })
@@ -277,8 +286,11 @@ export function useStructuredAgentSessionOptions(args: {
     threadGoal: support?.threadGoal,
     /** Absent from a host that predates it or a session that writes no context facts. */
     contextUsage: support?.contextUsage,
+    /** Undefined until this fence's options read answers. */
+    rewind: support?.fence === fence ? support.rewind : undefined,
     optionSnapshot,
     optionSurface,
-    setStructuredOption
+    setStructuredOption,
+    unavailable: hostCatalog.unavailable
   }
 }

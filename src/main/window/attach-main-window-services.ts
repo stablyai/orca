@@ -26,6 +26,8 @@ import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/brows
 import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from '../updater'
 import { scheduleHistoryGc } from '../terminal-history-gc'
+import { openCodeHookService, openCode2HookService } from '../opencode/hook-service'
+import { listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
@@ -37,7 +39,7 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
-import { registerFileDropRelay } from './native-file-drop-relay'
+import { registerDroppedPathPreparation } from './dropped-path-preparation-ipc'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -107,6 +109,8 @@ export function attachMainWindowServices(
   scheduleHistoryGc(async () => {
     return getKnownWorktreeIdsForHistoryGc(store)
   })
+  openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
+  openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)
   const localPtyProviderStartupReady = options?.awaitLocalPtyProviderStartup?.()
   if (localPtyProviderStartupReady) {
     void localPtyProviderStartupReady
@@ -122,7 +126,7 @@ export function attachMainWindowServices(
   }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow, runtime)
-  registerFileDropRelay(mainWindow)
+  registerDroppedPathPreparation(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)
   scheduleMainWindowAutoUpdaterSetup(mainWindow, store, options)
   registerRuntimeWindowLifecycle(mainWindow, runtime)

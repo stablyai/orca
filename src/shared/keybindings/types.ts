@@ -8,6 +8,7 @@ export type KeybindingScope =
   | 'editor'
   | 'fileExplorer'
   | 'composer'
+  | 'chat'
   | 'settings'
 
 export type KeybindingContext = 'app' | 'terminal' | 'browser'
@@ -47,6 +48,7 @@ export type KeybindingActionId =
   | 'sidebar.checks.toggle'
   | 'sidebar.ports.toggle'
   | 'sidebar.sleepingWorkspaces.toggle'
+  | 'sidebar.childWorkspaces.toggle'
   | 'sidebar.focusWorktreeList'
   | 'floatingTerminal.toggle'
   | 'floatingWorkspace.maximize'
@@ -77,6 +79,7 @@ export type KeybindingActionId =
   | 'tab.selectByIndex'
   | 'tab.openQuickCommandsMenu'
   | 'browser.find'
+  | 'chat.find'
   | 'browser.back'
   | 'browser.forward'
   | 'browser.reload'

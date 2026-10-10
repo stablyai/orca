@@ -1,25 +1,28 @@
-import { randomBytes } from 'node:crypto'
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
   buildDaemonHostManifest,
-  daemonHostExeName,
   destPath,
   executeManifest,
   toPosixRelative,
   WINDOWS_PROCESS_TREE_REQUIRED,
   type DaemonHostSources
 } from './daemon-host-manifest'
+import {
+  collectDaemonHostBuildInventory,
+  daemonHostBuildInventoryMatches,
+  daemonHostBuildRuntimeMatches,
+  readDaemonHostBuildMarker,
+  writeDaemonHostBuildMarker
+} from './daemon-host-build-inventory'
 import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
+import {
+  daemonHostStagingName,
+  reclaimAbandonedDaemonHostStaging,
+  reclaimUnownedDaemonHostDir
+} from './daemon-host-reclaim'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
 import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-process-inspection'
@@ -44,25 +47,48 @@ export type RelocatedDaemonHost = {
 }
 
 const HOST_SUBDIR = 'daemon-host'
-const MARKER_NAME = '.materialized.json'
+const observedBuilds = new Map<string, { fingerprint: string; entrySourcePath: string }>()
+
+function observedBuildKey(sources: Pick<DaemonHostSources, 'execPath' | 'resourcesPath'>): string {
+  return JSON.stringify([
+    getAppEnvironment().getVersion(),
+    sources.execPath,
+    sources.resourcesPath,
+    process.versions.electron ?? `node-${process.versions.node}`,
+    process.arch
+  ])
+}
+
+function currentBuildFingerprint(
+  sources: DaemonHostSources,
+  sourceFingerprint: string | null
+): string | null {
+  const key = observedBuildKey(sources)
+  if (sourceFingerprint !== null) {
+    observedBuilds.set(key, {
+      fingerprint: sourceFingerprint,
+      entrySourcePath: sources.entrySourcePath
+    })
+    return sourceFingerprint
+  }
+  // Once this process observed its build, an updater removing source files cannot select another same-version build.
+  const observed = observedBuilds.get(key)
+  return observed?.entrySourcePath === sources.entrySourcePath ? observed.fingerprint : null
+}
 
 // LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
 
-type MaterializeMarker = {
-  version: string
-  completedAt: string
-  entryRelPath: string
-}
-
 // Mirror getDaemonEntryPath()'s resolution order so the copied entry is the exact file the in-dir fork would run.
-function resolveEntrySourcePath(resourcesPath: string): string {
+function resolveEntrySourcePath(resourcesPath: string, observedEntryPath?: string): string {
   const unpackedRoot = join(resourcesPath, 'app.asar.unpacked')
   const direct = join(unpackedRoot, 'daemon-entry.js')
   if (existsSync(direct)) {
     return direct
   }
-  return join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
+  const nested = join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
+  // Preserve the observed layout only when neither live entry survives the updater.
+  return existsSync(nested) ? nested : (observedEntryPath ?? nested)
 }
 
 /**
@@ -94,7 +120,8 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   }
   const execPath = process.execPath
   const appDir = winPath.dirname(execPath)
-  const entrySourcePath = resolveEntrySourcePath(resourcesPath)
+  const observed = observedBuilds.get(observedBuildKey({ execPath, resourcesPath }))
+  const entrySourcePath = resolveEntrySourcePath(resourcesPath, observed?.entrySourcePath)
   return {
     appDir,
     execPath,
@@ -103,24 +130,6 @@ function collectDaemonHostSources(): DaemonHostSources | null {
     entryRelPath: toPosixRelative(appDir, entrySourcePath),
     windowsProcessTreeDir: join(resourcesPath, 'node_modules', '@vscode', 'windows-process-tree')
   }
-}
-
-function readMarker(dir: string): MaterializeMarker | null {
-  try {
-    const parsed = JSON.parse(
-      readFileSync(join(dir, MARKER_NAME), 'utf8')
-    ) as Partial<MaterializeMarker>
-    if (typeof parsed.version === 'string' && typeof parsed.entryRelPath === 'string') {
-      return {
-        version: parsed.version,
-        completedAt: typeof parsed.completedAt === 'string' ? parsed.completedAt : '',
-        entryRelPath: parsed.entryRelPath
-      }
-    }
-  } catch {
-    // Missing/corrupt marker — treat as not materialized.
-  }
-  return null
 }
 
 function processTreeRelDir(sources: DaemonHostSources): string {
@@ -134,14 +143,33 @@ function missingProcessTreeFiles(packageDir: string): boolean {
   )
 }
 
-function hostRootDir(): string {
+// Sibling of the legacy shared HOST_SUBDIR, whose older pruners delete every unpinned child dir.
+// That legacy root is never reclaimed here: profile-scoped pid evidence can't prove another
+// profile's daemon gone, and new code never writes there, so its cost is a finite one-time
+// copy (~260MB) per pre-upgrade mirror until a genuine uninstall removes it.
+const PROFILE_HOST_SUBDIR = 'daemon-host-profiles'
+
+// Profiles (--user-data-dir, E2E) share LOCALAPPDATA but not pid records, so one profile's
+// listing cannot prove another's mirror unowned; each profile owns only its own root.
+function userDataProfileKey(userDataPath: string): string {
+  const normalized = winPath.resolve(userDataPath).toLowerCase()
+  return createHash('sha256').update(normalized).digest('hex').slice(0, 16)
+}
+
+/** This profile's mirror root; the only tree its prune may reclaim. */
+export function getDaemonHostRootDir(): string {
+  const userDataPath = getAppEnvironment().getPath('userData')
   // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME); fall back to userData only if LOCALAPPDATA is unset.
   const localAppData = process.env.LOCALAPPDATA
-  const base =
-    typeof localAppData === 'string' && localAppData.length > 0
-      ? join(localAppData, LOCAL_HOST_ROOT_NAME)
-      : getAppEnvironment().getPath('userData')
-  return join(base, HOST_SUBDIR)
+  if (typeof localAppData === 'string' && localAppData.length > 0) {
+    return join(
+      localAppData,
+      LOCAL_HOST_ROOT_NAME,
+      PROFILE_HOST_SUBDIR,
+      userDataProfileKey(userDataPath)
+    )
+  }
+  return join(userDataPath, HOST_SUBDIR)
 }
 
 /**
@@ -153,25 +181,59 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (!sources) {
     return null
   }
+  const inventory = collectDaemonHostBuildInventory(sources)
+  return findRelocatedDaemonHost(
+    sources,
+    currentBuildFingerprint(sources, inventory?.fingerprint ?? null)
+  )
+}
+
+function findRelocatedDaemonHost(
+  sources: DaemonHostSources,
+  fingerprint: string | null
+): RelocatedDaemonHost | null {
+  if (fingerprint === null) {
+    return null
+  }
   const version = getAppEnvironment().getVersion()
-  const dest = join(hostRootDir(), version)
-  const marker = readMarker(dest)
-  if (!marker || marker.version !== version) {
+  const versionRoot = join(getDaemonHostRootDir(), version)
+  let builds
+  try {
+    builds = readdirSync(versionRoot, { withFileTypes: true })
+  } catch {
     return null
   }
-  const execPath = join(dest, daemonHostExeName(sources.execPath))
-  const entryPath = destPath(dest, marker.entryRelPath)
-  if (!existsSync(execPath) || !existsSync(entryPath)) {
-    return null
+  const candidates = builds
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('build-'))
+    .map((entry) => ({
+      dest: join(versionRoot, entry.name),
+      marker: readDaemonHostBuildMarker(join(versionRoot, entry.name))
+    }))
+    .sort((left, right) =>
+      (right.marker?.completedAt ?? '').localeCompare(left.marker?.completedAt ?? '')
+    )
+  for (const { dest, marker } of candidates) {
+    if (
+      !marker ||
+      marker.version !== version ||
+      !daemonHostBuildRuntimeMatches(marker, sources) ||
+      marker.fingerprint !== fingerprint ||
+      !daemonHostBuildInventoryMatches(dest, marker)
+    ) {
+      continue
+    }
+    const execPath = join(dest, marker.executableName)
+    const entryPath = destPath(dest, marker.entryRelPath)
+    if (
+      !existsSync(execPath) ||
+      !existsSync(entryPath) ||
+      missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))
+    ) {
+      continue
+    }
+    return { execPath, entryPath }
   }
-  // A mirror the daemon cannot load the addon from still runs -- it just forks a
-  // shell per snapshot (#16905) -- so treat it as unmaterialized and rebuild. Hosts
-  // from before this shipped have none of these files. Checked in the mirror, never
-  // in the install dir, which is the thing relocation exists to outlive.
-  if (missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))) {
-    return null
-  }
-  return { execPath, entryPath }
+  return null
 }
 
 /**
@@ -179,39 +241,35 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
  * via marker; stages into a temp sibling and publishes by atomic rename, so a crash mid-copy never leaves a half-populated dest.
  */
 export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
-  const existing = getRelocatedDaemonHost()
-  if (existing) {
-    return existing
-  }
   const sources = collectDaemonHostSources()
   if (!sources) {
     return null
   }
+  const inventory = collectDaemonHostBuildInventory(sources)
+  const existing = findRelocatedDaemonHost(
+    sources,
+    currentBuildFingerprint(sources, inventory?.fingerprint ?? null)
+  )
+  if (existing) {
+    return existing
+  }
   // Checked against the source before copying: the mirror check below would refuse
   // the result anyway, and re-copying ~260MB on every launch to reach that verdict
   // is the loop this shares its list with the copy plan to prevent.
-  if (missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
+  if (!inventory || missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
     return null
   }
   const version = getAppEnvironment().getVersion()
-  const root = hostRootDir()
-  const dest = join(root, version)
-  const staging = join(root, `${version}.staging-${randomBytes(6).toString('hex')}`)
+  const root = getDaemonHostRootDir()
+  const versionRoot = join(root, version)
+  const nonce = randomBytes(6).toString('hex')
+  const dest = join(versionRoot, `build-${inventory.fingerprint}-${nonce}`)
+  const staging = join(versionRoot, daemonHostStagingName(process.pid, nonce))
   try {
-    mkdirSync(root, { recursive: true })
-    rmSync(staging, { recursive: true, force: true })
+    mkdirSync(versionRoot, { recursive: true })
     executeManifest(buildDaemonHostManifest(sources), staging)
-    // Marker written LAST so an interrupted copy leaves a marker-less staging dir the next launch discards.
-    const marker: MaterializeMarker = {
-      version,
-      completedAt: new Date().toISOString(),
-      entryRelPath: sources.entryRelPath
-    }
-    writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
-    // Replace any stale/partial dest, then publish atomically. Windows refuses to delete a running
-    // image, so a live daemon already hosted in THIS version's dir (same-version reinstall, or a dev
-    // channel reusing a version) throws here and materialization fails open to the install-dir host.
-    rmSync(dest, { recursive: true, force: true })
+    writeDaemonHostBuildMarker(staging, version, inventory)
+    // Publish a new immutable build; a same-version daemon may still load files from an older mirror.
     renameSync(staging, dest)
   } catch {
     try {
@@ -221,7 +279,7 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     }
     return null
   }
-  return getRelocatedDaemonHost()
+  return findRelocatedDaemonHost(sources, inventory.fingerprint)
 }
 
 export type PinnedDaemonVersionsEvidence =
@@ -282,23 +340,6 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
   return { status: 'complete', versionLiveness }
 }
 
-// Why: deletion is the destructive direction and this is a statement position the compiler does
-// not police for exhaustiveness — reclaim must be opted into by a positively matched 'exited',
-// so any future unhandled verdict status preserves the host dir instead of deleting it.
-export function reclaimUnownedDaemonHostDir(
-  verdict: ProcessLivenessVerdict,
-  hostDir: string
-): void {
-  if (verdict.status !== 'exited') {
-    return
-  }
-  try {
-    rmSync(hostDir, { recursive: true, force: true })
-  } catch {
-    // Still locked or already gone — retry on a future launch.
-  }
-}
-
 /**
  * Reclaim daemon-host/<ver> dirs that are neither the current version nor pinned by a live daemon.
  * Best-effort — never throws; a locked/staging dir is retried on a future launch.
@@ -307,12 +348,13 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
   if (!isPackagedElectronWin32()) {
     return
   }
+  pruneDaemonHostStaging()
   if (evidence.status === 'unverifiable') {
     console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
     return
   }
   const version = getAppEnvironment().getVersion()
-  const root = hostRootDir()
+  const root = getDaemonHostRootDir()
   let entries
   try {
     entries = readdirSync(root, { withFileTypes: true })
@@ -320,11 +362,21 @@ export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): voi
     return
   }
   for (const entry of entries) {
+    // A published current-version build can belong to a daemon that has not written its pid yet.
     if (!entry.isDirectory() || entry.name === version) {
       continue
     }
     // A complete runtime-dir listing with no pid record for this version proves it is unowned.
     const verdict = evidence.versionLiveness.get(entry.name) ?? { status: 'exited' }
     reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))
+  }
+}
+
+/** Reclaim only copies whose writer positively exited, independently of daemon pid publication. */
+export function pruneDaemonHostStaging(): void {
+  if (isPackagedElectronWin32()) {
+    reclaimAbandonedDaemonHostStaging(
+      join(getDaemonHostRootDir(), getAppEnvironment().getVersion())
+    )
   }
 }

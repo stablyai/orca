@@ -185,3 +185,23 @@ describe('Store keeps runtime-authored session fields across desktop writes', ()
     ).toEqual([other])
   })
 })
+
+describe('a host partition written from a per-host renderer snapshot', () => {
+  it('keeps the maps the snapshot left out, on both desktop write paths', () => {
+    const store = createStore()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the renderer's per-host split omits maps a host has no rows in.
+    const slice = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      unifiedTabs: {}
+    } as unknown as WorkspaceSessionState
+    store.setWorkspaceSession(slice, 'runtime:env-1')
+    store.stageWorkspaceSessionBeforeUnload(slice, HOST_ID)
+    for (const hostId of ['runtime:env-1', HOST_ID]) {
+      expect(store.getWorkspaceSession(hostId)).toMatchObject({
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {}
+      })
+    }
+  })
+})

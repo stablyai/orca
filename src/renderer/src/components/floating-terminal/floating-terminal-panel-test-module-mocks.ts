@@ -13,6 +13,8 @@ import { storeBox, type FloatingPanelStoreState } from './floating-terminal-pane
 export function createReactHookOverrides() {
   return {
     useCallback: <T>(callback: T) => callback,
+    // Why: subscription hooks in the shared model read module stores; the probe only needs the snapshot.
+    useSyncExternalStore: <T>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot(),
     useEffect: (effect: EffectCallback) => {
       hookRuntime.effects.push(effect)
     },

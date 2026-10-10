@@ -392,7 +392,7 @@ describe('registerPtyHandlers', () => {
           setPtyController: vi.fn(),
           onPtyExit: vi.fn()
         }
-        setPtyOwnership('remote-pty', 'ssh-1')
+        setPtyOwnership('remote-pty', 'ssh:ssh-1')
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,
@@ -448,7 +448,7 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        setPtyOwnership('remote-pty', 'ssh-1')
+        setPtyOwnership('remote-pty', 'ssh:ssh-1')
         handlers.clear()
         registerPtyHandlers(
           mainWindow as never,

@@ -13,7 +13,8 @@ import {
   stageWindowsProcessTreeNodeAddonApiHeaders,
   windowsProcessTreeAddonPath
 } from './windows-process-tree-gyp-rebuild.mjs'
-import { describeProcessFailure, runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
+import { describeProcessFailure } from './process-failure-message.mjs'
 import { disableMsbuildFileTrackingOnWindows } from './msbuild-file-tracking.mjs'
 
 const require = createRequire(import.meta.url)

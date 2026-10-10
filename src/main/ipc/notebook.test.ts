@@ -1,5 +1,9 @@
 import { EventEmitter } from 'node:events'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFsPromises from 'node:fs/promises'
 import type { KernelFrame } from '../../shared/notebook-kernel-types'
 
 const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
@@ -14,11 +18,23 @@ vi.mock('electron', () => ({
       handlers.set(channel, handler)
   }
 }))
-vi.mock('./filesystem-auth', () => ({ resolveAuthorizedPath: resolveAuthorizedPathMock }))
+vi.mock('./local-file-access-resolution', () => ({
+  resolveUserNamedRegularFile: resolveAuthorizedPathMock,
+  resolveDesktopAuthorizedPath: resolveAuthorizedPathMock
+}))
 vi.mock('../notebook/notebook-kernel', () => ({ startNotebookKernel: startNotebookKernelMock }))
+// Why: the mocked resolver returns made-up `/real/...` paths, which stand for real files already.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    realpath: async (path: string) => (path.startsWith('/real/') ? path : actual.realpath(path))
+  }
+})
 
 import { registerNotebookHandlers } from './notebook'
 import type { Store } from '../persistence'
+import type * as FileAccessResolution from './local-file-access-resolution'
 
 function fakeKernel() {
   let onFrame: (frame: KernelFrame) => void = () => {}
@@ -120,6 +136,30 @@ describe('notebook IPC', () => {
     )
     expect(second.kernel.execute).toHaveBeenCalledWith('x')
     expect(first.kernel.execute).not.toHaveBeenCalled()
+  })
+
+  it('starts a kernel for a notebook outside every project, and refuses a relative path', async () => {
+    const actual = await vi.importActual<typeof FileAccessResolution>(
+      './local-file-access-resolution'
+    )
+    resolveAuthorizedPathMock.mockImplementation(actual.resolveUserNamedRegularFile)
+    const folder = await mkdtemp(join(await realpath(tmpdir()), 'orca-notebook-'))
+    try {
+      const notebook = join(folder, 'analysis.ipynb')
+      await writeFile(notebook, '{}')
+      fakeKernel()
+      const start = handlers.get('notebook:startKernel')!
+
+      await expect(
+        start({ sender: fakeOwner() }, { filePath: notebook, python: '/py' })
+      ).resolves.toEqual({ status: 'ready' })
+      expect(startNotebookKernelMock).toHaveBeenCalledWith(expect.objectContaining({ cwd: folder }))
+      await expect(
+        start({ sender: fakeOwner() }, { filePath: 'analysis.ipynb', python: '/py' })
+      ).rejects.toThrow('absolute path')
+    } finally {
+      await rm(folder, { recursive: true, force: true })
+    }
   })
 
   it.each(['shutdown', 'destroyed', 'did-navigate', 'render-process-gone'])(
@@ -229,9 +269,9 @@ describe('notebook IPC', () => {
     const old = start({ sender: owner }, alias)
     const fresh = start({ sender: owner }, canonical)
     handlers.get('notebook:shutdownKernel')!({ sender: owner }, alias)
-    aliasAuthorization.resolve(canonical.filePath)
+    aliasAuthorization.resolve(`/real${canonical.filePath}`)
     await expect(old).resolves.toMatchObject({ status: 'failed' })
-    canonicalAuthorization.resolve(canonical.filePath)
+    canonicalAuthorization.resolve(`/real${canonical.filePath}`)
 
     await expect(fresh).resolves.toEqual({ status: 'ready' })
     handlers.get('notebook:execute')!({ sender: owner }, { ...canonical, code: 'canonical' })

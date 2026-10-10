@@ -28,6 +28,7 @@ export function makeAgentStatusStoreWiring(): {
     reconcileAgentStatusForEndedProcess: (
       paneKeys: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[0]
     ) => void
+    dropAgentStatusForRemovedWorktree: AgentHookServer['dropStatusEntriesForRemovedWorktree']
   }
   /** Call once the runtime exists; returns the republish teardown. */
   attach: (runtime: WiredRuntime) => () => void
@@ -44,7 +45,9 @@ export function makeAgentStatusStoreWiring(): {
         statusStore.getStatusSnapshotForPane(paneKey),
       reconcileAgentStatusForEndedProcess: (paneKeys) => {
         statusStore.reconcileEndedProcessForPaneKeys(paneKeys)
-      }
+      },
+      dropAgentStatusForRemovedWorktree: (worktreeId, host) =>
+        statusStore.dropStatusEntriesForRemovedWorktree(worktreeId, host)
     },
     attach: (runtime) => installHookStatusSessionTabsRepublish(statusStore, () => runtime)
   }

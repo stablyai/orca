@@ -159,11 +159,12 @@ describe('SshChannelMultiplexer', () => {
       vi.advanceTimersByTime(1_000)
 
       await expect(promise).rejects.toThrow('timed out')
+      const cancelFrame = transport.written.findLast((frame) => frame[0] === MessageType.Regular)
+      if (!cancelFrame) {
+        throw new Error('Missing RPC cancellation frame')
+      }
       const cancelPayload = JSON.parse(
-        transport.written
-          .at(-1)!
-          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written.at(-1)!.readUInt32BE(9))
-          .toString()
+        cancelFrame.subarray(HEADER_LENGTH, HEADER_LENGTH + cancelFrame.readUInt32BE(9)).toString()
       )
       expect(cancelPayload).toMatchObject({
         method: 'rpc.cancel',

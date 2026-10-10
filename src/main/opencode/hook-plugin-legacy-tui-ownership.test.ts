@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url'
 import { getOpenCodePluginSource } from './status-plugin-module-source'
 import { writeOpenCodeTuiPlugin } from '../../shared/opencode-tui-plugin-install'
 import { fakeLegacyTui, type LegacyTuiEvent } from './opencode-legacy-tui-fixture'
-import { readV1Plugin } from './opencode-legacy-plugin-loader-fixture'
+import { getLegacyPlugins, readV1Plugin } from './opencode-legacy-plugin-loader-fixture'
+import { getOpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
 type Post = {
   paneKey?: string
@@ -23,7 +24,8 @@ const ENV_KEYS = [
   'ORCA_AGENT_HOOK_ENDPOINT',
   'ORCA_AGENT_HOOK_PORT',
   'ORCA_AGENT_HOOK_TOKEN',
-  'ORCA_AGENT_HOOK_OPENCODE_TUI'
+  'ORCA_AGENT_HOOK_OPENCODE_TUI',
+  'ORCA_OPENCODE_PLUGIN_API'
 ] as const
 const created = (id: string, parentID?: string): LegacyTuiEvent => ({
   type: 'session.created',
@@ -48,6 +50,7 @@ describe('OpenCode 1 TUI API pane reporting', () => {
     savedArgv = process.argv
     savedEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]))
     process.argv = ['opencode', 'attach', 'http://127.0.0.1:4096']
+    process.env.ORCA_OPENCODE_PLUGIN_API = 'v2'
     process.env.ORCA_OPENCODE_AGENT = 'opencode'
     process.env.ORCA_AGENT_HOOK_PORT = '59999'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'fixture'
@@ -125,6 +128,50 @@ describe('OpenCode 1 TUI API pane reporting', () => {
       throw new Error('No server plugin')
     }
     expect(readV1Plugin(plugin, path, 'server')).not.toHaveProperty('tui')
+    const tui = await start()
+    expect(tui.listenerCount()).toBeGreaterThan(0)
+  })
+
+  it('loads the selected v1 factory through the release fallback once and retains the separate TUI', async () => {
+    process.env.ORCA_OPENCODE_PLUGIN_API = getOpenCodeCliCapabilities('1.18.30').pluginApi
+    process.argv = ['opencode', 'serve']
+    process.env.ORCA_PANE_KEY = PANE_A
+    const path = join(dir, 'selected-v1-server.mjs')
+    writeFileSync(path, getOpenCodePluginSource())
+    const plugin: unknown = await import(pathToFileURL(path).href)
+    if (typeof plugin !== 'object' || !plugin || !('default' in plugin)) {
+      throw new Error('No server plugin')
+    }
+    expect(readV1Plugin(plugin, path, 'server', 'detect')).toBeUndefined()
+    const factories = getLegacyPlugins(plugin)
+    expect(factories).toHaveLength(1)
+    expect(factories[0]).toBe(plugin.default)
+    const hooks: unknown = await factories[0]({
+      client: { session: { get: async () => ({ data: { id: 'ses_root' } }) } }
+    })
+    if (
+      !hooks ||
+      typeof hooks !== 'object' ||
+      !('event' in hooks) ||
+      typeof hooks.event !== 'function' ||
+      !('dispose' in hooks) ||
+      typeof hooks.dispose !== 'function'
+    ) {
+      throw new Error('No legacy event hooks')
+    }
+    const dispose = hooks.dispose
+    cleanups.push(async () => {
+      await dispose()
+    })
+    await hooks.event({
+      event: {
+        type: 'session.status',
+        properties: { sessionID: 'ses_root', status: { type: 'busy' } }
+      }
+    })
+    await settle('SessionBusy:ses_root')
+    expect(posts.at(-1)).toMatchObject({ opencodeSharedServer: 1 })
+    process.argv = ['opencode', 'attach', 'http://127.0.0.1:4096']
     const tui = await start()
     expect(tui.listenerCount()).toBeGreaterThan(0)
   })

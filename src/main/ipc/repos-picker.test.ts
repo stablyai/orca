@@ -51,7 +51,6 @@ describe('repos folder pickers', () => {
   const mockStore = {
     getRepos: vi.fn().mockReturnValue([]),
     addRepo: vi.fn(),
-    removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn()
   }

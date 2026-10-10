@@ -15,7 +15,7 @@ export type ReposIpcMocks = {
   mockStore: Record<
     | 'getRepos'
     | 'addRepo'
-    | 'removeProject'
+    | 'removeProjectForHost'
     | 'getRepo'
     | 'getProjects'
     | 'getProjectHostSetups'
@@ -25,7 +25,8 @@ export type ReposIpcMocks = {
     | 'updateProjectGroup'
     | 'deleteProjectGroup'
     | 'moveProjectToGroup'
-    | 'getSshTarget',
+    | 'getSshTarget'
+    | 'getSshTargets',
     ReposIpcSpy
   > & { updateRepo: Mock<(repoId: string, updates: Record<string, unknown>) => unknown> }
   mockGitProvider: Record<
@@ -51,7 +52,7 @@ export function createReposIpcMocks(): ReposIpcMocks {
     mockStore: {
       getRepos: vi.fn().mockReturnValue([]),
       addRepo: vi.fn(),
-      removeProject: vi.fn(),
+      removeProjectForHost: vi.fn(),
       getRepo: vi.fn(),
       updateRepo: vi.fn(),
       getProjects: vi.fn().mockReturnValue([]),
@@ -62,7 +63,8 @@ export function createReposIpcMocks(): ReposIpcMocks {
       updateProjectGroup: vi.fn(),
       deleteProjectGroup: vi.fn(),
       moveProjectToGroup: vi.fn(),
-      getSshTarget: vi.fn()
+      getSshTarget: vi.fn(),
+      getSshTargets: vi.fn().mockReturnValue([])
     },
     mockGitProvider: {
       isGitRepo: vi.fn().mockReturnValue(true),

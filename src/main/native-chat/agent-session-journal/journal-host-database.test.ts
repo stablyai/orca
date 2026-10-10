@@ -10,7 +10,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { spawnProcess } from '../../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { tearDownRuntime } from '../../runtime/structured-agent-session-runtime-teardown'
 import { journalDatabasePath } from './journal-host-database'
 import {
@@ -20,19 +20,20 @@ import {
   readTestJournalRows
 } from './journal-host-database-test-support'
 import type Database from '../../sqlite/sync-database'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'local',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const OTHER: AgentSessionJournalIdentity = {
   ...IDENTITY,
   sessionId: 'session-2',
-  providerHandle: { kind: 'codex', threadId: 'thread-2' }
+  providerHandle: codexProviderHandle('thread-2')
 }
 
 const SUBMISSION = {
@@ -183,14 +184,14 @@ setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const stopFailing = failCommits(connection)
 
-    // A first-use copy's batch, under the unsynced level. Its caller gets the COMMIT's own error.
+    // Its caller gets the COMMIT's own error.
     expect(() =>
-      database.unsyncedTransaction((db) =>
+      database.transaction((db) =>
         db
           .prepare(
             'INSERT INTO journal_rows (session_id, epoch, seq, ts, row_json) VALUES (?, ?, ?, ?, ?)'
           )
-          .run('copying', 'epoch-copying', 1, 1, '{}')
+          .run('unknown', 'epoch-unknown', 1, 1, '{}')
       )
     ).toThrow('FOREIGN KEY constraint failed')
     expect(connection.isTransaction).toBe(true)
@@ -209,8 +210,6 @@ setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
     rollbackFails = false
     expect(database.db.isTransaction).toBe(false)
     stopFailing()
-    // Restored with the ROLLBACK: no later commit runs at the copy's unsynced level.
-    expect(Number(connection.pragma('synchronous', { simple: true }))).toBe(2)
     await expect(
       other.appendItem(item(1), text('served'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     ).resolves.toBeDefined()
@@ -232,8 +231,9 @@ describe('quit', () => {
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
     const database = openTestJournalHostDatabase(root)
     const installed = {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `flushAllStreamedEvents` on the host.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: teardown calls only `stopDelivery` and `flushAllStreamedEvents` on the host.
       host: {
+        stopDelivery: () => {},
         flushAllStreamedEvents: async () => {
           // A child's last row, delivered while quit is draining its sink.
           await new Promise<void>((resolve) => setTimeout(resolve, 10))

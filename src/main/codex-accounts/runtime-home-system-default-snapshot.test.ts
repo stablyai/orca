@@ -495,7 +495,6 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(getRuntimeCodexAuthPath())).toBe(false)
 
     setRealHomeRoutableForTest(true)
-    service.setRealHomeLaneGate(() => true)
     writeFileSync(getSystemCodexAuthPath(), reloginAuth, 'utf-8')
     service.reconcileLegacySharedHomeForRetainedPanes()
 

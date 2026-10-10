@@ -4,7 +4,21 @@ const FILE_OPEN_FOCUS_HELP =
 
 /** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'reference add': {
+    url: '--url <url>            Full review or issue URL; pass all URLs positionally or all as repeated --url'
+  },
+  'reference remove': {
+    url: '--url <url>            Full review or issue URL; pass all URLs positionally or all as repeated --url',
+    key: '--key <key>            Opaque key from reference list; repeat for several'
+  },
+  'reference find': {
+    query: '--query <url-or-key>   Full URL or native issue key such as STA-1234',
+    repo: '--repo <selector>      Filter by workspace repository membership',
+    'include-archived': '--include-archived     Include archived workspaces',
+    limit: '--limit <n>            Maximum matching workspaces (default 50)'
+  },
   'worktree create': {
+    reference: '--reference <url>      Attach an issue or review URL; repeat for several',
     pr: '--pr <number>          Linked GitHub pull request number',
     'gitlab-issue': '--gitlab-issue <number|url> Linked GitLab issue in the source project',
     'gitlab-mr': '--gitlab-mr <number|url> Linked GitLab merge request in the source project'
@@ -13,6 +27,17 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     full: '--full                 Print the full guide with bundled references',
     reference: '--reference <name>     Print one bundled reference by name',
     references: '--references           List the bundled reference names for a topic'
+  },
+  'environment update': {
+    force: '--force                Restart over running terminals instead of deferring the update'
+  },
+  'environment recover': {
+    'accept-changed-state':
+      '--accept-changed-state Restore the prelaunch snapshot over state a rejected build changed',
+    yes: '--yes                  Confirm discarding what the rejected build changed'
+  },
+  'environment stop': {
+    yes: '--yes                  Confirm stopping the server and unlinking it from this machine'
   },
   'file open': {
     focus: FILE_OPEN_FOCUS_HELP

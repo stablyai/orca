@@ -73,7 +73,10 @@ describe('structured agent-session read transport generations', () => {
     })
   })
 
-  function start(applyEvent: (event: AgentSessionSubscribeEvent) => void, applyError = vi.fn()) {
+  function start(
+    applyEvent: Parameters<typeof startStructuredAgentSessionReadTransport>[0]['applyEvent'],
+    applyError = vi.fn()
+  ) {
     return startStructuredAgentSessionReadTransport({
       applyEvent,
       applyError,
@@ -180,6 +183,49 @@ describe('structured agent-session read transport generations', () => {
       expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2))
       attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
       await flushPromises()
+      transport.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("applies each subscription's first batch alone and marked, and coalesces the rest", async () => {
+    vi.useFakeTimers()
+    try {
+      const applied: [number | undefined, boolean][] = []
+      const batch = (sequence: number): AgentSessionSubscribeEvent => ({
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        }
+      })
+      const transport = start((event, options) => {
+        applied.push([
+          event.type === 'batch' ? event.batch.cursor.sequence : undefined,
+          options?.opensSubscription === true
+        ])
+      })
+      await flushPromises()
+      attempts[0].onEvent(batch(1))
+      attempts[0].onEvent(batch(2))
+      attempts[0].onEvent(batch(3))
+      expect(applied).toEqual([[1, true]])
+      await vi.advanceTimersByTimeAsync(60)
+      expect(applied).toEqual([
+        [1, true],
+        [3, false]
+      ])
+
+      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+      await flushPromises()
+      attempts[0].onClose()
+      await vi.advanceTimersByTimeAsync(750)
+      attempts[1].onEvent(batch(4))
+      expect(applied.at(-1)).toEqual([4, true])
       transport.dispose()
     } finally {
       vi.useRealTimers()
@@ -316,45 +362,49 @@ describe('structured agent-session read transport unattached refusals', () => {
     }
   })
 
-  it('hands the pane the refusal a read met, and stops reconnecting only past damage', async () => {
-    vi.useFakeTimers()
-    try {
-      const journalRefusal = (reason: string) => ({
-        code: 'runtime_error',
-        message: 'agent_session_journal_unreadable',
-        data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
-      })
-      const applyError = vi.fn()
-      const transport = startWithHydration(async () => undefined, applyError)
-      await flushPromises()
-      expect(attempts).toHaveLength(1)
+  it.each(['journalCorrupt', 'journalWrittenByNewerOrca'])(
+    'hands the pane the refusal a read met, and stops reconnecting only past %s',
+    async (final) => {
+      vi.useFakeTimers()
+      try {
+        const journalRefusal = (reason: string) => ({
+          code: 'runtime_error',
+          message: 'agent_session_journal_unreadable',
+          data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
+        })
+        const applyError = vi.fn()
+        const transport = startWithHydration(async () => undefined, applyError)
+        await flushPromises()
+        expect(attempts).toHaveLength(1)
 
-      // An open that can clear keeps reconnecting.
-      attempts[0].onError(journalRefusal('journalUnavailable'))
-      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
-      await flushPromises()
-      expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
-        code: 'agent_session_journal_unreadable',
-        details: { reason: 'journalUnavailable' }
-      })
-      await vi.advanceTimersByTimeAsync(750)
-      expect(attempts).toHaveLength(2)
+        // An open that can clear keeps reconnecting.
+        attempts[0].onError(journalRefusal('journalUnavailable'))
+        attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
+        await flushPromises()
+        expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
+          code: 'agent_session_journal_unreadable',
+          details: { reason: 'journalUnavailable' }
+        })
+        await vi.advanceTimersByTimeAsync(750)
+        expect(attempts).toHaveLength(2)
 
-      // Damage no retry reads past: decided from the reason, not the message, which is the same.
-      attempts[1].onError(journalRefusal('journalCorrupt'))
-      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
-      await flushPromises()
-      expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
-        code: 'agent_session_journal_unreadable',
-        details: { reason: 'journalCorrupt' }
-      })
-      await vi.advanceTimersByTimeAsync(60_000)
-      expect(attempts).toHaveLength(2)
-      transport.dispose()
-    } finally {
-      vi.useRealTimers()
+        // Damage, or a newer Orca's chat, no retry reads past: decided from the reason, not the
+        // message, which is the same.
+        attempts[1].onError(journalRefusal(final))
+        attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
+        await flushPromises()
+        expect(applyError).toHaveBeenLastCalledWith('agent_session_journal_unreadable', {
+          code: 'agent_session_journal_unreadable',
+          details: { reason: final }
+        })
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(attempts).toHaveLength(2)
+        transport.dispose()
+      } finally {
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 
   it('reads a thrown hydrate refusal the same way, and a new run reads again', async () => {
     vi.useFakeTimers()

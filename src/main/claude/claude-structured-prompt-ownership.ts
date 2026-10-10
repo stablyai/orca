@@ -63,7 +63,8 @@ export async function cancelClaudeStructuredTurn(input: {
   const timeoutMs = Math.min(input.timeoutMs ?? CLAUDE_STOP_GRACE_MS, CLAUDE_STOP_GRACE_MS)
   const session = requireSession(sessions, request.sessionId)
   const acquisitionGeneration = session.acquisitionGeneration
-  // Before startup lands nothing was written, so there is nothing to interrupt.
+  // A CLI still starting answers no interrupt: Stop ends its child next (`stopEndsSession`), and
+  // that end settles every message it was handed and never echoed as stopped.
   if (request.prompt || session.startup.state === 'pending') {
     return { cancelled: false }
   }
@@ -208,4 +209,18 @@ export async function dismissClaudeStructuredPrompt(input: {
   } finally {
     session.prompts.releaseClaim(claim)
   }
+}
+
+/** An answered or dismissed request frees the child it blocked before the host records the card,
+ *  so no row reads the child waiting beside a closed card; no provider frame says so first. */
+export function settleClaudePromptFreeingChild<R extends { commit: () => Promise<void> }>(
+  input: { request: R; sessions: Map<string, ClaudeSession>; free: () => void },
+  settle: (input: { request: R; sessions: Map<string, ClaudeSession> }) => Promise<void>
+): Promise<void> {
+  const { request, sessions, free } = input
+  const commit = async (): Promise<void> => {
+    free()
+    await request.commit()
+  }
+  return settle({ request: { ...request, commit }, sessions }).finally(free)
 }

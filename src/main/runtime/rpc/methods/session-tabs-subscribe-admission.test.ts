@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -35,7 +36,7 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     getClientSettings: () => ({
-      experimentalStructuredNativeChat: options.structuredChat === true
+      experimentalNativeChat: options.structuredChat === true
     }),
     restoreStructuredAgentSessionTabs: restore,
     listMobileSessionTabs,

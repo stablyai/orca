@@ -21,6 +21,8 @@ import { performAttach } from './structured-agent-session-attach-flow'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'legacy-session'
@@ -90,7 +92,7 @@ function adapter(input: {
         },
         link: {
           linkId: `${input.origin}-link`,
-          handle: { provider: 'codex', threadId: 'legacy-thread' },
+          handle: codexProviderHandle('legacy-thread'),
           origin: input.origin,
           mintedAtFence: fence,
           observedAt: NOW
@@ -139,7 +141,7 @@ describe('structured session acquisition options', () => {
           },
           link: {
             linkId: `${origin}-link`,
-            handle: { provider: 'codex', threadId: 'legacy-thread' },
+            handle: codexProviderHandle('legacy-thread'),
             origin,
             mintedAtFence: input.fence,
             observedAt: NOW
@@ -152,6 +154,7 @@ describe('structured session acquisition options', () => {
 
     let firstJournal: AgentSessionJournal | undefined
     const first = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store: initialStore,
       adapter: withHistory('created'),
@@ -163,6 +166,7 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
+      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null),
       now: () => NOW,
       onAttached: (attached) => {
@@ -190,6 +194,7 @@ describe('structured session acquisition options', () => {
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
     const second = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: withHistory('resumed'),
@@ -201,6 +206,7 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
+      optionRevision: () => 0,
       params: attachParams(RESUME_OPERATION, releasedFence),
       now: () => NOW + 1,
       onAttached: () => {}
@@ -222,6 +228,7 @@ describe('structured session acquisition options', () => {
     const recordPhase = vi.fn<AgentSessionCreatePhaseRecorder>()
 
     const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,
@@ -233,6 +240,7 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
+      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null, options),
       now: () => NOW,
       recordPhase,
@@ -252,6 +260,7 @@ describe('structured session acquisition options', () => {
     const sessionAdapter = adapter({ origin: 'created' })
     const attempt = async (options: Readonly<Record<string, string>>, spawnToken: string) =>
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: sessionAdapter,
@@ -263,6 +272,7 @@ describe('structured session acquisition options', () => {
           probe: { outcome: 'reservation-unused' }
         },
         callerKey: 'client-1',
+        optionRevision: () => 0,
         params: attachParams(CREATE_OPERATION, null, options),
         now: () => NOW,
         onAttached: () => {}
@@ -283,6 +293,7 @@ describe('structured session acquisition options', () => {
     const store = await openTestAgentSessionRecordStore(root)
 
     const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter({ origin: 'created' }),
@@ -294,6 +305,7 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
+      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null),
       now: () => NOW,
       onAttached: () => {}
@@ -314,6 +326,7 @@ describe('structured session acquisition options', () => {
     })
     const releasedFence = resumedStore.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const resumed = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store: resumedStore,
       adapter: adapter({
@@ -331,6 +344,7 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
+      optionRevision: () => 0,
       params: attachParams(RESUME_OPERATION, releasedFence),
       now: () => NOW + 1,
       onAttached: () => {}
@@ -357,6 +371,7 @@ describe('structured session acquisition options', () => {
     })
 
     const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: sessionAdapter,
@@ -368,6 +383,7 @@ describe('structured session acquisition options', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
+      optionRevision: () => 0,
       params: attachParams(CREATE_OPERATION, null, {
         model: 'gpt-standard',
         fastMode: 'true'
@@ -378,6 +394,78 @@ describe('structured session acquisition options', () => {
 
     expect(created).toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-standard' })
+  })
+
+  it('proves an opened Codex owner from effective options without reading its catalog', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-acquisition-known-options-'))
+    const store = await openTestAgentSessionRecordStore(root)
+    const sessionAdapter: StructuredAgentSessionAdapter = {
+      ...adapter({ origin: 'created' }),
+      readOptions: vi.fn(async () => {
+        throw new Error('model list unavailable')
+      }),
+      readAcquisitionOptions: vi.fn(() => ({ model: 'gpt-reported', effort: 'high' }))
+    }
+
+    const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: sessionAdapter,
+      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      optionRevision: () => 0,
+      params: attachParams(CREATE_OPERATION, null, { model: 'gpt-saved', effort: 'medium' }),
+      now: () => NOW,
+      onAttached: () => {}
+    })
+
+    expect(created).toMatchObject({ ok: true })
+    expect(sessionAdapter.readOptions).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-reported', effort: 'high' })
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
+  })
+
+  it('retains saved options when an opened Codex thread reports no effective model', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-acquisition-saved-options-'))
+    const store = await openTestAgentSessionRecordStore(root)
+    const sessionAdapter: StructuredAgentSessionAdapter = {
+      ...adapter({ origin: 'created' }),
+      readOptions: vi.fn(async () => {
+        throw new Error('model list unavailable')
+      }),
+      readAcquisitionOptions: vi.fn(() => undefined)
+    }
+    const options = { model: 'gpt-saved', effort: 'medium' }
+
+    const created = await performAttach({
+      agents: NO_STRUCTURED_AGENTS,
+      logger: createStructuredAgentSessionLogger(),
+      store,
+      adapter: sessionAdapter,
+      openConversation: openTestAttachConversation(openTestJournalHostDatabase(root!)),
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      optionRevision: () => 0,
+      params: attachParams(CREATE_OPERATION, null, options),
+      now: () => NOW,
+      onAttached: () => {}
+    })
+
+    expect(created).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.options).toEqual(options)
+    expect(sessionAdapter.readOptions).not.toHaveBeenCalled()
   })
 
   it('releases an acquisition when provider options cannot be read', async () => {
@@ -394,6 +482,7 @@ describe('structured session acquisition options', () => {
 
     await expect(
       performAttach({
+        agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: failingAdapter,
@@ -405,6 +494,7 @@ describe('structured session acquisition options', () => {
           probe: { outcome: 'reservation-unused' }
         },
         callerKey: 'client-1',
+        optionRevision: () => 0,
         params: attachParams(CREATE_OPERATION, null),
         now: () => NOW,
         onAttached: () => {}
@@ -460,7 +550,7 @@ describe('structured session acquisition options', () => {
           },
           link: {
             linkId: `link-${fence}`,
-            handle: { provider: 'codex', threadId: 'legacy-thread' },
+            handle: codexProviderHandle('legacy-thread'),
             origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
             mintedAtFence: fence,
             observedAt: NOW
@@ -473,28 +563,26 @@ describe('structured session acquisition options', () => {
         }
         return cleanup
       })
-      const failingAdapter = {
-        ...base,
-        acquire,
-        readOptions,
-        releaseAcquisition,
-        ...(failurePoint === 'journal'
-          ? { historyFilePath: vi.fn().mockRejectedValueOnce(injected).mockResolvedValue(null) }
-          : {})
-      }
+      const failingAdapter = { ...base, acquire, readOptions, releaseAcquisition }
+      let journalFailure = failurePoint === 'journal' ? injected : null
       const perform = (
         target: AgentSessionRecordStore,
         operationId: string,
         fence: number | null
       ) =>
         performAttach({
+          agents: NO_STRUCTURED_AGENTS,
           logger: createStructuredAgentSessionLogger(),
           store: target,
           adapter: failingAdapter,
-          openConversation: openTestAttachConversation(
-            openTestJournalHostDatabase(root!),
-            failingAdapter
-          ),
+          openConversation: async (record) => {
+            const failure = journalFailure
+            journalFailure = null
+            if (failure) {
+              throw failure
+            }
+            return openTestAttachConversation(openTestJournalHostDatabase(root!))(record)
+          },
           authority: {
             spawnToken: operationId === CREATE_OPERATION ? 'spawn-a' : 'spawn-b',
             claimKeyId: 'key-1',
@@ -502,6 +590,7 @@ describe('structured session acquisition options', () => {
             probe: { outcome: 'reservation-unused' }
           },
           callerKey: 'client-1',
+          optionRevision: () => 0,
           params: attachParams(operationId, fence),
           now: () => NOW,
           onAttached: () => {}
@@ -590,6 +679,7 @@ describe('the tab a create reserves', () => {
 
   function attachWith(store: AgentSessionRecordStore, surfaceTabId?: string) {
     return performAttach({
+      agents: NO_STRUCTURED_AGENTS,
       logger: createStructuredAgentSessionLogger(),
       store,
       adapter: adapter({ origin: 'created' }),
@@ -601,6 +691,7 @@ describe('the tab a create reserves', () => {
         probe: { outcome: 'reservation-unused' }
       },
       callerKey: 'client-1',
+      optionRevision: () => 0,
       // Beside the fingerprinted fields, like `options`: which tab shows the chat is not which
       // conversation this attaches to.
       params: {

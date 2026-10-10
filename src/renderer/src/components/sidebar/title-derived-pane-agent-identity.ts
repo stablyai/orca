@@ -19,6 +19,7 @@ const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',
+  'DeepSeek Build': 'dsb',
   Pi: 'pi',
   OMP: 'omp'
 }
