@@ -82,6 +82,8 @@
       "expo-router",
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/ios-scene-lifecycle.js",
+      "./plugins/ios-pod-deployment-target.js",
       [
         "expo-splash-screen",
         {
@@ -107,7 +109,8 @@
         "expo-build-properties",
         {
           "ios": {
-            "buildReactNativeFromSource": true
+            "buildReactNativeFromSource": true,
+            "deploymentTarget": "16.0"
           },
           "android": {
             "usesCleartextTraffic": true
