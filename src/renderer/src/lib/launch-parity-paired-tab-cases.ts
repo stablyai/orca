@@ -2,6 +2,7 @@
 // producer suite asserts launchAgentInNewTab hands each creator `launch`; the wire suite feeds
 // the same `launch` to the real creator and pins the RPC the host receives.
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab'
+import type { CreateWebRuntimeSessionTerminalArgs } from '@/runtime/web-runtime-session-types'
 import {
   launchWorkspaceId,
   type LaunchWorkspace
@@ -21,9 +22,13 @@ export type PairedTabCase = {
   name: string
   producer: Pick<LaunchAgentInNewTabArgs, 'agent' | 'prompt'> &
     Partial<Pick<LaunchAgentInNewTabArgs, 'promptDelivery' | 'agentArgs' | 'initialCwd'>>
-  creator: 'session' | 'launch-draft'
-  launch: Record<string, unknown>
-}
+} & (
+  | { creator: 'session'; launch: CreateWebRuntimeSessionTerminalArgs }
+  | {
+      creator: 'launch-draft'
+      launch: CreateWebRuntimeSessionTerminalArgs & { agent: 'claude'; launchDraft: string }
+    }
+)
 
 const BASE = {
   worktreeId: WORKTREE_ID,
@@ -32,9 +37,9 @@ const BASE = {
   activate: true,
   viewMode: 'terminal',
   agentSessionKind: 'fresh'
-}
+} as const
 const CODEX_ARGS = '--dangerously-bypass-approvals-and-sandbox'
-const codex = (agentArgs = CODEX_ARGS): Record<string, unknown> => ({
+const codex = (agentArgs = CODEX_ARGS): CreateWebRuntimeSessionTerminalArgs => ({
   ...BASE,
   launchAgent: 'codex',
   command: `codex '${agentArgs.split(' ').join("' '")}' 'fix it'`,

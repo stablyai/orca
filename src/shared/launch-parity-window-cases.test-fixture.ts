@@ -49,7 +49,9 @@ const folder = (path: string, extra: Partial<LaunchWorkspace> = {}): LaunchWorks
 const ssh = { connectionId: 'ssh-1' }
 const WSL_UBUNTU = { kind: 'wsl', distro: 'Ubuntu' } as const
 const HOST_SENT = { projectRuntime: { kind: 'windows-host', reason: 'global-default' } } as const
-const WSL_SENT = { projectRuntime: { kind: 'wsl', reason: 'project-override', distro: 'Ubuntu' } }
+const WSL_SENT = {
+  projectRuntime: { kind: 'wsl', reason: 'project-override', distro: 'Ubuntu' }
+} as const
 const IN_PWSH = { shellOverride: 'powershell.exe' }
 const IN_WSL = { shellOverride: 'wsl.exe' }
 // Main runs a local pane in the settings shell; Windows adds the WSL distro it derived.
@@ -165,7 +167,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
     {
       ...ps,
       ...IN_PWSH,
-      projectRuntime: { kind: 'windows-host', reason: 'project-override' }
+      projectRuntime: { kind: 'windows-host', reason: 'project-override' } as const
     },
     { ...PWSH, terminalWindowsWslDistro: 'Ubuntu' }
   ),
@@ -176,7 +178,7 @@ export const WINDOW_LAUNCH_CASES: WindowLaunchCase[] = [
     {
       ...posix,
       ...IN_WSL,
-      projectRuntime: { kind: 'wsl', reason: 'global-default', distro: 'Ubuntu' }
+      projectRuntime: { kind: 'wsl', reason: 'global-default', distro: 'Ubuntu' } as const
     },
     WSL_EXE,
     { localWindowsRuntimeDefault: WSL_UBUNTU }

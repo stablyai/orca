@@ -116,7 +116,11 @@ const WSL_RUNTIME = {
   }
 } as const
 const PANE_ENV = { ORCA_PANE_KEY: 'tab-1:leaf-1', ORCA_AGENT_LAUNCH_TOKEN: 'tok-1' }
-const TELEMETRY = { agent_kind: 'opencode', launch_source: 'quick_command', request_kind: 'new' }
+const TELEMETRY = {
+  agent_kind: 'opencode',
+  launch_source: 'quick_command',
+  request_kind: 'new'
+} as const
 
 /** What a local OpenCode pane with a model pick builds (row 4, window half). */
 const modelPane = (kitty: boolean): IpcPtyTransportOptions => ({

@@ -56,7 +56,7 @@ async function runAutomation(
   const store = modules.createStore()
   holder.store = store
   store.setState(launchWorkspaceState(c.workspace, c.settings))
-  const spawn = vi.fn(async () => ({ id: 'pty-1' }))
+  const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ id: 'pty-1' }))
   const rpc = vi.fn(async (request: { method: string }) =>
     request.method === 'terminal.createAgentSession' && paired?.failCreateAgentSession
       ? { ok: false, error: { code: paired.failCreateAgentSession, message: 'legacy' } }
@@ -124,7 +124,11 @@ describe('row 5: desktop automation pty:spawn request', () => {
     // The phone sees the hidden run tab under its automation title (or the default title).
     expect(
       phone.map(({ tabs }) =>
-        tabs.map(({ title, launchAgent, isActive }) => ({ title, launchAgent, isActive }))
+        tabs.map((tab) => ({
+          title: tab.title,
+          launchAgent: recordOf(tab).launchAgent,
+          isActive: tab.isActive
+        }))
       )
     ).toEqual([[{ title: c.title ?? 'Terminal 1', launchAgent: undefined, isActive: true }]])
   })
@@ -201,6 +205,7 @@ describe('row 5r: paired runtime legacy terminal.create params', () => {
     expect(spawn).not.toHaveBeenCalled()
     const window = automationSpawnRequest({
       ...c,
+      name: c.agent,
       workspace: PAIRED_REPO,
       request: legacyCommand(c),
       provider: { shellOverride: undefined }
@@ -260,4 +265,8 @@ function legacyCommand(c: { client: LaunchClient; agent: string }) {
   const claude = "claude '--dangerously-skip-permissions'"
   const prompt = c.client === 'win32' ? `'don''t stop'` : posixPrompt
   return { command: `${claude} ${prompt}`, agentCommand: claude }
+}
+
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? { ...value } : {}
 }

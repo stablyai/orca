@@ -73,6 +73,7 @@ async function openTab(c: WindowLaunchCase) {
   const producer = c.producer
   if (producer.kind === 'new-tab') {
     modules.launch.launchAgentInNewTab({
+      requestId: `parity-${c.name}`,
       agent: producer.agent,
       worktreeId,
       prompt: "fix Bob's bug",
@@ -106,7 +107,7 @@ async function openTab(c: WindowLaunchCase) {
 /** Mounts the tab's pane the way TerminalPane does and returns the pty:spawn request it sends. */
 async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
   const { modules, store, worktreeId, tab } = await openTab(c)
-  const spawn = vi.fn(async () => ({ id: 'pty-1' }))
+  const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ id: 'pty-1' }))
   const noop = (): (() => void) => () => {}
   Object.assign(window.api.pty, {
     spawn,
@@ -118,7 +119,8 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
     resize: vi.fn(),
     claimViewport: vi.fn()
   })
-  const deps = buildPaneConnectionDeps(() => store.getState(), {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the real store state is a superset of every StoreState member the pane reads.
+  const deps = buildPaneConnectionDeps(() => store.getState() as never, {
     tabId: tab.id,
     worktreeId,
     // As TerminalPane mounts: a queued initial cwd, else the tab's startup cwd, else the workspace.
@@ -129,7 +131,8 @@ async function paneSpawnRequest(c: WindowLaunchCase): Promise<unknown> {
     ).startupCwd,
     startup: store.getState().pendingStartupByTabId[tab.id]
   })
-  modules.pane.connectPanePty(createPane(1), createManager(1), deps)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane fixtures model every member connectPanePty reads, as in pty-connection-startup-command-delivery.test.ts.
+  modules.pane.connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
   await flushAsyncTicks(20)
   const [request] = spawn.mock.calls[0] ?? []
   // Fixed ids so the table can name them; the color replies are this harness's theme.

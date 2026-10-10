@@ -695,7 +695,7 @@ function stubRuntime(capabilities: string[]): RuntimeCall {
 const HOST_AUTHORITY = ['agent-session.host-authority.v1']
 
 function expectedWire(c: PairedTabCase, modern: boolean): RuntimeRequest[] {
-  const launch = c.launch
+  const launch = recordOf(c.launch)
   const launchConfig = recordOf(launch.launchConfig)
   const worktree = `id:${String(launch.worktreeId)}`
   const cwd = typeof launch.cwd === 'string' ? launch.cwd : undefined
@@ -762,12 +762,12 @@ describe('row 7: prompted paired launch wire shape on main', () => {
     '$name, host authority $modern',
     async (c) => {
       const runtimeCall = stubRuntime(c.modern ? HOST_AUTHORITY : [])
-      const create =
+      const created =
         c.creator === 'session'
-          ? createWebRuntimeSessionTerminal
-          : createWebRuntimeAgentSessionTerminalWithLaunchDraft
+          ? createWebRuntimeSessionTerminal(c.launch)
+          : createWebRuntimeAgentSessionTerminalWithLaunchDraft(c.launch)
 
-      await expect(create(c.launch)).resolves.toEqual({ status: 'created' })
+      await expect(created).resolves.toEqual({ status: 'created' })
 
       const sent = runtimeCall.mock.calls
         .map(([request]) => request)
@@ -777,7 +777,15 @@ describe('row 7: prompted paired launch wire shape on main', () => {
       // A draft's chat-composer copy is seeded only after the host answers with its tab.
       expect(mocks.seedNativeChatLaunchDraftForAgentTab.mock.calls).toEqual(
         c.creator === 'launch-draft'
-          ? [[{ tabId: 'web-terminal-host-tab-2', agent: 'claude', text: c.launch.launchDraft }]]
+          ? [
+              [
+                {
+                  tabId: 'web-terminal-host-tab-2',
+                  agent: 'claude',
+                  text: recordOf(c.launch).launchDraft
+                }
+              ]
+            ]
           : []
       )
     }
