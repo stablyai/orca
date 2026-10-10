@@ -366,6 +366,11 @@ async function sleepUnderSelector(deps, cells, adminPost, selector) {
   if (after.selector.generation !== selector.generation) {
     throw new Error('admission selector changed during staging sleep')
   }
+  // The flag workflow runs outside the staging lock, so a reserve flip can land mid-sleep.
+  const lateReserve = await reserveCells(deps, cells)
+  if (lateReserve?.length) {
+    throw new Error(`staging sleep refuses reserve-mode cells: ${lateReserve.join(', ')}`)
+  }
   await Promise.all(cells.map((cell) => setMigSize(deps, cell, 0)))
   await ensureSqlPolicy(deps, 'NEVER')
   deps.emit({

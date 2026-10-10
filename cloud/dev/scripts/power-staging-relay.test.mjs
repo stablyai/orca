@@ -234,6 +234,7 @@ function harness({
     commands,
     events,
     posts,
+    admitModes,
     deps: {
       command,
       commandJson,
@@ -327,6 +328,20 @@ test('refuses a selector-era sleep while any cell is reserve or busy', async () 
     /refuses reserve-mode cells: staging-gce-c2/
   )
   assert.equal(reserve.commands.length, 0)
+
+  // A flip that lands after the first read, while Cloud Run scales down, still stops the resize.
+  const late = harness({ selectorGeneration: 3, admitModes: {} })
+  const run = late.deps.command
+  late.deps.command = (args) => {
+    if (args[0] === 'run' && args[2] === 'update-traffic') late.admitModes['staging-gce-c4'] = 'reserve'
+    return run(args)
+  }
+  await assert.rejects(
+    runStagingRelayPower(argumentConfig(topologyFile(), 'sleep'), late.deps),
+    /refuses reserve-mode cells: staging-gce-c4/
+  )
+  assert.deepEqual([...late.cells.values()].map((cell) => cell.targetSize), [1, 1, 1, 1])
+  assert.equal(late.sqlPolicy(), 'ALWAYS')
 
   const busy = harness({ selectorGeneration: 3, observedRequests: 1 })
   await assert.rejects(
