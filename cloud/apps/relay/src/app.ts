@@ -130,6 +130,8 @@ export function createRelayApp(
     cellFlags?: () => AppliedControlFlags<CellFlags>
     cellReserve?: (request: ReserveRequest) => ReserveOutcome[]
     cellDemote?: (request: DemoteRequest) => string
+    cellReserverPoll?: () => void
+    cellAdmitModeEffective?: () => 'db' | 'reserve'
     cellReserveCounts?: () => {
       bookings: number
       intake: { perSec: number; burst: number; tokens: number }
@@ -343,6 +345,8 @@ export function createRelayApp(
     isDraining: operations.isDraining,
     runtimeCounts: operations.runtimeCounts,
     cellFlags: operations.cellFlags,
+    onReserverPoll: operations.cellReserverPoll,
+    admitModeEffective: operations.cellAdmitModeEffective,
     reserveCounts: operations.cellReserveCounts,
     placementCeiling: operations.cellPlacementCeiling
   })
@@ -800,7 +804,15 @@ export function createRelayApp(
       regionalRehomeProtocol: config.rehomeAudience && config.rehomeDirectorServiceAccount ? 3 : 0,
       // The flag workflow's read-back: applied switches, never the desired object.
       ...(operations.cellFlags
-        ? { flagsApplied: operations.cellFlags(), supportedFlags: supportedCellFlags() }
+        ? {
+            flagsApplied: operations.cellFlags(),
+            supportedFlags: supportedCellFlags(),
+            // The flag tool paces a flip back's wait from it.
+            databasePoolMax: config.databasePoolMax
+          }
+        : {}),
+      ...(operations.cellAdmitModeEffective
+        ? { admitModeEffective: operations.cellAdmitModeEffective() }
         : {}),
       connectionCapacity:
         config.connectionHardCap === undefined

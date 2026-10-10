@@ -19,6 +19,7 @@ import { createRemoteJWKSet } from 'jose'
 import { WebSocketServer } from 'ws'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
+import { ReserveDeadMan, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
 import { classifyAssignmentLease } from './assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell-flags.js'
@@ -64,6 +65,8 @@ function decodePathSegment(value: string): string | null {
 // tripping it. On 10-07 every window that met both also logged SQL failures.
 export const HOST_HELLO_SHED_OLDEST_WAIT_MS = 1_000
 const HOST_HELLO_SHED_RETRY_AFTER_SECONDS = 2
+// Well inside the flag channel's 5 s read, so a flip back starts re-registering within ~6 s.
+export const RESERVE_MODE_WATCH_MS = 1_000
 // Shipped desktops ignore it; it is for the ones that learn to read it.
 const CELL_FULL_RETRY_AFTER_SECONDS = 2
 
@@ -206,6 +209,15 @@ export function createRelayServer(
   const databaseShedding = (): boolean =>
     readRelayDatabasePoolPressure(database).databasePoolWaiting >= config.databasePoolMax &&
     readRelayDatabasePoolOldestWaitMs(database) >= HOST_HELLO_SHED_OLDEST_WAIT_MS
+  const reserveDeadMan = reserveBook
+    ? new ReserveDeadMan(config.cellId, options.now, reserveDeadManWindowMs(config.cellId))
+    : null
+  // The switch file's admitMode, unless the dead-man has flipped this cell back.
+  const effectiveAdmitMode = (): 'db' | 'reserve' => {
+    const applied = options.cellFlags?.()
+    if (!applied) return 'db'
+    return reserveDeadMan ? reserveDeadMan.mode(applied) : applied.flags.admitMode
+  }
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
@@ -224,7 +236,9 @@ export function createRelayServer(
     }),
     reserveBook
       ? {
-          mode: () => options.cellFlags?.().flags.admitMode ?? 'db',
+          mode: effectiveAdmitMode,
+          directorContact: () => reserveDeadMan?.contact(),
+          reregisterInFlight: () => options.cellFlags?.().flags.reregisterInFlight,
           ticketEnforce: () => options.cellFlags?.().flags.ticketCheck === 'enforce',
           dryRunEnabled: () => options.cellFlags?.().flags.reserveDryRun === true,
           databaseShedding: () => databaseShedding(),
@@ -238,8 +252,20 @@ export function createRelayServer(
         }
       : undefined
   )
-  // Expired bookings give their units back even while no director is reserving.
-  const reserveSweepTimer = reserveBook ? setInterval(() => reserveBook.sweep(), 1_000) : null
+  // Expired bookings give their units back even while no director is reserving. A flip out of
+  // reserve mode voids the bookings and registers every control admitted from memory.
+  let appliedAdmitMode = effectiveAdmitMode()
+  const reserveSweepTimer = reserveBook
+    ? setInterval(() => {
+        reserveBook.sweep()
+        const admitMode = effectiveAdmitMode()
+        if (appliedAdmitMode === 'reserve' && admitMode !== 'reserve') {
+          reserveBook.clear()
+          sessions.reregisterMemoryControls()
+        }
+        appliedAdmitMode = admitMode
+      }, RESERVE_MODE_WATCH_MS)
+    : null
   reserveSweepTimer?.unref()
   const app = createRelayApp(config, {
     store,
@@ -266,6 +292,13 @@ export function createRelayServer(
     ...(reserveBook && placementCeiling !== null
       ? {
           cellReserve: (request: ReserveRequest) => sessions.reserve(request),
+          cellReserverPoll: () => reserveDeadMan?.contact(),
+          // Reserve until every control it admitted from memory holds a lease again: the flag
+          // workflow records db in Postgres (and sweeps resume) only after this says db.
+          cellAdmitModeEffective: (): 'db' | 'reserve' =>
+            effectiveAdmitMode() === 'reserve' || sessions.reregistrationPending() > 0
+              ? 'reserve'
+              : 'db',
           cellDemote: (request: DemoteRequest) => sessions.demote(request),
           cellReserveCounts: () => sessions.reserveCounts(),
           cellPlacementCeiling: placementCeiling

@@ -19,6 +19,9 @@ export function registerCellSeatFeedRoute(
     isDraining?: () => boolean
     runtimeCounts?: () => RelayRuntimeCounts
     cellFlags?: () => AppliedControlFlags<CellFlags>
+    // A placing director's poll (reserver=1) feeds the cell's dead-man.
+    onReserverPoll?: () => void
+    admitModeEffective?: () => 'db' | 'reserve'
     // Step 5: what a director needs to estimate a seat and a booking here.
     reserveCounts?: () => {
       bookings: number
@@ -39,6 +42,7 @@ export function registerCellSeatFeedRoute(
     if (!bearer || !(await input.verifyRegionalRehomeToken(bearer))) {
       return context.json({ error: 'invalid_token' }, 401)
     }
+    if (context.req.query('reserver') === '1') input.onReserverPoll?.()
     const cursor = parseCellSeatCursor(context.req.query('since'))
     if (cursor === 'invalid') return context.json({ error: 'invalid_request' }, 400)
     const sinceSeq =
@@ -69,6 +73,7 @@ export function registerCellSeatFeedRoute(
       ...(reserve ? { intake: reserve.intake } : {}),
       // Applied, never desired: generation 0 means no object has been read since boot.
       ...(input.cellFlags ? { flagsApplied: input.cellFlags() } : {}),
+      ...(input.admitModeEffective ? { admitModeEffective: input.admitModeEffective() } : {}),
       ...page
     })
   })
