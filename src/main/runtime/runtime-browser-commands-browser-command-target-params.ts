@@ -162,11 +162,13 @@ export type RuntimeBrowserCommandHost = {
     id: string
     repoId?: string
     hostId?: ExecutionHostId
+    path?: string
   }>
   resolveBrowserWorkspace(selector: string): Promise<{
     id: string
     repoId?: string
     hostId?: ExecutionHostId
+    path?: string
   }>
   resolveBrowserNetworkExecutionHost(worktree?: {
     id: string

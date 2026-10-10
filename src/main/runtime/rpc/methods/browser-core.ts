@@ -51,7 +51,10 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.goto',
     permission: 'workspace',
     params: Goto,
-    handler: async (params, { runtime }) => runtime.browserGoto(params)
+    handler: async (params, { runtime, pairedDeviceId, clientKind }) =>
+      pairedDeviceId
+        ? runtime.browserGoto(params, { pairedDeviceId, clientKind })
+        : runtime.browserGoto(params, { clientKind })
   }),
   defineMethod({
     name: 'browser.certificate.proceed',
