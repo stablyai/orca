@@ -162,8 +162,9 @@ describe('Codex background-command Stop', () => {
 
     await backgroundedDevServer(codex)
 
+    // Per-row Stop stays offered for sub-agents; no command row is stoppable and no Stop all.
     expect(codex.adapter.backgroundTaskStops('session-1')).toEqual({
-      supportsTaskStop: false,
+      supportsTaskStop: true,
       supportsStopAll: false
     })
     expect(lastCommandStoppable(codex.evidence)).toBe(false)
@@ -185,8 +186,9 @@ describe('Codex background-command Stop', () => {
     })
     await backgroundedDevServer(codex)
     expect(lastCommandStoppable(codex.evidence)).toBe(false)
+    // Per-row Stop stays offered for sub-agents; no command row is stoppable and no Stop all.
     expect(codex.adapter.backgroundTaskStops('session-1')).toEqual({
-      supportsTaskStop: false,
+      supportsTaskStop: true,
       supportsStopAll: false
     })
 
@@ -194,7 +196,7 @@ describe('Codex background-command Stop', () => {
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(lastCommandStoppable(codex.evidence)).toBe(true)
-    expect(codex.adapter.backgroundTaskStops('session-1')?.supportsTaskStop).toBe(true)
+    expect(codex.adapter.backgroundTaskStops('session-1')?.supportsStopAll).toBe(true)
   })
 
   it('probes the app-server once, not per command', async () => {
@@ -236,7 +238,7 @@ describe('Codex background-command Stop', () => {
     })
     await new Promise((resolve) => setImmediate(resolve))
     expect(probes).toBe(1)
-    expect(codex.adapter.backgroundTaskStops('session-1')?.supportsTaskStop).toBe(false)
+    expect(codex.adapter.backgroundTaskStops('session-1')?.supportsStopAll).toBe(false)
 
     codex.notify('turn/completed', {
       threadId: THREAD_ID,
@@ -245,7 +247,7 @@ describe('Codex background-command Stop', () => {
     await new Promise((resolve) => setImmediate(resolve))
 
     expect(probes).toBe(2)
-    expect(codex.adapter.backgroundTaskStops('session-1')?.supportsTaskStop).toBe(true)
+    expect(codex.adapter.backgroundTaskStops('session-1')?.supportsStopAll).toBe(true)
     expect(lastCommandStoppable(codex.evidence)).toBe(true)
   })
 

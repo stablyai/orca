@@ -1,9 +1,9 @@
 import {
   signalProcessTree,
   forceTerminateProcessTree
-} from '../shared/child-process/process-tree-termination'
-import type { ProcessTerminationBarrier } from '../shared/child-process/process-spec'
-import { runProcess } from '../shared/child-process/run-process'
+} from '@orca/process-host/process-tree-termination'
+import type { ProcessTerminationBarrier } from '@orca/process-host/process-spec'
+import { runProcess } from '@orca/process-host'
 import { GitAdmissionScheduler } from '../shared/git-admission-scheduler'
 import type { GitAdmissionRequest } from '../shared/git-admission-state'
 import { gitCommandTimeoutMs } from '../shared/git-command-timeout'

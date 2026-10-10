@@ -59,3 +59,23 @@ export type AgentSessionQueuedMessageDeleteResult =
   /** `dispatched` means it already became a submission; `missing` covers a
    *  pruned tombstone. Replays answer from tombstone receipts. */
   | { deleted: false; messageId: string; disposition: 'dispatched' | 'withdrawn' | 'missing' }
+
+/** `agentSession.queuedMessageUpdate` (`agent-session.queued-message-edit.v1`). `unchanged`: the
+ *  card already reads as asked, which is also how a resent Save whose answer was lost succeeds.
+ *  `changed`: someone else's edit landed first; nothing was overwritten. */
+export type AgentSessionQueuedMessageUpdateResult =
+  | { status: 'updated' | 'unchanged'; messageId: string; fingerprint: string }
+  | { status: 'changed' | 'not-editable'; messageId: string }
+  | { status: 'gone'; messageId: string; disposition: 'dispatched' | 'withdrawn' | 'missing' }
+
+/** `agentSession.queuedMessageEditHold`: one editor's lease, keyed by the authenticated caller and
+ *  `editId`. It expires on its own; renewing extends it, and release frees only this editor's. */
+export type AgentSessionQueuedMessageEditHoldParams = {
+  sessionId: string
+  messageId: string
+  editId: string
+} & ({ action: 'acquire'; expectedBodyFingerprint: string } | { action: 'renew' | 'release' })
+
+export type AgentSessionQueuedMessageEditHoldResult =
+  | { status: 'held'; fingerprint: string; leaseDurationMs: number; remainingMs: number }
+  | { status: 'released' | 'expired' | 'changed' | 'gone' | 'not-editable' }

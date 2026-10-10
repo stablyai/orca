@@ -22,7 +22,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../shared/structured-agent-session-main-agent-working'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
-import { QueuedMessageNotConsumableError } from '../agent-session-journal/journal-queued-messages'
+import { QueuedMessageNotConsumableError } from '../agent-session-journal/queued-message-consume-error'
 import type { QueuedMessageRow } from '../agent-session-journal/queued-message-table'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
@@ -57,16 +57,19 @@ export function pendingPromptExists(journal: Pick<AgentSessionJournal, 'visitIte
 
 /** Waiting, not held on its own, and not positioned behind a returned card or a
  *  card the queue's pause holds: the queue never reorders. The admission rule
- *  (§accept) and the drain's selection both read it. */
+ *  (§accept) and the drain's selection both read it; only the drain's (`automatic`) stops at a
+ *  card being edited, so an edited card still counts as backlog a new send queues behind. */
 function oldestActionableQueuedMessage(
-  journal: Pick<AgentSessionJournal, 'queuedMessages'>
+  journal: Pick<AgentSessionJournal, 'queuedMessages'>,
+  automatic: boolean
 ): QueuedMessageRow | null {
   const rows = journal.queuedMessages.list()
   // Nothing waiting costs no pause derivation: this runs on every journal publish.
   if (!rows.some((row) => row.state === 'waiting')) {
     return null
   }
-  return nextSendableQueuedCard(structuredQueuePauses(journal), rows)
+  const edited = automatic ? journal.queuedMessages.editLeases.heldIds(rows) : undefined
+  return nextSendableQueuedCard(structuredQueuePauses(journal), rows, edited)
 }
 
 /**
@@ -125,7 +128,7 @@ export function nextStructuredQueuedMessage(input: {
   record: AgentSessionRecord | null
   fence: number
 }): QueuedMessageRow | null {
-  const next = oldestActionableQueuedMessage(input.journal)
+  const next = oldestActionableQueuedMessage(input.journal, true)
   const { journal, fence } = input
   // The gate's cheap `working` first: publication asks on every streamed frame, and the gate's
   // prompt check walks the whole fold.
@@ -160,7 +163,7 @@ export function shouldQueueStructuredAgentSessionSend(input: {
   if (hold !== null) {
     return true
   }
-  return oldestActionableQueuedMessage(input.journal) !== null
+  return oldestActionableQueuedMessage(input.journal, false) !== null
 }
 
 /**
@@ -289,7 +292,7 @@ export class StructuredAgentSessionQueuedMessageDrain {
     try {
       if (
         !journal.queuedMessages.settlementOwed() &&
-        (oldestActionableQueuedMessage(journal) === null ||
+        (oldestActionableQueuedMessage(journal, true) === null ||
           isStructuredAgentSessionMainAgentWorking(
             journal.activeTurnId(),
             journal.submissions(),

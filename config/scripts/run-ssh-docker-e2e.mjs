@@ -54,6 +54,7 @@ const result = spawnSync(
     'playwright',
     'test',
     'tests/e2e/local-ssh-browser-routing.spec.ts',
+    'tests/e2e/repo-registration-async.spec.ts',
     'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts',
     'tests/e2e/pty-input-write-queue-ssh.spec.ts',
     'tests/e2e/ssh-ai-vault-session-history.spec.ts',

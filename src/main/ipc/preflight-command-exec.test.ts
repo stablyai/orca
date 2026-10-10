@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import type * as LocalCommandResolver from './command-path-resolver'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 
@@ -16,7 +16,7 @@ const {
   runProcessMock: vi.fn()
 }))
 
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 vi.mock('./preflight-local-env', () => ({ buildLocalPreflightEnv: () => undefined }))
 

@@ -13,7 +13,7 @@ import {
 import { readOrcadArtifactIdentity } from './orcad-artifact-identity'
 import { ORCAD_SERVER_ENTRY_FILENAME, ORCAD_VERSION_FILENAME } from '../../shared/orcad-artifacts'
 import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../shared/orcad-node-runtime-identity'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { preflightOrcadNativeRuntime } from './orcad-runtime-native-preflight'
 import {
   isRunningAsBundledOrcadRuntime,

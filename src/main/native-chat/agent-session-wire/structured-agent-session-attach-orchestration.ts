@@ -234,6 +234,7 @@ async function runAttachUnderAbort(
             fence,
             acquisitionGeneration,
             deathEvidence: priorDeathEvidence,
+            replaced: context.deps.store.replacedRuntime(sessionId),
             failureTextContext: structuredAgentSessionFailureWordsContext(priorRecord)
           })
         }

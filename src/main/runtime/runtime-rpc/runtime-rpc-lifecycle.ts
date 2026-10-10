@@ -4,7 +4,12 @@ import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-wat
 import type { RpcTransport } from '../rpc/transport'
 import { UnixSocketTransport } from '../rpc/unix-socket-transport'
 import { WebSocketTransport } from '../rpc/ws-transport'
-import { readWsFallbackPort, writeWsFallbackPort } from '../rpc/ws-fallback-port-store'
+import {
+  clearWsFallbackPort,
+  readWsFallbackPort,
+  wsFallbackPortLadder,
+  writeWsFallbackPort
+} from '../rpc/ws-fallback-port-store'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
@@ -20,6 +25,7 @@ import {
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
 import { errorMessage } from '../../../shared/error-message'
+import { loadHostDescriptor, publishHostDescriptor } from '../host-descriptor'
 
 export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   async start(): Promise<void> {
@@ -85,6 +91,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.deviceRegistry = pairingIdentity.deviceRegistry
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
+        this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
+        publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {
           const host = this.resolveInitialWebSocketBindHost()
           const { transport, endpoint } = await this.startWebSocketTransport({
@@ -96,6 +104,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           })
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
+          } else if (transport.persistedFallbackFailed) {
+            clearWsFallbackPort(this.userDataPath)
           }
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
@@ -177,7 +187,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       port: options.port,
       staticRoot: this.webClientRoot,
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
-      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
+      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
+      fallbackLadder: wsFallbackPortLadder(this.wsPort)
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)

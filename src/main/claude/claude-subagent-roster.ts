@@ -87,8 +87,7 @@ export class ClaudeSubagentRoster {
     this.now = deps.now ?? (() => Date.now())
     this.groups = new ClaudeSubagentRosterGroups({
       journaled: deps.journaled,
-      currentTurnScope: deps.currentTurnScope,
-      onEvicted: (group) => this.sweep(group, true)
+      currentTurnScope: deps.currentTurnScope
     })
     this.ids = new ClaudeSubagentIds(deps.journaled?.canonical)
     this.linkage = new ClaudeSubagentLinkage({
@@ -124,6 +123,12 @@ export class ClaudeSubagentRoster {
     if (frame.toolUseId) {
       this.ids.alias(frame.toolUseId, frame.taskId)
     }
+    if (
+      this.groups.hasSettled(frame.taskId, frame.toolUseId) &&
+      (frame.toolUseId !== null || !this.groups.locate(frame.taskId))
+    ) {
+      return true
+    }
     const located =
       this.groups.locateOrInherit(frame.taskId) ??
       (frame.toolUseId ? this.adopt(frame.toolUseId, frame.taskId) : null)
@@ -158,10 +163,20 @@ export class ClaudeSubagentRoster {
    */
   observeChildActivity(parentToolUseId: string): void {
     const canonical = this.ids.canonical(parentToolUseId)
-    if (this.ids.isExcluded(parentToolUseId, canonical)) {
+    if (
+      this.ids.isExcluded(parentToolUseId, canonical) ||
+      this.groups.hasSettled(canonical, parentToolUseId) ||
+      (!this.groups.locate(canonical) && this.groups.hasSettled(canonical, null))
+    ) {
       return
     }
-    if (this.groups.locateOrInherit(canonical)) {
+    if (this.groups.locate(canonical)) {
+      return
+    }
+    const inherited = this.groups.locateOrInherit(canonical)
+    if (inherited) {
+      // Child traffic can precede the announcement that reopens an inherited row.
+      this.groups.trim(inherited.group, true)
       return
     }
     if (this.announcesTasks) {
@@ -242,7 +257,6 @@ export class ClaudeSubagentRoster {
     if (!group) {
       return
     }
-    let changed = false
     for (const [id, tracked] of group.entries) {
       if (isTerminalSubagentState(tracked.entry.state)) {
         continue
@@ -254,11 +268,13 @@ export class ClaudeSubagentRoster {
         ...tracked,
         entry: { ...tracked.entry, state: 'unverifiable', settledAt: this.now() }
       })
-      changed = true
     }
-    if (changed) {
-      writeClaudeSubagentGroupRow(this.deps.sink, group)
-    }
+    this.write(group)
+  }
+
+  private write(group: RosterGroup): void {
+    writeClaudeSubagentGroupRow(this.deps.sink, group)
+    this.groups.trim(group)
   }
 
   private create(
@@ -270,6 +286,7 @@ export class ClaudeSubagentRoster {
   ): void {
     const group = this.groups.groupFor(this.deps.currentGroupKey() ?? OUTSIDE_TURN)
     if (group.admittedEntries >= MAX_SUBAGENTS_PER_GROUP) {
+      this.write(group)
       return
     }
     group.admittedEntries += 1
@@ -291,7 +308,7 @@ export class ClaudeSubagentRoster {
       }
     })
     this.groups.place(id, group.groupId)
-    writeClaudeSubagentGroupRow(this.deps.sink, group)
+    this.write(group)
   }
 
   private revise(
@@ -332,7 +349,7 @@ export class ClaudeSubagentRoster {
       }
     }
     group.entries.set(id, next)
-    writeClaudeSubagentGroupRow(this.deps.sink, group)
+    this.write(group)
   }
 
   /** Re-key a provisional entry from its tool id onto the canonical task id the
@@ -362,6 +379,6 @@ export class ClaudeSubagentRoster {
     }
     located.group.entries.delete(id)
     this.groups.forget(id)
-    writeClaudeSubagentGroupRow(this.deps.sink, located.group)
+    this.write(located.group)
   }
 }

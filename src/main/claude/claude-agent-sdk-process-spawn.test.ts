@@ -1,9 +1,8 @@
-import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { describe, expect, it, vi } from 'vitest'
 import type { SpawnOptions as SdkSpawnOptions } from '@anthropic-ai/claude-agent-sdk'
-import { resolveSpawn, type spawnProcess } from '../../shared/child-process/run-process'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
+import type { PipedProcessSpawner, ProcessSpec } from '@orca/process-host/process-spec'
+
 import type * as ProviderSupervisor from '../provider-process/provider-process-supervisor'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
@@ -14,26 +13,13 @@ vi.mock('../provider-process/provider-process-supervisor', async (importOriginal
   return { ...actual, createProviderSpawnSpec: vi.fn(actual.createProviderSpawnSpec) }
 })
 
-type FakeChild = EventEmitter & {
-  pid: number
-  stdin: PassThrough
-  stdout: PassThrough
-  stderr: PassThrough
-  kill: ReturnType<typeof vi.fn<(signal?: NodeJS.Signals | number) => boolean>>
-}
-
 function fakeSpawn() {
-  const child = new EventEmitter() as FakeChild
-  child.pid = 4321
-  child.stdin = new PassThrough()
-  child.stdout = new PassThrough()
-  child.stderr = new PassThrough()
-  child.kill = vi.fn((_signal?: NodeJS.Signals | number) => true)
+  const child = createFakePipedChild()
   const specs: ProcessSpec[] = []
-  const spawnImpl = ((spec: ProcessSpec) => {
+  const spawnImpl: PipedProcessSpawner = (spec) => {
     specs.push(spec)
     return child
-  }) as unknown as typeof spawnProcess
+  }
   return { child, spawnImpl, specs }
 }
 
@@ -183,7 +169,7 @@ describe('claude agent SDK process spawn', () => {
     expect(spawn.managed?.stderrTail().length).toBe(8192)
   })
 
-  it('hands a Windows .cmd shim to Orca\u2019s argument encoder', () => {
+  it('preserves a Windows .cmd shim and its arguments for the host spawner', () => {
     const process = fakeSpawn()
     createClaudeCodeProcessSpawn(process.spawnImpl, 'win32').spawn(
       sdkOptions({
@@ -192,15 +178,11 @@ describe('claude agent SDK process spawn', () => {
       })
     )
 
-    // The spec the spawner builds is what Orca's Windows branch encodes; the SDK's
-    // own spawn would hand `.cmd` straight to Node and mangle the argument.
-    const resolved = resolveSpawn(process.specs[0] as ProcessSpec, 'win32')
-    expect(resolved.file.toLowerCase()).toContain('cmd.exe')
-    expect(resolved.options.windowsVerbatimArguments).toBe(true)
-    expect(resolved.args).toHaveLength(1)
-    // `/v:off` plus the quoted argument is what keeps `&` from splitting the line.
-    expect(resolved.args[0]).toContain('/v:off')
-    expect(resolved.args[0]).toContain('"a b&c"')
-    expect(resolved.args[0]).toContain('"--setting-sources=user,project,local"')
+    expect(process.specs).toEqual([
+      expect.objectContaining({
+        program: 'C:\\Users\\dev\\AppData\\npm\\claude.cmd',
+        args: ['--setting-sources=user,project,local', '--session-id', 'a b&c']
+      })
+    ])
   })
 })

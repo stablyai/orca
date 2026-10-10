@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { ChildProcess, spawn } from 'node:child_process'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type TestContext } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -118,15 +118,22 @@ type StubHook = {
   trustStatus: string
 }
 
-function createStubRequest(options: {
-  scenario: string
-  hooks: StubHook[]
-  expectedTrustKeys: string[]
-  managedCommand: string
-  timeoutMs?: number
-}): { request: CodexHookTrustGrantRequest; recordFile: string; pidFile: string } {
+function createStubRequest(
+  options: {
+    scenario: string
+    hooks: StubHook[]
+    expectedTrustKeys: string[]
+    managedCommand: string
+    timeoutMs?: number
+  },
+  onTestFinished?: TestContext['onTestFinished']
+): { request: CodexHookTrustGrantRequest; recordFile: string; pidFile: string } {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-stub-'))
-  tempRoots.push(root)
+  if (onTestFinished) {
+    onTestFinished(() => rmSync(root, { recursive: true, force: true }))
+  } else {
+    tempRoots.push(root)
+  }
   const stubPath = join(root, 'stub-app-server.cjs')
   writeFileSync(stubPath, STUB_SERVER_SOURCE)
   const recordFile = join(root, 'batch-write-params.json')
@@ -398,15 +405,19 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(isCodexAppServerUnsupportedError(error)).toBe(false)
   })
 
-  it('kills a hung server at the session deadline', async () => {
+  it.concurrent('kills a hung server at the session deadline', async (context) => {
+    const { expect, onTestFinished } = context
     const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-    const { request, pidFile } = createStubRequest({
-      scenario: 'hang',
-      hooks: keys.map((key) => managedHook(key)),
-      expectedTrustKeys: keys,
-      managedCommand: MANAGED_COMMAND,
-      timeoutMs: STUB_START_DEADLINE_MS
-    })
+    const { request, pidFile } = createStubRequest(
+      {
+        scenario: 'hang',
+        hooks: keys.map((key) => managedHook(key)),
+        expectedTrustKeys: keys,
+        managedCommand: MANAGED_COMMAND,
+        timeoutMs: STUB_START_DEADLINE_MS
+      },
+      onTestFinished
+    )
 
     const startedAt = Date.now()
     await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
@@ -419,17 +430,20 @@ describe('runCodexHookTrustGrantSession', () => {
     expect(() => process.kill(childPid, 0)).toThrow()
   })
 
-  it.runIf(process.platform !== 'win32')(
+  it.runIf(process.platform !== 'win32').concurrent(
     'stops a server that ignores its stdin end and SIGTERM after the SIGTERM grace',
-    async () => {
+    async ({ expect, onTestFinished }) => {
       const keys = ['/home/a/.codex/hooks.json:session_start:0:0']
-      const { request, pidFile } = createStubRequest({
-        scenario: 'wedged',
-        hooks: keys.map((key) => managedHook(key)),
-        expectedTrustKeys: keys,
-        managedCommand: MANAGED_COMMAND,
-        timeoutMs: STUB_START_DEADLINE_MS
-      })
+      const { request, pidFile } = createStubRequest(
+        {
+          scenario: 'wedged',
+          hooks: keys.map((key) => managedHook(key)),
+          expectedTrustKeys: keys,
+          managedCommand: MANAGED_COMMAND,
+          timeoutMs: STUB_START_DEADLINE_MS
+        },
+        onTestFinished
+      )
 
       const startedAt = Date.now()
       await expect(runCodexHookTrustGrantSession(request)).rejects.toBeInstanceOf(
@@ -444,14 +458,18 @@ describe('runCodexHookTrustGrantSession', () => {
     }
   )
 
-  it('bounds a callback that stalls between RPC requests', async () => {
-    const { request, pidFile } = createStubRequest({
-      scenario: 'happy',
-      hooks: [],
-      expectedTrustKeys: [],
-      managedCommand: MANAGED_COMMAND,
-      timeoutMs: STUB_START_DEADLINE_MS
-    })
+  it.concurrent('bounds a callback that stalls between RPC requests', async (context) => {
+    const { expect, onTestFinished } = context
+    const { request, pidFile } = createStubRequest(
+      {
+        scenario: 'happy',
+        hooks: [],
+        expectedTrustKeys: [],
+        managedCommand: MANAGED_COMMAND,
+        timeoutMs: STUB_START_DEADLINE_MS
+      },
+      onTestFinished
+    )
 
     const startedAt = Date.now()
     await expect(

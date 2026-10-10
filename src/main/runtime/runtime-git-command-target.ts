@@ -9,7 +9,7 @@ import {
   resolveGitRouteForHost
 } from '../providers/execution-host-provider-dispatch'
 import type { createLocalGitProvider, LocalGitProvider } from '../providers/local-git-provider'
-import { SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from '../providers/ssh-git-dispatch'
+import { sshGitProviderMissingError } from '../providers/ssh-git-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { PullRequestLinkedIssueMeta } from '../source-control/pull-request-linked-issue'
@@ -96,7 +96,7 @@ export function requireSshRuntimeGitProvider(
   route: Extract<RuntimeGitRoute, { kind: 'ssh' }>
 ): SshGitProvider {
   if (!route.provider) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+    throw sshGitProviderMissingError(route.connectionId)
   }
   return route.provider
 }

@@ -23,7 +23,7 @@ export const uiClipboardAndWindowControlsApi = {
       filePath: string
       relativePath: string
       staged: boolean
-      runtimeEnvironmentId?: string
+      runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
     }) => void
   ): (() => void) => {
@@ -34,7 +34,7 @@ export const uiClipboardAndWindowControlsApi = {
         filePath: string
         relativePath: string
         staged: boolean
-        runtimeEnvironmentId?: string
+        runtimeEnvironmentId?: string | null
         navigation?: RuntimeNavigationTarget
       }
     ) => callback(data)

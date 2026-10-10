@@ -5,6 +5,7 @@ import {
   LayoutSubscribeParams,
   LayoutUnsubscribeParams
 } from '../../../../shared/rpc-contract/workspace-layout-params'
+import type { WorkspaceLayoutStreamFrame } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { defineMethod, defineStreamingMethod } from '../core'
 
 let layoutSubscriptionSeq = 0
@@ -14,7 +15,9 @@ export const WORKSPACE_LAYOUT_METHODS = [
     name: 'layout.subscribe',
     permission: 'workspace',
     params: LayoutSubscribeParams,
-    handler: async (params, { runtime, connectionId, signal }, emit) => {
+    handler: async (params, { runtime, connectionId, signal }, emitFrame) => {
+      // Typed so the frames stay the contract the client reads.
+      const emit = (frame: WorkspaceLayoutStreamFrame): void => emitFrame(frame)
       const keys = params?.workspaces
       const wanted = (key: string) => !Array.isArray(keys) || keys.includes(key)
       await new Promise<void>((resolve) => {

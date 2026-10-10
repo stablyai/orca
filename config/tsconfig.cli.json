@@ -3,6 +3,7 @@
   "include": [
     "../src/cli/**/*",
     "../src/shared/**/*",
+    "../src/packages/process-host/src/__fixtures__/**/*",
     "../src/main/agent-state-file-reader.ts",
     "../src/main/gitlab/project-ref-parser.ts",
     "../src/main/agent-hooks/grok-replay-guard.ts",

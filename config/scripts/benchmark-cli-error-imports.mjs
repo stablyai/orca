@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
+import { runProcessSync } from '@orca/process-host'
 import { existsSync, realpathSync } from 'node:fs'
 import { delimiter, join, resolve } from 'node:path'
 
@@ -19,10 +19,6 @@ const entries = {
 for (const entry of Object.values(entries)) {
   assert.ok(existsSync(entry), `Missing emitted CLI: ${entry}`)
 }
-
-const { runProcessSync } = createRequire(import.meta.url)(
-  join(resolve(afterDir), 'shared', 'child-process', 'run-process.js')
-)
 
 const child = String.raw`
   const { performance } = require('node:perf_hooks')

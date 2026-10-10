@@ -41,7 +41,7 @@ describe('mobileQueuedMessageCards', () => {
     const [card] = mobileQueuedMessageCards(
       [draft({ messageId: 'auth', ...returnedAs(agentSessionFailureFact('notSignedIn')) })],
       [],
-      { pendingPrompt: false, agentName }
+      { agentName }
     )
     expect(card?.caption).toContain(agentName)
     expect(card?.caption).toContain(guidance)
@@ -54,12 +54,11 @@ describe('mobileQueuedMessageCards', () => {
     (agentName) => {
       const fact = agentSessionFailureFact('notSignedIn', { account: 'managed' })
       const drafts = [draft({ messageId: 'auth', ...returnedAs(fact) })]
-      const [card] = mobileQueuedMessageCards(drafts, [], { pendingPrompt: false, agentName })
+      const [card] = mobileQueuedMessageCards(drafts, [], { agentName })
       expect(card?.caption).toBe(
         `This ${agentName} account isn't signed in. Sign in again in ${agentName} Accounts settings.`
       )
       const [stated] = mobileQueuedMessageCards(drafts, [], {
-        pendingPrompt: false,
         agentName,
         statedFailures: [fact]
       })
@@ -80,14 +79,13 @@ describe('mobileQueuedMessageCards', () => {
           }
         })
       ],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(card).toMatchObject({ text: '/compact', command: true, caption: null })
     expect(card).not.toHaveProperty('waitsForAgent')
-    expect(
-      mobileQueuedMessageCards([draft({ messageId: 'a' })], [], { pendingPrompt: false })[0]
-    ).not.toHaveProperty('command')
+    expect(mobileQueuedMessageCards([draft({ messageId: 'a' })], [])[0]).not.toHaveProperty(
+      'command'
+    )
     const compact = draft({
       messageId: 'c',
       body: {
@@ -97,9 +95,10 @@ describe('mobileQueuedMessageCards', () => {
         command: { name: 'compact' }
       }
     })
-    expect(
-      mobileQueuedMessageCards([compact], [], { pendingPrompt: false, agentWorking: true })[0]
-    ).toMatchObject({ command: true, waitsForAgent: true })
+    expect(mobileQueuedMessageCards([compact], [], { agentWorking: true })[0]).toMatchObject({
+      command: true,
+      waitsForAgent: true
+    })
   })
 
   it("a send-failed command card's caption names Send only when Send is there", () => {
@@ -114,24 +113,22 @@ describe('mobileQueuedMessageCards', () => {
         command: { name: 'compact' }
       }
     })
-    expect(
-      mobileQueuedMessageCards([failed], [], { pendingPrompt: false, agentWorking: true })[0]
-        ?.caption
-    ).toBe("Couldn't send — tap Send to retry once the agent finishes")
-    expect(mobileQueuedMessageCards([failed], [], { pendingPrompt: false })[0]?.caption).toBe(
+    expect(mobileQueuedMessageCards([failed], [], { agentWorking: true })[0]?.caption).toBe(
+      "Couldn't send — tap Send to retry once the agent finishes"
+    )
+    expect(mobileQueuedMessageCards([failed], [])[0]?.caption).toBe(
       "Couldn't send — tap Send to retry"
     )
   })
 
   it('renders nothing without a published list', () => {
-    expect(mobileQueuedMessageCards(null, [], { pendingPrompt: false })).toEqual([])
-    expect(mobileQueuedMessageCards([], [], { pendingPrompt: false })).toEqual([])
+    expect(mobileQueuedMessageCards(null, [])).toEqual([])
+    expect(mobileQueuedMessageCards([], [])).toEqual([])
   })
 
+  // The card knows no open question or paused queue: the question and the pause row say why.
   it('captions nothing on a plain waiting draft, as the desktop row', () => {
-    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a' })], [], {
-      pendingPrompt: false
-    })
+    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a' })], [])
     expect(card).toEqual({
       messageId: 'a',
       text: 'body of a',
@@ -143,31 +140,13 @@ describe('mobileQueuedMessageCards', () => {
     })
   })
 
-  it('captions a waiting draft behind a pending prompt', () => {
-    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a' })], [], {
-      pendingPrompt: true
-    })
-    expect(card?.caption).toBe('Waiting for your answer')
-  })
-
-  it('captions nothing on a waiting card of a paused queue; its pause row explains', () => {
-    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a' })], [], {
-      pendingPrompt: false,
-      queuePaused: true
-    })
-    expect(card?.caption).toBeNull()
-    expect(card?.paused).toBe(false)
-    expect(card?.needsAttention).toBe(false)
-  })
-
-  it("keeps a card's own failed send and reads a prompt's wait as queued under a paused queue", () => {
+  it("keeps a card's own failed send beside a plainly queued one", () => {
     const cards = mobileQueuedMessageCards(
       [
         draft({ messageId: 'a', paused: true, pausedReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED }),
         draft({ messageId: 'b', position: 2 })
       ],
-      [],
-      { pendingPrompt: true, queuePaused: true }
+      []
     )
     expect(cards.map((card) => card.caption)).toEqual(["Couldn't send — tap Send to retry", null])
     expect(cards[0]?.paused).toBe(true)
@@ -175,9 +154,7 @@ describe('mobileQueuedMessageCards', () => {
 
   it('finds something for Resume to send only in a waiting card with no hold, ahead of a returned one', () => {
     const resumable = (drafts: AgentSessionQueuedMessage[]) =>
-      mobileQueueHasResumableCard(
-        mobileQueuedMessageCards(drafts, [], { pendingPrompt: false, queuePaused: true })
-      )
+      mobileQueueHasResumableCard(mobileQueuedMessageCards(drafts, []))
     const returned = draft({
       messageId: 'r',
       ...returnedAs(agentSessionFailureFact('hostRestarted'))
@@ -205,9 +182,7 @@ describe('mobileQueuedMessageCards', () => {
   })
 
   it('captions a reasonless pause as a plain pause, promising no release rule', () => {
-    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a', paused: true })], [], {
-      pendingPrompt: false
-    })
+    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a', paused: true })], [])
     expect(card?.caption).toBe('Paused')
   })
 
@@ -217,8 +192,7 @@ describe('mobileQueuedMessageCards', () => {
     })
     const cards = mobileQueuedMessageCards(
       [draft({ messageId: 'a', ...returnedAs(refused) }), draft({ messageId: 'b', position: 2 })],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(cards[0]?.caption).toContain('Steering is unavailable')
     expect(cards[0]?.state).toBe('returned')
@@ -237,8 +211,7 @@ describe('mobileQueuedMessageCards', () => {
       [
         { queuedMessageId: 'returned', dispatchState: 'rejected' },
         { queuedMessageId: 'drained', dispatchState: 'pending' }
-      ],
-      { pendingPrompt: false }
+      ]
     )
     expect(cards.map((card) => card.messageId)).toEqual(['returned', 'waiting'])
     expect(cards[1]?.caption).toBe('Waiting — a message ahead needs attention')
@@ -257,8 +230,7 @@ describe('mobileQueuedMessageCards', () => {
         { queuedMessageId: 'requeued', dispatchState: 'rejected' },
         { queuedMessageId: 'sending', dispatchState: 'pending' },
         { queuedMessageId: 'sent', dispatchState: 'accepted' }
-      ],
-      { pendingPrompt: false }
+      ]
     )
     expect(cards.map((card) => card.messageId)).toEqual(['requeued'])
   })
@@ -266,8 +238,7 @@ describe('mobileQueuedMessageCards', () => {
   it('maps a Stop-withdrawn returned card to its own English copy', () => {
     const [card] = mobileQueuedMessageCards(
       [draft({ messageId: 'a', ...returnedAs(agentSessionFailureFact('cancelled')) })],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(card?.caption).toBe('Stopped before it was sent')
   })
@@ -282,8 +253,7 @@ describe('mobileQueuedMessageCards', () => {
           returnedRejection: { kind: 'cancelled' }
         })
       ],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(card?.caption).toBe('Stopped before it was sent')
   })
@@ -291,8 +261,7 @@ describe('mobileQueuedMessageCards', () => {
   it('words a host-restart returned card from its fact, as a rejected send', () => {
     const [card] = mobileQueuedMessageCards(
       [draft({ messageId: 'a', ...returnedAs(agentSessionFailureFact('hostRestarted')) })],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(card?.caption).toBe('Orca restarted before this message was sent.')
   })
@@ -301,13 +270,7 @@ describe('mobileQueuedMessageCards', () => {
     const refused = agentSessionFailureFact('providerRejected', {
       detail: { text: 'stack trace for the log', audience: 'log' }
     })
-    const [card] = mobileQueuedMessageCards(
-      [draft({ messageId: 'a', ...returnedAs(refused) })],
-      [],
-      {
-        pendingPrompt: false
-      }
-    )
+    const [card] = mobileQueuedMessageCards([draft({ messageId: 'a', ...returnedAs(refused) })], [])
     expect(card?.caption).not.toContain('stack trace')
   })
 
@@ -321,8 +284,7 @@ describe('mobileQueuedMessageCards', () => {
           returnedRejection: { kind: 'laterKind' }
         })
       ],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(card?.caption).toBe('Words for a kind a newer host added.')
   })
@@ -343,8 +305,7 @@ describe('mobileQueuedMessageCards', () => {
           returnedRejection: newer
         })
       ],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(card?.caption).toBe(reason)
   })
@@ -357,8 +318,7 @@ describe('mobileQueuedMessageCards', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: simulates a marker from a newer host than this build's union.
         draft({ messageId: 'b', position: 2, paused: true, pausedReason: 'later_marker' as never })
       ],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(cards.map((card) => card.caption)).toEqual([
       "Couldn't send — tap Send to retry",
@@ -377,8 +337,7 @@ describe('mobileQueuedMessageCards', () => {
           returnedReason: DISPATCH_REJECTED_HOST_RESTARTED
         })
       ],
-      [],
-      { pendingPrompt: false }
+      []
     )
     expect(card?.caption).toBe('Your message was not sent.')
   })

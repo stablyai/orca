@@ -118,6 +118,24 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
   return null
 }
 
+/**
+ * Bookkeeping for a worktree whose owner publications conflict. It is spelled as a runtime host so
+ * nothing treats the worktree as local, but no environment has this id and it must never be dialed.
+ */
+export const UNRESOLVED_OWNER_HOST_ID = 'runtime:unresolved-owner' satisfies ExecutionHostId
+
+export function isUnresolvedOwnerHostId(value: string | null | undefined): boolean {
+  return parseExecutionHostId(value)?.id === UNRESOLVED_OWNER_HOST_ID
+}
+
+/** {@link parseExecutionHostId} for transports: the unresolved-owner sentinel is not a host. */
+export function parseRoutableExecutionHostId(
+  value: string | null | undefined
+): ParsedExecutionHost | null {
+  const parsed = parseExecutionHostId(value)
+  return parsed?.id === UNRESOLVED_OWNER_HOST_ID ? null : parsed
+}
+
 export function normalizeExecutionHostId(value: string | null | undefined): ExecutionHostId | null {
   return parseExecutionHostId(value)?.id ?? null
 }

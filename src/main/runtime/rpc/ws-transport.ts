@@ -42,6 +42,8 @@ export type WebSocketTransportOptions = {
   fallbackPort?: number
   // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
   preferPinnedPort?: boolean
+  // Why: deterministic ports tried before an OS-assigned one, so a fallback stays stable across reboots.
+  fallbackLadder?: readonly number[]
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -54,6 +56,8 @@ export class WebSocketTransport implements RpcTransport {
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
+  private readonly fallbackLadder: readonly number[]
+  private persistedFallbackBindFailed = false
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
@@ -73,7 +77,8 @@ export class WebSocketTransport implements RpcTransport {
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
-    preferPinnedPort
+    preferPinnedPort,
+    fallbackLadder
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -88,6 +93,12 @@ export class WebSocketTransport implements RpcTransport {
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
+    this.fallbackLadder = fallbackLadder ?? []
+  }
+
+  // True when the persisted fallback was tried and refused, so the caller can drop it.
+  get persistedFallbackFailed(): boolean {
+    return this.persistedFallbackBindFailed
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -134,22 +145,29 @@ export class WebSocketTransport implements RpcTransport {
     if (this.wss) {
       return
     }
-    // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); on failure each candidate falls through to OS-assigned port 0.
+    // Why: bind a persisted fallback first so devices paired to it aren't stranded (STA-1511); serve --port flips to pinned-first (issue #8535); then the deterministic ladder, and only then an OS-assigned port 0.
     const persistedFallbackPort =
       this.fallbackPort !== undefined && this.fallbackPort !== 0 && this.fallbackPort !== this.port
         ? this.fallbackPort
         : undefined
-    const candidatePorts =
+    const configuredPorts =
       persistedFallbackPort === undefined
         ? [this.port]
         : this.preferPinnedPort
           ? [this.port, persistedFallbackPort]
           : [persistedFallbackPort, this.port]
+    const candidatePorts = [
+      ...configuredPorts,
+      ...this.fallbackLadder.filter((port) => !configuredPorts.includes(port))
+    ]
     for (const port of candidatePorts) {
       try {
         await this.tryListen(port)
         return
       } catch (error: unknown) {
+        if (port === persistedFallbackPort) {
+          this.persistedFallbackBindFailed = true
+        }
         // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.
         if (
           port !== persistedFallbackPort &&

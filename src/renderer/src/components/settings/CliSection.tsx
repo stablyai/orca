@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -293,7 +294,11 @@ export function CliSection({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => void window.api.shell.openPath(status.commandPath as string)}
+              onClick={() => {
+                if (status.commandPath) {
+                  void window.api.shell.openPath(status.commandPath, LOCAL_EXECUTION_HOST_ID)
+                }
+              }}
               disabled={loading || !canRevealCommandPath}
               className="gap-2"
             >

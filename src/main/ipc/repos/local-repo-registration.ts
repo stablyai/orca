@@ -5,7 +5,11 @@ import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
-import { inspectGitRepoForRegistration, getGitRepoRoot, getRepoName } from '../../git/repo'
+import {
+  inspectGitRepoForRegistrationAsync,
+  getGitRepoRootAsync,
+  getRepoName
+} from '../../git/repo'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
@@ -20,7 +24,7 @@ export async function addLocalRepoFromPath(
   if (repoKind === 'git') {
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
   }
-  const gitInfo = repoKind === 'git' ? inspectGitRepoForRegistration(path) : null
+  const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
   if (gitInfo && !gitInfo.isRepo) {
     return { error: `Not a valid git repository: ${path}` }
   }
@@ -52,7 +56,9 @@ export async function addLocalRepoFromPath(
   // same project and host — a duplicate run-target row that resolves to a transient worktree path.
   let mainRepoKey: string | null = null
   if (repoKind === 'git') {
-    const mainRepoRoot = gitInfo?.mainRepoPath ? getGitRepoRoot(gitInfo.mainRepoPath) : null
+    const mainRepoRoot = gitInfo?.mainRepoPath
+      ? await getGitRepoRootAsync(gitInfo.mainRepoPath)
+      : null
     if (mainRepoRoot) {
       mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
       // Why !isFolderRepo: only a git-kind main checkout projects onto the same project as its

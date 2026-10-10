@@ -145,7 +145,6 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       rootRef,
       runtimeEnvironmentId,
       scrollRichMarkdownReviewNoteCardIntoView,
-      settings,
       view,
       worktreeId,
       worktreeRoot

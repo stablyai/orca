@@ -2931,7 +2931,6 @@
             "efb3843e75": "ワークスペースのフィルターと並べ替え",
             "93b7381d50": "フィルター",
             "a615e24679": "並べ替え",
-            "4cc5b73efe": "非アクティブなワークスペースを検索しています…",
             "5bf2e88480": "{{value0}}/{{value1}} {{value2}} をスキャンしました",
             "searchPlaceholder": "ワークスペースの検索",
             "ageFilter": "年",
@@ -2943,7 +2942,6 @@
             "1d3503357d": "削除の続行中にこれを閉じて後で戻れます。",
             "4c2990886e": "{{value0}}/{{value1}} 件を削除済み",
             "86ba852118": "{{value0}}、{{value1}} 件が失敗",
-            "7b7bde5181": "これまでに確認したワークスペース: {{value0}}",
             "deletingCount": "削除中のワークスペース: {{value0}}",
             "deleteCount": "ワークスペースを削除しますか: {{value0}}?",
             "selectedForDeletionCount": "削除対象として選択済み: {{value0}}",
@@ -3426,7 +3424,8 @@
             "ec2adf093e": "新規ターミナルで {{value0}} を起動",
             "465e432ef1": "{{value0}} の起動コマンドを作成できませんでした。",
             "e518f544b1": "Agent が検出されませんでした",
-            "8dea9b5cdf": "有効な Agent がありません"
+            "8dea9b5cdf": "有効な Agent がありません",
+            "needsServerUpdate": "このワークスペースの Agent を表示するには、このサーバーの Orca を更新してください"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
@@ -5298,7 +5297,9 @@
           "b79b39d865": "プロジェクトの削除",
           "removeDescriptionSsh": "この操作は {{name}} を Orca から削除するだけです。ファイルは {{host}} に残っており、その SSH ホストを再追加すれば復元できます。",
           "removeDescriptionLocal": "この操作は {{name}} を Orca から削除するだけです。ファイルはディスクに残っています。",
-          "removeDescriptionVmRecipe": "これにより、{{name}} が Orca から削除されます。その VM レシピによって、環境とそのファイルが完全に削除されるかどうかが決まります。"
+          "removeDescriptionVmRecipe": "これにより、{{name}} が Orca から削除されます。その VM レシピによって、環境とそのファイルが完全に削除されるかどうかが決まります。",
+          "openTerminalWarningOne": "このプロジェクトで開いているターミナル 1 個が閉じられます。",
+          "openTerminalWarningMany": "このプロジェクトで開いているターミナル {{count}} 個が閉じられます。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "アクティブなワークスペースを表示する"
@@ -11458,7 +11459,6 @@
           "pathGroup": "スマートフォンがこのコンピュータに到達する方法",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "スマートフォンはモバイル回線または任意の Wi‑Fi から接続できます。サインインが必要なのは Relay のみです。",
-          "signInRequired": "Relay のみ — LAN にはアカウントは不要です。",
           "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
           "signInAgain": "Relay に再サインイン",
           "localTitle": "LAN",
@@ -11955,7 +11955,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "ターミナル URL のクリック数",
-          "description": "ターミナル内のリンクまたはチャット記録をクリックしたときに利用可能な操作を表示します。ターミナルで {{modifier}} クリックを要求するには、これをオフにします。",
           "descriptionV2": "ターミナルペインおよびチャットトランスクリプトに出力される検出された URL のクリックを制御します。",
           "plainClickLabel": "プレーンクリック",
           "plainClickDescription": "左クリックで操作を表示するか、URL を開くか、ターミナルに任せるかを選択します。 Cmd/Ctrl キーを押しながらクリックすると、常に直接開きます。",
@@ -18013,6 +18012,7 @@
         "model": "モデル",
         "effort": "推論レベル",
         "fastMode": "高速モード",
+        "speed": "速度",
         "thinking": "思考",
         "options": "オプション",
         "sessionOptions": "セッションオプション",
@@ -18033,7 +18033,8 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
-          "ultra": "ウルトラ"
+          "ultra": "ウルトラ",
+          "standard": "標準"
         },
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
@@ -18286,6 +18287,7 @@
         "orcaStopUpdate": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。",
         "orcaStopQuit": "この応答の途中で、{{machine}} の Orca が終了しました。",
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
+        "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
         "orcaStopCanContinue": "この会話で続行できます。"
       },
       "providerFrame": {
@@ -18422,10 +18424,8 @@
       },
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
-        "editAlreadySent": "すでに送信されています — テキストは入力欄に残っています。",
         "listLabel": "キュー内のメッセージ",
         "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
-        "awaitingAnswerHold": "回答を待っています",
         "steer": "今すぐ送信",
         "send": "送信",
         "steerHint": "モデルを中断せずに送信します",
@@ -18449,7 +18449,15 @@
         "sendConfirmClear": "キューを消去",
         "sendConfirmSend": "メッセージを送信",
         "fromSender": "送信元:",
-        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。"
+        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。",
+        "save": "保存",
+        "editingMessage": "メッセージを編集中",
+        "cancelEditing": "編集をキャンセル",
+        "editChanged": "編集中にこのメッセージが変更されました。編集したテキストはチャット入力欄にあります。",
+        "editChangedPrompt": "編集中にこのメッセージが変更されました。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。",
+        "editFailed": "このメッセージは編集できません。",
+        "editGone": "このメッセージはすでに送信または削除されています。編集したテキストはチャット入力欄にあります。",
+        "editGonePrompt": "このメッセージはすでに送信または削除されています。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
@@ -19240,6 +19248,7 @@
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
       "consent": "全文検索を有効にしますか? Orca は、完全な会話とツール出力ごとに最大 3,072 文字を含む、ローカル Agent のトランスクリプトからこのコンピュータ上にインデックスを作成します。内容は編集されていません。認証されたペアリングされたクライアントは検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
+      "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
       "noService": "このコンピュータでは検索を利用できません。 Orca アップデートまたは検索サポートを備えたランタイムが必要な場合があります。",
       "failed": "このコンピュータを検索できませんでした。接続を確認して、再試行してください。",

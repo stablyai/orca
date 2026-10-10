@@ -41,7 +41,6 @@ function discovery(defaultModel: string): AgentModelCatalogSuccess {
       efforts: EFFORTS,
       ...(id === defaultModel ? { defaultEffort: 'high' } : {})
     })),
-    fastModeTierByModel: new Map(),
     origin: 'probe'
   }
 }
