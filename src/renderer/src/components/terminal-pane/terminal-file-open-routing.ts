@@ -66,12 +66,9 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
 }
 
-export function shouldOpenTerminalFileWithSystemDefault(
-  fileContext: TerminalFileContext,
-  filePath: string
-): boolean {
+export function shouldOpenTerminalFileWithSystemDefault(fileContext: TerminalFileContext): boolean {
   // Why: an unresolved owner has no connectionId either, which would otherwise read as local.
-  return fileContext.sourceHostResolved && canClientOsOpenWorkspaceFile(fileContext, filePath)
+  return fileContext.sourceHostResolved && canClientOsOpenWorkspaceFile(fileContext)
 }
 
 let latestOpenDetectedFilePathRequestId = 0
@@ -131,10 +128,7 @@ export function openDetectedFilePath(
       })
       return
     }
-    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
-      fileContext,
-      mappedFilePath
-    )
+    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
 
     if (!openWithSystemDefault) {
       const worktreeRootLink = resolveKnownWorktreeRootPathLink(
@@ -210,7 +204,7 @@ export function openDetectedFilePath(
     // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
     // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (isHtmlFilePath(mappedFilePath)) {
-      if (shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)) {
+      if (shouldOpenTerminalFileWithSystemDefault(fileContext)) {
         openHtmlFileInBrowser(mappedFilePath, worktreeId)
         return
       }

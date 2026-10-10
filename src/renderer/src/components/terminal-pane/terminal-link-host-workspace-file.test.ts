@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
   flushDoubleRaf,
@@ -8,7 +9,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, statMock, openFileMock, runtimeEnvironmentCallMock } = doubles
+const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -23,6 +24,10 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
+}))
+
+vi.mock('./terminal-remote-file-download-open', () => ({
+  downloadAndOpenRemoteTerminalFile: vi.fn()
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -98,6 +103,44 @@ describe('a paired-server link outside its own workspace', () => {
       }),
       { forceContentReload: true }
     )
+  })
+
+  it('downloads a Shift-clicked host file instead of opening the same path on this computer', async () => {
+    hostAnswers({
+      worktree: 'wt-main',
+      relativePath: 'src/index.ts',
+      absolutePath: '/repo/src/index.ts',
+      exists: true,
+      isDirectory: false
+    })
+
+    openDetectedFilePath('/repo/src/index.ts', null, null, {
+      ...featureWorktree,
+      openWithSystemDefault: true
+    })
+    await flushDoubleRaf()
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'wt-main', worktreePath: '/repo' }),
+      '/repo/src/index.ts'
+    )
+  })
+
+  it('never opens a host directory on this computer', async () => {
+    hostAnswers({
+      worktree: 'wt-main',
+      relativePath: 'docs',
+      absolutePath: '/repo/docs',
+      exists: true,
+      isDirectory: true
+    })
+
+    openDetectedFilePath('/repo/docs', null, null, featureWorktree)
+    await flushDoubleRaf()
+
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
   })
 
   it('says the host has no workspace for a path outside all of them', async () => {

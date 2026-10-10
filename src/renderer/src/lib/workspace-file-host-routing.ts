@@ -1,8 +1,6 @@
 import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
-import {
-  isRemoteRuntimeFileOperation,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { hasRemoteRuntimeOwner } from '@/runtime/runtime-file-routing'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 
@@ -39,12 +37,10 @@ export function buildWorkspaceFileContextForFile(
 }
 
 /**
- * Whether the client's OS can launch this path at all. False for anything an SSH connection or a
- * runtime environment owns — those have to be downloaded before the OS has a file to open.
+ * Whether the client's OS can launch the workspace's paths at all. False for anything an SSH
+ * connection or a runtime environment owns — those have to be downloaded before the OS has a file
+ * to open. Decided by owner, not path: a server path outside its workspace is still the server's.
  */
-export function canClientOsOpenWorkspaceFile(
-  fileContext: RuntimeFileOperationArgs,
-  filePath: string
-): boolean {
-  return !fileContext.connectionId && !isRemoteRuntimeFileOperation(fileContext, filePath)
+export function canClientOsOpenWorkspaceFile(fileContext: RuntimeFileOperationArgs): boolean {
+  return !fileContext.connectionId && !hasRemoteRuntimeOwner(fileContext)
 }
