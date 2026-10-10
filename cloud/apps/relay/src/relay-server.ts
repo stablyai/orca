@@ -42,6 +42,10 @@ import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
 import { ShadowDirectoryCompare } from './shadow-directory-compare.js'
 import { startShadowSeatPoller } from './shadow-seat-directory.js'
+import { CellReserveClient } from './cell-reserve-client.js'
+import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
+import { ReserveAssignment } from './reserve-assignment.js'
+import { ReservePlacer } from './reserve-placement.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
 // A malformed percent-escape in the request target must be a client error, never a URIError
@@ -165,6 +169,36 @@ export function createRelayServer(
   const shadowCompare = shadowSeatPoller
     ? new ShadowDirectoryCompare(shadowSeatPoller.directory, options.now)
     : undefined
+  // Step 5 on directors: needs the map and the rehome credential the cells verify.
+  const directorId = randomUUID()
+  const rehomeAudience = config.rehomeAudience
+  const reservePlacement =
+    config.role === 'director' &&
+    shadowSeatPoller &&
+    rehomeAudience &&
+    (config.reservePlacement ?? 'off') !== 'off'
+      ? new ReserveAssignment({
+          mode: config.reservePlacement ?? 'off',
+          directory: shadowSeatPoller.directory,
+          cells: shadowSeatPoller.cells,
+          startedAt: shadowSeatPoller.startedAt,
+          placer: new ReservePlacer(options.now, options.random),
+          client: new CellReserveClient({
+            directorId,
+            identityToken: reusedIdentityToken(
+              () => googleMetadataIdentityToken(rehomeAudience),
+              options.now
+            )
+          }),
+          readRow: async (identity) => await assignments.hostWhereabouts(identity),
+          now: options.now,
+          random: options.random
+        })
+      : undefined
+  const demotionTimer = reservePlacement
+    ? setInterval(() => reservePlacement.demoteDuplicates(), 1_000)
+    : null
+  demotionTimer?.unref()
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,
@@ -228,6 +262,7 @@ export function createRelayServer(
     recordAssignmentUnavailable: (cause) => observability.recordAssignmentUnavailable?.(cause),
     recordRegionRequest: (region) => observability.recordRegionRequest?.(region),
     shadowSeats: shadowSeatPoller?.directory,
+    reservePlacement,
     compareShadowSeats: shadowCompare
       ? (route, identity, answer) => {
           shadowCompare.compare(route, identity, answer)
@@ -660,6 +695,8 @@ export function createRelayServer(
     connectionSnapshot,
     ready,
     cellIncarnation,
-    shadowSeatPoller
+    shadowSeatPoller,
+    directorId,
+    reservePlacement
   }
 }
