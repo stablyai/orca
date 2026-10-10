@@ -1,23 +1,29 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import {
   JOURNAL_BUSY_TIMEOUT_MS,
+  JOURNAL_SIZE_LIMIT_BYTES,
   journalPragmaNumber,
   openJournalDatabase
 } from './journal-database'
-import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
-import { journalDatabaseFile } from './journal-paths'
 import {
-  deleteAllJournalRows,
-  deleteJournalRowSuffix,
+  createJournalTablesSql,
+  JOURNAL_DB_OLDEST_RELEASED_VERSION,
+  JOURNAL_DB_SCHEMA_VERSION
+} from './journal-database-schema'
+import { journalDatabasePath } from './journal-host-database'
+import { JournalUnreleasedSchemaError } from './journal-open-failure'
+import {
+  deleteJournalEpochRows,
   insertJournalRow,
-  readJournalEpochRows,
+  iterateJournalEpochRows,
+  publishJournalSessionEpoch,
   readJournalRowsAfter,
-  readJournalSessionEpoch,
-  upsertJournalSessionRow
+  readJournalSessionEpoch
 } from './journal-row-table'
 import type { JournalRow } from './journal-row-schema'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
@@ -38,9 +44,21 @@ function epochRow(seq: number, epoch = 'epoch-1'): JournalRow {
   }
 }
 
+const SESSION = { sessionId: 'session-1', workspaceId: 'ws-1' }
+
+function rowsOf(db: Database.Database, sessionId: string, epoch: string): number[] {
+  return [...iterateJournalEpochRows(db, sessionId, epoch)].map((row) => row.seq)
+}
+
+async function digest(path: string): Promise<string> {
+  return createHash('sha256')
+    .update(await readFile(path))
+    .digest('hex')
+}
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-db-'))
-  dbPath = journalDatabaseFile(root)
+  dbPath = journalDatabasePath(root)
 })
 
 afterEach(async () => {
@@ -48,53 +66,63 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('journal database open', () => {
-  it('creates both tables and reads back every load-bearing pragma', () => {
-    const opened = openJournalDatabase(dbPath)
+describe('the host journal database open', () => {
+  it('creates every table and reads back every load-bearing pragma', () => {
+    const db = openJournalDatabase(dbPath).db
     try {
-      const tables = opened.db
+      const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
         .all()
         .map((entry) => (entry as { name: string }).name)
-      expect(tables).toContain('journal_rows')
-      expect(tables).toContain('journal_sessions')
-      expect(opened.db.pragma('journal_mode', { simple: true })).toBe('wal')
-      expect(journalPragmaNumber(opened.db, 'synchronous')).toBe(2)
-      expect(journalPragmaNumber(opened.db, 'busy_timeout')).toBe(JOURNAL_BUSY_TIMEOUT_MS)
-      expect(journalPragmaNumber(opened.db, 'foreign_keys')).toBe(1)
-      expect(journalPragmaNumber(opened.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
-      expect(opened.readOnly).toBe(false)
+      expect(tables).toEqual(
+        expect.arrayContaining([
+          'journal_imports',
+          'journal_repairs',
+          'journal_rows',
+          'journal_sessions',
+          'journal_set_aside'
+        ])
+      )
+      expect(db.pragma('journal_mode', { simple: true })).toBe('wal')
+      expect(journalPragmaNumber(db, 'synchronous')).toBe(2)
+      expect(journalPragmaNumber(db, 'checkpoint_fullfsync')).toBe(1)
+      expect(journalPragmaNumber(db, 'busy_timeout')).toBe(JOURNAL_BUSY_TIMEOUT_MS)
+      expect(journalPragmaNumber(db, 'foreign_keys')).toBe(1)
+      // 2 is INCREMENTAL, which only takes on an empty file before WAL.
+      expect(journalPragmaNumber(db, 'auto_vacuum')).toBe(2)
+      expect(journalPragmaNumber(db, 'journal_size_limit')).toBe(JOURNAL_SIZE_LIMIT_BYTES)
+      expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
+    } finally {
+      db.close()
+    }
+  })
+
+  // T5: a newer build's database opens read-only, its rows readable, and is left byte-identical.
+  it('opens a newer user_version read-only without touching the file', async () => {
+    const seeded = openJournalDatabase(dbPath).db
+    publishJournalSessionEpoch(seeded, SESSION, 'epoch-1')
+    insertJournalRow(seeded, 'session-1', epochRow(1))
+    seeded.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 5}`)
+    seeded.close()
+    const before = await digest(dbPath)
+
+    const opened = openJournalDatabase(dbPath)
+    try {
+      expect(opened.readOnly).toBe(true)
+      expect(readJournalSessionEpoch(opened.db, 'session-1')).toBe('epoch-1')
+      expect([...iterateJournalEpochRows(opened.db, 'session-1', 'epoch-1')]).toHaveLength(1)
+      expect(() => insertJournalRow(opened.db, 'session-1', epochRow(2))).toThrow(/readonly/i)
     } finally {
       opened.db.close()
     }
+
+    expect(await digest(dbPath)).toBe(before)
+    // A read-only reader of a WAL file may leave an empty log beside it, never a frame.
+    expect((await stat(`${dbPath}-wal`).catch(() => null))?.size ?? 0).toBe(0)
   })
 
-  it('latches read-only on a future user_version without touching the file', async () => {
-    const seeded = openJournalDatabase(dbPath)
-    upsertJournalSessionRow(seeded.db, 'session-1', 'epoch-1', 1)
-    insertJournalRow(seeded.db, 'session-1', epochRow(1))
-    seeded.db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 5}`)
-    seeded.db.close()
-    const before = await stat(dbPath)
-
-    const latched = openJournalDatabase(dbPath)
-    try {
-      expect(latched.readOnly).toBe(true)
-      expect(journalPragmaNumber(latched.db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION + 5)
-      expect(readJournalEpochRows(latched.db, 'session-1', 'epoch-1')).toHaveLength(1)
-      expect(() => latched.db.exec("INSERT INTO journal_sessions VALUES ('x', 'y', 1)")).toThrow()
-    } finally {
-      latched.db.close()
-    }
-    expect((await stat(dbPath)).size).toBe(before.size)
-    expect(journalPragmaNumber(openJournalDatabase(dbPath).db, 'user_version')).toBe(
-      JOURNAL_DB_SCHEMA_VERSION + 5
-    )
-  })
-
-  // Site 1: the raw connection is owned by the open call until it returns.
   it('closes the raw connection when schema setup throws', async () => {
-    const failing = join(root, 'nested', 'journal.db')
+    const failing = join(root, 'nested', 'agent-session-journal.db')
     expect(() => openJournalDatabase(failing)).toThrow()
     await expect(stat(`${failing}-wal`)).rejects.toThrow()
     await expect(rm(root, { recursive: true, force: true })).resolves.toBeUndefined()
@@ -103,73 +131,62 @@ describe('journal database open', () => {
 })
 
 describe('journal row statements', () => {
-  it('serves replay, resume, discard and suffix truncation from the primary key', () => {
-    const opened = openJournalDatabase(dbPath)
+  it('serves replay, resume and an epoch discard', () => {
+    const db = openJournalDatabase(dbPath).db
     try {
-      const { db } = opened
       db.exec('BEGIN IMMEDIATE')
       for (let seq = 1; seq <= 5; seq += 1) {
         insertJournalRow(db, 'session-1', epochRow(seq))
       }
-      insertJournalRow(db, 'session-1', epochRow(1, 'epoch-old'))
-      upsertJournalSessionRow(db, 'session-1', 'epoch-1', 42)
+      insertJournalRow(db, 'session-2', epochRow(1))
+      publishJournalSessionEpoch(db, SESSION, 'epoch-1')
+      publishJournalSessionEpoch(db, { sessionId: 'session-2', workspaceId: 'ws-1' }, 'epoch-1')
       db.exec('COMMIT')
 
       expect(readJournalSessionEpoch(db, 'session-1')).toBe('epoch-1')
       expect(readJournalSessionEpoch(db, 'absent')).toBeNull()
-      expect(readJournalEpochRows(db, 'session-1', 'epoch-1').map((row) => row.seq)).toEqual([
-        1, 2, 3, 4, 5
-      ])
+      expect(rowsOf(db, 'session-1', 'epoch-1')).toEqual([1, 2, 3, 4, 5])
       expect(readJournalRowsAfter(db, 'session-1', 'epoch-1', 3).map((row) => row.seq)).toEqual([
         4, 5
       ])
 
-      // The rejected suffix leaves `journal_rows`, scoped to its own epoch.
-      expect(deleteJournalRowSuffix(db, 'session-1', 'epoch-1', 4)).toBe(2)
-      expect(readJournalEpochRows(db, 'session-1', 'epoch-1').map((row) => row.seq)).toEqual([
-        1, 2, 3
-      ])
-      expect(readJournalEpochRows(db, 'session-1', 'epoch-old')).toHaveLength(1)
-
-      deleteAllJournalRows(db)
-      expect(readJournalEpochRows(db, 'session-1', 'epoch-1')).toHaveLength(0)
-      expect(readJournalEpochRows(db, 'session-1', 'epoch-old')).toHaveLength(0)
-      expect(readJournalSessionEpoch(db, 'session-1')).toBe('epoch-1')
+      // Another chat in the same file is untouched by this chat's discard.
+      deleteJournalEpochRows(db, 'session-1', 'epoch-1')
+      expect(rowsOf(db, 'session-1', 'epoch-1')).toEqual([])
+      expect(rowsOf(db, 'session-2', 'epoch-1')).toEqual([1])
     } finally {
-      opened.db.close()
+      db.close()
     }
   })
 
-  it('refuses a duplicate sequence inside one epoch', () => {
-    const opened = openJournalDatabase(dbPath)
+  it('refuses a duplicate sequence inside one epoch of one chat', () => {
+    const db = openJournalDatabase(dbPath).db
     try {
-      insertJournalRow(opened.db, 'session-1', epochRow(1))
-      expect(() => insertJournalRow(opened.db, 'session-1', epochRow(1))).toThrow()
-      insertJournalRow(opened.db, 'session-1', epochRow(1, 'epoch-2'))
+      insertJournalRow(db, 'session-1', epochRow(1))
+      expect(() => insertJournalRow(db, 'session-1', epochRow(1))).toThrow()
+      insertJournalRow(db, 'session-1', epochRow(1, 'epoch-2'))
+      insertJournalRow(db, 'session-2', epochRow(1))
     } finally {
-      opened.db.close()
+      db.close()
     }
   })
 
-  it('upserts the session projection in place', () => {
-    const opened = openJournalDatabase(dbPath)
+  it('moves the epoch pointer in place', () => {
+    const db = openJournalDatabase(dbPath).db
     try {
-      upsertJournalSessionRow(opened.db, 'session-1', 'epoch-1', 1)
-      upsertJournalSessionRow(opened.db, 'session-1', 'epoch-2', 2)
-      expect(readJournalSessionEpoch(opened.db, 'session-1')).toBe('epoch-2')
-      expect(
-        opened.db.prepare('SELECT count(*) AS total FROM journal_sessions').get()
-      ).toMatchObject({ total: 1 })
+      publishJournalSessionEpoch(db, SESSION, 'epoch-1')
+      publishJournalSessionEpoch(db, SESSION, 'epoch-2')
+      expect(readJournalSessionEpoch(db, 'session-1')).toBe('epoch-2')
+      expect(db.prepare('SELECT count(*) AS total FROM journal_sessions').get()).toMatchObject({
+        total: 1
+      })
     } finally {
-      opened.db.close()
+      db.close()
     }
   })
 })
 
 describe('schema creation', () => {
-  // Creating the tables outside the migration transaction left a v2-shaped
-  // database still reporting version 0, which an older build does not latch
-  // read-only: it stamps its own version on and writes through v1 SQL.
   it('publishes no table until the version bump commits with it', () => {
     const original = Database.prototype.pragma
     const pragma = vi.spyOn(Database.prototype, 'pragma').mockImplementation(function (
@@ -197,5 +214,45 @@ describe('schema creation', () => {
     } finally {
       inspected.close()
     }
+  })
+
+  it('gives a version 3 database the chat record tables, keeping its rows', () => {
+    const released = new Database(dbPath)
+    released.exec(createJournalTablesSql())
+    released.exec("INSERT INTO journal_sessions VALUES ('s1', 'ws', 'e1')")
+    released.pragma(`user_version = ${JOURNAL_DB_OLDEST_RELEASED_VERSION}`)
+    released.close()
+
+    const { db } = openJournalDatabase(dbPath)
+    try {
+      expect(journalPragmaNumber(db, 'user_version')).toBe(JOURNAL_DB_SCHEMA_VERSION)
+      expect(db.prepare('SELECT session_id FROM journal_sessions').all()).toEqual([
+        { session_id: 's1' }
+      ])
+      expect(db.prepare('SELECT count(*) AS n FROM agent_session_records').get()).toEqual({ n: 0 })
+    } finally {
+      db.close()
+    }
+  })
+
+  // Versions 1 and 2 were written only by unreleased builds; neither is migrated.
+  it.each([1, 2])('refuses a version %i database without touching the file', async (version) => {
+    const earlier = new Database(dbPath)
+    earlier.pragma('journal_mode = WAL')
+    earlier.exec(`
+CREATE TABLE journal_rows (id INTEGER PRIMARY KEY, ts INTEGER NOT NULL, row_json TEXT NOT NULL);
+CREATE TABLE journal_sessions (session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL,
+  epoch TEXT NOT NULL, block INTEGER NOT NULL UNIQUE, status_json TEXT, status_seq INTEGER);
+INSERT INTO journal_sessions VALUES ('s1', 'ws', 'e1', 0, NULL, NULL);`)
+    earlier.pragma(`user_version = ${version}`)
+    earlier.pragma('journal_mode = DELETE')
+    earlier.close()
+    const before = await digest(dbPath)
+
+    expect(() => openJournalDatabase(dbPath)).toThrow(`unreleased schema ${version}`)
+    expect(() => openJournalDatabase(dbPath)).toThrow(JournalUnreleasedSchemaError)
+
+    expect(await digest(dbPath)).toBe(before)
+    await expect(stat(`${dbPath}-wal`)).rejects.toThrow()
   })
 })

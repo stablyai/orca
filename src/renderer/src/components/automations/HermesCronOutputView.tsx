@@ -14,7 +14,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+import { isRunnableAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { translate } from '@/i18n/i18n'
 import { parseHermesOutput, type ParsedHermesSection } from './hermes-cron-output-parse'
@@ -33,7 +33,7 @@ function isErrorSection(section: ParsedHermesSection): boolean {
 
 function getScheduleDisplay(value: string): string | null {
   const trimmed = value.trim()
-  if (!isValidAutomationSchedule(trimmed)) {
+  if (!isRunnableAutomationSchedule(trimmed)) {
     return null
   }
   return formatUiAutomationSchedule(trimmed)

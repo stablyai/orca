@@ -29,8 +29,6 @@ describe('worktree jump navigation', () => {
     mocks.getVisibleWorktreeShortcutTargets.mockReturnValue([])
     mocks.worktreePassesSidebarFilters.mockReturnValue(false)
     mocks.getState.mockReturnValue({
-      sidebarBody: 'agents',
-      setSidebarBody: vi.fn(),
       worktreesByRepo: { repo: [] },
       showSleepingWorkspaces: true,
       filterRepoIds: ['other-repo'],
@@ -57,16 +55,18 @@ describe('worktree jump navigation', () => {
 
     expect(mocks.worktreePassesSidebarFilters).not.toHaveBeenCalled()
     expect(mocks.warning).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/deleted', {})
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/deleted', {
+      navigationIntent: 'user-open',
+      showWorkspaceList: true
+    })
   })
 
   it('switches the left sidebar to Spaces and warns when filters hide the target', () => {
-    const state = mocks.getState()
-
     expect(jumpToWorktreeFromSidebar('repo::/target')).toBe(true)
 
-    expect(state.setSidebarBody).toHaveBeenCalledWith('workspaces')
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/target', {
+      navigationIntent: 'user-open',
+      showWorkspaceList: true,
       revealInSidebar: false,
       clearSidebarFilters: false
     })
@@ -98,7 +98,10 @@ describe('worktree jump navigation', () => {
 
     expect(jumpToWorktreeFromSidebar('wt-collapsed')).toBe(true)
 
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-collapsed', {})
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-collapsed', {
+      navigationIntent: 'user-open',
+      showWorkspaceList: true
+    })
     expect(mocks.warning).not.toHaveBeenCalled()
   })
 
@@ -121,6 +124,8 @@ describe('worktree jump navigation', () => {
     expect(jumpToWorktreeFromSidebar('repo::/target', { executionHostId: 'ssh:beta' })).toBe(true)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/target', {
+      navigationIntent: 'user-open',
+      showWorkspaceList: true,
       revealInSidebar: false,
       clearSidebarFilters: false,
       executionHostId: 'ssh:beta'
@@ -129,23 +134,20 @@ describe('worktree jump navigation', () => {
   })
 
   it('routes folder workspaces through the workspace dispatcher without a filter check', () => {
-    const state = mocks.getState()
-
     expect(jumpToWorktreeFromSidebar('folder:folder-1', { executionHostId: 'local' })).toBe(true)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('folder:folder-1', {
+      navigationIntent: 'user-open',
+      showWorkspaceList: true,
       executionHostId: 'local'
     })
     // Folder workspaces never get the filter-hidden treatment.
     expect(mocks.worktreePassesSidebarFilters).not.toHaveBeenCalled()
-    expect(state.setSidebarBody).toHaveBeenCalledWith('workspaces')
   })
 
   it('propagates a blocked folder-workspace activation as failure', () => {
-    const state = mocks.getState()
     mocks.activateAndRevealWorkspace.mockReturnValue(false)
 
     expect(jumpToWorktreeFromSidebar('folder:folder-1')).toBe(false)
-    expect(state.setSidebarBody).not.toHaveBeenCalled()
   })
 })

@@ -1,6 +1,7 @@
 import type { RecentlyClosedTabPosition } from '../../recently-closed-tabs'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type { OpenCheckRunDetailsState } from '@/components/editor/check-run-details-tab'
+import type { OpenChatVisualTabState } from '@/components/native-chat/native-chat-visual-tab'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -138,13 +139,17 @@ export type OpenFile = {
   fileContentReloadNonce?: number
   /** Why: CI check-details tabs are virtual editor tabs backed by fetched PR check-run metadata, not a file on disk. */
   checkRunDetails?: OpenCheckRunDetailsState
+  /** Why: chat-visual tabs are virtual editor tabs showing a chat's visual, not a file on disk. */
+  chatVisual?: OpenChatVisualTabState
   /** Why: web-client tab mirrored from the host snapshot; only mirrored tabs may be culled when they vanish, locally-opened tabs must survive. */
   mirroredFromRuntimeSession?: boolean
   /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
   readOnly?: boolean
+  /** Transient: paged CSV data must never become an editable buffer. */
+  csvPreviewOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'chat-visual'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -165,6 +170,12 @@ export type ClosedEditorTabSnapshot = Omit<
 }
 
 export const MAX_RECENT_CLOSED_EDITOR_TABS = 10
+
+/**
+ * How an editor open selects its tab. 'focus' (default) selects it as a user action; 'background'
+ * selects it inside its own worktree without stamping its focus time; 'none' only adds it.
+ */
+export type EditorTabSelection = 'focus' | 'background' | 'none'
 
 export type EditorOpenTargetOptions = {
   targetGroupId?: string

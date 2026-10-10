@@ -8,6 +8,8 @@ class PendingSetupPool {
   readonly installed: { unsubscribe: () => Promise<void> }[] = []
   readonly dispose = vi.fn()
   readonly forgetRoot = vi.fn()
+  readonly disposeAndWait = vi.fn(async () => {})
+  readonly reopen = vi.fn()
 
   async subscribe(): Promise<WatcherProcessSubscription> {
     const subscription = { unsubscribe: vi.fn(async () => undefined) }

@@ -40,6 +40,12 @@ export type NativeChatToolIconName =
   | 'bot'
   | 'list-checks'
   | 'wrench'
+  /** The awaiting-input row's glyph. Carried here for the shared aligned slot;
+   *  it names no tool category, because that row stands for a question rather
+   *  than for the call that asked it. */
+  | 'message-square-more'
+  /** The reasoning row's glyph, carried for the same aligned slot; it names no tool category. */
+  | 'brain'
 
 /** Category to glyph. */
 export const NATIVE_CHAT_TOOL_ICON_NAMES: Record<NativeChatToolCategory, NativeChatToolIconName> = {
@@ -78,6 +84,8 @@ const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   // Claude's tool names, which its lane renders verbatim.
   ['grep', 'search'],
   ['glob', 'search'],
+  // Claude's Task call lasts as long as its subagent. Codex's `spawn_agent` ends once the helper
+  // starts, so it is deliberately absent: its roster row, not the call, stands for the helper.
   ['task', 'subAgentActivity'],
   ['webfetch', 'webSearch'],
   ['todowrite', 'todoList'],

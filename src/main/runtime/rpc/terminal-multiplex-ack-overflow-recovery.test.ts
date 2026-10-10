@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -413,11 +414,15 @@ describe('terminal multiplex RPC', () => {
       )!
     )
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'still interactive\r',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        {
+          text: 'still interactive\r',
+          enter: false,
+          interrupt: false
+        },
+        { inputKind: 'driving' }
+      )
     )
 
     binaryFrames.splice(0)
@@ -463,6 +468,15 @@ describe('terminal multiplex RPC', () => {
       decodeTerminalStreamJson<{ truncated?: boolean }>(drainFrames[recoveryStartIndex]!.payload)
         ?.truncated
     ).toBe(false)
+    // P2-5: the client's history ends before the dropped output, so recovery must carry history to replace it.
+    expect(runtime.serializeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
+      scrollbackRows: 1000
+    })
+    expect(
+      decodeTerminalStreamJson<{ scrollbackRows?: number }>(
+        drainFrames[recoveryStartIndex]!.payload
+      )?.scrollbackRows
+    ).toBe(1000)
     expect(firstOutputAfterAckIndex).toBeGreaterThan(recoveryStartIndex)
     expect(
       drainFrames

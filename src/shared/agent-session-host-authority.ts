@@ -23,6 +23,7 @@ export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_operation_conflict',
   'agent_session_operation_expired',
   'agent_session_operation_capacity',
+  'agent_session_operation_unknown',
   'agent_session_legacy_required',
   'execution_owner_reconciling',
   'execution_owner_unavailable'
@@ -35,6 +36,9 @@ export const AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION = 1 as const
 
 export const AGENT_SESSION_OPERATION_FUTURE_SKEW_MS = 5 * 60 * 1000
 export const AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS = 24 * 60 * 60 * 1000
+/** Oldest an operation can be when admitted, plus the host tombstone lifetime after admission. */
+export const AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS =
+  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS * 2 + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 
 const AGENT_SESSION_OPERATION_ID_PATTERN = /^(\d{13})-[0-9a-f]{32}$/
 
@@ -107,6 +111,7 @@ export type RuntimeEnsureAgentSessionRequest =
       agent: ResumableTuiAgent
       providerSession: AgentProviderSessionMetadata
       ompResumeFilePath?: string
+      terminalKittyKeyboardProtocol?: boolean
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
@@ -121,6 +126,7 @@ export type RuntimeEnsureAgentSessionResult = {
 
 export type RuntimeCreateAgentSessionRequest = {
   clientOperationId: string
+  terminalKittyKeyboardProtocol?: boolean
   worktree: string
   agent: TuiAgent
   prompt?: string

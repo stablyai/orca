@@ -34,7 +34,7 @@ export async function ensureDevLauncher(args: {
   const content =
     args.platform === 'win32'
       ? buildWindowsDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
-      : buildUnixDevLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
+      : buildUnixCliLauncher(args.execPath, args.cliEntryPath, args.userDataPath)
   await writeFile(launcherPath, content, {
     encoding: 'utf8',
     mode: args.platform === 'win32' ? undefined : 0o755
@@ -49,11 +49,20 @@ export async function ensureDevLauncher(args: {
   return launcherPath
 }
 
-export function buildUnixDevLauncher(
+export function buildUnixCliLauncher(
   execPathValue: string,
   cliEntryPath: string,
-  userDataPath: string
+  userDataPath: string,
+  runtime: 'electron' | 'node' = 'electron'
 ): string {
+  if (runtime === 'node') {
+    return `#!/usr/bin/env sh
+set -eu
+export ORCA_USER_DATA_PATH=${quoteShell(userDataPath)}
+unset NODE_OPTIONS NODE_REPL_EXTERNAL_MODULE ELECTRON_RUN_AS_NODE
+exec ${quoteShell(execPathValue)} ${quoteShell(cliEntryPath)} "$@"
+`
+  }
   return `#!/usr/bin/env bash
 set -euo pipefail
 ELECTRON=${quoteShell(execPathValue)}

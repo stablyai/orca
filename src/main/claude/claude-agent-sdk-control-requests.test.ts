@@ -24,3 +24,29 @@ describe('createClaudeControlSurface stopTask', () => {
     expect(stopTask).toHaveBeenCalledTimes(2)
   })
 })
+
+/** A query exposing only the cancel method, as the surface reads nothing else for it. */
+function queryWithCancel(cancelAsyncMessage?: (uuid: string) => Promise<unknown>): Query {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cancelAsyncMessage reads only this member.
+  return (cancelAsyncMessage ? { cancelAsyncMessage } : {}) as unknown as Query
+}
+
+describe('createClaudeControlSurface cancelAsyncMessage', () => {
+  it('reports a withdrawal only when the CLI answers cancelled: true', async () => {
+    // An older CLI answers with an empty success, which carries no `cancelled`.
+    const cancelAsyncMessage = vi
+      .fn<(uuid: string) => Promise<unknown>>()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(undefined)
+    const controls = createClaudeControlSurface(queryWithCancel(cancelAsyncMessage))
+
+    await expect(controls.cancelAsyncMessage('queued-1')).resolves.toBe(true)
+    await expect(controls.cancelAsyncMessage('queued-2')).resolves.toBe(false)
+    await expect(controls.cancelAsyncMessage('queued-3')).resolves.toBe(false)
+    expect(cancelAsyncMessage.mock.calls).toEqual([['queued-1'], ['queued-2'], ['queued-3']])
+    await expect(
+      createClaudeControlSurface(queryWithCancel()).cancelAsyncMessage('queued-4')
+    ).resolves.toBe(false)
+  })
+})

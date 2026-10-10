@@ -17,6 +17,7 @@ import {
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-orchestration-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
@@ -32,10 +33,7 @@ function appendLedger(envName, event) {
     appendFileSync(ledgerPath, JSON.stringify({ pid: process.pid, at: Date.now(), ...event }) + '\\n')
   } catch {}
 }
-if (process.argv.slice(2).includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn', startedAt: Date.now() })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 let acknowledged = false

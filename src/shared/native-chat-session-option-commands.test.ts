@@ -341,11 +341,11 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
         persist
       })
     ).toEqual({ changed: true, opensAgentPicker: false })
-    expect(record.valuesByModel['grok-4.6']?.effort).toEqual({
+    expect(record.valuesByModel['grok-4.7']?.effort).toEqual({
       value: 'low',
       source: 'dispatched'
     })
-    expect(persist).toHaveBeenCalledWith('grok-4.6', 'effort', 'low')
+    expect(persist).toHaveBeenCalledWith('grok-4.7', 'effort', 'low')
   })
 
   it('does not reset tracked state when the typed model is the CLI default already shown', () => {
@@ -353,8 +353,8 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
     // already displays looked like a switch and deleted that model's options.
     const record = grokRecord()
     recordGrok(record, '/effort low')
-    recordGrok(record, '/model grok-4.6')
-    expect(record.valuesByModel['grok-4.6']?.effort).toEqual({
+    recordGrok(record, '/model grok-4.7')
+    expect(record.valuesByModel['grok-4.7']?.effort).toEqual({
       value: 'low',
       source: 'dispatched'
     })
@@ -373,7 +373,7 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
       command: '/model grok-build'
     })
     expect(record.model).toEqual({ value: 'grok-build', source: 'dispatched' })
-    expect(record.valuesByModel['grok-4.6']?.effort).toEqual({
+    expect(record.valuesByModel['grok-4.7']?.effort).toEqual({
       value: 'low',
       source: 'dispatched'
     })

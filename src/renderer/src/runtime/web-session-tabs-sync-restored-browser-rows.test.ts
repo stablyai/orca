@@ -6,7 +6,8 @@ import type {
   RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
 import type { Tab } from '../../../shared/tab-types'
-import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
   NOW,

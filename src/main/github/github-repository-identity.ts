@@ -1,11 +1,8 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { readRemoteUrl } from '../git/remote-url-probe'
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
-import {
-  getSshGitProvider,
-  getSshGitProviderGeneration,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../providers/ssh-git-dispatch'
+import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { readLocalGitConfigSignature } from './local-git-config-signature'
 import {
   parseGitHubOwnerRepo,
@@ -15,6 +12,8 @@ import {
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -26,11 +25,14 @@ export type GitHubRepoContext = {
   connectionId?: string | null
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  /** SSH keeps the binding even when cwd is omitted from gh options. */
+  ghAccount?: GhAccountBinding
 }
 
 export type LocalGitExecOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
 }
 
 export type GitHubRemoteIdentityProbeOptions = {
@@ -46,7 +48,8 @@ export function githubRepoContext(
     repoPath,
     connectionId: connectionId ?? null,
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-    ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
+    ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {}),
+    ...(localGitOptions.ghAccount ? { ghAccount: localGitOptions.ghAccount } : {})
   }
 }
 
@@ -55,13 +58,16 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   encoding?: BufferEncoding
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  ghAccount?: GhAccountBinding
 } {
+  const account = context.ghAccount ? { ghAccount: context.ghAccount } : {}
   return context.connectionId
-    ? {}
+    ? { ...account }
     : {
         cwd: context.repoPath,
         ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
-        ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
+        ...(context.admissionTier ? { admissionTier: context.admissionTier } : {}),
+        ...account
       }
 }
 
@@ -128,12 +134,8 @@ export async function getOwnerRepoForRemote(
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<OwnerRepo | null> {
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
-  if (
-    probeOptions.requireVerifiedSshProbe &&
-    context.connectionId &&
-    !getSshGitProvider(context.connectionId)
-  ) {
-    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  if (probeOptions.requireVerifiedSshProbe) {
+    requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
   }
   const runtimeKey = context.connectionId
     ? `ssh:${context.connectionId}:${getSshGitProviderGeneration(context.connectionId)}`
@@ -193,12 +195,8 @@ async function resolveOwnerRepoForRemote(
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
     if (!remoteUrl) {
-      if (
-        requireVerifiedSshProbe &&
-        context.connectionId &&
-        !getSshGitProvider(context.connectionId)
-      ) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      if (requireVerifiedSshProbe) {
+        requireReachableGitRoute(getConnectionExecutionHostId(context.connectionId))
       }
       // Empty remote URL is stable until git config changes.
       ownerRepoCache.set(cacheKey, {

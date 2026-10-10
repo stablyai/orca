@@ -1,3 +1,4 @@
+import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { getCanonicalRepoKey } from '../git/canonical-repo-key'
 import {
@@ -16,7 +17,7 @@ export type RemoteTrackingBase = {
   base: string
 }
 
-type GitOptions = { wslDistro?: string }
+type GitOptions = LocalGitExecOptions
 
 // Why: reuse recent fetches across create and drift probes without hiding remote changes for long.
 const FETCH_FRESHNESS_MS = 30_000
@@ -227,6 +228,9 @@ export class RuntimeRemoteFetchController {
     gitOptions: GitOptions = {}
   ): Promise<RemoteTrackingBase | null> {
     const remoteRefPrefix = 'refs/remotes/'
+    if (baseBranch.startsWith('refs/') && !baseBranch.startsWith(remoteRefPrefix)) {
+      return null
+    }
     const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
       ? baseBranch.slice(remoteRefPrefix.length)
       : baseBranch

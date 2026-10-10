@@ -1,8 +1,7 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseGroupLayout } from './tabs-layout'
+import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import {
-  dedupeTabOrder,
   findGroupAndWorktree,
   findGroupForTab,
   findTabAndWorktree,
@@ -10,6 +9,7 @@ import {
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
+import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
 
 export function createTabsMoveActions(
   set: TabsSliceSet,
@@ -22,16 +22,16 @@ export function createTabsMoveActions(
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         const foundTarget = findGroupAndWorktree(state.groupsByWorktree, targetGroupId)
         if (!foundTab || !foundTarget || foundTab.worktreeId !== foundTarget.worktreeId) {
-          return {}
+          return state
         }
         const { tab, worktreeId } = foundTab
         if (tab.groupId === targetGroupId) {
-          return {}
+          return state
         }
         const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
         const targetGroup = foundTarget.group
         if (!sourceGroup) {
-          return {}
+          return state
         }
         moved = true
 

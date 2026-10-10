@@ -26,6 +26,12 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'zcode') {
+    return 'ZCode'
+  }
+  if (provider === 'cursor') {
+    return 'Cursor'
+  }
   return provider
 }
 
@@ -75,6 +81,15 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
+/** System Default's login expired on the server: Claude refreshes it the next time it runs. */
+export function isClaudeUsageWaitingForClaude(p: ProviderRateLimits): boolean {
+  return (
+    p.provider === 'claude' &&
+    p.usageMetadata?.failureKind === 'stale-token' &&
+    p.usageMetadata.authProvenance === 'system'
+  )
+}
+
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {
@@ -85,12 +100,20 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
+      // Why: only an older host, which still defers a refresh for a live session, reports this.
       case 'deferred-by-live-session':
         return translate(
           'auto.components.status.bar.tooltip.0d8d7cfe15',
           'Waiting for Claude session'
         )
+      // Why: Orca never refreshes a Claude login; only an older host that still does reports the other kinds.
       case 'stale-token':
+        return isClaudeUsageWaitingForClaude(p)
+          ? translate(
+              'auto.components.status.bar.tooltip.claude.waiting.label',
+              'Updates when Claude runs'
+            )
+          : translate('auto.components.status.bar.tooltip.claude.expired.label', 'Sign-in expired')
       case 'refreshable-credentials-without-token':
       case 'delegated-refresh-required':
         return translate('auto.components.status.bar.tooltip.1804cd8c3f', 'Refreshing sign-in')
@@ -101,8 +124,11 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
       case 'cli-unavailable':
       case 'usage-unavailable':
         return translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')
+      // Why: the host reports this only for a selected account whose own profile has no login.
       case 'missing-credentials':
+        return translate('accounts.claude.usageSignInLabel', 'Sign in again')
       case 'missing-scope':
+      case 'no-subscription':
       case 'parse':
       case 'rate-limited':
       case 'server':
@@ -115,6 +141,19 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   // so it needs its own copy rather than the generic refresh-failure label.
   if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
     return translate('auto.components.status.bar.tooltip.minimax.expired.label', 'Sign-in expired')
+  }
+  // Why: cursor-agent owns its own token rotation, so a lapsed Cursor session is
+  // fixed by signing in to the CLI, not by Orca retrying the fetch.
+  if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {
+    return translate('auto.components.status.bar.tooltip.cursor.expired.label', 'Sign-in expired')
+  }
+  // Why: an unsubscribed account is a settled answer about the account, not a
+  // failed refresh; "Refresh failed" sends the user hunting a bug that is not there.
+  if (p.usageMetadata?.failureKind === 'no-subscription') {
+    return translate(
+      'auto.components.status.bar.tooltip.usage.noSubscription.label',
+      'No subscription'
+    )
   }
   if (isUsageRateLimitError(p.error)) {
     return translate('auto.components.status.bar.tooltip.7ad719c4bf', 'Limited')
@@ -143,14 +182,30 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
   }
+  if (p.provider === 'cursor' && p.usageMetadata?.failureKind === 'stale-token') {
+    return translate(
+      'auto.components.status.bar.tooltip.cursor.expired.message',
+      'Run cursor-agent login in a terminal on the computer running Orca, then retry usage.'
+    )
+  }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
+      // Why: only an older host, which still defers a refresh for a live session, reports this.
       case 'deferred-by-live-session':
         return translate(
           'auto.components.status.bar.tooltip.3d3c9c0c1f',
           'Claude usage will refresh after the live Claude terminal rotates its credentials.'
         )
       case 'stale-token':
+        return isClaudeUsageWaitingForClaude(p)
+          ? translate(
+              'auto.components.status.bar.tooltip.claude.waiting.message',
+              'Claude usage updates the next time Claude runs.'
+            )
+          : translate(
+              'auto.components.status.bar.tooltip.claude.expired.message',
+              'Claude usage has expired. Start Claude in this account to refresh it.'
+            )
       case 'refreshable-credentials-without-token':
       case 'delegated-refresh-required':
         return translate(
@@ -169,6 +224,11 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.cabdc2a9e0',
           'Claude sign-in credentials could not be read.'
         )
+      case 'missing-credentials':
+        return translate(
+          'accounts.claude.usageSignInMessage',
+          'The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.'
+        )
       case 'server':
       case 'parse':
       case 'usage-unavailable':
@@ -177,7 +237,7 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.a7517cccb6',
           'Claude usage is unavailable right now.'
         )
-      case 'missing-credentials':
+      case 'no-subscription':
       case 'rate-limited':
       case 'unknown':
       case undefined:
@@ -197,6 +257,10 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.minimax.expired.cookie',
           'MiniMax session cookie expired. Replace it in Settings.'
         )
+  }
+  // The entitlement verdict names the account state; generic auth copy would bury it.
+  if (p.usageMetadata?.failureKind === 'no-subscription') {
+    return p.error
   }
   if (isUsageAuthError(p.error)) {
     const name = getProviderDisplayName(p.provider)

@@ -18,6 +18,8 @@ export type AgentStatusApi = {
   inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>
   /** Guarded clear for an answered AskUserQuestion wait — the CLI emits no hook at answer time, so the renderer reports the submit keystroke. */
   inferQuestionAnswered: (request: AgentQuestionAnsweredInferenceRequest) => Promise<boolean>
+  /** Whether the host can check this pane's agent process; without that, silence keeps today's cleanup. */
+  hasVerifiableAgentProcess?: (paneKey: string) => Promise<boolean>
   /** Listen for PTYs on a legacy numeric pane key that have registry-backed UUID pane proof. */
   onMigrationUnsupported: (callback: (entry: MigrationUnsupportedPtyEntry) => void) => () => void
   onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void) => () => void
@@ -41,19 +43,11 @@ export type AgentStatusApi = {
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
   dropByTabPrefix: (tabId: string) => void
   /** Permanently retire one pane's hook authority while siblings stay live. */
-  retirePaneAuthority: (paneKey: string) => void
+  retirePaneAuthority: (paneKey: string, retirementId?: string) => void
   /** Lift one pane's retirement fence when a live PTY re-attaches to it. Closed tabs stay retired. */
   restorePaneAuthority: (paneKey: string) => void
   /** Move hook authority when a live pane is detached into another tab. */
   transferPaneAuthority: (args: { fromPaneKey: string; toPaneKey: string; ptyId?: string }) => void
-}
-
-export type AgentTrustApi = {
-  markTrusted: (args: {
-    preset: 'cursor' | 'copilot' | 'codex'
-    workspacePath: string
-    connectionId?: string
-  }) => Promise<void>
 }
 
 export type AgentAwakeApi = {

@@ -8,12 +8,14 @@ import {
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
+import { translate } from '@/i18n/i18n'
 
 export type ProjectHostSetupOption =
   | {
@@ -172,11 +174,18 @@ function buildNeedsSetupOptions({
       (host) =>
         !readySetupByHost.has(host.id) &&
         !isEphemeralVmProjectHost(host) &&
-        !isRuntimeOwnedSshSetupHost(host.id)
+        !isRuntimeOwnedSshSetupHost(host.id) &&
+        !isMergedAwayExecutionHost(host) &&
+        // Why: a machine whose other id already holds the project shows that ready row only.
+        !host.aliasHostIds?.some((aliasHostId) => readySetupByHost.has(aliasHostId))
     )
     .map((host) => {
       const pendingSetup = pendingSetupByHost.get(host.id)
-      const availability = getHostSetupAvailability(host)
+      // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
+      // so connection state needs to win over setup guidance.
+      const unavailableDetail =
+        getHostHealthUnavailableDetail(host.health) ?? getHostSetupUnavailableDetail(host)
+      const isAvailable = unavailableDetail === null
       const connectAction = getHostConnectAction(host)
       return {
         id: `needs-setup:${host.id}`,
@@ -184,14 +193,12 @@ function buildNeedsSetupOptions({
         projectId,
         hostId: host.id,
         label: host.label || getExecutionHostLabel(host.id),
-        detail: availability.isAvailable
-          ? pendingSetup
-            ? getPendingSetupDetail(pendingSetup)
-            : 'Project location not set'
-          : availability.detail,
-        isAvailable: availability.isAvailable,
+        detail:
+          unavailableDetail ??
+          (pendingSetup ? getPendingSetupDetail(pendingSetup) : 'Project location not set'),
+        isAvailable,
         attention: host.health === 'error',
-        canSetLocation: canSetProjectLocation(projectId, availability.isAvailable, pendingSetup),
+        canSetLocation: canSetProjectLocation(projectId, isAvailable, pendingSetup),
         ...(connectAction ? { connectAction } : {})
       }
     })
@@ -209,46 +216,32 @@ function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
   return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
 }
 
-function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
-  isAvailable: boolean
-  detail: string
-} {
+export function getHostSetupUnavailableDetail(host: ExecutionHostRegistryEntry): string | null {
   if (host.health === 'blocked') {
-    return {
-      isAvailable: false,
-      detail: 'Orca server version is incompatible'
-    }
+    return translate(
+      'auto.components.settings.RepositoryPane.hostSetupBlockedVersion',
+      'Orca server version is incompatible'
+    )
   }
-  // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
-  // so connection state needs to win over setup guidance.
-  const healthUnavailableDetail = getHostHealthUnavailableDetail(host.health)
-  if (healthUnavailableDetail) {
-    return {
-      isAvailable: false,
-      detail: healthUnavailableDetail
-    }
+  if (host.kind !== 'runtime') {
+    return null
   }
-  if (host.kind === 'runtime') {
-    if (!host.capabilities) {
-      return {
-        isAvailable: false,
-        detail: 'Checking host capabilities'
-      }
-    }
-    if (
-      !host.capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
-      !host.capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
-    ) {
-      return {
-        isAvailable: false,
-        detail: 'Update Orca on this host to set up projects'
-      }
-    }
+  if (!host.capabilities) {
+    return translate(
+      'auto.components.settings.RepositoryPane.hostSetupCheckingCapability',
+      'Checking host capabilities'
+    )
   }
-  return {
-    isAvailable: true,
-    detail: ''
+  if (
+    !host.capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
+    !host.capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
+  ) {
+    return translate(
+      'auto.components.settings.RepositoryPane.hostSetupMissingCapability',
+      'Update Orca on this host to set up projects'
+    )
   }
+  return null
 }
 
 function getHostHealthUnavailableDetail(

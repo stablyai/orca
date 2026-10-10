@@ -25,21 +25,16 @@ export type ValidatedCookie = ImportedCookieFields & {
   partition: SourcePartitionRead
 }
 
-// Why: Chromium's CookieSameSiteForStorage enum (0=Unspecified,1=None,2=Lax,3=Strict) differs from Firefox's numbering.
-export function chromiumSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
-  switch (raw) {
-    case 1:
-      return 'no_restriction'
-    case 2:
-      return 'lax'
-    case 3:
-      return 'strict'
-    default:
-      return 'unspecified'
-  }
-}
-
-export function firefoxSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
+// Chromium stores net::CookieSameSite unchanged; see net/cookies/cookie_constants.h and
+// net/extras/sqlite/sqlite_persistent_cookie_store.cc (-1 unspecified, 0 None, 1 Lax, 2 Strict;
+// 3 is the deprecated EXTENDED value Chromium itself folds to unspecified).
+// Firefox's moz_cookies OVERLAPS on 1=Lax and 2=Strict but its domain is wider, so the default arm
+// is load-bearing for it, not incidental: 256 (nsICookie SAMESITE_UNSET) is what modern Firefox
+// writes for every cookie with no SameSite attribute, NULL appears on pre-v10 rows, and 0 means
+// explicit None OR a legacy unset row the schema-15 migration left behind — the two are not
+// distinguishable in the column. Every one of those must land on unspecified, so do NOT make this
+// switch exhaustive or drop the default without re-checking both browsers' real value domains.
+export function databaseSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
   switch (raw) {
     case 0:
       return 'no_restriction'
@@ -56,7 +51,7 @@ export function normalizeSameSite(
   raw: unknown
 ): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
   if (typeof raw === 'number') {
-    return chromiumSameSite(raw)
+    return databaseSameSite(raw)
   }
   if (typeof raw !== 'string') {
     return 'unspecified'

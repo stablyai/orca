@@ -22,10 +22,6 @@ const cache = new Map<string, RemoteSessionParseCacheEntry>()
 
 export type RemoteSessionParseStats = { reused: number; parsed: number }
 
-export function createRemoteSessionParseStats(): RemoteSessionParseStats {
-  return { reused: 0, parsed: 0 }
-}
-
 export function resetRemoteSessionParseCacheForTests(): void {
   cache.clear()
 }
@@ -33,6 +29,10 @@ export function resetRemoteSessionParseCacheForTests(): void {
 /** Identity of the host a parse result belongs to; a result is not portable across either field. */
 export function remoteSessionParseHostKey(context: RemoteScannerContext): string {
   return `${context.executionHostId}\u0000${context.hostPlatform.relayPlatform}`
+}
+
+export function remoteSessionCandidateKey(candidate: RemoteSessionCandidate): string {
+  return `${candidate.source.agent}\u0000${candidate.file.path}`
 }
 
 function storeEntry(path: string, entry: RemoteSessionParseCacheEntry): void {
@@ -79,7 +79,8 @@ export async function parseRemoteSessionFileCached(args: {
   stats?: RemoteSessionParseStats
 }): Promise<AiVaultSession | null> {
   const { file } = args.candidate
-  const entry = cache.get(file.path)
+  const key = remoteSessionCandidateKey(args.candidate)
+  const entry = cache.get(key)
   const unchanged =
     entry !== undefined &&
     entry.hostKey === args.hostKey &&
@@ -96,7 +97,7 @@ export async function parseRemoteSessionFileCached(args: {
       entry.session = await args.refreshReusedSession(entry.session)
     }
     // Refresh recency without re-parsing so the LRU evicts cold paths first.
-    storeEntry(file.path, entry)
+    storeEntry(key, entry)
     return entry.session
   }
 
@@ -104,7 +105,7 @@ export async function parseRemoteSessionFileCached(args: {
   if (args.stats) {
     args.stats.parsed++
   }
-  storeEntry(file.path, {
+  storeEntry(key, {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     hostKey: args.hostKey,

@@ -26,7 +26,8 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getPRForBranch, mergePR } from './client'
+import { getPRForBranch } from './client/lookup/get-pr-for-branch'
+import { mergePR } from './client/merge/merge-pr'
 import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
 
 const { ghExecFileAsyncMock, getOwnerRepoMock, acquireMock, releaseMock } = clientMocks
@@ -592,9 +593,9 @@ describe('GitHub GraphQL rate-limit guard', () => {
   })
 
   it.each([
-    { stackShape: 'omits stack', stackField: {} },
-    { stackShape: 'sets stack to null', stackField: { stack: null } }
-  ])('keeps legacy merge when an ordinary GitHub response $stackShape', async (scenario) => {
+    { stackVariant: 'omits stack', stackField: {} },
+    { stackVariant: 'sets stack to null', stackField: { stack: null } }
+  ])('keeps legacy merge when an ordinary GitHub response $stackVariant', async (scenario) => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout: JSON.stringify({

@@ -7,6 +7,7 @@ import type {
   GitPushTarget,
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
+  WorkspaceAttachment,
   WorkspaceStatus
 } from './types'
 import type { TuiAgent } from '../tui-agent'
@@ -49,6 +50,7 @@ export type WorktreeMeta = {
   /** Optional for backward compatibility — see Worktree.linkedGiteaPR. */
   linkedGiteaPR?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
   isUnread: boolean

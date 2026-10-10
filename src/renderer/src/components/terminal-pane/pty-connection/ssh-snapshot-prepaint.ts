@@ -60,7 +60,7 @@ export function bindPrepaintParkedSshSnapshot(session: ConnectPanePtySession): v
             })) {
               session.writeReplayData(replayChunk)
             }
-            session.writeReplayData(session.reattachReplayResetSequence(modelData))
+            session.writeReplayEpilogue(session.chooseReattachReplayReset(modelData))
             if (snapshot.pendingEscapeTailAnsi) {
               session.writeReplayData(snapshot.pendingEscapeTailAnsi)
             }

@@ -87,6 +87,7 @@ export type VirtualizedWorktreeViewportProps = {
   onPinWorktrees: (worktreeIds: readonly string[]) => void
   onDropWorktreesOnWorkspaceBoard: (args: WorktreeStatusDropAtIndexArgs) => void
   workspaceBoardOpen: boolean
+  onWorktreeCardClick?: () => void
   onWorkspaceBoardDragPreviewStart: () => void
   onWorkspaceBoardDragPreviewCommit: () => void
   onWorkspaceBoardDragPreviewCancel: () => void

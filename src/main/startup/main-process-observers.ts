@@ -3,13 +3,14 @@ import { join } from 'node:path'
 import { AgentAwakeService } from '../agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
-import { agentHookServer, type AgentHookProviderSessionIdentity } from '../agent-hooks/server'
-import { createHookProviderSessionInvalidator } from '../agent-hooks/hook-provider-session-invalidation'
-import { createHookStatusSessionTabsInvalidator } from '../agent-hooks/hook-status-session-tabs-invalidation'
+import { agentHookServer } from '../agent-hooks/server'
+import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
 import { initObservability } from '../observability'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import { getCanonicalUserDataPath } from '../persistence'
 import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
@@ -18,6 +19,7 @@ import { AgentSessionTransitionRecorder } from '../stats/agent-session-transitio
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
+import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 
@@ -40,66 +42,31 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
-  const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
-    const ownedIdentities = identities.map((identity) => ({
-      ...identity,
-      worktreeId:
-        identity.worktreeId ??
-        state.runtime?.getTerminalWorktreeIdForPaneKey(identity.paneKey) ??
-        undefined
-    }))
-    for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
-      // Why not `notifyMobileSessionTabsChanged` alone: it re-emits at the unchanged
-      // `snapshotVersion`, which every client drops on its monotonic gate.
-      state.runtime?.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
-    }
-  }
-  state.publishProviderSessionChanges = publishProviderSessionChanges
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     state.agentAwakeService?.setStatuses(statuses)
   })
-  // Healthy session.tabs streams need a push when transcript identity changes.
-  const unsubscribeProviderSessionChanges = agentHookServer.subscribeProviderSessionChanges(
-    (sessions) => publishProviderSessionChanges(sessions)
+  const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
+    state.agentAwakeService?.observeStatusFreshness(status)
+  })
+  const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
+    agentHookServer,
+    () => state.runtime
   )
-  // Why: hook rows are the only carrier of live agent state on a headless host, and
-  // nothing else republishes `session.tabs` when one changes — so a paired client
-  // would keep the pane's last projection until an unrelated PTY touch came along.
-  const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
-  const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
-    if (hookStatusChangedSessionTabs(enriched)) {
-      state.runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
-    }
-  })
-  // Teardown: agent exit, pane close, and the SSH transient-disconnect batch all land
-  // here. Without it the live state published above becomes a zombie question card.
-  const unsubscribeHookStatusClear = agentHookServer.subscribePaneStatusClear((clear) => {
-    const clearedPaneKeys =
-      'paneKey' in clear
-        ? [clear.paneKey]
-        : hookStatusChangedSessionTabs.forgetConnection(clear.connectionId)
-    for (const paneKey of clearedPaneKeys) {
-      hookStatusChangedSessionTabs.forgetPane(paneKey)
-      state.runtime?.touchMobileSessionTabsForPane(paneKey)
-    }
-  })
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
-    unsubscribeProviderSessionChanges()
-    unsubscribeHookStatusSessionTabs()
-    unsubscribeHookStatusClear()
+    unsubscribeStatusFreshness()
+    uninstallHookStatusRepublish()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
-  // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
-  // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
-  // number the watchdog exists to produce would sit unread on the user's disk. Must run after
-  // initTelemetry: track() drops silently until the client and store are wired.
-  if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
+  const profileStateStartup = state.profileStateStartup
+  if (profileStateStartup) {
+    track('profile_state_authority_selected', {
+      backend: profileStateStartup.backend,
+      classification: profileStateStartup.classification,
+      authority_mode: 'sqlite-established',
+      runtime: profileStateStartup.runtime,
+      migrated: profileStateStartup.migrated
     })
   }
   // Why: the trust-grant module is bundled into plain-node CLI entries where
@@ -126,6 +93,13 @@ export function initializeMainProcessObservers(): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
+  state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
+  if (state.hangDetection) {
+    track('main_thread_hang_detected', {
+      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
+      self_recovered: state.hangDetection.selfRecovered
+    })
+  }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')
   )
@@ -160,4 +134,5 @@ export function initializeMainProcessObservers(): void {
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)
+  state.museUsage = new MuseUsageStore(store)
 }

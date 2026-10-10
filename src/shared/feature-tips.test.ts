@@ -11,12 +11,42 @@ describe('feature tips', () => {
   it('orders new unseen tips before older unseen tips', () => {
     const tips = getOrderedUnseenFeatureTips({ seenTipIds: new Set<FeatureTipId>() })
 
-    expect(tips.map((tip) => tip.id)).toEqual(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+    expect(tips.map((tip) => tip.id)).toEqual([
+      'native-chat-upgrade',
+      'agent-session-search',
+      'orca-cli',
+      'cmd-j-palette',
+      'voice-dictation'
+    ])
+  })
+
+  it('treats the native chat upgrade tip as done for every profile outside its audience', () => {
+    const base = {
+      cliInstalled: true,
+      voiceDictationEnabled: true,
+      sessionSearchTipCompleted: true
+    }
+    expect(
+      getCompletedFeatureTipIds({ ...base, inNativeChatUpgradeTipAudience: false }).has(
+        'native-chat-upgrade'
+      )
+    ).toBe(true)
+    expect(
+      getCompletedFeatureTipIds({ ...base, inNativeChatUpgradeTipAudience: true }).has(
+        'native-chat-upgrade'
+      )
+    ).toBe(false)
   })
 
   it('skips tips the user has already seen', () => {
     const tips = getOrderedUnseenFeatureTips({
-      seenTipIds: new Set<FeatureTipId>(['voice-dictation', 'orca-cli', 'cmd-j-palette'])
+      seenTipIds: new Set<FeatureTipId>([
+        'native-chat-upgrade',
+        'voice-dictation',
+        'orca-cli',
+        'cmd-j-palette',
+        'agent-session-search'
+      ])
     })
 
     expect(tips.map((tip) => tip.id)).toEqual([])
@@ -28,7 +58,9 @@ describe('feature tips', () => {
       seenTipIds: new Set<FeatureTipId>(['cmd-j-palette']),
       completedTipIds: getCompletedFeatureTipIds({
         cliInstalled: true,
-        voiceDictationEnabled: true
+        voiceDictationEnabled: true,
+        sessionSearchTipCompleted: true,
+        inNativeChatUpgradeTipAudience: false
       })
     })
 
@@ -40,7 +72,9 @@ describe('feature tips', () => {
       seenTipIds: new Set<FeatureTipId>(['voice-dictation', 'cmd-j-palette']),
       completedTipIds: getCompletedFeatureTipIds({
         cliInstalled: true,
-        voiceDictationEnabled: false
+        voiceDictationEnabled: false,
+        sessionSearchTipCompleted: true,
+        inNativeChatUpgradeTipAudience: false
       })
     })
 
@@ -53,6 +87,8 @@ describe('feature tips', () => {
       completedTipIds: getCompletedFeatureTipIds({
         cliInstalled: false,
         voiceDictationEnabled: false,
+        sessionSearchTipCompleted: true,
+        inNativeChatUpgradeTipAudience: false,
         featureInteractions: {
           'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
         }

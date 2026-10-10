@@ -6,6 +6,7 @@ import Database from '../../sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID, OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { dropDerivedDeliverySchema } from './db/schema/derived-delivery-test-fixture'
 import { SCHEMA_VERSION } from './db/contract-constants'
 
 describe('OrchestrationDb version-skew migration', () => {
@@ -267,6 +268,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
@@ -303,6 +305,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
@@ -374,15 +377,7 @@ describe('OrchestrationDb version-skew migration', () => {
     expect(deliveryIndexes.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['idx_deliveries_one_outstanding', 'idx_deliveries_run_created'])
     )
-    expect(() =>
-      db!.db
-        .prepare(
-          `INSERT INTO deliveries (
-             id, run_id, mailbox_handle, consumer_generation, message_ids
-           ) VALUES (?, ?, ?, ?, '[]')`
-        )
-        .run('delivery_v34_duplicate', run.id, `run:${run.id}`, run.consumer_generation)
-    ).toThrow(/UNIQUE constraint failed/)
+    expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
   })
 
   it('cleans additive lifecycle rows when a v30 writer resets tasks before re-upgrade', () => {
@@ -489,6 +484,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP TABLE deliveries;
       CREATE TABLE deliveries (
@@ -567,6 +563,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    dropDerivedDeliverySchema(raw)
     raw.exec(`
       DROP INDEX IF EXISTS idx_deliveries_one_outstanding;
       CREATE UNIQUE INDEX idx_deliveries_one_outstanding

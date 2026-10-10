@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { isTuiAgent } from '../tui-agent-config'
+import {
+  canonicalizeWindowsShellOverride,
+  isSupportedWindowsShellOverride,
+  listSupportedWindowsShellOverrides
+} from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
 
 export const TerminalHandle = z.object({
@@ -100,6 +105,8 @@ export const TerminalSend = TerminalHandle.extend({
   interrupt: z.unknown().optional(),
   // Why: older hosts strip this optional intent and retain their direct-send behavior.
   agentPrompt: z.literal(true).optional(),
+  // Older hosts strip this and omit the proof; callers read their whole-write `accepted` verdict.
+  requireWriteSettlement: z.literal(true).optional(),
   // Why: waiting observes the same prompt receipt; it never authorizes a second write.
   waitSubmitMs: z.number().int().min(0).max(3_600_000).optional(),
   resolvedLaunchDraft: z
@@ -139,6 +146,15 @@ export const TerminalWait = TerminalHandle.extend({
   timeoutMs: OptionalFiniteNumber
 })
 
+const TerminalColorQueryReplyColorsParam = z.object({
+  foreground: z.string().max(128).optional(),
+  background: z.string().max(128).optional()
+})
+
+export const TerminalSetViewerColors = z.object({
+  colors: TerminalColorQueryReplyColorsParam
+})
+
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
   clientMutationId: z.string().min(1).max(128).optional(),
@@ -168,19 +184,26 @@ export const TerminalCreateParams = z.object({
     .optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
-  terminalColorQueryReplies: z
-    .object({
-      foreground: z.string().max(128).optional(),
-      background: z.string().max(128).optional()
-    })
-    .optional(),
+  terminalKittyKeyboardProtocol: z.boolean().optional(),
+  terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),
   activate: z.unknown().optional(),
   presentation: z.enum(['background', 'focused']).optional(),
   tabId: OptionalString,
-  leafId: OptionalString
+  leafId: OptionalString,
+  // Why refused at the boundary rather than at spawn: only the host knows the allowlist, and a
+  // relay-side throw reaches the caller as an opaque spawn failure after the round trip.
+  shell: z
+    .string()
+    .refine(isSupportedWindowsShellOverride, {
+      message: `shell must be one of: ${listSupportedWindowsShellOverrides().join(', ')}`
+    })
+    // Why here: the host is authoritative, so it canonicalizes even when a client did not; the
+    // spawn path exact-matches `.exe` spellings and must never see `cmd` or `Git-Bash`.
+    .transform((shell) => canonicalizeWindowsShellOverride(shell) ?? shell)
+    .optional()
 })
 
 export const TerminalSplit = TerminalHandle.extend({
@@ -218,5 +241,6 @@ export const AgentTeamsTmuxCompat = z.object({
 
 export const AgentTeamsPrepareLaunch = z.object({
   paneKey: requiredString('Missing pane key'),
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  prepareAuth: z.boolean().optional()
 })

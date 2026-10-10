@@ -18,11 +18,15 @@ export type ClearCompletedActivityPlan = {
   clearedThreadCount: number
 }
 
-/** A thread is clearable when it needs nothing from the user: completed or interrupted,
- *  with no fresh live working/monitoring/blocked/waiting state. */
+/** A thread is clearable when it needs nothing from the user: any finished outcome, with no fresh
+ *  live working/monitoring/blocked/waiting state. */
 export function isClearableActivityThread(thread: AgentPaneThread): boolean {
   const id = activityThreadStatusId(thread)
-  return id === 'done' || id === 'interrupted'
+  // Why: a failed main agent reads failed while its subagents still run; that thread is still live.
+  if (thread.currentAgentState) {
+    return false
+  }
+  return id === 'done' || id === 'failed' || id === 'interrupted' || id === 'unconfirmed'
 }
 
 export function planClearCompletedActivity(
@@ -68,14 +72,32 @@ export function planClearCompletedActivity(
 // Deferred evictions whose undo toast is still open; flushed on pagehide because the toast's
 // close callbacks never fire on quit/reload, which would let cleared rows replay next launch.
 const pendingDiskEvictions = new Set<() => void>()
+let evictionListenerRetired = false
 export function flushPendingClearCompletedEvictions(): void {
   // Set iteration tolerates the self-delete each evict() performs.
   for (const evict of pendingDiskEvictions) {
     evict()
   }
 }
+export function disposePendingClearCompletedEvictionListener(): void {
+  evictionListenerRetired = true
+  releaseRetiredEvictionListener()
+}
+
+function releaseRetiredEvictionListener(): void {
+  if (evictionListenerRetired && pendingDiskEvictions.size === 0 && typeof window !== 'undefined') {
+    window.removeEventListener('pagehide', flushPendingClearCompletedEvictions)
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flushPendingClearCompletedEvictions)
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  // Vite can replace this module without a full renderer reload. Remove the
+  // pagehide hook so dev sessions do not retain stale eviction closures.
+  import.meta.hot.dispose(disposePendingClearCompletedEvictionListener)
 }
 
 // Why a fallback: sonner only fires onDismiss/onAutoClose for the toast's own close paths; a
@@ -127,15 +149,14 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
   // Why turn timestamps, not entry identity: a runtime orchestration merge replaces the live
   // entry object without a state change (setRuntimeAgentOrchestrationByPaneKey), and an
   // identity check would then strand the clear-planted suppressor past Undo, losing the run.
-  const introducedSuppressorLiveTurns = new Map(
-    plan.retainedSnapshots.flatMap((retained) => {
-      const paneKey = retained.entry.paneKey
-      const liveEntry = state.agentStatusByPaneKey[paneKey]
-      return liveEntry && !state.retentionSuppressedPaneKeys[paneKey]
-        ? ([[paneKey, liveEntry.stateStartedAt]] as const)
-        : []
-    })
-  )
+  const introducedSuppressorLiveTurns = new Map<string, number>()
+  for (const retained of plan.retainedSnapshots) {
+    const paneKey = retained.entry.paneKey
+    const liveEntry = state.agentStatusByPaneKey[paneKey]
+    if (liveEntry && !state.retentionSuppressedPaneKeys[paneKey]) {
+      introducedSuppressorLiveTurns.set(paneKey, liveEntry.stateStartedAt)
+    }
+  }
   state.dismissRetainedAgents(plan.retainedSnapshots.map((retained) => retained.entry.paneKey))
 
   let undone = false
@@ -143,6 +164,7 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null
   const dropRetainedFromDiskCache = (): void => {
     pendingDiskEvictions.delete(dropRetainedFromDiskCache)
+    releaseRetiredEvictionListener()
     if (fallbackTimer !== null) {
       clearTimeout(fallbackTimer)
       fallbackTimer = null
@@ -154,6 +176,9 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
     evictPersistedStatuses(plan.cacheIdentities)
   }
   pendingDiskEvictions.add(dropRetainedFromDiskCache)
+  if (evictionListenerRetired && typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushPendingClearCompletedEvictions)
+  }
   fallbackTimer = setTimeout(dropRetainedFromDiskCache, CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
   toast(
     plan.clearedThreadCount === 1
@@ -169,6 +194,7 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
         onClick: () => {
           undone = true
           pendingDiskEvictions.delete(dropRetainedFromDiskCache)
+          releaseRetiredEvictionListener()
           if (fallbackTimer !== null) {
             clearTimeout(fallbackTimer)
             fallbackTimer = null

@@ -1,54 +1,20 @@
 import type { Page } from '@stablyai/playwright-test'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { focusActiveTerminalInput } from './helpers/terminal'
+import {
+  buildPacedTypingMeasurement,
+  PACED_TYPING_CHARACTERS,
+  parseKeyArrivalSidecar,
+  type KeyArrivalRecord,
+  type PacedTypingMeasurement
+} from './paced-terminal-typing-measurement'
 import { typingKeyMarkerPrefix } from './sustained-agent-typing-load-scripts'
 
-const KEY_CHARS = 'abcdefghijklmnopqrstuvwxyz'
 const TIMER_SAMPLE_MS = 16
 const MARKER_SCAN_TRAILING_ROWS = 160
 const ECHO_STRAGGLER_TIMEOUT_MS = 30_000
 
-export type LatencyStats = {
-  count: number
-  p50: number
-  p90: number
-  p99: number
-  max: number
-}
-
-type KeySample = {
-  seq: number
-  sentAt: number
-  ptyArrivedAt: number | null
-  echoSeenAt: number | null
-}
-
-export type PacedTypingMeasurement = {
-  keyCount: number
-  missingPtyArrivalCount: number
-  missingEchoCount: number
-  totalMs: LatencyStats | null
-  inputHalfMs: LatencyStats | null
-  echoHalfMs: LatencyStats | null
-  maxTimerDriftMs: number
-  samples: KeySample[]
-}
-
-function latencyStats(samples: number[]): LatencyStats | null {
-  if (samples.length === 0) {
-    return null
-  }
-  const sorted = [...samples].sort((a, b) => a - b)
-  const at = (q: number): number =>
-    sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))]
-  return {
-    count: sorted.length,
-    p50: at(0.5),
-    p90: at(0.9),
-    p99: at(0.99),
-    max: sorted.at(-1) ?? 0
-  }
-}
+export * from './paced-terminal-typing-measurement'
 
 async function scanRecentKeyMarkerSeqs(
   page: Page,
@@ -89,26 +55,20 @@ async function scanRecentKeyMarkerSeqs(
   )
 }
 
-function readKeyArrivalSidecar(sidecarPath: string): Map<number, number> {
-  const arrivals = new Map<number, number>()
-  let raw = ''
-  try {
-    raw = readFileSync(sidecarPath, 'utf8')
-  } catch {
-    return arrivals
+function readKeyArrivalSidecar(sidecarPath: string): Map<number, KeyArrivalRecord> {
+  if (!existsSync(sidecarPath)) {
+    return new Map()
   }
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) {
-      continue
-    }
-    try {
-      const entry = JSON.parse(line) as { seq: number; atMs: number }
-      arrivals.set(entry.seq, entry.atMs)
-    } catch {
-      /* torn tail write; final retry pass re-reads */
+  return parseKeyArrivalSidecar(readFileSync(sidecarPath, 'utf8'))
+}
+
+function hasExpectedSeqs<T>(values: ReadonlyMap<number, T>, keyCount: number): boolean {
+  for (let seq = 1; seq <= keyCount; seq += 1) {
+    if (!values.has(seq)) {
+      return false
     }
   }
-  return arrivals
+  return true
 }
 
 export async function measurePacedTyping(
@@ -152,21 +112,24 @@ export async function measurePacedTyping(
     }
   })()
 
+  const plannedAtBySeq = new Map<number, number>()
   const sentAtBySeq = new Map<number, number>()
+  const scheduleStartedAt = Date.now()
   try {
     for (let index = 0; index < options.keyCount; index++) {
       const seq = index + 1
-      const tickStart = Date.now()
-      sentAtBySeq.set(seq, tickStart)
-      await page.keyboard.type(KEY_CHARS[index % KEY_CHARS.length])
-      const elapsed = Date.now() - tickStart
-      if (elapsed < options.keyCadenceMs) {
-        await page.waitForTimeout(options.keyCadenceMs - elapsed)
+      const plannedAt = scheduleStartedAt + index * options.keyCadenceMs
+      plannedAtBySeq.set(seq, plannedAt)
+      while (Date.now() < plannedAt) {
+        await page.waitForTimeout(plannedAt - Date.now())
       }
+      const actualDispatchAt = Date.now()
+      sentAtBySeq.set(seq, actualDispatchAt)
+      await page.keyboard.type(PACED_TYPING_CHARACTERS[index % PACED_TYPING_CHARACTERS.length])
     }
     // Wait out stragglers so a slow echo is measured, not dropped.
     const stragglerDeadline = Date.now() + ECHO_STRAGGLER_TIMEOUT_MS
-    while (echoSeenAt.size < options.keyCount && Date.now() < stragglerDeadline) {
+    while (!hasExpectedSeqs(echoSeenAt, options.keyCount) && Date.now() < stragglerDeadline) {
       await page.waitForTimeout(25)
     }
   } finally {
@@ -179,39 +142,17 @@ export async function measurePacedTyping(
   // The probe appends arrivals asynchronously; re-read until complete or 5s.
   let arrivals = readKeyArrivalSidecar(sidecarPath)
   const sidecarDeadline = Date.now() + 5_000
-  while (arrivals.size < options.keyCount && Date.now() < sidecarDeadline) {
+  while (!hasExpectedSeqs(arrivals, options.keyCount) && Date.now() < sidecarDeadline) {
     await new Promise((resolve) => setTimeout(resolve, 100))
     arrivals = readKeyArrivalSidecar(sidecarPath)
   }
 
-  const samples: KeySample[] = []
-  const totalMs: number[] = []
-  const inputHalfMs: number[] = []
-  const echoHalfMs: number[] = []
-  for (let seq = 1; seq <= options.keyCount; seq++) {
-    const sentAt = sentAtBySeq.get(seq) ?? 0
-    const ptyArrivedAt = arrivals.get(seq) ?? null
-    const seenAt = echoSeenAt.get(seq) ?? null
-    samples.push({ seq, sentAt, ptyArrivedAt, echoSeenAt: seenAt })
-    if (ptyArrivedAt !== null) {
-      inputHalfMs.push(ptyArrivedAt - sentAt)
-    }
-    if (seenAt !== null) {
-      totalMs.push(seenAt - sentAt)
-      if (ptyArrivedAt !== null) {
-        echoHalfMs.push(seenAt - ptyArrivedAt)
-      }
-    }
-  }
-
-  return {
+  return buildPacedTypingMeasurement({
     keyCount: options.keyCount,
-    missingPtyArrivalCount: options.keyCount - arrivals.size,
-    missingEchoCount: options.keyCount - echoSeenAt.size,
-    totalMs: latencyStats(totalMs),
-    inputHalfMs: latencyStats(inputHalfMs),
-    echoHalfMs: latencyStats(echoHalfMs),
-    maxTimerDriftMs,
-    samples
-  }
+    plannedAtBySeq,
+    sentAtBySeq,
+    arrivals,
+    echoSeenAt,
+    maxTimerDriftMs
+  })
 }

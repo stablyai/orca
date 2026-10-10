@@ -1,9 +1,15 @@
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch-runtime-capability'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../rpc/transport'
 import { UnixSocketTransport } from '../rpc/unix-socket-transport'
 import { WebSocketTransport } from '../rpc/ws-transport'
-import { readWsFallbackPort, writeWsFallbackPort } from '../rpc/ws-fallback-port-store'
+import {
+  clearWsFallbackPort,
+  readWsFallbackPort,
+  wsFallbackPortLadder,
+  writeWsFallbackPort
+} from '../rpc/ws-fallback-port-store'
 import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
@@ -18,6 +24,8 @@ import {
   createRuntimeTransportMetadata,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
+import { errorMessage } from '../../../shared/error-message'
+import { loadHostDescriptor, publishHostDescriptor } from '../host-descriptor'
 
 export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   async start(): Promise<void> {
@@ -45,12 +53,12 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
 
     // Why: the `.catch` guarantees reply() always fires so a throw can't strand the client or leak the AbortController.
     socketTransport.onMessage((msg, reply, context) => {
-      void this.handleMessage(msg, context)
+      void this.trackClientRequest(() => this.handleMessage(msg, context))
         .then((response) => {
           reply(JSON.stringify(response))
         })
         .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
+          const message = errorMessage(error)
           // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'
           try {
@@ -83,6 +91,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.deviceRegistry = pairingIdentity.deviceRegistry
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
+        this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
+        publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {
           const host = this.resolveInitialWebSocketBindHost()
           const { transport, endpoint } = await this.startWebSocketTransport({
@@ -94,6 +104,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           })
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
+          } else if (transport.persistedFallbackFailed) {
+            clearWsFallbackPort(this.userDataPath)
           }
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
@@ -175,7 +187,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       port: options.port,
       staticRoot: this.webClientRoot,
       ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
-      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
+      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {}),
+      fallbackLadder: wsFallbackPortLadder(this.wsPort)
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
     this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
@@ -215,18 +228,23 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       deviceRegistry,
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
-        void this.handleWebSocketMessage(
-          plaintext,
-          reply,
-          sendBinary,
-          undefined,
-          socket.ws,
-          socket.device.deviceToken,
-          socket
+        void this.trackClientRequest(() =>
+          this.handleWebSocketMessage(
+            plaintext,
+            reply,
+            sendBinary,
+            undefined,
+            socket.ws,
+            socket.device.deviceToken,
+            socket
+          )
         )
       },
-      onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
-      onReady: () => {
+      onBinary: (socket, bytes) => {
+        this.lastClientRequestAt = Date.now()
+        this.handleWebSocketBinaryMessage(bytes, socket.ws)
+      },
+      onReady: (socket) => {
         // Why: first authenticated mobile/remote client (direct WS and
         // cloud relay both attach here) starts path-candidate tracking.
         // Activation is a local-host concern: candidate buffers live on the
@@ -234,6 +252,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         // legitimately lack this method (its own server activates it).
         this.runtime.activateRecentPtyPathCandidateTracking?.()
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+        if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
+          this.runtime.noteAgentLaunchClientReady?.()
+        }
       },
       onClose: (socket, hasOtherConnections) => {
         if (!socket) {

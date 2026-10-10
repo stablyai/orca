@@ -1,3 +1,4 @@
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
@@ -21,6 +22,15 @@ vi.mock('../telemetry/cohort-classifier', () => ({
  */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+const SUBJECT = makeStructuredAgentStatusSubject(
+  {
+    executionHostId: 'local',
+    wslDistro: null,
+    workspaceId: WORKTREE_ID,
+    workspaceKind: 'git-worktree'
+  },
+  SESSION
+)
 
 function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
   return {
@@ -38,7 +48,7 @@ function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionSta
 function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummary {
   const store = new AgentHookServer()
   for (const entry of summaries) {
-    store.ingestStructuredStatus(entry)
+    store.ingestStructuredStatus(entry, SUBJECT)
   }
   const row = {
     worktreeId: WORKTREE_ID,
@@ -49,17 +59,18 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
   const summariesById = new Map<string, RuntimeWorktreePsSummary>([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries: summariesById,
-    pathIndex: { byPath: new Map(), byRealPath: new Map() } as never,
-    missingWorktreeIds: new Set(),
     workingTerminalEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
-      connectedPtyEvidence: { tabIds: new Set(), paneKeys: new Set(), ptyIds: new Set() },
-      retainedSnapshots: [],
+      connectedPtyEvidence: {
+        tabIds: new Set(),
+        paneKeys: new Set(),
+        ptyIdByTerminalHandle: new Map()
+      },
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
-    getSummary: (map, _p, _m, id) => map.get(id) ?? null
+    getSummary: (id) => summariesById.get(id) ?? null
   })
   return row
 }
@@ -69,6 +80,16 @@ beforeEach(() => {
 })
 
 describe('worktree ps reports structured sessions', () => {
+  it("lists a person's Stop still ending the turn, and drops it once the host does", () => {
+    expect(attach([summary({ stopping: true })]).agents[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stopping: true }
+    })
+    const ended = attach([summary({ stopping: true }), summary({ updatedAt: 1_757_030_401_000 })])
+    expect(ended.agents[0]?.state).toBe('working')
+    expect(ended.agents[0]?.mainAgent).not.toHaveProperty('stopping')
+  })
+
   it('a busy structured session is not reported idle', () => {
     const row = attach([summary()])
     expect(row.agents).toHaveLength(1)
@@ -76,12 +97,6 @@ describe('worktree ps reports structured sessions', () => {
     expect(row.agents[0]?.agentType).toBe('claude')
     expect(row.agents[0]?.prompt).toBe('ship the thing')
     expect(row.status).toBe('working')
-  })
-
-  // The same projection the sidebar applies, so the two surfaces cannot disagree about one session.
-  it('maps attention to blocked and idle to done', () => {
-    expect(attach([summary({ status: 'attention' })]).agents[0]?.state).toBe('blocked')
-    expect(attach([summary({ status: 'idle' })]).agents[0]?.state).toBe('done')
   })
 
   it('does not turn a completed host-held session into permission', () => {

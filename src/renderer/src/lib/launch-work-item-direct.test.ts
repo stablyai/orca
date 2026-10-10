@@ -123,22 +123,19 @@ vi.mock('@/lib/launch-work-item-direct-agent-routing', async () => {
   )
   return {
     ...actual,
-    settleDirectWorkItemStructuredLaunch: vi.fn(actual.settleDirectWorkItemStructuredLaunch)
+    beginDirectWorkItemStructuredLaunch: vi.fn(actual.beginDirectWorkItemStructuredLaunch)
   }
 })
 
 import { launchWorkItemDirect } from './launch-work-item-direct'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
-import { settleDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
+import { beginDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 
 const mockApi = {
   worktrees: {
     resolvePrBase: mocks.resolvePrBase
-  },
-  agentTrust: {
-    markTrusted: vi.fn()
   }
 }
 
@@ -149,9 +146,6 @@ describe('launchWorkItemDirect', () => {
       api: {
         worktrees: {
           resolvePrBase: mocks.resolvePrBase
-        },
-        agentTrust: {
-          markTrusted: mockApi.agentTrust.markTrusted
         }
       }
     })
@@ -210,7 +204,6 @@ describe('launchWorkItemDirect', () => {
     } as typeof mocks.store
     // @ts-expect-error -- test shim
     globalThis.window = { api: mockApi }
-    mockApi.agentTrust.markTrusted.mockResolvedValue(undefined)
   })
 
   it('rejects invalid per-launch CLI arguments before creating a workspace', async () => {
@@ -417,7 +410,6 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'win32',
       isRemote: false
     })
@@ -472,11 +464,8 @@ describe('launchWorkItemDirect', () => {
     })
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
     // Why: the draft is inside `--prefill`, so the plan sets no draftPrompt.
-    // launchDraftText is the only thing that lets the view-mode gate see a
-    // draft here — without it this tab opens in chat unconditionally.
     const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
     expect(startup?.draftPrompt).toBeUndefined()
-    expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
   })
 
   it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
@@ -561,11 +550,9 @@ describe('launchWorkItemDirect', () => {
     // Why: activation seeded a plain shell (`tab-1`); a failed structured launch hands back no tab,
     // so the PR body must not reach that shell where the Claude readiness heuristic would submit it
     // — and callers hang irreversible follow-up work off a `true`, so this must not report success.
-    vi.mocked(settleDirectWorkItemStructuredLaunch).mockResolvedValueOnce({
+    vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
       completed: false,
       structuredLaunch: true,
-      visibilityUnknown: false,
-      failed: true,
       primaryTabId: null
     })
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')
@@ -587,15 +574,54 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(false)
 
-    expect(settleDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
-      expect.objectContaining({ primaryTabId: 'tab-1' })
+    expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: null, beforeOpen: expect.any(Function) })
     )
     expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
-  it('uses remote cursor-agent detection, trust preflight, and paste launch for SSH repos', async () => {
+  // A paired server that declines the chat opens this launch's terminal, which must keep the
+  // recipe's saved CLI arguments the terminal route applied.
+  it("hands a server's decline terminal the caller's own CLI arguments", async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
+      completed: true,
+      structuredLaunch: true,
+      primaryTabId: null
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      openModalFallback: vi.fn(),
+      agentOverride: 'claude',
+      agentArgs: '--model opus',
+      launchPlatform: 'linux',
+      promptDelivery: 'submit-after-ready',
+      item: {
+        type: 'pr',
+        number: 7,
+        title: 'Fix checks',
+        url: 'https://github.com/acme/repo/pull/7',
+        pasteContent: 'Fix the failing checks.'
+      }
+    })
+
+    expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        declinedTerminal: {
+          agentArgs: '--model opus',
+          launchPlatform: 'linux',
+          launchSource: 'task_page'
+        }
+      })
+    )
+  })
+
+  it('uses remote cursor-agent detection and paste launch for SSH repos', async () => {
     mocks.store.repos = [
       {
         id: 'repo-ssh',
@@ -636,18 +662,12 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.store.ensureDetectedAgents).not.toHaveBeenCalled()
     expect(mocks.store.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
-    expect(mockApi.agentTrust.markTrusted).toHaveBeenCalledWith({
-      preset: 'cursor',
-      workspacePath: '/home/orca/repo-worktrees/issue-77',
-      connectionId: 'ssh-1'
-    })
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
       agent: 'cursor',
       draft: 'https://github.com/acme/repo/issues/77',
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true
     })
@@ -657,7 +677,6 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true,
       allowEmptyPromptLaunch: true

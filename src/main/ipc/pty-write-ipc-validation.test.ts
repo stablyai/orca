@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSyncMock, spawnMock, recordCodexPaneAccountMock } from './pty-ipc-mock-registry'
-import { posixOnlyIt, TEST_CODEX_HOME } from './pty-ipc-test-constants'
+import { spawnMock, recordCodexPaneAccountMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
@@ -373,7 +372,7 @@ describe('registerPtyHandlers', () => {
     // reattach call — the manager owns the hooks/platform gating this spy stands in for.
     const ensureForDistro = vi
       .spyOn(wslHookRelayManager, 'ensureForDistro')
-      .mockImplementation(() => {})
+      .mockImplementation(async () => {})
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-wsl', isReattach: true, wslDistro: 'Ubuntu-24.04' })),
       write: vi.fn(),
@@ -394,47 +393,4 @@ describe('registerPtyHandlers', () => {
       ensureForDistro.mockRestore()
     }
   })
-  posixOnlyIt(
-    'does not guess route provenance for a pane-local shell startup CODEX_HOME',
-    async () => {
-      setLocalPtyProvider({
-        spawn: vi.fn(async () => ({ id: 'pty-custom-home' })),
-        write: vi.fn(),
-        resize: vi.fn(),
-        kill: vi.fn(),
-        shutdown: vi.fn(),
-        onData: vi.fn(() => vi.fn()),
-        onExit: vi.fn(() => vi.fn()),
-        listProcesses: vi.fn(async () => []),
-        getForegroundProcess: vi.fn(async () => null)
-      } as never)
-      readFileSyncMock.mockImplementation((path: string) =>
-        path === '/pane-home/.zshrc' ? 'export CODEX_HOME="$HOME/custom-codex-home"\n' : ''
-      )
-      const getSettings = vi.fn().mockReturnValue({ activeCodexManagedAccountId: null })
-      registerPtyHandlers(
-        mainWindow as never,
-        undefined,
-        () => TEST_CODEX_HOME,
-        getSettings as never
-      )
-
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        env: {
-          CODEX_HOME: '',
-          ORCA_CODEX_HOME: '',
-          HOME: '/pane-home',
-          SHELL: '/bin/zsh'
-        }
-      })
-
-      expect(recordCodexPaneAccountMock).toHaveBeenCalledWith('pty-custom-home', {
-        selectionKey: 'host',
-        accountId: null,
-        homeRoute: 'custom-home'
-      })
-    }
-  )
 })

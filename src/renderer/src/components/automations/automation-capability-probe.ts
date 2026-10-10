@@ -6,8 +6,13 @@ import {
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../../shared/protocol-version'
+import {
+  EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
+  hasExtraAgentArgs
+} from '../../../../shared/automation-extra-agent-args'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
 import { automationHostDiagnostics } from './automation-host-diagnostics'
 
@@ -138,6 +143,35 @@ export async function assertAutomationCreateIdempotencySupported(
     AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
     'Moving automations to this host requires a newer Orca server. Update the HUB and try again.'
   )
+}
+
+/** Older hosts strip the field and would run without it, so nonempty extras need the capability. */
+export async function assertExtraAgentArgsSupported(
+  authority: AutomationAuthorityRef,
+  extraAgentArgs: string | undefined
+): Promise<void> {
+  if (!hasExtraAgentArgs(extraAgentArgs)) {
+    return
+  }
+  await assertAuthorityCapability(
+    authority,
+    AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
+    EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED
+  )
+}
+
+/** Same gate for the legacy unfenced path, which knows only the environment id. */
+export async function assertEnvironmentSupportsExtraAgentArgs(
+  environmentId: string,
+  extraAgentArgs: string | undefined
+): Promise<void> {
+  if (!hasExtraAgentArgs(extraAgentArgs)) {
+    return
+  }
+  const status = await getRuntimeEnvironmentStatus(environmentId, REQUEST_TIMEOUT_MS)
+  if (!status.capabilities?.includes(AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY)) {
+    throw new AutomationHostScopeUnsupportedError(EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED)
+  }
 }
 
 export {

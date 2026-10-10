@@ -9,13 +9,18 @@ import {
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 
 // Native WebSockets normally emit close immediately after error; bound the
 // missing-close case so a dead socket cannot leave recovery pending forever.
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
 
 export class RelayOuterError extends Error {
-  constructor(readonly code: number) {
+  // rejectedByRelayHello: the relay refused in a relay-hello frame, not just a close code.
+  constructor(
+    readonly code: number,
+    readonly rejectedByRelayHello = false
+  ) {
     super(`relay_outer_${code}`)
   }
 }
@@ -54,7 +59,7 @@ export class MobileRelayE2eeLink {
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
     this.socket = (options.createSocket ?? ((url) => new WebSocket(url)))(
-      relaySocketUrl(options.endpoint)
+      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
     )
     const session = MobileE2EEV2ClientSession.create({
       desktopPublicKeyB64: options.desktopPublicKeyB64,
@@ -129,6 +134,9 @@ export class MobileRelayE2eeLink {
     // `error` is often delivered just before `close`; wait for close so a
     // typed relay code is not replaced by a generic transport error.
     this.socket.onerror = () => {
+      if (this.closed) {
+        return
+      }
       this.transportErrorTimer ??= setTimeout(() => {
         this.transportErrorTimer = null
         this.fail(new RelayOuterError(1006))
@@ -163,7 +171,7 @@ export class MobileRelayE2eeLink {
       throw new Error('invalid relay hello')
     }
     if (!parsed.data.ok) {
-      throw new RelayOuterError(parsed.data.code)
+      throw new RelayOuterError(parsed.data.code, true)
     }
     if (parsed.data.credentialKind !== this.options.expectedCredentialKind) {
       throw new Error('relay credential resolved as an unexpected credential kind')
@@ -186,13 +194,6 @@ export class MobileRelayE2eeLink {
     this.options.onError(error)
     this.socket.close()
   }
-}
-
-function relaySocketUrl(endpoint: { cellUrl: string; relayHostId: string }): string {
-  const url = new URL(endpoint.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(endpoint.relayHostId)}`
-  return url.toString()
 }
 
 function asError(error: unknown): Error {

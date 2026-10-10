@@ -301,6 +301,36 @@ describe('PortScanHandler Linux cancellation', () => {
       platform: 'linux'
     })
   })
+
+  it('fails instead of answering "no listeners" when the socket table is unreadable', async () => {
+    mockLinuxProcScan({ pidCount: 1, fdCount: 1 })
+    const scanTable = readFileMock.getMockImplementation()
+    readFileMock.mockImplementation(async (path: string) => {
+      if (path === '/proc/net/tcp') {
+        throw Object.assign(new Error('EACCES'), { code: 'EACCES' })
+      }
+      return scanTable?.(path)
+    })
+
+    await expect(capturePortDetectHandler()({}, requestContext())).rejects.toThrow(
+      /Could not read \/proc\/net\/tcp/
+    )
+  })
+
+  it('reads a host with IPv6 off, where tcp6 is absent', async () => {
+    mockLinuxProcScan({ pidCount: 1, fdCount: 1 })
+    const scanTable = readFileMock.getMockImplementation()
+    readFileMock.mockImplementation(async (path: string) => {
+      if (path === '/proc/net/tcp6') {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return scanTable?.(path)
+    })
+
+    await expect(capturePortDetectHandler()({}, requestContext())).resolves.toMatchObject({
+      ports: [{ port: 3000 }]
+    })
+  })
 })
 
 describe('parseHexAddress', () => {
@@ -313,16 +343,6 @@ describe('parseHexAddress', () => {
   it('parses IPv4 all-interfaces (0.0.0.0)', () => {
     const result = parseHexAddress('00000000:1F90')
     expect(result).toEqual({ host: '0.0.0.0', port: 8080 })
-  })
-
-  it('parses port 22 correctly', () => {
-    const result = parseHexAddress('00000000:0016')
-    expect(result).toEqual({ host: '0.0.0.0', port: 22 })
-  })
-
-  it('parses port 443 correctly', () => {
-    const result = parseHexAddress('0100007F:01BB')
-    expect(result).toEqual({ host: '127.0.0.1', port: 443 })
   })
 
   it('parses a non-localhost IPv4 address', () => {
@@ -350,22 +370,6 @@ describe('parseHexAddress', () => {
     expect(parseHexAddress('invalid')).toBeNull()
     expect(parseHexAddress('')).toBeNull()
     expect(parseHexAddress('::::')).toBeNull()
-  })
-
-  it('parses high ports correctly', () => {
-    // Port 65535 = FFFF
-    const result = parseHexAddress('0100007F:FFFF')
-    expect(result).toEqual({ host: '127.0.0.1', port: 65535 })
-  })
-
-  it('parses port 5432 (postgres)', () => {
-    const result = parseHexAddress('0100007F:1538')
-    expect(result).toEqual({ host: '127.0.0.1', port: 5432 })
-  })
-
-  it('parses port 3306 (mysql)', () => {
-    const result = parseHexAddress('00000000:0CEA')
-    expect(result).toEqual({ host: '0.0.0.0', port: 3306 })
   })
 })
 

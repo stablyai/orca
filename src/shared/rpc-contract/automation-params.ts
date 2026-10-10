@@ -14,7 +14,6 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../automation-precheck'
-import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../task-source-context'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'
@@ -58,14 +57,51 @@ export const OptionalNullablePlainString = z
   .pipe(z.union([z.string(), z.null(), z.undefined()]))
   .optional()
 
+// A GitHub identity is only usable with both fields present and non-blank.
+const GithubIdentityField = z.string().refine((value) => value.trim().length > 0, {
+  message: 'Required'
+})
+
 export const TaskProviderIdentity = z
-  .custom<SharedTaskProviderIdentity>(
-    (value) =>
-      value !== null &&
-      typeof value === 'object' &&
-      'provider' in value &&
-      ['github', 'gitlab', 'linear', 'jira'].includes(String(value.provider))
-  )
+  .discriminatedUnion('provider', [
+    z
+      .object({
+        provider: z.literal('github'),
+        // Why refine, not .trim(): normalizeTaskProviderIdentity treats a blank owner or repo as
+        // no identity at all, so blank must be rejected here — but trimming would rewrite the
+        // parsed value and change what the handler receives.
+        owner: GithubIdentityField,
+        repo: GithubIdentityField,
+        host: z.string().optional()
+      })
+      .passthrough(),
+    z
+      .object({
+        provider: z.literal('gitlab'),
+        projectId: z.string().nullable().optional(),
+        namespace: z.string().nullable().optional(),
+        project: z.string().nullable().optional(),
+        webUrl: z.string().nullable().optional()
+      })
+      .passthrough(),
+    z
+      .object({
+        provider: z.literal('linear'),
+        workspaceId: z.string().nullable().optional(),
+        workspaceName: z.string().nullable().optional(),
+        teamId: z.string().nullable().optional(),
+        teamKey: z.string().nullable().optional()
+      })
+      .passthrough(),
+    z
+      .object({
+        provider: z.literal('jira'),
+        siteId: z.string().nullable().optional(),
+        siteUrl: z.string().nullable().optional(),
+        projectKey: z.string().nullable().optional()
+      })
+      .passthrough()
+  ])
   .optional()
   .nullable()
 
@@ -147,12 +183,16 @@ export const AutomationRuns = z.object({
   cursor: OptionalString
 })
 
+// Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
+const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
+
 export const AutomationCreate = z.object({
   creationKey: OptionalString,
   name: requiredString('Missing automation name'),
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  extraAgentArgs: ExtraAgentArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -174,6 +214,7 @@ export const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  extraAgentArgs: ExtraAgentArgs,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,

@@ -6,6 +6,7 @@ import type {
   RuntimeTerminalInteractiveWait
 } from '../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
+import type { AgentStatus } from '../../shared/agent-detection'
 import { withTimeout } from './runtime-async-boundaries'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './orca-runtime-core'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -14,37 +15,38 @@ import { selectExactWorkerProviderSession } from './orchestration/worker-provide
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { OrchestrationError } from './orchestration/orchestration-error'
-import {
-  detectInstalledAgentsWithShellPathHydration,
-  detectRemoteAgents
-} from '../preflight/agent-detection'
-import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectLocalManagedAgentCliPresence } from '../agent-hooks/local-agent-cli-presence'
-import { getManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
+import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import { resolveConfiguredWorkerAgent } from './orchestration/configured-worker-agent-selector'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-options'
-import { extractExecutableToken } from '../../shared/managed-agent-command-token'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import { KNOWN_TUI_AGENT_DETECTION_COMMANDS } from '../../shared/tui-agent-detection-commands'
-import { isCommandOnLocalPath } from '../ipc/command-path-resolver'
-import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
+
+import { prepareOpenCodeModelStartupInputs } from '../opencode/opencode-model-startup-plan'
+import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
+import { validateWorkerAgentAvailability } from './worker-agent-availability'
 
 export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   async getTerminalInteractiveWait(
     handle: string
   ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
     let ptyId: string
-    let terminal: RuntimeTerminalAgentStatusSnapshot
+    let inputs: {
+      terminal: RuntimeTerminalAgentStatusSnapshot
+      lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+    }
     try {
       ptyId = this.getTerminalAgentStatusPtyId(handle)
-      terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
+      inputs = this.getTerminalWaitPermissionInputs(handle, ptyId)
     } catch {
       return undefined
     }
+    const { terminal, lifecycle } = inputs
     const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
     const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
       terminal,
       explicitStatus,
-      this.agentPromptLifecycleByPtyId.get(ptyId)
+      lifecycle
     )
     if (promptReason) {
       return {
@@ -201,88 +203,102 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       return
     }
     const repo = await this.showRepo(repoSelector)
-    const projectRuntime = repo.connectionId
-      ? undefined
-      : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-    const localRuntimeKind =
-      projectRuntime?.status === 'resolved' ? projectRuntime.runtime.kind : undefined
-    let detected: string[]
-    if (repo.connectionId) {
-      const override = extractExecutableToken(settings.agentCmdOverrides?.[agent])
-      const config = TUI_AGENT_CONFIG[agent]
-      const commands = override
-        ? [
-            ...KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-            {
-              id: agent,
-              cmd: override,
-              ...(config.detectRequiredCommands
-                ? { requiredCommands: config.detectRequiredCommands }
-                : {}),
-              ...(config.detectUnsupportedRuntimes
-                ? { unsupportedRuntimes: config.detectUnsupportedRuntimes }
-                : {})
-            }
-          ]
-        : undefined
-      detected = await detectRemoteAgents({
-        connectionId: repo.connectionId,
-        commands,
-        requireAvailable: true
-      })
-    } else {
-      detected = await detectInstalledAgentsWithShellPathHydration(
-        { projectRuntime },
-        { failOnProbeError: true }
-      )
-      const override = extractExecutableToken(settings.agentCmdOverrides?.[agent])
-      if (
-        !detected.includes(agent) &&
-        override &&
-        projectRuntime?.status === 'resolved' &&
-        projectRuntime.runtime.kind === 'wsl'
-      ) {
-        const found = await detectWslCommandsOnPath(
-          { distro: projectRuntime.runtime.distro },
-          [override],
-          { failOnProbeError: true }
-        )
-        if (found.has(override)) {
-          return
-        }
-      }
-      if (
-        !detected.includes(agent) &&
-        override &&
-        projectRuntime?.status !== 'repair-required' &&
-        localRuntimeKind !== 'wsl'
-      ) {
-        const env = {
-          ...(buildLocalPreflightEnv() ?? process.env),
-          ...settings.agentDefaultEnv?.[agent]
-        }
-        const pathEnv = Object.entries(env).find(([key]) => key.toLowerCase() === 'path')?.[1]
-        const target = getManagedAgentHookTarget(agent)
-        if (target) {
-          const presence = await detectLocalManagedAgentCliPresence([target], settings, { pathEnv })
-          if (presence[agent]?.state === 'found') {
-            return
-          }
-        } else if (await isCommandOnLocalPath(override, { env, cwd: repo.path })) {
-          return
-        }
-      }
+    await validateWorkerAgentAvailability({
+      agent,
+      settings,
+      repo,
+      projectRuntime: repo.connectionId
+        ? undefined
+        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo),
+      platform: this.getAgentLaunchPlatformForRepo(repo)
+    })
+  }
+
+  resolveOrchestrationAgentLauncher(
+    selector: string,
+    platform: NodeJS.Platform = process.platform,
+    shell?: AgentStartupShell
+  ): TuiAgent | undefined {
+    return resolveConfiguredWorkerAgent(
+      selector,
+      this.store?.getSettings().agentCmdOverrides ?? {},
+      platform,
+      shell
+    )
+  }
+
+  async resolveOrchestrationAgentLauncherForTarget(
+    selector: string,
+    target: { repo?: string; worktree?: string }
+  ): Promise<TuiAgent | undefined> {
+    if (isTuiAgent(selector)) {
+      return selector
     }
-    const usesClaudeTeamsFallback =
-      agent === 'claude-agent-teams' &&
-      detected.includes('claude') &&
-      (this.getAgentLaunchPlatformForRepo(repo) === 'win32' ||
-        (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'))
-    if (!detected.includes(agent) && !usesClaudeTeamsFallback) {
-      throw new OrchestrationError(
-        'agent_not_available',
-        `Agent launcher ${agent} is not installed on the execution host.`
-      )
+    const repo = target.repo ? await this.resolveRepoSelector(target.repo) : null
+    const workspace = repo
+      ? { repo, path: repo.path, connectionId: repo.connectionId }
+      : await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
+    const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const shell = resolveStartupShell(
+      platform,
+      resolveLocalWindowsAgentStartupShell({
+        platform,
+        isRemote: Boolean(workspace.connectionId),
+        terminalWindowsShell: this.store?.getSettings().terminalWindowsShell
+      })
+    )
+    return this.resolveOrchestrationAgentLauncher(selector, platform, shell)
+  }
+
+  async probeOrchestrationOpenCodeModelLaunchSupport(target: {
+    worktree?: string
+    model?: string
+  }): Promise<boolean> {
+    if (!target.model || !target.worktree) {
+      return false
+    }
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
+    const executionRepo = workspace?.repo
+    if (
+      workspace?.connectionId ||
+      (executionRepo?.executionHostId && executionRepo.executionHostId !== 'local')
+    ) {
+      return false
+    }
+    const store = this.requireStore()
+    const settings = store.getSettings()
+    const path = workspace?.path
+    const unc = path ? parseWslUncPath(path) : null
+    const projectRuntime = executionRepo
+      ? resolveLocalProjectRuntimeForRepo(store, executionRepo)
+      : null
+    if (projectRuntime?.status === 'repair-required') {
+      return false
+    }
+    const wsl = unc
+      ? { distro: unc.distro }
+      : projectRuntime?.runtime.kind === 'wsl'
+        ? { distro: projectRuntime.runtime.distro }
+        : undefined
+    if (!path) {
+      return false
+    }
+    try {
+      await prepareOpenCodeModelStartupInputs({
+        inputs: resolveAgentStartupPlanInputs({
+          agent: 'opencode',
+          settings,
+          platform: wsl ? 'linux' : process.platform,
+          isRemote: false,
+          sessionOptions: { model: target.model }
+        }),
+        cwd: path,
+        isWsl: Boolean(wsl),
+        hostIdentity: this.getRuntimeId()
+      })
+      return true
+    } catch {
+      return false
     }
   }
 

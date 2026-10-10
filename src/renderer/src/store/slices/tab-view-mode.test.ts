@@ -81,4 +81,41 @@ describe('tab view mode', () => {
     store.getState().toggleTabViewMode('missing-tab')
     expect(store.getState().unifiedTabsByWorktree[WT]).toBe(before)
   })
+
+  // Why: terminal-pane recovery asks the terminal row who owns the surface.
+  // Host sync already writes viewMode there; only these local toggles skipped
+  // it, which is why the guard had to OR two indices to get a safe answer.
+  describe('mirrors onto the terminal row', () => {
+    function terminalRow(tabId: string) {
+      return store.getState().tabsByWorktree[WT]?.find((tab) => tab.id === tabId)
+    }
+
+    beforeEach(() => {
+      const tabId = store.getState().createTab(WT).id
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            ...store.getState().unifiedTabsByWorktree[WT].filter((tab) => tab.id !== tabId),
+            makeUnifiedTab({ id: tabId, entityId: tabId, worktreeId: WT, groupId: 'g-left' })
+          ]
+        }
+      } as Partial<AppState>)
+      rowTabId = tabId
+    })
+
+    let rowTabId = ''
+
+    it('toggleTabViewMode patches the row in the same write', () => {
+      store.getState().toggleTabViewMode(rowTabId)
+      expect(terminalRow(rowTabId)?.viewMode).toBe('chat')
+
+      store.getState().toggleTabViewMode(rowTabId)
+      expect(terminalRow(rowTabId)?.viewMode).toBe('terminal')
+    })
+
+    it('setTabViewMode patches the row in the same write', () => {
+      store.getState().setTabViewMode(rowTabId, 'chat')
+      expect(terminalRow(rowTabId)?.viewMode).toBe('chat')
+    })
+  })
 })

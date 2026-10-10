@@ -1,31 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { CODEX_APP_SERVER_NOTIFICATION_METHODS } from '../../codex/codex-app-server-notification-schema'
-import { CLAUDE_STREAM_JSON_FRAME_KINDS } from './claude-stream-json-frame-schema'
+import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../agent-session-journal/journal-payload-bounds'
 import {
   classifyProviderFrame,
-  isDeltaShapedProviderFrameKind,
+  hasTypedProviderFrameTranslator,
+  isDeltaProviderFrameKind,
   PROVIDER_FRAME_CLASSIFICATIONS
 } from './provider-frame-disposition'
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
 
 describe('provider frame classification catalog', () => {
-  it('classifies every pinned Codex app-server notification method', () => {
-    expect(Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex)).toEqual([
-      ...CODEX_APP_SERVER_NOTIFICATION_METHODS
-    ])
-  })
-
-  it('classifies every pinned Claude stream-json frame kind', () => {
-    expect(Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.claude)).toEqual([
-      ...CLAUDE_STREAM_JSON_FRAME_KINDS
-    ])
-  })
-
   it('classifies every pinned delta kind as stream-into-item', () => {
     const deltaKinds = [
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.codex),
       ...Object.keys(PROVIDER_FRAME_CLASSIFICATIONS.claude)
-    ].filter(isDeltaShapedProviderFrameKind)
+    ].filter(isDeltaProviderFrameKind)
 
     expect(deltaKinds.length).toBeGreaterThan(0)
     for (const kind of deltaKinds) {
@@ -48,6 +36,9 @@ describe('provider frame classification catalog', () => {
       'suppressed-benign'
     )
     expect(classifyProviderFrame('claude', 'message:system:hook_started', {})).toBe(
+      'suppressed-benign'
+    )
+    expect(classifyProviderFrame('claude', 'message:stream_event:ping', {})).toBe(
       'suppressed-benign'
     )
   })
@@ -163,6 +154,83 @@ describe('provider frame classification catalog', () => {
         'timeline-substantive'
       )
     }
+  })
+})
+
+describe('typed translator coverage', () => {
+  it('emits no generic row for a covered kind, whatever the payload reports', () => {
+    // The catalogue calls these `status-chrome`, but `hasProviderError` promotes
+    // any of them that reports a failure — which is how a failed background task
+    // reached users as `claude · message:system:task_notification`. Coverage is
+    // the contract that stops it: the typed translator writes the row instead.
+    for (const kind of [
+      'message:system:task_started',
+      'message:system:task_updated',
+      'message:system:task_progress',
+      'message:system:task_notification',
+      'message:system:background_tasks_changed'
+    ]) {
+      expect(
+        unhandledProviderFrameJournalItem(
+          'claude',
+          kind,
+          {
+            task_id: 'byjnee2no',
+            status: 'failed',
+            summary: 'Background command "Wait" failed with exit code 1'
+          },
+          DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+          { coveredByTypedTranslator: true }
+        ),
+        kind
+      ).toBeNull()
+    }
+  })
+
+  it('keeps malformed covered-kind failures eligible for the generic fallback', () => {
+    // Eligibility is all this layer decides. A frame naming no task is not
+    // claimed by the row owner, which withholds the coverage flag so the
+    // failure still reaches the user. The SENTENCE it leads with is Claude's to
+    // supply, through the fallback's display-text seam — proven in
+    // `claude-structured-journal-translation-background-tasks.test.ts`. Teaching
+    // `summary` to the shared key list here would re-rank the row text of every
+    // unmodelled frame on both providers to reach this one case.
+    expect(
+      unhandledProviderFrameJournalItem('claude', 'message:system:task_notification', {
+        status: 'failed',
+        summary: 'Background command "Wait" failed with exit code 1'
+      })
+    ).toMatchObject({ classification: 'error-surface' })
+  })
+
+  it('covers the Codex thread status, which reports `systemError` beside the `error` row', () => {
+    const kind = 'notification:thread/status/changed'
+    const payload = { threadId: 'thread-1', status: { type: 'systemError' } }
+
+    expect(hasTypedProviderFrameTranslator('codex', kind)).toBe(true)
+    expect(
+      unhandledProviderFrameJournalItem('codex', kind, payload, DEFAULT_JOURNAL_PAYLOAD_LIMITS, {
+        coveredByTypedTranslator: true
+      })
+    ).toBeNull()
+    expect(unhandledProviderFrameJournalItem('codex', kind, payload)).toMatchObject({
+      classification: 'error-surface'
+    })
+  })
+
+  it('covers a kind only for its own provider — a Claude kind from Codex still falls back', () => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'message:system:task_notification', {
+        status: 'failed'
+      })
+    ).not.toBeNull()
+  })
+
+  it('leaves an unmodelled Claude failure on the visible fallback', () => {
+    const item = unhandledProviderFrameJournalItem('claude', 'message:system:future_task', {
+      status: 'failed'
+    })
+    expect(item?.classification).toBe('error-surface')
   })
 })
 

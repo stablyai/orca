@@ -8,20 +8,13 @@ import {
   getLatestWebSessionTabsPublicationEpoch,
   resolveHostSessionTabIdForWebSessionTab
 } from '@/runtime/web-session-tabs-sync'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
-import { translate } from '@/i18n/i18n'
+import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel,
   shouldConfirmPinnedTabClose
 } from '@/store/pinned-tab-close-guard'
-import {
-  closeStructuredTerminalSessionWithRetry,
-  disposeStructuredTerminalSession,
-  structuredTerminalSessionId
-} from './structured-terminal-session-disposal'
-import { toast } from 'sonner'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
@@ -58,8 +51,6 @@ export function closeTerminalTab(
     skipRunningProcessConfirm?: boolean
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
-    /** Internal re-entry after the structured provider close is proven. */
-    structuredSessionCloseConfirmed?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
     precomputedCloseState?: PrecomputedTerminalCloseState
     onClosed?: () => void
@@ -91,11 +82,9 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
-  const worktreeRoute = resolveTerminalWorktreeRoute(state, owningWorktreeId)
-  if (!worktreeRoute) {
-    options?.onCancel?.()
-    return
-  }
+  // Why no early return: an unrouted close still prunes locally and reaches main's close record;
+  // teardown of a PTY whose host is unproven fails closed on its own.
+  const worktreeRoute = resolveTerminalCloseRoute(state, owningWorktreeId, terminalTabId)
 
   // Why: a pinned tab routes through the confirmation guard instead of closing
   // outright. `force` is the post-confirmation re-entry, which skips the guard.
@@ -139,60 +128,7 @@ export function closeTerminalTab(
     return
   }
 
-  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
-  const structuredSessionId = structuredTerminalSessionId(
-    state.unifiedTabsByWorktree?.[owningWorktreeId],
-    terminalTabId
-  )
-  if (
-    structuredSessionId &&
-    options?.reason !== 'pty-exit' &&
-    options?.structuredSessionCloseConfirmed !== true
-  ) {
-    const target = runtimeEnvironmentId
-      ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
-      : ({ kind: 'local' } as const)
-    void closeStructuredTerminalSessionWithRetry(target, structuredSessionId).then((closed) => {
-      if (!closed) {
-        toast.error(
-          translate(
-            'components.native-chat.structuredSessionCloseFailed',
-            'Could not close this chat session'
-          ),
-          {
-            description: translate(
-              'components.native-chat.structuredSessionCloseFailedDescription',
-              'The terminal stayed open so the provider remains recoverable.'
-            )
-          }
-        )
-        options?.onCancel?.()
-        return
-      }
-      closeTerminalTab(tabId, {
-        ...options,
-        force: true,
-        skipRunningProcessConfirm: true,
-        structuredSessionCloseConfirmed: true
-      })
-    })
-    return
-  }
-  const retireStructuredSession = (): void => {
-    const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
-    const target = runtimeEnvironmentId
-      ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
-      : ({ kind: 'local' } as const)
-    if (options?.structuredSessionCloseConfirmed === true) {
-      return
-    }
-    disposeStructuredTerminalSession({
-      unifiedTabs: state.unifiedTabsByWorktree?.[owningWorktreeId],
-      terminalTabId,
-      target,
-      reason: closeReason
-    })
-  }
+  const runtimeEnvironmentId = worktreeRoute?.runtimeEnvironmentId ?? null
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {
       // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
@@ -251,7 +187,6 @@ export function closeTerminalTab(
           }
         : {})
     })
-    retireStructuredSession()
     options?.onClosed?.()
     return
   }
@@ -300,18 +235,18 @@ export function closeTerminalTab(
     if (current.activeWorktreeId === owningWorktreeId) {
       // Why: agent-session and simulator tabs render without a terminal/editor/browser
       // entity, so only the unified renderable count can prove the worktree is empty
-      // (mirrors leaveWorktreeIfEmpty in useTabGroupTabCloseCommands).
+      // (mirrors leaveWorktreeIfEmpty in workspace-emptied-reaction.ts).
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
       if (renderableTabCount === 0) {
         const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)
         if (worktreeFile) {
           current.setActiveFile(worktreeFile.id)
-          current.setActiveTabType('editor')
+          current.setActiveTabType('editor', owningWorktreeId)
         } else {
           const browserTab = (current.browserTabsByWorktree?.[owningWorktreeId] ?? [])[0]
           if (browserTab) {
             current.setActiveBrowserTab(browserTab.id)
-            current.setActiveTabType('browser')
+            current.setActiveTabType('browser', owningWorktreeId)
           } else {
             current.setActiveWorktree(null)
           }
@@ -319,6 +254,5 @@ export function closeTerminalTab(
       }
     }
   }
-  retireStructuredSession()
   options?.onClosed?.()
 }

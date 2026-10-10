@@ -83,19 +83,24 @@ export function issueSourceSlug(source: GitHubOwnerRepo | null | undefined): str
   return source ? `${source.owner}/${source.repo}` : 'Unknown'
 }
 
-export function compareLinearIssues(
-  a: LinearIssue,
-  b: LinearIssue,
+export function sortLinearIssues(
+  issues: readonly LinearIssue[],
   orderBy: LinearOrderBy
-): number {
-  if (orderBy === 'updated') {
-    return taskTime(b.updatedAt) - taskTime(a.updatedAt)
+): LinearIssue[] {
+  if (issues.length < 2) {
+    return [...issues]
   }
   if (orderBy === 'identifier') {
-    return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    return [...issues].sort((a, b) => collator.compare(a.identifier, b.identifier))
   }
-  const priorityDelta = getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority)
-  return priorityDelta || taskTime(b.updatedAt) - taskTime(a.updatedAt)
+  const keyed = issues.map((issue) => ({
+    issue,
+    updatedAt: taskTime(issue.updatedAt),
+    priority: orderBy === 'updated' ? 0 : getLinearPriorityRank(issue.priority)
+  }))
+  keyed.sort((a, b) => a.priority - b.priority || b.updatedAt - a.updatedAt)
+  return keyed.map(({ issue }) => issue)
 }
 
 export function getLinearIssueGroup(
@@ -134,7 +139,21 @@ export function groupLinearIssues(
   groupBy: LinearGroupBy,
   orderBy: LinearOrderBy
 ): LinearIssueSection[] {
-  const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
+  return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy)
+}
+
+/** The caller must sort issues by its selected order before grouping. */
+export function groupSortedLinearIssues(
+  issues: readonly LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
+  return groupOrderedLinearIssues([...issues], groupBy)
+}
+
+function groupOrderedLinearIssues(
+  sorted: LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
   if (groupBy === 'none') {
     return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
   }
@@ -177,11 +196,10 @@ export function linearIssueSecondaryParts(
   return parts
 }
 
-export function reconcileTeamSelection(
-  teams: LinearTeam[],
-  saved: string[] | null | undefined
-): Set<string> {
-  if (!saved) {
+// Why `unknown`: a host predating the desktop fix for 0a2b6e7f projects its
+// raw store value, which can be a string; that must read as sticky-all.
+export function reconcileTeamSelection(teams: LinearTeam[], saved: unknown): Set<string> {
+  if (!Array.isArray(saved)) {
     return new Set(teams.map((team) => team.id))
   }
   const available = new Set(teams.map((team) => team.id))

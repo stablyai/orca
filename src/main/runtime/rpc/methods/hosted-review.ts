@@ -1,4 +1,6 @@
 import { defineMethod } from '../core'
+import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
+import { UNSUPPORTED_HOSTED_REVIEW_PROVIDER } from '../../../source-control/hosted-review-creation'
 import {
   HostedReviewCreate,
   HostedReviewCreationEligibility,
@@ -8,6 +10,7 @@ import {
 export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.forBranch',
+    permission: 'workspace',
     params: HostedReviewForBranch,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -18,6 +21,7 @@ export const HOSTED_REVIEW_METHODS = [
         ...(params.admissionTier ? { admissionTier: params.admissionTier } : {}),
         currentHeadOid: params.currentHeadOid ?? null,
         ...(params.active === true ? { active: true } : {}),
+        ...(params.force === true ? { force: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
@@ -29,6 +33,7 @@ export const HOSTED_REVIEW_METHODS = [
   }),
   defineMethod({
     name: 'hostedReview.getCreationEligibility',
+    permission: 'workspace',
     params: HostedReviewCreationEligibility,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -53,9 +58,15 @@ export const HOSTED_REVIEW_METHODS = [
   }),
   defineMethod({
     name: 'hostedReview.create',
+    permission: 'workspace',
     params: HostedReviewCreate,
-    handler: async (params, { runtime }) =>
-      runtime.createHostedReview({
+    handler: async (params, { runtime }) => {
+      // The wire carries the host's own provider token, so this is where an arm this build does
+      // not know becomes a refusal instead of a params rejection the client cannot read.
+      if (!supportsHostedReviewCreation(params.provider)) {
+        return UNSUPPORTED_HOSTED_REVIEW_PROVIDER
+      }
+      return runtime.createHostedReview({
         repoSelector: params.repo,
         worktreeSelector: params.worktree,
         provider: params.provider,
@@ -66,12 +77,17 @@ export const HOSTED_REVIEW_METHODS = [
         draft: params.draft,
         useTemplate: params.useTemplate
       })
+    }
   }),
   defineMethod({
     name: 'hostedReview.createStacked',
+    permission: 'workspace',
     params: HostedReviewCreate,
-    handler: async (params, { runtime }) =>
-      runtime.createStackedHostedReview({
+    handler: async (params, { runtime }) => {
+      if (!supportsHostedReviewCreation(params.provider)) {
+        return UNSUPPORTED_HOSTED_REVIEW_PROVIDER
+      }
+      return runtime.createStackedHostedReview({
         repoSelector: params.repo,
         worktreeSelector: params.worktree,
         provider: params.provider,
@@ -82,5 +98,6 @@ export const HOSTED_REVIEW_METHODS = [
         draft: params.draft,
         useTemplate: params.useTemplate
       })
+    }
   })
 ]

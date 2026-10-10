@@ -63,24 +63,23 @@ export class RelayWatchRootCapacityGate {
     this.waiting.add(rootKey)
     // Once, and never past the caller: a genuinely full cap must still reach the refusal that sends
     // the client dormant, and an unsubscribe that never settles must not park the request with it.
-    return (signal ? Promise.race([released, abortSignalSettled(signal)]) : released).finally(
-      () => {
-        this.waiting.delete(rootKey)
+    let onAbort = (): void => {}
+    const abandoned = new Promise<void>((resolve) => {
+      onAbort = () => resolve()
+      if (signal?.aborted) {
+        resolve()
+      } else {
+        signal?.addEventListener('abort', onAbort, { once: true })
       }
-    )
+    })
+    return (signal ? Promise.race([released, abandoned]) : released).finally(() => {
+      signal?.removeEventListener('abort', onAbort)
+      this.waiting.delete(rootKey)
+    })
   }
 
   /** Setup roots that currently hold a slot — a parked capacity waiter holds none. */
   private claimedSetupRoots(rootKey: string): string[] {
     return [...this.setupRoots.keys()].filter((key) => key === rootKey || !this.waiting.has(key))
   }
-}
-
-/** Resolves (never rejects) when the request is abandoned, so a race can drop out of a wait. */
-function abortSignalSettled(signal: AbortSignal): Promise<void> {
-  return signal.aborted
-    ? Promise.resolve()
-    : new Promise<void>((resolve) =>
-        signal.addEventListener('abort', () => resolve(), { once: true })
-      )
 }

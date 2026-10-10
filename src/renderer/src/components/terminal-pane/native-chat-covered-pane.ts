@@ -15,6 +15,28 @@ export function paneIsCoveredByNativeChat(
   return pane?.container.querySelector(NATIVE_CHAT_COVER_SELECTOR) != null
 }
 
+/**
+ * Pane focus aimed at a covered pane lands on its chat cover (the chat then hands
+ * it to its composer), never on the hidden terminal or the pane the user left.
+ * Returns false when no chat covers the pane.
+ */
+export function focusNativeChatCover(pane: { container: Pick<Element, 'querySelector'> }): boolean {
+  const cover = pane.container.querySelector<HTMLElement>(NATIVE_CHAT_COVER_SELECTOR)
+  if (!cover) {
+    return false
+  }
+  // Focus already in the chat (a click, the composer) stays where it is.
+  if (!cover.contains(cover.ownerDocument.activeElement)) {
+    cover.focus({ preventScroll: true })
+  }
+  return true
+}
+
+/** True for anything inside a chat cover, including the shell before a chat root mounts. */
+export function isInsideNativeChatCover(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(NATIVE_CHAT_COVER_SELECTOR) !== null
+}
+
 /** Mirrors focusActivePane's target so the guard tracks exactly the pane that would take focus. */
 export function activePaneIsCoveredByNativeChat(manager: PaneManager): boolean {
   return paneIsCoveredByNativeChat(manager.getActivePane() ?? manager.getPanes()[0])

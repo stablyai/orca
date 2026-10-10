@@ -1,0 +1,5 @@
+@import '../../../src/renderer/src/assets/main.css';
+@source './fixture.tsx';
+@source '../../../src/renderer/src/components/right-sidebar';
+@source '../../../src/renderer/src/components/ui';
+@source '../../../src/renderer/src/components/AgentStateDot.tsx';

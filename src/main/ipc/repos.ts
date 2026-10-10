@@ -24,7 +24,6 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:listForExecutionHost')
   ipcMain.removeHandler('repos:add')
-  ipcMain.removeHandler('repos:remove')
   ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:reorderForHost')

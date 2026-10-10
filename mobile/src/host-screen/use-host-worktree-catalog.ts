@@ -3,6 +3,8 @@ import { useFocusEffect } from 'expo-router'
 import { setCachedWorktrees } from '../cache/worktree-cache'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
+import { showPinnedWorktreesInGroupsRead } from '../transport/settings-read-operations'
 import { useWorktreeResync } from '../transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../worktree/host-worktree-refresh'
 import { areWorktreeListsEqual } from '../worktree/worktree-list-snapshot'
@@ -36,10 +38,12 @@ export function useHostWorktreeCatalog(args: {
     clientRef,
     fetchWorktreesInFlightRef,
     newWorktreeModalVisibleRef,
+    setActionError,
     setCatalogError,
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
+    setShowPinnedInGroups,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
@@ -84,6 +88,9 @@ export function useHostWorktreeCatalog(args: {
         const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
           setCatalogError(null)
+          // A confirmed list is the host answering, which is the evidence a transient action
+          // failure was about a moment that has passed.
+          setActionError('')
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
@@ -116,10 +123,14 @@ export function useHostWorktreeCatalog(args: {
             return serverPinned
           })
         }
-      } catch {
+      } catch (error) {
         // Will retry on reconnect
         if (clientRef.current === requestClient && hostId === requestHostId) {
-          setCatalogError('network_error')
+          // Why the branch: this code is printed to the user verbatim, and a reply the reader
+          // refused is a host-payload defect, not a connectivity one (STA-3123).
+          setCatalogError(
+            error instanceof RpcIncompatibleReplyError ? 'invalid_response' : 'network_error'
+          )
         }
       } finally {
         fetchWorktreesInFlightRef.current = false
@@ -136,13 +147,36 @@ export function useHostWorktreeCatalog(args: {
     }, [])
   )
 
+  const syncShowPinnedInGroups = useCallback(async (requestClient: RpcClient) => {
+    try {
+      const reply = await showPinnedWorktreesInGroupsRead.request(requestClient)
+      if (clientRef.current !== requestClient) {
+        return
+      }
+      const read = showPinnedWorktreesInGroupsRead.interpret(reply)
+      if (read.accepted) {
+        setShowPinnedInGroups(read.value)
+      }
+    } catch {
+      // Best-effort: keep the current placement until the next focus/connect.
+    }
+  }, [])
+
   const startWorktreeRefresh = useCallback(() => {
     if (!client || connState !== 'connected') {
       return
     }
     void syncViewSettingsFromDesktop()
+    void syncShowPinnedInGroups(client)
     return startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
-  }, [client, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+  }, [
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata,
+    syncViewSettingsFromDesktop,
+    syncShowPinnedInGroups
+  ])
 
   useFocusEffect(
     useCallback(() => {

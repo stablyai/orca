@@ -29,11 +29,9 @@ const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call 
 // `&&`) keeps startup working even if chcp.com is missing.
 const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
-function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
-  if (!codexLaunchPreflightCommand) {
-    return GIT_BASH_UTF8_LOGIN_COMMAND
-  }
-
+// Why every pane gets the rcfile: it defines the claude function that follows the selected
+// account (and the codex wrapper), as bash panes elsewhere get; it sources the login chain itself.
+function getGitBashLaunchCommand(): string {
   ensureShellReadyWrappersAt()
   const wrapperArgs = getBashWrapperLaunchArgs()
   if (!wrapperArgs) {
@@ -216,7 +214,7 @@ export function resolveWindowsShellLaunchArgs(
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['-c', getGitBashLaunchCommand(codexLaunchPreflightCommand)],
+      shellArgs: ['-c', getGitBashLaunchCommand()],
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

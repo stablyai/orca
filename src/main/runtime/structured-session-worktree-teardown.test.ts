@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { IPtyProvider } from '../providers/types'
+import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -8,13 +10,13 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { killAllProcessesForWorktree } = await import('./worktree-teardown')
+type TeardownRuntime = NonNullable<Parameters<typeof killAllProcessesForWorktree>[1]['runtime']>
 const {
   classifyWorktreeForceDeleteReason,
   isProvenLiveStructuredSessionRemovalError,
   isUnstoppedPtyRemovalError
 } = await import('../../shared/worktree/removal')
-const { listLiveStructuredSessionsForWorktree } =
-  await import('./structured-session-worktree-teardown')
+const { listStructuredSessionsForWorktree } = await import('./structured-session-worktree-teardown')
 
 const WORKTREE = 'repo_1::/tmp/wt-a'
 const OTHER_WORKTREE = 'repo_1::/tmp/wt-b'
@@ -59,6 +61,13 @@ function installHost(options: {
   /** Sessions in the persisted visible-tab index, so a rollback has something to put back. */
   visible?: string[]
   /**
+   * Sessions this host is not holding, so they observe `unverifiable` rather than `live`.
+   *
+   * The everyday shape, not an edge case: the idle sweep has already put to rest any chat quiet for
+   * its window, on screen or not.
+   */
+  detached?: Set<string>
+  /**
    * Sessions whose death evidence lands DURING the close's tab-restore write.
    *
    * `setSessionTabVisibility` is a store transaction — a real disk write — so the close's own
@@ -66,7 +75,11 @@ function installHost(options: {
    */
   exitsDuringTabRestore?: Set<string>
 }): { closed: string[]; visible: Set<string> } {
-  const held = new Set(options.records.map((entry) => entry.sessionId))
+  const held = new Set(
+    options.records
+      .map((entry) => entry.sessionId)
+      .filter((sessionId) => !options.detached?.has(sessionId))
+  )
   const closed: string[] = []
   const visible = new Set(options.visible ?? [])
   const recordExit = (sessionId: string): void => {
@@ -77,7 +90,13 @@ function installHost(options: {
     }
   }
   hostRef.current = {
-    deps: { store: { listRecords: () => options.records, getRecord: () => null } },
+    deps: {
+      store: {
+        listRecords: () => options.records,
+        getRecord: () => null,
+        getSessionTabId: (sessionId: string) => (visible.has(sessionId) ? `tab-${sessionId}` : null)
+      }
+    },
     hasSession: (sessionId: string) => held.has(sessionId),
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...visible] }),
     setSessionTabVisibility: async (sessionId: string, isVisible: boolean) => {
@@ -132,6 +151,20 @@ function destructiveDeps(extra: { allowUnverifiedStop?: boolean; timeoutMs?: num
   }
 }
 
+/** Keys are pinned to the real runtime; each stub narrows its own args to what the case drives. */
+type TeardownRuntimeStubs = Partial<Record<keyof TeardownRuntime, unknown>>
+
+function runtimeDouble(hooks: TeardownRuntimeStubs): TeardownRuntime {
+  return Object.assign(Object.create(null), hooks)
+}
+
+function livePtyProvider(): IPtyProvider {
+  return Object.assign(Object.create(null), {
+    listProcesses: async () => [{ id: 'pty-1' }],
+    shutdown: async () => {}
+  })
+}
+
 /** The structured sweep's own warn — a forced removal can emit a PTY-sweep one onto the same spy. */
 function structuredSessionWarning(warn: { mock: { calls: unknown[][] } }): string {
   return (
@@ -148,9 +181,21 @@ describe('worktree teardown and structured agent sessions', () => {
 
   it('finds sessions by workspace, and ignores a sibling worktree', () => {
     installHost({ records: [record('s1', WORKTREE), record('s2', OTHER_WORKTREE)] })
-    expect(listLiveStructuredSessionsForWorktree(WORKTREE, {})).toEqual([
-      { sessionId: 's1', agent: 'claude' }
-    ])
+    expect(listStructuredSessionsForWorktree(WORKTREE, {})).toEqual({
+      members: [{ sessionId: 's1', agent: 'claude' }],
+      live: [{ sessionId: 's1', agent: 'claude' }]
+    })
+  })
+
+  it('counts a chat with no attached child as a member but never as live', () => {
+    // The split this file's two lists exist for. A provider child is scoped to a VISIBLE pane, so
+    // every chat in a workspace the user is not currently looking at observes non-live — and a
+    // liveness-only list therefore saw nothing at all to act on for the commonest delete there is.
+    installHost({ records: [record('s1', WORKTREE)], detached: new Set(['s1']) })
+    expect(listStructuredSessionsForWorktree(WORKTREE, {})).toEqual({
+      members: [{ sessionId: 's1', agent: 'claude' }],
+      live: []
+    })
   })
 
   it('closes a live session on an ordinary removal instead of refusing it', async () => {
@@ -298,14 +343,21 @@ describe('worktree teardown and structured agent sessions', () => {
 
   it('still removes under force when a close does not settle, and says so', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    installHost({ records: [record('s1', WORKTREE)], stuck: new Set(['s1']) })
-    const result = await killAllProcessesForWorktree(
-      WORKTREE,
-      destructiveDeps({ allowUnverifiedStop: true })
-    )
+    const retired: string[] = []
+    installHost({ records: [record('s1', WORKTREE)], stuck: new Set(['s1']), visible: ['s1'] })
+    const result = await killAllProcessesForWorktree(WORKTREE, {
+      ...destructiveDeps({ allowUnverifiedStop: true }),
+      runtime: runtimeDouble({
+        retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
+          retired.push(sessionId)
+          return true
+        }
+      })
+    })
     expect(result.structuredStopped).toBeUndefined()
     // The live arm of that record, carrying the verdict the refusal would have shown.
     expect(structuredSessionWarning(warn)).toContain('still live: 1 agent session (claude)')
+    expect(retired).toEqual(['s1'])
     warn.mockRestore()
   })
 
@@ -365,11 +417,14 @@ describe('worktree teardown and structured agent sessions', () => {
     installHost({
       records: [record('s1', WORKTREE, { executionHostId: 'ssh:host-a' }), record('s2', WORKTREE)]
     })
-    const local = [{ sessionId: 's2', agent: 'claude' }]
-    expect(listLiveStructuredSessionsForWorktree(WORKTREE, { resolvedConnectionId: null })).toEqual(
+    const local = {
+      members: [{ sessionId: 's2', agent: 'claude' }],
+      live: [{ sessionId: 's2', agent: 'claude' }]
+    }
+    expect(listStructuredSessionsForWorktree(WORKTREE, { resolvedConnectionId: null })).toEqual(
       local
     )
-    expect(listLiveStructuredSessionsForWorktree(WORKTREE, {})).toEqual(local)
+    expect(listStructuredSessionsForWorktree(WORKTREE, {})).toEqual(local)
   })
 
   it('closes only the session on the host the removal resolved to', async () => {
@@ -458,74 +513,107 @@ describe('worktree teardown and structured agent sessions', () => {
   })
 
   it('refuses in agent-session wording when the close outlives the sweep budget', async () => {
-    // A structured close that runs out of time used to reject with the PTY timeout sentinel, which
-    // the classifier reads FIRST — so the toast blamed terminals, and the Force Delete meant to
-    // clear the wedge hit the same rejection again (#11960).
-    installHost({ records: [record('s1', WORKTREE)], closeGate: new Promise<void>(() => {}) })
-    const error = await killAllProcessesForWorktree(
-      WORKTREE,
-      destructiveDeps({ timeoutMs: 5 })
-    ).catch((thrown: Error) => thrown.message)
-    expect(error).toContain('could not confirm these closed: 1 agent session (claude)')
-    expect(isUnstoppedPtyRemovalError(error as string)).toBe(false)
-    expect(classifyWorktreeForceDeleteReason(error as string, true)).toBe('running-agent-session')
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      // A structured close that runs out of time used to reject with the PTY timeout sentinel, which
+      // the classifier reads FIRST — so the toast blamed terminals, and the Force Delete meant to
+      // clear the wedge hit the same rejection again (#11960).
+      installHost({ records: [record('s1', WORKTREE)], closeGate: new Promise<void>(() => {}) })
+      const outcome = killAllProcessesForWorktree(
+        WORKTREE,
+        destructiveDeps({ timeoutMs: 5 })
+      ).catch((thrown: Error) => thrown.message)
+      await vi.advanceTimersByTimeAsync(5)
+      const error = await outcome
+      expect(error).toContain('could not confirm these closed: 1 agent session (claude)')
+      expect(isUnstoppedPtyRemovalError(error as string)).toBe(false)
+      expect(classifyWorktreeForceDeleteReason(error as string, true)).toBe('running-agent-session')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('never wedges Force Delete on a close that will not settle', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    installHost({ records: [record('s1', WORKTREE)], closeGate: new Promise<void>(() => {}) })
-    await expect(
-      killAllProcessesForWorktree(
+    try {
+      installHost({ records: [record('s1', WORKTREE)], closeGate: new Promise<void>(() => {}) })
+      const outcome = killAllProcessesForWorktree(
         WORKTREE,
         destructiveDeps({ allowUnverifiedStop: true, timeoutMs: 5 })
       )
-    ).resolves.toMatchObject({ runtimeStopped: 0 })
-    const message = structuredSessionWarning(warn)
-    expect(message).toContain('could not confirm these closed: 1 agent session (claude)')
-    // The pin: a close that ran out of time was never watched stay attached. This warn is the only
-    // record a forced removal leaves, and the removal.ts split exists precisely so "we could not
-    // confirm" is never reported as "we saw it running" — including here.
-    expect(message).not.toContain('still attached')
-    warn.mockRestore()
+      void outcome.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(5 + ABANDONED_SWEEP_GRACE_MS)
+      await expect(outcome).resolves.toMatchObject({ runtimeStopped: 0 })
+      const message = structuredSessionWarning(warn)
+      expect(message).toContain('could not confirm these closed: 1 agent session (claude)')
+      // The pin: a close that ran out of time was never watched stay attached. This warn is the only
+      // record a forced removal leaves, and the removal.ts split exists precisely so "we could not
+      // confirm" is never reported as "we saw it running" — including here.
+      expect(message).not.toContain('still attached')
+    } finally {
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it('names only the sessions still open when the budget expires mid-close', async () => {
-    // The close loop is serial, so a deadline can land part-way through it. A fallback assembled
-    // at the deadline could only name the whole list — so a removal that had already closed the
-    // first chat still told the user both were still there, which is the exact thing this sweep
-    // exists to stop doing: never report state nobody observed.
-    installHost({
-      records: [record('s1', WORKTREE), record('s2', WORKTREE, { provider: 'codex' })],
-      closeGates: { s2: new Promise<void>(() => {}) }
-    })
-    const error = await killAllProcessesForWorktree(
-      WORKTREE,
-      destructiveDeps({ timeoutMs: 40 })
-    ).catch((thrown: Error) => thrown.message)
-    expect(error).toContain('could not confirm these closed: 1 agent session (codex)')
-    expect(error).not.toContain('claude')
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    try {
+      // The close loop is serial, so a deadline can land part-way through it. A fallback assembled
+      // at the deadline could only name the whole list — so a removal that had already closed the
+      // first chat still told the user both were still there, which is the exact thing this sweep
+      // exists to stop doing: never report state nobody observed.
+      installHost({
+        records: [record('s1', WORKTREE), record('s2', WORKTREE, { provider: 'codex' })],
+        closeGates: { s2: new Promise<void>(() => {}) }
+      })
+      const outcome = killAllProcessesForWorktree(
+        WORKTREE,
+        destructiveDeps({ timeoutMs: 40 })
+      ).catch((thrown: Error) => thrown.message)
+      await vi.advanceTimersByTimeAsync(40)
+      const error = await outcome
+      expect(error).toContain('could not confirm these closed: 1 agent session (codex)')
+      expect(error).not.toContain('claude')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('counts the closes that landed before the budget expired', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     // The other half of the same fallback: it reported zero closes, so the removal log said
     // `structured=0` for a chat it had just ended.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const slowClose = new Promise<void>((resolve) => {
       setTimeout(resolve, 300)
     })
-    installHost({
-      records: [record('s1', WORKTREE), record('s2', WORKTREE, { provider: 'codex' })],
-      closeGates: { s2: slowClose }
-    })
-    const result = await killAllProcessesForWorktree(
-      WORKTREE,
-      destructiveDeps({ allowUnverifiedStop: true, timeoutMs: 40 })
-    )
-    expect(result.structuredStopped).toBe(1)
-    expect(structuredSessionWarning(warn)).toContain(
-      'could not confirm these closed: 1 agent session (codex)'
-    )
-    warn.mockRestore()
+    try {
+      installHost({
+        records: [record('s1', WORKTREE), record('s2', WORKTREE, { provider: 'codex' })],
+        closeGates: { s2: slowClose }
+      })
+      const outcome = killAllProcessesForWorktree(
+        WORKTREE,
+        destructiveDeps({ allowUnverifiedStop: true, timeoutMs: 40 })
+      )
+      void outcome.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(300)
+      const result = await outcome
+      expect(result.structuredStopped).toBe(1)
+      expect(structuredSessionWarning(warn)).toContain(
+        'could not confirm these closed: 1 agent session (codex)'
+      )
+    } finally {
+      try {
+        await vi.advanceTimersByTimeAsync(300)
+        await slowClose
+      } finally {
+        warn.mockRestore()
+        vi.useRealTimers()
+      }
+    }
   })
 
   it('stops issuing new closes once the budget is spent', async () => {
@@ -541,16 +629,20 @@ describe('worktree teardown and structured agent sessions', () => {
       records: [record('s1', WORKTREE), record('s2', WORKTREE)],
       closeGates: { s1: firstClose }
     })
-    const error = await killAllProcessesForWorktree(
-      WORKTREE,
-      destructiveDeps({ timeoutMs: 5 })
-    ).catch((thrown: Error) => thrown.message)
-    expect(error).toContain('could not confirm these closed: 2 agent sessions (claude)')
-    releaseFirstClose()
-    await new Promise((resolve) => {
-      setTimeout(resolve, 25)
-    })
-    expect(host.closed).toEqual(['s1'])
+    vi.useFakeTimers()
+    try {
+      const outcome = killAllProcessesForWorktree(
+        WORKTREE,
+        destructiveDeps({ timeoutMs: 5 })
+      ).catch((thrown: Error) => thrown.message)
+      await vi.advanceTimersByTimeAsync(5)
+      expect(await outcome).toContain('could not confirm these closed: 2 agent sessions (claude)')
+      releaseFirstClose()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(host.closed).toEqual(['s1'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('leaves the terminals already stopped when it refuses over a stuck session', async () => {
@@ -597,6 +689,214 @@ describe('worktree teardown and structured agent sessions', () => {
     })
     releaseClose()
     await expect(removal).resolves.toMatchObject({ structuredStopped: 1 })
+  })
+
+  it('retires the chat tab of a chat that had no child to close', async () => {
+    // The orphan. Deleting a workspace from the sidebar while a different one is active leaves
+    // every chat in the target non-live — the provider child belongs to the VISIBLE pane — so the
+    // close list was empty and the sweep returned early. The durable `visibleSessionIds` reference
+    // survived both purges a removal already performs, and startup replayed it: the chat tab came
+    // back at the next launch pointing at a workspace that no longer exists.
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).resolves.toMatchObject({
+      runtimeStopped: 0
+    })
+    expect(host.closed).toEqual([])
+    expect([...host.visible]).toEqual([])
+  })
+
+  it('retires it from the live tab snapshot as well as the durable index', async () => {
+    // `setSessionTabVisibility(false)` only clears the restore index; the chat tab published on
+    // screen survives it for the rest of the app session and re-attaches the session when opened.
+    const retired: string[] = []
+    const runtime = {
+      stopTerminalsForWorktree: async () => ({ stopped: 0 }),
+      retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
+        retired.push(sessionId)
+        return true
+      }
+    } as never
+    installHost({
+      records: [record('s1', WORKTREE)],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    await killAllProcessesForWorktree(WORKTREE, { ...destructiveDeps(), runtime })
+    expect(retired).toEqual(['s1'])
+  })
+
+  it('keeps every chat tab when the removal refuses over a session it could not close', async () => {
+    // The load-bearing interaction. A refusal leaves the workspace — and its chat tabs — exactly
+    // where they were, so retirement must not have run: a destructive operation that refused and
+    // still took the user's chats away is the very harm this sweep's rollback exists to prevent.
+    // Both members are covered, the stuck one and the detached bystander beside it.
+    const host = installHost({
+      records: [record('s1', WORKTREE), record('s2', WORKTREE)],
+      stuck: new Set(['s1']),
+      detached: new Set(['s2']),
+      visible: ['s1', 's2']
+    })
+    await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).rejects.toThrow(
+      /still live: 1 agent session \(claude\)/
+    )
+    expect([...host.visible].sort()).toEqual(['s1', 's2'])
+  })
+
+  it('keeps every chat tab when the unstopped-PTY gate refuses the removal', async () => {
+    // The reason retirement is NOT done inside the structured sweep. That sweep is joined BEFORE
+    // the per-PTY verdict so a structured refusal can outrank a terminal one — which means a tab
+    // retired at the end of it would still be ahead of a gate that can refuse the whole removal,
+    // and this workspace survives with its chats gone.
+    const runtime = runtimeDouble({
+      stopTerminalsForWorktree: async (
+        _worktreeId: string,
+        options: { stopPty: (ptyId: string, stop: () => Promise<boolean>) => Promise<unknown> }
+      ) => {
+        await options.stopPty('pty-1', async () => false)
+        return { stopped: 0 }
+      }
+    })
+    const liveProvider = livePtyProvider()
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    await expect(
+      killAllProcessesForWorktree(WORKTREE, {
+        localProvider: liveProvider,
+        requirePhysicalStop: true,
+        includeProviderInventory: false,
+        includeLocalRegistry: false,
+        runtime
+      })
+    ).rejects.toThrow(/still live: pty-1/)
+    expect([...host.visible]).toEqual(['s1'])
+  })
+
+  it('retires the chat tab under force, which deletes the workspace anyway', async () => {
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    await killAllProcessesForWorktree(WORKTREE, destructiveDeps({ allowUnverifiedStop: true }))
+    expect([...host.visible]).toEqual([])
+  })
+
+  it('retires the chat tab for a folder-workspace removal too', async () => {
+    // No checkout vanishes there, but the workspace metadata does, so a republished tab at the
+    // next launch points at a workspace Orca has forgotten. That path already drops the tab for
+    // the sessions it DID close, so leaving the detached ones is the inconsistency being fixed.
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    await killAllProcessesForWorktree(WORKTREE, {
+      localProvider,
+      includeProviderInventory: false as const,
+      includeLocalRegistry: false as const,
+      closeStructuredSessions: true
+    })
+    expect([...host.visible]).toEqual([])
+  })
+
+  it('retires a live snapshot tab when folder cleanup cannot close its child', async () => {
+    const retired: string[] = []
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      stuck: new Set(['s1']),
+      visible: ['s1']
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await killAllProcessesForWorktree(WORKTREE, {
+      localProvider,
+      includeProviderInventory: false as const,
+      includeLocalRegistry: false as const,
+      closeStructuredSessions: true,
+      runtime: runtimeDouble({
+        retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
+          retired.push(sessionId)
+          return true
+        }
+      })
+    })
+    expect([...host.visible]).toEqual([])
+    expect(retired).toEqual(['s1'])
+    warn.mockRestore()
+  })
+
+  it('retires tabs before propagating a best-effort PTY sweep failure', async () => {
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    const retired: string[] = []
+    const settleModule = await import('./settle-before-deadline')
+    const settle = settleModule.settleBeforeDeadline
+    const rejection = vi
+      .spyOn(settleModule, 'settleBeforeDeadline')
+      .mockImplementation((run, fallback, deadline, failClosedError, failClosedOnRunError) => {
+        if (fallback === 0) {
+          return Promise.reject(new Error('terminal inventory unavailable'))
+        }
+        return settle(run, fallback, deadline, failClosedError, failClosedOnRunError)
+      })
+    try {
+      await expect(
+        killAllProcessesForWorktree(WORKTREE, {
+          localProvider,
+          includeProviderInventory: true,
+          includeLocalRegistry: false,
+          closeStructuredSessions: true,
+          runtime: runtimeDouble({
+            retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
+              retired.push(sessionId)
+              return true
+            }
+          })
+        })
+      ).rejects.toThrow('terminal inventory unavailable')
+    } finally {
+      rejection.mockRestore()
+    }
+    expect([...host.visible]).toEqual([])
+    expect(retired).toEqual(['s1'])
+  })
+
+  it('retires nothing on a reconciliation sweep, which deletes no workspace', async () => {
+    // Those callers repair state. They close no session, so they must retire no tab either —
+    // the workspace and its checkout are both still there.
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    await killAllProcessesForWorktree(WORKTREE, {
+      localProvider,
+      includeProviderInventory: false,
+      includeLocalRegistry: false
+    })
+    expect([...host.visible]).toEqual(['s1'])
+  })
+
+  it('leaves a same-id workspace on another host holding its chat tab', async () => {
+    // The membership filter is fenced for the same reason the close list is: `repoId::path` names
+    // a different workspace on every host, and retiring a tab for one host's workspace takes a
+    // chat tab from another's.
+    const host = installHost({
+      records: [record('s1', WORKTREE, { executionHostId: 'ssh:host-a' })],
+      detached: new Set(['s1']),
+      visible: ['s1']
+    })
+    await killAllProcessesForWorktree(WORKTREE, destructiveDeps())
+    expect([...host.visible]).toEqual(['s1'])
   })
 
   it('does not block removal when no structured host is installed', async () => {

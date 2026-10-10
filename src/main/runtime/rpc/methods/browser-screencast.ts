@@ -8,6 +8,7 @@ import { ScreencastUnsubscribe } from '../../../../shared/rpc-contract/browser-s
 export const BROWSER_SCREENCAST_METHODS = [
   defineStreamingMethod({
     name: 'browser.screencast',
+    permission: 'workspace',
     params: Screencast,
     handler: async (
       params,
@@ -26,6 +27,7 @@ export const BROWSER_SCREENCAST_METHODS = [
   }),
   defineMethod({
     name: 'browser.screencast.unsubscribe',
+    permission: 'workspace',
     params: ScreencastUnsubscribe,
     handler: async (params, { runtime }) => {
       if (!runtimeBrowserCommandsFactoryIsAvailable()) {

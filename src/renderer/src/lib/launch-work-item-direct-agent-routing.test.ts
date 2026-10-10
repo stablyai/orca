@@ -1,34 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentSessionLaunchPlan } from './agent-session-launch-plan'
+
+type BeginArgs = { beforeOpen: (sessionId: string) => boolean | void }
 
 const mocks = vi.hoisted(() => ({
-  settleStructuredAgentLaunch: vi.fn(),
-  activateAndRevealWorktree: vi.fn(),
-  preflightAgentTrust: vi.fn()
+  beginStructuredAgentSessionProvisionalLaunch:
+    vi.fn<(args: BeginArgs) => { sessionId: string; tab: { id: string } } | null>()
 }))
 
-vi.mock('@/lib/structured-agent-launch-settlement', () => ({
-  settleStructuredAgentLaunch: mocks.settleStructuredAgentLaunch
-}))
-
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: mocks.activateAndRevealWorktree
-}))
-
-vi.mock('@/lib/agent-trust-preflight', () => ({
-  preflightAgentTrust: mocks.preflightAgentTrust
-}))
-
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
-  isNativeChatTranscriptLocalReadable: vi.fn(() => true)
+vi.mock('@/lib/structured-agent-session-provisional-tab', () => ({
+  beginStructuredAgentSessionProvisionalLaunch: mocks.beginStructuredAgentSessionProvisionalLaunch
 }))
 
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
-import {
-  markDirectWorkItemAgentTrusted,
-  settleDirectWorkItemStructuredLaunch
-} from './launch-work-item-direct-agent-routing'
+import { beginDirectWorkItemStructuredLaunch } from './launch-work-item-direct-agent-routing'
 
-const structuredPlan = adoptAgentSessionLaunchVerdict({
+const structuredPlan: AgentSessionLaunchPlan = adoptAgentSessionLaunchVerdict({
+  requestId: 'request-1',
   route: 'structured-native-chat',
   agent: 'codex',
   worktreeId: 'worktree-1',
@@ -36,146 +24,60 @@ const structuredPlan = adoptAgentSessionLaunchVerdict({
   promptDelivery: 'draft'
 })
 
-const baseArgs = {
-  plan: structuredPlan,
-  worktreeId: 'worktree-1',
-  workspacePath: '/repo/worktree',
-  connectionId: null,
-  primaryTabId: null,
-  startupPlan: null,
-  launchSource: 'task_page' as const
-}
-
-describe('settleDirectWorkItemStructuredLaunch', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('preserves the editable delivery mode for the default-agent PR launch', async () => {
-    mocks.settleStructuredAgentLaunch.mockResolvedValue({
-      kind: 'structured',
-      sessionId: 'draft-session'
+describe('beginDirectWorkItemStructuredLaunch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      args.beforeOpen('session-1')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
     })
-    await expect(settleDirectWorkItemStructuredLaunch(baseArgs)).resolves.toEqual({
-      completed: true,
-      structuredLaunch: true,
-      visibilityUnknown: false,
-      failed: false,
-      primaryTabId: null
-    })
-    expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
-      'worktree-1',
-      'codex',
-      { prompt: 'Fix the route', promptDelivery: 'draft' },
-      expect.anything()
-    )
   })
 
-  it('runs trust preflight and the legacy terminal as the refusal fallback', async () => {
-    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'fallback-tab' })
-    mocks.settleStructuredAgentLaunch.mockImplementation(
-      async (_worktreeId, _agent, _options, hooks) => ({
-        kind: 'refused-then-legacy',
-        ...(await hooks.legacyFallback())
+  it('opens the provisional chat synchronously and preserves the requested tab id', () => {
+    const order: string[] = []
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockImplementation((args) => {
+      order.push('begin')
+      args.beforeOpen('session-1')
+      order.push('open')
+      return { sessionId: 'session-1', tab: { id: 'agent-session:session-1' } }
+    })
+
+    expect(
+      beginDirectWorkItemStructuredLaunch({
+        plan: structuredPlan,
+        primaryTabId: null,
+        beforeOpen: (sessionId) => {
+          order.push(`reveal:${sessionId}`)
+          return true
+        }
       })
-    )
-
-    await expect(settleDirectWorkItemStructuredLaunch(baseArgs)).resolves.toEqual({
-      completed: false,
-      structuredLaunch: false,
-      visibilityUnknown: false,
-      failed: false,
-      primaryTabId: 'fallback-tab'
-    })
-    expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
-      agent: 'codex',
-      workspacePath: '/repo/worktree',
-      connectionId: null
-    })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
-      'worktree-1',
-      expect.objectContaining({ sidebarRevealBehavior: 'auto', createNewTerminalForStartup: true })
-    )
+    ).toEqual({ completed: true, structuredLaunch: true, primaryTabId: 'agent-session:session-1' })
+    expect(order).toEqual(['begin', 'reveal:session-1', 'open'])
   })
 
-  it('reports an unknown outcome without starting a fallback terminal', async () => {
-    mocks.settleStructuredAgentLaunch.mockResolvedValue({
-      kind: 'visibility-unknown',
-      sessionId: 'session-1'
-    })
+  it('does not claim completion when the provisional opener is refused', () => {
+    mocks.beginStructuredAgentSessionProvisionalLaunch.mockReturnValue(null)
 
-    await expect(settleDirectWorkItemStructuredLaunch(baseArgs)).resolves.toEqual({
-      completed: false,
-      structuredLaunch: true,
-      visibilityUnknown: true,
-      failed: false,
-      primaryTabId: null
-    })
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['failed', { kind: 'failed', error: new Error('x') }],
-    ['cancelled', { kind: 'cancelled', sessionId: 'session-1' }]
-  ])(
-    'drops the pre-launch tab on a %s settlement so nothing is pasted into it',
-    async (_kind, settlement) => {
-      mocks.settleStructuredAgentLaunch.mockResolvedValue(settlement)
-
-      await expect(
-        settleDirectWorkItemStructuredLaunch({ ...baseArgs, primaryTabId: 'setup-shell-tab' })
-      ).resolves.toEqual({
-        completed: false,
-        structuredLaunch: true,
-        visibilityUnknown: false,
-        failed: true,
-        primaryTabId: null
+    expect(
+      beginDirectWorkItemStructuredLaunch({
+        plan: structuredPlan,
+        primaryTabId: 'setup-shell-tab',
+        beforeOpen: vi.fn()
       })
-      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    }
-  )
+    ).toEqual({ completed: false, structuredLaunch: true, primaryTabId: 'setup-shell-tab' })
+  })
 
-  it('skips the loop when the route is not structured', async () => {
-    await expect(
-      settleDirectWorkItemStructuredLaunch({
-        ...baseArgs,
-        plan: adoptAgentSessionLaunchVerdict({ ...structuredPlan, route: 'legacy-native-chat' })
+  it('skips structured opening for non-structured routes', () => {
+    expect(
+      beginDirectWorkItemStructuredLaunch({
+        plan: adoptAgentSessionLaunchVerdict({
+          ...structuredPlan,
+          route: 'terminal-tui'
+        }),
+        primaryTabId: null,
+        beforeOpen: vi.fn()
       })
-    ).resolves.toEqual({
-      completed: false,
-      structuredLaunch: false,
-      visibilityUnknown: false,
-      failed: false,
-      primaryTabId: null
-    })
-    expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
-  })
-})
-
-describe('markDirectWorkItemAgentTrusted', () => {
-  beforeEach(() => vi.clearAllMocks())
-
-  it('marks trust before a legacy terminal launch', async () => {
-    await markDirectWorkItemAgentTrusted({
-      structuredLaunch: false,
-      agent: 'codex',
-      workspacePath: '/repo/worktree',
-      connectionId: 'ssh-1'
-    })
-
-    expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
-      agent: 'codex',
-      workspacePath: '/repo/worktree',
-      connectionId: 'ssh-1'
-    })
-  })
-
-  it('leaves trust to the refusal fallback on the structured route', async () => {
-    await markDirectWorkItemAgentTrusted({
-      structuredLaunch: true,
-      agent: 'codex',
-      workspacePath: '/repo/worktree',
-      connectionId: null
-    })
-
-    expect(mocks.preflightAgentTrust).not.toHaveBeenCalled()
+    ).toEqual({ completed: false, structuredLaunch: false, primaryTabId: null })
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch).not.toHaveBeenCalled()
   })
 })

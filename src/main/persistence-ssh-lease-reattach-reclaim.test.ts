@@ -1,8 +1,9 @@
+import { closeTestStores, createStore, testState } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createStore, testState } from './persistence-test-harness'
+
 import { sshRemotePtyLeaseAllowsReattach } from '../shared/ssh-types'
 
 vi.mock('electron', () => ({
@@ -24,7 +25,8 @@ describe('ssh remote pty lease reclaim after a proven reattach', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

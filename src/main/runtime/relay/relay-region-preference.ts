@@ -1,9 +1,11 @@
+import { measureRelayRegionDecision } from './relay-region-decision'
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
 import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/secure-file'
 import { fetchRelayRegionCatalog, relayDirectorHost } from './relay-region-catalog-fetch'
+import type { RelayRegionDecision, RelayRegionWindow } from './relay-region-correction-protocol'
 import {
   logRelayRegionEvent,
   relayRegionCacheHitEvent,
@@ -43,7 +45,7 @@ const FAR_CELL_RATIO = 3
 
 const RelayRegionCacheSchema = z
   .object({
-    v: z.literal(1),
+    v: z.literal(2),
     directorUrl: z.string().max(2_048),
     // Null records a deliberate "no hint"; the field is absent only for a region.
     region: RelayRegionSchema.nullable(),
@@ -53,6 +55,11 @@ const RelayRegionCacheSchema = z
   .strict()
 
 type RelayRegionCache = z.infer<typeof RelayRegionCacheSchema>
+
+// Sign-out removes what Relay use left behind; the next Relay session re-measures.
+export function clearRelayRegionPreferenceCache(userDataPath: string): void {
+  rmSync(join(userDataPath, RELAY_REGION_CACHE_FILENAME), { force: true })
+}
 
 type RelayRegionPreferenceOptions = {
   directorUrl: string
@@ -73,6 +80,14 @@ export class RelayRegionPreferenceResolver {
 
   constructor(options: RelayRegionPreferenceOptions) {
     this.options = options
+  }
+
+  measureDecision(window: RelayRegionWindow): Promise<RelayRegionDecision> {
+    return measureRelayRegionDecision(window, {
+      diagnosticOverride: Boolean(this.overrideRegion()),
+      now: this.options.now ?? Date.now,
+      measure: () => this.probeCatalog(this.options.fetch ?? globalThis.fetch)
+    })
   }
 
   async resolve(): Promise<RelayRegion | undefined> {
@@ -233,7 +248,7 @@ export class RelayRegionPreferenceResolver {
   ): void {
     try {
       writeSecureJsonFile(this.cachePath(), {
-        v: 1,
+        v: 2,
         directorUrl: this.options.directorUrl,
         region: entry.region,
         ...(entry.latencyMs === undefined ? {} : { latencyMs: entry.latencyMs }),
@@ -266,23 +281,6 @@ export class RelayRegionPreferenceResolver {
           this.options.requestTimeoutMs ?? PROBE_TIMEOUT_MS
         ))
     )
-  }
-}
-
-export function createRelayRegionPreferenceReader(input: {
-  authConfig: { relayDirectorUrl: string }
-  userDataPath: string
-}): {
-  resolvePreferredRegion: () => Promise<RelayRegion | undefined>
-  noteAssignedCell: (cellUrl: string) => void
-} {
-  const resolver = new RelayRegionPreferenceResolver({
-    directorUrl: input.authConfig.relayDirectorUrl,
-    userDataPath: input.userDataPath
-  })
-  return {
-    resolvePreferredRegion: () => resolver.resolve(),
-    noteAssignedCell: (cellUrl) => void resolver.invalidateIfAssignedCellIsFar(cellUrl)
   }
 }
 

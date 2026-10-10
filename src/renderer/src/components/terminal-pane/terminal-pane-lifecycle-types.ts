@@ -1,3 +1,5 @@
+import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
+import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { IDisposable } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
@@ -19,6 +21,7 @@ import type { ReplayingPanesRef } from './replay-guard'
 import type { TerminalLinkActionRequester } from './terminal-link-action-request'
 import type { TerminalLinkRoutingPreferenceRequester } from './terminal-url-link-hit-testing'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
+import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 
 export type TerminalPaneStartup = Exclude<PtyPaneStartup, null>
 
@@ -91,14 +94,16 @@ export type UseTerminalPaneLifecycleDeps = {
     directSshRetryAttemptId?: DirectSshPaneRetryAttemptId
   ) => void
   markWorktreeUnread: (worktreeId: string) => void
-  markTerminalTabUnread: (tabId: string) => void
-  markTerminalPaneUnread: (paneKey: string) => void
+  markTerminalTabUnread: (tabId: string, reason: AgentAttentionUnreadReason) => void
+  markTerminalPaneUnread: (paneKey: string, reason: AgentAttentionUnreadReason) => void
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
+    ptyId?: string | null
+    workspaceOwner?: NotificationWorkspaceOwner
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: ParsedAgentStatusPayload
@@ -118,7 +123,7 @@ export type UseTerminalPaneLifecycleDeps = {
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setExpandedPane: (paneId: number | null) => void
   syncExpandedLayout: () => void
-  persistLayoutSnapshot: () => void
+  persistLayoutSnapshot: (intent?: PaneLayoutEditIntent) => void
   setPaneTitles: React.Dispatch<React.SetStateAction<Record<number, string>>>
   paneTitlesRef: React.RefObject<Record<number, string>>
   setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>

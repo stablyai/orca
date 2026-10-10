@@ -57,10 +57,6 @@ export function isLocalSshBrowserPartition(partition: string): boolean {
   return preparedByPartition.has(partition)
 }
 
-export function localSshBrowserPartitionTargetId(partition: string): string | null {
-  return preparedByPartition.get(partition)?.targetId ?? null
-}
-
 export function localSshBrowserPartitionForSession(webSession: Session): string | null {
   return partitionBySession.get(webSession) ?? null
 }
@@ -155,9 +151,8 @@ async function prepareFresh(input: {
     proxyEndpoint,
     dependencies: {
       getSession: (partition) => session.fromPartition(partition),
-      setupPolicies: ({ partition, browserProfileId }) => {
-        browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId)
-      },
+      setupPolicies: ({ partition, browserProfileId }) =>
+        browserSessionRegistry.setupRoutePartitionPolicies(partition, browserProfileId),
       clearPolicies: ({ partition }) => {
         browserSessionRegistry.clearRoutePartitionPolicies(partition)
       }
@@ -219,8 +214,3 @@ export async function releaseLocalSshBrowserPartitionsForTarget(targetId: string
 }
 
 registerBrowserRoutePartitionRetentionProbe((partition) => preparedByPartition.has(partition))
-
-export function resetLocalSshBrowserPartitionsForTests(): void {
-  preparedByIdentityKey.clear()
-  preparedByPartition.clear()
-}

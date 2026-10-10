@@ -1,22 +1,14 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { Terminal } from '@xterm/xterm'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { PtyPaneStartup } from './pty-connection-types'
 import type { PtyTransport } from './pty-transport'
 import type { PaneCwdMap } from './resolve-split-cwd'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { RESET_KITTY_KEYBOARD_PROTOCOL } from '../../../../shared/terminal-mode-reset-profiles'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { resolveLocalhostHttpLinkDisplayUrl } from '@/lib/http-link-routing'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { PRIMARY_SELECTION_MAX_LENGTH } from '@/lib/primary-selection'
-
-/** Writes a transport-agnostic interrupt reset without running xterm work inline. */
-export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
-  writeTerminalOutput(terminal, RESET_KITTY_KEYBOARD_PROTOCOL, {
-    foreground: true,
-    latencySensitive: false
-  })
-}
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -55,7 +47,7 @@ export function reportActiveRendererPtyForPane(
 ): void {
   for (const [paneId, transport] of paneTransports) {
     const ptyId = transport.getPtyId()
-    if (!ptyId || ptyId.startsWith('remote:')) {
+    if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       continue
     }
     window.api.pty.setActiveRendererPty?.(ptyId, activePaneId === paneId)
@@ -180,15 +172,15 @@ export function resolveTerminalHomePathFromEnv(
 }
 
 export function paneOwnsQueuedStartup(
-  paneStartup: object | null | undefined,
-  queuedStartup: object | null | undefined
+  paneStartup: PtyPaneStartup | null | undefined,
+  queuedStartup: PtyPaneStartup | null | undefined
 ): boolean {
   return queuedStartup != null && paneStartup === queuedStartup
 }
 
 export function createQueuedStartupConsumer(
-  paneStartup: object | null | undefined,
-  queuedStartup: object | null | undefined,
+  paneStartup: PtyPaneStartup | null | undefined,
+  queuedStartup: PtyPaneStartup | null | undefined,
   consume: () => void,
   isStillQueued: () => boolean
 ): (() => void) | undefined {

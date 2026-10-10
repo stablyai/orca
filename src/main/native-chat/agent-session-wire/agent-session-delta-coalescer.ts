@@ -32,6 +32,8 @@ export type AgentSessionDeltaSnapshot = {
 export type AgentSessionDeltaCoalescerDeps = {
   /** Called with the FULL text accumulated for the key, not the increment. */
   emit: (key: string, text: string, snapshot: AgentSessionDeltaSnapshot) => unknown
+  /** False accepts a skipped snapshot; sink refusal is reported by emit. */
+  shouldEmit?: (key: string, textLength: number) => boolean
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -56,6 +58,10 @@ export type AgentSessionDeltaCoalescer = {
   dispose: () => void
   /** Bounded last-known state for terminalizing a rejected completion. */
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  /** Streams with text not yet emitted, in arrival order, for a caller that writes them itself. */
+  dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
+  /** The caller wrote this stream's current text itself; nothing is owed until it grows. */
+  markFlushed: (key: string) => void
 }
 
 function defaultSchedule(run: () => void, ms: number): () => void {
@@ -78,6 +84,7 @@ export function createAgentSessionDeltaCoalescer(
     {
       chunks: string[]
       retainedBytes: number
+      textLength: number
       observedBytes: number
       truncated: boolean
       dirty: boolean
@@ -90,6 +97,10 @@ export function createAgentSessionDeltaCoalescer(
   const flushKey = (key: string): boolean => {
     const stream = streams.get(key)
     if (!stream?.dirty) {
+      return true
+    }
+    if (deps.shouldEmit?.(key, stream.textLength) === false) {
+      stream.dirty = false
       return true
     }
     const text = stream.chunks.join('')
@@ -155,6 +166,7 @@ export function createAgentSessionDeltaCoalescer(
         stream = {
           chunks: [],
           retainedBytes: 0,
+          textLength: 0,
           observedBytes: 0,
           truncated: false,
           dirty: false
@@ -165,7 +177,8 @@ export function createAgentSessionDeltaCoalescer(
       } else if (deps.isProtected?.(key)) {
         evictable.delete(key)
       }
-      stream.observedBytes += Buffer.byteLength(delta, 'utf8')
+      const deltaBytes = Buffer.byteLength(delta, 'utf8')
+      stream.observedBytes += deltaBytes
       if (!stream.truncated) {
         const availableTotal = Math.max(0, maxTotalRetainedBytes - totalRetainedBytes)
         const streamLimit = Math.min(maxRetainedBytes, stream.retainedBytes + availableTotal)
@@ -173,9 +186,13 @@ export function createAgentSessionDeltaCoalescer(
           stream.chunks,
           stream.retainedBytes,
           delta,
+          deltaBytes,
           streamLimit
         )
         totalRetainedBytes += next.retainedBytes - stream.retainedBytes
+        stream.textLength = next.truncated
+          ? (next.chunks[0]?.length ?? 0)
+          : stream.textLength + delta.length
         stream.chunks = next.chunks
         stream.retainedBytes = next.retainedBytes
         stream.truncated = next.truncated
@@ -213,6 +230,27 @@ export function createAgentSessionDeltaCoalescer(
             truncated: stream.truncated
           }
         : null
+    },
+    dirty: () =>
+      [...streams].flatMap(([key, stream]) =>
+        stream.dirty
+          ? [
+              {
+                key,
+                snapshot: {
+                  text: stream.chunks.join(''),
+                  observedBytes: stream.observedBytes,
+                  truncated: stream.truncated
+                }
+              }
+            ]
+          : []
+      ),
+    markFlushed: (key) => {
+      const stream = streams.get(key)
+      if (stream) {
+        stream.dirty = false
+      }
     }
   }
 }
@@ -221,29 +259,46 @@ function appendWithinUtf8ByteLimit(
   current: string[],
   currentBytes: number,
   delta: string,
+  deltaBytes: number,
   maxBytes: number
 ): { chunks: string[]; retainedBytes: number; truncated: boolean } {
   const available = Math.max(0, maxBytes - currentBytes)
-  const deltaBuffer = Buffer.from(delta, 'utf8')
-  if (deltaBuffer.byteLength <= available) {
+  if (deltaBytes <= available) {
     // The caller owns the per-stream array; append in place so each token is
     // amortized O(1) instead of copying the complete prefix on every delta.
-    current.push(delta)
+    if (delta.length > 0) {
+      current.push(delta)
+    }
     return {
       chunks: current,
-      retainedBytes: currentBytes + deltaBuffer.byteLength,
+      retainedBytes: currentBytes + deltaBytes,
       truncated: false
     }
   }
+  return truncateStreamPrefix(current, delta, maxBytes)
+}
+
+function truncateStreamPrefix(
+  current: string[],
+  delta: string,
+  maxBytes: number
+): { chunks: string[]; retainedBytes: number; truncated: boolean } {
   const marker = Buffer.from(AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER, 'utf8')
   const headBytes = Math.max(0, maxBytes - marker.byteLength)
-  const combined = Buffer.concat([
-    ...current.map((chunk) => Buffer.from(chunk, 'utf8')),
-    deltaBuffer
-  ])
-  let end = Math.min(combined.byteLength, headBytes)
-  while (end > 0 && (combined[end] & 0b1100_0000) === 0b1000_0000) {
-    end -= 1
+  const boundedHead = Number.isSafeInteger(maxBytes) && maxBytes >= 0
+  const combined = boundedHead
+    ? Buffer.allocUnsafe(headBytes)
+    : Buffer.concat([
+        ...current.map((chunk) => Buffer.from(chunk, 'utf8')),
+        Buffer.from(delta, 'utf8')
+      ])
+  let end = boundedHead
+    ? writeStreamPrefix(combined, current, delta)
+    : Math.min(combined.byteLength, headBytes)
+  if (!boundedHead) {
+    while (end > 0 && (combined[end] & 0b1100_0000) === 0b1000_0000) {
+      end -= 1
+    }
   }
   const visibleMarker = marker.subarray(0, Math.min(marker.byteLength, maxBytes - end))
   const text = combined.subarray(0, end).toString('utf8') + visibleMarker.toString('utf8')
@@ -252,4 +307,20 @@ function appendWithinUtf8ByteLimit(
     retainedBytes: Buffer.byteLength(text, 'utf8'),
     truncated: true
   }
+}
+
+function writeStreamPrefix(buffer: Buffer, chunks: string[], delta: string): number {
+  let end = 0
+  for (const chunk of chunks) {
+    if (end === buffer.length) {
+      return end
+    }
+    const written = buffer.write(chunk, end, buffer.length - end, 'utf8')
+    end += written
+    // Encode each chunk independently to preserve split-surrogate replacement.
+    if (written < Buffer.byteLength(chunk, 'utf8')) {
+      return end
+    }
+  }
+  return end + buffer.write(delta, end, buffer.length - end, 'utf8')
 }

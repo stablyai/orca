@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { triggerError } from '../platform/haptics'
@@ -13,7 +13,10 @@ import {
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
-import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
+import {
+  useMobileNativeChatSendError,
+  mobileNativeChatSendErrorMessage
+} from './use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
@@ -27,6 +30,7 @@ export function useMobileSessionNativeChatDictation(
     worktreeId,
     client,
     connState,
+    agentSessionHostSupport,
     setInput,
     liveInputTerminalHandles,
     activeHandle,
@@ -72,11 +76,25 @@ export function useMobileSessionNativeChatDictation(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    agentSessionHostSupport,
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
+  const sendErrorMessage = useMemo(
+    () =>
+      mobileNativeChatSendErrorMessage(
+        { message: nativeChatSendError.message, failure: nativeChatSendError.failure },
+        nativeChatController.nativeChatSession.messages
+      ),
+    [
+      nativeChatSendError.message,
+      nativeChatSendError.failure,
+      nativeChatController.nativeChatSession.messages
+    ]
+  )
   nativeChatSendError.bannerMountedRef.current = showNativeChat
+  nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
   const nativeChatOverlayInputLockReason =
     activeSessionTab?.type === 'agent-session'
       ? connState === 'connected'
@@ -88,6 +106,26 @@ export function useMobileSessionNativeChatDictation(
     onBlur: resetLiveInputFocus,
     surfaceKey: JSON.stringify([routeKey, activeHandle, showNativeChat, liveInputEnabled])
   })
+
+  /**
+   * One policy for every dictation failure, whichever entry point sees it: `onError` for a
+   * dictation already underway, `start`'s rejection for the tap that never got one. Written twice,
+   * only the first knew about the setup sheet, so a desktop refusing the start with
+   * `voice_dictation_disabled` showed the user that code as a toast.
+   */
+  const reportDictationFailure = useCallback(
+    (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err)
+      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
+      if (isDictationSetupRequiredError(message)) {
+        setShowDictationSetup(true)
+        return
+      }
+      triggerError()
+      showToast(message)
+    },
+    [setShowDictationSetup, showToast]
+  )
 
   const dictation = useMobileDictation({
     client,
@@ -130,13 +168,7 @@ export function useMobileSessionNativeChatDictation(
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
-      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
-      if (isDictationSetupRequiredError(err.message)) {
-        setShowDictationSetup(true)
-        return
-      }
-      triggerError()
-      showToast(err.message)
+      reportDictationFailure(err)
     }
   })
 
@@ -149,10 +181,9 @@ export function useMobileSessionNativeChatDictation(
       if (dictationRouteContextRef.current === routeContext) {
         dictationRouteContextRef.current = null
       }
-      triggerError()
-      showToast(err instanceof Error ? err.message : String(err))
+      reportDictationFailure(err)
     })
-  }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
+  }, [activeHandle, dictation, liveInputTerminalHandles, reportDictationFailure])
 
   const cancelDictation = useCallback(() => {
     dictationRouteContextRef.current = null
@@ -212,7 +243,7 @@ export function useMobileSessionNativeChatDictation(
   }, [diffComments])
   return {
     nativeChatScopeKey,
-    nativeChatSendError,
+    nativeChatSendError: { ...nativeChatSendError, message: sendErrorMessage },
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     nativeChatInputLeaseReadyRef,

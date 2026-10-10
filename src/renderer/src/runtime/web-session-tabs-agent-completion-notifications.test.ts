@@ -22,12 +22,10 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests
 } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
-import {
-  applyWebSessionTabsSnapshot,
-  applyWebSessionTabsStorePatch,
-  decideWebSessionTabsSnapshot,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from './web-session-tabs-sync'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
+import { applyWebSessionTabsStorePatch } from './web-session-tabs-sync/store-patch'
+import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 
 const ENVIRONMENT_ID = 'web-env-1'
 const WORKTREE_ID = 'repo::/worktree'

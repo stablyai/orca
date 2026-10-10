@@ -4,19 +4,17 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
 import {
-  agentTabsDefaultToNativeChat,
-  prefersStructuredNativeChatByDefault,
+  STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from './protocol-version'
+import {
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
 
-const ON = {
-  experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true
-}
+const ON = { experimentalNativeChat: true }
 
 function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   return resolveStructuredNativeChatSupport({
@@ -28,26 +26,16 @@ function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
   })
 }
 
-describe('the settings default', () => {
-  it('needs all three toggles for structured, and the first two for native chat', () => {
-    expect(prefersStructuredNativeChatByDefault(ON)).toBe(true)
-    expect(prefersStructuredNativeChatByDefault({ ...ON, experimentalNativeChat: false })).toBe(
-      false
-    )
-    expect(
-      prefersStructuredNativeChatByDefault({ ...ON, openAgentTabsInChatByDefault: false })
-    ).toBe(false)
-    expect(
-      prefersStructuredNativeChatByDefault({ ...ON, experimentalStructuredNativeChat: false })
-    ).toBe(false)
-    expect(agentTabsDefaultToNativeChat({ ...ON, experimentalStructuredNativeChat: false })).toBe(
-      true
-    )
+describe('the Chat UI switch', () => {
+  it('selects structured chat from the one persisted setting', () => {
+    const oldSelectorOff = { experimentalNativeChat: true, openAgentTabsInChatByDefault: false }
+    expect(isNativeChatEnabled(ON)).toBe(true)
+    expect(isNativeChatEnabled({ experimentalNativeChat: false })).toBe(false)
+    expect(isNativeChatEnabled(oldSelectorOff)).toBe(true)
   })
 
   it.each([null, undefined, {}])('reads %s as no preference', (settings) => {
-    expect(prefersStructuredNativeChatByDefault(settings)).toBe(false)
-    expect(agentTabsDefaultToNativeChat(settings)).toBe(false)
+    expect(isNativeChatEnabled(settings)).toBe(false)
   })
 })
 
@@ -56,30 +44,19 @@ describe('per-launch structured feasibility', () => {
     expect(support({ agent })).toEqual({ supported: true })
   })
 
-  it.each([
+  const blockerCases: [string, Partial<StructuredNativeChatSupportInput>, string][] = [
     ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
     ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
-    ['a floating workspace', { workspaceKind: 'floating' }, 'floating-workspace'],
-    ['a custom TUI launch', { requiresTuiLaunchCustomization: true }, 'tui-launch-customization'],
+    ['a custom start directory', { startsOutsideWorkspaceRoot: true }, 'custom-start-directory'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],
     ['a missing capability', { hostCapabilities: [] }, 'runtime-capability'],
     ['an unanswered host', { hostCapabilities: null }, 'runtime-capability-unknown']
-  ] as [string, Partial<StructuredNativeChatSupportInput>, string][])(
-    'names %s as the blocker',
-    (_name, overrides, blocker) => {
-      expect(support(overrides)).toEqual({ supported: false, blocker })
-    }
-  )
+  ]
 
-  // The client cannot see whether the host can read a provider child's start time, so neither
-  // provider is refused here on platform; agentSession.createSupport answers that at create time.
-  it.each(['claude', 'codex'] as const)(
-    'leaves a Windows %s launch to the executing host',
-    (agent) => {
-      expect(support({ agent })).toEqual({ supported: true })
-    }
-  )
+  it.each(blockerCases)('names %s as the blocker', (_name, overrides, blocker) => {
+    expect(support(overrides)).toEqual({ supported: false, blocker })
+  })
 
   it('blocks a WSL or repair-required project runtime', () => {
     expect(
@@ -113,7 +90,50 @@ describe('per-launch structured feasibility', () => {
     ).toEqual({ supported: false, blocker: 'project-runtime' })
   })
 
-  it('supports a folder workspace without widening floating scope', () => {
-    expect(support({ workspaceKind: 'folder' })).toEqual({ supported: true })
+  // Why floating is supported: its configured directory resolves like any other workspace, so a
+  // session can be filed under it. Workspace kind no longer refuses anything on its own.
+  it.each(['folder', 'floating', 'git-worktree'] as const)(
+    'supports a local %s workspace',
+    (workspaceKind) => {
+      expect(support({ workspaceKind })).toEqual({ supported: true })
+    }
+  )
+})
+
+describe('agents beyond Claude and Codex', () => {
+  const REGISTERED = [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
+  ]
+
+  it.each(['grok', 'pi'] as const)(
+    '%s is offered only by a host that advertises and lists it',
+    (agent) => {
+      expect(
+        support({ agent, hostCapabilities: REGISTERED, hostStructuredAgents: [agent] })
+      ).toEqual({ supported: true })
+    }
+  )
+
+  it('are not offered by a host that does not advertise its registered agents', () => {
+    expect(support({ agent: 'grok', hostStructuredAgents: ['grok'] })).toEqual({
+      supported: false,
+      blocker: 'runtime-capability'
+    })
+  })
+
+  it('are not offered when the host did not list them', () => {
+    expect(support({ agent: 'grok', hostCapabilities: REGISTERED })).toEqual({
+      supported: false,
+      blocker: 'agent-without-structured-session'
+    })
+    expect(
+      support({ agent: 'grok', hostCapabilities: REGISTERED, hostStructuredAgents: ['claude'] })
+    ).toEqual({ supported: false, blocker: 'agent-without-structured-session' })
+  })
+
+  it('leave Claude and Codex offered by hosts that predate the capability', () => {
+    expect(support({ agent: 'claude' })).toEqual({ supported: true })
+    expect(support({ agent: 'codex' })).toEqual({ supported: true })
   })
 })

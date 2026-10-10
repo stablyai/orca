@@ -1,28 +1,36 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
+  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { isSubagentGroupBlock } from '../../../shared/native-chat-types'
-import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat-background-task-row'
+import { isBackgroundTaskBlock, isSubagentGroupBlock } from '../../../shared/native-chat-types'
+import type {
+  NativeChatBackgroundTaskBlock,
+  NativeChatSubagentEntry
+} from '../../../shared/native-chat-types'
 import {
   codexSubagentGroupBody,
   codexSubagentGroupIdentity
 } from '../../codex/codex-subagent-roster'
 import type { openAgentSessionJournal } from './journal-store-factory'
-import { createTrackedJournalOpener } from './journal-store-test-open'
-import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { lostLiveWorkJournalBody, staleSubagentRosterRevisions } from './journal-subagent-liveness'
+import { endedUnseenMessageBody } from './journal-terminal-settlement'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'ws-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 const GROUP_ID = 'thread-1:turn-1'
@@ -40,7 +48,7 @@ const journals = createTrackedJournalOpener()
 async function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
   return journals.open({
     identity: IDENTITY,
-    journalDir: root,
+    stateDirectory: root,
     now: tick,
     mintEpoch: () => `epoch-${clock}`,
     ...overrides
@@ -52,6 +60,34 @@ function rosterRow(agents: NativeChatSubagentEntry[]) {
   return {
     identity: codexSubagentGroupIdentity(GROUP_ID),
     body: codexSubagentGroupBody(GROUP_ID, agents)
+  }
+}
+
+function backgroundTaskBlock(
+  overrides: Partial<NativeChatBackgroundTaskBlock> = {}
+): NativeChatBackgroundTaskBlock {
+  return {
+    type: 'background-task',
+    taskId: 'task-1',
+    kind: 'command',
+    label: 'sleep 20',
+    state: 'working',
+    startedAt: 10,
+    ...overrides
+  }
+}
+
+function backgroundTaskRow(block = backgroundTaskBlock()) {
+  return {
+    identity: {
+      provider: 'orca' as const,
+      clientMessageId: `claude-background-task:${block.taskId}`
+    },
+    body: {
+      kind: 'message' as const,
+      role: 'system' as const,
+      blocks: [{ type: 'text' as const, text: backgroundTaskFallbackText(block) }, block]
+    }
   }
 }
 
@@ -68,6 +104,10 @@ function renderItem(agents: NativeChatSubagentEntry[]): AgentJournalRenderItem {
 
 function rosterOf(body: AgentJournalRenderItem['body']): NativeChatSubagentEntry[] {
   return body.kind === 'message' ? (body.blocks.find(isSubagentGroupBlock)?.agents ?? []) : []
+}
+
+function taskOf(body: AgentJournalRenderItem['body']): NativeChatBackgroundTaskBlock | undefined {
+  return body.kind === 'message' ? body.blocks.find(isBackgroundTaskBlock) : undefined
 }
 
 function twinOf(body: AgentJournalRenderItem['body']): string | undefined {
@@ -104,6 +144,23 @@ describe('staleSubagentRosterRevisions', () => {
     expect(twinOf(revisions[0]!.body)).toBe('Ran 2 subagents (1 unverifiable)')
   })
 
+  it('settles a background task the previous host left live, and moves the twin with it', () => {
+    const row = backgroundTaskRow()
+    const revisions = staleSubagentRosterRevisions([
+      {
+        itemId: agentJournalItemKey(row.identity),
+        revision: 1,
+        body: row.body,
+        sequence: 2,
+        observedAt: 1
+      }
+    ])
+
+    expect(revisions).toHaveLength(1)
+    expect(taskOf(revisions[0]!.body)).toMatchObject({ taskId: 'task-1', state: 'unverifiable' })
+    expect(twinOf(revisions[0]!.body)).toBe('Background command "sleep 20" stopped reporting')
+  })
+
   // The child stopped being observable at an unknown moment. A stamp taken now
   // would report the time the app was down as how long the child ran.
   it('records no terminal timestamp for a child whose run length is unknown', () => {
@@ -112,6 +169,21 @@ describe('staleSubagentRosterRevisions', () => {
     ])
 
     expect(rosterOf(revisions[0]!.body)[0]).not.toHaveProperty('settledAt')
+  })
+
+  it('records no terminal timestamp for a background task whose run length is unknown', () => {
+    const row = backgroundTaskRow(backgroundTaskBlock({ settledAt: 20 }))
+    const revisions = staleSubagentRosterRevisions([
+      {
+        itemId: agentJournalItemKey(row.identity),
+        revision: 1,
+        body: row.body,
+        sequence: 2,
+        observedAt: 1
+      }
+    ])
+
+    expect(taskOf(revisions[0]!.body)).not.toHaveProperty('settledAt')
   })
 
   it('owes nothing for a roster whose children all settled', () => {
@@ -148,13 +220,84 @@ describe('staleSubagentRosterRevisions', () => {
 })
 
 describe('journal reopen after the writing host is gone', () => {
+  it('writes composed roster, task, reasoning and text-twin corrections as one settlement step', async () => {
+    const journal = await open()
+    const roster = rosterRow([
+      { id: 'working', label: 'read', state: 'working' },
+      { id: 'done', label: 'write', state: 'completed', settledAt: 20 }
+    ])
+    const task = backgroundTaskRow()
+    if (roster.body.kind !== 'message') {
+      throw new Error('a subagent roster is a message row')
+    }
+    const body: AgentJournalItemBody = {
+      ...roster.body,
+      state: 'running',
+      blocks: [...roster.body.blocks, ...task.body.blocks]
+    }
+    await journal.appendItem(roster.identity, body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    const published: ReturnType<typeof journal.snapshot>[] = []
+    journal.observeCommits(() => published.push(journal.snapshot()))
+    const resolve = () => {
+      const current = journal.itemBody(agentJournalItemKey(roster.identity))
+      const lost = current && lostLiveWorkJournalBody(current)
+      if (!lost) {
+        return []
+      }
+      return [
+        {
+          kind: 'item' as const,
+          identity: roster.identity,
+          body: endedUnseenMessageBody(lost) ?? lost,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
+    }
+    await journal.appendSteps([
+      {
+        kind: 'settlement',
+        batch: { settlementId: 'composed:0', fence: 0, recovered: true, resolve }
+      }
+    ])
+    const settled = journal.snapshot()
+    const next = settled.items.at(-1)!.body
+    expect(next).toMatchObject({ state: 'completed' })
+    expect(rosterOf(next)).toMatchObject([
+      { state: 'unverifiable' },
+      { state: 'completed', settledAt: 20 }
+    ])
+    expect(taskOf(next)).toMatchObject({ state: 'unverifiable' })
+    expect(
+      next.kind === 'message' &&
+        next.blocks.filter((block) => block.type === 'text').map((block) => block.text)
+    ).toEqual([
+      'Ran 2 subagents (1 unverifiable)',
+      'Background command "sleep 20" stopped reporting'
+    ])
+    expect(published).toEqual([settled])
+    await journal.appendSteps([
+      {
+        kind: 'settlement',
+        batch: { settlementId: 'composed:0', fence: 0, recovered: true, resolve }
+      }
+    ])
+    expect(journal.snapshot()).toEqual(settled)
+    expect(published).toEqual([settled])
+  })
+
   it('settles a persisted working roster to unverifiable, while the live row still reads working', async () => {
     const live = await open()
     const row = rosterRow([
       { id: 'a', label: 'read_readme', state: 'working', startedAt: 10 },
       { id: 'b', label: 'read_package', state: 'working', startedAt: 10 }
     ])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     // Still the writing host: it can see the children, so the row says so.
     const beforeRestart = live.snapshot().items.at(-1)!
@@ -163,10 +306,12 @@ describe('journal reopen after the writing host is gone', () => {
 
     // The host dies without ever settling them — no `ended`, so no session sweep.
     await live.close()
+    clock += 3_600_000
 
     const reopened = await open()
     const afterRestart = reopened.snapshot().items.at(-1)!
     expect(afterRestart.itemId).toBe(beforeRestart.itemId)
+    expect(afterRestart.recovered).toBe(true)
     expect(rosterOf(afterRestart.body)).toMatchObject([
       { id: 'a', state: 'unverifiable' },
       { id: 'b', state: 'unverifiable' }
@@ -177,7 +322,10 @@ describe('journal reopen after the writing host is gone', () => {
   it('revises the row in place rather than appending a second one', async () => {
     const live = await open()
     const row = rosterRow([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const before = live.snapshot().items.length
     await live.close()
 
@@ -186,10 +334,32 @@ describe('journal reopen after the writing host is gone', () => {
     expect(reopened.snapshot().items.at(-1)?.revision).toBe(2)
   })
 
+  it('settles a persisted working background task to unverifiable', async () => {
+    const live = await open()
+    const row = backgroundTaskRow()
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    const beforeRestart = live.snapshot().items.at(-1)!
+    expect(taskOf(beforeRestart.body)).toMatchObject({ state: 'working' })
+    expect(twinOf(beforeRestart.body)).toBe('Started background command "sleep 20"')
+    await live.close()
+
+    const reopened = await open()
+    const afterRestart = reopened.snapshot().items.at(-1)!
+    expect(afterRestart.itemId).toBe(beforeRestart.itemId)
+    expect(taskOf(afterRestart.body)).toMatchObject({ state: 'unverifiable' })
+    expect(twinOf(afterRestart.body)).toBe('Background command "sleep 20" stopped reporting')
+  })
+
   it('writes nothing on a second reopen once every child is settled', async () => {
     const live = await open()
     const row = rosterRow([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await live.close()
 
     const once = await open()

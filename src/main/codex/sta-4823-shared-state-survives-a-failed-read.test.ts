@@ -368,7 +368,7 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
 
     // Asserted against the file rather than the new observation API, so this
     // anchor still means something when the fix is reverted.
-    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 3 })
   })
 
   it('still replaces a fully-read baseline rejected by the JSON structure limit', () => {
@@ -377,7 +377,7 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
 
     snapshotCodexRuntimeSettingsBaseline(runtimeHomePath)
 
-    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 2 })
+    expect(JSON.parse(realFs.readFileSync(baselinePath(), 'utf-8'))).toMatchObject({ version: 3 })
   })
 
   it('rebuilds an oversized baseline previously produced from a bounded runtime config', () => {

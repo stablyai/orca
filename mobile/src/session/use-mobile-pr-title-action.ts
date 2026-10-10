@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { fetchUpdatePRTitle, type GitHubPrMutationOutcome } from './github-pr-mutations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { buildUpdatePRTitleParams } from './pr-title-edit'
@@ -27,10 +28,7 @@ export type PrTitleActionInput = {
   mutations?: PrTitleMutations
 }
 
-function realMutations(
-  client: Pick<RpcClient, 'sendRequest'>,
-  worktreeId: string
-): PrTitleMutations {
+function realMutations(client: RpcOperationSender, worktreeId: string): PrTitleMutations {
   return {
     updateTitle: (args) => fetchUpdatePRTitle(client, worktreeId, args)
   }

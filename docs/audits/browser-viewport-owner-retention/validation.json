@@ -1,0 +1,36 @@
+{
+  "scope": "Actual manager and lifecycle; controlled Electron/CDP ports; no native guest, heap/RSS or incident attribution",
+  "baseline": {
+    "total": 12,
+    "failedOwnershipCases": 7,
+    "passedControls": 5
+  },
+  "fixed": {
+    "total": 42,
+    "passed": 42,
+    "testFiles": 4
+  },
+  "independentReview": {
+    "candidateTestsPassed": 12,
+    "findings": "No blocker; three map mutation guards preserve current guest and promise ownership"
+  },
+  "typecheck": {
+    "node": "passed after correcting fixture-only protected-map reads and array typing",
+    "cli": "passed",
+    "web": "passed"
+  },
+  "quality": {
+    "fullFileScans": 5,
+    "codeFiles": 3,
+    "newDiagnostics": 0
+  },
+  "sourceSha256": {
+    "src/main/browser/browser-manager-viewport.ts": "a839fd89cc5e687782323036ca3a8dd9de79bd838e77dd863a5e1ae101424b4c",
+    "src/main/browser/browser-manager-viewport-ownership.test.ts": "ec17f2acd6b766166d13cafc2ecd33f1d4f0de7a4b4e8896d0746b2d528341da"
+  },
+  "limitations": [
+    "Pending CDP response schedules are injected, not an affected-host capture",
+    "Retired map values are booleans; native objects and process RSS were not measured",
+    "Historical viewport source is exact; surrounding dependencies execute current audit versions"
+  ]
+}

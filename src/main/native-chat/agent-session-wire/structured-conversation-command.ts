@@ -1,6 +1,3 @@
-import { createHash } from 'node:crypto'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
-import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session-host-authority'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
@@ -9,31 +6,45 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import {
-  attachFingerprintFields,
-  type AgentSessionAttachParams
-} from './structured-agent-session-attach'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
+import { agentSessionOperationKey } from '../../../shared/agent-session-operation-ledger'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
+import { sendPreparation } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
-import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
+import {
+  agentSessionFailureWords,
+  type AgentSessionFailureWordsContext
+} from '../../../shared/agent-session-failure-words'
+import {
+  providerContextBoundaryForClear,
+  type AgentSessionConversationClear
+} from '../../runtime/agent-session-conversation-command-record'
+
+/** A command's `error` is the sentence its row shows. */
+export function conversationCommandFailure(
+  failure: AgentSessionFailureFact | undefined,
+  context: AgentSessionFailureWordsContext = {}
+) {
+  if (!failure) {
+    return {}
+  }
+  const words = agentSessionFailureWords(failure, { ...context, surface: 'row' })
+  return { error: words.text, failure: words.failure }
+}
 
 export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
+  /** /compact only: wait as a card while the agent works, as a queued send does. */
+  delivery?: 'queue-if-active'
+  /** Host-local, set by the client-facing command RPC as for an ordinary send. */
+  userSend?: true
 }
-export type ConversationReplacement = {
-  sourceSessionId: string
-  sessionId: string
-  workspaceId: string
-  agent: 'claude' | 'codex'
-}
-
+/** Stop the provider and record a fresh-context boundary in the same conversation. */
 export function runStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
-  host: Pick<StructuredAgentSessionHost, 'attach' | 'flushStreamedEvents'>,
   caller: StructuredAgentSessionCaller,
   params: ConversationCommandParams
 ): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
@@ -46,228 +57,94 @@ export function runStructuredConversationCommand(
       ? record
       : null
   }
-  return context.serialize(sessionId, () =>
-    admitAndRunAgentSessionMutation({
+  return context.serialize(sessionId, async () => {
+    let clear: AgentSessionConversationClear | null = null
+    const result = await admitAndRunAgentSessionMutation({
       store,
       adapter: context.deps.adapter,
+      agents: context.deps.agents,
+      logger: context.deps.logger,
       callerKey: caller.callerKey,
       envelope,
-      journal: context.sessions.get(sessionId)?.journal,
+      // Starts the agent only to settle a rewind in doubt, as a send does; a /clear itself starts nothing.
+      prepareSession: sendPreparation(context, envelope, { refusesInRun: true }),
+      journal: () => context.sessions.get(sessionId)?.journal,
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,
       plan: {
         method: 'agentSession.conversationCommand',
         fields: { command },
+        // Written to the conversation, not the agent, so whoever owns the agent does not matter.
+        conversationWrite: true,
         recoverUnknownFromDurableState: true,
-        settledOutcome: (value) => ({ status: 'succeeded', sessionId, conversationCommand: value }),
+        settlesWithWrite: true,
+        successReceipt: () =>
+          store.conversationReceipts.clear(
+            () => {
+              if (!clear) {
+                throw new Error('agent_session_clear_not_completed')
+              }
+              return clear
+            },
+            { callerKey: caller.callerKey, operationId: clientOperationId }
+          ),
         replay: (_ctx, outcome) => {
           if (outcome.status === 'succeeded' && outcome.conversationCommand) {
             return outcome.conversationCommand
           }
           const prior = matching()
-          if (prior?.phase === 'committed') {
-            return prior
-          }
-          if (command === 'compact' && prior && outcome.status !== 'unknown') {
-            return {
-              command,
-              state: 'unknown',
-              error: 'Compaction completion is unconfirmed; it was not run again.'
-            }
-          }
-          return outcome.status === 'succeeded' && command === 'compact'
-            ? { command, state: 'completed' }
-            : null
+          return prior?.phase === 'committed' ? prior : null
         },
-        rerunWhenReplayMissing: () => command === 'clear' && matching()?.phase === 'prepared',
+        // The commit is the only write, so a clear with no committed answer changed nothing.
+        rerunWhenReplayMissing: () => true,
         run: async (ctx) => {
-          await host.flushStreamedEvents(sessionId)
           const record = store.getRecord(sessionId)!
-          const prior = matching()
-          const blocked =
-            prior?.phase === 'prepared' && command === 'clear'
-              ? null
-              : conversationCommandBlocked(ctx, record)
+          const blocked = conversationCommandBlocked(
+            ctx,
+            record,
+            context.readChildWork(sessionId),
+            context.sessions.get(sessionId)?.child ? undefined : 'at-rest'
+          )
           if (blocked) {
-            return {
-              ok: false,
-              refusal: { code: 'agent_session_operation_invalid', message: blocked }
-            }
+            return { ok: false, refusal: blocked }
           }
-          const replacementSessionId =
-            command === 'clear'
-              ? (prior?.replacementSessionId ??
-                `clear-${createHash('sha256')
-                  .update(JSON.stringify([sessionId, caller.callerKey, clientOperationId]))
-                  .digest('hex')
-                  .slice(0, 40)}`)
-              : undefined
-          const prepared = {
-            command,
-            runtimeFence: ctx.fence,
+          await context.stopAgent(sessionId, { cause: 'context-clear' })
+          const stopped = store.getRecord(sessionId)!
+          const fence = stopped.lease.runtimeFence
+          const rechecked = conversationCommandBlocked(
+            { ...ctx, fence },
+            stopped,
+            context.readChildWork(sessionId),
+            'at-rest'
+          )
+          if (rechecked) {
+            return { ok: false, refusal: rechecked }
+          }
+          const completed: AgentSessionConversationClear['command'] = {
+            command: 'clear',
+            runtimeFence: fence,
             operationId: clientOperationId,
             callerKey: caller.callerKey,
-            phase: 'prepared' as const,
-            state: 'unknown' as const,
-            ...(replacementSessionId ? { replacementSessionId } : {})
+            phase: 'committed',
+            state: 'completed'
           }
-          let effectiveOptions = record.options
-          if (command === 'clear' && !prior) {
-            try {
-              const options = await ctx.adapter.readOptions?.({ sessionId, fence: ctx.fence })
-              effectiveOptions = {
-                ...record.options,
-                ...(options
-                  ? {
-                      model: options.current.model,
-                      ...(options.current.effort ? { effort: options.current.effort } : {})
-                    }
-                  : {})
-              }
-            } catch {
-              return {
-                ok: false,
-                refusal: {
-                  code: 'agent_session_operation_invalid',
-                  message:
-                    'Could not read the current session configuration. Try again when the provider is connected.'
-                }
-              }
-            }
+          clear = { sessionId, fence, command: completed, now: context.now() }
+          if (!ctx.operationReceipt) {
+            throw new Error('agent_session_clear_receipt_missing')
           }
-          if (effectiveOptions && command === 'clear') {
-            await ctx.persistOptions(effectiveOptions)
-          }
-          await store.setConversationCommand(sessionId, ctx.fence, prepared)
-          let error: string | undefined
-          if (command === 'clear' && replacementSessionId) {
-            const attach: AgentSessionAttachParams = {
-              envelope: {
-                sessionId: replacementSessionId,
-                clientOperationId: `${parseAgentSessionOperationTimestamp(clientOperationId)}-${createHash(
-                  'sha256'
-                )
-                  .update(JSON.stringify([sessionId, caller.callerKey, clientOperationId]))
-                  .digest('hex')
-                  .slice(0, 32)}`,
-                expectedRuntimeFence: null,
-                payloadFingerprint: ''
-              },
-              location: record.location,
-              accountHome: record.accountHome,
-              provider: record.provider,
-              agent: record.provider,
-              runtimeKind: 'native',
-              launchArgs: record.launchArgs,
-              options: effectiveOptions
-            }
-            attach.envelope.payloadFingerprint = computeAgentSessionPayloadFingerprint({
-              method: 'agentSession.attach',
-              sessionId: replacementSessionId,
-              fields: attachFingerprintFields(attach)
-            })
-            const acquired = await host.attach(caller, attach)
-            if (!acquired.ok) {
-              if (
-                !isDefinitiveAgentSessionCreateRefusal(acquired.refusal.code) &&
-                store.getRecord(replacementSessionId)?.lease.claimStatus !== 'released'
-              ) {
-                throw new Error(acquired.refusal.message)
-              }
-              const failed = {
-                ...prepared,
-                replacementSessionId: undefined,
-                phase: 'committed' as const,
-                state: 'completed' as const,
-                error: acquired.refusal.message.slice(0, 4096)
-              }
-              await store.setConversationCommand(sessionId, ctx.fence, failed)
-              return { ok: true, value: failed }
-            }
-          } else {
-            if (!ctx.adapter.compact) {
-              throw new Error('Compaction is unavailable for this provider.')
-            }
-            const identity = {
-              provider: 'orca' as const,
-              clientMessageId: `compact:${clientOperationId}`
-            }
-            await ctx.journal.appendItem(
-              identity,
-              {
-                kind: 'status',
-                text: 'Compacting conversation…',
-                turnLifecycle: { turnId: `compact:${clientOperationId}`, state: 'running' }
-              },
-              { fence: ctx.fence }
-            )
-            ctx.publish()
-            try {
-              error = (
-                await ctx.adapter.compact({
-                  turnId: `compact:${clientOperationId}`,
-                  sessionId,
-                  fence: ctx.fence,
-                  onLateResult: (result) =>
-                    context.serialize(sessionId, async () => {
-                      if (
-                        matching()?.phase !== 'prepared' ||
-                        context.sessions.get(sessionId)?.journal !== ctx.journal
-                      ) {
-                        return
-                      }
-                      await host.flushStreamedEvents(sessionId)
-                      await ctx.journal.appendItem(
-                        identity,
-                        { kind: 'status', text: result.error ?? 'Conversation compacted.' },
-                        { fence: ctx.fence }
-                      )
-                      await store.setConversationCommand(sessionId, ctx.fence, {
-                        ...prepared,
-                        phase: 'committed',
-                        state: 'completed',
-                        ...(result.error ? { error: result.error.slice(0, 4096) } : {})
-                      })
-                      await store.recordOperationOutcome({
-                        callerKey: caller.callerKey,
-                        operationId: clientOperationId,
-                        outcome: {
-                          status: 'succeeded',
-                          sessionId,
-                          conversationCommand: matching()!
-                        }
-                      })
-                      ctx.publish()
-                    })
-                })
-              ).error
-              await host.flushStreamedEvents(sessionId)
-            } catch (cause) {
-              await ctx.journal.appendItem(
-                identity,
-                { kind: 'status', text: 'Compaction completion is unconfirmed.' },
-                { fence: ctx.fence }
-              )
-              ctx.publish()
-              throw cause
-            }
-            await ctx.journal.appendItem(
-              identity,
-              { kind: 'status', text: error ?? 'Conversation compacted.' },
-              { fence: ctx.fence }
-            )
-            ctx.publish()
-          }
-          const completed = {
-            ...prepared,
-            phase: 'committed' as const,
-            state: 'completed' as const,
-            ...(error ? { error: error.slice(0, 4096) } : {})
-          }
-          await store.setConversationCommand(sessionId, ctx.fence, completed)
+          await ctx.journal.context.clear(
+            providerContextBoundaryForClear(clear),
+            ctx.operationReceipt,
+            agentSessionOperationKey(caller.callerKey, clientOperationId)
+          )
           return { ok: true, value: completed }
         }
       }
     })
-  )
+    return result.ok &&
+      'runtimeFence' in result.value &&
+      typeof result.value.runtimeFence === 'number'
+      ? { ...result, fence: result.value.runtimeFence }
+      : result
+  })
 }

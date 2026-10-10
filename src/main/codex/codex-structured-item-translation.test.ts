@@ -806,7 +806,7 @@ describe('codex item bodies', () => {
     // Both the row label and the run header read top-level input keys only, so a
     // shape whose detail sits inside `action` renders as the input's raw JSON.
     const url = 'https://example.com/docs/page'
-    const shapes: [string, unknown, string, string][] = [
+    const cases: [string, unknown, string, string][] = [
       ['started', null, '', ''],
       [
         'search',
@@ -823,7 +823,7 @@ describe('codex item bodies', () => {
       ],
       ['other', { type: 'other' }, 'other', '']
     ]
-    for (const [name, action, label, brief] of shapes) {
+    for (const [name, action, label, brief] of cases) {
       // Codex leaves the item's own `query` empty on most completed searches.
       const query = name === 'search' || name === 'findInPage' ? 'a sample query' : ''
       const input = toolCallInput({ type: 'webSearch', id: 'w', query, action })
@@ -848,6 +848,34 @@ describe('codex item bodies', () => {
     expect(codexJournalItem({ type: 'sleep', id: 's-1', durationMs: 20_000 })).toEqual({
       body: null,
       handled: true
+    })
+  })
+
+  it('keeps streamed reasoning as a message and leaves streamed plans as status', () => {
+    expect(codexStreamingJournalItem({ type: 'reasoning', id: 'r' }, 'thinking')).toEqual({
+      handled: true,
+      body: {
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [{ type: 'text', text: 'thinking' }]
+      }
+    })
+    expect(codexStreamingJournalItem({ type: 'reasoning', id: 'r' }, ' \n ')).toEqual({
+      handled: true,
+      body: null
+    })
+    expect(codexStreamingJournalItem({ type: 'plan', id: 'p' }, 'First\nSecond')).toEqual({
+      handled: true,
+      body: { kind: 'status', text: 'First\nSecond', presentation: 'plan-document' }
+    })
+  })
+
+  it('omits blank reasoning and preserves the plan document body', () => {
+    expect(codexItemBody({ type: 'reasoning', id: 'r', text: ' \n ' })).toBeNull()
+    expect(codexItemBody({ type: 'plan', id: 'p', text: 'First\nSecond' })).toEqual({
+      kind: 'status',
+      text: 'First\nSecond',
+      presentation: 'plan-document'
     })
   })
 

@@ -45,6 +45,7 @@ export function SessionRowTrailingActions({
   detailsId,
   detailsTooltip,
   resumeDisabled,
+  resumeHidden = false,
   resumeLabel,
   worktreeInfo,
   onToggleDetails,
@@ -54,6 +55,7 @@ export function SessionRowTrailingActions({
   onResume,
   onContinueInNewSession,
   onResumeInNewChat,
+  onResumeInNewCli,
   onCopyResume,
   onCopyId,
   onCopyPath,
@@ -68,6 +70,7 @@ export function SessionRowTrailingActions({
   detailsId: string
   detailsTooltip: string
   resumeDisabled: boolean
+  resumeHidden?: boolean
   resumeLabel: string
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   onToggleDetails: () => void
@@ -78,15 +81,16 @@ export function SessionRowTrailingActions({
   onContinueInNewSession?: () => void
   /** Passed through to the overflow menu only; the resting row keeps its two-icon budget. */
   onResumeInNewChat?: () => void
+  onResumeInNewCli?: () => void
   onCopyResume?: () => void
   onCopyId: () => void
-  onCopyPath: () => void
+  onCopyPath?: () => void
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
-  onRequestDelete: () => void
+  onRequestDelete?: () => void
 }) {
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
 
@@ -140,32 +144,34 @@ export function SessionRowTrailingActions({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={resumeLabel}
-              disabled={resumeDisabled}
-              draggable={false}
-              onClick={(event) => {
-                event.stopPropagation()
-                onResume()
-              }}
-              data-testid="ai-vault-session-resume"
-              // Why: on touch (no hover) these controls stay visible and
-              // tappable; on hover-capable devices the session row gates both
-              // visibility and hit targets until it is hovered.
-              className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
-            >
-              <Play className="size-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {resumeLabel}
-          </TooltipContent>
-        </Tooltip>
+        {!resumeHidden ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={resumeLabel}
+                disabled={resumeDisabled}
+                draggable={false}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onResume()
+                }}
+                data-testid="ai-vault-session-resume"
+                // Why: on touch (no hover) these controls stay visible and
+                // tappable; on hover-capable devices the session row gates both
+                // visibility and hit targets until it is hovered.
+                className="can-hover:pointer-events-none group-hover/session-row:pointer-events-auto group-focus-within/session-row:pointer-events-auto focus-visible:pointer-events-auto"
+              >
+                <Play className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {resumeLabel}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         {onContinueInNewSession ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -174,8 +180,8 @@ export function SessionRowTrailingActions({
                 variant="ghost"
                 size="icon-xs"
                 aria-label={translate(
-                  'components.agentSessionContinuation.continueInNewSession',
-                  'Continue in New Session…'
+                  'components.agentSessionContinuation.handOffToAnotherAgent',
+                  'Hand Off to Another Agent'
                 )}
                 draggable={false}
                 onClick={(event) => {
@@ -190,8 +196,8 @@ export function SessionRowTrailingActions({
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
               {translate(
-                'components.agentSessionContinuation.continueInNewSession',
-                'Continue in New Session…'
+                'components.agentSessionContinuation.handOffToAnotherAgent',
+                'Hand Off to Another Agent'
               )}
             </TooltipContent>
           </Tooltip>
@@ -256,10 +262,12 @@ export function SessionRowTrailingActions({
         <DropdownMenuContent align="end">
           <SessionActionMenuItems
             resumeDisabled={resumeDisabled}
+            resumeHidden={resumeHidden}
             resumeLabel={resumeLabel}
             onResume={onResume}
             onContinueInNewSession={onContinueInNewSession}
             onResumeInNewChat={onResumeInNewChat}
+            onResumeInNewCli={onResumeInNewCli}
             onJumpToOriginalPane={onJumpToOriginalPane}
             showJumpToWorktree={showJumpToWorktree}
             onJumpToWorktree={onJumpToWorktree}

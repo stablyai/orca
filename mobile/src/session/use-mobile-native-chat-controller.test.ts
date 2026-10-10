@@ -17,6 +17,7 @@ const viewMode = { isTabChatView: (_tabId: string) => true }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
 const structuredSendWithOutcome = vi.fn()
 const structuredCancel = vi.fn()
+const structuredCancelPrompt = vi.fn(async () => true)
 const structuredRespondPermission = vi.fn(async () => true)
 const structuredRespondQuestion = vi.fn(async () => true)
 const structuredSetOption = vi.fn(async () => true)
@@ -32,6 +33,7 @@ const structuredOptionSnapshot: SessionOptionDescriptor[] = [
       choices: [{ value: 'gpt-fast', label: 'GPT Fast' }]
     },
     valueSource: 'reported',
+    transport: 'agent-session',
     settable: true
   }
 ]
@@ -88,8 +90,10 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
     session: structuredSessionState,
     ...structuredActivity,
+    queued: { cards: [], send: vi.fn(), delete: vi.fn(), edit: vi.fn() },
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
+    cancelPrompt: structuredCancelPrompt,
     permission: structuredPermission,
     question: structuredQuestion,
     optionSnapshot: structuredOptionSnapshot,
@@ -156,6 +160,7 @@ import {
   type MobileNativeChatController
 } from './use-mobile-native-chat-controller'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
 
 const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
 
@@ -225,6 +230,10 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     act(() => renderer?.unmount())
     renderer = null
     controller = null
+  })
+
+  it('leaves structured prompt cancellation unavailable on the legacy bridge lane', () => {
+    expect(controller?.handleNativeChatCancelPrompt).toBeUndefined()
   })
 
   it('clears an orphaned image paste before a question-card answer (#10228)', async () => {
@@ -660,10 +669,10 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
   }
 
   beforeEach(() => {
+    mobileNativeChatPromptDismissals.clearForTests()
     viewMode.isTabChatView = () => true
     setTranscript('ready')
-    promptsState.ask = PROMPT
-    promptsState.detectedAsk = PROMPT
+    Object.assign(promptsState, { ask: PROMPT, detectedAsk: PROMPT })
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -673,8 +682,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     act(() => renderer?.unmount())
     renderer = null
     controller = null
-    promptsState.ask = null
-    promptsState.detectedAsk = null
+    Object.assign(promptsState, { ask: null, detectedAsk: null })
     setTranscript('ready', 0)
     viewMode.isTabChatView = () => true
     activeTab.id = 'tab-1'

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { translate } from '../../i18n/i18n'
@@ -66,7 +65,6 @@ export function MobilePairingConnectionOptions({
   relayMintRetrying?: boolean
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
   const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
@@ -219,21 +217,19 @@ export function MobilePairingConnectionOptions({
           >
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
               {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
-                'Relay only — LAN does not need an account.'
+                'auto.components.settings.MobilePairingConnectionOptions.relaySignInDetail',
+                'Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account.'
               )}
             </p>
             <Button
               type="button"
               size="sm"
               className="shrink-0"
-              disabled={connecting}
               onClick={() => {
                 onChange('automatic')
                 void connect()
               }}
             >
-              {connecting ? <Loader2 className="animate-spin" /> : null}
               {reconnectRequired
                 ? translate(
                     'auto.components.settings.MobilePairingConnectionOptions.signInAgain',

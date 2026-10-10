@@ -1,8 +1,11 @@
 import { connect, type Socket } from 'node:net'
 import { DaemonProtocolError } from './types'
+import { ensureDaemonSocketDir } from './daemon-socket-endpoint-path'
 
 export function connectDaemonSocket(socketPath: string, timeoutMs: number): Promise<Socket> {
   return new Promise((resolve, reject) => {
+    // Throws inside the executor, so an untrusted relocated dir rejects before the hello token is sent.
+    ensureDaemonSocketDir(socketPath)
     const socket = connect(socketPath)
     const cleanup = (): void => {
       clearTimeout(timer)

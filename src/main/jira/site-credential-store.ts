@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getSecretStore } from '../../shared/secret-store'
+import { readCredentialFileProtection } from '../credential-file-protection'
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
@@ -189,6 +191,11 @@ export function readToken(siteId: string): string | null {
     }
     return null
   }
+}
+
+/** How a site's stored token sits on disk, or null when none is stored. */
+export function getSiteTokenProtection(siteId: string): SecretAtRestProtection | null {
+  return readCredentialFileProtection(getTokenPath(siteId))
 }
 
 export function saveToken(siteId: string, apiToken: string): void {

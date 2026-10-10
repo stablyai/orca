@@ -36,15 +36,17 @@ export type WorkerTerminalListingSnapshot =
   | { createdAt: string; dispatchId: string }
 
 export function listWorkerTerminalReleaseBacklog(
-  this: OrchestrationDb
+  this: OrchestrationDb,
+  limit?: number
 ): WorkerTerminalResourceRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: LIMIT only bounds unchanged rows selected from the resource table.
   return this.db
     .prepare(
       `SELECT * FROM worker_terminal_resources
         WHERE release_state IN ('requested', 'releasing')
-        ORDER BY release_requested_at ASC`
+        ORDER BY release_requested_at ASC LIMIT ?`
     )
-    .all() as WorkerTerminalResourceRow[]
+    .all(limit ?? -1) as WorkerTerminalResourceRow[]
 }
 
 export const WORKER_LIST_CURSOR_EXPIRED_MESSAGE =
@@ -130,9 +132,10 @@ export function listWorkerTerminalResources(
   }
   if (params.after) {
     // Order and fence must share one key, or a row created between pages moves across the cut.
+    // Pages walk down from the newest row, so the continuation takes what sits below the anchor.
     // A pre-v3 cursor is resolved from its anchor row; when a reset deleted that row
-    // `rowid > NULL` matched nothing and the page read as a finished, empty inventory.
-    where.push('d.rowid > ?')
+    // `rowid < NULL` matched nothing and the page read as a finished, empty inventory.
+    where.push('d.rowid < ?')
     values.push(resolveAnchorRowId.call(this, params.after, params.runId))
   }
   let detailWhere = where
@@ -155,6 +158,7 @@ export function listWorkerTerminalResources(
   if (detailLimit !== undefined) {
     detailValues.push(detailLimit)
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this cast is unchanged and matches every other row cast in db/; the gate flags it only because this diff edits the ORDER BY inside its span.
   const rows = this.db
     .prepare(
       `SELECT d.id AS dispatch_id,
@@ -181,7 +185,7 @@ export function listWorkerTerminalResources(
          LEFT JOIN tasks t ON t.id = d.task_id AND t.run_id = d.run_id
          LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = d.id
         ${detailWhere.length > 0 ? `WHERE ${detailWhere.join(' AND ')}` : ''}
-        ORDER BY d.rowid ASC${limitClause}`
+        ORDER BY d.rowid DESC${limitClause}`
     )
     .all(...detailValues) as {
     dispatch_id: string

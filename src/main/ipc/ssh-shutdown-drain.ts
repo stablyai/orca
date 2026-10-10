@@ -69,7 +69,10 @@ function sshShutdownTasks(targetIds: readonly string[]): SshShutdownTask[] {
         targetId,
         promise: teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
       })),
-    { targetId: '*transports', promise: connectionManager?.disconnectAll() ?? Promise.resolve() }
+    {
+      targetId: '*transports',
+      promise: connectionManager?.disconnectAll() ?? Promise.resolve()
+    }
   ]
 }
 

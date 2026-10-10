@@ -2,6 +2,7 @@ import type { GitHubCreateIssueFields, GitHubIssueUpdate } from '../../shared/is
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubPRReviewCommentInput } from '../../shared/github/comment-types'
 import type { Repo } from '../../shared/repo-types'
+import type { LocalProjectGhExecOptions } from '../project-runtime-git-options'
 import {
   addIssueComment,
   addPRReviewComment,
@@ -10,7 +11,7 @@ import {
   updateIssue
 } from '../github/client'
 
-type LocalGitArgs = [] | [{ wslDistro?: string }]
+type LocalGitArgs = [] | [LocalProjectGhExecOptions]
 
 type RuntimeGitHubIssueCommentCommandsDeps = {
   resolveRepo: (selector: string) => Promise<Repo>
@@ -49,7 +50,8 @@ export class RuntimeGitHubIssueCommentCommands {
       number,
       updates,
       repo.connectionId ?? null,
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      repo.issueSourcePreference
     )
   }
 
@@ -57,7 +59,8 @@ export class RuntimeGitHubIssueCommentCommands {
     repoSelector: string,
     number: number,
     body: string,
-    prRepo?: GitHubOwnerRepo | null
+    prRepo?: GitHubOwnerRepo | null,
+    type?: 'issue' | 'pr'
   ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return addIssueComment(
@@ -66,7 +69,9 @@ export class RuntimeGitHubIssueCommentCommands {
       body,
       repo.connectionId ?? null,
       prRepo ?? null,
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      // Why: the issue source selector only scopes issues; PR comments keep their resolution.
+      type === 'pr' ? undefined : repo.issueSourcePreference
     )
   }
 

@@ -12,7 +12,12 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
-import { structuredSessionRandomUuid } from './mobile-structured-agent-session-rpc'
+import {
+  structuredAgentSessionCreate,
+  structuredAgentSupportProbe
+} from './mobile-session-launch-operations'
+import { structuredSessionRandomUuid } from './structured-session-operation-id'
+import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 
 type StructuredCreateSupport = {
   supported?: boolean
@@ -82,7 +87,7 @@ export async function createMobileStructuredAgentSession(
   let supportResponse
   for (let attempt = 0; ; attempt += 1) {
     try {
-      supportResponse = await client.sendRequest('agentSession.createSupport', { worktree, agent })
+      supportResponse = await structuredAgentSupportProbe.request(client, { worktree, agent })
     } catch (error) {
       const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
       if (
@@ -118,16 +123,17 @@ export async function createMobileStructuredAgentSession(
   }
 
   const params = createParamsFor(agent, worktree)
+  rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
   try {
-    response = await client.sendRequest('agentSession.create', params, {
+    response = await structuredAgentSessionCreate.request(client, params, {
       timeoutMs: 15_000,
       budgetSpansConnect: true
     })
   } catch {
     // Replay the durable envelope once so a lost acknowledgement cannot create a sibling.
     try {
-      response = await client.sendRequest('agentSession.create', params, {
+      response = await structuredAgentSessionCreate.request(client, params, {
         timeoutMs: 15_000,
         budgetSpansConnect: true
       })

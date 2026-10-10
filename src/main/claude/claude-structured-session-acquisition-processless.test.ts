@@ -13,7 +13,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   workspaceId: 'workspace-1',
   hostId: 'local',
   agent: 'claude',
-  providerHandle: { kind: 'opaque', agent: 'claude', value: 'pending' }
+  providerHandle: null
 }
 
 describe('Claude structured processless acquisition', () => {
@@ -24,18 +24,20 @@ describe('Claude structured processless acquisition', () => {
       _launch,
       handlers = {}
     ) => {
+      // A failed spawn reports its error on a later tick, as child_process does.
+      setTimeout(() => handlers.onFault?.(fault), 0)
       const connection: ClaudeStreamJsonConnection = {
         pid: undefined,
         closed: true,
-        exitVerdict: { root: 'processless', tree: 'exited' },
+        exitVerdict: { root: 'exited', tree: 'exited', processless: true },
         initializationResult: async () => {
-          handlers.onFault?.(fault)
           throw fault
         },
         getSettings: async () => ({}),
+        getContextUsage: async () => ({}),
         supportedModels: async () => [],
         interrupt: async () => undefined,
-        cancelAsyncMessage: async () => {},
+        cancelAsyncMessage: async () => false,
         setModel: async () => {},
         setPermissionMode: async () => {},
         applyFlagSettings: async () => {},
@@ -53,7 +55,8 @@ describe('Claude structured processless acquisition', () => {
         claudeConfigDir: '/accounts/claude',
         providerSessionId: PROVIDER_SESSION_ID,
         resumeLeafUuid: null,
-        resumed: false
+        resumesTranscript: false,
+        continuesChain: false
       }),
       openConnection
     })

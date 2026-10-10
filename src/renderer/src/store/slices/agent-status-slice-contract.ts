@@ -1,7 +1,6 @@
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
-  AgentLaunchConfigStatusMetadata,
   AgentProviderSessionRecordMetadata,
   AgentProviderSessionRouting,
   AgentProviderSessionTiming,
@@ -61,7 +60,7 @@ export type AgentStatusSlice = {
   recentlyClosedAgentStatusTabIds: Record<string, true>
 
   /** Exact pane authorities retired while sibling panes in the tab stay live. */
-  recentlyRetiredAgentStatusPaneKeys: Record<string, true>
+  recentlyRetiredAgentStatusPaneKeys: Record<string, true | string>
 
   retireAgentPaneAuthority: (
     paneKey: string,
@@ -111,9 +110,6 @@ export type AgentStatusSlice = {
   ) => void
   getAgentLaunchConfigForStatusEntry: (
     entry: AgentStatusEntry
-  ) => SleepingAgentLaunchConfig | undefined
-  getAgentLaunchConfigForStatusMetadata: (
-    metadata: AgentLaunchConfigStatusMetadata
   ) => SleepingAgentLaunchConfig | undefined
   clearAgentLaunchConfig: (paneKey: string) => void
 

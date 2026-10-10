@@ -1,3 +1,4 @@
+import { createObserveTerminalGitHubPullRequestLink } from './worktrees/session/worktree-terminal-reference'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { WorktreeSlice } from './worktree-helpers'
@@ -37,8 +38,7 @@ import { createSetWorktreesPinnedAndReveal } from './worktrees/session/worktree-
 import {
   createBumpWorktreeActivity,
   createClearWorktreeUnread,
-  createMarkWorktreeUnread,
-  createObserveTerminalGitHubPullRequestLink
+  createMarkWorktreeUnread
 } from './worktrees/session/worktree-unread-activity'
 import {
   createMarkWorktreeVisited,
@@ -52,6 +52,7 @@ import {
   createGetKnownWorktreeById,
   createPurgeWorktreeTerminalState,
   createRemountTerminalTabForRecovery,
+  createSettleTerminalTabRecovery,
   createSetRenamingWorktreeId
 } from './worktrees/session/worktree-slice-lookups'
 import { createPurgeStaleRuntimeHostState } from './worktrees/teardown/purge-stale-runtime-host-state'
@@ -100,7 +101,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   updateWorktreesMeta: createUpdateWorktreesMeta(set, get),
   setWorktreesPinnedAndReveal: createSetWorktreesPinnedAndReveal(set, get),
   markWorktreeUnread: createMarkWorktreeUnread(set, get),
-  observeTerminalGitHubPullRequestLink: createObserveTerminalGitHubPullRequestLink(set, get),
+  observeTerminalGitHubPullRequestLink: createObserveTerminalGitHubPullRequestLink(get),
   clearWorktreeUnread: createClearWorktreeUnread(set, get),
   bumpWorktreeActivity: createBumpWorktreeActivity(set, get),
   markWorktreeVisited: createMarkWorktreeVisited(set, get),
@@ -108,6 +109,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   seedActiveWorktreeLastVisitedIfMissing: createSeedActiveWorktreeLastVisitedIfMissing(set, get),
   setRenamingWorktreeId: createSetRenamingWorktreeId(set, get),
   remountTerminalTabForRecovery: createRemountTerminalTabForRecovery(set, get),
+  settleTerminalTabRecovery: createSettleTerminalTabRecovery(set, get),
   setActiveWorktree: createSetActiveWorktree(set, get),
   setActiveFolderWorkspace: createSetActiveFolderWorkspace(set, get),
   allWorktrees: createAllWorktrees(set, get),

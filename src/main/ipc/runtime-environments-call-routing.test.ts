@@ -3,10 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../shared/protocol-version'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import * as environmentStore from '../../shared/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
@@ -414,6 +412,42 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'repo.list'
     ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects an import mutation when its capability-proven runtime was replaced before routing', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    environmentStore.markEnvironmentUsed(userDataPath, added.environment.id, {
+      runtimeId: 'runtime-replacement'
+    })
+
+    const call = handler<
+      {
+        selector: string
+        method: string
+        expectedEnvironmentRuntimeId?: string
+      },
+      RuntimeRpcResponse<unknown>
+    >('runtimeEnvironments:call')
+    await expect(
+      call(null, {
+        selector: 'desk',
+        method: 'files.writeBase64',
+        expectedEnvironmentRuntimeId: 'runtime-capability-proven'
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_environment_changed',
+        message: 'Runtime environment identity changed; refresh and try again'
+      }
+    })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
 
   it.each([
