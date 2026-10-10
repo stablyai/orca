@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import type * as ManagedAgentHookTargets from '../../shared/managed-agent-hook-targets'
 
 const {
   detectInstalledAgents,
@@ -26,7 +27,8 @@ vi.mock('../ipc/preflight-wsl-agent-detection', () => ({ detectWslCommandsOnPath
 vi.mock('../agent-hooks/local-agent-cli-presence', () => ({ detectLocalManagedAgentCliPresence }))
 vi.mock('../project-runtime-git-options', () => ({ resolveLocalProjectRuntimeForRepo }))
 vi.mock('../ipc/command-path-resolver', () => ({ isCommandOnLocalPath }))
-vi.mock('../../shared/managed-agent-hook-targets', () => ({
+vi.mock('../../shared/managed-agent-hook-targets', async (importOriginal) => ({
+  ...(await importOriginal<typeof ManagedAgentHookTargets>()),
   getManagedAgentHookTarget: () => null
 }))
 
@@ -98,17 +100,20 @@ describe('validateOrchestrationAgentLauncherForRepo', () => {
     ).resolves.toBeUndefined()
   })
 
-  it('accepts a native bare override with the inherited PATH', async () => {
-    const runtime = createRuntime({ agentCmdOverrides: { amp: 'managed-amp' } })
-    detectInstalledAgents.mockResolvedValue([])
-    isCommandOnLocalPath.mockResolvedValue(true)
+  it.each(['amp', 'aider'] as const)(
+    'accepts a native %s override with inherited PATH',
+    async (agent) => {
+      const runtime = createRuntime({ agentCmdOverrides: { [agent]: 'managed-agent' } })
+      detectInstalledAgents.mockResolvedValue([])
+      isCommandOnLocalPath.mockResolvedValue(true)
 
-    await runtime.validateOrchestrationAgentLauncherForRepo('amp', 'repo-1')
-    expect(isCommandOnLocalPath).toHaveBeenCalledWith(
-      'managed-amp',
-      expect.objectContaining({ env: expect.objectContaining({ PATH: expect.any(String) }) })
-    )
-  })
+      await runtime.validateOrchestrationAgentLauncherForRepo(agent, 'repo-1')
+      expect(isCommandOnLocalPath).toHaveBeenCalledWith(
+        'managed-agent',
+        expect.objectContaining({ env: expect.objectContaining({ PATH: expect.any(String) }) })
+      )
+    }
+  )
 
   it('probes a WSL override strictly and accepts it when found', async () => {
     const runtime = createRuntime({ agentCmdOverrides: { codex: '~/bin/codex' } })
