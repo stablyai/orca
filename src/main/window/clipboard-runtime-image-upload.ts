@@ -28,13 +28,18 @@ async function saveClipboardImageBase64InRuntime(
   userDataPath: string,
   runtimeEnvironmentId: string,
   contentBase64: string,
-  connectionId: string | null
+  connectionId: string | null,
+  discardable = false
 ): Promise<string> {
   const startResponse = await callRuntimeEnvironment(
     userDataPath,
     runtimeEnvironmentId,
     'clipboard.startImageUpload',
-    { expectedBase64Length: contentBase64.length, connectionId },
+    {
+      expectedBase64Length: contentBase64.length,
+      connectionId,
+      ...(discardable ? { discardable: true } : {})
+    },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
   if (!startResponse.ok) {
@@ -46,7 +51,7 @@ async function saveClipboardImageBase64InRuntime(
         userDataPath,
         runtimeEnvironmentId,
         'clipboard.saveImageAsTempFile',
-        { contentBase64, connectionId }
+        { contentBase64, connectionId, ...(discardable ? { discardable: true } : {}) }
       )
     }
     throw new Error(startResponse.error.message)
@@ -111,13 +116,15 @@ export function saveClipboardImageBufferInRuntime(
   userDataPath: string,
   runtimeEnvironmentId: string,
   buffer: Buffer,
-  connectionId: string | null = null
+  connectionId: string | null = null,
+  discardable = false
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   return saveClipboardImageBase64InRuntime(
     userDataPath,
     runtimeEnvironmentId,
     buffer.toString('base64'),
-    connectionId
+    connectionId,
+    discardable
   )
 }

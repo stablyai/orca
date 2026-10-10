@@ -74,10 +74,10 @@ const rendererEvent = {
   }
 }
 
-function saveImageHandler(): SaveImageHandler {
+function saveImageHandler(channel = 'clipboard:saveImageAsTempFile'): SaveImageHandler {
   handleMock.mockClear()
   registerClipboardHandlers({} as never)
-  const call = handleMock.mock.calls.find((c) => c[0] === 'clipboard:saveImageAsTempFile')
+  const call = handleMock.mock.calls.find((c) => c[0] === channel)
   if (!call) {
     throw new Error('clipboard:saveImageAsTempFile not registered')
   }
@@ -219,5 +219,63 @@ describe('clipboard image paste for a runtime-owned SSH workspace', () => {
 
     expect(fsWriteFileMock).toHaveBeenCalledTimes(1)
     expect(callRuntimeEnvironmentMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('runtime-owned image preview leases', () => {
+  beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => '/tmp' })
+    callRuntimeEnvironmentMock.mockReset()
+    fsWriteFileMock.mockReset()
+  })
+  it('captures identical full-size bytes and settles through the original runtime SSH target', async () => {
+    mockRuntimeUpload({
+      'clipboard.imageLeaseAvailable': { ok: true, result: { supported: true } },
+      'clipboard.imageLease': { ok: true, result: { ok: true } }
+    })
+    const preview = saveImageHandler('clipboard:saveImagePreview')
+    await expect(
+      preview(rendererEvent, { runtimeEnvironmentId: RUNTIME_ID, connectionId: RUNTIME_SSH_TARGET })
+    ).resolves.toEqual({
+      path: '/tmp/on-runtime-target.png',
+      dataUrl: `data:image/png;base64,${PNG.toString('base64')}`,
+      runtimeEnvironmentId: RUNTIME_ID
+    })
+    expect(runtimeCall('clipboard.startImageUpload')?.[3]).toEqual({
+      expectedBase64Length: 8,
+      connectionId: RUNTIME_SSH_TARGET,
+      discardable: true
+    })
+    const settle = saveImageHandler('clipboard:imageLease')
+    await settle(rendererEvent, {
+      path: '/tmp/on-runtime-target.png',
+      runtimeEnvironmentId: RUNTIME_ID,
+      connectionId: RUNTIME_SSH_TARGET
+    })
+    expect(runtimeCall('clipboard.imageLease')?.slice(1, 4)).toEqual([
+      RUNTIME_ID,
+      'clipboard.imageLease',
+      {
+        path: '/tmp/on-runtime-target.png',
+        connectionId: RUNTIME_SSH_TARGET,
+        retain: undefined,
+        release: undefined
+      }
+    ])
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
+  })
+  it('refuses an older runtime before uploading or creating a file', async () => {
+    mockRuntimeUpload({
+      'clipboard.imageLeaseAvailable': {
+        ok: false,
+        error: { code: 'method_not_found', message: 'not found' }
+      }
+    })
+    const preview = saveImageHandler('clipboard:saveImagePreview')
+    await expect(preview(rendererEvent, { runtimeEnvironmentId: RUNTIME_ID })).rejects.toThrow(
+      'Update the remote Orca server'
+    )
+    expect(runtimeCall('clipboard.startImageUpload')).toBeUndefined()
+    expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 })

@@ -12,7 +12,7 @@ import {
 } from '../../shared/rich-markdown-context-menu'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
-import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
+import type { ClipboardImagePreview, ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { PreloadApi } from '../api-types'
 
@@ -96,6 +96,18 @@ export const uiClipboardAndWindowControlsApi = {
     /** A native-chat composer paste, kept where its draft can bring it back. */
     forNativeChatDraft?: boolean
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+  saveClipboardImagePreview: (args?: {
+    connectionId?: string | null
+    runtimeEnvironmentId?: string | null
+  }): Promise<ClipboardImagePreview | null> =>
+    ipcRenderer.invoke('clipboard:saveImagePreview', args),
+  settleClipboardImagePreview: (args: {
+    path: string
+    connectionId?: string | null
+    runtimeEnvironmentId?: string | null
+    retain?: boolean
+    release?: boolean
+  }): Promise<void> => ipcRenderer.invoke('clipboard:imageLease', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   restoreNativeChatPastes: (

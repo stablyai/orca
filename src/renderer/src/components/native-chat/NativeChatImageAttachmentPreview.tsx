@@ -19,13 +19,17 @@ type Props = {
   /** The paired server the chat runs on; a file stored there is read back through it. */
   hostEnvironmentId?: string
   onRemove: (id: string) => void
+  removeDisabled?: boolean
+  fullSizePreviewUrl?: string
 }
 
 /** Thumbnail for a pending image, with an in-app full-size preview on click. */
 export function NativeChatImageAttachmentPreview({
   attachment,
   hostEnvironmentId,
-  onRemove
+  onRemove,
+  removeDisabled = false,
+  fullSizePreviewUrl
 }: Props): React.JSX.Element {
   if (attachment.unavailableName !== undefined) {
     return (
@@ -33,6 +37,7 @@ export function NativeChatImageAttachmentPreview({
         id={attachment.id}
         name={attachment.unavailableName}
         onRemove={onRemove}
+        removeDisabled={removeDisabled}
       />
     )
   }
@@ -41,6 +46,8 @@ export function NativeChatImageAttachmentPreview({
       attachment={attachment}
       hostEnvironmentId={hostEnvironmentId}
       onRemove={onRemove}
+      removeDisabled={removeDisabled}
+      fullSizePreviewUrl={fullSizePreviewUrl}
     />
   )
 }
@@ -51,11 +58,18 @@ function attachmentLabel(path: string): string {
     : basename(path)
 }
 
-function RemoveAttachmentButton({ onRemove }: { onRemove: () => void }): React.JSX.Element {
+function RemoveAttachmentButton({
+  onRemove,
+  disabled
+}: {
+  onRemove: () => void
+  disabled?: boolean
+}): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onRemove}
+      disabled={disabled}
       aria-label={translate(
         'components.native-chat.composer.removeAttachment',
         'Remove attachment'
@@ -72,11 +86,13 @@ function RemoveAttachmentButton({ onRemove }: { onRemove: () => void }): React.J
 function NativeChatUnavailableImageChip({
   id,
   name,
-  onRemove
+  onRemove,
+  removeDisabled
 }: {
   id: string
   name: string
   onRemove: (id: string) => void
+  removeDisabled?: boolean
 }): React.JSX.Element {
   const pasted = isNativeChatPastedImagePath(name)
   const label = attachmentLabel(name)
@@ -107,7 +123,7 @@ function NativeChatUnavailableImageChip({
           <span className="truncate text-muted-foreground">{hint}</span>
         </div>
       </div>
-      <RemoveAttachmentButton onRemove={() => onRemove(id)} />
+      <RemoveAttachmentButton onRemove={() => onRemove(id)} disabled={removeDisabled} />
     </div>
   )
 }
@@ -115,7 +131,9 @@ function NativeChatUnavailableImageChip({
 function NativeChatImageThumbnail({
   attachment,
   hostEnvironmentId,
-  onRemove
+  onRemove,
+  removeDisabled = false,
+  fullSizePreviewUrl
 }: Props): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false)
   const [isNearViewport, setIsNearViewport] = useState(false)
@@ -159,7 +177,7 @@ function NativeChatImageThumbnail({
     [readEnvironmentId]
   )
   const localSrc = useLocalImageSrc(
-    !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
+    !fullSizePreviewUrl && !isPending && (isNearViewport || isOpen) ? attachment.path : undefined,
     attachment.path,
     attachment.connectionId,
     hostReadContext,
@@ -168,8 +186,8 @@ function NativeChatImageThumbnail({
   )
   // The clipboard thumbnail is already in this process, so it renders with no
   // round-trip; the on-disk file only wins for the full-size dialog.
-  const thumbnailSrc = attachment.previewUrl ?? localSrc
-  const fullSizeSrc = localSrc ?? attachment.previewUrl
+  const thumbnailSrc = fullSizePreviewUrl ?? attachment.previewUrl ?? localSrc
+  const fullSizeSrc = fullSizePreviewUrl ?? localSrc ?? attachment.previewUrl
   const filename = attachmentLabel(attachment.path)
   const pendingLabel = attachment.pendingName
     ? translate('components.native-chat.composer.uploadingFile', 'Uploading {{name}}…', {
@@ -182,7 +200,7 @@ function NativeChatImageThumbnail({
     attachment.pendingName !== undefined && !isNativeChatImageAttachmentPath(attachment.pendingName)
   const KindIcon = isFile ? FileText : ImageIcon
   // The thumbnail may be the downscaled clipboard preview; copy only the file.
-  const copySrc = copyableNativeChatImageSrc(localSrc)
+  const copySrc = copyableNativeChatImageSrc(fullSizePreviewUrl ?? localSrc)
 
   return (
     <>
@@ -222,7 +240,10 @@ function NativeChatImageThumbnail({
             <LoadingSpinner className="size-4 text-muted-foreground" />
           </span>
         ) : null}
-        <RemoveAttachmentButton onRemove={() => onRemove(attachment.id)} />
+        <RemoveAttachmentButton
+          onRemove={() => onRemove(attachment.id)}
+          disabled={removeDisabled}
+        />
       </div>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent

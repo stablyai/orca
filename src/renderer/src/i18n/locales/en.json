@@ -19415,6 +19415,13 @@
     "retry": "Retry"
   },
   "terminal": {
+    "imageAttachments": {
+      "attach": "Add to Codex",
+      "cancel": "Cancel",
+      "codexPreview": "Codex image preview · Not yet attached",
+      "failed": "Could not attach image. Check the session and try again.",
+      "noSubmit": "Add images, then send from Codex. Other CLIs use their existing paste flow."
+    },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
       "capacity": "The device saving this terminal reported full storage or an exceeded storage quota. Free space on that device, then try again.",

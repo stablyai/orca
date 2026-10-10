@@ -1,3 +1,4 @@
+import { createWebClipboardPreviewApi } from './web-clipboard-preview-api'
 import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
@@ -171,6 +172,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       }
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
+    ...createWebClipboardPreviewApi(),
     clipboardHasImage,
     // Browsers expose copied files only inside a paste event.
     readClipboardFilePaths: async () => [],

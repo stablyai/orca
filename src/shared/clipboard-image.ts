@@ -41,6 +41,12 @@ export function assertClipboardImageDimensionsWithinLimit({
  *  image is still being written to disk. Small enough to cross IPC instantly. */
 export const CLIPBOARD_IMAGE_THUMBNAIL_MAX_EDGE = 320
 
+export type ClipboardImagePreview = {
+  path: string
+  dataUrl: string
+  runtimeEnvironmentId?: string | null
+}
+
 export type ClipboardImageThumbnail = ClipboardImageDimensions & {
   /** `data:image/png;base64,...` preview of the clipboard image. */
   dataUrl: string

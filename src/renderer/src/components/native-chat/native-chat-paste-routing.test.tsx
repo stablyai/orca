@@ -376,7 +376,10 @@ describe('paste inside a chat cover never reaches the terminal', () => {
     paste(f.pane.helper)
     expect(f.pasteFromClipboard).toHaveBeenCalledExactlyOnceWith(f.pane, 'paste-event')
     window.dispatchEvent(new Event(APP_MENU_PASTE_EVENT, { cancelable: true }))
-    expect(mocks.terminalClipboard).toHaveBeenCalledTimes(1)
+    expect(f.pasteFromClipboard.mock.calls).toEqual([
+      [f.pane, 'paste-event'],
+      [f.pane, 'app-menu']
+    ])
   })
 })
 
