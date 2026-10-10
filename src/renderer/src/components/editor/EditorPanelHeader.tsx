@@ -23,7 +23,6 @@ import { markdownArtifactSourceKey } from './markdown-artifact-upload'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
-  copiedPathVisible: boolean
   isSingleDiff: boolean
   isDiffSurface: boolean
   isMarkdown: boolean
@@ -43,7 +42,6 @@ type EditorPanelHeaderProps = {
   markdownFrontmatterVisible: boolean
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
-  onCopyPath: () => void
   onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
   onOpenPreviewToSide: () => void
   onOpenMarkdownPreview: () => void
@@ -57,7 +55,6 @@ type EditorPanelHeaderProps = {
 
 export function EditorPanelHeader({
   activeFile,
-  copiedPathVisible,
   isSingleDiff,
   isDiffSurface,
   isMarkdown,
@@ -77,7 +74,6 @@ export function EditorPanelHeader({
   markdownFrontmatterVisible,
   sideBySide,
   openFileState,
-  onCopyPath,
   onOpenDiffTargetFile,
   onOpenPreviewToSide,
   onOpenMarkdownPreview,
@@ -107,9 +103,7 @@ export function EditorPanelHeader({
     <div className="editor-header">
       <EditorPanelHeaderPath
         activeFile={activeFile}
-        copiedPathVisible={copiedPathVisible}
         canShowMarkdownPreview={canShowMarkdownPreview}
-        onCopyPath={onCopyPath}
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
       {canOpenPreviewToSide && (
