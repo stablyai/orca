@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useAppStore } from '@/store'
+import { settingsForProjectViewCacheKey } from '@/store/github/cache-identity'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
 import ProjectBoard from './ProjectBoard'
@@ -44,6 +45,13 @@ export default function ProjectViewWrapper({
     selectedRepoIds
   })
   const addRepo = useAppStore((state) => state.addRepo)
+  const slugOrigin = rowActions.missingDialogs.slugDialog?.origin ?? null
+  const slugCacheKey = slugOrigin?.cacheKey ?? null
+  // Why: an open dialog keeps writing to the host its row was loaded from, even if the board's source moves.
+  const slugSourceSettings = useMemo(
+    () => (slugCacheKey ? settingsForProjectViewCacheKey(null, slugCacheKey) : null),
+    [slugCacheKey]
+  )
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -57,8 +65,8 @@ export default function ProjectViewWrapper({
       ) : null}
       <ProjectViewBody tableState={tableState} rowActions={rowActions} />
       <ProjectItemSlugDialog
-        projectOrigin={rowActions.missingDialogs.slugDialog?.origin ?? null}
-        sourceSettings={tableState.sourceSettings}
+        projectOrigin={slugOrigin}
+        sourceSettings={slugSourceSettings ?? tableState.sourceSettings}
         onClose={() => rowActions.setSlugDialog(null)}
       />
       <ProjectMissingRepoDialog
