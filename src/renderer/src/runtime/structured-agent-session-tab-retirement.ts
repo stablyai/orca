@@ -83,7 +83,9 @@ function reacceptHostSessionTabs(target: RuntimeClientTarget, worktreeId: string
     target.kind === 'environment'
       ? import('./web-runtime-session-snapshot').then(({ refreshWebRuntimeSessionTabsSnapshot }) =>
           refreshWebRuntimeSessionTabsSnapshot(target.environmentId, worktreeId, {
-            acceptCurrentSnapshot: true
+            acceptCurrentSnapshot: true,
+            // A read that began before the close would still list the chat.
+            afterCurrentInFlight: true
           })
         )
       : import('./local-structured-session-tabs-sync/inventory-refresh').then(
@@ -120,17 +122,22 @@ export function beginStructuredAgentSessionTabClose(args: {
   // Why: a host frame sent before the host handles the close still lists the chat and would re-add
   // it at the end of the strip; the intent lifts once a host frame stops listing it. Floating-panel
   // frames are never applied, so nothing there could re-add the chat or ever end its intent.
-  if (args.worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-    recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
+  if (args.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    void retireStructuredAgentSessionTab(args)
+    return
   }
+  recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
   void retireStructuredAgentSessionTab(args).then((hostTabClosed) => {
     if (!hostTabClosed) {
       // The host may still have the chat: let its list show it again.
       clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
     }
-    // Why: only a host frame ends the intent, and none may follow a close the host had nothing to
-    // publish for; left alone, it would hide this chat reopened within its TTL.
-    reacceptHostSessionTabs(args.target, args.worktreeId)
+    // Why: this machine's host emits its removal frame before the close answers, so only a failure
+    // needs a read; a paired server's frames travel apart from its answer, so, as for its terminal
+    // closes, every close is followed by a read.
+    if (!hostTabClosed || args.target.kind === 'environment') {
+      reacceptHostSessionTabs(args.target, args.worktreeId)
+    }
   })
 }
 

@@ -12,13 +12,14 @@ const mocks = vi.hoisted(() => ({
   hasTombstone: vi.fn<(worktreeId: string, sessionId: string) => boolean>(),
   markCancelled:
     vi.fn<(worktreeId: string, sessionId: string, executionHostId: string) => boolean>(),
-  reacceptLocal: vi.fn<(worktreeId: string) => Promise<void>>(),
+  reacceptLocal:
+    vi.fn<(worktreeId: string, options?: { reacceptCurrentVersion?: boolean }) => Promise<void>>(),
   refreshPaired:
     vi.fn<
       (
         environmentId: string,
         worktreeId: string,
-        options?: { acceptCurrentSnapshot?: boolean }
+        options?: { acceptCurrentSnapshot?: boolean; afterCurrentInFlight?: boolean }
       ) => Promise<void>
     >()
 }))
@@ -47,7 +48,7 @@ vi.mock('./local-session-tab-close-owner', () => ({
   ) => close()
 }))
 vi.mock('./local-structured-session-tabs-sync/inventory-refresh', () => ({
-  refreshLocalStructuredSessionWorktreeTabs: (worktreeId: string) => mocks.reacceptLocal(worktreeId)
+  refreshLocalStructuredSessionWorktreeTabs: mocks.reacceptLocal
 }))
 vi.mock('./web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: mocks.refreshPaired
@@ -191,9 +192,10 @@ describe('structured agent session tab retirement', () => {
 
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalled())
     answerClose()
-    // A successful close keeps the intent and re-reads, so a frame without the chat always follows.
-    await vi.waitFor(() => expect(mocks.reacceptLocal).toHaveBeenCalledWith('wt-1'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // This machine's host emitted its removal before answering, so that frame ends it: no read.
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(true)
+    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
     reconcileWebSessionCloseIntents(
       { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
       'wt-1',
@@ -202,7 +204,9 @@ describe('structured agent session tab retirement', () => {
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
   })
 
-  it('records no intent for a floating-panel chat, whose frames are never applied', () => {
+  it('records no intent for a floating-panel chat, whose frames are never applied', async () => {
+    mocks.callRuntime.mockRejectedValue(new Error('window relay failed'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     beginStructuredAgentSessionTabClose({
       target,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -217,6 +221,10 @@ describe('structured agent session tab retirement', () => {
         Date.now()
       )
     ).toBe(false)
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('shows a chat the local host kept by re-reading its worktree', async () => {
@@ -228,7 +236,9 @@ describe('structured agent session tab retirement', () => {
       sessionId: 'session-1',
       provisional: false
     })
-    await vi.waitFor(() => expect(mocks.reacceptLocal).toHaveBeenCalledWith('wt-1'))
+    await vi.waitFor(() =>
+      expect(mocks.reacceptLocal).toHaveBeenCalledWith('wt-1', { reacceptCurrentVersion: true })
+    )
     expect(closing(LOCAL_STRUCTURED_SESSION_OWNER)).toBe(false)
     expect(mocks.refreshPaired).not.toHaveBeenCalled()
     warn.mockRestore()
@@ -257,12 +267,32 @@ describe('structured agent session tab retirement', () => {
     failClose()
     await vi.waitFor(() =>
       expect(mocks.refreshPaired).toHaveBeenCalledWith('server-1', 'wt-1', {
-        acceptCurrentSnapshot: true
+        acceptCurrentSnapshot: true,
+        afterCurrentInFlight: true
       })
     )
     expect(closing('server-1')).toBe(false)
     expect(mocks.reacceptLocal).not.toHaveBeenCalled()
     warn.mockRestore()
+  })
+
+  it('re-reads a paired server after a successful close, since its frames travel apart from its answer', async () => {
+    const paired = { kind: 'environment', environmentId: 'server-1' } as const
+    beginStructuredAgentSessionTabClose({
+      target: paired,
+      worktreeId: 'wt-1',
+      sessionId: 'session-1',
+      provisional: false
+    })
+    await vi.waitFor(() =>
+      expect(mocks.refreshPaired).toHaveBeenCalledWith('server-1', 'wt-1', {
+        acceptCurrentSnapshot: true,
+        afterCurrentInFlight: true
+      })
+    )
+    // Only a frame without the chat ends the hide.
+    expect(closing('server-1')).toBe(true)
+    expect(mocks.reacceptLocal).not.toHaveBeenCalled()
   })
 
   it('deduplicates concurrent host retirement', async () => {
