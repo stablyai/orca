@@ -865,10 +865,16 @@ export async function runReservePlacementSimulation(
       used = true
       clock.schedule(50 + random() * 250, () => hello(host, answer.cellId, answer.epoch, reconnect))
     }
-    void assign(first, host, reconnect).then((answer) => onAnswer(answer, true))
+    // A throw in the model is a broken run, recorded like any violated rule.
+    const broken = (error: unknown) => violate(0, `model threw: ${String(error)}`)
+    void assign(first, host, reconnect)
+      .then((answer) => onAnswer(answer, true))
+      .catch(broken)
     if (duplicate) {
       clock.schedule(random() * 500, () => {
-        void assign(duplicate, host, reconnect).then((answer) => onAnswer(answer, false))
+        void assign(duplicate, host, reconnect)
+          .then((answer) => onAnswer(answer, false))
+          .catch(broken)
       })
     }
   }
