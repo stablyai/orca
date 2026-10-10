@@ -98,6 +98,11 @@ docs/**
 # The deployable docs app is source, not local engineering notes.
 !docs/site/
 !docs/site/**
+!docs/automation-recipes/
+!docs/automation-recipes/repository-updates.md
+!docs/automation-recipes/pull-request-failures.md
+!docs/proposals/
+!docs/proposals/agent-attention-and-change-review.md
 !docs/audits/
 !docs/audits/closed-editor-model-lifetime/
 !docs/audits/closed-editor-model-lifetime/**
