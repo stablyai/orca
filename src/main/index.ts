@@ -1,5 +1,7 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
+import { createDeepLinkDispatcher } from './deep-link/deep-link-dispatcher'
+import { parseOrcaDeepLink } from './deep-link/orca-deep-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch } from './window/foreground-activation-policy'
 import {
@@ -37,10 +39,28 @@ function focusExistingWindow(): void {
   focusExistingWindowAction()
 }
 
+// Why: `orca://focus` reuses runtime.focusTerminal — the action behind `orca terminal focus`
+// and notification clicks — so a link fired by any web page can only reveal a pane.
+const focusDeepLinkDispatcher = createDeepLinkDispatcher({
+  getRuntime: () => state.runtime,
+  warn: console.warn
+})
+
+function deliverPendingOrcaFocus(): void {
+  const link = state.orcaFocusDeepLinks.consume()
+  if (!link) {
+    return
+  }
+  // Why fire-and-forget: the dispatcher waits for the renderer graph itself, so a link that
+  // lands mid-boot is held there instead of blocking activation.
+  void focusDeepLinkDispatcher.dispatch(link)
+}
+
 function requestDesktopActivation(argv: readonly string[] = []): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
+  state.orcaFocusDeepLinks.capture(argv, deliverPendingOrcaFocus)
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
@@ -95,7 +115,8 @@ const preflightReady = runMainProcessPreflight({
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (preflightReady) {
   app.on('open-url', (event, url) => {
-    if (!parseSkillShareId(url)) {
+    // Why: macOS delivers every claimed `orca://` link here; unclaimed URLs keep the OS default.
+    if (!parseSkillShareId(url) && !parseOrcaDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -115,6 +136,8 @@ if (preflightReady) {
     }
   })
   state.skillShareDeepLinks.capture(process.argv)
+  // Why no publish: the runtime does not exist yet; the ready phase below replays it.
+  state.orcaFocusDeepLinks.capture(process.argv)
   // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()
@@ -125,6 +148,9 @@ if (preflightReady) {
         openMainWindow,
         handleMacAppActivation
       })
+      // Why here: the window and runtime now exist, so a focus link held from a cold launch
+      // gets its full graph-ready budget instead of spending it on boot.
+      deliverPendingOrcaFocus()
     } catch (error) {
       const message =
         formatProfileStateStartupFailure(error) ??
