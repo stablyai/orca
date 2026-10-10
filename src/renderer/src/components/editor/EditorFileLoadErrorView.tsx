@@ -1,17 +1,23 @@
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { WORKTREE_HOST_UNRESOLVED_CODE } from './editor-panel-content-types'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import {
+  FILE_TOO_LARGE_CODE,
+  FILE_TOO_LARGE_ERROR,
+  WORKTREE_HOST_UNRESOLVED_CODE
+} from './editor-panel-content-types'
 
-// Why: `loadError` is stored as English so logs and non-view consumers stay readable; the
-// user-facing copy is keyed by the machine sentinel, never by the text, so localization
-// cannot break the terminal-state comparison upstream (#21041).
+// RPC transports can carry the machine token in a wrapped message.
 function localizeFileLoadError(message: string, code: string | undefined): string {
   if (code === WORKTREE_HOST_UNRESOLVED_CODE) {
     return translate(
       'editor.fileLoad.hostUnresolved',
       "The host couldn't find this file's workspace. It may have been removed, or the host may not know about it yet. Retry, or close this tab from the tab strip."
     )
+  }
+  if (hasRuntimeRpcErrorCode({ code, message }, FILE_TOO_LARGE_CODE)) {
+    return translate('editor.fileLoad.fileTooLarge', FILE_TOO_LARGE_ERROR)
   }
   return message
 }

@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import {
+  FILE_TOO_LARGE_CODE,
   WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE,
   WORKTREE_HOST_UNRESOLVED_CODE,
   WORKTREE_HOST_UNRESOLVED_ERROR,
@@ -106,6 +107,41 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
     expect(shouldRetryFileLoadError('Access denied: outside allowed directories')).toBe(false)
+    // Why (#21689): remote oversized files fail immediately and must not consume retry attempts.
+    expect(shouldRetryFileLoadError(FILE_TOO_LARGE_CODE)).toBe(false)
+    expect(shouldRetryFileLoadError('remote read failed: file_too_large')).toBe(false)
+    expect(shouldRetryFileLoadError('custom failure', FILE_TOO_LARGE_CODE)).toBe(false)
+    expect(shouldRetryFileLoadError('Failed to read file_too_large.log')).toBe(true)
+  })
+
+  it.each([
+    { loadError: FILE_TOO_LARGE_CODE },
+    { loadError: 'Remote preview failed: file_too_large' },
+    { loadError: 'custom failure', loadErrorCode: FILE_TOO_LARGE_CODE }
+  ])('schedules no retry for an oversized refusal: %j', (failure) => {
+    const file = makeFile()
+    const attemptsRef: { current: Record<string, number> } = { current: {} }
+    const fileContents: Record<string, FileContent> = {
+      [file.id]: { content: '', isBinary: false, ...failure }
+    }
+    const loadFileContent = vi.fn(async () => undefined)
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() =>
+      root?.render(
+        <Harness
+          file={file}
+          fileContents={fileContents}
+          attemptsRef={attemptsRef}
+          loadFileContent={loadFileContent}
+          setFileContents={vi.fn()}
+        />
+      )
+    )
+    expect(setTimeoutSpy).not.toHaveBeenCalled()
+    expect(loadFileContent).not.toHaveBeenCalled()
+    expect(attemptsRef.current).toEqual({})
   })
 
   it('does not spend retry budget when hiding cancels a pending retry', () => {
