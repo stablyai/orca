@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import React, { act } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getExecutionHostLabel, toSshExecutionHostId } from '../../../../shared/execution-host'
@@ -13,19 +13,19 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
+import { TooltipProvider } from '../ui/tooltip'
 
 let container: HTMLDivElement
 let root: Root
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
+const browseDir = vi.fn(async ({ dirPath }: { dirPath: string }) => ({
+  resolvedPath: dirPath === '~' ? '/home/alice' : dirPath,
+  entries: [{ name: 'projects', isDirectory: true }]
+}))
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'displayName' | 'path'>): Repo {
-  return {
-    badgeColor: '#737373',
-    addedAt: 100,
-    kind: 'git',
-    ...overrides
-  }
+  return { badgeColor: '#737373', addedAt: 100, kind: 'git', ...overrides }
 }
 
 function makeProject({ id, ...overrides }: Partial<Project> & Pick<Project, 'id'>): Project {
@@ -65,6 +65,12 @@ function connectedSshState(targetId: string) {
 }
 
 beforeEach(() => {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  browseDir.mockClear()
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { ssh: { browseDir } }
+  })
   useAppStore.setState(useAppStore.getInitialState(), true)
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -79,16 +85,23 @@ afterEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
-function renderSection(repo: Repo, selectedProjectSetupId?: string): void {
+function renderSection(
+  repo: Repo,
+  selectedProjectSetupId?: string,
+  settingsSelectionKey?: string
+): void {
   act(() => {
     root.render(
-      React.createElement(RepositoryHostSetupsSection, {
-        repo,
-        selectedProjectSetupId,
-        forceVisible: true,
-        searchQuery: '',
-        searchEntries: []
-      })
+      <TooltipProvider>
+        <RepositoryHostSetupsSection
+          repo={repo}
+          selectedProjectSetupId={selectedProjectSetupId}
+          settingsSelectionKey={settingsSelectionKey}
+          forceVisible
+          searchQuery=""
+          searchEntries={[]}
+        />
+      </TooltipProvider>
     )
   })
 }
@@ -487,7 +500,7 @@ describe('RepositoryHostSetupsSection', () => {
     expect(openSettingsTarget).not.toHaveBeenCalled()
   })
 
-  it('clones the project onto another known host from settings', async () => {
+  it('prefills and clones the project while keeping the split settings entry selected', async () => {
     const openSettingsPage = vi.fn()
     const openSettingsTarget = vi.fn()
     const setSettingsProjectHostSelection = vi.fn()
@@ -510,7 +523,12 @@ describe('RepositoryHostSetupsSection', () => {
     const localRepo = makeRepo({
       id: 'local-repo',
       displayName: 'Orca',
-      path: '/Users/alice/orca'
+      path: '/Users/alice/orca',
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/stablyai/orca',
+        remoteName: 'origin',
+        remoteUrl: 'https://github.com/stablyai/orca.git'
+      }
     })
     useAppStore.setState({
       repos: [localRepo],
@@ -532,20 +550,41 @@ describe('RepositoryHostSetupsSection', () => {
       setupProjectClone
     })
 
-    renderSection(localRepo)
+    renderSection(localRepo, undefined, 'github:stablyai/orca::setup:local-repo')
     clickButton('Add to another host')
     clickButton('Clone from URL')
 
     const urlInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="Repository URL"]'
+      'input[placeholder="https://github.com/owner/repository.git"]'
     )
     const destinationInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="/destination/on/host"]'
+      'input[placeholder="/parent/directory/on/host"]'
     )
-    expect(urlInput).toBeTruthy()
+    expect(urlInput?.value).toBe('https://github.com/stablyai/orca.git')
     expect(destinationInput).toBeTruthy()
-    typeIntoInput(urlInput!, 'https://github.com/stablyai/orca.git')
-    typeIntoInput(destinationInput!, '/home/alice')
+    const browseButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Browse host filesystem"]'
+    )
+    expect(browseButton).toBeTruthy()
+
+    await act(async () => {
+      browseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(browseDir).toHaveBeenCalledWith({ targetId: 'openclaw 2', dirPath: '~' })
+    expect(container.textContent).toContain('Browse host filesystem')
+
+    const selectParentButton = findButton('Select parent folder')
+    expect(selectParentButton).toBeTruthy()
+    await act(async () => {
+      selectParentButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(
+      container.querySelector<HTMLInputElement>('input[placeholder="/parent/directory/on/host"]')
+        ?.value
+    ).toBe('/home/alice')
+    expect(container.textContent).toContain('Creates /home/alice/orca')
 
     const cloneButton = findButton('Clone')
     expect(cloneButton).toBeTruthy()
@@ -562,7 +601,7 @@ describe('RepositoryHostSetupsSection', () => {
       displayName: 'Orca'
     })
     expect(setSettingsProjectHostSelection).toHaveBeenCalledWith(
-      'github:stablyai/orca',
+      'github:stablyai/orca::setup:local-repo',
       'ssh:openclaw%202'
     )
     expect(openSettingsPage).not.toHaveBeenCalled()

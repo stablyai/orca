@@ -71,6 +71,7 @@ export function CloneStep({
           <RemoteFileBrowser
             targetId={sshTargetId}
             initialPath={cloneDestination || '~'}
+            selectionPurpose="create-inside"
             onSelect={(path) => {
               onDestChange(path)
               setBrowsingDestination(false)
@@ -81,6 +82,7 @@ export function CloneStep({
           <RemoteFileBrowser
             runtimeEnvironmentId={runtimeEnvironmentId as string}
             initialPath={cloneDestination || '~'}
+            selectionPurpose="create-inside"
             onSelect={(path) => {
               onDestChange(path)
               setBrowsingDestination(false)

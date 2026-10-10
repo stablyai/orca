@@ -8,6 +8,7 @@ import {
   validateGhAccountBinding
 } from '../github/gh-account-binding-inventory'
 import { getRateLimit } from '../github/rate-limit'
+import { listAuthenticatedGitHubRepositories } from '../github/repository-catalog'
 import type { Store } from '../persistence'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { track } from '../telemetry/client'
@@ -15,6 +16,7 @@ import { assertRegisteredGitHubRepo, getGitHubLocalGitOptionArgs } from './githu
 
 export function registerGitHubAccountHandlers(store: Store): void {
   ipcMain.handle('gh:viewer', () => getAuthenticatedViewer())
+  ipcMain.handle('gh:listRepositories', () => listAuthenticatedGitHubRepositories())
   ipcMain.handle('gh:checkOrcaStarred', () => checkOrcaStarred())
   ipcMain.handle('gh:starOrca', async (_event, source: unknown) => {
     const sourceParse = appStarSourceSchema.safeParse(source)
