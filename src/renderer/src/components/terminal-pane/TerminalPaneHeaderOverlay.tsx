@@ -27,6 +27,9 @@ type TerminalPaneHeaderOverlayProps = {
   worktreeId: string
   cwd: string
   showAlwaysOnHeaders: boolean
+  /** Hide the active pane's header buttons until the header is hovered or focused. */
+  // Why required: dropping the setting wiring must be a compile error, not a silent "always".
+  headerButtonsOnHover: boolean
   /** Used by ephemeral one-off command terminals that omit the header affordance. */
   showSplitButton?: boolean
   isTabPinned: boolean
@@ -74,6 +77,7 @@ export default function TerminalPaneHeaderOverlay({
   worktreeId,
   cwd,
   showAlwaysOnHeaders,
+  headerButtonsOnHover,
   showSplitButton = true,
   isTabPinned,
   paneCount,
@@ -116,6 +120,7 @@ export default function TerminalPaneHeaderOverlay({
     <div
       className="pane-title-overlay-layer"
       data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
+      data-header-buttons={headerButtonsOnHover ? 'hover' : 'always'}
       style={{
         display: terminalContentVisible ? undefined : 'none',
         ['--orca-pane-title-bg' as string]: paneTitleBackground,

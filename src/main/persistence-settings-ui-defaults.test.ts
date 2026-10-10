@@ -84,6 +84,7 @@ describe('Store', () => {
     expect(settings.terminalScrollSensitivity).toBe(1.15)
     expect(settings.terminalFastScrollSensitivity).toBe(5)
     expect(settings.terminalTuiScrollSensitivity).toBe(1)
+    expect(settings.terminalPaneHeaderButtons).toBe('always')
     expect(settings.localAccountRuntime).toBe('auto')
     expect(settings.localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
     expect(settings.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
