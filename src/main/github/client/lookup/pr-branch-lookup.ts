@@ -65,8 +65,9 @@ export async function hydrateBranchLookupWithExactPR(
   }
   try {
     return (
-      (await getPRByNumber(ownerRepo, branchData.number, ghOptions, executionScope, branchData)) ??
-      branchData
+      (await getPRByNumber(ownerRepo, branchData.number, ghOptions, executionScope, branchData, {
+        readQueueMembership: true
+      })) ?? branchData
     )
   } catch {
     return branchData

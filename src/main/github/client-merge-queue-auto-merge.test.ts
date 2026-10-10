@@ -308,6 +308,53 @@ describe('GitHub GraphQL rate-limit guard', () => {
     ).toBe(false)
   })
 
+  it('enqueues when a required merge queue disallows auto-merge', async () => {
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({ id: 'PR_kwDO123', headRefOid: 'head-oid', baseRefName: 'main' })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: { repository: { mergeQueue: { id: 'MQ_kw' }, autoMergeAllowed: false } }
+        })
+      })
+      .mockResolvedValue({ stdout: '', stderr: '' })
+
+    await expect(
+      setPRAutoMerge('/repo-root', 7, true, 'squash', undefined, {
+        owner: 'stablyai',
+        repo: 'orca',
+        host: 'github.com'
+      })
+    ).resolves.toEqual({ ok: true, enqueued: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      4,
+      expect.arrayContaining([
+        'api',
+        'graphql',
+        '-f',
+        'pullRequestId=PR_kwDO123',
+        '-f',
+        'expectedHeadOid=head-oid'
+      ]),
+      expect.objectContaining({
+        cwd: '/repo-root',
+        env: expect.objectContaining({ GH_PROMPT_DISABLED: '1' }),
+        host: 'github.com'
+      })
+    )
+    const enqueueCall = ghExecFileAsyncMock.mock.calls[3]?.[0] as string[]
+    expect(enqueueCall.some((arg) => arg.includes('enqueuePullRequest'))).toBe(true)
+    expect(
+      ghExecFileAsyncMock.mock.calls.some(
+        (call) =>
+          call[0][0] === 'pr' && call[0][1] === 'merge' && (call[0] as string[]).includes('--auto')
+      )
+    ).toBe(false)
+  })
+
   it('blocks direct merge when GitHub reports required approval', async () => {
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })

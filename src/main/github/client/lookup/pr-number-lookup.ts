@@ -52,7 +52,8 @@ export async function getPRByNumber(
   number: number,
   ghOptions: ReturnType<typeof ghRepoExecOptions>,
   executionScope: string,
-  knownPullRequestData?: PullRequestLookupData | null
+  knownPullRequestData?: PullRequestLookupData | null,
+  options?: { readQueueMembership?: boolean }
 ): Promise<PullRequestLookupData | null> {
   try {
     const { stdout } = await ghExecFileAsync(
@@ -76,7 +77,8 @@ export async function getPRByNumber(
         ...(knownPullRequestData?.stack ? { stack: knownPullRequestData.stack } : {})
       },
       ghOptions,
-      executionScope
+      executionScope,
+      options
     )
   } catch (err) {
     // Why: deleted/edited linked PR metadata falls back to branch discovery; quota/auth/network failures get one cheaper REST exact lookup.
@@ -89,7 +91,7 @@ export async function getPRByNumber(
           ? await getRestPRByNumber(ownerRepo, number, ghOptions)
           : knownPullRequestData
       return restData
-        ? hydratePullRequestLookupData(ownerRepo, restData, ghOptions, executionScope)
+        ? hydratePullRequestLookupData(ownerRepo, restData, ghOptions, executionScope, options)
         : null
     } catch (restErr) {
       if (isNotFoundGhError(restErr)) {
@@ -115,7 +117,9 @@ export async function lookupPRByNumber(args: {
         candidate,
         args.number,
         args.ghOptions,
-        args.executionScope
+        args.executionScope,
+        undefined,
+        { readQueueMembership: true }
       )
       if (!linkedData) {
         continue
