@@ -30,6 +30,7 @@ import { buildSshPtySpawnRequest } from '../main/providers/ssh-pty-spawn-request
 const HOST_SHELL = { wslShell: false }
 const ORIGINAL_CLAUDE_CONFIG = '{"oauthAccount":{"x":1}}'
 const AGENTS_WITH_A_RELAY_WRITER: [TuiAgent, AgentTrustPreset][] = [
+  ['kimi', 'kimi'],
   ['claude', 'claude'],
   ['claude-agent-teams', 'claude'],
   ['codex', 'codex'],
@@ -42,6 +43,7 @@ const AGENTS_THAT_INHERIT_TRUST = AGENTS_WITH_A_RELAY_WRITER.filter(([, preset])
   ['claude', 'copilot', 'qoder', 'qoder-cn'].includes(preset)
 )
 const ALL_PRESETS: AgentTrustPreset[] = [
+  'kimi',
   'claude',
   'codex',
   'cursor',

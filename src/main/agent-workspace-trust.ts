@@ -67,6 +67,7 @@ export async function applyAgentWorkspaceTrust(
     return {
       homes: localHomePaths(workspacePath, context),
       agentHome,
+      kimiHome: (context.env?.KIMI_CODE_HOME ?? process.env.KIMI_CODE_HOME)?.trim(),
       claudeConfig: () =>
         resolveLocalClaudeTrustConfig({
           workspacePath,

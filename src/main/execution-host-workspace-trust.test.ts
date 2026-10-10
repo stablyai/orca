@@ -28,6 +28,7 @@ import {
 } from './execution-host-workspace-trust'
 
 const PRESETS: readonly AgentTrustPreset[] = [
+  'kimi',
   'claude',
   'codex',
   'cursor',

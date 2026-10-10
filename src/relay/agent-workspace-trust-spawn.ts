@@ -34,6 +34,7 @@ export async function applyRelayAgentWorkspaceTrust(
     return {
       homes: [homeDir, homedir()],
       agentHome: homeDir,
+      kimiHome: (spawnEnv.KIMI_CODE_HOME ?? process.env.KIMI_CODE_HOME)?.trim(),
       claudeConfig: () => ({
         configFile: resolveClaudeGlobalConfigFile({
           env: spawnEnv,
