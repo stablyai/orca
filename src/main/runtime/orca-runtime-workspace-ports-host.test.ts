@@ -70,4 +70,33 @@ describe('host-scoped workspace port scans on the server', () => {
     expect(result).toMatchObject({ ok: false })
     expect(kill).not.toHaveBeenCalled()
   })
+
+  it('authorizes Stop only with workspaces this host runs itself', async () => {
+    const repos = [
+      { id: 'local-repo', path: '/srv/app' },
+      // An SSH repo may carry only its execution host, with no legacy connectionId.
+      { id: 'ssh-repo', path: '/srv/private', executionHostId: 'ssh:box' },
+      { id: 'legacy-ssh-repo', path: '/srv/legacy', connectionId: 'box' },
+      { id: 'runtime-repo', path: '/srv/env', executionHostId: 'runtime:env-2' }
+    ]
+    const worktree = (repoId: string, path: string) => ({
+      id: `${repoId}::${path}`,
+      repoId,
+      displayName: '',
+      git: { path }
+    })
+    const host = {
+      requireStore: () => ({ getRepos: () => repos }),
+      listResolvedWorktrees: async () => [
+        worktree('local-repo', '/srv/app'),
+        worktree('ssh-repo', '/srv/private'),
+        worktree('legacy-ssh-repo', '/srv/legacy'),
+        worktree('runtime-repo', '/srv/env')
+      ]
+    }
+
+    const probes = await proto['getWorkspacePortProbes'].call(host)
+
+    expect(probes.map((probe) => probe.path)).toEqual(['/srv/app'])
+  })
 })
