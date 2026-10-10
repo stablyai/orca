@@ -1,5 +1,10 @@
-import type { WorktreeMetaBatchUpdate, WorktreeSlice } from '../../worktree-helpers'
+import type {
+  WorktreeMetaBatchUpdate,
+  WorktreePinTarget,
+  WorktreeSlice
+} from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getActiveSidebarWorkspaceId,
   parseWorkspaceKey
@@ -53,11 +58,20 @@ function hasChangedLineageAncestor(
   return false
 }
 
+function resolvePinTarget(target: WorktreePinTarget): {
+  worktreeId: string
+  executionHostId: ExecutionHostId | undefined
+} {
+  return typeof target === 'string'
+    ? { worktreeId: target, executionHostId: undefined }
+    : { worktreeId: target.worktreeId, executionHostId: target.executionHostId }
+}
+
 export function createSetWorktreesPinnedAndReveal(
   _set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['setWorktreesPinnedAndReveal'] {
-  return (worktreeIds, isPinned) => {
+  return (targets, isPinned) => {
     // Only follow a toggled row with the viewport when it's the focused worktree, not an unfocused card.
     const activeSidebarWorktreeId = getActiveSidebarWorkspaceId(
       get().activeWorkspaceKey,
@@ -68,25 +82,25 @@ export function createSetWorktreesPinnedAndReveal(
     const changedWorktreeIds = new Set<string>()
     let didChange = false
     let revealWorktreeId: string | null = null
-    for (const worktreeId of worktreeIds) {
-      const current = get().getKnownWorktreeById(worktreeId)
+    for (const target of targets) {
+      const { worktreeId, executionHostId: targetExecutionHostId } = resolvePinTarget(target)
+      // A bare id (the legacy call shape) resolves against ANY host, same as before this
+      // fix; a caller passing executionHostId disambiguates a Worktree.id two hosts share.
+      const current = get().getKnownWorktreeById(worktreeId, targetExecutionHostId)
       if (!current || current.isPinned === isPinned) {
         continue
       }
       didChange = true
       changedWorktreeIds.add(worktreeId)
+      const executionHostId = targetExecutionHostId ?? current.hostId ?? 'local'
       const workspaceScope = parseWorkspaceKey(worktreeId)
       if (workspaceScope?.type === 'folder') {
-        void get().updateWorktreeMeta(
-          worktreeId,
-          { isPinned },
-          { executionHostId: current.hostId ?? 'local' }
-        )
+        void get().updateWorktreeMeta(worktreeId, { isPinned }, { executionHostId })
       } else {
         updates.push({
           worktreeId,
           updates: { isPinned },
-          executionHostId: current.hostId ?? 'local'
+          executionHostId
         })
       }
       if (revealWorktreeId === null && worktreeId === activeSidebarWorktreeId) {

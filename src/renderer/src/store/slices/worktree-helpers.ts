@@ -85,6 +85,22 @@ export type WorktreeMetaBatchUpdate = {
   executionHostId?: ExecutionHostId
 }
 
+/**
+ * A bare id keeps the legacy behavior (resolves against ANY host, so a
+ * `Worktree.id` shared by two hosts can collide); an object REQUIRES the
+ * host, so it always disambiguates the lookup the way every other
+ * multi-worktree write in this store already does (see
+ * `WorktreeMetaBatchUpdate` above). An optional field on the object branch
+ * would let a caller construct an object that is exactly as ambiguous as the
+ * bare-string branch, defeating the point of having two branches.
+ */
+export type WorktreePinTarget =
+  | string
+  | {
+      worktreeId: string
+      executionHostId: ExecutionHostId
+    }
+
 export type WorktreeRenameRequest = {
   worktreeId: string
   rowKey?: string
@@ -277,7 +293,7 @@ export type WorktreeSlice = {
    * the shortcut action visible even though pinned worktrees also remain in
    * their normal sidebar groups.
    */
-  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
+  setWorktreesPinnedAndReveal: (targets: readonly WorktreePinTarget[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
   observeTerminalGitHubPullRequestLink: (
     worktreeId: string,
