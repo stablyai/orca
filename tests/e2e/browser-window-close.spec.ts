@@ -9,7 +9,7 @@ import { ensureTerminalVisible, getActiveWorktreeId, waitForActiveWorktree } fro
 async function openFixtureTab(
   page: Page,
   registerCleanup: (cleanup: () => Promise<void>) => void
-): Promise<{ tabId: string; worktreeId: string }> {
+): Promise<{ tabId: string }> {
   const fixtureDir = mkdtempSync(path.join(os.tmpdir(), 'orca-browser-window-close-'))
   registerCleanup(async () => {
     rmSync(fixtureDir, { recursive: true, force: true })
@@ -36,12 +36,17 @@ async function openFixtureTab(
   if (!tab) {
     throw new Error('Failed to create the browser fixture tab')
   }
+  // Why the catch here only: the guest may not exist or have loaded yet while this polls.
   await expect
-    .poll(() => runInGuest(page, tab.id, `document.querySelector('#close-marker')?.textContent`), {
-      timeout: 10_000
-    })
+    .poll(
+      () =>
+        runInGuest(page, tab.id, `document.querySelector('#close-marker')?.textContent`).catch(
+          () => null
+        ),
+      { timeout: 10_000 }
+    )
     .toBe('close-fixture')
-  return { tabId: tab.id, worktreeId }
+  return { tabId: tab.id }
 }
 
 // Why executeJavaScript: it runs in the page's own world, where the guest preload replaced window.close.
@@ -51,36 +56,12 @@ async function runInGuest(page: Page, tabId: string, script: string): Promise<un
       const webview = document
         .querySelector(`[data-browser-overlay-tab-id="${targetTabId}"]`)
         ?.querySelector<Electron.WebviewTag>('webview')
-      try {
-        return webview ? await webview.executeJavaScript(targetScript) : null
-      } catch {
-        return null
+      if (!webview) {
+        throw new Error(`No webview for browser tab ${targetTabId}`)
       }
+      return webview.executeJavaScript(targetScript)
     },
     { targetTabId: tabId, targetScript: script }
-  )
-}
-
-async function readTabPresence(
-  page: Page,
-  worktreeId: string,
-  tabId: string
-): Promise<{ browserTab: boolean; unifiedTab: boolean }> {
-  return page.evaluate(
-    ({ targetWorktreeId, targetTabId }) => {
-      const state = window.__store?.getState()
-      return {
-        browserTab: Boolean(
-          state?.browserTabsByWorktree[targetWorktreeId]?.some((tab) => tab.id === targetTabId)
-        ),
-        unifiedTab: Boolean(
-          state?.unifiedTabsByWorktree[targetWorktreeId]?.some(
-            (tab) => tab.contentType === 'browser' && tab.entityId === targetTabId
-          )
-        )
-      }
-    },
-    { targetWorktreeId: worktreeId, targetTabId: tabId }
   )
 }
 
@@ -88,32 +69,27 @@ test('a page that calls window.close() closes its browser tab', async ({
   orcaPage,
   registerPostElectronShutdownCleanup
 }) => {
-  const { tabId, worktreeId } = await openFixtureTab(orcaPage, registerPostElectronShutdownCleanup)
-  expect(await readTabPresence(orcaPage, worktreeId, tabId)).toEqual({
-    browserTab: true,
-    unifiedTab: true
-  })
+  const { tabId } = await openFixtureTab(orcaPage, registerPostElectronShutdownCleanup)
+  const tab = orcaPage.locator(`[data-tab-id="${tabId}"]`)
+  await expect(tab).toBeVisible()
 
   await runInGuest(orcaPage, tabId, 'window.close()')
 
-  await expect
-    .poll(() => readTabPresence(orcaPage, worktreeId, tabId), { timeout: 10_000 })
-    .toEqual({ browserTab: false, unifiedTab: false })
+  await expect(tab).toHaveCount(0, { timeout: 10_000 })
 })
 
 test('a page that navigated keeps its tab when it calls window.close()', async ({
   orcaPage,
   registerPostElectronShutdownCleanup
 }) => {
-  const { tabId, worktreeId } = await openFixtureTab(orcaPage, registerPostElectronShutdownCleanup)
-  await runInGuest(orcaPage, tabId, `history.pushState({}, '', '#next'); history.length`)
+  const { tabId } = await openFixtureTab(orcaPage, registerPostElectronShutdownCleanup)
+  expect(
+    await runInGuest(orcaPage, tabId, `history.pushState({}, '', '#next'); history.length`)
+  ).toBe(2)
 
   await runInGuest(orcaPage, tabId, 'window.close()')
 
   // Why a fixed wait: this asserts that nothing happens, so there is no event to poll for.
   await orcaPage.waitForTimeout(1_000)
-  expect(await readTabPresence(orcaPage, worktreeId, tabId)).toEqual({
-    browserTab: true,
-    unifiedTab: true
-  })
+  await expect(orcaPage.locator(`[data-tab-id="${tabId}"]`)).toBeVisible()
 })
