@@ -131,7 +131,12 @@ export function initializeMainProcessObservers(): void {
   const agentSessionRecorder = new AgentSessionTransitionRecorder(state.stats)
   agentHookServer.subscribeEnrichedStatus((enriched) => agentSessionRecorder.onStatus(enriched))
   agentHookServer.subscribePaneStatusClear((clear) => agentSessionRecorder.onCleared(clear))
-  state.claudeUsage = new ClaudeUsageStore(store)
+  state.claudeUsage = new ClaudeUsageStore(store, async () => {
+    if (!state.claudeRuntimeAuth) {
+      throw new Error('Claude account routing is not ready')
+    }
+    return state.claudeRuntimeAuth.getUsageProfileDirs()
+  })
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)
   state.museUsage = new MuseUsageStore(store)

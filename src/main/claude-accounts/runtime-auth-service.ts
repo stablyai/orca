@@ -1,9 +1,11 @@
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import { toWindowsWslPath } from '../../shared/wsl-paths'
 import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import type { Store } from '../persistence'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { getWslGuestEnvironment } from '../wsl/wsl-guest-environment'
+import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limit-target'
 import { ClaudeProfileRouter } from './claude-profile-router'
 import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
 import {
@@ -41,6 +43,29 @@ export class ClaudeRuntimeAuthService {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
     return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
+  }
+
+  /** Usage follows the selected profile, never every installed WSL distro. */
+  async getUsageProfileDirs(): Promise<string[]> {
+    const target = this.resolveTarget(getInitialClaudeRateLimitTarget(this.store.getSettings()))
+    const wsl = this.wslRouteFor(target)
+    if (target.runtime === 'wsl' && !wsl) {
+      throw new Error('Selected WSL Claude runtime is unavailable')
+    }
+    const preparation = wsl ? await wsl.router.preparation(wsl.distro) : this.router.preparation()
+    let configDir = preparation.configDir
+    if (wsl && !preparation.provenance.startsWith('profile:')) {
+      const environment = await getWslGuestEnvironment(wsl.distro)
+      if (!environment || environment.claudeConfigDir === null) {
+        throw new Error('Selected WSL Claude environment is unavailable')
+      }
+      configDir = toWindowsWslPath(
+        environment.claudeConfigDir ?? `${environment.home}/.claude`,
+        wsl.distro
+      )
+    }
+    const joinPath = wsl ? win32.join : join
+    return [joinPath(configDir, 'projects'), joinPath(configDir, 'transcripts')]
   }
 
   async prepareForRateLimitFetch(

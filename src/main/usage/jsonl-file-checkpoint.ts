@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs'
-import { open, type FileHandle } from 'node:fs/promises'
+import { openJsonlFileHandle, type JsonlFileHandle } from './jsonl-file-access'
 import { createHash } from 'node:crypto'
 import {
   readJsonlFileSnapshot,
@@ -25,7 +25,7 @@ export type JsonlFileCheckpoint = {
 
 export type JsonlFileReader = {
   path: string
-  handle: FileHandle
+  handle: JsonlFileHandle
   stats: JsonlFileSnapshot
   snapshotCheckpoint: JsonlFileCheckpoint | null
   snapshotChunks: Buffer[] | null
@@ -111,7 +111,7 @@ export function jsonlPhysicalFileId(stats: {
 
 export async function openJsonlFileReader(filePath: string): Promise<JsonlFileReader> {
   while (true) {
-    const handle = await open(filePath, 'r')
+    const handle = await openJsonlFileHandle(filePath)
     let retained = false
     try {
       const stats = await readJsonlHandleSnapshot(handle)

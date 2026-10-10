@@ -186,6 +186,59 @@ afterAll(() => {
 })
 
 describe('usage scan worker event-loop occupancy', () => {
+  it('keeps a selected Claude profile isolated through the real worker source-cache path', async () => {
+    const selected = join(corpusRoot, 'selected-claude', 'projects')
+    const unrelated = join(corpusRoot, '.claude', 'projects')
+    mkdirSync(selected, { recursive: true })
+    mkdirSync(unrelated, { recursive: true })
+    const line = (sessionId: string) =>
+      JSON.stringify({
+        type: 'assistant',
+        sessionId,
+        timestamp: '2026-10-10T12:00:00Z',
+        message: {
+          id: sessionId,
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 10, output_tokens: 2 }
+        }
+      })
+    writeFileSync(join(selected, 'selected.jsonl'), `${line('selected')}\n`)
+    writeFileSync(join(unrelated, 'unrelated.jsonl'), `${line('unrelated')}\n`)
+    const workers: Worker[] = []
+    const client = new UsageScanWorkerClient({
+      workerFactory: () => {
+        const worker = new Worker(workerEntryPath)
+        workers.push(worker)
+        return worker
+      },
+      log: () => {}
+    })
+    const sourceCache: UsageSourceCacheRef = {
+      path: join(corpusRoot, 'selected-claude-sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: '[]',
+      reuse: true
+    }
+    try {
+      const result = await withCorpusEnv(() =>
+        client.scan({
+          operation: 'scan',
+          providerId: 'claude',
+          profileDirs: [selected],
+          worktrees: [],
+          sourceCache
+        })
+      )
+      expect(result).toMatchObject({ providerId: 'claude', sessions: [{ sessionId: 'selected' }] })
+      if (result.operation !== 'scan' || result.providerId !== 'claude') {
+        throw new Error('Expected Claude worker response')
+      }
+      expect(result.sessions).toHaveLength(1)
+    } finally {
+      await Promise.all(workers.map((worker) => worker.terminate()))
+    }
+  })
+
   it('costs the calling thread a fraction of the JS time the same scan does inline', async () => {
     // Calling thread first: the baseline is measured with no worker alive, and
     // the worker arm then reads an OS cache the inline arm already warmed,
