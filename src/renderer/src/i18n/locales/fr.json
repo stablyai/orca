@@ -3531,7 +3531,8 @@
             "ec2adf093e": "Lancer {{value0}} dans un nouveau terminal",
             "465e432ef1": "Impossible de construire la commande de lancement pour {{value0}}.",
             "e518f544b1": "Aucun agent détecté",
-            "8dea9b5cdf": "Aucun agent activé"
+            "8dea9b5cdf": "Aucun agent activé",
+            "needsServerUpdate": "Mettez à jour Orca sur ce serveur pour lister les agents de cet espace de travail"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Changer d'onglet",
@@ -11540,7 +11541,6 @@
           "pathGroup": "Comment le téléphone joint cet ordinateur",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Le téléphone peut être en données mobiles ou sur n'importe quel Wi‑Fi. Connexion requise uniquement pour Relay.",
-          "signInRequired": "Relay uniquement — le LAN n'a pas besoin de compte.",
           "relayUnavailable": "Orca Relay n'est pas disponible dans ce build. Utilisez le LAN.",
           "signIn": "Se connecter pour Relay",
           "signInAgain": "Se reconnecter pour Relay",
@@ -18096,6 +18096,7 @@
         "model": "Modèle",
         "effort": "Effort",
         "fastMode": "Mode rapide",
+        "speed": "Vitesse",
         "thinking": "Réflexion",
         "options": "Options",
         "sessionOptions": "Options de session",
@@ -18116,7 +18117,8 @@
           "high": "Haute",
           "xhigh": "Extra élevé",
           "max": "Max",
-          "ultra": "Ultra"
+          "ultra": "Ultra",
+          "standard": "Standard"
         },
         "imageSaving": "Enregistrement de l'image collée…",
         "pendingAttachmentLimit": "Trop de pièces jointes sont en attente. Terminez de composer avant d’en attacher davantage.",
@@ -19248,6 +19250,7 @@
       "sortResultsAriaLabel": "Trier les résultats : {{value0}}",
       "consent": "Activer la recherche en texte intégral ? Orca crée un index sur cet ordinateur à partir des transcriptions des agents locaux, comprenant des conversations complètes et jusqu'à 3 072 caractères par sortie d'outil. Le contenu n'est pas expurgé. Les clients couplés authentifiés peuvent le rechercher.",
       "remoteDisabled": "La recherche est désactivée sur cet ordinateur. Activez l’indexation des transcriptions sur cet ordinateur pour rechercher ses sessions.",
+      "titleOnly": "La recherche en texte intégral est désactivée sur cet ordinateur ; seuls les titres des sessions sont pris en compte.",
       "notReady": "L'index de recherche n'est pas encore prêt. Réessayez sous peu.",
       "noService": "La recherche n'est pas disponible sur cet ordinateur. Il peut nécessiter une mise à jour Orca ou un runtime avec prise en charge de la recherche.",
       "failed": "Impossible de rechercher cet ordinateur. Vérifiez sa connexion et réessayez.",

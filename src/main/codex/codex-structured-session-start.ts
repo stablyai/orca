@@ -16,14 +16,8 @@ import {
   reportedCodexSessionOptions
 } from './codex-structured-session-options'
 import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
-import {
-  codexAcquireCatalogAccess,
-  codexAcquireFastModeCatalog
-} from './codex-structured-acquire-catalog'
-import {
-  reconcileCodexFastModeOption,
-  reportedCodexThreadOptions
-} from './codex-structured-fast-mode'
+import { codexAcquireCatalogAccess } from './codex-structured-acquire-catalog'
+import { reportedCodexThreadOptions } from './codex-structured-service-tier'
 import {
   assertCodexConnectionOpen,
   codexSessionLifecycle,
@@ -88,11 +82,6 @@ export async function startCodexStructuredSession(start: CodexStartInput): Promi
     }
     const options = restoredCodexSessionOptions(input.options)
     const catalogAccess = codexAcquireCatalogAccess(deps, launch)
-    const fastModeCatalog = codexAcquireFastModeCatalog({
-      catalogAccess,
-      opened,
-      restoreNeedsCatalog: options.get('fastMode') === 'true' || options.has('serviceTier')
-    })
     const session: CodexSession = {
       account: start.account,
       connection,
@@ -116,16 +105,6 @@ export async function startCodexStructuredSession(start: CodexStartInput): Promi
       forceCloseUnexpected: (reason) =>
         start.forceCloseUnexpected(sessionId, input.fence, child.acquisitionGeneration, reason),
       ...(start.unbindReadingControl ? { unbindReadingControl: start.unbindReadingControl } : {})
-    }
-    if (fastModeCatalog) {
-      const model = options.get('model') ?? opened.model ?? fastModeCatalog.result.current.model
-      reconcileCodexFastModeOption(session, {
-        fastModeTierByModel: fastModeCatalog.fastModeTierByModel,
-        currentFastMode: true,
-        model,
-        modelFastModeSupport: fastModeCatalog.result.models.find((entry) => entry.id === model)
-          ?.supportsFastMode
-      })
     }
     current()
     sessions.set(sessionId, session)
@@ -158,9 +137,7 @@ export async function startCodexStructuredSession(start: CodexStartInput): Promi
       sessionId,
       sessions,
       timeoutMs: deps.requestTimeoutMs,
-      logger: deps.logger,
-      optionRevision: input.optionRevision,
-      onEvent: deps.onEvent
+      logger: deps.logger
     })
   } catch (error) {
     if (child.ended || attempt.cancelled) {

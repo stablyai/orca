@@ -41,11 +41,8 @@ import { createCodexStructuredNotificationRetry } from './codex-structured-notif
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
 import { codexStoppedRequestEndWait, settleCodexRequestEndWaiters } from './codex-request-end-wait'
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
-import {
-  codexBackgroundTaskStops,
-  startCodexTerminalStopProbe,
-  stopCodexBackgroundCommands
-} from './codex-background-terminals'
+import { startCodexTerminalStopProbe } from './codex-background-terminals'
+import { codexBackgroundTaskStops, stopCodexBackgroundTasks } from './codex-background-task-stops'
 import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
@@ -204,7 +201,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
-  ) => stopCodexBackgroundCommands(this.sessions, input, this.deps.requestTimeoutMs)
+  ) => stopCodexBackgroundTasks(this.sessions, input, this.deps.requestTimeoutMs)
 
   bindPromptItemId = (
     sessionId: string,
@@ -301,7 +298,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   async setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<Readonly<Record<string, string>>> {
-    if (!isCodexTurnOptionKey(input.key)) {
+    // `fastMode` is an older client's toggle, applied as a tier; it never rides on a turn.
+    if (!isCodexTurnOptionKey(input.key) && input.key !== 'fastMode') {
       throw new Error(`codex app-server has no thread option named ${input.key}`)
     }
     return applyCodexStructuredSessionOption(this.session(input.sessionId), input.key, input.value)

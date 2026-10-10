@@ -80,7 +80,7 @@ export async function renameDurable(tmpPath: string, finalPath: string): Promise
  */
 export async function writeTempFileDurable(
   tmpPath: string,
-  payload: string,
+  payload: string | Uint8Array,
   mode?: number
 ): Promise<void> {
   const handle = await open(tmpPath, 'w', mode)
@@ -132,7 +132,7 @@ export async function copyFileDurable(sourcePath: string, finalPath: string): Pr
 export async function writeFileDurable(
   tmpPath: string,
   finalPath: string,
-  payload: string
+  payload: string | Uint8Array
 ): Promise<void> {
   await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true)
 }
@@ -146,7 +146,7 @@ export async function writeFileDurable(
 export async function writeFileDurableIfCurrent(
   tmpPath: string,
   finalPath: string,
-  payload: string,
+  payload: string | Uint8Array,
   isCurrent: () => boolean
 ): Promise<boolean> {
   let renamed = false

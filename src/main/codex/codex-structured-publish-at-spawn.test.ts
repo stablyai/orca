@@ -58,7 +58,7 @@ describe('Codex startup publishes its child before the handshake', () => {
     let revision = 2
     await adapter.acquire({
       ...INPUT,
-      options: { model: 'gpt-saved', effort: 'low', fastMode: 'true' },
+      options: { model: 'gpt-saved', effort: 'low', serviceTier: 'priority' },
       optionRevision: () => revision
     })
     await vi.waitFor(() => expect(codex.connections[0].calls.at(-1)?.method).toBe('thread/start'))
@@ -72,22 +72,22 @@ describe('Codex startup publishes its child before the handshake', () => {
           link: expect.objectContaining({
             handle: expect.objectContaining({ nativeId: THREAD_ID })
           }),
-          reportedOptions: { model: 'gpt-saved', effort: 'low', fastMode: true },
+          reportedOptions: { model: 'gpt-saved', effort: 'low', serviceTier: 'priority' },
           restoreSkippedOptions: [],
           optionRevision: 2
         })
       )
     )
-    revision = 4
     catalog.resolve({
       data: [{ model: 'gpt-saved', supportedReasoningEfforts: [] }],
       nextCursor: null
     })
     await vi.waitFor(() =>
-      expect(events).toContainEqual(
-        expect.objectContaining({ type: 'options-reported', optionRevision: 3 })
-      )
+      expect(codex.connections[0].calls.some((call) => call.method === 'model/list')).toBe(true)
     )
+    // The listing changes no option the start reported, so it reports nothing more.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(events.map((event) => event.type)).toEqual(['started'])
     await adapter.closeAll()
   })
 

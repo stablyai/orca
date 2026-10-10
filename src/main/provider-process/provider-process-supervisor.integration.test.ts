@@ -314,7 +314,13 @@ describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processe
 
     const signalledAt = Date.now()
     supervisor.kill('SIGTERM')
-    const exited = await Promise.race([exit, new Promise((resolve) => setTimeout(resolve, 5_000))])
+    let exitTimeout: ReturnType<typeof setTimeout> | undefined
+    const exited = await Promise.race([
+      exit,
+      new Promise((resolve) => {
+        exitTimeout = setTimeout(resolve, 5_000)
+      })
+    ]).finally(() => clearTimeout(exitTimeout))
 
     expect(exited).toEqual({ code: null, signal: 'SIGTERM' })
     expect(Date.now() - signalledAt).toBeGreaterThanOrEqual(graceMs)

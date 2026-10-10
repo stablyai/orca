@@ -13,8 +13,10 @@ const storeState = vi.hoisted(
       openInApplications: OpenInApplication[]
       activeRuntimeEnvironmentId: string | null
     }
+    worktreesByRepo: Record<string, { id: string; repoId: string; hostId: string }[]>
   } => ({
-    settings: { openInApplications: [], activeRuntimeEnvironmentId: null }
+    settings: { openInApplications: [], activeRuntimeEnvironmentId: null },
+    worktreesByRepo: { 'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'local' }] }
   })
 )
 const ownerRuntime = vi.hoisted((): { environmentId: string | null } => ({ environmentId: null }))
@@ -68,11 +70,10 @@ vi.mock('@/components/sidebar/WorktreeOpenInMenu', async () => {
   return {
     getOpenInEntryAvailability: (
       entry: { command?: string },
-      settings: typeof storeState.settings,
       connectionId?: string | null,
       runtimeEnvironmentId?: string | null
     ) => ({
-      disabled: !getExternalEditorOpenCapability(settings, {
+      disabled: !getExternalEditorOpenCapability({
         command: entry.command,
         connectionId,
         runtimeEnvironmentId
@@ -127,6 +128,9 @@ describe('SourceControlEntryContextMenu', () => {
     items.list = []
     storeState.settings.activeRuntimeEnvironmentId = null
     storeState.settings.openInApplications = []
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'local' }]
+    }
     ownerRuntime.environmentId = null
     revealInFileManager.mockReset()
     openWorktreePath.mockReset()
@@ -158,7 +162,13 @@ describe('SourceControlEntryContextMenu', () => {
     expect(revealItem?.disabled).toBe(false)
     expect(showsLocalOnlyHint(revealItem)).toBe(false)
     revealItem?.onSelect?.()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/example.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/src/example.ts', 'local')
+  })
+
+  it('reveals a local repo file while a remote server is focused', () => {
+    storeState.settings.activeRuntimeEnvironmentId = 'env-1'
+
+    expect(renderRevealItem()?.disabled).toBe(false)
   })
 
   it('offers the file manager once, outside the "Open in" apps', () => {
@@ -183,10 +193,26 @@ describe('SourceControlEntryContextMenu', () => {
     expect(openWorktreePath).toHaveBeenCalledWith({
       target: 'external-editor',
       worktreePath: '/repo/src/example.ts',
-      connectionId: undefined,
+      connectionId: null,
       runtimeEnvironmentId: 'env-2',
+      ownerUnresolved: false,
       command: 'zed'
     })
+  })
+
+  it('routes a repo the catalog places on an SSH host there, even with no connection prop', () => {
+    storeState.worktreesByRepo = {
+      'repo-1': [{ id: 'worktree-1', repoId: 'repo-1', hostId: 'ssh:ssh-9' }]
+    }
+    storeState.settings.activeRuntimeEnvironmentId = 'env-1'
+    storeState.settings.openInApplications = [{ id: 'code', label: 'Code', command: 'code' }]
+
+    const revealItem = renderRevealItem()
+    expect(revealItem?.disabled).toBe(true)
+    items.list.find((item) => childrenText(item.children) === 'Code')?.onSelect?.()
+    expect(openWorktreePath).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-9', runtimeEnvironmentId: null })
+    )
   })
 
   it('disables reveal, with no reason, for a deleted file', () => {

@@ -14,7 +14,8 @@ import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-messa
 import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
 import { gitExecFileAsync } from '../git/runner'
 import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { resolveGitRouteForHost } from '../providers/execution-host-provider-dispatch'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import {
   probeBranchUpstream,
   renameCurrentBranch,
@@ -176,10 +177,15 @@ async function runAutoRename(
   }
   const worktreePath = parsed.worktreePath
 
-  const provider = repo.connectionId ? (getSshGitProvider(repo.connectionId) ?? null) : null
-  if (repo.connectionId && !provider) {
+  // Why: a runtime row's connectionId names the server's own SSH target; that host owns the branch, never this client.
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'runtime') {
+    return stop(`branch is owned by ${route.hostId}`)
+  }
+  if (route.kind === 'ssh' && !route.provider) {
     return retry('ssh provider unavailable')
   }
+  const provider = route.kind === 'ssh' ? route.provider : null
   const exec: GitExec = provider
     ? (args) => provider.exec(args, worktreePath)
     : (args) => gitExecFileAsync(args, { cwd: worktreePath })
@@ -212,7 +218,9 @@ async function runAutoRename(
   }
 
   const settings = deps.getSettings()
-  const hostKey = getCommitMessageModelDiscoveryHostKey(repo.connectionId ?? null)
+  const hostKey = getCommitMessageModelDiscoveryHostKey(
+    route.kind === 'ssh' ? route.connectionId : null
+  )
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
     // Why: a generation-step failure (vs a benign skip) is user-actionable, so surface it on the card.

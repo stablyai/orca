@@ -131,13 +131,13 @@ export const RelayDeviceResumeConfirmedMessageSchema = DeviceResumeConfirmedSche
   type: z.literal('device-resume-confirmed')
 }).strict()
 
-export const RelayControlErrorMessageSchema = z
-  .object({
-    type: z.literal('control-error'),
-    reqId: OpaqueIdSchema.optional(),
-    code: z.string().min(1).max(128)
-  })
-  .strict()
+// Not strict: a relay that adds a field (e.g. a retry hint) must not make every
+// shipped desktop drop its control-error as unrecognized. Unknown keys are stripped.
+export const RelayControlErrorMessageSchema = z.object({
+  type: z.literal('control-error'),
+  reqId: OpaqueIdSchema.optional(),
+  code: z.string().min(1).max(128)
+})
 
 export type RelayPendingConnection = z.infer<typeof PendingConnectionSchema>
 export type RelayHostHelloAckMessage = z.infer<typeof RelayHostHelloAckMessageSchema>

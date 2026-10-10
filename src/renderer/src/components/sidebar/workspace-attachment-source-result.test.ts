@@ -111,7 +111,7 @@ describe('attachment source conversion', () => {
             hostId: 'runtime:other'
           }) ?? undefined
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       isWorkspaceAttachmentLinked([old], {
         ...enriched,
@@ -123,6 +123,7 @@ describe('attachment source conversion', () => {
     const bare: WorkspaceAttachment = { provider: 'github', type: 'pr', number: 7 }
     const result = appendWorkspaceAttachment([bare], review)
     expect(result).toEqual([review])
+    expect(isWorkspaceAttachmentLinked([bare], review)).toBe(true)
   })
   it.each(['issue', 'mr'] as const)(
     'keeps a bare GitLab %s distinct from the same-number other type',

@@ -11,6 +11,7 @@ import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import { createWorktreeRefs, getUsageWorktreeFingerprint } from './usage-worktree-refs'
+import { UsageInlineCachePreservation } from './usage-inline-cache-preservation'
 import {
   usageSourceCachePath,
   type UsageCacheSplitRequest,
@@ -46,6 +47,13 @@ type UsageProviderStoreLifecycleConfig<
   resolveCacheFile: () => string
   createDefaultState: () => State
   normalizeState: (state: State) => State
+  parseReport?: (
+    text: string,
+    parsed?: State,
+    integrityVerified?: boolean
+  ) => State | Promise<State>
+  serializeReport?: (state: State) => string
+  providerId?: 'claude'
   sourceKey: SourceKey
   dataPresenceKey: DataPresenceKey
   tokenUsage?: {
@@ -76,6 +84,7 @@ export abstract class UsageProviderStoreLifecycle<
   private tokenReporter: AgentTokenUsageReporter | null = null
   private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
+  private readonly inlineCache = new UsageInlineCachePreservation()
 
   constructor(
     private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
@@ -116,6 +125,7 @@ export abstract class UsageProviderStoreLifecycle<
   /** Await queued cache writes so quit does not drop the final snapshot. */
   async flush(): Promise<void> {
     await this.loaded
+    await this.inlineCache.settle()
     await this.tokenReporter?.flush()
     await Promise.all([this.writer.flush(), this.analyticsSessionIds?.flush()])
   }
@@ -144,10 +154,32 @@ export abstract class UsageProviderStoreLifecycle<
   }
 
   protected writeToDisk(): Promise<void> {
-    return this.writer.write(() => {
-      const { [this.config.sourceKey]: _sources, ...report } = this.state
-      return JSON.stringify(report)
-    })
+    return this.inlineCache.write(
+      this.config.resolveCacheFile(),
+      () => this.state.scanState.enabled,
+      this.writer,
+      () => this.serializeReport()
+    )
+  }
+
+  private serializeReport(): string {
+    if (this.config.serializeReport) {
+      return this.config.serializeReport(this.state)
+    }
+    const { [this.config.sourceKey]: _sources, ...report } = this.state
+    return JSON.stringify(report)
+  }
+
+  private applyReport(text: string, parsed?: State, verified = false): void | Promise<void> {
+    const report = this.config.parseReport
+      ? this.config.parseReport(text, parsed, verified)
+      : (parsed ?? JSON.parse(text))
+    if (report instanceof Promise) {
+      return report.then((state) => {
+        this.state = this.normalizeReport(state)
+      })
+    }
+    this.state = this.normalizeReport(report)
   }
 
   private load(): Promise<void> {
@@ -156,20 +188,23 @@ export abstract class UsageProviderStoreLifecycle<
       if (statSync(cacheFile).size > MAIN_THREAD_PARSE_MAX_BYTES) {
         return this.loadOnWorker(cacheFile)
       }
-      const parsed: State = JSON.parse(readFileSync(cacheFile, 'utf-8'))
-      this.state = this.normalizeReport(parsed)
+      const text = readFileSync(cacheFile, 'utf-8')
+      const parsed: State = JSON.parse(text)
       if (
         Array.isArray(parsed[this.config.sourceKey]) &&
         parsed[this.config.sourceKey].length > 0
       ) {
         return this.loadOnWorker(cacheFile)
       }
+      const applied = this.applyReport(text, parsed)
+      if (applied) {
+        return applied.catch((error: unknown) => {
+          console.error(`${this.config.logTag} Failed to load persisted state:`, error)
+        })
+      }
     } catch (error) {
       if (!isMissingFileError(error)) {
-        console.error(
-          `${this.config.logTag} Failed to load persisted state, starting fresh:`,
-          error
-        )
+        console.error(`${this.config.logTag} Failed to load persisted state:`, error)
       }
     }
     return Promise.resolve()
@@ -177,17 +212,35 @@ export abstract class UsageProviderStoreLifecycle<
 
   private async loadOnWorker(cacheFile: string): Promise<void> {
     try {
-      const { reportText, migrated } = await this.config
-        .splitCacheFile({ cacheFile, sourceKey: this.config.sourceKey })
+      let fallback = false
+      const { reportText, migrated, reportIntegrityVerified } = await Promise.resolve()
+        .then(() =>
+          this.config.splitCacheFile({
+            cacheFile,
+            sourceKey: this.config.sourceKey,
+            ...(this.config.providerId ? { providerId: this.config.providerId } : {})
+          })
+        )
         .catch(async (error: unknown) => {
           // Preserve usage history when the worker cannot start.
           console.warn(`${this.config.logTag} Reading the usage cache on the main thread:`, error)
-          return { reportText: await readFile(cacheFile, 'utf-8'), migrated: false }
+          fallback = true
+          return {
+            reportText: await readFile(cacheFile, 'utf-8'),
+            migrated: false,
+            reportIntegrityVerified: false
+          }
         })
       if (reportText === null) {
         return
       }
-      this.state = this.normalizeReport(JSON.parse(reportText))
+      const parsed: State = JSON.parse(reportText)
+      this.inlineCache.active =
+        fallback &&
+        !('usageIntegrity' in parsed) &&
+        Array.isArray(parsed[this.config.sourceKey]) &&
+        parsed[this.config.sourceKey].length > 0
+      await this.applyReport(reportText, parsed, !fallback && reportIntegrityVerified === true)
       if (migrated) {
         // Future launches can read the compact report synchronously.
         await this.writeToDisk().catch(() => {})
@@ -231,6 +284,8 @@ export abstract class UsageProviderStoreLifecycle<
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
         this.state.worktreeFingerprint = worktreeFingerprint
+        this.state.schemaVersion = this.schemaVersion
+        this.inlineCache.active = false
         this.state.scanState.lastScanCompletedAt = Date.now()
         this.state.scanState.lastScanError = null
         // Persistence failures do not turn a successful source scan into a scan failure.

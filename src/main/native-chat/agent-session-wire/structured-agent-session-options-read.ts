@@ -88,7 +88,8 @@ async function readStructuredAgentSessionOptionsAtRest(
     current: {
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
-      ...(typeof fastMode === 'boolean' ? { fastMode } : {})
+      ...(typeof fastMode === 'boolean' ? { fastMode } : {}),
+      ...(saved.serviceTier ? { serviceTier: saved.serviceTier } : {})
     }
   }
 }

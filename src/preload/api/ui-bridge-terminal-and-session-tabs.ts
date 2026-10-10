@@ -227,7 +227,7 @@ export const uiTerminalAndSessionTabsApi = {
       worktreeId: string
       filePath: string
       relativePath: string
-      runtimeEnvironmentId?: string
+      runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
     }) => void
   ): (() => void) => {
@@ -237,7 +237,7 @@ export const uiTerminalAndSessionTabsApi = {
         worktreeId: string
         filePath: string
         relativePath: string
-        runtimeEnvironmentId?: string
+        runtimeEnvironmentId?: string | null
         navigation?: RuntimeNavigationTarget
       }
     ) => callback(data)

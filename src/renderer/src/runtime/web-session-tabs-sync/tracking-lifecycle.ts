@@ -27,6 +27,10 @@ import {
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
 import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
 import {
+  forgetRetiredEpochCensuses,
+  resetRetiredEpochCensusesForTests
+} from './retired-epoch-census'
+import {
   clearWebAgentSessionHandoffsForWorktree,
   clearWebAgentSessionHandoffsForEnvironment
 } from '../web-agent-session-handoff'
@@ -101,6 +105,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   hostWorkingClientBoundaryByPaneKey.clear()
   sessionTabsTrackingGenerations.reset()
   resetWebSessionBrowserPlacementsForTests()
+  resetRetiredEpochCensusesForTests()
 }
 
 export function _getWebSessionTabsTrackingCountsForTest(): {
@@ -137,6 +142,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
+  forgetRetiredEpochCensuses((candidate) => candidate === key)
   // The receipt ledger and removal watermark are deliberately kept: they order a delayed
   // predecessor frame against the live publisher's next one, which is the whole point of a
   // retraction. Clearing the live view is this function's job; forgetting what was received is not.
@@ -161,6 +167,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
   sessionTabsTrackingGenerations.advance(trimmedEnvironmentId)
+  forgetRetiredEpochCensuses((key) => key.startsWith(keyPrefix))
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       latestSessionTabsSnapshotByWorktree.delete(key)

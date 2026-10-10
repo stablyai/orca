@@ -747,6 +747,28 @@ describe('WebSocketTransport', () => {
       await expect(transport.start()).rejects.toThrow('open EACCES')
     })
 
+    it('tries the deterministic ladder before an OS-assigned port (#15490)', async () => {
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: 6768,
+        fallbackPort: 62944,
+        fallbackLadder: [6769, 6770, 6771]
+      })
+      transports.push(transport)
+      const attempted: number[] = []
+      const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
+      withListen.tryListen = async (port: number) => {
+        attempted.push(port)
+        if (port !== 6770) {
+          throw Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' })
+        }
+      }
+
+      await transport.start()
+      expect(attempted).toEqual([62944, 6768, 6769, 6770])
+      expect(transport.persistedFallbackFailed).toBe(true)
+    })
+
     it('retries the persisted fallback port before an OS-assigned one', async () => {
       const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
       transports.push(holder)

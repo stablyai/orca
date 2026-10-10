@@ -3426,7 +3426,8 @@
             "ec2adf093e": "Iniciar {{value0}} en un nuevo terminal",
             "465e432ef1": "No se pudo generar el comando de inicio para {{value0}}.",
             "e518f544b1": "No se detectaron agentes",
-            "8dea9b5cdf": "No hay agentes habilitados"
+            "8dea9b5cdf": "No hay agentes habilitados",
+            "needsServerUpdate": "Actualiza Orca en este servidor para ver los agentes de este espacio de trabajo"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Cambiar pestaña",
@@ -11458,7 +11459,6 @@
           "pathGroup": "Cómo llega el teléfono a este ordenador",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. El inicio de sesión solo es necesario para Relay.",
-          "signInRequired": "Solo Relay — LAN no necesita una cuenta.",
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
           "signInAgain": "Volver a iniciar sesión para Relay",
           "localTitle": "LAN",
@@ -17982,6 +17982,7 @@
         "model": "Modelo",
         "effort": "Esfuerzo",
         "fastMode": "Modo rápido",
+        "speed": "Velocidad",
         "thinking": "Razonamiento",
         "options": "Opciones",
         "sessionOptions": "Opciones de sesión",
@@ -18002,7 +18003,8 @@
           "high": "Alto",
           "xhigh": "Muy alto",
           "max": "Máximo",
-          "ultra": "Supremo"
+          "ultra": "Supremo",
+          "standard": "Estándar"
         },
         "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
         "commands": "Comandos",
@@ -19334,6 +19336,7 @@
       "sortResultsAriaLabel": "Ordenar resultados: {{value0}}",
       "consent": "¿Activar la búsqueda de texto completo? Orca crea un índice en esta computadora a partir de las transcripciones locales de los agentes, incluidas conversaciones completas y hasta 3.072 caracteres por salida de herramienta. El contenido no se censura. Los clientes emparejados autenticados pueden buscarlo.",
       "remoteDisabled": "La búsqueda está desactivada en esta computadora. Activa la indexación de transcripciones en esa computadora para buscar sus sesiones.",
+      "titleOnly": "La búsqueda de texto completo está desactivada en esta computadora, así que solo se buscan los títulos de las sesiones.",
       "notReady": "El índice de búsqueda aún no está listo. Reintenta en un momento.",
       "noService": "La búsqueda no está disponible en esta computadora. Puede que necesite una actualización de Orca o un entorno de ejecución compatible con la búsqueda.",
       "unsupportedAgent": "Esta computadora no admite la búsqueda en el historial del agente seleccionado. Actualiza Orca en esa computadora o selecciona otro agente.",

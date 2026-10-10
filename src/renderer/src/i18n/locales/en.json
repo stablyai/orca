@@ -3640,7 +3640,8 @@
             "ec2adf093e": "Launch {{value0}} in a new terminal",
             "465e432ef1": "Could not build launch command for {{value0}}.",
             "e518f544b1": "No agents detected",
-            "8dea9b5cdf": "No enabled agents"
+            "8dea9b5cdf": "No enabled agents",
+            "needsServerUpdate": "Update Orca on this server to list this workspace’s agents"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -11682,14 +11683,14 @@
           "pathGroup": "How the phone reaches this computer",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "Phone can be on cellular or any Wi‑Fi. Sign-in required for Relay only.",
-          "signInRequired": "Relay only — LAN does not need an account.",
           "relayUnavailable": "Orca Relay isn’t available in this build. Use LAN.",
           "signIn": "Sign in for Relay",
           "signInAgain": "Sign in again for Relay",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
           "retrying": "Retrying",
-          "relayCell": "Relay cell"
+          "relayCell": "Relay cell",
+          "relaySignInDetail": "Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account."
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",
@@ -14741,7 +14742,9 @@
           "retry": "Retry Relay",
           "copyDiagnostics": "Copy diagnostics",
           "reconnectTitle": "Your Orca account session expired.",
-          "reconnectBody": "Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi."
+          "reconnectBody": "Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi.",
+          "notEntitledTitle": "Orca Relay isn’t included with this Orca account.",
+          "rateLimitedBody": "Orca Relay is busy. Wait a minute and retry, or use LAN to pair over Tailscale or the same Wi‑Fi."
         }
       },
       "gitlab": {
@@ -17861,6 +17864,10 @@
         "preloadApi": {
           "cursorAccounts": {
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
+          },
+          "accounts": {
+            "signInHostOnly": "Adding or re-signing an account is only available in the desktop app on the computer running Orca.",
+            "claudeWslDefaultUnavailable": "Switching a WSL lane back to the system default is only available in the desktop app."
           }
         }
       },
@@ -18278,6 +18285,7 @@
         "model": "Model",
         "effort": "Effort",
         "fastMode": "Fast mode",
+        "speed": "Speed",
         "thinking": "Thinking",
         "options": "Options",
         "sessionOptions": "Session options",
@@ -18298,7 +18306,8 @@
           "high": "High",
           "xhigh": "Extra high",
           "max": "Max",
-          "ultra": "Ultra"
+          "ultra": "Ultra",
+          "standard": "Standard"
         },
         "pendingAttachmentLimit": "Too many attachments are waiting. Finish composing before attaching more.",
         "viewAttachment": "View image",
@@ -18724,6 +18733,11 @@
         "EditorFileTabContextMenu": {
           "closeOthers": "Close Others",
           "closeTabsToLeft": "Close Tabs To The Left"
+        },
+        "CopyTabIdMenuItem": {
+          "copied": "Tab ID copied",
+          "failed": "Could not copy tab ID",
+          "copy": "Copy Tab ID"
         }
       }
     },
@@ -19322,6 +19336,7 @@
       "sortResultsAriaLabel": "Sort results: {{value0}}",
       "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.",
       "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
+      "titleOnly": "Full-text search is off on this computer, so only session titles are matched.",
       "notReady": "The search index is not ready yet. Try again shortly.",
       "noService": "Search is unavailable on this computer. It may need an Orca update or a runtime with search support.",
       "unsupportedAgent": "This computer does not support history search for the selected agent. Update Orca on that computer or select another agent.",

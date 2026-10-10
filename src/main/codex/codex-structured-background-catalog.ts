@@ -1,14 +1,6 @@
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import {
-  fetchCodexModelCatalogListing,
-  type CodexModelCatalogListing
-} from './codex-structured-model-catalog'
-import { reportedCodexSessionOptions } from './codex-structured-session-options'
-import type {
-  CodexStructuredSessionAdapterDeps,
-  CodexSession
-} from './codex-structured-session-state'
-import { reconcileCodexFastModeOption } from './codex-structured-fast-mode'
+import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
+import type { CodexSession } from './codex-structured-session-state'
 
 type BackgroundCatalogInput = {
   session: CodexSession
@@ -16,27 +8,6 @@ type BackgroundCatalogInput = {
   sessions: ReadonlyMap<string, CodexSession>
   timeoutMs: number | undefined
   logger: StructuredAgentSessionLogger | undefined
-  optionRevision?: () => number
-  onEvent?: CodexStructuredSessionAdapterDeps['onEvent']
-}
-
-/** Turns read tiers from the store; only a legacy saved tier needs migrating here. */
-function applyListing(session: CodexSession, listing: CodexModelCatalogListing): void {
-  if (!session.options.has('serviceTier')) {
-    return
-  }
-  const model =
-    session.options.get('model') ??
-    session.reportedOptions.model ??
-    listing.models.find((entry) => entry.isDefault)?.id ??
-    listing.models[0]?.id ??
-    ''
-  reconcileCodexFastModeOption(session, {
-    fastModeTierByModel: listing.fastModeTierByModel,
-    currentFastMode: undefined,
-    model,
-    modelFastModeSupport: undefined
-  })
 }
 
 async function refresh(input: BackgroundCatalogInput): Promise<void> {
@@ -45,30 +16,14 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
   const store = access?.store
   const fingerprint = access?.fingerprint
   const prior = fingerprint ? store?.get(fingerprint) : undefined
-  const model = session.options.get('model') ?? session.reportedOptions.model
-  const needsTier =
-    (session.options.get('fastMode') === 'true' || session.options.has('serviceTier')) &&
-    (!model || !prior?.fastModeTierByModel[model])
   if (
     fingerprint &&
     store &&
-    (store.hasActiveFailure(fingerprint) || (prior && !store.isStale(prior) && !needsTier))
+    (store.hasActiveFailure(fingerprint) || (prior && !store.isStale(prior)))
   ) {
     return
   }
   const isCurrent = (): boolean => sessions.get(sessionId) === session && !session.ended
-  const optionRevision = input.optionRevision?.() ?? 0
-  const report = (): void => {
-    input.onEvent?.({
-      type: 'options-reported',
-      sessionId,
-      fence: session.fence,
-      acquisitionGeneration: session.acquisitionGeneration,
-      reportedOptions: reportedCodexSessionOptions(session),
-      restoreSkippedOptions: [],
-      optionRevision
-    })
-  }
   try {
     const listing = await fetchCodexModelCatalogListing({
       connection: session.connection,
@@ -83,11 +38,6 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
     }
     const latest = fingerprint ? store?.get(fingerprint) : undefined
     if (latest && latest !== prior) {
-      applyListing(session, {
-        models: latest.models,
-        fastModeTierByModel: new Map(Object.entries(latest.fastModeTierByModel))
-      })
-      report()
       return
     }
     if (fingerprint && store) {
@@ -97,14 +47,11 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
         'codex',
         {
           models: listing.models,
-          fastModeTierByModel: listing.fastModeTierByModel,
           origin: 'live-session'
         },
         'discovery'
       )
     }
-    applyListing(session, listing)
-    report()
   } catch (error) {
     if (!isCurrent()) {
       return

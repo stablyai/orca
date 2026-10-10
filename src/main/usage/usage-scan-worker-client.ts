@@ -93,7 +93,13 @@ export class UsageScanWorkerClient {
     if (value.operation !== 'splitCacheFile') {
       throw new Error(`Usage scan worker answered ${value.operation}, expected splitCacheFile`)
     }
-    return { reportText: value.reportText, migrated: value.migrated }
+    return {
+      reportText: value.reportText,
+      migrated: value.migrated,
+      ...(value.reportIntegrityVerified === undefined
+        ? {}
+        : { reportIntegrityVerified: value.reportIntegrityVerified })
+    }
   }
 
   private async dispatch(body: UsageScanWorkerRequestBody): Promise<UsageScanWorkerValue> {

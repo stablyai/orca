@@ -12,7 +12,6 @@ export type AgentModelCatalogSource = 'discovery' | 'live'
 export type AgentModelCatalogSuccess = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  fastModeTierByModel: ReadonlyMap<string, string>
   origin: 'live-session' | 'probe'
   /** A row only this session's launch added (its own `--model`): kept only once the account's
    *  catalog already lists that model. */
@@ -25,8 +24,6 @@ export type AgentModelCatalogSuccess = {
 export type AgentModelCatalogListing = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  /** Provider-advertised Fast tier per model id. */
-  fastModeTierByModel: Record<string, string>
   origin: 'live-session' | 'probe'
   at: number
 }
@@ -119,7 +116,6 @@ export type AgentModelCatalogEntry = {
   // The merged view every reader uses, derived from the two listings above.
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
-  fastModeTierByModel: Record<string, string>
   origin: 'live-session' | 'probe'
   fetchedAt: number
 }
@@ -188,10 +184,6 @@ export function agentModelCatalogEntry(
     configured,
     models: mergedModels(discovered, live, configured),
     ...(fastModeSupport ? { fastModeSupport } : {}),
-    fastModeTierByModel: {
-      ...live?.fastModeTierByModel,
-      ...discovered?.fastModeTierByModel
-    },
     origin: newer.origin,
     fetchedAt: newer.at
   }
@@ -217,7 +209,6 @@ export function agentModelCatalogEntryWithSuccess(
   const listing: AgentModelCatalogListing = {
     models: models.map((model) => ({ ...model })),
     ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {}),
-    fastModeTierByModel: Object.fromEntries(success.fastModeTierByModel.entries()),
     origin: success.origin,
     at
   }
@@ -272,12 +263,7 @@ export function entryWithConfiguredDefault(
 /** What a saved entry says, without its clocks: an unchanged key needs no write to disk. */
 export function agentModelCatalogListingKey(entry: AgentModelCatalogEntry): string {
   const facts = (listing: AgentModelCatalogListing | null): unknown =>
-    listing && [
-      listing.origin,
-      listing.models,
-      listing.fastModeSupport ?? null,
-      listing.fastModeTierByModel
-    ]
+    listing && [listing.origin, listing.models, listing.fastModeSupport ?? null]
   return JSON.stringify([
     facts(entry.discovered),
     facts(entry.live),

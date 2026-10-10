@@ -90,7 +90,8 @@ vi.mock('../rpc/relay-transport', () => ({
 
 import { RelaySessionBroker, StaleRelayBrokerError } from './relay-session-broker'
 import { RelayHttpError } from './relay-http-client'
-import { RelayAuthCoordinator, type RelayAuthContext } from './relay-auth-coordinator'
+import { RelayAuthCoordinator } from './relay-auth-coordinator'
+import type { RelayAuthContext } from './relay-auth-identity'
 import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
 
 function deferred<T>() {

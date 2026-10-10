@@ -89,6 +89,8 @@ export type TerminalCreateOptions = {
   agentSessionClaim?: AgentSessionExecutionClaim
   agentSessionCreateOperationId?: string
   signal?: AbortSignal
+  /** Refuse (`worktree_terminals_sleeping`) instead of waking a worktree the host has put to sleep. */
+  refuseSleptWorktree?: boolean
   onPtySpawnCommitted?: () => void
   /** Called before the spawn request leaves this process; a throw before it proves nothing spawned. */
   onPtySpawnDispatched?: (launch?: {

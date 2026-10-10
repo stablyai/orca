@@ -34,13 +34,13 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       identity: identityFor('session-1'),
       fence: 7,
       spawnToken: 'spawn-9',
-      options: { model: 'gpt-saved', effort: 'low', fastMode: 'true' }
+      options: { model: 'gpt-saved', effort: 'low', serviceTier: 'priority' }
     })
 
     expect(codexStartReport(adapter).reportedOptions).toEqual({
       model: 'gpt-saved',
       effort: 'low',
-      fastMode: true
+      serviceTier: 'priority'
     })
     expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
       'initialize',

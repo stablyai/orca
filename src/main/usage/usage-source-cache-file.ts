@@ -18,8 +18,12 @@ export type UsageSourceCacheRef = {
   reuse: boolean
 }
 
-export type UsageCacheSplitRequest = { cacheFile: string; sourceKey: string }
-export type UsageCacheSplitResult = { reportText: string | null; migrated: boolean }
+export type UsageCacheSplitRequest = { cacheFile: string; sourceKey: string; providerId?: 'claude' }
+export type UsageCacheSplitResult = {
+  reportText: string | null
+  migrated: boolean
+  reportIntegrityVerified?: boolean
+}
 
 export function usageSourceCachePath(cacheFile: string): string {
   const { dir, name } = parse(cacheFile)
@@ -48,17 +52,34 @@ export async function writeUsageSourceCache(
   ref: UsageSourceCacheRef,
   sources: readonly unknown[]
 ): Promise<void> {
+  await writeUsageSourceCacheText(
+    ref,
+    JSON.stringify({
+      schemaVersion: ref.schemaVersion,
+      worktreeFingerprint: ref.worktreeFingerprint,
+      sources
+    })
+  )
+}
+
+export async function writeUsageSourceCacheText(
+  ref: UsageSourceCacheRef,
+  text: string
+): Promise<void> {
+  await writeUsageSourceCacheData(ref, text)
+}
+
+export async function writeUsageSourceCacheData(
+  ref: UsageSourceCacheRef,
+  data: string | Uint8Array
+): Promise<void> {
   await mkdir(dirname(ref.path), { recursive: true }).catch(() => {})
   // Why: a worker terminated mid-write orphans a multi-MB temp file; reclaim earlier launches' ones.
   await removeStaleDurableWriteTempFiles(ref.path)
   await writeFileDurable(
     durableWriteTempPath(ref.path, threadId > 0 ? String(threadId) : undefined),
     ref.path,
-    JSON.stringify({
-      schemaVersion: ref.schemaVersion,
-      worktreeFingerprint: ref.worktreeFingerprint,
-      sources
-    })
+    data
   )
 }
 

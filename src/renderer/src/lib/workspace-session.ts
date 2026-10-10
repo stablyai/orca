@@ -208,9 +208,15 @@ export function buildSanitizedTabsByWorktree(
     Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, recovery: _recovery, ...rest } = tab
+        const {
+          pendingActivationSpawn: _unused,
+          recovery: _recovery,
+          restoredFromSession: _restored,
+          ...rest
+        } = tab
         void _unused
         void _recovery
+        void _restored
         return rest
       })
     ])

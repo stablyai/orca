@@ -359,6 +359,7 @@ describe('UsageProviderStoreLifecycle', () => {
     // A write racing the load must not clobber the history being loaded.
     const disabled = store.setEnabled(false)
 
+    await Promise.resolve()
     expect(split).toHaveBeenCalledWith({ cacheFile, sourceKey: 'processedSources' })
     await store.whenLoaded()
     await disabled

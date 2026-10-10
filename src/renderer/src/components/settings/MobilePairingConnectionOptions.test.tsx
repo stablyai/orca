@@ -89,7 +89,9 @@ describe('MobilePairingConnectionOptions', () => {
     const signInPanel = screen.getByTestId('anywhere-sign-in-panel')
     const signIn = screen.getByRole('button', { name: 'Sign in for Relay' })
     expect(signInPanel).toBeVisible()
-    expect(screen.getByText('Relay only — LAN does not need an account.')).toBeVisible()
+    expect(
+      screen.getByText(/Signs this desktop in to Orca and routes the phone through Orca’s servers/)
+    ).toBeVisible()
     // Why: CTA must sit between Relay and LAN so it is not buried under LAN.
     expect(
       relay.compareDocumentPosition(signInPanel) & Node.DOCUMENT_POSITION_FOLLOWING
