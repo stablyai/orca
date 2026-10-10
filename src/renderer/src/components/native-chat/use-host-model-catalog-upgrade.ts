@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import {
   readAgentSessionUnavailable,
   type AgentSessionUnavailable
@@ -63,6 +63,9 @@ export function useHostModelCatalogUpgrade(args: {
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
+  /** The listing the host said was running has landed: the session's own options answer (a
+   *  stopped chat's, decided against that listing) is worth reading again. */
+  onListingSettled?: () => void
 }): { unavailable: AgentSessionUnavailable | null } {
   const {
     activeOptionRecordRef,
@@ -90,6 +93,10 @@ export function useHostModelCatalogUpgrade(args: {
   // A reason the agent's own start gave ends with that agent: its start or stop reads again,
   // dropping an answer read before it.
   const running = args.providerRunning === true
+  const onListingSettled = useRef(args.onListingSettled)
+  useEffect(() => {
+    onListingSettled.current = args.onListingSettled
+  }, [args.onListingSettled])
   useEffect(() => {
     if (!said) {
       return
@@ -137,7 +144,16 @@ export function useHostModelCatalogUpgrade(args: {
     }
     let leave: (() => void) | null = null
     const waitForListing = (): void => {
-      leave = joinHostModelListingWait(waitKey, () => read(true), apply)
+      leave = joinHostModelListingWait(
+        waitKey,
+        () => read(true),
+        (catalog) => {
+          apply(catalog)
+          if (catalog) {
+            onListingSettled.current?.()
+          }
+        }
+      )
     }
     if (isHostModelListingWaitInFlight(waitKey)) {
       // The host already answered that its listing is running: the built-in list stands meanwhile.

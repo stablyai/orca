@@ -266,7 +266,8 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
         adoption && isLegacyAgentSessionAccountHome(selectedAccountHome)
           ? { variable: selectedAccountHome.variable, path: adoption.accountHomePath }
           : selectedAccountHome,
-      ...(options ? { options } : {}),
+      // The saved selection is the user's own picks, so a model it names is a picker's.
+      ...(options ? { options, ...(options.model ? { modelSource: 'picker' as const } : {}) } : {}),
       ...(input.resumeFrom && adoption
         ? {
             // `adopt` is what makes the reservation seed the handle chain. Presence of

@@ -69,7 +69,7 @@ export type AgentModelCatalogService = {
     waitForListing?: boolean
     /** Answer only from the saved entry and held reason; start, join or re-check no listing. */
     savedOnly?: boolean
-    /** The model a decision is about; absent, the session record's saved model. */
+    /** The model a decision is about; absent, the session record's model when a picker chose it. */
     requiredModel?: string
     /** A start's read: it waits a few seconds for the one re-listing its selection takes, and
      *  starts no other listing, since the chat's own child lists. */
@@ -206,7 +206,10 @@ export function createAgentModelCatalogService(
         agents: deps.agents,
         agent: params.agent,
         fingerprint,
-        selected: params.requiredModel ?? scoped?.options?.model
+        // Only a picker's selection is ever replaced; a model a caller named runs as given.
+        selected:
+          params.requiredModel ??
+          (scoped?.modelSource === 'picker' ? scoped.options?.model : undefined)
       })
       // Every answer carries the reason the probe last found, read when the answer is made.
       const answer = async (

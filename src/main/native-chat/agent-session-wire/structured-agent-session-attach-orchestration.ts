@@ -185,7 +185,8 @@ async function runAttachUnderAbort(
           throw barrier.error
         }
       },
-      launchOptions: (record) => agentModelLaunchOptions(context.deps.modelCatalog, record),
+      launchOptions: (record) =>
+        agentModelLaunchOptions(context.deps.modelCatalog, context.deps.agents, record),
       authority: {
         ...(launchDirectory ? { launchDirectory } : {}),
         spawnToken: () => context.deps.mintSpawnToken?.() ?? randomUUID(),

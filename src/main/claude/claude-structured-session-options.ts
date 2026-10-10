@@ -18,6 +18,7 @@ import {
 } from './claude-structured-catalog-listing'
 import type { StructuredAgentSessionLiveOptions } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
+import { agentModelListNames } from '../../shared/agent-session-model-fallback'
 
 /**
  * The session's current effort, which only `get_settings` reports: the
@@ -200,10 +201,7 @@ export function claudeCatalogAdmitsModel(models: readonly ListedModel[], modelId
   // An empty list identifies no model, so it is not evidence against one — a live
   // CLI predating `list_models` would otherwise have every model refused under it.
   // Do not turn this into a refusal.
-  return (
-    models.length === 0 ||
-    models.some((model) => model.id === modelId || model.resolvedModel === modelId)
-  )
+  return models.length === 0 || agentModelListNames(models, modelId)
 }
 
 /** The built-in models a running child lists when the CLI gives it none; a chat at rest with no
@@ -219,7 +217,7 @@ export function claudeSessionListsModel(
 ): boolean {
   const discovered = listedModels(catalog ? { models: catalog } : null)
   const listed = discovered.length > 0 ? discovered : seedModels()
-  return modelId !== undefined && listed.some((row) => row.id === modelId)
+  return modelId !== undefined && agentModelListNames(listed, modelId)
 }
 
 export async function readClaudeStructuredSessionOptions(

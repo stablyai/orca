@@ -18,7 +18,7 @@ import {
 const CHILD_LISTING_CLOCK_MAX = 256
 
 /** The rules a catalog read applies to the chat's selected model, for an agent whose host replaces
- *  a gone selection; inert for any other agent. */
+ *  a gone selection; inert for any other agent, and with no selection it may replace. */
 export function selectedModelRules(input: {
   store: AgentModelCatalogStore
   agents: Pick<StructuredAgentRegistry, 'definition'> | undefined
@@ -28,24 +28,25 @@ export function selectedModelRules(input: {
 }): {
   /** An aged list lacking the selection, with no failure held: re-listed before it decides. */
   needsRelisting: (entry: AgentModelCatalogEntry | null) => boolean
-  /** The listed default a gone selection gives way to, named only while `listed` is current and
-   *  nothing (a listing running, a failure or a held reason) leaves doubt. */
+  /** The listed default a gone selection gives way to, named only for a selection, while `listed`
+   *  is the current account-level listing itself (not a running chat's, which a project's config
+   *  may narrow) and nothing (a listing running, a failure or a held reason) leaves doubt. */
   replacement: (listed: AgentModelCatalogEntry | null, listingInProgress: boolean) => string | null
 } {
   const { store, fingerprint, selected } = input
   const applies =
+    Boolean(selected) &&
     input.agents?.definition(input.agent)?.restingOptions.replacesUnlistedModel === true
   return {
     needsRelisting: (entry) =>
       applies &&
-      Boolean(selected) &&
       entry !== null &&
       !agentModelListNames(entry.models, selected ?? '') &&
       !store.isCurrent(entry) &&
       !store.hasActiveFailure(fingerprint),
     replacement: (listed, listingInProgress) =>
       applies &&
-      listed &&
+      listed?.origin === 'probe' &&
       !listingInProgress &&
       !store.failure(fingerprint)?.unavailable &&
       !store.hasActiveFailure(fingerprint) &&

@@ -9,9 +9,9 @@ import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtim
 const STALLED = 'claude-started-stalled'
 const HEALTHY = 'claude-started-healthy'
 const CALLER = { callerKey: 'client-1' }
-// Nothing was picked and no listed row names the model Claude's own config ran, so only the
-// effort it reported is recorded; the next start lets the config choose the model again.
-const PROVEN_OPTIONS = { effort: 'high' }
+// Nothing was picked: the start records the listed row that runs the model Claude's own config
+// chose (`claude-sonnet-5`), by the row's id, and the effort it reported.
+const PROVEN_OPTIONS = { model: 'sonnet', effort: 'high' }
 
 let claude = createScriptedClaudeRuntime([STALLED, HEALTHY])
 

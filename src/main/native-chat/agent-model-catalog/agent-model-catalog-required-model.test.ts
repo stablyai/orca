@@ -6,12 +6,16 @@ import { CLAUDE_STRUCTURED_AGENT } from '../../claude/claude-structured-agent-de
 import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
-import { settledAgentModelSelection } from './agent-model-catalog-selection'
+import {
+  agentModelLaunchOptions,
+  settledAgentModelSelection
+} from './agent-model-catalog-selection'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import {
   AGENT_MODEL_CATALOG_CURRENT_MS,
   AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
+  AGENT_MODEL_CATALOG_START_WAIT_MS,
   AgentModelCatalogStore,
   type AgentModelCatalogSuccess
 } from './agent-model-catalog-store'
@@ -200,6 +204,68 @@ describe('the catalog read for a selected model', () => {
     expect(settledAgentModelSelection(answer, { model: 'fable-6' })).toEqual({ model: 'fable-6' })
   })
 
+  it("never calls a model gone from a running chat's narrower list beside a current discovery", async () => {
+    const record = agentSessionRecordFixture()
+    record.provider = 'claude'
+    record.accountHome = HOME
+    const { clock, probe, service } = catalog({
+      ageMs: 0,
+      saved: listing('opus', 'sonnet'),
+      record
+    })
+    clock.now += 5_000
+    // A chat in a project whose Claude settings allow only Sonnet lists just that, and later.
+    service.recordLiveListing(record.sessionId, {
+      models: listing('sonnet').models.map((model) => ({ ...model, isDefault: false })),
+      frozenListingOf: 'chat-in-restricted-project'
+    })
+    clock.now += 5_000
+    const answer = await service.read({ agent: 'claude', requiredModel: 'opus', forStart: true })
+    expect(probe).not.toHaveBeenCalled()
+    expect(answer).not.toHaveProperty('unlistedModelReplacement')
+    expect(settledAgentModelSelection(answer, { model: 'opus', effort: 'high' })).toEqual({
+      model: 'opus',
+      effort: 'high'
+    })
+  })
+
+  it.each([
+    ['a caller named', 'caller' as const],
+    ['a record from before its source was kept holds', undefined]
+  ])('re-lists nothing and names no replacement for a model %s', async (_, modelSource) => {
+    const record: AgentSessionRecord = {
+      ...agentSessionRecordFixture(),
+      provider: 'claude',
+      accountHome: HOME,
+      options: { model: 'claude-sonnet-4-5' },
+      ...(modelSource ? { modelSource } : {})
+    }
+    for (const ageMs of [AGENT_MODEL_CATALOG_CURRENT_MS, 0]) {
+      const { probe, service } = catalog({ ageMs, record })
+      const answer = await service.read({
+        agent: 'claude',
+        sessionId: record.sessionId,
+        waitForListing: true
+      })
+      expect(probe).not.toHaveBeenCalled()
+      expect(answer).not.toHaveProperty('unlistedModelReplacement')
+      expect(settledAgentModelSelection(answer, record.options ?? {})).toEqual(record.options)
+    }
+  })
+
+  it("replaces a picker's selection the current list lacks", async () => {
+    const record: AgentSessionRecord = {
+      ...agentSessionRecordFixture(),
+      provider: 'claude',
+      accountHome: HOME,
+      options: { model: 'gone' },
+      modelSource: 'picker'
+    }
+    const { service } = catalog({ ageMs: 0, record })
+    const answer = await service.read({ agent: 'claude', sessionId: record.sessionId })
+    expect(answer).toMatchObject({ unlistedModelReplacement: 'sonnet' })
+  })
+
   it('names the listed default as the replacement even where a workspace hides which it is', async () => {
     const { service } = catalog({
       ageMs: 0,
@@ -224,5 +290,33 @@ describe('the catalog read for a selected model', () => {
         { id: 'opus', isDefault: false }
       ]
     })
+  })
+})
+
+describe('the options a start launches', () => {
+  it('launches as saved once the whole start read outlasts the start wait', async () => {
+    vi.useFakeTimers()
+    try {
+      const record = {
+        provider: 'claude',
+        sessionId: 'session-1',
+        options: { model: 'opus', effort: 'high' },
+        modelSource: 'picker' as const
+      }
+      // A read held up before any listing, as on a workspace-config check that never answers.
+      const read = vi.fn(() => new Promise<never>(() => {}))
+      const agents = { definition: () => CLAUDE_STRUCTURED_AGENT }
+      let launched: unknown = 'pending'
+      void agentModelLaunchOptions({ read }, agents, record).then((options) => {
+        launched = options
+      })
+      await vi.advanceTimersByTimeAsync(AGENT_MODEL_CATALOG_START_WAIT_MS - 1)
+      expect(launched).toBe('pending')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(launched).toEqual(record.options)
+      expect(read).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

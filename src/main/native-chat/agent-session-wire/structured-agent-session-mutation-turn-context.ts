@@ -21,12 +21,13 @@ export function mutationTurnContext<TValue>(
     agent: record.provider,
     logger: request.logger,
     ...(persistedOptions ? { persistedOptions } : {}),
-    persistOptions: (options) =>
+    persistOptions: (options, modelSource) =>
       request.store
         .replaceSessionOptions({
           sessionId: request.envelope.sessionId,
           fence,
           options,
+          ...(modelSource ? { modelSource } : {}),
           now: request.now()
         })
         .then(() => undefined),

@@ -73,6 +73,10 @@ function restingChat(input: {
     path: '/accounts/pinned'
   }
   record.options = input.options ?? {}
+  // A selection the user picked; a caller's model is never replaced.
+  if (record.options.model) {
+    record.modelSource = 'picker'
+  }
   const clock = { now: 1_000 }
   const store = new AgentModelCatalogStore({ now: () => clock.now })
   store.recordSuccess(
@@ -127,8 +131,11 @@ function restingChat(input: {
       { store: { getRecord: () => record }, agents },
       {
         sessionId: record.sessionId,
-        persistOptions: async (options) => {
+        persistOptions: async (options, modelSource) => {
           record.options = options
+          if (modelSource) {
+            record.modelSource = modelSource
+          }
         },
         publish: () => {}
       },
@@ -137,7 +144,9 @@ function restingChat(input: {
   // The picker's follow-up read, which waits for the re-listing an at-rest read only starts.
   const listed = () =>
     modelCatalog.read({ agent: record.provider, sessionId: record.sessionId, waitForListing: true })
-  return { record, clock, probe, modelCatalog, read, write, listed }
+  // What the next start launches with.
+  const launch = () => agentModelLaunchOptions(modelCatalog, agents, record)
+  return { record, clock, probe, modelCatalog, read, write, listed, launch }
 }
 
 function snapshotRow(state: StructuredAgentSessionOptionState, id: string) {
@@ -191,7 +200,7 @@ describe('Claude picker catalog at rest', () => {
       currentValue: 'xhigh',
       choices: OPUS.efforts
     })
-    expect(await agentModelLaunchOptions(chat.modelCatalog, chat.record)).toEqual({
+    expect(await chat.launch()).toEqual({
       model: 'opus',
       effort: 'xhigh'
     })
@@ -217,7 +226,7 @@ describe('Claude picker catalog at rest', () => {
       expect(snapshotRow(state, 'model')?.kind).toMatchObject({ currentValue: 'sonnet' })
       expect(snapshotRow(state, 'effort')?.kind).toMatchObject({ choices: SONNET.efforts })
       // The next start names the default explicitly; the read itself writes nothing.
-      expect(await agentModelLaunchOptions(chat.modelCatalog, chat.record)).toEqual(settled)
+      expect(await chat.launch()).toEqual(settled)
       expect(chat.record.options).toEqual({ model: 'opus', effort })
       expect(chat.probe).toHaveBeenCalledOnce()
     }
@@ -244,7 +253,7 @@ describe('Claude picker catalog at rest', () => {
     expect(snapshotRow(state, 'model')?.kind).toMatchObject({ currentValue: 'opus' })
     expect(snapshotRow(state, 'effort')).toBeUndefined()
     expect(canSetStructuredAgentSessionOption(state, 'effort', 'xhigh')).toBe(false)
-    expect(await agentModelLaunchOptions(chat.modelCatalog, chat.record)).toEqual({
+    expect(await chat.launch()).toEqual({
       model: 'opus',
       effort: 'xhigh'
     })
@@ -265,7 +274,7 @@ describe('Claude picker catalog at rest', () => {
       })
       expect((await chat.read()).result.current).toEqual({ model: 'opus', effort: 'xhigh' })
       let launched: Readonly<Record<string, string>> | undefined
-      void agentModelLaunchOptions(chat.modelCatalog, chat.record).then((options) => {
+      void chat.launch().then((options) => {
         launched = options
       })
       await vi.advanceTimersByTimeAsync(AGENT_MODEL_CATALOG_START_WAIT_MS - 1)

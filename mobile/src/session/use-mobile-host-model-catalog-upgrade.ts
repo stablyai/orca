@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react'
+import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
 import type { NativeChatSessionOptionRecord } from '../../../src/shared/native-chat-session-option-state'
@@ -35,6 +35,9 @@ export function useMobileHostModelCatalogUpgrade(args: {
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
+  /** The listing the host said was running has landed: the session's own options answer (a
+   *  stopped chat's, decided against that listing) is worth reading again. */
+  onListingSettled?: () => void
 }): void {
   const {
     activeOptionRecordRef,
@@ -48,6 +51,10 @@ export function useMobileHostModelCatalogUpgrade(args: {
     updateOptionState,
     worktree
   } = args
+  const onListingSettled = useRef(args.onListingSettled)
+  useEffect(() => {
+    onListingSettled.current = args.onListingSettled
+  }, [args.onListingSettled])
   useEffect(() => {
     if (!client || !sessionId || !enabled || !agent || !optionCatalog) {
       return
@@ -86,10 +93,16 @@ export function useMobileHostModelCatalogUpgrade(args: {
     }
     void read(false)
       .then((catalog) => {
-        if (catalog.origin === 'unknown' && catalog.listingInProgress === true && !stale) {
-          // Usable on the built-in list while the listing runs; it lands in place.
+        if (catalog.listingInProgress === true && !stale) {
+          // Usable on the list it has (else the built-in one) while the listing runs; it lands in
+          // place, and a stopped chat's options decided against it are read again.
           apply(catalog)
-          return read(true).then(apply)
+          return read(true).then((settled) => {
+            apply(settled)
+            if (!stale) {
+              onListingSettled.current?.()
+            }
+          })
         }
         apply(catalog)
         return undefined

@@ -100,7 +100,7 @@ export async function recordStructuredAgentSessionOptionIntent(
     }
   }
   const options = { ...record.options, [input.key]: input.value }
-  await ctx.persistOptions(options)
+  await ctx.persistOptions(options, input.key === 'model' ? 'picker' : undefined)
   ctx.publish()
   return { ok: true, value: { ...input, options } }
 }

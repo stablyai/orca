@@ -5,10 +5,27 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { attachParams, CALLER, hostTestState } from './structured-agent-session-host-test-harness'
+import type { AgentSessionModelSource } from '../../../shared/agent-session-options-replacement'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
+
+/** A new Claude chat whose saved model a picker chose, unless `modelSource` says otherwise. */
+function claudeChat(
+  options: Record<string, string>,
+  modelSource: AgentSessionModelSource | null = 'picker'
+) {
+  return attachParams({
+    provider: 'claude',
+    agent: 'claude',
+    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
+    providerHandle: undefined,
+    options,
+    ...(modelSource ? { modelSource } : {})
+  })
+}
 
 function catalogFake() {
   return {
@@ -24,6 +41,14 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 
 beforeEach(() => {
   ;({ host, acquire } = hostTestState())
+  const started = acquire.getMockImplementation()!
+  // The harness's child proves a Codex thread; a Claude chat's proves a Claude session.
+  acquire.mockImplementation(async (input) => {
+    const acquired = await started(input)
+    return host.deps.store.getRecord(SESSION)?.provider === 'claude'
+      ? { ...acquired, link: { ...acquired.link, handle: claudeProviderHandle('claude-1', null) } }
+      : acquired
+  })
 })
 
 describe('the model a start launches', () => {
@@ -48,7 +73,7 @@ describe('the model a start launches', () => {
       }))
       host.deps.modelCatalog = { ...catalogFake(), read }
 
-      const params = attachParams({ options: { model: 'opus', effort: 'high' } })
+      const params = claudeChat({ model: 'opus', effort: 'high' })
       expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
       expect(read).toHaveBeenCalledWith(
         expect.objectContaining({ sessionId: SESSION, forStart: true })
@@ -64,10 +89,27 @@ describe('the model a start launches', () => {
         throw new Error('catalog unavailable')
       })
     }
-    const params = attachParams({ options: { model: 'opus', effort: 'high' } })
+    const params = claudeChat({ model: 'opus', effort: 'high' })
     expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
     expect(acquire).toHaveBeenCalledWith(
       expect.objectContaining({ options: { model: 'opus', effort: 'high' } })
     )
+  })
+
+  it.each([
+    ['a caller named it', claudeChat({ model: 'claude-sonnet-4-5' }, 'caller')],
+    ['the record predates who chose it', claudeChat({ model: 'claude-sonnet-4-5' }, null)],
+    ['the agent never replaces one', attachParams({ options: { model: 'gpt-gone' } })]
+  ])('starts a saved model as given, reading no catalog, when %s', async (_, params) => {
+    const read = vi.fn(async () => ({
+      origin: 'probe' as const,
+      models: [{ id: 'sonnet', label: 'Sonnet', isDefault: true, efforts: [] }],
+      fetchedAt: NOW,
+      unlistedModelReplacement: 'sonnet'
+    }))
+    host.deps.modelCatalog = { ...catalogFake(), read }
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    expect(read).not.toHaveBeenCalled()
+    expect(acquire).toHaveBeenCalledWith(expect.objectContaining({ options: params.options }))
   })
 })

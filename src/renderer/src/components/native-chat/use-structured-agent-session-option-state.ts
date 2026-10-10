@@ -191,8 +191,12 @@ export function useStructuredAgentSessionOptionState(args: {
     }
   }, [contextRefresh])
 
+  // A stopped chat's options are decided against the host's listing, so one that lands re-reads them.
+  const rereadOptions = useCallback(() => optionsReadRef.current?.run(), [])
+
   return {
     conversationSupport,
+    rereadOptions,
     optionState,
     optionStateRef,
     activeOptionRecordRef,

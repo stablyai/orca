@@ -7,9 +7,10 @@ import {
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
 
-type ListedModelIdentity = { id: string; isDefault?: boolean; resolvedModel?: string }
+type ListedModelIdentity = { id: string; isDefault?: boolean; resolvedModel?: string | null }
 
-/** Whether `models` names `selected`, as an id or as the provider id a listed alias runs. */
+/** Whether `models` names `selected`, as an id or as the provider id a listed alias runs. The one
+ *  "is this model listed" rule, for every agent and every caller. */
 export function agentModelListNames(
   models: readonly ListedModelIdentity[],
   selected: string

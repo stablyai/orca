@@ -107,6 +107,13 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     hostLaunchDirectory,
     ...resolvedAttach
   } = resolved
+  // A caller's options replace the seed outright, and a model they name runs as given.
+  const callerOptions = args.options
+    ? {
+        options: args.options,
+        modelSource: args.options.model ? ('caller' as const) : undefined
+      }
+    : {}
   return {
     host,
     ...(hostLaunchDirectory ? { hostLaunchDirectory } : {}),
@@ -115,7 +122,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
       // they are the session's initial state, not its identity, so a retry that re-resolves them
       // must replay rather than conflict.
-      ...(args.options ? { options: args.options } : {}),
+      ...callerOptions,
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,

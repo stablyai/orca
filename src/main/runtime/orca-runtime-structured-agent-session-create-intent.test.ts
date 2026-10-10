@@ -233,6 +233,8 @@ describe('structured agent-session create intent', () => {
       path: '/configured/claude-home'
     })
     expect(intent.options).toEqual({ model: 'opus', effort: 'high', fastMode: 'true' })
+    // The saved selection is the user's picks, which a later list may find gone.
+    expect(intent.modelSource).toBe('picker')
     // createSupport reports this same seed, so a paired client's picker shows what create runs.
     expect(runtime.structuredAgentSessionLaunchSeedOptions('claude')).toEqual(intent.options)
   })

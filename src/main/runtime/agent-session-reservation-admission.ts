@@ -34,6 +34,7 @@ import {
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
+import type { AgentSessionModelSource } from '../../shared/agent-session-options-replacement'
 import { isAgentSessionLaunchArgs } from '../../shared/agent-session-launch-args'
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import {
@@ -62,6 +63,8 @@ export type AgentSessionReserveRequest = {
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
+  /** Who chose the model `options` name. */
+  modelSource?: AgentSessionModelSource
   /** The tab id a create reserved for this conversation, taken when its tab is published. An id
    *  another session's tab holds is refused here, before anything is spawned. */
   surfaceTabId?: string

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
+import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { CODEX_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
@@ -41,6 +42,24 @@ describe('structured agent session options', () => {
         choices: [{ value: 'reported-model', label: 'Reported Model' }]
       }
     })
+  })
+
+  it("names the listed default for a child that reports no model only where the agent's seed proves it", () => {
+    const report = {
+      models: [{ id: 'listed-default', label: 'Listed default', isDefault: true, efforts: [] }],
+      current: {}
+    }
+    const shown = (seed: typeof GROK_SESSION_OPTION_CATALOG) => {
+      const state = applyStructuredAgentSessionOptions(
+        createStructuredAgentSessionOptionState('grok', seed),
+        seed,
+        report
+      )
+      const [model] = structuredAgentSessionOptionSnapshot(state)
+      return model?.kind.type === 'select' ? (model.kind.currentValue ?? null) : null
+    }
+    expect(shown(GROK_SESSION_OPTION_CATALOG)).toBe('listed-default')
+    expect(shown(CODEX_SESSION_OPTION_CATALOG)).toBeNull()
   })
 
   it('projects native Codex selects while bridge Codex keeps its agent picker', () => {

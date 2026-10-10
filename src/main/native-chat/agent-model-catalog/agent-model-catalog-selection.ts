@@ -1,6 +1,9 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
 import type { AgentModelCatalogService } from './agent-model-catalog-service'
+import { AGENT_MODEL_CATALOG_START_WAIT_MS } from './agent-model-catalog-store'
+import type { StructuredAgentRegistry } from '../agent-session-wire/structured-agent-registry'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
   nearestAgentEffort,
   unlistedAgentModelReplacement
@@ -33,19 +36,29 @@ export function settledAgentModelSelection(
   return { ...rest, model: replacement, ...(carried ? { effort: carried } : {}) }
 }
 
-/** The saved options a start launches with, decided as an at-rest read is. The catalog never gates
- *  a start: no catalog, a failed read, or a re-listing slower than the start's short wait launches
- *  the selection as saved. */
+/** The saved options a start launches with, decided as an at-rest read is. Only a picker's
+ *  selection, for an agent whose host replaces a gone one, is read against the catalog at all, and
+ *  the catalog never gates a start: no catalog, a failed read, or a read slower than the start's
+ *  short wait launches the selection as saved. */
 export async function agentModelLaunchOptions(
   catalog: Pick<AgentModelCatalogService, 'read'> | undefined,
-  record: Pick<AgentSessionRecord, 'provider' | 'sessionId' | 'options'>
+  agents: Pick<StructuredAgentRegistry, 'definition'>,
+  record: Pick<AgentSessionRecord, 'provider' | 'sessionId' | 'options' | 'modelSource'>
 ): Promise<Readonly<Record<string, string>> | undefined> {
   const saved = record.options
-  if (!catalog || !saved?.model) {
+  if (
+    !catalog ||
+    !saved?.model ||
+    record.modelSource !== 'picker' ||
+    agents.definition(record.provider)?.restingOptions.replacesUnlistedModel !== true
+  ) {
     return saved
   }
-  const answer = await catalog
-    .read({ agent: record.provider, sessionId: record.sessionId, forStart: true })
-    .catch(() => null)
+  // The whole read, the workspace-config checks it may wait on included.
+  const answer = await withTimeout<AgentSessionModelCatalogResult | null>(
+    catalog.read({ agent: record.provider, sessionId: record.sessionId, forStart: true }),
+    AGENT_MODEL_CATALOG_START_WAIT_MS,
+    null
+  )
   return answer ? settledAgentModelSelection(answer, saved) : saved
 }

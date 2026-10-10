@@ -109,10 +109,11 @@ describe('a registered definition', () => {
 
     const accepted = pick(agents, RECORD, 'pilotOption')
     await expect(accepted.result).resolves.toMatchObject({ ok: true })
-    expect(accepted.persistOptions).toHaveBeenCalledWith({
-      model: 'pilot-model',
-      pilotOption: 'enabled'
-    })
+    // Not a model pick, so it names no model source.
+    expect(accepted.persistOptions).toHaveBeenCalledWith(
+      { model: 'pilot-model', pilotOption: 'enabled' },
+      undefined
+    )
     // Claude's own module accepts `model`; the registration says otherwise and wins.
     const refused = pick(agents, RECORD, 'model')
     await expect(refused.result).resolves.toMatchObject({ ok: false })

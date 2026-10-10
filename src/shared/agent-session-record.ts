@@ -2,6 +2,10 @@ import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './age
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 import {
+  isAgentSessionModelSource,
+  type AgentSessionModelSource
+} from './agent-session-options-replacement'
+import {
   isPersistedAgentSessionHandoffStage,
   isPersistedAgentSessionRuntimeKind,
   type PersistedAgentSessionLease,
@@ -157,6 +161,9 @@ export type AgentSessionRecord = {
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
+  /** Who chose `options.model`. Absent when it holds none, or on a record from before this was
+   *  kept, which reads as a caller's: only a picker's selection is ever replaced. */
+  modelSource?: AgentSessionModelSource
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
@@ -165,13 +172,6 @@ export type AgentSessionRecord = {
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
-}
-
-export type AgentSessionOptionsReplacement = {
-  sessionId: string
-  fence: number
-  options: Readonly<Record<string, string>>
-  now: number
 }
 
 const MAX_ID_LENGTH = 512
@@ -360,6 +360,7 @@ export function isPersistedAgentSessionRecord(
     (record.launchDirectory === undefined ||
       isBoundedString(record.launchDirectory, MAX_PATH_LENGTH)) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
+    (record.modelSource === undefined || isAgentSessionModelSource(record.modelSource)) &&
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.providerContextBoundary === undefined ||
       isAgentSessionProviderContextBoundary(record.providerContextBoundary)) &&

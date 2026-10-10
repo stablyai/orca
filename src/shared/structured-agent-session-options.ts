@@ -86,7 +86,14 @@ export function structuredAgentSessionOptionCatalog(
       options: seed.unknownModelOptions ?? []
     })
   }
-  return { ...seed, models, defaultModelIsCliDefault: result.current.model ? true : undefined }
+  // A child that reports no model has said nothing about what it runs: its list's default is a
+  // guess unless the agent's own seed proves it is what a launch with no model runs.
+  return {
+    ...seed,
+    models,
+    defaultModelIsCliDefault:
+      result.current.model || seed.defaultModelIsCliDefault ? true : undefined
+  }
 }
 
 export type StructuredAgentSessionOptionState = {
