@@ -49,6 +49,7 @@ function setup(
     feeds?: SeatFeedResponse[]
     reserve?: (cellId: string, sticky: boolean) => ReserveAttempt
     row?: (identity: { userId: string; relayHostId: string }) => Promise<{ cellId: string; assignmentEpoch: number } | null>
+    databaseBusy?: () => boolean
     mode?: 'off' | 'dry-run' | 'on'
     startedAt?: number
   } = {}
@@ -84,6 +85,7 @@ function setup(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: see above.
     client: client as unknown as CellReserveClient,
     readRow: options.row ?? (async () => null),
+    ...(options.databaseBusy ? { databaseBusy: options.databaseBusy } : {}),
     now: () => now.value,
     random: () => 0.25,
     log: () => undefined
@@ -253,8 +255,11 @@ describe('reserve assignment on a director', () => {
   })
 
   it('after a WRONG_CELL leave, any director reads the row and mints above it', async () => {
-    const leftWrongCell = (row: () => Promise<{ cellId: string; assignmentEpoch: number } | null>) => {
-      const harness = setup({ row })
+    const leftWrongCell = (
+      row: () => Promise<{ cellId: string; assignmentEpoch: number } | null>,
+      databaseBusy?: () => boolean
+    ) => {
+      const harness = setup({ row, ...(databaseBusy ? { databaseBusy } : {}) })
       // Another director demoted the seat: this one only sees the leave in c1's feed.
       harness.directory.apply(
         'c1',
@@ -285,6 +290,14 @@ describe('reserve assignment on a director', () => {
       kind: 'answer',
       assignment: { assignmentEpoch: 8 }
     })
+    // Pool waiters: the read is skipped outright, so a stall cannot stack timed-out reads.
+    const busyRow = vi.fn(async () => ({ cellId: 'c2', assignmentEpoch: 8 }))
+    const busy = leftWrongCell(busyRow, () => true)
+    expect(await busy.assignment.plan(HOST, { reconnect: true, region: US })).toMatchObject({
+      kind: 'answer',
+      assignment: { assignmentEpoch: 8 }
+    })
+    expect(busyRow).not.toHaveBeenCalled()
     // A stalled database: the read gives up after its bound and places as before.
     vi.useFakeTimers()
     try {
