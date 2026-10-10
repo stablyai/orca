@@ -148,4 +148,101 @@ test.describe('Source Control AI commit messages', () => {
       cleanupWorktree(testRepoPath, worktreePath, branchName)
     }
   })
+
+  test('copies and saves a base preview without losing staged context', async ({
+    orcaPage,
+    testRepoPath,
+    registerPostElectronShutdownCleanup
+  }, testInfo) => {
+    const { branchName, worktreePath } = createWorktreeWithStagedChange(testRepoPath)
+    registerPostElectronShutdownCleanup(async () =>
+      cleanupWorktree(testRepoPath, worktreePath, branchName)
+    )
+    const generatorPath = path.join(os.tmpdir(), `${branchName}-preview-generator.cjs`)
+    writeLinkedIssueEchoGenerator(generatorPath, [
+      "  const valid = prompt.includes('diff --git a/README.md b/README.md') && prompt.includes('+Generated flow.') && prompt.includes('Use Conventional Commits.') && !prompt.includes('src/example.ts') && !prompt.includes('{stagedPatch}')",
+      "  process.stdout.write(valid ? 'fix: describe real staged changes' : 'wrong context')"
+    ])
+    try {
+      await waitForSessionReady(orcaPage)
+      await openSourceControlForWorktree(orcaPage, testRepoPath, worktreePath)
+      await orcaPage.evaluate(async () => {
+        await window.__store!.getState().updateSettings({
+          activeRuntimeEnvironmentId: null,
+          sourceControlAi: {
+            enabled: true,
+            agentId: null,
+            customAgentCommand: '',
+            selectedModelByAgent: {},
+            selectedThinkingByModel: {},
+            instructionsByOperation: {},
+            actions: {}
+          },
+          commitMessageAi: {
+            enabled: true,
+            agentId: null,
+            customAgentCommand: '',
+            selectedModelByAgent: {},
+            selectedThinkingByModel: {},
+            customPrompt: ''
+          }
+        })
+      })
+      await orcaPage.getByRole('button', { name: 'Generate commit message with AI' }).click()
+      const dialog = orcaPage.getByRole('dialog', { name: 'Generate Commit Message' })
+      await expect(dialog).toBeVisible()
+      await orcaPage.evaluate(async (generatorPath) => {
+        await window.__store!.getState().updateSettings({
+          sourceControlAi: {
+            enabled: true,
+            agentId: 'custom',
+            selectedModelByAgent: {},
+            selectedThinkingByModel: {},
+            instructionsByOperation: {},
+            actions: {},
+            customAgentCommand: `node ${JSON.stringify(generatorPath)}`
+          }
+        })
+      }, generatorPath)
+      await dialog.getByRole('button', { name: '{basePrompt}', exact: true }).hover()
+      const preview = orcaPage.locator('[data-slot="hover-card-content"] pre')
+      await expect(preview).toContainText('{stagedPatch}')
+      const copied = await preview.innerText()
+      expect(copied).toContain('{stagedFiles}')
+      expect(copied).not.toContain('src/example.ts')
+      await orcaPage.screenshot({ path: testInfo.outputPath('preview-placeholders.png') })
+      await orcaPage.locator('[data-slot="hover-card-content"]').evaluate((card) => {
+        card.scrollTop = card.scrollHeight
+      })
+      await orcaPage.screenshot({ path: testInfo.outputPath('preview-context-placeholders.png') })
+      await dialog.getByRole('heading', { name: 'Generate Commit Message' }).hover()
+      await expect(preview).not.toBeVisible()
+      const template = dialog.getByRole('textbox', { name: 'Command template' })
+      await template.fill('Write a commit message without context.')
+      await expect(dialog).toContainText('never sees the staged changes')
+      await orcaPage.screenshot({ path: testInfo.outputPath('missing-context-warning.png') })
+      await template.fill(
+        copied.replace(
+          '- First line: imperative mood, <= 72 chars, no trailing period.',
+          '- Use Conventional Commits.'
+        )
+      )
+      await expect(dialog).not.toContainText('never sees the staged changes')
+      await dialog.getByRole('button', { name: 'Save defaults', exact: true }).click()
+      await expect(dialog.getByRole('button', { name: 'Save defaults', exact: true })).toHaveCount(
+        0
+      )
+      await orcaPage.screenshot({ path: testInfo.outputPath('saved-template.png') })
+      await dialog.getByRole('button', { name: 'Generate', exact: true }).click()
+      const message = orcaPage.getByRole('textbox', { name: 'Commit message', exact: true })
+      await expect(message).toHaveValue('fix: describe real staged changes', { timeout: 20_000 })
+      await message.fill('')
+      await orcaPage.getByRole('button', { name: 'Generate commit message with AI' }).click()
+      await expect(dialog).not.toBeVisible()
+      await expect(message).toHaveValue('fix: describe real staged changes', { timeout: 20_000 })
+      await orcaPage.screenshot({ path: testInfo.outputPath('generated-from-saved-template.png') })
+    } finally {
+      rmSync(generatorPath, { force: true })
+    }
+  })
 })
