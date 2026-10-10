@@ -1,23 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { z } from 'zod'
 import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summary'
 import { isSubagentGroupBlock, type NativeChatSubagentState } from '../../shared/native-chat-types'
 import type { AcpSubagentUpdate } from './acp-dialects/acp-dialect'
 import { grokSubagentNotification } from './acp-dialects/grok-subagents'
 import { AcpSubagentTimeline } from './acp-subagent-timeline'
-
-const retainedSchema = z.object({
-  groups: z.map(
-    z.string(),
-    z.object({
-      entries: z.map(z.string(), z.object({ label: z.string() })),
-      labelCounts: z.map(z.string(), z.number()),
-      results: z.map(z.string(), z.string())
-    })
-  ),
-  groupOf: z.map(z.string(), z.string()),
-  retention: z.object({ settledIdentities: z.object({ size: z.number() }) })
-})
 
 function spawnGroups(
   timeline: AcpSubagentTimeline,
@@ -49,7 +35,7 @@ describe('ACP subagent retention', () => {
     }
     expect(timeline.has('0:0')).toBe(true)
     expect(timeline.has('32:63')).toBe(true)
-    expect(retainedSchema.parse(timeline).groupOf.size).toBe(33 * 64)
+    expect(timeline.retentionSizes().groups).toBe(33)
     timeline.translate(
       Array.from({ length: 63 }, (_, child): AcpSubagentUpdate => ({
         id: `0:${child}`,
@@ -59,8 +45,7 @@ describe('ACP subagent retention', () => {
       { thread: 'parent' },
       100
     )
-    expect(retainedSchema.parse(timeline).groups.size).toBe(33)
-    expect(retainedSchema.parse(timeline).groups.get('turn-0')?.results.size).toBe(63)
+    expect(timeline.retentionSizes()).toMatchObject({ groups: 33, replies: 63 })
     const events = timeline.translate(
       [{ id: '0:63', state: 'completed', result: 'Last sibling' }],
       { thread: 'parent', turn: 'later' },
@@ -70,10 +55,8 @@ describe('ACP subagent retention', () => {
       'turn-0',
       'turn-0'
     ])
-    const retained = retainedSchema.parse(timeline)
-    expect(retained.groups.size).toBe(32)
-    expect(retained.groups.has('turn-0')).toBe(false)
-    expect(retained.groupOf.has('0:0')).toBe(false)
+    // The settled group is released with its replies; its children stay known as settled.
+    expect(timeline.retentionSizes()).toMatchObject({ groups: 32, replies: 0 })
     expect(timeline.has('0:0')).toBe(true)
     expect(timeline.translate([{ id: '0:0', state: 'working' }], {}, 102)).toEqual([])
   })
@@ -93,20 +76,18 @@ describe('ACP subagent retention', () => {
         group + 1
       )
     }
-    const retained = retainedSchema.parse(timeline)
-    expect(retained.groups.size).toBe(32)
-    expect(retained.groupOf.size).toBe(31 * 64 + 1)
-    expect(
-      [...retained.groups.values()].reduce((total, group) => total + group.results.size, 0)
-    ).toBe(31 * 64)
-    expect(retained.retention.settledIdentities.size).toBe(32 * 64)
+    expect(timeline.retentionSizes()).toEqual({
+      groups: 32,
+      replies: 31 * 64,
+      settledIdentities: 32 * 64
+    })
     expect(timeline.has('live')).toBe(true)
     expect(timeline.has('0:0')).toBe(false)
     expect(timeline.has('33:0')).toBe(true)
     expect(timeline.translate([{ id: '33:0', state: 'working' }], {}, 2200)).toEqual([])
   })
 
-  it('bounds retained descriptions and count keys, preserving ordinary duplicate labels and clipped distinctions', () => {
+  it('bounds retained descriptions, preserving ordinary duplicate labels and clipped distinctions', () => {
     const timeline = new AcpSubagentTimeline()
     const description = 'A'.repeat(1024 * 1024)
     const updates = ['large-1', 'large-2'].flatMap((id) => {
@@ -122,23 +103,16 @@ describe('ACP subagent retention', () => {
       { turn: 'turn' },
       0
     )
-    const retained = retainedSchema.parse(timeline).groups.get('turn')
-    expect(retained).toBeDefined()
-    const labels = [...(retained?.entries.values() ?? [])].map((entry) => entry.label)
-    expect(labels.every((label) => label.length <= MAX_SUBAGENT_FIELD_CHARS)).toBe(true)
-    expect(
-      [...(retained?.labelCounts.keys() ?? [])].every(
-        (key) => key.length <= MAX_SUBAGENT_FIELD_CHARS
+    const labels = events
+      .flatMap((event) =>
+        event.type === 'item.update' && event.body.kind === 'message'
+          ? event.body.blocks.filter(isSubagentGroupBlock).flatMap((group) => group.agents)
+          : []
       )
-    ).toBe(true)
+      .map((entry) => entry.label)
+    expect(labels.every((label) => label.length <= MAX_SUBAGENT_FIELD_CHARS)).toBe(true)
     expect(new Set(labels).size).toBe(4)
     expect(labels.slice(2)).toEqual(['Review', 'Review 2'])
-    const emitted = events.flatMap((event) =>
-      event.type === 'item.update' && event.body.kind === 'message'
-        ? event.body.blocks.filter(isSubagentGroupBlock).flatMap((group) => group.agents)
-        : []
-    )
-    expect(emitted.map((entry) => entry.label)).toEqual(labels)
   })
 
   it('drops ownership and cached replies on disposal even if the producer continues', () => {
@@ -146,11 +120,9 @@ describe('ACP subagent retention', () => {
     spawnGroups(timeline, 33)
     timeline.translate([{ id: 'child-0', state: 'completed', result: 'Answer' }], {}, 100)
     timeline.dispose()
-    const retained = retainedSchema.parse(timeline)
-    expect(retained.groups.size).toBe(0)
-    expect(retained.groupOf.size).toBe(0)
-    expect(retained.retention.settledIdentities.size).toBe(0)
+    const empty = { groups: 0, settledIdentities: 0, replies: 0 }
+    expect(timeline.retentionSizes()).toEqual(empty)
     expect(timeline.translate([{ id: 'child-1', tokens: 9 }, { id: 'new' }], {}, 101)).toEqual([])
-    expect(retainedSchema.parse(timeline).groups.size).toBe(0)
+    expect(timeline.retentionSizes()).toEqual(empty)
   })
 })

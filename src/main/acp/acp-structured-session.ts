@@ -96,7 +96,10 @@ export function closeAcpSessionJournal(
   session.journalClosed = reason
   session.prompts.clear()
   session.turns.end(reason)
-  session.lane.apply([{ type: 'session.ended', verdict }])
+  session.lane.apply([
+    ...session.lane.translator.subagents.settleSession(Date.now()),
+    { type: 'session.ended', verdict }
+  ])
   session.lane.flush()
   session.lane.dispose()
   session.unbindReadingControl?.()

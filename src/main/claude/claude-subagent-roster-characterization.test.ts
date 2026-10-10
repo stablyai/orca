@@ -181,7 +181,7 @@ describe('Claude subagent roster rows (characterization)', () => {
           return null
         }
         claimed = true
-        return { entries: earlier, turnScope: { kind: 'turn', turnItemId: 'turn-row:s:turn-0' } }
+        return { entries: earlier, placement: { kind: 'turn', turnItemId: 'turn-row:s:turn-0' } }
       },
       attempt: (id) => (id === 't1' ? 2 : 1)
     }

@@ -15,7 +15,8 @@ import type { AgentSessionJournal } from '../native-chat/agent-session-journal/j
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { claudeSubagentGroupBody, claudeSubagentGroupIdentity } from './claude-subagent-group-row'
+import { subagentGroupJournalBody } from '../native-chat/agent-session-journal/journal-subagent-group-body'
+import { claudeSubagentGroupIdentity } from './claude-subagent-journaled-roster'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -210,7 +211,7 @@ async function journalAnOlderBuildListedTwice(): Promise<AgentSessionJournal> {
   ] as const) {
     older.sink.appendItem(
       claudeSubagentGroupIdentity(groupId),
-      claudeSubagentGroupBody(groupId, agents),
+      subagentGroupJournalBody(groupId, agents),
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
@@ -283,11 +284,18 @@ describe('a Claude subagent resumed after its provider restarted', () => {
       agentId: 'agent-b',
       providerParentRef: 'toolu_spawn_b'
     })
-    // The resume revised the child's own entry, as it would have without a restart: one row names
-    // it, and its rows say which run of it they are.
+    // The resumed run is listed in the turn that resumed it, as it would have been without a
+    // restart; the first run's row keeps how that run ended. Its rows say which run they are.
     expect(rowsListing(journal, 'agent-a')).toEqual([
       expect.objectContaining({
         groupId: 'claude-session:turn-a',
+        agents: [
+          expect.objectContaining({ id: 'agent-a', state: 'failed' }),
+          expect.objectContaining({ id: 'agent-b', state: 'failed' })
+        ]
+      }),
+      expect.objectContaining({
+        groupId: 'claude-session:turn-b',
         agents: [
           expect.objectContaining({ id: 'agent-a', state: 'working' }),
           expect.objectContaining({ id: 'agent-b', state: 'working' })
@@ -423,13 +431,18 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     second.translator.handle(taskStarted('agent-a', 'toolu_message_a', 'Grok PR'))
     second.translator.handle(childSays('a-2', 'toolu_spawn_a', 'A resumes the capture'))
     await second.settle()
+    // Listed in the turn that resumed it; the earlier run's row keeps how that run ended.
     expect(rowsListing(journal, 'agent-a')).toEqual([
       expect.objectContaining({
         groupId: 'claude-session:turn-a',
+        agents: [expect.objectContaining({ id: 'agent-a', state: 'stopped', settledAt: lostAt })]
+      }),
+      expect.objectContaining({
+        groupId: 'claude-session:turn-b',
         agents: [expect.objectContaining({ id: 'agent-a', state: 'working', startedAt: 5_100_000 })]
       })
     ])
-    expect(rowsListing(journal, 'agent-a')[0]?.agents[0]?.settledAt).toBeUndefined()
+    expect(rowsListing(journal, 'agent-a')[1]?.agents[0]?.settledAt).toBeUndefined()
     expect(proseRow(journal, 'A resumes the capture')).toMatchObject({
       agentId: 'agent-a',
       attempt: 2
@@ -488,15 +501,17 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     run.translator.handle(taskCompleted('agent-a', 'toolu_message_a'))
     await run.settle()
 
-    // The copy the resume reopened is the one its outcome lands on; nothing is left running.
+    // The resumed run's own entry takes its outcome; the rows of earlier runs keep theirs, and
+    // nothing is left running.
     expect(agentAStateByRow(journal)).toEqual({
       'claude-session:turn-a': 'unverifiable',
-      'claude-session:turn-b': 'completed'
+      'claude-session:turn-b': 'completed',
+      'claude-session:turn-c': 'completed'
     })
     await run.exit()
   })
 
-  it('resumes a twice-listed child in its later row even when a sibling reaches the older row first', async () => {
+  it('resumes a twice-listed child in the resuming turn even when a sibling reaches the older row first', async () => {
     const journal = await journalAnOlderBuildListedTwice()
     const run = acquire(journal)
     run.translator.handle(userTurn('turn-c'))
@@ -506,7 +521,8 @@ describe('a Claude subagent resumed after its provider restarted', () => {
 
     expect(agentAStateByRow(journal)).toEqual({
       'claude-session:turn-a': 'unverifiable',
-      'claude-session:turn-b': 'working'
+      'claude-session:turn-b': 'completed',
+      'claude-session:turn-c': 'working'
     })
     await run.exit()
   })

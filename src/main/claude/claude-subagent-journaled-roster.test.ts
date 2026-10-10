@@ -7,8 +7,11 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import type { NativeChatSubagentEntry } from '../../shared/native-chat-types'
 import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeSubagentGroupBody, claudeSubagentGroupIdentity } from './claude-subagent-group-row'
-import { ClaudeJournaledRoster } from './claude-subagent-journaled-roster'
+import { subagentGroupJournalBody } from '../native-chat/agent-session-journal/journal-subagent-group-body'
+import {
+  ClaudeJournaledRoster,
+  claudeSubagentGroupIdentity
+} from './claude-subagent-journaled-roster'
 
 type Row = {
   itemId: string
@@ -39,7 +42,7 @@ const groupRow = (
 ): Row => ({
   itemId,
   sequence,
-  body: claudeSubagentGroupBody(groupId, agents),
+  body: subagentGroupJournalBody(groupId, agents),
   linkage: turnScope ? { turnScope } : {}
 })
 
@@ -134,7 +137,7 @@ describe('ClaudeJournaledRoster', () => {
     const claimed = journaled.claimGroup('turn-a')
     expect(claimed?.entries.map((agent) => agent.id)).toEqual(['task-a', 'task-b'])
     // The row keeps the turn it was created beside.
-    expect(claimed?.turnScope).toEqual(turnA)
+    expect(claimed?.placement).toEqual(turnA)
     // After that the roster's own copy is the newer one.
     expect(journaled.claimGroup('turn-a')).toBeNull()
   })

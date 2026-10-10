@@ -190,9 +190,11 @@ describe('Codex child-work evidence', () => {
       expect.objectContaining({ membership: 'settled', state: 'done', outcome: 'unknown' })
     ])
     expect(tracker.state).toBeNull()
-    // The first ending a turn gets stands.
+    // Lost contact is no verdict: the turn's own ending still says how it went.
     send(turn('turn/completed', CHILD, 'c1', 'completed'))
-    expect(records()).toEqual([expect.objectContaining({ outcome: 'unknown' })])
+    expect(records()).toEqual([expect.objectContaining({ outcome: 'succeeded' })])
+    send(turn('turn/completed', CHILD, 'c1', 'failed'))
+    expect(records()).toEqual([expect.objectContaining({ outcome: 'succeeded' })])
   })
 
   it('keeps a child working through a retried error and a systemError status: its turn runs on', () => {

@@ -37,7 +37,7 @@ exports[`ACP subagent timeline rows (characterization) > children sharing a labe
               },
               {
                 "id": "a3",
-                "label": "Audit 2",
+                "label": "Audit 2 2",
                 "startedAt": 1010,
                 "state": "working",
               },
@@ -95,7 +95,7 @@ exports[`ACP subagent timeline rows (characterization) > children sharing a labe
               },
               {
                 "id": "a3",
-                "label": "Audit 2",
+                "label": "Audit 2 2",
                 "settledAt": 1020,
                 "startedAt": 1010,
                 "state": "failed",
@@ -357,7 +357,42 @@ exports[`ACP subagent timeline rows (characterization) > one child: working, tok
       "type": "item.update",
     },
   ],
-  [],
+  [
+    {
+      "body": {
+        "blocks": [
+          {
+            "text": "Kicked off 1 subagent",
+            "type": "text",
+          },
+          {
+            "agents": [
+              {
+                "id": "a1",
+                "label": "Explore",
+                "startedAt": 1010,
+                "state": "working",
+                "tokens": 0,
+              },
+            ],
+            "groupId": "turn-1",
+            "type": "subagent-group",
+          },
+        ],
+        "kind": "message",
+        "role": "system",
+      },
+      "item": "subagents:turn-1",
+      "join": {
+        "thread": "parent",
+        "turn": "turn-1",
+      },
+      "subagentIdentities": [
+        "a1",
+      ],
+      "type": "item.update",
+    },
+  ],
   [
     {
       "body": {

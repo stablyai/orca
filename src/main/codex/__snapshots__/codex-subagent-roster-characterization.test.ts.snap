@@ -542,6 +542,45 @@ exports[`Codex subagent roster rows (characterization) > a child thread closing 
     "accepted": true,
     "op": "publish",
   },
+  {
+    "accepted": true,
+    "body": {
+      "blocks": [
+        {
+          "text": "Ran 1 subagent",
+          "type": "text",
+        },
+        {
+          "agents": [
+            {
+              "id": "c1",
+              "label": "a",
+              "settledAt": 1040,
+              "startedAt": 1020,
+              "state": "completed",
+            },
+          ],
+          "groupId": "thread-parent:turn-1",
+          "type": "subagent-group",
+        },
+      ],
+      "kind": "message",
+      "role": "system",
+    },
+    "identity": {
+      "clientMessageId": "codex-subagents:thread-parent:turn-1",
+      "provider": "orca",
+    },
+    "op": "append",
+    "turnScope": {
+      "kind": "turn",
+      "turnItemId": "thread-parent/turn-1",
+    },
+  },
+  {
+    "accepted": true,
+    "op": "publish",
+  },
 ]
 `;
 
@@ -875,7 +914,7 @@ exports[`Codex subagent roster rows (characterization) > more than 32 settled gr
 exports[`Codex subagent roster rows (characterization) > more than 32 settled groups, then a late frame for an evicted run 3`] = `
 {
   "groups": 32,
-  "settledIdentities": 3,
+  "settledIdentities": 6,
 }
 `;
 
@@ -1200,7 +1239,7 @@ exports[`Codex subagent roster rows (characterization) > two children sharing a 
             },
             {
               "id": "c3",
-              "label": "worker 2",
+              "label": "worker 2 2",
               "startedAt": 1060,
               "state": "working",
             },
@@ -1251,7 +1290,7 @@ exports[`Codex subagent roster rows (characterization) > two children sharing a 
             },
             {
               "id": "c3",
-              "label": "worker 2",
+              "label": "worker 2 2",
               "startedAt": 1060,
               "state": "working",
             },
@@ -1303,7 +1342,7 @@ exports[`Codex subagent roster rows (characterization) > two children sharing a 
             },
             {
               "id": "c3",
-              "label": "worker 2",
+              "label": "worker 2 2",
               "startedAt": 1060,
               "state": "working",
             },
@@ -1355,7 +1394,7 @@ exports[`Codex subagent roster rows (characterization) > two children sharing a 
             },
             {
               "id": "c3",
-              "label": "worker 2",
+              "label": "worker 2 2",
               "settledAt": 1090,
               "startedAt": 1060,
               "state": "unverifiable",

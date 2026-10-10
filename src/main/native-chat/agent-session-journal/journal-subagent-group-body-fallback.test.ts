@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatSubagentEntry } from '../../shared/native-chat-types'
-import { claudeSubagentGroupBody } from './claude-subagent-group-row'
+import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
+import { subagentGroupJournalBody } from './journal-subagent-group-body'
 
 function entry(id: string, state: NativeChatSubagentEntry['state']): NativeChatSubagentEntry {
   return { id, label: id, state, startedAt: 1 }
@@ -9,12 +9,12 @@ function entry(id: string, state: NativeChatSubagentEntry['state']): NativeChatS
 /** The fallback sentence is the WHOLE row on mobile and paired web, which have
  *  no roster renderer, so these assertions are the entire contract there. */
 function sentence(agents: readonly NativeChatSubagentEntry[]): string {
-  const body = claudeSubagentGroupBody('turn-1', agents)
+  const body = subagentGroupJournalBody('turn-1', agents)
   const block = body.kind === 'message' ? body.blocks[0] : undefined
   return block && block.type === 'text' ? block.text : ''
 }
 
-describe('claudeSubagentGroupBody fallback sentence', () => {
+describe('subagentGroupJournalBody fallback sentence', () => {
   it('reads as a plain completion when every child completed', () => {
     expect(sentence([entry('a', 'completed'), entry('b', 'completed')])).toBe('Ran 2 subagents')
   })
