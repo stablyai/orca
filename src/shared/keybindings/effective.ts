@@ -5,7 +5,12 @@ import type {
   KeybindingOverrides,
   TerminalShortcutPolicy
 } from './types'
-import { DEFINITIONS_BY_ID, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
+import {
+  DEFINITIONS_BY_ID,
+  getKeybindingPlatform,
+  isDigitIndexActionId,
+  isKeybindingActionId
+} from './definitions'
 import {
   normalizeKeybindingWithOptions,
   normalizeOptionsForAction,
@@ -22,6 +27,29 @@ export function getDefaultBindings(
       allowShiftOnlyKeybindings: definition.allowShiftOnlyKeybindings === true
     })
     return normalized.ok ? normalized.value : binding
+  })
+}
+
+export function hasCustomEditorF1Binding(overrides?: KeybindingOverrides): boolean {
+  return Object.entries(overrides ?? {}).some(([actionId, bindings]) => {
+    if (
+      actionId === 'editor.commandPalette' ||
+      !isKeybindingActionId(actionId) ||
+      !Array.isArray(bindings)
+    ) {
+      return false
+    }
+    const definition = DEFINITIONS_BY_ID.get(actionId)
+    if (definition?.scope !== 'editor' && definition?.conflictGroup !== 'editor') {
+      return false
+    }
+    return bindings.some((binding) => {
+      const normalized = normalizeKeybindingWithOptions(
+        binding,
+        normalizeOptionsForAction(actionId)
+      )
+      return normalized.ok && normalized.value === 'F1'
+    })
   })
 }
 
@@ -52,6 +80,9 @@ export function getEffectiveKeybindingsForAction(
       return normalized.ok ? [normalized.value] : []
     })
   }
+  if (actionId === 'editor.commandPalette' && hasCustomEditorF1Binding(overrides)) {
+    return []
+  }
   return definition ? getDefaultBindings(definition, platform) : []
 }
 
@@ -63,6 +94,10 @@ export function getEffectiveKeybindingsForDefinition(
   const override = overrides?.[definition.id]
   if (Array.isArray(override)) {
     return getEffectiveKeybindingsForAction(definition.id, platform, overrides)
+  }
+  // New defaults must not invalidate an existing editor shortcut during upgrade.
+  if (definition.id === 'editor.commandPalette' && hasCustomEditorF1Binding(overrides)) {
+    return []
   }
   return getDefaultBindings(definition, platform)
 }
