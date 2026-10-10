@@ -16,7 +16,6 @@
 1 src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
 2 src/renderer/src/components/editor/useMarkdownDocuments.ts
 1 src/renderer/src/components/linear-api-key-dialog.tsx
-1 src/renderer/src/components/ports/WorkspacePortScanner.tsx
 1 src/renderer/src/components/quick-open-file-navigation.ts
 1 src/renderer/src/components/settings/GeneralPane.tsx
 1 src/renderer/src/components/settings/RepositoryGitHubAccountSection.tsx
@@ -25,8 +24,6 @@
 1 src/renderer/src/components/sidebar/add-repo-runtime-owner.ts
 1 src/renderer/src/components/status-bar/ClaudeSwitcherMenu.tsx
 1 src/renderer/src/components/status-bar/use-codex-switcher-controller.ts
-1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
-1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model.ts
 1 src/renderer/src/components/terminal-pane/terminal-file-path-mapping.ts
 1 src/renderer/src/components/terminal-pane/terminal-path-existence-batch.ts
 1 src/renderer/src/components/terminal-pane/terminal-worktree-path-link.ts
@@ -35,16 +32,8 @@
 1 src/renderer/src/hooks/use-active-skill-discovery-runtime-target.ts
 1 src/renderer/src/hooks/useIssueMetadata.ts
 1 src/renderer/src/hooks/useSettingsNavigationMetadata.ts
-3 src/renderer/src/lib/activate-ai-vault-structured-session.ts
-1 src/renderer/src/lib/active-agent-note-send.ts
-1 src/renderer/src/lib/active-agent-note-target.ts
-1 src/renderer/src/lib/automation-session-observer.ts
-1 src/renderer/src/lib/codex-pane-selection-lane.ts
 1 src/renderer/src/lib/github-pr-start-point.ts
-1 src/renderer/src/lib/launch-agent-background-session.ts
-1 src/renderer/src/lib/launch-worktree-background-terminals.ts
 1 src/renderer/src/lib/local-file-access.ts
-1 src/renderer/src/lib/structured-agent-session-tab-activation.ts
 1 src/renderer/src/lib/workspace-file-host-routing.ts
 1 src/renderer/src/lib/worktree-creation-flow-startup.ts
 1 src/renderer/src/runtime/mobile-markdown-bridge.ts

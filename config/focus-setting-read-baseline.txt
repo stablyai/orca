@@ -9,11 +9,10 @@
 1 src/renderer/src/components/Landing.tsx
 1 src/renderer/src/components/LinearIssueWorkspace.tsx
 1 src/renderer/src/components/NativeChatResumeOnRestartGroups.tsx
-1 src/renderer/src/components/NativeChatResumeOnRestartModal.tsx
 2 src/renderer/src/components/QuickOpen.tsx
 1 src/renderer/src/components/activity/ActivityPrototypePage.tsx
 1 src/renderer/src/components/activity/activity-scope-filter-controls.tsx
-3 src/renderer/src/components/activity/activity-thread-actions.ts
+2 src/renderer/src/components/activity/activity-thread-actions.ts
 1 src/renderer/src/components/activity/use-agent-pane-threads.ts
 4 src/renderer/src/components/agent/AgentSettingsDialog.tsx
 1 src/renderer/src/components/automations/automation-host-client.ts
@@ -108,7 +107,6 @@
 1 src/renderer/src/components/new-workspace/use-smart-workspace-secondary-searches.ts
 2 src/renderer/src/components/new-workspace/use-work-item-source-foundation.ts
 1 src/renderer/src/components/new-workspace/use-work-item-source-search.ts
-1 src/renderer/src/components/ports/WorkspacePortScanner.tsx
 2 src/renderer/src/components/quick-open-file-list-test-harness.ts
 6 src/renderer/src/components/quick-open-file-list.ts
 4 src/renderer/src/components/quick-open-file-navigation.ts
@@ -118,8 +116,6 @@
 3 src/renderer/src/components/right-sidebar/FileExplorer.tsx
 1 src/renderer/src/components/right-sidebar/FileExplorerFilesTreePane.tsx
 1 src/renderer/src/components/right-sidebar/FolderWorkspacePrChecksRow.tsx
-1 src/renderer/src/components/right-sidebar/ai-vault-original-pane-actions.ts
-1 src/renderer/src/components/right-sidebar/ai-vault-session-launch-actions.ts
 3 src/renderer/src/components/right-sidebar/checks-panel-hosted-review-click-routing.ts
 1 src/renderer/src/components/right-sidebar/checks-panel/use-checks-panel-controller-state.tsx
 1 src/renderer/src/components/right-sidebar/checks-panel/use-checks-panel-create-review.tsx
@@ -229,7 +225,6 @@
 1 src/renderer/src/components/sidebar/SidebarAgentsList.tsx
 1 src/renderer/src/components/sidebar/SidebarSettingsHelpMenu.tsx
 1 src/renderer/src/components/sidebar/SidebarTaskNavButton.tsx
-1 src/renderer/src/components/sidebar/WorktreeCardAgents.tsx
 2 src/renderer/src/components/sidebar/WorktreeList.tsx
 1 src/renderer/src/components/sidebar/WorktreeRowOpenInSubMenu.tsx
 1 src/renderer/src/components/sidebar/add-repo-runtime-owner.ts
@@ -276,12 +271,10 @@
 3 src/renderer/src/components/tab-bar/tab-bar-windows-shell-launch-test-harness.ts
 2 src/renderer/src/components/tab-bar/tab-create-entry-action.ts
 3 src/renderer/src/components/tab-bar/tab-create-entry-local-path.ts
-1 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
-4 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model.ts
+3 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model.ts
 2 src/renderer/src/components/tab-bar/web-runtime-tab-move-mirror.ts
 1 src/renderer/src/components/tab-bar/windows-shell-menu-visibility.ts
-1 src/renderer/src/components/tab-group/AiVaultSessionDropLayer.tsx
-3 src/renderer/src/components/tab-group/useTabGroupActivationCommands.ts
+2 src/renderer/src/components/tab-group/useTabGroupActivationCommands.ts
 5 src/renderer/src/components/tab-group/useTabGroupCreationCommands.ts
 1 src/renderer/src/components/task-page/TaskPage.tsx
 1 src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts
@@ -321,8 +314,6 @@
 2 src/renderer/src/components/use-worktree-jump-palette-filter.ts
 3 src/renderer/src/components/use-worktree-jump-palette-quick-actions.ts
 2 src/renderer/src/components/use-worktree-jump-palette-store-state.ts
-2 src/renderer/src/hooks/automation-dispatch-handler.ts
-1 src/renderer/src/hooks/automation-dispatch-workspace.ts
 4 src/renderer/src/hooks/composer-state/attachment-drop-state.ts
 1 src/renderer/src/hooks/composer-state/composer-attachment-drop-state.ts
 1 src/renderer/src/hooks/composer-state/composer-navigation-actions.ts
@@ -355,16 +346,14 @@
 7 src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 1 src/renderer/src/hooks/useUnreadDockBadge.ts
 2 src/renderer/src/hooks/useWindowsTerminalCapabilityOwnerKey.ts
-10 src/renderer/src/lib/activate-ai-vault-structured-session.ts
+3 src/renderer/src/lib/activate-ai-vault-structured-session.ts
 1 src/renderer/src/lib/active-agent-note-send.ts
 1 src/renderer/src/lib/active-agent-note-target.ts
 1 src/renderer/src/lib/agent-background-session-launch-host.ts
 1 src/renderer/src/lib/agent-hibernation-coordinator-test-fixture.ts
 3 src/renderer/src/lib/agent-hibernation-coordinator.ts
-1 src/renderer/src/lib/automation-session-observer.ts
 1 src/renderer/src/lib/client-creation-action-error.ts
 3 src/renderer/src/lib/client-creation-action-policy.ts
-3 src/renderer/src/lib/codex-pane-selection-lane.ts
 1 src/renderer/src/lib/default-creation-host.ts # the sanctioned reader of the default host
 1 src/renderer/src/lib/doc-preview-grants.ts
 3 src/renderer/src/lib/ensure-hooks-confirmed.ts
@@ -388,7 +377,6 @@
 3 src/renderer/src/lib/local-file-access.ts
 2 src/renderer/src/lib/local-preflight-context.ts
 1 src/renderer/src/lib/markdown-document-templates.ts
-1 src/renderer/src/lib/open-agent-message-sender.ts
 2 src/renderer/src/lib/provider-runtime-context.ts
 1 src/renderer/src/lib/remote-workspace-drop-test-fixtures.ts
 2 src/renderer/src/lib/rename-file.ts
@@ -397,7 +385,7 @@
 1 src/renderer/src/lib/runtime-session-mirror-owners.ts
 1 src/renderer/src/lib/runtime-session-mirror-targets.ts
 1 src/renderer/src/lib/single-runtime-legacy-owner.ts
-3 src/renderer/src/lib/structured-agent-session-tab-activation.ts
+1 src/renderer/src/lib/structured-agent-session-tab-activation.ts
 1 src/renderer/src/lib/tab-number-shortcuts.ts
 1 src/renderer/src/lib/terminal-tab-owner-activation.ts
 4 src/renderer/src/lib/terminal-worktree-route.ts

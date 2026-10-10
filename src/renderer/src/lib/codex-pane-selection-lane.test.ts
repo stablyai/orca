@@ -231,14 +231,14 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
     ).toBe('env:env-owner')
   })
 
-  it('routes an owner-less remote pane to the active environment, as inspection does', () => {
+  it('never gives an owner-less remote pane the focused server, as inspection does not', () => {
     expect(
       resolveCodexPaneSelectionLaneKey({
         state: laneState({ activeRuntimeEnvironmentId: 'env-1' }),
         tab: HOST_TAB,
         ptyId: 'remote:term-1'
       })
-    ).toBe('env:env-1')
+    ).toBe('remote-runtime')
   })
 
   it('keeps an owner-less remote pane off the host lane when no environment is active', () => {

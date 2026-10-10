@@ -1,13 +1,17 @@
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
+import {
+  runtimeTargetForOwnerEnvironment,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-client-target'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
-  getSettingsForWorktreeRuntimeOwner,
+  getRuntimeEnvironmentIdForWorktree,
   type WorktreeRuntimeOwnerState
 } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -49,13 +53,12 @@ export type ActiveTerminalNoteTargetState = {
   >
   runtimePaneTitlesByTabId?: Record<string, Record<number, string> | undefined>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry | undefined>
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
 } & Pick<WorktreeRuntimeOwnerState, 'repos' | 'worktreesByRepo'>
 
 type ActiveAgentRuntimeProbeDescriptor = {
   key: string
   worktreeId: string
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>
+  runtimeTarget: RuntimeClientTarget
   noteTarget: ActiveTerminalNoteTarget
 }
 
@@ -122,8 +125,8 @@ export function getActiveAgentRuntimeProbeDescriptor(
   }
   // Route by the worktree's owner host so the probe targets the host that runs
   // this worktree's agent terminal, not the focused runtime.
-  const runtimeTarget = getActiveRuntimeTarget(
-    getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  const runtimeTarget = runtimeTargetForOwnerEnvironment(
+    getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   )
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'
@@ -159,7 +162,7 @@ export async function probeActiveAgentNoteTarget({
 }
 
 export async function findActiveRuntimeTerminal(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   worktreeId: string,
   noteTarget: ActiveTerminalNoteTarget,
   timeoutMs: number

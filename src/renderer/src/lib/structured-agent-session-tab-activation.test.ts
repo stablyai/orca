@@ -18,12 +18,7 @@ vi.mock('./worktree-runtime-owner', () => ({
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
-  getActiveRuntimeTarget: ({
-    activeRuntimeEnvironmentId
-  }: {
-    activeRuntimeEnvironmentId: string
-  }) => ({ kind: 'environment', environmentId: activeRuntimeEnvironmentId })
+  callRuntimeRpc: mocks.callRuntimeRpc
 }))
 
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
