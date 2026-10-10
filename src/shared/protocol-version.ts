@@ -253,6 +253,12 @@ export const AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY =
 // gates the rollout.
 export const AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY =
   'agent-session.queued-messages.v1' as const
+// Why: a host advertising this edits a queued card in place (`agentSession.queuedMessageUpdate`)
+// and holds it from automatic delivery while edited (`agentSession.queuedMessageEditHold`). Apart
+// from queued-messages.v1: kept and agent-mail cards are editable with mid-turn queueing still off.
+// A client offers Edit only when the host advertises it; there is no copy-and-delete fallback.
+export const AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY =
+  'agent-session.queued-message-edit.v1' as const
 // Why: `agentSession.conversationCommand`'s params are strict, so an older host rejects
 // `delivery`. A host advertising this holds a /compact sent while the agent works as a queued
 // card instead of refusing it. Clients ask only when queued-messages.v1 is advertised too:
@@ -392,6 +398,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_ANSWERS_PROOF_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUEUED_MESSAGE_EDIT_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
   ...STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES,
   ...AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES,

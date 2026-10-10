@@ -27,6 +27,10 @@ import {
   readAgentSessionRuntimeEnds
 } from './agent-session-runtime-end-record'
 import {
+  agentSessionReplacedRuntimes,
+  type AgentSessionReplacedRuntime
+} from './agent-session-replaced-runtime'
+import {
   agentSessionStoreDraftRowWrites,
   draftAgentSessionStoreState,
   type AgentSessionStoreRowWrites
@@ -86,16 +90,23 @@ type StagedStoreTransaction<T> = {
 export class AgentSessionStoreTransactions {
   private queue: Promise<unknown> = Promise.resolve()
   private published: AgentSessionStoreState
+  /** What this runtime took over from the runtimes before it, as loaded; never changes after. */
+  readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
   constructor(
     private readonly journalDatabase: JournalHostDatabase,
-    loaded: AgentSessionStoreState
+    loaded: AgentSessionStoreState,
+    hostId: string
   ) {
     freezeRows(loaded, null)
     this.published = {
       ...loaded,
       runtimeEnds: readAgentSessionRuntimeEnds(journalDatabase.stateDirectory)
     }
+    this.replacedRuntimes = agentSessionReplacedRuntimes(this.published, {
+      hostId,
+      incarnation: agentSessionRuntimeIncarnation()
+    })
     // Before any owner this runtime records: a crash is concluded only from a recorded start.
     beginAgentSessionRuntimeRecord(
       journalDatabase.stateDirectory,

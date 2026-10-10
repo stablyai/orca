@@ -18251,6 +18251,7 @@
         "orcaStopUpdate": "此回复进行期间，{{machine}} 上的 Orca 为更新而重新启动。",
         "orcaStopQuit": "此回复进行期间，{{machine}} 上的 Orca 已关闭。",
         "orcaStopCrash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
+        "orcaStopRemote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
         "orcaStopCanContinue": "你可以在此对话中继续。"
       },
       "providerFrame": {
@@ -18387,7 +18388,6 @@
       },
       "queuedMessages": {
         "alreadySent": "此消息已发送。",
-        "editAlreadySent": "已发送 — 你的文本仍在输入框中。",
         "listLabel": "排队的消息",
         "behindReturnedHold": "等待中 — 前面有一条消息需要处理",
         "awaitingAnswerHold": "等待你的回答",
@@ -18414,7 +18414,15 @@
         "sendConfirmClear": "清空队列",
         "sendConfirmSend": "发送消息",
         "fromSender": "来自",
-        "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。"
+        "pausedSendFailedWaiting": "无法发送。智能体完成后，点按发送以重试。",
+        "save": "保存",
+        "editingMessage": "正在编辑消息",
+        "cancelEditing": "取消编辑",
+        "editChanged": "你编辑时此消息已更改。你编辑的内容已放入聊天输入框。",
+        "editChangedPrompt": "你编辑时此消息已更改。回答智能体后，你编辑的内容会出现在聊天输入框中。",
+        "editFailed": "此消息无法编辑。",
+        "editGone": "此消息已发送或移除。你编辑的内容已放入聊天输入框。",
+        "editGonePrompt": "此消息已发送或移除。回答智能体后，你编辑的内容会出现在聊天输入框中。"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",

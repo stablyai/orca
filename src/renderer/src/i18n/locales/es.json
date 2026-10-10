@@ -18250,7 +18250,6 @@
       },
       "queuedMessages": {
         "alreadySent": "Este mensaje ya se envió.",
-        "editAlreadySent": "Ya se envió — tu texto sigue en el cuadro de mensaje.",
         "listLabel": "Mensajes en cola",
         "behindReturnedHold": "En espera: un mensaje anterior necesita atención",
         "awaitingAnswerHold": "Esperando tu respuesta",
@@ -18277,7 +18276,15 @@
         "sendConfirmClear": "Vaciar cola",
         "sendConfirmSend": "Enviar mensaje",
         "fromSender": "De",
-        "pausedSendFailedWaiting": "No se pudo enviar. Cuando el agente termine, pulsa Enviar para reintentar."
+        "pausedSendFailedWaiting": "No se pudo enviar. Cuando el agente termine, pulsa Enviar para reintentar.",
+        "save": "Guardar",
+        "editingMessage": "Editando mensaje",
+        "cancelEditing": "Cancelar edición",
+        "editChanged": "Este mensaje cambió mientras lo editabas. Tu edición está en el cuadro de chat.",
+        "editChangedPrompt": "Este mensaje cambió mientras lo editabas. Tu edición estará en el cuadro de chat cuando respondas al agente.",
+        "editFailed": "Este mensaje no se puede editar.",
+        "editGone": "Este mensaje ya se envió o se eliminó. Tu edición está en el cuadro de chat.",
+        "editGonePrompt": "Este mensaje ya se envió o se eliminó. Tu edición estará en el cuadro de chat cuando respondas al agente."
       },
       "thought": "Pensó",
       "thoughtForDuration": "Pensó durante {{duration}}",
@@ -18370,6 +18377,7 @@
         "orcaStopUpdate": "Orca en {{machine}} se reinició para actualizarse mientras esta respuesta estaba en curso.",
         "orcaStopQuit": "Orca en {{machine}} se cerró mientras esta respuesta estaba en curso.",
         "orcaStopCrash": "Orca en {{machine}} se detuvo inesperadamente mientras esta respuesta estaba en curso.",
+        "orcaStopRemote": "Orca en {{machine}} se detuvo mientras esta respuesta estaba en curso.",
         "orcaStopCanContinue": "Puedes continuar en esta conversación."
       },
       "providerFrame": {

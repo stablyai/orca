@@ -18353,6 +18353,7 @@
         "orcaStopUpdate": "Orca sur {{machine}} a redémarré pour une mise à jour pendant que cette réponse était en cours.",
         "orcaStopQuit": "Orca sur {{machine}} a été fermé pendant que cette réponse était en cours.",
         "orcaStopCrash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
+        "orcaStopRemote": "Orca sur {{machine}} s'est arrêté pendant que cette réponse était en cours.",
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation."
       },
       "providerFrame": {
@@ -18489,7 +18490,6 @@
       },
       "queuedMessages": {
         "alreadySent": "Ce message a déjà été envoyé.",
-        "editAlreadySent": "Déjà envoyé — votre texte reste dans la zone de saisie.",
         "listLabel": "Messages en file d'attente",
         "behindReturnedHold": "En attente — un message précédent nécessite votre attention",
         "awaitingAnswerHold": "En attente de votre réponse",
@@ -18516,7 +18516,15 @@
         "sendConfirmClear": "Vider la file d'attente",
         "sendConfirmSend": "Envoyer le message",
         "fromSender": "De",
-        "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer."
+        "pausedSendFailedWaiting": "Envoi impossible. Quand l'agent aura terminé, appuyez sur Envoyer pour réessayer.",
+        "save": "Enregistrer",
+        "editingMessage": "Modification du message",
+        "cancelEditing": "Annuler la modification",
+        "editChanged": "Ce message a changé pendant que vous le modifiiez. Votre modification se trouve dans le champ de discussion.",
+        "editChangedPrompt": "Ce message a changé pendant que vous le modifiiez. Votre modification sera dans le champ de discussion une fois que vous aurez répondu à l'agent.",
+        "editFailed": "Ce message ne peut pas être modifié.",
+        "editGone": "Ce message a déjà été envoyé ou supprimé. Votre modification se trouve dans le champ de discussion.",
+        "editGonePrompt": "Ce message a déjà été envoyé ou supprimé. Votre modification sera dans le champ de discussion une fois que vous aurez répondu à l'agent."
       },
       "thought": "A réfléchi",
       "thoughtForDuration": "A réfléchi pendant {{duration}}",

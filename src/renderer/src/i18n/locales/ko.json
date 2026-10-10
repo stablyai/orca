@@ -18286,6 +18286,7 @@
         "orcaStopUpdate": "이 응답이 진행되는 동안 {{machine}}의 Orca가 업데이트를 위해 다시 시작되었습니다.",
         "orcaStopQuit": "이 응답이 진행되는 동안 {{machine}}의 Orca가 종료되었습니다.",
         "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
+        "orcaStopRemote": "이 응답이 진행되는 동안 {{machine}}의 Orca가 중지되었습니다.",
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다."
       },
       "providerFrame": {
@@ -18422,7 +18423,6 @@
       },
       "queuedMessages": {
         "alreadySent": "이 메시지는 이미 전송되었습니다.",
-        "editAlreadySent": "이미 전송되었습니다 — 텍스트는 입력창에 남아 있습니다.",
         "listLabel": "대기 중인 메시지",
         "behindReturnedHold": "대기 중 — 앞의 메시지에 확인이 필요합니다",
         "awaitingAnswerHold": "답변을 기다리는 중",
@@ -18449,7 +18449,15 @@
         "sendConfirmClear": "대기열 지우기",
         "sendConfirmSend": "메시지 보내기",
         "fromSender": "보낸 사람:",
-        "pausedSendFailedWaiting": "보낼 수 없습니다. 에이전트가 끝나면 보내기를 눌러 다시 시도하세요."
+        "pausedSendFailedWaiting": "보낼 수 없습니다. 에이전트가 끝나면 보내기를 눌러 다시 시도하세요.",
+        "save": "저장",
+        "editingMessage": "메시지 편집 중",
+        "cancelEditing": "편집 취소",
+        "editChanged": "편집하는 동안 이 메시지가 변경되었습니다. 편집한 내용은 채팅 입력란에 있습니다.",
+        "editChangedPrompt": "편집하는 동안 이 메시지가 변경되었습니다. 에이전트에 답하면 편집한 내용이 채팅 입력란에 표시됩니다.",
+        "editFailed": "이 메시지는 편집할 수 없습니다.",
+        "editGone": "이 메시지는 이미 전송되었거나 삭제되었습니다. 편집한 내용은 채팅 입력란에 있습니다.",
+        "editGonePrompt": "이 메시지는 이미 전송되었거나 삭제되었습니다. 에이전트에 답하면 편집한 내용이 채팅 입력란에 표시됩니다."
       },
       "thought": "생각함",
       "thoughtForDuration": "{{duration}} 동안 생각함",
