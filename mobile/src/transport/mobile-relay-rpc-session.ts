@@ -9,6 +9,7 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
+import { LivenessProbeReplyWitness } from './liveness-probe-reply-witness'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
@@ -46,6 +47,7 @@ export function connectMobileRelayRpcSession(args: {
 }): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
   const pending = new RelayPendingRequests()
+  const probeReplies = new LivenessProbeReplyWitness()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state: ConnectionState = 'connecting'
   let lastConnectedAt: number | null = null
@@ -152,9 +154,14 @@ export function connectMobileRelayRpcSession(args: {
     probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
     missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
-    sendProbe: () =>
-      state === 'connected' &&
-      sendFrame({ id: pending.nextId(), method: 'status.get', params: undefined }),
+    sendProbe: () => {
+      if (state !== 'connected') {
+        return false
+      }
+      const id = pending.nextId()
+      probeReplies.probeSent(id)
+      return sendFrame({ id, method: 'status.get', params: undefined })
+    },
     onTimeout: (evidence) => {
       args.onLog?.({
         id: `relay-liveness-${logSessionId}-${++logSequence}`,
@@ -228,6 +235,7 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function sendFrame(request: { id: string; method: string; params?: unknown }): boolean {
+    probeReplies.requestWritten(request)
     return link.sendText(JSON.stringify({ ...request, deviceToken: args.deviceToken }))
   }
 
@@ -240,6 +248,9 @@ export function connectMobileRelayRpcSession(args: {
     }
     if (!isRpcResponse(value)) {
       return
+    }
+    if (probeReplies.settles(value.id)) {
+      livenessWatchdog.noteRpcResponse(livenessIdentity)
     }
     if (pending.settle(value)) {
       return

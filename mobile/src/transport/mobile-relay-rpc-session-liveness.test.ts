@@ -139,6 +139,75 @@ describe('mobile relay RPC session liveness', () => {
     )
   })
 
+  it('does not let stream frames satisfy a foreground probe', async () => {
+    const session = await authenticateSession()
+    session.subscribe('terminal.subscribe', { terminal: 'term' }, vi.fn())
+    await vi.advanceTimersByTimeAsync(0)
+    const subscription = sentRequests()[0]!
+
+    session.notifyForeground('focus')
+    for (let window = 0; window < 4; window++) {
+      fakes.linkOptions!.onBinary(new Uint8Array([1, 2, 3]))
+      fakes.linkOptions!.onText(
+        JSON.stringify({
+          id: subscription.id,
+          ok: true,
+          streaming: true,
+          result: { type: 'data' },
+          _meta: { runtimeId: 'r1' }
+        })
+      )
+      await vi.advanceTimersByTimeAsync(2_000)
+    }
+
+    expect(session.getState()).toBe('disconnected')
+  })
+
+  it('does not let a superseded probe reply settle the outstanding probe', async () => {
+    const session = await authenticateSession()
+
+    session.notifyForeground('focus')
+    const firstProbe = sentRequests()[0]!
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(fakes.sendText).toHaveBeenCalledTimes(2)
+    fakes.linkOptions!.onText(
+      JSON.stringify({ id: firstProbe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(session.getState()).toBe('disconnected')
+  })
+
+  it('does not let a reply to a request written before the probe settle it', async () => {
+    const session = await authenticateSession()
+    const earlier = session.sendRequest('worktree.ps', {}).catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(0)
+    const earlierRequest = sentRequests()[0]!
+
+    session.notifyForeground('focus')
+    fakes.linkOptions!.onText(
+      JSON.stringify({ id: earlierRequest.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
+    await vi.advanceTimersByTimeAsync(8_000)
+
+    expect(session.getState()).toBe('disconnected')
+    await earlier
+  })
+
+  it('keeps the relay when the foreground probe is answered', async () => {
+    const session = await authenticateSession()
+
+    session.notifyForeground('focus')
+    const probe = sentRequests()[0]!
+    fakes.linkOptions!.onText(
+      JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
+    await vi.advanceTimersByTimeAsync(8_000)
+
+    expect(session.getState()).toBe('connected')
+    session.close()
+  })
+
   it('uses distinct liveness evidence IDs for sessions created in the same millisecond', async () => {
     vi.setSystemTime(1_000)
     const firstLog = vi.fn<ConnectionLogSink>()
