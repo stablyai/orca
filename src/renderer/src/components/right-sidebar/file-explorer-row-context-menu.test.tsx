@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 import type { TreeNode } from './file-explorer-types'
+import { downloadRemoteFile } from './file-explorer-row-file-transfer'
 
 type ItemProps = { onSelect?: () => void; disabled?: boolean; children?: React.ReactNode }
 
@@ -70,7 +71,10 @@ const fileNode: TreeNode = {
 
 function renderRevealItem(
   owner: Partial<
-    Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId' | 'node'>
+    Pick<
+      React.ComponentProps<typeof FileExplorerRowContextMenu>,
+      'connectionId' | 'runtimeDownloadContext' | 'node' | 'supportsFolderDownload'
+    >
   > = {}
 ): ItemProps | undefined {
   renderToStaticMarkup(
@@ -113,6 +117,7 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
     storeState.activeWorkspaceExecutionHostId = null
     storeState.settings.activeRuntimeEnvironmentId = null
     revealInFileManager.mockReset()
+    vi.mocked(downloadRemoteFile).mockReset()
   })
 
   it.each(['runtime:remote', 'ssh:nested'] as const)(
@@ -164,5 +169,42 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
     storeState.activeWorktreeId = 'folder:fw-1'
 
     expect(renderRevealItem()?.disabled).toBe(false)
+  })
+
+  it('downloads a nested SSH file through its owning server', () => {
+    const context = {
+      settings: { activeRuntimeEnvironmentId: 'hub-a' },
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      connectionId: 'ssh-1'
+    }
+    renderRevealItem({ connectionId: 'ssh-1', runtimeDownloadContext: context })
+    const download = items.list.find((item) =>
+      React.Children.toArray(item.children).includes('Download')
+    )
+    expect(download).toBeDefined()
+    download?.onSelect?.()
+    expect(downloadRemoteFile).toHaveBeenCalledWith(fileNode, context)
+  })
+
+  it('keeps direct SSH file downloads on their desktop provider', () => {
+    renderRevealItem({ connectionId: 'ssh-1' })
+    const download = items.list.find((item) =>
+      React.Children.toArray(item.children).includes('Download')
+    )
+    expect(download).toBeDefined()
+    download?.onSelect?.()
+    expect(downloadRemoteFile).toHaveBeenCalledWith(fileNode, 'ssh-1')
+  })
+
+  it('keeps supported direct SSH folder downloads on their desktop provider', () => {
+    const folder = { ...fileNode, name: 'src', path: '/repo/src', isDirectory: true }
+    renderRevealItem({ node: folder, connectionId: 'ssh-1', supportsFolderDownload: true })
+    const download = items.list.find((item) =>
+      React.Children.toArray(item.children).includes('Download Folder')
+    )
+    expect(download).toBeDefined()
+    download?.onSelect?.()
+    expect(downloadRemoteFile).toHaveBeenCalledWith(folder, 'ssh-1')
   })
 })

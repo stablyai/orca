@@ -66,6 +66,34 @@ it('runs real browser file-drop ownership in the template-building Docker job', 
   }
 })
 
+it('runs nested SSH downloads in the Docker lane when download ownership changes', () => {
+  const spec = 'tests/e2e/nested-ssh-download-owner.spec.ts'
+  expect(classify([spec])).toEqual({ e2e_run_changed: false, e2e_needs_build: true })
+  const job = workflow.jobs['ssh-docker-watcher-isolation']
+  expect(job.if).toContain(spec)
+  expect(job.steps.find((step) => step.name === 'Run remaining Docker SSH E2E').run).toContain(
+    'pnpm run test:e2e:ssh-docker'
+  )
+  const runner = readFileSync('config/scripts/run-ssh-docker-e2e.mjs', 'utf8')
+  expect(runner).toContain(`'${spec}'`)
+  expect(runner).toContain("ORCA_E2E_SSH_DOCKER: '1'")
+  for (const source of [
+    'src/renderer/src/components/right-sidebar/file-explorer-row-context-menu.tsx',
+    'src/renderer/src/components/right-sidebar/file-explorer-row-file-transfer.ts',
+    'src/renderer/src/components/right-sidebar/use-file-explorer-tree-pane-state.ts',
+    'src/renderer/src/components/terminal-pane/terminal-remote-file-download-open.ts',
+    'src/renderer/src/runtime/runtime-file-read-client.ts',
+    'src/renderer/src/runtime/runtime-file-routing.ts'
+  ]) {
+    expect(selectPrE2eSpecs([source]), source).toContain(spec)
+  }
+  expect(
+    selectPrE2eSpecs([
+      'src/renderer/src/components/terminal-pane/terminal-remote-file-download-open.test.ts'
+    ])
+  ).not.toContain(spec)
+})
+
 it('skips the general consumer only when every requested spec has a dedicated owner', () => {
   for (const spec of DEDICATED_E2E_SPECS) {
     expect(classify([spec]).e2e_run_changed, spec).toBe(false)

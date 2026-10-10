@@ -2,6 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 export const DOCKER_SSH_E2E_SPECS = [
   'tests/e2e/local-ssh-browser-routing.spec.ts',
+  'tests/e2e/nested-ssh-download-owner.spec.ts',
   'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts',
   'tests/e2e/pty-input-write-queue-ssh.spec.ts',
   'tests/e2e/ssh-ai-vault-session-history.spec.ts',

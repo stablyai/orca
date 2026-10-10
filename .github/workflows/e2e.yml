@@ -310,6 +310,7 @@ jobs:
             # Dispatching an older ref retains its existing dedicated-owner exclusions.
             jq -r '.[] | select(
               . != "tests/e2e/local-ssh-browser-routing.spec.ts" and
+              . != "tests/e2e/nested-ssh-download-owner.spec.ts" and
               . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
               . != "tests/e2e/pty-input-write-queue-ssh.spec.ts" and
               . != "tests/e2e/ssh-ai-vault-session-history.spec.ts" and
@@ -403,6 +404,7 @@ jobs:
       inputs.test_files == '' ||
       inputs.ssh_source_changed == 'true' ||
       contains(inputs.test_files, 'tests/e2e/local-ssh-browser-routing.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/nested-ssh-download-owner.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/pty-input-write-queue-ssh.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-ai-vault-session-history.spec.ts') ||

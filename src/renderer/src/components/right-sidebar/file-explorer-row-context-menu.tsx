@@ -135,7 +135,7 @@ export function FileExplorerRowContextMenu({
     }
   }, [activeWorktreeId, node.path])
   const handleDownload = useCallback(() => {
-    const downloadTarget = connectionId || runtimeDownloadContext
+    const downloadTarget = runtimeDownloadContext || connectionId
     if (!downloadTarget) {
       return
     }

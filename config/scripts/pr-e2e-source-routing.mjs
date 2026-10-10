@@ -15,6 +15,20 @@ const NATIVE_IME_HARNESS =
 
 export const PR_E2E_SOURCE_ROUTES = [
   {
+    id: 'ssh.nested-download-owner',
+    specs: ['tests/e2e/nested-ssh-download-owner.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      [
+        'src/renderer/src/components/right-sidebar/file-explorer-row-context-menu.tsx',
+        'src/renderer/src/components/right-sidebar/file-explorer-row-file-transfer.ts',
+        'src/renderer/src/components/right-sidebar/use-file-explorer-tree-pane-state.ts',
+        'src/renderer/src/components/terminal-pane/terminal-remote-file-download-open.ts',
+        'src/renderer/src/runtime/runtime-file-read-client.ts',
+        'src/renderer/src/runtime/runtime-file-routing.ts'
+      ].includes(file)
+  },
+  {
     id: 'ssh.orcad-editor-ownership',
     specs: ['tests/e2e/ssh-orcad-editor-ownership.spec.ts'],
     matches: (file) =>
