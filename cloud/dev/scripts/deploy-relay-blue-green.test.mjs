@@ -14,6 +14,7 @@ import {
   DIRECTOR_REHOME_IDENTITY_ENV,
   assertRegionalRehomeDisabled,
   assertReserveCompatibleTrafficMove,
+  assertShadowCellsKeepReserveCells,
   deployDirector,
   DIRECTOR_RESERVE_PLACEMENT_ENV,
   directorDeploymentEnvironment,
@@ -22,6 +23,7 @@ import {
   directorTopologyChange,
   environmentUpdateValue,
   parseArguments,
+  readDirectorPlacement,
   readReserveCells,
   revisionEnvironment,
   revisionSecretEnvironment,
@@ -433,7 +435,8 @@ function directorHarness({
   servingServiceAccount,
   servingImageDigest = `sha256:${'f'.repeat(64)}`,
   reserveCells = {},
-  servingEnvironment = {}
+  servingEnvironment = {},
+  placements = {}
 } = {}) {
   const state = {
     activeRevision: 'relay-00001-old',
@@ -552,7 +555,8 @@ function directorHarness({
     waitForHealth: async (_origin, connectionCapacityProtocol) => {
       healthProtocols.push(connectionCapacityProtocol)
     },
-    readReserveCells: async (_config, origin) => reserveCells[origin]
+    readReserveCells: async (_config, origin) => reserveCells[origin],
+    readDirectorPlacement: async (_config, origin) => placements[origin] ?? 'unreported'
   }
   return { state, removed, healthProtocols, operations }
 }
@@ -939,7 +943,8 @@ test('turning reserve placement off is refused while any cell is reserve, even o
   const candidateOrigin = 'https://candidate-new---relay-hash-uc.a.run.app'
   const reserved = directorHarness({
     servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' },
-    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'], [candidateOrigin]: ['production-gce-c3'] }
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'], [candidateOrigin]: ['production-gce-c3'] },
+    placements: { 'https://relay-hash-uc.a.run.app': 'on', [candidateOrigin]: 'off' }
   })
   await assert.rejects(
     deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', reserved.operations),
@@ -964,4 +969,49 @@ test('--reserve-placement takes only a known mode, and only for a director', () 
   )
   assert.equal(directorDeploymentEnvironment({ 'reserve-placement': 'preserve' })[DIRECTOR_RESERVE_PLACEMENT_ENV], undefined)
   assert.equal(directorDeploymentEnvironment({ 'reserve-placement': 'dry-run' })[DIRECTOR_RESERVE_PLACEMENT_ENV], 'dry-run')
+})
+
+test('the guard reads placement as built, so a director that never placed does not block turning it off', async () => {
+  const servingImageDigest = `sha256:${'f'.repeat(64)}`
+  const candidateOrigin = 'https://candidate-new---relay-hash-uc.a.run.app'
+  // Configured on, but the serving director reports off: it was never feeding the dead-man.
+  const harness = directorHarness({
+    servingEnvironment: { [DIRECTOR_RESERVE_PLACEMENT_ENV]: 'on' },
+    reserveCells: { 'https://relay-hash-uc.a.run.app': ['production-gce-c3'], [candidateOrigin]: ['production-gce-c3'] },
+    placements: { 'https://relay-hash-uc.a.run.app': 'off', [candidateOrigin]: 'off' }
+  })
+  await deployDirector({ image: `relay@${servingImageDigest}`, 'reserve-placement': 'off' }, 'candidate-new', harness.operations)
+  assert.equal(harness.state.revisions.get(harness.state.activeRevision).env[DIRECTOR_RESERVE_PLACEMENT_ENV], 'off')
+})
+
+test('a shadow-cell change on the same image is checked, and a shrink past a reserve cell is refused', () => {
+  assert.throws(
+    () => assertShadowCellsKeepReserveCells('production-gce-c1,production-gce-c3', 'production-gce-c1', ['production-gce-c3']),
+    /would drop reserve cells \(production-gce-c3\); flip them to db first/
+  )
+  assert.throws(() => assertShadowCellsKeepReserveCells('all', 'production-gce-c1', ['production-gce-c3']), /production-gce-c3/)
+  assert.throws(() => assertShadowCellsKeepReserveCells('all', undefined, ['production-gce-c3']), /production-gce-c3/)
+  assert.doesNotThrow(() => assertShadowCellsKeepReserveCells('production-gce-c1', 'all', ['production-gce-c3']))
+  assert.doesNotThrow(() => assertShadowCellsKeepReserveCells('production-gce-c1,production-gce-c3', 'production-gce-c1', []))
+  // A reserve cell the serving list never polled is not being dropped by this deploy.
+  assert.doesNotThrow(() => assertShadowCellsKeepReserveCells('production-gce-c1', 'production-gce-c1', ['production-gce-c3']))
+})
+
+test('reads a director placement from runtime-status, and reports an image without the field', async () => {
+  const environment = process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+  process.env.ORCA_RELAY_ADMIN_ID_TOKEN = 'aaa.bbb.ccc'
+  const config = { 'admin-audience': 'https://relay.onorca.dev/v1/admin/drain' }
+  try {
+    const answer = (body) => async () => new Response(JSON.stringify({ v: 1, role: 'director', ...body }))
+    assert.equal(await readDirectorPlacement(config, 'https://d.example.test', answer({ reservePlacement: 'on' })), 'on')
+    assert.equal(await readDirectorPlacement(config, 'https://d.example.test', answer({})), 'unreported')
+    await assert.rejects(readDirectorPlacement(config, 'https://d.example.test', answer({ reservePlacement: 'maybe' })), /reports reserve placement maybe/)
+    await assert.rejects(
+      readDirectorPlacement(config, 'https://d.example.test', async () => new Response('{}', { status: 401 })),
+      /runtime status failed/
+    )
+  } finally {
+    if (environment === undefined) delete process.env.ORCA_RELAY_ADMIN_ID_TOKEN
+    else process.env.ORCA_RELAY_ADMIN_ID_TOKEN = environment
+  }
 })

@@ -53,7 +53,9 @@ export function readRelayServingRegionalPlacementVersion(input, dependencies = {
   try {
     service = run(gcloudArguments('services', input))
   } catch (error) {
-    if (error?.code === 'NOT_FOUND') return { version: input.bootstrap_version, cohort_percent: '0' }
+    if (error?.code === 'NOT_FOUND') {
+      return { version: input.bootstrap_version, cohort_percent: '0', reserve_placement: '', shadow_seat_feed_cells: '' }
+    }
     throw error
   }
   const serving = (service.status?.traffic ?? []).filter(
@@ -77,12 +79,21 @@ export function readRelayServingRegionalPlacementVersion(input, dependencies = {
     throw new Error('serving region correction cohort is invalid')
   }
   const cohort_percent = cohortSettings[0]?.value ?? '0'
+  // Set by the director deploy (placement) or by hand (shadow cells), never by Terraform: carried
+  // so an apply keeps them, and empty when the serving revision has none.
+  const reserve_placement = servingPlainSetting(revision, 'ORCA_RELAY_RESERVE_PLACEMENT', /^(?:off|dry-run|on)$/)
+  const shadow_seat_feed_cells = servingPlainSetting(
+    revision,
+    'ORCA_RELAY_SHADOW_SEAT_FEED_CELLS',
+    /^(?:all|[A-Za-z0-9_-]+(?:, ?[A-Za-z0-9_-]+)*)$/
+  )
+  const carried = { cohort_percent, reserve_placement, shadow_seat_feed_cells }
   const references = (revision.spec?.containers ?? []).flatMap((container) =>
     (container.env ?? []).filter(
       (environment) => environment.name === 'ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED'
     )
   )
-  if (references.length === 0) return { version: input.bootstrap_version, cohort_percent }
+  if (references.length === 0) return { version: input.bootstrap_version, ...carried }
   const reference = normalizeSecretReference(references[0])
   if (
     references.length !== 1 ||
@@ -91,7 +102,20 @@ export function readRelayServingRegionalPlacementVersion(input, dependencies = {
   ) {
     throw new Error('serving regional placement secret reference is invalid')
   }
-  return { version: reference.version, cohort_percent }
+  return { version: reference.version, ...carried }
+}
+
+// One plain value, or none; anything else (a secret, a duplicate, a malformed value) fails the
+// plan rather than letting an apply drop or reset the setting.
+function servingPlainSetting(revision, name, valid) {
+  const settings = (revision.spec?.containers ?? []).flatMap((container) =>
+    (container.env ?? []).filter((environment) => environment.name === name)
+  )
+  if (settings.length === 0) return ''
+  if (settings.length > 1 || typeof settings[0].value !== 'string' || !valid.test(settings[0].value)) {
+    throw new Error(`serving ${name} is invalid`)
+  }
+  return settings[0].value
 }
 
 // Why: the v2 API reports `valueSource.secretKeyRef.{secret,version}`, but

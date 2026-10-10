@@ -14,6 +14,8 @@ export const DIRECTOR_CORRECTION_COHORT_ENV = 'ORCA_RELAY_REGION_CORRECTION_COHO
 // Step 5 placement on the directors; only this deploy changes it, so the reserve guard sees it.
 export const DIRECTOR_RESERVE_PLACEMENT_ENV = 'ORCA_RELAY_RESERVE_PLACEMENT'
 const RESERVE_PLACEMENT_MODES = ['off', 'dry-run', 'on']
+// The cells whose feeds a director polls; a reserve cell outside it has no placing director.
+export const DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV = 'ORCA_RELAY_SHADOW_SEAT_FEED_CELLS'
 export const DIRECTOR_REHOME_IDENTITY_ENV =
   'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT'
 export const DIRECTOR_REHOME_AUDIENCE_ENV = 'ORCA_RELAY_REHOME_AUDIENCE'
@@ -780,6 +782,54 @@ export function assertReservePlacementKept(servingPlacement, candidatePlacement,
   }
 }
 
+// Placement as the director built it (runtime-status), not as its env asks; an image from before
+// the field reports nothing, and only its env can say.
+export async function readDirectorPlacement(config, origin, fetchImpl = fetch) {
+  const response = await fetchImpl(`${origin}/v1/admin/runtime-status`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${adminIdentityToken(config)}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ v: 1 }),
+    signal: AbortSignal.timeout(30_000)
+  })
+  const result = await response.json().catch(() => null)
+  if (!response.ok || result?.v !== 1 || result.role !== 'director') {
+    throw new Error(`director runtime status failed at ${origin}: ${result?.error ?? response.status}`)
+  }
+  if (result.reservePlacement === undefined) return 'unreported'
+  if (!RESERVE_PLACEMENT_MODES.includes(result.reservePlacement)) {
+    throw new Error(`director at ${origin} reports reserve placement ${result.reservePlacement}`)
+  }
+  return result.reservePlacement
+}
+
+const shadowCellSet = (value) =>
+  (value ?? '').trim() === 'all'
+    ? 'all'
+    : new Set(
+        (value ?? '')
+          .split(',')
+          .map((cell) => cell.trim())
+          .filter(Boolean)
+      )
+
+// A reserve cell the directors stop polling gets no booking and no reserver poll: its dead-man
+// trips. Shrinking the shadow-cell list past one is refused until that cell is db.
+export function assertShadowCellsKeepReserveCells(servingCells, candidateCells, reserve) {
+  if (reserve === undefined || reserve.length === 0) return
+  const before = shadowCellSet(servingCells)
+  const after = shadowCellSet(candidateCells)
+  if (after === 'all') return
+  const dropped = reserve.filter((cell) => (before === 'all' || before.has(cell)) && !after.has(cell))
+  if (dropped.length > 0) {
+    throw new Error(
+      `the shadow seat-feed cells would drop reserve cells (${dropped.join(', ')}); flip them to db first`
+    )
+  }
+}
+
 function directorCellIds(...environments) {
   const ids = new Set()
   for (const environment of environments) {
@@ -809,6 +859,7 @@ export async function deployDirector(config, tag, overrides = {}) {
     waitForHealth,
     assertRegionalRehomeDisabled,
     readReserveCells,
+    readDirectorPlacement,
     ...overrides
   }
   // Why: gcloud does not carry minScale onto a new revision, and the candidate below takes
@@ -869,11 +920,9 @@ export async function deployDirector(config, tag, overrides = {}) {
   deploymentEnvironment[DIRECTOR_CORRECTION_COHORT_ENV] ??= correctionCohortPercent(
     currentEnvironment[DIRECTOR_CORRECTION_COHORT_ENV] ?? '0'
   )
-  const servingReservePlacement = currentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ?? 'off'
   if (currentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] !== undefined) {
-    deploymentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ??= servingReservePlacement
+    deploymentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ??= currentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV]
   }
-  const candidateReservePlacement = deploymentEnvironment[DIRECTOR_RESERVE_PLACEMENT_ENV] ?? 'off'
   if (config['region-correction-cohort-percent'] !== undefined &&
       config['region-correction-cohort-percent'] !== 'preserve' &&
       config['expected-rehome-generation'] === undefined) {
@@ -984,25 +1033,38 @@ export async function deployDirector(config, tag, overrides = {}) {
     }
     await operations.waitForHealth(candidate.origin, requiredCapacityProtocol)
     await verifyRehomeDisabled(candidate.origin)
-    // The same image on both sides supports the same things; only an image change, or turning
-    // placement off, needs every cell's admit mode (and the admin token that reads it).
+    // The same image and the same placement and shadow-cell settings support the same things;
+    // anything else needs every cell's admit mode (and the admin token that reads it).
     const sameImage =
       servingRevision.spec?.containers?.[0]?.image?.split('@').at(-1) === config.image?.split('@').at(-1)
-    const placementOff = servingReservePlacement === 'on' && candidateReservePlacement !== 'on'
-    if (sameImage && !placementOff) {
-      console.warn(JSON.stringify({ event: 'director_reserve_support_checked', skipped: 'same image' }))
+    const sameSetting = (name) => (currentEnvironment[name] ?? '') === (environment[name] ?? '')
+    if (sameImage && sameSetting(DIRECTOR_RESERVE_PLACEMENT_ENV) && sameSetting(DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV)) {
+      console.warn(JSON.stringify({ event: 'director_reserve_support_checked', skipped: 'same image and settings' }))
     } else {
       const servingOrigin = initialService.status?.url
       if (!servingOrigin) throw new Error('relay service reports no URL for the serving revision')
       const cellIds = directorCellIds(currentEnvironment, environment)
       const servingReserve = await operations.readReserveCells(config, servingOrigin, cellIds)
       const candidateReserve = await operations.readReserveCells(config, candidate.origin, cellIds)
+      const reserve = candidateReserve ?? servingReserve
+      // Placement as each director built it, which an env string alone does not say.
+      const placementAt = async (origin, env) => {
+        const placement = await operations.readDirectorPlacement(config, origin)
+        return placement === 'unreported' ? (env[DIRECTOR_RESERVE_PLACEMENT_ENV] ?? 'off') : placement
+      }
+      const servingPlacement = await placementAt(servingOrigin, currentEnvironment)
+      const candidatePlacement = await placementAt(candidate.origin, environment)
       assertReserveCompatibleTrafficMove(servingReserve, candidateReserve)
-      assertReservePlacementKept(servingReservePlacement, candidateReservePlacement, candidateReserve ?? servingReserve)
+      assertReservePlacementKept(servingPlacement, candidatePlacement, reserve)
+      assertShadowCellsKeepReserveCells(
+        currentEnvironment[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV],
+        environment[DIRECTOR_SHADOW_SEAT_FEED_CELLS_ENV],
+        reserve
+      )
       console.warn(
         JSON.stringify({
           event: 'director_reserve_support_checked',
-          reservePlacement: { serving: servingReservePlacement, candidate: candidateReservePlacement },
+          reservePlacement: { serving: servingPlacement, candidate: candidatePlacement },
           serving: servingReserve === undefined ? 'unsupported' : servingReserve,
           candidate: candidateReserve === undefined ? 'unsupported' : candidateReserve
         })
