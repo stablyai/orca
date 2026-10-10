@@ -57,10 +57,10 @@ beforeEach(() => {
   state.remote.mockClear()
   state.local.mockClear()
 })
-const renderSection = () =>
+const renderSection = (activeRuntimeEnvironmentId: string | null = null) =>
   render(
     <AgentLaunchSettingsSection
-      settings={createGlobalSettingsFixture({ activeRuntimeEnvironmentId: null })}
+      settings={createGlobalSettingsFixture({ activeRuntimeEnvironmentId })}
       updateSettings={vi.fn()}
       renderPermissions={() => null}
     />
@@ -102,6 +102,12 @@ describe('launch settings host selection', () => {
     renderSection()
     expect(state.remote.mock.calls[0]?.[0].environmentId).toBe('ssh-host')
     expect(screen.getByRole('combobox').textContent).toContain('SSH host')
+  })
+
+  it('opens on the Active Server without an active workspace', () => {
+    renderSection(' ssh-host ')
+    expect(state.remote.mock.calls[0]?.[0].environmentId).toBe('ssh-host')
+    expect(state.local).not.toHaveBeenCalled()
   })
 
   it('keeps unknown workspace ownership unresolved instead of displaying desktop defaults', () => {

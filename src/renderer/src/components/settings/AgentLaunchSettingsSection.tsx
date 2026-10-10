@@ -1,10 +1,7 @@
 import { useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
-import {
-  getActiveRuntimeTarget,
-  runtimeTargetForExecutionHostId
-} from '@/runtime/runtime-client-target'
+import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import { useSidebarHostScopeOptions } from '../sidebar/use-sidebar-host-scope-options'
 import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
 import {
@@ -42,10 +39,9 @@ export function AgentLaunchSettingsSection({
     if (state.activeWorktreeId) {
       return getResolvedExecutionHostIdForWorktree(state, state.activeWorktreeId)
     }
-    const target = getActiveRuntimeTarget(settings)
-    return target.kind === 'local'
-      ? LOCAL_EXECUTION_HOST_ID
-      : toRuntimeExecutionHostId(target.environmentId)
+    // Why: with no workspace the pane opens where it did before host selection, the Active Server.
+    const activeServer = settings.activeRuntimeEnvironmentId?.trim()
+    return activeServer ? toRuntimeExecutionHostId(activeServer) : LOCAL_EXECUTION_HOST_ID
   })
   const environments = useAppStore((state) => state.runtimeEnvironments)
   const [selected, setSelected] = useState<ExecutionHostId | null>(initialHost)
