@@ -18096,6 +18096,7 @@
         "model": "Modèle",
         "effort": "Effort",
         "fastMode": "Mode rapide",
+        "speed": "Vitesse",
         "thinking": "Réflexion",
         "options": "Options",
         "sessionOptions": "Options de session",
@@ -18116,7 +18117,8 @@
           "high": "Haute",
           "xhigh": "Extra élevé",
           "max": "Max",
-          "ultra": "Ultra"
+          "ultra": "Ultra",
+          "standard": "Standard"
         },
         "imageSaving": "Enregistrement de l'image collée…",
         "pendingAttachmentLimit": "Trop de pièces jointes sont en attente. Terminez de composer avant d’en attacher davantage.",
@@ -18492,7 +18494,6 @@
         "alreadySent": "Ce message a déjà été envoyé.",
         "listLabel": "Messages en file d'attente",
         "behindReturnedHold": "En attente — un message précédent nécessite votre attention",
-        "awaitingAnswerHold": "En attente de votre réponse",
         "steer": "Envoyer maintenant",
         "send": "Envoyer",
         "steerHint": "Envoyer sans interrompre le modèle",
@@ -19249,6 +19250,7 @@
       "sortResultsAriaLabel": "Trier les résultats : {{value0}}",
       "consent": "Activer la recherche en texte intégral ? Orca crée un index sur cet ordinateur à partir des transcriptions des agents locaux, comprenant des conversations complètes et jusqu'à 3 072 caractères par sortie d'outil. Le contenu n'est pas expurgé. Les clients couplés authentifiés peuvent le rechercher.",
       "remoteDisabled": "La recherche est désactivée sur cet ordinateur. Activez l’indexation des transcriptions sur cet ordinateur pour rechercher ses sessions.",
+      "titleOnly": "La recherche en texte intégral est désactivée sur cet ordinateur ; seuls les titres des sessions sont pris en compte.",
       "notReady": "L'index de recherche n'est pas encore prêt. Réessayez sous peu.",
       "noService": "La recherche n'est pas disponible sur cet ordinateur. Il peut nécessiter une mise à jour Orca ou un runtime avec prise en charge de la recherche.",
       "failed": "Impossible de rechercher cet ordinateur. Vérifiez sa connexion et réessayez.",

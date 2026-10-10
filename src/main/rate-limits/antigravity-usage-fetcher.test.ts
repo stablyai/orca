@@ -4,7 +4,7 @@ import {
   resetAntigravityUsageSupportForTests
 } from './antigravity-usage-fetcher'
 import { ANTIGRAVITY_USAGE_ARGS, ANTIGRAVITY_VERSION_ARGS } from './antigravity-usage-command'
-import type { ProcessResult } from '../../shared/child-process/process-spec'
+import type { ProcessResult } from '@orca/process-host/process-spec'
 
 const USAGE_ENVELOPE = JSON.stringify({
   conversation_id: '',

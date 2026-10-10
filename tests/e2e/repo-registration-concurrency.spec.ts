@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 test.use({ seedTestRepo: false })
 

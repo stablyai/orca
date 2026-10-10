@@ -3,7 +3,7 @@ import type * as RecordFile from './orcad-remote-record-file'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),

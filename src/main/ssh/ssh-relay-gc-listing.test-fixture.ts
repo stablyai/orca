@@ -1,9 +1,10 @@
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
-import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { execCommand } from './ssh-relay-exec-command'
@@ -13,7 +14,7 @@ export const SSH_EXEC_OUTPUT_CAP_CHARS = 1024 * 1024
 class RelayGcShellChannel extends PassThrough implements ClientChannel {
   stdin: this = this
   stdout: this = this
-  stderr: ReturnType<typeof spawnProcess>['stderr']
+  stderr: PipedChildProcess['stderr']
   server = false as const
   type = 'session' as const
   subtype = 'exec' as const
@@ -21,7 +22,7 @@ class RelayGcShellChannel extends PassThrough implements ClientChannel {
   outgoing: unknown = null
   private readonly exited = Promise.withResolvers<void>()
 
-  constructor(private readonly child: ReturnType<typeof spawnProcess>) {
+  constructor(private readonly child: PipedChildProcess) {
     super({ autoDestroy: false, emitClose: false })
     this.stderr = child.stderr
     child.stdout.pipe(this)

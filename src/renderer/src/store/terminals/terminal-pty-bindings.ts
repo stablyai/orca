@@ -100,8 +100,9 @@ export function createTerminalPtyBindingActions(
             wasActivationSpawn = true
           }
           // Why: consume one suppression per split-pane activation callback.
-          const { pendingActivationSpawn: _unused, ...rest } = tab
+          const { pendingActivationSpawn: _unused, restoredFromSession: _restored, ...rest } = tab
           void _unused
+          void _restored
           // Why: tab.ptyId is the single-pane fallback for legacy attach; later split-pane spawns must not steal it or remount/close reattaches the tab to the wrong PTY.
           const currentTabPtyId = tab.ptyId === replacementPtyId ? ptyId : tab.ptyId
           const nextTabPtyId = currentTabPtyId ?? nextPtyIds[0] ?? null

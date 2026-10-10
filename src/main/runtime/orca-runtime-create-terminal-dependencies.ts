@@ -1,4 +1,6 @@
-export type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+
+export type { TerminalCreateOptions }
 export type { Worktree } from '../../shared/worktree/types'
 export type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 export {
@@ -36,3 +38,13 @@ export const BACKGROUND_TERMINAL_SPAWN_FLAGS = {
   initiallyHidden: true,
   persistHostSessionBinding: true
 } as const
+
+/** Caller-scoped spawn guards: abort when the caller disconnects; never wake a slept worktree. */
+export function callerSpawnGuards(
+  opts: Pick<TerminalCreateOptions, 'signal' | 'refuseSleptWorktree'>
+): { signal?: AbortSignal; refuseSleptWorktree?: true } {
+  return {
+    ...(opts.signal ? { signal: opts.signal } : {}),
+    ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {})
+  }
+}

@@ -7,7 +7,7 @@ const { spawnMock, cwdUsableMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   cwdUsableMock: vi.fn()
 }))
-vi.mock('../shared/child-process/run-process', () => ({ spawnProcess: spawnMock }))
+vi.mock('@orca/process-host', () => ({ spawnProcess: spawnMock }))
 vi.mock('./relay-bundled-ripgrep', () => ({ resolveRelayRipgrepCommand: () => '/tools/rg' }))
 vi.mock('../shared/ripgrep-process-availability', async (importOriginal) => ({
   ...(await importOriginal<typeof RipgrepAvailability>()),

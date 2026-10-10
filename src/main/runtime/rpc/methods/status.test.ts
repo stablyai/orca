@@ -7,7 +7,7 @@ import { STATUS_METHODS } from './status'
 
 // Why mocked: the friendly-name lookup is the one path that spawns `scutil`; the test decides when it lands.
 const runProcessMock = vi.hoisted(() => vi.fn())
-vi.mock('../../../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
+vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },

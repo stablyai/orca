@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RELAY_LSOF_PROBE_JS } from '../../shared/child-process/posix-lsof-probe'
+import { RELAY_LSOF_PROBE_JS } from '@orca/process-host/posix-lsof-probe'
 
 const execCommand = vi.fn()
 vi.mock('./ssh-relay-deploy-helpers', () => ({

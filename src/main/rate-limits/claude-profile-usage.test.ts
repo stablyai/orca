@@ -24,7 +24,7 @@ const runningDistros = vi.hoisted(() => ({
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: runningDistros.filter
 }))
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   spawnProcess: () => {
     throw new Error('Usage must not launch a process')
   },

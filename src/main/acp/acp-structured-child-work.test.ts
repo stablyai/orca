@@ -19,6 +19,7 @@ import {
 import { acpChildWorkStatusSink } from './acp-structured-child-work.test-support'
 import { GrokFixtureReplay } from './acp-structured-fixture-replay.test-support'
 import { readAcpFixture } from './acp-timeline-fixture.test-support'
+import type { FakeFrame } from './acp-scripted-agent.test-support'
 
 beforeEach(() => _internals.resetCachesForTests())
 const cleanup: (() => Promise<unknown>)[] = []
@@ -29,10 +30,26 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
+function cleanupScriptedHost(hosted: Awaited<ReturnType<typeof openHostRig>>) {
+  let prompt: FakeFrame | undefined
+  cleanup.push(async () => {
+    const scriptedPrompt = prompt
+    if (scriptedPrompt) {
+      const { agent } = hosted.rig.child()
+      // Only teardown's actual cancel ends this fixture's scripted prompt.
+      agent.on('session/cancel', () => agent.reply(scriptedPrompt, { stopReason: 'cancelled' }))
+    }
+    await hosted.host.close(SESSION, 'user-close')
+  })
+  return (frame: FakeFrame) => {
+    prompt = frame
+  }
+}
+
 async function fixture() {
   const childWork = acpChildWorkStatusSink()
   const hosted = await openAttachedHostRig({}, childWork.sink)
-  cleanup.push(() => hosted.host.close(SESSION, 'user-close'))
+  const cancelOnCleanup = cleanupScriptedHost(hosted)
   const sidebar: AgentChildWorkView[][] = []
   hosted.host.subscribeStatus({
     id: 'sidebar',
@@ -47,6 +64,7 @@ async function fixture() {
   })
   await send(hosted.host, 'Delegate work')
   const prompt = await hosted.rig.frame('session/prompt')
+  cancelOnCleanup(prompt)
   const agent = hosted.rig.child().agent
   agent.notify('session/update', replyChunk(promptIdOf(prompt), 'Delegating'))
   await hosted.rows()
@@ -315,10 +333,11 @@ describe('Grok roster evidence through the existing host child store', () => {
       script: (agent) =>
         agent.on('_x.ai/subagent/cancel', (frame) => agent.fail(frame, -32601, 'Method not found'))
     })
-    cleanup.push(() => hosted.host.close(SESSION, 'user-close'))
+    const cancelOnCleanup = cleanupScriptedHost(hosted)
     expect(await hosted.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
     await send(hosted.host, 'Delegate on older peer')
     const prompt = await hosted.rig.frame('session/prompt')
+    cancelOnCleanup(prompt)
     hosted.rig.child().agent.notify('_x.ai/session/update', {
       sessionId: PROVIDER_SESSION,
       update: {

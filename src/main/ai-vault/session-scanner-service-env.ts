@@ -36,6 +36,7 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   // Why: Devin's Windows data root resolves under %APPDATA%, which managed
   // machines relocate away from the profile default.
   'APPDATA',
+  'CLAUDE_CONFIG_DIR',
   'CODEX_HOME',
   'CLINE_SESSION_DATA_DIR',
   'COPILOT_HOME',

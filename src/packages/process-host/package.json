@@ -1,0 +1,109 @@
+{
+  "name": "@orca/process-host",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Orca host subprocess execution, cancellation, and termination",
+  "files": [
+    "dist"
+  ],
+  "type": "commonjs",
+  "main": "./dist/run-process.js",
+  "types": "./dist/run-process.d.ts",
+  "exports": {
+    ".": {
+      "orca-source": "./src/run-process.ts",
+      "types": "./dist/run-process.d.ts",
+      "default": "./dist/run-process.js"
+    },
+    "./process-spec": {
+      "orca-source": "./src/process-spec.ts",
+      "types": "./dist/process-spec.d.ts",
+      "default": "./dist/process-spec.js"
+    },
+    "./fork-process": {
+      "orca-source": "./src/fork-process.ts",
+      "types": "./dist/fork-process.d.ts",
+      "default": "./dist/fork-process.js"
+    },
+    "./process-tree-termination": {
+      "orca-source": "./src/process-tree-termination.ts",
+      "types": "./dist/process-tree-termination.d.ts",
+      "default": "./dist/process-tree-termination.js"
+    },
+    "./process-tree-kill-gate": {
+      "orca-source": "./src/process-tree-kill-gate.ts",
+      "types": "./dist/process-tree-kill-gate.d.ts",
+      "default": "./dist/process-tree-kill-gate.js"
+    },
+    "./spawn-observer": {
+      "orca-source": "./src/spawn-observer.ts",
+      "types": "./dist/spawn-observer.d.ts",
+      "default": "./dist/spawn-observer.js"
+    },
+    "./bounded-output-sink": {
+      "orca-source": "./src/bounded-output-sink.ts",
+      "types": "./dist/bounded-output-sink.d.ts",
+      "default": "./dist/bounded-output-sink.js"
+    },
+    "./growing-byte-buffer": {
+      "orca-source": "./src/growing-byte-buffer.ts",
+      "types": "./dist/growing-byte-buffer.d.ts",
+      "default": "./dist/growing-byte-buffer.js"
+    },
+    "./windows-command-line": {
+      "orca-source": "./src/windows-command-line.ts",
+      "types": "./dist/windows-command-line.d.ts",
+      "default": "./dist/windows-command-line.js"
+    },
+    "./windows-system-binary": {
+      "orca-source": "./src/windows-system-binary.ts",
+      "types": "./dist/windows-system-binary.d.ts",
+      "default": "./dist/windows-system-binary.js"
+    },
+    "./windows-cmd-shim-resolution": {
+      "orca-source": "./src/windows-cmd-shim-resolution.ts",
+      "types": "./dist/windows-cmd-shim-resolution.d.ts",
+      "default": "./dist/windows-cmd-shim-resolution.js"
+    },
+    "./posix-lsof-probe": {
+      "orca-source": "./src/posix-lsof-probe.ts",
+      "types": "./dist/posix-lsof-probe.d.ts",
+      "default": "./dist/posix-lsof-probe.js"
+    },
+    "./retryable-process-exit-proof": {
+      "orca-source": "./src/retryable-process-exit-proof.ts",
+      "types": "./dist/retryable-process-exit-proof.d.ts",
+      "default": "./dist/retryable-process-exit-proof.js"
+    },
+    "./cancel-process-acquisition": {
+      "orca-source": "./src/cancel-process-acquisition.ts",
+      "types": "./dist/cancel-process-acquisition.d.ts",
+      "default": "./dist/cancel-process-acquisition.js"
+    },
+    "./close-process-registry": {
+      "orca-source": "./src/close-process-registry.ts",
+      "types": "./dist/close-process-registry.d.ts",
+      "default": "./dist/close-process-registry.js"
+    },
+    "./child-termination-reporter": {
+      "orca-source": "./src/child-termination-reporter.ts",
+      "types": "./dist/child-termination-reporter.d.ts",
+      "default": "./dist/child-termination-reporter.js"
+    }
+  },
+  "scripts": {
+    "build": "tsx --conditions=orca-source scripts/build-dist.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.130",
+    "proper-lockfile": "4.1.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

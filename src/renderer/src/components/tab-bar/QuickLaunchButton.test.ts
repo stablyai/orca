@@ -159,7 +159,8 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
       kind: 'runtime',
-      environmentId: 'env-1'
+      environmentId: 'env-1',
+      worktreeId: 'worktree-1'
     })
   })
 
@@ -179,7 +180,8 @@ describe('QuickLaunchAgentMenuItems', () => {
 
     expect(useDetectedAgentsMock).toHaveBeenLastCalledWith({
       kind: 'runtime',
-      environmentId: 'env-1'
+      environmentId: 'env-1',
+      worktreeId: 'worktree-1'
     })
   })
 

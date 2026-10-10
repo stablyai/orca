@@ -83,6 +83,6 @@ export function createAcpModelCatalogProbe(
     if (models.length === 0) {
       throw new Error(`${spec.agent} listed no models`)
     }
-    return { models, fastModeTierByModel: new Map(), origin: 'probe' }
+    return { models, origin: 'probe' }
   }
 }

@@ -18,7 +18,7 @@ import {
 } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { NODE_RUNTIME_ASSETS } from '../../shared/node-runtime-pin'
 import {
   ORCAD_BUILD_TARGET_FILENAME,

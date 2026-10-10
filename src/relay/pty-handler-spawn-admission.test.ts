@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import * as ptyShellUtils from './pty-shell-utils'
 import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
-import * as runProcessModule from '../shared/child-process/run-process'
+import * as runProcessModule from '@orca/process-host'
 import * as nodePtyBindingSurvey from './node-pty-binding-survey'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({

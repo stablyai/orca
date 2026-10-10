@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
 const mockCreateEmptySplitGroup = vi.fn()
+const mockCloseEmptyGroup = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockSetActiveTabType = vi.fn()
 const mockSetTabBarOrder = vi.fn()
@@ -14,6 +15,7 @@ const runtimeMocks = vi.hoisted(() => ({
 const mockState = {
   createTab: mockCreateTab,
   createEmptySplitGroup: mockCreateEmptySplitGroup,
+  closeEmptyGroup: mockCloseEmptyGroup,
   queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: mockSetTabBarOrder,
@@ -190,5 +192,51 @@ describe('launchAiVaultSessionInNewTab', () => {
       await expect(result.runtimeLaunch).resolves.toEqual({ status: 'created' })
     }
     expect(mockSetActiveTabType).toHaveBeenCalledExactlyOnceWith('terminal', 'wt-1')
+  })
+
+  // #22791: a drop on a pane edge in a paired-runtime worktree opened a tab instead of a split.
+  it('splits the pane before a runtime-hosted resume and targets the new group', async () => {
+    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
+
+    const result = launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      targetGroupId: 'group-1',
+      splitDirection: 'right',
+      command: 'codex resume session-2'
+    })
+
+    expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
+    expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ targetGroupId: 'group-new' })
+    )
+    expect(result.groupId).toBe('group-new')
+    if (result.tabId === null) {
+      await result.runtimeLaunch
+    }
+    expect(mockCloseEmptyGroup).not.toHaveBeenCalled()
+  })
+
+  it('removes the still-empty split group when the runtime create does not succeed', async () => {
+    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    runtimeMocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      status: 'failed',
+      message: 'refused'
+    })
+
+    const result = launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      targetGroupId: 'group-1',
+      splitDirection: 'right',
+      command: 'codex resume session-2'
+    })
+    if (result.tabId === null) {
+      await result.runtimeLaunch
+    }
+
+    expect(mockCloseEmptyGroup).toHaveBeenCalledWith('wt-1', 'group-new')
   })
 })
