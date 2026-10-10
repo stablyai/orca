@@ -130,6 +130,23 @@ describe('the tab menu offers exactly what the Session History row offers', () =
     })
   })
 
+  it('nothing for a CLI conversation a native chat already holds', () => {
+    const state = useAppStore.getState()
+    const owned = row({
+      structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
+    })
+    expect(panelTargets(state, owned).resumeInNewChatWorkspaceId).toBeNull()
+    expect(
+      resolveTabSessionSwitch(state, owned, {
+        kind: 'cli',
+        agent: 'claude',
+        providerSessionId: owned.sessionId,
+        workspaceId: WORKTREE_ID,
+        request
+      })
+    ).toBeNull()
+  })
+
   it("Resume in New Native Chat in the conversation's own worktree when that differs", () => {
     const state = useAppStore.getState()
     const session = row({ cwd: '/repo/sibling' })

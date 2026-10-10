@@ -4,6 +4,8 @@ import type { AppState } from '@/store/types'
 import { makeRepo, makeTerminalTab, makeWorktree } from '../worktree-jump-palette-test-fixtures'
 import { makeAgentStatusEntry } from '@/runtime/sync-runtime-graph-test-harness'
 import type { AiVaultListArgs, AiVaultSession } from '../../../../shared/ai-vault-types'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   claimAiVaultForcedRescan,
   resetAiVaultForcedRescanThrottleForTest
@@ -13,6 +15,7 @@ import {
   readCachedAiVaultSessionList
 } from '../right-sidebar/ai-vault-session-list-request'
 import {
+  canPaneOfferResumeInNewChat,
   findTabSessionHistoryRow,
   lookupTabSessionHistoryRow,
   resolveTabSessionHistorySubject,
@@ -23,9 +26,17 @@ import {
 const mocks = vi.hoisted(() => {
   const state: {
     resumeState: { blocked: boolean; worktreeId: string | null }
-  } = { resumeState: { blocked: false, worktreeId: 'repo-1::/repo/wt' } }
+    platform: string
+  } = { resumeState: { blocked: false, worktreeId: 'repo-1::/repo/wt' }, platform: 'darwin' }
   return { ...state, resumeInChat: vi.fn() }
 })
+
+// Staged host answers: its capabilities arrive over IPC at boot, and the platform from preload.
+vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readLocalRuntimeCapabilitiesOrUnknown: () => [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}))
+vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => mocks.platform }))
 
 // Parity with the panel's real composition is pinned in tab-session-history-switch.parity.test.ts.
 vi.mock('../right-sidebar/ai-vault-session-resume-in-chat-workspace', () => ({
@@ -122,6 +133,7 @@ const cliSubject: TabSessionHistorySubject = {
 beforeEach(() => {
   resetAiVaultForcedRescanThrottleForTest()
   mocks.resumeState = { blocked: false, worktreeId: WORKTREE_ID }
+  mocks.platform = 'darwin'
   mocks.resumeInChat.mockReset()
 })
 
@@ -190,6 +202,92 @@ describe('resolveTabSessionHistorySubject', () => {
   })
 })
 
+describe('one pane of a terminal tab', () => {
+  const claudePane = 'term-1:leaf-1'
+  const grokPane = 'term-1:leaf-2'
+  const splitTab = (activeLeafId: string): AppState => {
+    makeState({
+      [claudePane]: liveClaudeEntry['term-1:leaf-1'],
+      [grokPane]: makeAgentStatusEntry({
+        agentType: 'grok',
+        paneKey: grokPane,
+        tabId: 'term-1',
+        worktreeId: WORKTREE_ID,
+        providerSession: { key: 'session_id', id: 'grok-session-1' }
+      })
+    })
+    useAppStore.setState({
+      terminalLayoutsByTabId: { 'term-1': { root: null, activeLeafId, expandedLeafId: null } }
+    })
+    return useAppStore.getState()
+  }
+  const paneSubject = (state: AppState, paneKey: string) =>
+    resolveTabSessionHistorySubject(state, {
+      tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+      paneKey
+    })
+  const paneGate = (state: AppState, paneKey: string) =>
+    canPaneOfferResumeInNewChat(state, { worktreeId: WORKTREE_ID, paneKey })
+
+  it("never stands in a sibling pane's conversation for a pane with no move", () => {
+    const state = splitTab('leaf-2')
+    // The tab as a whole maps to the Claude pane; the Grok pane on its own has nothing.
+    expect(
+      resolveTabSessionHistorySubject(state, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+    ).toEqual(cliSubject)
+    expect(paneSubject(state, grokPane)).toBeNull()
+    expect(paneGate(state, grokPane)).toBe(false)
+  })
+
+  it("finds the pane's own conversation", () => {
+    const state = splitTab('leaf-1')
+    expect(paneSubject(state, claudePane)).toEqual(cliSubject)
+    expect(paneGate(state, claudePane)).toBe(true)
+  })
+
+  it('still maps a pane whose agent exited, as the tab menu does', () => {
+    const state = makeState()
+    useAppStore.setState({
+      retainedAgentsByPaneKey: {
+        [claudePane]: {
+          entry: liveClaudeEntry['term-1:leaf-1'],
+          worktreeId: WORKTREE_ID,
+          tab: state.tabsByWorktree[WORKTREE_ID][0],
+          agentType: 'claude',
+          startedAt: 0
+        }
+      }
+    })
+    const retained = useAppStore.getState()
+    expect(paneSubject(retained, claudePane)).toEqual(cliSubject)
+    expect(
+      resolveTabSessionHistorySubject(retained, { tab: { id: 'term-1', worktreeId: WORKTREE_ID } })
+    ).toEqual(cliSubject)
+    expect(paneGate(retained, claudePane)).toBe(true)
+  })
+
+  it('offers nothing where the project runs in WSL, whose chat route is refused', () => {
+    mocks.platform = 'win32'
+    const onWindows = (
+      localWindowsRuntimeDefault: { kind: 'wsl'; distro: string } | { kind: 'windows-host' }
+    ) => {
+      makeState(liveClaudeEntry)
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('C:\\Users\\me'), localWindowsRuntimeDefault }
+      })
+      return useAppStore.getState()
+    }
+    expect(paneGate(onWindows({ kind: 'windows-host' }), claudePane)).toBe(true)
+    expect(paneGate(onWindows({ kind: 'wsl', distro: 'Ubuntu' }), claudePane)).toBe(false)
+  })
+
+  it('offers nothing over SSH', () => {
+    expect(paneGate(makeState(liveClaudeEntry, { connectionId: 'dev-box' }), claudePane)).toBe(
+      false
+    )
+  })
+})
+
 describe('findTabSessionHistoryRow', () => {
   const chatRow = row({
     id: 'chat-row',
@@ -201,8 +299,14 @@ describe('findTabSessionHistoryRow', () => {
     expect(findTabSessionHistoryRow([cliRow, chatRow], chatSubject)?.id).toBe('chat-row')
   })
 
-  it('matches a terminal tab only to an unowned row of the same agent and conversation', () => {
-    expect(findTabSessionHistoryRow([chatRow, cliRow], cliSubject)?.id).toBe('cli-row')
+  it('matches a terminal tab to the row of the same agent and conversation', () => {
+    expect(findTabSessionHistoryRow([cliRow], cliSubject)?.id).toBe('cli-row')
+    // A chat that resumed the conversation owns its row; the move's gate refuses it from there.
+    const ownedRow = row({
+      id: 'owned-row',
+      structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID }
+    })
+    expect(findTabSessionHistoryRow([ownedRow], cliSubject)?.id).toBe('owned-row')
     expect(findTabSessionHistoryRow([row({ agent: 'codex' })], cliSubject)).toBeNull()
     expect(
       findTabSessionHistoryRow(
@@ -347,6 +451,36 @@ describe('lookupTabSessionHistoryRow', () => {
       lookupOptions
     )
     expect(listSessions).toHaveBeenCalledTimes(1)
+  })
+
+  it('finds a chat-owned row without spending a forced rescan', async () => {
+    const owned = row({ structuredSession: { sessionId: 'orca-chat-1', workspaceId: WORKTREE_ID } })
+    const listSessions = vi.fn(async (_args: AiVaultListArgs) => listResult([owned]))
+    await expect(
+      lookupTabSessionHistoryRow(cliSubject, listSessions, lookupOptions)
+    ).resolves.toMatchObject({ structuredSession: { sessionId: 'orca-chat-1' } })
+    expect(listSessions).toHaveBeenCalledTimes(1)
+    expect(claimAiVaultForcedRescan()).toBe(true)
+  })
+
+  it('forces a rescan for a click even while the budget is spent, and takes the budget', async () => {
+    expect(claimAiVaultForcedRescan()).toBe(true)
+    const listSessions = vi
+      .fn()
+      .mockResolvedValueOnce(listResult([emptyRow]))
+      .mockResolvedValueOnce(listResult([row()]))
+    const clickOptions = { ...lookupOptions, userRequested: true }
+    await expect(
+      lookupTabSessionHistoryRow(cliSubject, listSessions, clickOptions)
+    ).resolves.toMatchObject({ messageCount: 2 })
+    expect(listSessions).toHaveBeenLastCalledWith(expect.objectContaining({ force: true }))
+    resetAiVaultForcedRescanThrottleForTest()
+    await lookupTabSessionHistoryRow(
+      cliSubject,
+      vi.fn().mockResolvedValue(listResult([])),
+      clickOptions
+    )
+    expect(claimAiVaultForcedRescan()).toBe(false)
   })
 
   it('reports no answer when the lookup is cancelled', async () => {

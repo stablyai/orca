@@ -18185,8 +18185,11 @@
       },
       "transcriptLabel": "대화",
       "toggle": {
-        "showTerminal": "terminal 표시",
-        "showChat": "채팅 보기 표시"
+        "showTerminal": "terminal 표시"
+      },
+      "resumeInNewChat": {
+        "notSavedYet": "{{agent}}이(가) 아직 이 대화를 저장하지 않았습니다. 응답한 후 다시 시도하세요.",
+        "cannotResume": "이 {{agent}} 대화는 기본 채팅에서 재개할 수 없습니다."
       },
       "state": {
         "loading": {
