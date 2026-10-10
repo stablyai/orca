@@ -173,6 +173,27 @@ describe('release policy', () => {
     })
   })
 
+  it('restores the Android latest-APK release to a prerelease when someone marks it Latest', async () => {
+    const apk = release('mobile-android-latest', 'github-actions[bot]', { id: 7 })
+    const stable = release('v1.4.214', 'github-actions[bot]')
+    const github = createGithub({ releases: [apk, stable], tags: { 'v1.4.214': {} } })
+
+    await run(github, apk, 'edited')
+
+    expect(github.rest.repos.deleteRelease).not.toHaveBeenCalled()
+    expect(github.rest.repos.updateRelease).toHaveBeenCalledWith({
+      ...repoRef,
+      release_id: apk.id,
+      prerelease: true,
+      make_latest: 'false'
+    })
+    expect(github.rest.repos.updateRelease).toHaveBeenLastCalledWith({
+      ...repoRef,
+      release_id: stable.id,
+      make_latest: 'true'
+    })
+  })
+
   it('deletes an agent state rules release a person published', async () => {
     const rules = release('agent-state-rules-engine-1-stable', 'someone', { prerelease: true })
     const github = createGithub({ releases: [rules] })

@@ -28,3 +28,10 @@ export function agentStateRulesTag(engineVersion, channel) {
   }
   return tag
 }
+
+/** The permanent Android download link's release; its APK is swapped in place on each release. */
+const MOBILE_ANDROID_LATEST_TAG = /^mobile-android-latest$/
+
+export function isMobileAndroidLatestTag(tag) {
+  return MOBILE_ANDROID_LATEST_TAG.test(tag)
+}

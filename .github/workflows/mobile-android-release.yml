@@ -38,6 +38,9 @@ jobs:
     permissions:
       contents: write
 
+    outputs:
+      publish_release: ${{ steps.release.outputs.publish_release }}
+
     defaults:
       run:
         working-directory: mobile
@@ -231,3 +234,11 @@ jobs:
               android/app/build/outputs/apk/release/*.apk \
               "${{ steps.apk.outputs.checksum }}"
           fi
+
+  # Points the permanent Android download link at the newest published release.
+  android-latest-apk:
+    needs: android-build
+    if: needs.android-build.outputs.publish_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/mobile-android-latest-apk.yml

@@ -1,0 +1,160 @@
+name: Mobile Android Latest APK
+
+# Why: GitHub's releases/latest/download URL belongs to the desktop app in this repo, so the
+# permanent Android download link is the app-release.apk asset of a dedicated release instead.
+# Every Android download link (READMEs, docs site, desktop app) points here and never changes.
+#
+# Why GITHUB_TOKEN: release-policy.yml deletes a mobile-android-latest release any other author
+# publishes, and this token's releases start no workflow.
+on:
+  workflow_call:
+  workflow_dispatch:
+  # Why: merging this file creates the release, and the daily run repairs a swap that died midway.
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mobile-android-latest-apk.yml
+  schedule:
+    - cron: '17 6 * * *'
+
+jobs:
+  publish-latest-apk:
+    if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Why job level: a called workflow's group would be shared with whatever calls it.
+    # Each run must read the release after the previous run's swap has finished.
+    concurrency:
+      group: mobile-android-latest-apk
+      cancel-in-progress: false
+
+    steps:
+      - name: Copy the newest Android APK onto the permanent link
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          LATEST_TAG: mobile-android-latest
+          ASSET: app-release.apk
+        run: |
+          set -euo pipefail
+
+          dir="$RUNNER_TEMP/android-latest-apk"
+          next="app-release.next.apk"
+          checksum="$ASSET.sha256"
+          mkdir -p "$dir"
+
+          # Writes the published release for tag $1 to file $2; drafts are never returned.
+          # Why: only "no such release" may read as absent; any other error fails the run.
+          read_release() {
+            if gh api "repos/$REPO/releases/tags/$1" >"$2" 2>"$dir/gh-error"; then
+              return 0
+            fi
+            if grep -q '(HTTP 404)' "$dir/gh-error"; then
+              return 1
+            fi
+            cat "$dir/gh-error" >&2
+            exit 1
+          }
+          # The asset's sha256 digest, "unknown" if GitHub recorded none, empty if it is absent.
+          digest() {
+            jq -r --arg n "$2" 'first(.assets[] | select(.name == $n) | .digest // "unknown") // ""' "$1"
+          }
+          download() {
+            gh release download "$source_tag" --repo "$REPO" --pattern "$1" --dir "$dir" --clobber
+          }
+          local_digest() {
+            echo "sha256:$(sha256sum "$dir/$1" | cut -d' ' -f1)"
+          }
+
+          # Why: publish the newest versioned release, not this run's build, so re-running an
+          # older release (or a queued run GitHub dropped) can never roll the link back. A failed
+          # build can leave a tag with no release or APK, so walk down until one has the asset.
+          tags="$(
+            gh api "repos/$REPO/git/matching-refs/tags/mobile-android-v" --paginate --jq '.[].ref' \
+              | sed -n 's#^refs/tags/\(mobile-android-v[0-9]*\.[0-9]*\.[0-9]*\)$#\1#p' \
+              | sort -Vr
+          )"
+          source_tag=""
+          for tag in $tags; do
+            read_release "$tag" "$dir/source.json" || continue
+            if jq -e --arg n "$ASSET" 'any(.assets[]; .name == $n)' "$dir/source.json" >/dev/null; then
+              source_tag="$tag"
+              break
+            fi
+          done
+          if [ -z "$source_tag" ]; then
+            echo "::error::No mobile-android-v* release has an $ASSET asset"
+            exit 1
+          fi
+          echo "Newest Android release: $source_tag"
+
+          source_url="https://github.com/$REPO/releases/tag/$source_tag"
+          notes="The newest Orca Mobile Android APK, at a link that never changes: https://github.com/$REPO/releases/download/$LATEST_TAG/$ASSET
+
+          Currently: $source_tag ($source_url). Changelog and source are on that release."
+
+          if ! read_release "$LATEST_TAG" "$dir/latest.json"; then
+            # --latest=false keeps the desktop app's Latest badge; the tag is never moved.
+            gh release create "$LATEST_TAG" --repo "$REPO" --target "$GITHUB_SHA" \
+              --title "Orca Mobile Android (latest)" --prerelease --latest=false --notes "$notes"
+            read_release "$LATEST_TAG" "$dir/latest.json"
+          fi
+
+          # Why bytes, not tag names: a version re-published with a new build must still reach
+          # the link, and a checksum must sit beside the APK exactly when the source has one.
+          want_apk="$(digest "$dir/source.json" "$ASSET")"
+          want_sum="$(digest "$dir/source.json" "$checksum")"
+          # Assets uploaded before GitHub recorded digests have none, so hash those here.
+          if [ "$want_apk" = unknown ]; then
+            download "$ASSET"
+            want_apk="$(local_digest "$ASSET")"
+          fi
+          if [ "$want_sum" = unknown ]; then
+            download "$checksum"
+            want_sum="$(local_digest "$checksum")"
+          fi
+          have_apk="$(digest "$dir/latest.json" "$ASSET")"
+          have_sum="$(digest "$dir/latest.json" "$checksum")"
+          if [ "$want_apk" = "$have_apk" ] && [ "$want_sum" = "$have_sum" ]; then
+            # Why: notes are edited last, so a run that failed there left them naming the old version.
+            served_notes="$(jq -r '.body // "" | gsub("\r"; "")' "$dir/latest.json")"
+            if [ "$served_notes" != "$notes" ]; then
+              gh release edit "$LATEST_TAG" --repo "$REPO" --notes "$notes"
+            fi
+            echo "$LATEST_TAG already serves $source_tag"
+            exit 0
+          fi
+
+          download "$ASSET"
+          if [ -n "$want_sum" ]; then
+            download "$checksum"
+          fi
+          mv "$dir/$ASSET" "$dir/$next"
+
+          # A run that died mid-swap can leave the temporary asset behind, and the old checksum
+          # must never sit beside a different APK.
+          for stale in "$next" "$checksum"; do
+            stale_id="$(jq -r --arg n "$stale" '.assets[] | select(.name == $n) | .id' "$dir/latest.json")"
+            if [ -n "$stale_id" ]; then
+              gh api -X DELETE "repos/$REPO/releases/assets/$stale_id"
+            fi
+          done
+
+          # Why: upload under a temporary name, then swap, so the link is down only between the
+          # delete and the rename rather than for the whole upload, and a failed upload leaves the
+          # previous APK serving.
+          gh release upload "$LATEST_TAG" "$dir/$next" --repo "$REPO"
+          read_release "$LATEST_TAG" "$dir/latest.json"
+          old_id="$(jq -r --arg n "$ASSET" '.assets[] | select(.name == $n) | .id' "$dir/latest.json")"
+          next_id="$(jq -r --arg n "$next" '.assets[] | select(.name == $n) | .id' "$dir/latest.json")"
+          if [ -n "$old_id" ]; then
+            gh api -X DELETE "repos/$REPO/releases/assets/$old_id"
+          fi
+          gh api -X PATCH "repos/$REPO/releases/assets/$next_id" -f name="$ASSET" >/dev/null
+          if [ -n "$want_sum" ]; then
+            gh release upload "$LATEST_TAG" "$dir/$checksum" --repo "$REPO"
+          fi
+          gh release edit "$LATEST_TAG" --repo "$REPO" --notes "$notes"
+          echo "$LATEST_TAG now serves $source_tag"

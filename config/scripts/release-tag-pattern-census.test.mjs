@@ -9,8 +9,10 @@ import {
   DESKTOP_RC_TAG,
   DESKTOP_STABLE_TAG,
   DESKTOP_STABLE_TAG_SHELL_PATTERN,
+  MOBILE_TAG,
   agentStateRulesTag,
-  isAgentStateRulesTag
+  isAgentStateRulesTag,
+  isMobileAndroidLatestTag
 } from './release-tag-patterns.mjs'
 
 const WORKFLOWS_DIR = '.github/workflows'
@@ -180,5 +182,13 @@ describe('release tag pattern census', () => {
       expect(DESKTOP_STABLE_TAG.test(tag) || DESKTOP_RC_TAG.test(tag)).toBe(false)
     }
     expect(() => agentStateRulesTag(1, 'beta')).toThrow()
+  })
+
+  it('never classifies the Android latest-APK release as a desktop or versioned mobile release', () => {
+    const tag = 'mobile-android-latest'
+    expect(isMobileAndroidLatestTag(tag)).toBe(true)
+    expect(DESKTOP_STABLE_TAG.test(tag) || DESKTOP_RC_TAG.test(tag) || MOBILE_TAG.test(tag)).toBe(
+      false
+    )
   })
 })
