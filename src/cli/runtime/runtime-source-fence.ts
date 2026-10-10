@@ -1,17 +1,11 @@
-import { resolve } from 'node:path'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
+import { isSameUserDataPath } from '../../shared/serve-user-data-path'
 import { readRuntimeSourceStamp, type RuntimeSourceStamp } from '../../shared/runtime-source-env'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { getPlatformUserDataPath } from './metadata'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
 type StatusProbe = (metadata: RuntimeMetadata) => Promise<RuntimeRpcResponse<RuntimeStatus>>
-
-function sameProfilePath(left: string, right: string): boolean {
-  const a = resolve(left)
-  const b = resolve(right)
-  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
-}
 
 /**
  * The stamp to enforce for a CLI dialing `userDataPath`. Explicitly choosing another profile (e.g.
@@ -22,11 +16,11 @@ export function resolveFencedRuntimeSource(
   userDataPath: string,
   platformDefaultPath: string | null
 ): RuntimeSourceStamp | null {
-  if (!stamp?.profilePath || sameProfilePath(userDataPath, stamp.profilePath)) {
+  if (!stamp?.profilePath || isSameUserDataPath(userDataPath, stamp.profilePath)) {
     return stamp
   }
   // Why: the platform default is what an unpinned terminal falls back to, which is the case to fence.
-  return platformDefaultPath !== null && sameProfilePath(userDataPath, platformDefaultPath)
+  return platformDefaultPath !== null && isSameUserDataPath(userDataPath, platformDefaultPath)
     ? stamp
     : null
 }
