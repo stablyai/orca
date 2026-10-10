@@ -1,7 +1,9 @@
 const RETRY_BASE_MS = 1_000
 const RETRY_MAX_MS = 5 * 60_000
 
-export class RelayDrainRetrySchedule {
+// Jittered exponential backoff that recovers brief failures quickly without
+// turning a sustained outage into auth/director load. One pending retry at a time.
+export class RelayRetrySchedule {
   private timer: ReturnType<typeof setTimeout> | null = null
   private attempt = 0
 
@@ -32,11 +34,11 @@ export class RelayDrainRetrySchedule {
     this.attempt = 0
   }
 
+  // Keeps the attempt count: a superseding reconcile still backs off from it.
   cancel(): void {
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
     }
-    this.reset()
   }
 }

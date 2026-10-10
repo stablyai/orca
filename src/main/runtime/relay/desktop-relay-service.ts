@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/mobile-relay-credential-contract'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { readRelayAuthContext } from './relay-auth-context'
+import { relayIdentityKey } from './relay-auth-identity'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
@@ -16,7 +17,7 @@ import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
 } from './relay-revoke-outbox'
-import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
+import { pairingAuthorizationForContext } from './relay-pairing-authorization'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference-reader'
@@ -27,21 +28,6 @@ type DesktopRelayServiceOptions = {
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
-}
-
-export function pairingAuthorizationForContext(
-  context: MobilePairingConnectionContext,
-  relayHostId: string
-): DeviceCredentialInstallAuthorization | null {
-  if (context.transport.transport === 'direct') {
-    return { mode: 'authenticated-direct', directAuthId: context.connectionId }
-  }
-  if (context.transport.relayHostId !== relayHostId) {
-    throw new Error('stale_relay_connection')
-  }
-  return context.transport.credentialKind === 'invite'
-    ? { mode: 'relay-basis', basisConnId: context.transport.basisConnId }
-    : null
 }
 
 // Why: a broker that died without arming a retry (sleep past token expiry,
@@ -74,10 +60,7 @@ export class DesktopRelayService {
     const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
       readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
-      hasDemand: ({ identity }) =>
-        this.demandLedger.hasDemand(
-          `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
-        ),
+      hasDemand: ({ identity }) => this.demandLedger.hasDemand(relayIdentityKey(identity)),
       openBroker: async ({ context, isCurrent, refreshAccessToken }) => {
         const broker = await RelaySessionBroker.connect({
           authConfig: options.authConfig,
