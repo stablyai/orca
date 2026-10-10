@@ -5,6 +5,7 @@ import {
   CLAUDE_IDLE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  IBM_BOB_AGENT_NAME_RE,
   containsAgentSpinnerGlyph,
   isClaudeManagementTitle,
   isCursorAgentTitle,
@@ -138,6 +139,9 @@ function computeAgentLabel(title: string): string | null {
   }
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
+  }
+  if (IBM_BOB_AGENT_NAME_RE.test(title)) {
+    return 'IBM Bob'
   }
   if (isClaudeAgent(title)) {
     return 'Claude Code'

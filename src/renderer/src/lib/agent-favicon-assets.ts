@@ -13,6 +13,7 @@ import kiroUrl from '../../../shared/agent-icons/kiro.png?url'
 import crushUrl from '../../../shared/agent-icons/crush.png?url'
 import augUrl from '../../../shared/agent-icons/aug.png?url'
 import autohandUrl from '../../../shared/agent-icons/autohand.png?url'
+import bobUrl from '../../../shared/agent-icons/bob.png?url'
 import clineUrl from '../../../shared/agent-icons/cline.png?url'
 import freebuffUrl from '../../../shared/agent-icons/freebuff.png?url'
 import codebuffUrl from '../../../shared/agent-icons/codebuff.png?url'
@@ -54,6 +55,7 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   crush: crushUrl,
   aug: augUrl,
   autohand: autohandUrl,
+  bob: bobUrl,
   cline: clineUrl,
   codebuff: codebuffUrl,
   freebuff: freebuffUrl,

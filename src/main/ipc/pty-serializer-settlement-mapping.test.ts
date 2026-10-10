@@ -125,6 +125,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -289,6 +290,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -355,6 +357,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       }),
@@ -403,6 +406,7 @@ describe('registerPtyHandlers', () => {
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((value) => {
         controller = value
       })
@@ -456,6 +460,7 @@ describe('registerPtyHandlers', () => {
   })
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
@@ -484,6 +489,7 @@ describe('registerPtyHandlers', () => {
       value: 'win32'
     })
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
@@ -537,6 +543,7 @@ describe('registerPtyHandlers', () => {
       value: 'win32'
     })
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
       onPtySpawned: vi.fn(),

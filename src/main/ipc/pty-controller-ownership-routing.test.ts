@@ -344,6 +344,7 @@ describe('registerPtyHandlers', () => {
     setLocalPtyProvider(provider as never)
     let controller: { spawn(args: Record<string, unknown>): Promise<unknown> } | undefined
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((next) => {
         controller = next
       }),
@@ -410,6 +411,7 @@ describe('registerPtyHandlers', () => {
       clearSshRemotePtyKillIntent: vi.fn()
     }
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_renderer_exited'),
       preAllocateHandleForPty: vi.fn(() => 'term_renderer_exited'),

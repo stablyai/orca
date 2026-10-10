@@ -17,6 +17,7 @@ export type PreflightMocks = {
   resolveCliCommandsMock: Mock
   isCommandOnLocalPathMock: Mock
   listLocalCommandPathsMock: Mock
+  resolveCommandOnLocalPathMock?: Mock
   mergePersistedWindowsPathAsyncMock: Mock
   mergePersistedWindowsPathMock: Mock
 }
@@ -54,6 +55,7 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
     resolveCliCommandsMock,
     isCommandOnLocalPathMock,
     listLocalCommandPathsMock,
+    resolveCommandOnLocalPathMock,
     mergePersistedWindowsPathAsyncMock,
     mergePersistedWindowsPathMock
   } = mocks
@@ -85,19 +87,26 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   // Why: reproduce the pre-#9297 local PATH check (spawn where/which, keep
   // only absolute resolutions) so cases that stub the where/which mock still
   // drive detection identically without a real subprocess.
-  isCommandOnLocalPathMock.mockReset()
-  isCommandOnLocalPathMock.mockImplementation(async (command: string) => {
+  const resolveViaFinder = async (command: string): Promise<string | null> => {
     const finder = process.platform === 'win32' ? 'where' : 'which'
     try {
       const { stdout } = await execFileAsyncMock(finder, [command])
-      return String(stdout)
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .some((line) => path.isAbsolute(line))
+      return (
+        String(stdout)
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .find((line) => path.isAbsolute(line)) ?? null
+      )
     } catch {
-      return false
+      return null
     }
-  })
+  }
+  isCommandOnLocalPathMock.mockReset()
+  isCommandOnLocalPathMock.mockImplementation(
+    async (command: string) => (await resolveViaFinder(command)) !== null
+  )
+  resolveCommandOnLocalPathMock?.mockReset()
+  resolveCommandOnLocalPathMock?.mockImplementation(resolveViaFinder)
   getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
   getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)
   getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)

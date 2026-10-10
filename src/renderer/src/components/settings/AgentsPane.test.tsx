@@ -512,7 +512,8 @@ describe('AgentsPane', () => {
     for (const agent of AGENT_CATALOG) {
       expect(matchesSettingsSearch(agent.id, getAgentsPaneSearchEntries())).toBe(true)
       expect(matchesSettingsSearch(agent.label, getAgentsPaneSearchEntries())).toBe(true)
-      expect(matchesSettingsSearch(agent.cmd, getAgentsPaneSearchEntries())).toBe(true)
+      const executable = agent.cmd.trim().split(/\s+/)[0]
+      expect(matchesSettingsSearch(executable, getAgentsPaneSearchEntries())).toBe(true)
     }
 
     expect(matchesSettingsSearch('GitHub Copilot', getAgentsPaneSearchEntries())).toBe(true)

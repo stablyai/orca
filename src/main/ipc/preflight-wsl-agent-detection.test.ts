@@ -78,7 +78,12 @@ describe('detectWslCommandsOnPath', () => {
 
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
-    expect(found).toEqual(new Set(['claude', 'codex']))
+    expect(found).toEqual(
+      new Map([
+        ['claude', '/usr/bin/claude'],
+        ['codex', '/home/user/.local/bin/codex']
+      ])
+    )
   })
 
   it('ignores commands whose resolved path is not absolute', async () => {
@@ -92,7 +97,7 @@ describe('detectWslCommandsOnPath', () => {
 
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
-    expect(found).toEqual(new Set())
+    expect(found).toEqual(new Map())
   })
 
   it('finds a real command even with rc/motd-shaped noise ahead of it in stdout (regression)', async () => {
@@ -114,21 +119,21 @@ describe('detectWslCommandsOnPath', () => {
 
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
-    expect(found).toEqual(new Set(['claude']))
+    expect(found).toEqual(new Map([['claude', '/home/user/.nvm/versions/node/v20/bin/claude']]))
   })
 
-  it('returns an empty set when wsl.exe cannot be started', async () => {
+  it('returns no commands when wsl.exe cannot be started', async () => {
     runWslProcessMock.mockRejectedValue(new Error('spawn wsl.exe ENOENT'))
 
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
-    expect(found).toEqual(new Set())
+    expect(found).toEqual(new Map())
   })
 
   it('skips the probe entirely when no commands are requested', async () => {
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, [])
 
-    expect(found).toEqual(new Set())
+    expect(found).toEqual(new Map())
     expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 })
@@ -146,7 +151,7 @@ it('does not veto a guest binary on an ordinary Linux mount under /mnt', async (
     timedOut: false
   })
   await expect(detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).resolves.toEqual(
-    new Set(['claude'])
+    new Map([['claude', '/mnt/d/tools/claude']])
   )
 })
 
@@ -159,7 +164,7 @@ it('still counts a genuine guest install', async () => {
     timedOut: false
   })
   expect(await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])).toEqual(
-    new Set(['claude'])
+    new Map([['claude', '/home/alice/.nvm/versions/node/v20.1.0/bin/claude']])
   )
 })
 

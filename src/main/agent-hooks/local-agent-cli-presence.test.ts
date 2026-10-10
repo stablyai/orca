@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
-import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
+import {
+  detectLocalManagedAgentCliPresence,
+  resolveLocalAgentCommand
+} from './local-agent-cli-presence'
 
 const codexTarget: ManagedAgentHookTarget = {
   agent: 'codex',
@@ -212,4 +215,38 @@ describe('detectLocalManagedAgentCliPresence', () => {
       expect(result.claude?.state).toBe('missing')
     }
   )
+})
+
+describe('resolveLocalAgentCommand', () => {
+  const linux = { pathDelimiter: ':', platform: 'linux' as const, homeDir: '/home/orca' }
+
+  it('expands a home-relative override the way presence does', async () => {
+    const probe = vi.fn(async (filePath: string) => filePath === '/home/orca/bin/bob')
+    const resolved = await resolveLocalAgentCommand('~/bin/bob', {
+      ...linux,
+      pathEnv: '',
+      fileProbe: { isExecutableFile: probe }
+    })
+    expect(resolved).toBe('/home/orca/bin/bob')
+  })
+
+  it('keeps a match from a relative PATH entry', async () => {
+    const probe = vi.fn(async (filePath: string) => filePath === 'node_modules/.bin/bob')
+    const resolved = await resolveLocalAgentCommand('bob', {
+      ...linux,
+      pathEnv: 'node_modules/.bin:/usr/bin',
+      fileProbe: { isExecutableFile: probe }
+    })
+    expect(resolved).toBe('node_modules/.bin/bob')
+  })
+
+  it('rejects a relative path-shaped command', async () => {
+    const probe = vi.fn(async () => true)
+    const resolved = await resolveLocalAgentCommand('bin/bob', {
+      ...linux,
+      pathEnv: '',
+      fileProbe: { isExecutableFile: probe }
+    })
+    expect(resolved).toBeNull()
+  })
 })

@@ -253,6 +253,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
         }
       | undefined
     const runtime = {
+      notePtyInput: vi.fn(),
       setPtyController: vi.fn((next) => {
         controller = next
       }),
