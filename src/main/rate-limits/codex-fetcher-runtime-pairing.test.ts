@@ -5,12 +5,16 @@ import { delimiter, join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RunProcess from '@orca/process-host'
 
-const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
-  childSpawnMock: vi.fn(),
-  readFileMock: vi.fn(),
-  resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
-}))
+const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock, netFetchMock } =
+  vi.hoisted(() => ({
+    netFetchMock: vi.fn(),
+    childSpawnMock: vi.fn(),
+    readFileMock: vi.fn(),
+    resolveCodexCommandMock: vi.fn(),
+    ptySpawnMock: vi.fn()
+  }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 // The chokepoint is the seam: assertions see what the fetcher asked for, before shim resolution.
@@ -71,7 +75,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
-    vi.stubGlobal('fetch', vi.fn())
+    netFetchMock.mockReset()
   })
 
   it("spawns the RPC reader with the resolved CLI's own node ahead of PATH", async () => {

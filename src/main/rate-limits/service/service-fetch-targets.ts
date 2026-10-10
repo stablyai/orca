@@ -130,6 +130,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       try {
         fresh = await fetchCodexRateLimits({
           codexHomePath,
+          networkProxySettings: this.networkProxySettingsResolver?.(),
           signal: controller.signal
         })
       } catch (error) {

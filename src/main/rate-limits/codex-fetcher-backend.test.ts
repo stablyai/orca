@@ -2,11 +2,14 @@ import { join } from 'node:path'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, readFileMock, ptySpawnMock, netFetchMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn(),
   ptySpawnMock: vi.fn()
 }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
@@ -26,7 +29,7 @@ describe('Codex backend rate-limit requests', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
-    vi.stubGlobal('fetch', vi.fn())
+    netFetchMock.mockReset()
   })
 
   afterEach(() => {
@@ -41,7 +44,7 @@ describe('Codex backend rate-limit requests', () => {
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
     )
-    vi.mocked(fetch)
+    netFetchMock
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -92,7 +95,7 @@ describe('Codex backend rate-limit requests', () => {
 
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
-    expect(fetch).toHaveBeenNthCalledWith(
+    expect(netFetchMock).toHaveBeenNthCalledWith(
       1,
       'https://chatgpt.com/backend-api/wham/usage',
       expect.objectContaining({
@@ -108,7 +111,7 @@ describe('Codex backend rate-limit requests', () => {
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
     )
-    vi.mocked(fetch)
+    netFetchMock
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -173,7 +176,7 @@ describe('Codex backend rate-limit requests', () => {
       status: 'error',
       error: 'Rate-limit fetch aborted'
     })
-    expect(fetch).not.toHaveBeenCalled()
+    expect(netFetchMock).not.toHaveBeenCalled()
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
     resolveRead('{}')
@@ -214,10 +217,9 @@ describe('Codex backend rate-limit requests', () => {
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
     )
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({ code: 'already_redeemed' })
-    } as Response)
+    netFetchMock.mockImplementation(
+      async () => new Response(JSON.stringify({ code: 'already_redeemed' }))
+    )
 
     await expect(
       consumeCodexRateLimitResetCredit({
@@ -226,7 +228,7 @@ describe('Codex backend rate-limit requests', () => {
       })
     ).resolves.toBe('alreadyRedeemed')
 
-    expect(fetch).toHaveBeenCalledWith(
+    expect(netFetchMock).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume',
       expect.objectContaining({
         method: 'POST',
@@ -248,7 +250,7 @@ describe('Codex backend rate-limit requests', () => {
       })
     )
     let cancelledBodies = 0
-    vi.mocked(fetch).mockResolvedValue(
+    netFetchMock.mockResolvedValue(
       cancelTrackingResponse(429, () => {
         cancelledBodies += 1
       })

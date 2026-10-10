@@ -1,10 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
+const { childSpawnMock, readFileMock, netFetchMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn()
 }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
@@ -82,7 +85,7 @@ describe('fetchCodexRateLimits credit balance', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
-    vi.stubGlobal('fetch', vi.fn())
+    netFetchMock.mockReset()
   })
 
   afterEach(() => {

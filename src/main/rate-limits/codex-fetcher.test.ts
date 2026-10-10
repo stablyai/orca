@@ -9,8 +9,10 @@ const {
   resolveCodexCommandMock,
   ptySpawnMock,
   isBackfillPendingMock,
-  startBackfillRecoveryMock
+  startBackfillRecoveryMock,
+  netFetchMock
 } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
@@ -18,6 +20,8 @@ const {
   isBackfillPendingMock: vi.fn(() => false),
   startBackfillRecoveryMock: vi.fn(() => Promise.resolve(null))
 }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
@@ -116,7 +120,7 @@ function mockBackendUsage(): void {
     JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
   )
   // A Response body reads once; usage and reset credits each fetch.
-  vi.mocked(fetch).mockImplementation(
+  netFetchMock.mockImplementation(
     async () =>
       new Response(
         JSON.stringify({
@@ -139,7 +143,7 @@ describe('fetchCodexRateLimits', () => {
     vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
     isBackfillPendingMock.mockReturnValue(false)
-    vi.stubGlobal('fetch', vi.fn())
+    netFetchMock.mockReset()
   })
 
   afterEach(() => {
@@ -245,7 +249,7 @@ describe('fetchCodexRateLimits', () => {
       error: 'Rate-limit fetch aborted'
     })
     expect(rpcChild.kill).toHaveBeenCalledTimes(1)
-    expect(fetch).not.toHaveBeenCalled()
+    expect(netFetchMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
@@ -265,7 +269,7 @@ describe('fetchCodexRateLimits', () => {
       status: 'ok',
       error: null
     })
-    expect(fetch).toHaveBeenCalledWith(
+    expect(netFetchMock).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/usage',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer access-token' })
@@ -290,7 +294,7 @@ describe('fetchCodexRateLimits', () => {
       status: 'error'
     })
     expect(rpcChild.stdin.listenerCount('error')).toBe(0)
-    expect(fetch).not.toHaveBeenCalled()
+    expect(netFetchMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
@@ -298,7 +302,7 @@ describe('fetchCodexRateLimits', () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
     mockBackendUsage()
-    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 401 }))
+    netFetchMock.mockResolvedValue(new Response(null, { status: 401 }))
 
     const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(0)
@@ -311,7 +315,7 @@ describe('fetchCodexRateLimits', () => {
       status: 'error',
       error: expect.stringContaining('exit code 1')
     })
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
@@ -385,28 +389,30 @@ describe('fetchCodexRateLimits', () => {
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
     )
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        plan_type: 'plus',
-        rate_limit: {
-          primary_window: {
-            used_percent: 7,
-            limit_window_seconds: 5 * 60 * 60,
-            reset_at: 1_800_000_000
-          },
-          secondary_window: {
-            used_percent: 23,
-            limit_window_seconds: 7 * 24 * 60 * 60,
-            reset_at: 1_800_100_000
-          }
-        },
-        rate_limit_reset_credits: {
-          available_count: 1,
-          credits: [{ status: 'available', expires_at: '2027-01-15T12:00:00Z' }]
-        }
-      })
-    } as Response)
+    netFetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            plan_type: 'plus',
+            rate_limit: {
+              primary_window: {
+                used_percent: 7,
+                limit_window_seconds: 5 * 60 * 60,
+                reset_at: 1_800_000_000
+              },
+              secondary_window: {
+                used_percent: 23,
+                limit_window_seconds: 7 * 24 * 60 * 60,
+                reset_at: 1_800_100_000
+              }
+            },
+            rate_limit_reset_credits: {
+              available_count: 1,
+              credits: [{ status: 'available', expires_at: '2027-01-15T12:00:00Z' }]
+            }
+          })
+        )
+    )
 
     const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(1)
@@ -417,7 +423,7 @@ describe('fetchCodexRateLimits', () => {
       weekly: { usedPercent: 23, windowMinutes: 10080, resetsAt: 1_800_100_000_000 },
       status: 'ok'
     })
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not map a duplicate session-duration window into the weekly slot', async () => {
@@ -449,30 +455,32 @@ describe('fetchCodexRateLimits', () => {
         }
       })
     )
-    vi.mocked(fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        available_count: 2,
-        total_earned_count: 3,
-        credits: [
-          {
-            status: 'available',
-            expires_at: '2026-06-25T12:00:00Z',
-            granted_at: '2026-06-18T12:00:00Z'
-          },
-          {
-            status: 'available',
-            expires_at: '2026-06-24T12:00:00Z',
-            granted_at: '2026-06-17T12:00:00Z'
-          },
-          {
-            status: 'redeemed',
-            expires_at: '2026-06-23T12:00:00Z',
-            granted_at: '2026-06-16T12:00:00Z'
-          }
-        ]
-      })
-    } as Response)
+    netFetchMock.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            available_count: 2,
+            total_earned_count: 3,
+            credits: [
+              {
+                status: 'available',
+                expires_at: '2026-06-25T12:00:00Z',
+                granted_at: '2026-06-18T12:00:00Z'
+              },
+              {
+                status: 'available',
+                expires_at: '2026-06-24T12:00:00Z',
+                granted_at: '2026-06-17T12:00:00Z'
+              },
+              {
+                status: 'redeemed',
+                expires_at: '2026-06-23T12:00:00Z',
+                granted_at: '2026-06-16T12:00:00Z'
+              }
+            ]
+          })
+        )
+    )
     rpcChild.stdin.write.mockImplementation((line: string) => {
       const msg = JSON.parse(line) as { id?: number; method?: string }
       if (msg.method === 'initialize') {
@@ -532,7 +540,7 @@ describe('fetchCodexRateLimits', () => {
       ]
     })
     expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
-    expect(fetch).toHaveBeenCalledWith(
+    expect(netFetchMock).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
@@ -604,7 +612,7 @@ describe('fetchCodexRateLimits', () => {
       ]
     })
     expect(readFileMock).not.toHaveBeenCalled()
-    expect(fetch).not.toHaveBeenCalled()
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('runs rate-limit RPC through WSL when the Codex home is a WSL managed account', async () => {
@@ -754,7 +762,7 @@ describe('fetchCodexRateLimits', () => {
     readFileMock.mockResolvedValue(
       JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
     )
-    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 503 }))
+    netFetchMock.mockResolvedValue(new Response(null, { status: 503 }))
 
     try {
       const resultPromise = fetchCodexRateLimits({
@@ -764,7 +772,7 @@ describe('fetchCodexRateLimits', () => {
       rpcChild.emit('close')
 
       await expect(resultPromise).resolves.toMatchObject({ status: 'error' })
-      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(netFetchMock).toHaveBeenCalledTimes(1)
       expect(childSpawnMock).toHaveBeenCalledTimes(1)
       expect(ptySpawnMock).not.toHaveBeenCalled()
     } finally {

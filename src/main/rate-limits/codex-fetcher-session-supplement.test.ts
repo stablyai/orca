@@ -1,10 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
+const { childSpawnMock, readFileMock, netFetchMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
   childSpawnMock: vi.fn(),
   readFileMock: vi.fn()
 }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
@@ -129,7 +132,7 @@ describe('Codex backend session supplement credits', () => {
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
     )
-    vi.stubGlobal('fetch', vi.fn())
+    netFetchMock.mockReset()
   })
 
   afterEach(() => {
@@ -138,21 +141,21 @@ describe('Codex backend session supplement credits', () => {
   })
 
   it('reuses complete zero-credit metadata from a weekly-only usage response', async () => {
-    vi.mocked(fetch).mockResolvedValue(usageResponse({ available_count: 0 }))
+    netFetchMock.mockResolvedValue(usageResponse({ available_count: 0 }))
 
     await expect(fetchWeeklyOnly()).resolves.toMatchObject({
       session: null,
       weekly: { usedPercent: 22, windowMinutes: 10_080 },
       rateLimitResetCredits: { availableCount: 0, nextExpiresAt: null }
     })
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([
     { name: 'null', credits: null },
     { name: 'invalid', credits: {} }
   ])('preserves complete RPC credits when usage metadata is $name', async ({ credits }) => {
-    vi.mocked(fetch).mockResolvedValue(usageResponse(credits))
+    netFetchMock.mockResolvedValue(usageResponse(credits))
 
     await expect(
       fetchWeeklyOnly({
@@ -165,14 +168,14 @@ describe('Codex backend session supplement credits', () => {
         nextExpiresAt: 1_800_000_000_000
       }
     })
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it.each([
     { name: 'absent', credits: undefined },
     { name: 'incomplete', credits: { available_count: 2 } }
   ])('uses the dedicated credits endpoint when usage metadata is $name', async ({ credits }) => {
-    vi.mocked(fetch)
+    netFetchMock
       .mockResolvedValueOnce(usageResponse(credits))
       .mockResolvedValueOnce(dedicatedCreditsResponse())
 
@@ -182,8 +185,8 @@ describe('Codex backend session supplement credits', () => {
         nextExpiresAt: Date.parse('2027-01-15T12:00:00Z')
       }
     })
-    expect(fetch).toHaveBeenCalledTimes(2)
-    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
+    expect(netFetchMock).toHaveBeenCalledTimes(2)
+    expect(netFetchMock.mock.calls.map(([url]) => url)).toEqual([
       'https://chatgpt.com/backend-api/wham/usage',
       'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits'
     ])

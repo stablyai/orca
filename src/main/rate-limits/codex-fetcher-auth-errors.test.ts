@@ -1,11 +1,14 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock, netFetchMock } = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
   childSpawnMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
   ptySpawnMock: vi.fn()
 }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
@@ -61,7 +64,7 @@ describe('fetchCodexRateLimits auth errors', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
-    vi.stubGlobal('fetch', vi.fn())
+    netFetchMock.mockReset()
   })
 
   afterEach(() => {
@@ -111,7 +114,7 @@ describe('fetchCodexRateLimits auth errors', () => {
       status: 'error',
       error: authError
     })
-    expect(fetch).not.toHaveBeenCalled()
+    expect(netFetchMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
@@ -157,7 +160,7 @@ describe('fetchCodexRateLimits auth errors', () => {
       status: 'error',
       error: authError
     })
-    expect(fetch).not.toHaveBeenCalled()
+    expect(netFetchMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 })

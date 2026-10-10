@@ -1,12 +1,16 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
-  childSpawnMock: vi.fn(),
-  readFileMock: vi.fn(),
-  resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
-}))
+const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock, netFetchMock } =
+  vi.hoisted(() => ({
+    netFetchMock: vi.fn(),
+    childSpawnMock: vi.fn(),
+    readFileMock: vi.fn(),
+    resolveCodexCommandMock: vi.fn(),
+    ptySpawnMock: vi.fn()
+  }))
+
+vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
@@ -94,7 +98,7 @@ describe('fetchCodexRateLimits probe shutdown', () => {
     resolveCodexCommandMock.mockReturnValue('codex')
     vi.mocked(probeCodexAuthPresence).mockResolvedValue('present')
     readFileMock.mockRejectedValue(new Error('no auth fixture'))
-    vi.stubGlobal('fetch', vi.fn())
+    netFetchMock.mockReset()
   })
 
   afterEach(() => {
