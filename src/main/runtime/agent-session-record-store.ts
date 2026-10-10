@@ -259,15 +259,14 @@ export class AgentSessionRecordStore {
   }
 
   /**
-   * Adjudicate every lease this host loaded. No lease grants a writer until it appears here. On a
-   * database a newer Orca wrote, the verdicts are kept in memory only: they are re-derived at every
+   * Adjudicate loaded leases, or only the addressed session. No lease grants a writer until it
+   * appears here. On a newer database, verdicts stay in memory only: they are re-derived at every
    * start, and none grants a writer there, since every grant is a write.
    */
   async reconcileOnRestart(
     args: AgentSessionRestartProbeArgs
   ): Promise<Map<string, AgentSessionRecord>> {
-    const pending = this.listRecords().filter((record) => record.lease.unreconciled)
-    const probes = await collectAgentSessionRestartProbes(pending, args)
+    const probes = await collectAgentSessionRestartProbes(this, args)
     return this.transact((draft) => applyAgentSessionRestartProbes(draft, probes, args.now), {
       inMemoryWhenReadOnly: true
     })
