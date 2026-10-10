@@ -13,6 +13,7 @@
  */
 
 import type { TuiAgent } from './tui-agent'
+import type { SleepingAgentLaunchConfig } from './agent-session-resume'
 
 /** How a launch's initial text reaches the agent. */
 export type AgentLaunchPromptDelivery =
@@ -98,6 +99,13 @@ export type AgentLaunchIntent = {
   /** The caller-minted id of the chat session a structured launch creates. Not a route input;
    *  refused when that session already exists. */
   sessionId?: string
+}
+
+/** The PTY a background run's spawn answered, which its window adopts as it adopts its own spawn. */
+export type AgentLaunchBackgroundRunSpawn = {
+  ptyId: string
+  incarnationId?: string
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 /**
@@ -207,6 +215,8 @@ export type AgentLaunchResult = {
   /** Absent when no window placed the tab: an older host, no requested placement, or a host with no
    *  window owning the layout. */
   placement?: AgentLaunchPlacementReceipt
+  /** Present only for a `backgroundRun`. */
+  backgroundRun?: AgentLaunchBackgroundRunSpawn
 }
 
 export type AgentLaunchMode = 'structured' | 'terminal'

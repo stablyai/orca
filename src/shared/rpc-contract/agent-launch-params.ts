@@ -141,6 +141,20 @@ export const AgentLaunchFields = z.object({
     .transform((value): 'focused' | 'background' | undefined =>
       value === 'focused' || value === 'background' ? value : undefined
     )
+    .optional(),
+  /**
+   * A desktop automation's run, sent only by a window to its own host, which ships with it (an older
+   * host would drop it and start a plain, visible launch). The host starts the agent exactly as that
+   * window would, with the run's title, appended arguments (unlike `agentArgs`, which replaces them)
+   * and the window's launch token, and leaves the hidden tab to the window. Temporary until one
+   * planner builds every launch.
+   */
+  backgroundRun: z
+    .object({
+      title: z.string().optional(),
+      extraAgentArgs: z.string().optional(),
+      launchToken: z.string().min(1, 'Missing launch token')
+    })
     .optional()
 })
 
@@ -163,7 +177,8 @@ export const AgentLaunch = AgentLaunchFields.superRefine(refuseSessionIdForAnoth
 
 export type AgentLaunchParams = z.infer<typeof AgentLaunch>
 
-// A distinct method prevents an older receiver from silently dropping the replay requirement.
-export const AgentLaunchReplay = AgentLaunchFields.required({ operationId: true }).superRefine(
-  refuseSessionIdForAnotherAgent
-)
+// A distinct method prevents an older receiver from silently dropping the replay requirement. An
+// automation's run is never replayed (its run id is its idempotency), so its field is not read here.
+export const AgentLaunchReplay = AgentLaunchFields.omit({ backgroundRun: true })
+  .required({ operationId: true })
+  .superRefine(refuseSessionIdForAnotherAgent)

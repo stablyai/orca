@@ -22,6 +22,9 @@ import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/cod
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { ResolvedPtyHost } from '../provider/registry'
 
+/** What `pty:spawn` answers the window: the provider's result plus the config it actually launched. */
+export type PtyIpcSpawnAnswer = PtySpawnResult & { launchConfig?: SleepingAgentLaunchConfig }
+
 export type PtySpawnIpcArgs = {
   cols: number
   rows: number

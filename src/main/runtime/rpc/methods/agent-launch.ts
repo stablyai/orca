@@ -33,7 +33,6 @@ import {
   trackTerminalSpawnDispatch,
   type TerminalSpawnDispatch
 } from '../../../agent-launch/agent-launch-not-started'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 import { admitAgentLaunchOperation, agentLaunchOperationCallerKey } from './agent-launch-replay'
 import {
@@ -61,6 +60,8 @@ import { agentLaunchWorkspaceFactory } from './agent-launch-worktree-creation'
 import { assertAgentLaunchTargetAuthorized } from './agent-launch-target-authorization'
 import { clientRendersStructuredAgent } from './structured-agent-session-policy'
 import { resolveUnlaunchedIntent } from './agent-launch-intent-resolution'
+import { activeAgentLaunchesFor } from './agent-launch-active-launches'
+import { runBackgroundRunAgentLaunch } from './agent-launch-background-run'
 import {
   publishEarlyTab,
   withPlacement,
@@ -172,26 +173,6 @@ function runLegacyAgentLaunch(
     )
   }
   return execute()
-}
-
-type ActiveAgentLaunch = {
-  fingerprint: string
-  promise: Promise<AgentLaunchResult>
-}
-
-const activeAgentLaunchesByRuntime = new WeakMap<
-  OrcaRuntimeService,
-  Map<string, ActiveAgentLaunch>
->()
-
-function activeAgentLaunchesFor(runtime: OrcaRuntimeService): Map<string, ActiveAgentLaunch> {
-  const existing = activeAgentLaunchesByRuntime.get(runtime)
-  if (existing) {
-    return existing
-  }
-  const active = new Map<string, ActiveAgentLaunch>()
-  activeAgentLaunchesByRuntime.set(runtime, active)
-  return active
 }
 
 async function executeReplaySafeAgentLaunch(
@@ -348,6 +329,9 @@ export const AGENT_LAUNCH_METHODS = [
         throw new Error('agent_launch_unsupported')
       }
       assertAgentLaunchTargetAuthorized(params.target, context)
+      if (params.backgroundRun) {
+        return runBackgroundRunAgentLaunch(params, context)
+      }
       if (!params.operationId) {
         return runLegacyAgentLaunch(params, context)
       }

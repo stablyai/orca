@@ -183,6 +183,19 @@ export function expectStableAgentBackgroundPaneSpawn(spawn: TestMock): string {
   return paneKey
 }
 
+/** This window's own host. It refuses a run before spawning by default, so the window spawns as on
+ *  main; a test that starts the run through the host answers `agent.launch` itself. */
+const refuseRunBeforeSpawn = async (_request: { method: string; params: unknown }) => ({
+  id: 'desktop-ipc',
+  ok: false,
+  error: {
+    code: 'agent_launch_background_run_unavailable',
+    message: 'agent_launch_background_run_unavailable'
+  },
+  _meta: { runtimeId: 'runtime-local' }
+})
+export const localRuntimeCall = vi.fn(refuseRunBeforeSpawn)
+
 export function stubAgentBackgroundSessionWindow(mocks: {
   dispatchEvent: TestMock
   spawn: TestMock
@@ -195,7 +208,7 @@ export function stubAgentBackgroundSessionWindow(mocks: {
     dispatchEvent: mocks.dispatchEvent,
     api: {
       pty: { spawn: mocks.spawn, write: mocks.write, kill: mocks.kill },
-      runtime: { call: vi.fn() },
+      runtime: { call: localRuntimeCall },
       runtimeEnvironments: {
         call: mocks.runtimeEnvironmentCall,
         subscribe: mocks.runtimeEnvironmentSubscribe
@@ -231,6 +244,7 @@ export function resetAgentBackgroundSessionTestHarness(args: {
       (args.runtimeCall as unknown as (value: unknown) => unknown)(request)
   )
   resetAgentBackgroundSessionTestState(args.state)
+  localRuntimeCall.mockImplementation(refuseRunBeforeSpawn)
   // Why: production reserves the tab id before the spawn; honoring options.id mirrors createTab's adoption contract.
   args.createTab.mockImplementation((_worktreeId, _groupId, _shellOverride, options) => {
     const tab = { id: options?.id ?? 'tab-1', title: 'Terminal 1' }

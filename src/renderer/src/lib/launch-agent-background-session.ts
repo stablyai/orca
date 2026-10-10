@@ -36,6 +36,7 @@ import {
 import { createBackgroundAgentStatusConsumer } from '@/lib/background-agent-status-consumer'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { runtimeWaitExitCode, settleTabPtyBinding } from '@/lib/agent-background-session-exit'
+import { spawnBackgroundRunPty } from '@/lib/background-run-host-spawn'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -166,32 +167,44 @@ export async function launchAgentBackgroundSession(
       runtimeTerminalHandle = created.terminal.handle
       ptyId = toRemoteRuntimePtyId(runtimeTerminalHandle, runtimeTarget.environmentId)
     } else {
-      const result = await window.api.pty.spawn({
-        cols: 120,
-        rows: 40,
-        cwd: worktree.path,
-        command: startupPlan.launchCommand,
-        ...(!sshConnectionId && isWslUncPath(worktree.path) ? { shellOverride: 'wsl.exe' } : {}),
-        // Why: the relay types, waits for the shell and stages long lines on the host that owns the PTY.
-        ...(sshConnectionId
-          ? { commandDelivery: 'provider' as const, startupCommandDelivery: 'shell-ready' as const }
-          : startupPlan.startupCommandDelivery
-            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-            : {}),
-        env: paneEnv,
-        launchConfig: startupPlan.launchConfig,
-        launchToken,
-        launchAgent: agent,
-        connectionId: sshConnectionId,
+      const result = await spawnBackgroundRunPty({
+        agent,
         worktreeId,
-        tabId: reservedTabId,
-        leafId,
-        // Why no launchAgent: the adopted tab is created without one, and the row must match it.
-        placement: { kind: 'new-tab', ...(title ? { row: { customTitle: title } } : {}) },
-        telemetry: {
-          agent_kind: tuiAgentToAgentKind(agent),
-          launch_source: launchSource ?? 'unknown',
-          request_kind: 'new'
+        ...(hasPrompt && !isFollowupPath ? { commandPrompt: trimmedPrompt } : {}),
+        ...(args.extraAgentArgs ? { extraAgentArgs: args.extraAgentArgs } : {}),
+        ...(title ? { title } : {}),
+        ...(launchSource ? { launchSource } : {}),
+        launchPlatform,
+        spawn: {
+          cols: 120,
+          rows: 40,
+          cwd: worktree.path,
+          command: startupPlan.launchCommand,
+          ...(!sshConnectionId && isWslUncPath(worktree.path) ? { shellOverride: 'wsl.exe' } : {}),
+          // Why: the relay types, waits for the shell and stages long lines on the host that owns the PTY.
+          ...(sshConnectionId
+            ? {
+                commandDelivery: 'provider' as const,
+                startupCommandDelivery: 'shell-ready' as const
+              }
+            : startupPlan.startupCommandDelivery
+              ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+              : {}),
+          env: paneEnv,
+          launchConfig: startupPlan.launchConfig,
+          launchToken,
+          launchAgent: agent,
+          connectionId: sshConnectionId,
+          worktreeId,
+          tabId: reservedTabId,
+          leafId,
+          // Why no launchAgent: the adopted tab is created without one, and the row must match it.
+          placement: { kind: 'new-tab', ...(title ? { row: { customTitle: title } } : {}) },
+          telemetry: {
+            agent_kind: tuiAgentToAgentKind(agent),
+            launch_source: launchSource ?? 'unknown',
+            request_kind: 'new'
+          }
         }
       })
       ptyId = result.id

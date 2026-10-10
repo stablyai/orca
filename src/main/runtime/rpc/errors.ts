@@ -35,6 +35,10 @@ import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launc
 import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
 import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
+import {
+  AGENT_LAUNCH_BACKGROUND_RUN_SPAWN_FAILED_CODE,
+  AGENT_LAUNCH_BACKGROUND_RUN_UNAVAILABLE_CODE
+} from '../../../shared/agent-launch-background-run'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -70,6 +74,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE,
   AGENT_LAUNCH_TAB_CLOSED_CODE,
   AGENT_LAUNCH_TARGET_FORBIDDEN_CODE,
+  AGENT_LAUNCH_BACKGROUND_RUN_UNAVAILABLE_CODE,
   'agent_launch_replay_unsupported',
   'runtime_unavailable',
   'selector_not_found',
@@ -161,6 +166,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_SHARING_BUSY_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
+  AGENT_LAUNCH_BACKGROUND_RUN_SPAWN_FAILED_CODE,
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
   // stop offering the action) — flattened to runtime_error it can only be guessed at.
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),

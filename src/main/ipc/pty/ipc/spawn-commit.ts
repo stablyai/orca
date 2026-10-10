@@ -1,7 +1,6 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { registerPty } from '../../../memory/pty-registry'
-import type { PtySpawnResult } from '../../../providers/types'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
 import { recordPtySpawnTelemetry } from '../pane/spawn-telemetry'
 import {
@@ -16,6 +15,7 @@ import {
   admitRendererAgentLaunchAuthority
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
+import type { PtyIpcSpawnAnswer } from './spawn-types'
 import { persistPtyIpcSpawnCommit, publishPtyIpcSpawnCommit } from './spawn-commit-persist'
 import { admitPtyReattachOwnership, registerPersistedPtySpawn } from '../pane/spawn-registration'
 import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
@@ -23,11 +23,11 @@ import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-rest
 import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 
-export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
+export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtyIpcSpawnAnswer> {
   return commitPtyWithOpenCodePromptIntent(ctx, () => commitReservedPtyIpcSpawn(ctx))
 }
 
-async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
+async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtyIpcSpawnAnswer> {
   const args = ctx.args
   admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   if (ctx.nativeWindowsConptySpawn) {
