@@ -40,15 +40,6 @@ describe('reserve ledger writer', () => {
     expect(await row(db)).toMatchObject({ cell_id: 'c2', assignment_epoch: 6 })
   })
 
-  it('lets only a demotion winner replace an equal epoch', async () => {
-    const { database: db, writer } = await setup()
-    writer.enqueue({ ...HOST, cellId: 'c1', epoch: 5 })
-    await writer.flush()
-    writer.enqueue({ ...HOST, cellId: 'c2', epoch: 5, allowEqual: true })
-    await writer.flush()
-    expect(await row(db)).toMatchObject({ cell_id: 'c2', assignment_epoch: 5 })
-  })
-
   it('drops a moved row’s counters but keeps a same-cell row’s', async () => {
     const { database: db, writer } = await setup()
     await db.query(
@@ -86,10 +77,12 @@ describe('reserve ledger writer', () => {
     expect(bounded.pending()).toBe(2)
   })
 
-  it('reconciles the map’s seats, and corrects a row that names a placement never used', async () => {
+  it('reconciles the map’s seats and never lowers an epoch', async () => {
     const { database: db, writer } = await setup()
-    // Today's path answered at a higher epoch on c7; the desktop used the booking on c1.
+    // Another path wrote a higher epoch on c7: the mirror leaves it, whatever the map says.
     writer.enqueue({ ...HOST, cellId: 'c7', epoch: 9 })
+    await writer.flush()
+    writer.enqueue({ ...HOST, cellId: 'c1', epoch: 9 })
     await writer.flush()
     const other = { userId: 'user-2', relayHostId: 'cccccccccccccccc' }
     const result = await reconcileReserveLedger({
@@ -97,29 +90,15 @@ describe('reserve ledger writer', () => {
       seats: () => [
         { ...HOST, cellId: 'c1', epoch: 8, joinedAt: 0 },
         { ...other, cellId: 'c1', epoch: 2, joinedAt: 0 },
-        // Too young to judge: its duplicate may still be settling.
+        // Too young: it may still be superseded.
         { userId: 'user-3', relayHostId: 'dddddddddddddddd', cellId: 'c1', epoch: 2, joinedAt: 990_000 }
       ],
-      cellDoesNotSeat: (cellId) => cellId === 'c7',
       now: 1_000_000
     })
     await writer.flush()
-    expect(result).toEqual({ upserted: 1, corrected: 1 })
-    expect(await row(db)).toMatchObject({ cell_id: 'c1', assignment_epoch: 8 })
+    expect(result).toEqual({ upserted: 1 })
+    expect(await row(db)).toMatchObject({ cell_id: 'c7', assignment_epoch: 9 })
     const written = await db.query(`SELECT cell_id FROM relay_assignments WHERE user_id = 'user-2'`)
     expect(written).toEqual([{ cell_id: 'c1' }])
-  })
-
-  it('leaves a row alone when the cell it names may still seat the host', async () => {
-    const { database: db, writer } = await setup()
-    writer.enqueue({ ...HOST, cellId: 'c7', epoch: 9 })
-    await writer.flush()
-    await reconcileReserveLedger({
-      writer,
-      seats: () => [{ ...HOST, cellId: 'c1', epoch: 8, joinedAt: 0 }],
-      cellDoesNotSeat: () => false,
-      now: 1_000_000
-    })
-    expect(await row(db)).toMatchObject({ cell_id: 'c7', assignment_epoch: 9 })
   })
 })

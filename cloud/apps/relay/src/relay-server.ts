@@ -45,7 +45,7 @@ import { startShadowSeatPoller } from './shadow-seat-directory.js'
 import { CellReserveClient } from './cell-reserve-client.js'
 import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
 import { ReserveAssignment } from './reserve-assignment.js'
-import { RESERVE_CELL_FRESH_MS, ReservePlacer } from './reserve-placement.js'
+import { ReservePlacer } from './reserve-placement.js'
 import {
   reconcileReserveLedger,
   RESERVE_LEDGER_RECONCILE_MS,
@@ -202,7 +202,6 @@ export function createRelayServer(
             )
           }),
           readRow: async (identity) => await assignments.hostWhereabouts(identity),
-          onDemotionWinner: (winner) => reserveLedger?.enqueue({ ...winner, allowEqual: true }),
           now: options.now,
           random: options.random
         })
@@ -250,15 +249,6 @@ export function createRelayServer(
                 joinedAt: seat.joinedAt
               }))
             ),
-        cellDoesNotSeat: (cellId, userId, relayHostId) => {
-          const state = directory.cellState(cellId)
-          return (
-            state?.status === 'live' &&
-            state.polledAt !== undefined &&
-            now - state.polledAt <= RESERVE_CELL_FRESH_MS &&
-            !directory.seatsOf(userId, relayHostId).some((seat) => seat.cellId === cellId)
-          )
-        },
         now
       })
         .catch(() => console.warn('[orca-relay] reserve ledger reconcile deferred'))
@@ -269,7 +259,14 @@ export function createRelayServer(
       const random = options.random ?? Math.random
       setTimeout(reconcile, RESERVE_LEDGER_RECONCILE_MS + random() * 60_000).unref?.()
     }
-    schedule()
+    // A restart loses the queue: the first run goes as soon as the map is complete.
+    const bootedAt = Date.now()
+    const firstRun = setInterval(() => {
+      if (!directory.isComplete() && Date.now() - bootedAt < RESERVE_LEDGER_RECONCILE_MS) return
+      clearInterval(firstRun)
+      reconcile()
+    }, 1_000)
+    firstRun.unref?.()
   }
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(

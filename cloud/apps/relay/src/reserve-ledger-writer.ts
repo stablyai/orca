@@ -4,8 +4,8 @@ import type { RelayDatabase } from './database.js'
 // Postgres, and the director that booked it writes the host's relay_assignments row about a
 // second later. Phones still resolve through that row until step 6.
 //
-// Rules: only a higher epoch replaces a row; a demotion winner may also replace an equal
-// one (every director names the same winner). No relay_cells row and no activity lease is
+// A guarded mirror, which nothing reads for a desktop's correctness: only a higher epoch
+// replaces a row, and nothing ever lowers one. No relay_cells row and no activity lease is
 // touched. A row whose cell changes drops its counters: the leases that back them keep
 // their own cell, and unbacked units stay counted on the old cell until its next reconcile,
 // which only makes that cell look fuller.
@@ -22,8 +22,6 @@ export type LedgerEntry = {
   relayHostId: string
   cellId: string
   epoch: number
-  // Only for a demotion winner.
-  allowEqual?: boolean
 }
 
 export class ReserveLedgerWriter {
@@ -101,22 +99,17 @@ export class ReserveLedgerWriter {
   }
 
   private async write(batch: LedgerEntry[]): Promise<void> {
-    // The newest entry per host wins inside one batch; one statement per guard kind.
+    // The newest entry per host wins inside one batch.
     const latest = new Map<string, LedgerEntry>()
     for (const entry of batch) {
       const key = `${entry.userId}\u0000${entry.relayHostId}`
       const known = latest.get(key)
-      if (!known || entry.epoch > known.epoch || (entry.epoch === known.epoch && entry.allowEqual)) {
-        latest.set(key, entry)
-      }
+      if (!known || entry.epoch > known.epoch) latest.set(key, entry)
     }
-    const strict = [...latest.values()].filter((entry) => !entry.allowEqual)
-    const equal = [...latest.values()].filter((entry) => entry.allowEqual)
-    if (strict.length > 0) await this.upsert(strict, '<')
-    if (equal.length > 0) await this.upsert(equal, '<=')
+    await this.upsert([...latest.values()])
   }
 
-  private async upsert(entries: LedgerEntry[], guard: '<' | '<='): Promise<void> {
+  private async upsert(entries: LedgerEntry[]): Promise<void> {
     const now = this.now()
     const rows = entries.map(() => '(?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0)').join(', ')
     const zeroOnMove = (column: string) =>
@@ -142,7 +135,7 @@ export class ReserveLedgerWriter {
          cell_id = excluded.cell_id,
          assignment_epoch = excluded.assignment_epoch,
          last_activity_at = excluded.last_activity_at
-       WHERE relay_assignments.assignment_epoch ${guard} excluded.assignment_epoch`,
+       WHERE relay_assignments.assignment_epoch < excluded.assignment_epoch`,
       entries.flatMap((entry) => [
         entry.userId,
         entry.relayHostId,
@@ -151,33 +144,6 @@ export class ReserveLedgerWriter {
         now,
         now
       ])
-    )
-  }
-
-  // A row naming a placement the desktop never used (two directors answered it, one through
-  // today's path at an equal or higher epoch) can never be corrected by the epoch guard.
-  // Compare-and-set it to the host's only seat; the caller has checked that the named cell
-  // is polled, live, and does not seat the host. The one write that may lower an epoch.
-  async correctOrphanRow(input: {
-    userId: string
-    relayHostId: string
-    expected: { cellId: string; epoch: number }
-    seat: { cellId: string; epoch: number }
-  }): Promise<void> {
-    await this.database.query(
-      `UPDATE relay_assignments SET cell_id = ?, assignment_epoch = ?, last_activity_at = ?,
-         reserved_controls = 0, reserved_splices = 0, reserved_invites = 0, pending_installs = 0,
-         pending_confirmations = 0, migration_leases = 0
-       WHERE user_id = ? AND relay_host_id = ? AND cell_id = ? AND assignment_epoch = ?`,
-      [
-        input.seat.cellId,
-        input.seat.epoch,
-        this.now(),
-        input.userId,
-        input.relayHostId,
-        input.expected.cellId,
-        input.expected.epoch
-      ]
     )
   }
 
@@ -222,42 +188,26 @@ export class ReserveLedgerWriter {
 }
 
 export const RESERVE_LEDGER_RECONCILE_MS = 10 * 60_000
-// A seat this young may still be settling a duplicate; the next reconcile takes it.
+// A seat this young may still be superseded; the next reconcile takes it.
 const RECONCILE_SETTLE_MS = 30_000
 
 type ReconcileSeat = { userId: string; relayHostId: string; cellId: string; epoch: number; joinedAt: number }
 
 // Every director upserts the map's seats on reserve-mode cells: guarded and idempotent, so
-// concurrent runs are harmless. A host seated on exactly one cell whose row names another
-// polled, live cell that does not seat it gets the compare-and-set correction.
+// concurrent runs are harmless. A row at an equal or higher epoch is left alone.
 export async function reconcileReserveLedger(input: {
   writer: ReserveLedgerWriter
   seats: () => ReconcileSeat[]
-  // Polled and live now, with this host not seated there.
-  cellDoesNotSeat: (cellId: string, userId: string, relayHostId: string) => boolean
   now: number
-}): Promise<{ upserted: number; corrected: number }> {
+}): Promise<{ upserted: number }> {
   const seats = input.seats().filter((seat) => input.now - seat.joinedAt >= RECONCILE_SETTLE_MS)
   const rows = await input.writer.readRows(seats)
   let upserted = 0
-  let corrected = 0
   for (const seat of seats) {
     const row = rows.get(`${seat.userId}\u0000${seat.relayHostId}`)
-    if (!row || row.epoch < seat.epoch) {
-      input.writer.enqueue(seat)
-      upserted += 1
-    } else if (
-      row.cellId !== seat.cellId &&
-      input.cellDoesNotSeat(row.cellId, seat.userId, seat.relayHostId)
-    ) {
-      await input.writer.correctOrphanRow({
-        userId: seat.userId,
-        relayHostId: seat.relayHostId,
-        expected: row,
-        seat
-      })
-      corrected += 1
-    }
+    if (row && row.epoch >= seat.epoch) continue
+    input.writer.enqueue(seat)
+    upserted += 1
   }
-  return { upserted, corrected }
+  return { upserted }
 }
