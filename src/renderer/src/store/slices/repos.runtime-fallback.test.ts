@@ -263,7 +263,12 @@ describe('repo slice runtime folder fallback', () => {
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-2' } as never })
     await expect(
       store.getState().addNonGitFolder('/srv/non-git', { runtimeEnvironmentId: 'env-1' })
-    ).resolves.toEqual({ ...folderRepo, executionHostId: 'runtime:env-1' })
+    ).resolves.toEqual({
+      ...folderRepo,
+      executionHostId: 'runtime:env-1',
+      authoritativeExecutionHostId: 'local',
+      catalogOwnerHostId: 'runtime:env-1'
+    })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',

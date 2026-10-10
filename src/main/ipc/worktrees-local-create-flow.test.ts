@@ -152,9 +152,7 @@ describe('registerWorktreeHandlers', () => {
       repoId: 'repo-1',
       name: 'concurrent-probe'
     })
-    await Promise.resolve()
-
-    expect(events).toEqual(['username-start', 'base-start'])
+    await vi.waitFor(() => expect(events).toEqual(['username-start', 'base-start']))
     resolveUsername('jdoe')
     resolveBase('origin/main')
     await expect(creation).resolves.toMatchObject({
@@ -402,7 +400,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('uses a repo-specific worktree base path when creating local worktrees', async () => {
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: '/workspace/repo',
       displayName: 'repo',
@@ -410,7 +408,9 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       worktreeBaseRef: null,
       worktreeBasePath: '../worktrees'
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     listWorktreesMock.mockResolvedValue([
       {
         path: '../worktrees/feature',
@@ -586,6 +586,7 @@ describe('registerWorktreeHandlers', () => {
       kind: 'folder' as const
     }
     store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
       displayName: '',
       comment: '',
