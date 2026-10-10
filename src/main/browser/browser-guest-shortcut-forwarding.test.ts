@@ -109,6 +109,8 @@ describe('setupGuestContextMenu', () => {
       pageUrl: 'https://test.dev/page',
       linkUrl: 'https://test.dev/link',
       selectionText: '',
+      // No extension support in this session.
+      extensionMenuItems: [],
       canGoBack: true,
       canGoForward: true
     })

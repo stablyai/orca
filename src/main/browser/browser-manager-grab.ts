@@ -27,10 +27,17 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     browserTabId: string,
     senderWebContentsId: number
   ): Electron.WebContents | null {
-    const docGuest = getWorkspaceDocPageGuest(browserTabId, senderWebContentsId)
-    if (docGuest) {
-      return docGuest
-    }
+    return (
+      getWorkspaceDocPageGuest(browserTabId, senderWebContentsId) ??
+      this.getAuthorizedBrowsingGuest(browserTabId, senderWebContentsId)
+    )
+  }
+
+  /** getAuthorizedGuest for browsing pages only, for features a document preview never has. */
+  getAuthorizedBrowsingGuest(
+    browserTabId: string,
+    senderWebContentsId: number
+  ): Electron.WebContents | null {
     const registeredRenderer = this.rendererWebContentsIdByTabId.get(browserTabId)
     if (registeredRenderer == null || registeredRenderer !== senderWebContentsId) {
       return null

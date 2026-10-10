@@ -8,6 +8,8 @@ import {
   resolveTabRegistrationWaiters
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
+import { registerBrowserExtensionHandlers } from './browser-extension-ipc'
+import { markExtensionTabActive } from '../browser/extensions/extension-tab-registry'
 import {
   disposeGrabModeStateForPage,
   registerBrowserGrabHandlers,
@@ -213,14 +215,18 @@ export function registerBrowserHandlers(): void {
   // Why: keeps the bridge's active tab in sync with the renderer's UI state.
   // Without this, a user switching tabs in the UI would leave the agent operating
   // on the previous tab, which is confusing.
-  ipcMain.handle('browser:activeTabChanged', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
+  ipcMain.handle('browser:activeTabChanged', (event, args: { browserPageId?: unknown }) => {
+    if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
       return false
+    }
+    const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
+    const guest = wcId === null ? undefined : webContents.fromId(wcId)
+    if (guest) {
+      markExtensionTabActive(guest)
     }
     if (!agentBrowserBridgeRef) {
       return false
     }
-    const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
     if (wcId !== null) {
       // Why: renderer tab changes are scoped to a worktree. If we only update
       // the global active guest, later worktree-scoped commands can still
@@ -234,6 +240,7 @@ export function registerBrowserHandlers(): void {
   })
 
   registerBrowserGuestViewHandlers()
+  registerBrowserExtensionHandlers()
 
   // --- Browser Context Grab IPC ---
 

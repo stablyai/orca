@@ -1,6 +1,5 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
+import { openLinkBesideBrowserPage } from '@/lib/browser-open-link-beside-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import {
@@ -109,38 +108,8 @@ export function registerBrowserStateIpcBridge(
     })
   )
   unsubs.push(
-    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
-      const store = useAppStore.getState()
-      const sourcePage = Object.values(store.browserPagesByWorkspace)
-        .flat()
-        .find((page) => page.id === browserPageId)
-      if (!sourcePage || getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
-        return
-      }
-      // Why: the link inherits the opener's cookie jar. Falling back to the default profile would let
-      // a page in an isolated session hand its links to the default one, silently crossing profiles.
-      const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
-        (tab) => tab.id === sourcePage.workspaceId
-      )
-      const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
-        store,
-        browserPageId,
-        sourcePage.worktreeId
-      )
-      store.createBrowserTab(sourcePage.worktreeId, url, {
-        title: url,
-        activate: activate ?? true,
-        ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
-        ...(sourceUnifiedTab?.executionHostId
-          ? { executionHostId: sourceUnifiedTab.executionHostId }
-          : {}),
-        ...(sourceTab
-          ? {
-              sessionProfileId: sourceTab.sessionProfileId,
-              sessionPartition: sourceTab.sessionPartition
-            }
-          : {})
-      })
-    })
+    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) =>
+      openLinkBesideBrowserPage(browserPageId, url, activate)
+    )
   )
 }

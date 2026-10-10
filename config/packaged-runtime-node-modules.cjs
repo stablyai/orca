@@ -20,6 +20,8 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@linear/sdk',
   '@orca/process-host',
   '@parcel/watcher',
+  // The Chrome Web Store installer resolves its preload file from its package directory.
+  'electron-chrome-web-store',
   'electron-updater',
   'i18next',
   'jsonc-parser',

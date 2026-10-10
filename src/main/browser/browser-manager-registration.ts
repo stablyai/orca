@@ -1,4 +1,5 @@
 import { webContents } from 'electron'
+import { trackExtensionTab, untrackExtensionTab } from './extensions/extension-tab-registry'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
 import { isWorkspaceDocPageId } from './doc-preview-guest-policy'
 import type { BrowserGuestRegistration } from './browser-manager-types'
@@ -65,6 +66,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.setupGrabShortcut(browserTabId, guest)
     this.setupShortcutForwarding(browserTabId, guest)
     this.setupMouseWheelZoomForwarding(browserTabId, guest)
+    const renderer = webContents.fromId(rendererWebContentsId)
+    if (renderer) {
+      // After Orca's shortcut listeners, so an Orca shortcut wins over an extension's.
+      trackExtensionTab(guest, renderer)
+    }
     this.flushPendingLoadFailure(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
@@ -87,6 +93,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
 
     // Why: remove attachGuestPolicies listeners so their guest-WebContents closures don't block GC.
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
+    const guestWebContents =
+      guestWebContentsId === undefined ? undefined : webContents.fromId(guestWebContentsId)
+    if (guestWebContents) {
+      untrackExtensionTab(guestWebContents)
+    }
     if (guestWebContentsId !== undefined) {
       this.cleanupGuestPolicyAttachment(guestWebContentsId)
     }

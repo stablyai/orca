@@ -19,6 +19,7 @@ import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingS
 import { BrowserUserAgentSetting } from './BrowserUserAgentSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
+import { BrowserExtensionsSetting } from './BrowserExtensionsSetting'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
 import {
   createBrowserHomePageDraftState,
@@ -114,6 +115,7 @@ export function BrowserPane({
   const showClientHostedRemote = matchesSettingsSearch(searchQuery, [browserSearchEntries[8]])
   const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [browserSearchEntries[9]])
   const showUserAgent = matchesSettingsSearch(searchQuery, [browserSearchEntries[10]])
+  const showExtensions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -246,6 +248,8 @@ export function BrowserPane({
       ) : null}
 
       {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
+
+      {showExtensions ? <BrowserExtensionsSetting /> : null}
 
       {showLinkRouting ? (
         <BrowserLinkRoutingSetting

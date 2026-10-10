@@ -100,6 +100,7 @@ export function BrowserChromeToolbar({
   viewSource,
   openExternal,
   overflowMenu,
+  extensionActions,
   showTourAnchors = false,
   pinnedStage
 }: {
@@ -115,6 +116,8 @@ export function BrowserChromeToolbar({
   viewSource: BrowserChromeToolAction | null
   openExternal: BrowserChromeToolAction | null
   overflowMenu: (props: BrowserChromeOverflowMenuProps) => React.ReactNode
+  /** Installed browser extensions' toolbar buttons. */
+  extensionActions?: React.ReactNode
   /** Only the browsing pane anchors the contextual tour; a second anchor would steal its steps. */
   showTourAnchors?: boolean
   /** Keeps the active contextual-tour control measurable while the remaining tools still fold. */
@@ -252,6 +255,8 @@ export function BrowserChromeToolbar({
       {openExternal && !folded.has('external') ? (
         <BrowserChromeActionButton action={openExternal} icon={ExternalLink} />
       ) : null}
+
+      {extensionActions}
 
       <span className="relative inline-flex">
         {overflowMenu({

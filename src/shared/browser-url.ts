@@ -321,10 +321,13 @@ export function normalizeBrowserNavigationUrl(
     // (nodeIntegration off, contextIsolation on, webSecurity on; see
     // createMainWindow.ts will-attach-webview), so the loaded page cannot
     // escalate privileges. Other non-web schemes (javascript:, arbitrary
-    // data: URIs) remain rejected.
+    // data: URIs) remain rejected. chrome-extension:// opens installed
+    // extensions' own pages (setup, settings); Chromium still refuses a page
+    // navigating to one the extension did not make web-accessible.
     return parsed.protocol === 'http:' ||
       parsed.protocol === 'https:' ||
-      parsed.protocol === 'file:'
+      parsed.protocol === 'file:' ||
+      parsed.protocol === 'chrome-extension:'
       ? parsed.toString()
       : null
   } catch {
@@ -358,7 +361,8 @@ export function normalizeExternalBrowserUrl(rawUrl: string): string | null {
   // hand off http(s) targets to the OS. file:// is allowed for the in-app
   // browser pane (local HTML preview), but forwarding it to openExternal
   // would let a remote page smuggle arbitrary file paths into Finder/Explorer.
-  if (normalized.startsWith('file:')) {
+  // chrome-extension:// ids are Orca's own, so the OS browser cannot open them either.
+  if (normalized.startsWith('file:') || normalized.startsWith('chrome-extension:')) {
     return null
   }
   return normalized

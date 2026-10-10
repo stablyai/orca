@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { BrowserExtensionMenuItem } from '../../../../../shared/browser-guest-events'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
@@ -27,6 +28,7 @@ export type BrowserPageContextMenuState = {
   linkUrl: string | null
   pageUrl: string
   selectionText: string
+  extensionMenuItems: BrowserExtensionMenuItem[]
 }
 
 export type BrowserPageGrabToastState = {

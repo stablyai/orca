@@ -88,6 +88,9 @@ vi.mock('./SettingsFormControls', () => ({ SettingsSubsectionHeader: () => null 
 vi.mock('./BrowserSessionCookiesSection', () => ({
   BrowserSessionCookiesSection: () => <span>Cookies row</span>
 }))
+vi.mock('./BrowserExtensionsSetting', () => ({
+  BrowserExtensionsSetting: () => <span>Extensions row</span>
+}))
 vi.mock('./BrowserNewProfileDialog', () => ({ BrowserNewProfileDialog: () => null }))
 
 beforeEach(() => {

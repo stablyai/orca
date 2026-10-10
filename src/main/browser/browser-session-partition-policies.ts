@@ -3,6 +3,7 @@ import type { Session } from 'electron'
 import type { BrowserSessionProfile } from '../../shared/browser-workspace-types'
 import { browserManager } from './browser-manager'
 import { clearProxySessionCredentials } from '../network/proxy-settings'
+import { enableBrowserExtensionsForSession } from './extensions/extension-session-enabler'
 import {
   applyProxyToBrowserSession,
   invalidateBrowserSessionProxyApplication
@@ -180,6 +181,7 @@ export async function installBrowserSessionPartitionPolicies(
       return isAutoGrantedBrowserSessionPermission(permission)
     })
     installBrowserWebAuthnAccessHandlers(sess)
+    enableBrowserExtensionsForSession(sess)
   }
   sess.setDisplayMediaRequestHandler((_request, callback) => {
     callback({ video: undefined, audio: undefined })
