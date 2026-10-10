@@ -1035,10 +1035,12 @@ export async function runReservePlacementSimulation(
       const wasReserve = cell.mode === 'reserve'
       cell.checkDeadMan(windowMs, config.reregistrationMs ?? DEFAULT_REREGISTRATION_MS)
       if (wasReserve && cell.mode === 'db') report.deadManTrips += 1
-      // Best-effort through the cell's own pool: nothing to write while the database is down.
+      // Best-effort through the cell's own pool: nothing to write while the database is down,
+      // and only while its switch says reserve (a db cell never writes one).
       const own = database.admitEffective.get(cell.cellId)
       if (
         !cell.old &&
+        database.reserveCells.has(cell.cellId) &&
         !cell.flagsUnread &&
         database.up &&
         (!own || own.mode !== cell.mode || own.incarnation !== cell.incarnation || clock.now - own.at >= CELL_ADMIT_EFFECTIVE_REFRESH_MS)
