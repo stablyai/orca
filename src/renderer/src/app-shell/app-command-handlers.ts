@@ -17,6 +17,7 @@ import {
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
 import { useAppStore } from '../store'
+import { runLatestAttention } from './latest-attention-command'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
@@ -155,6 +156,7 @@ export function createAppCommandHandlers(
       : false
 
   return new Map<KeybindingActionId, () => boolean>([
+    ['worktree.jumpToLatestAttention', () => runLatestAttention(creationLayoutActive, claim)],
     [
       'worktree.history.back',
       () => {

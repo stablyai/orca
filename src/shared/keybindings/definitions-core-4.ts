@@ -3,6 +3,23 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'worktree.jumpToLatestAttention',
+    title: 'Jump to latest agent needing input',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'agent',
+      'attention',
+      'notification',
+      'latest',
+      'waiting',
+      'input'
+    ],
+    defaultBindings: platformBindings(['Mod+Shift+U']),
+    allowInTerminal: true
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',
