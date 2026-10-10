@@ -18,6 +18,40 @@ import { isAutomaticTabActivation } from '../../shared/tab-activation-intent'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 
 export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
+  protected async refreshMobileSessionPtyRecords(
+    targetWorktreeId: string | null = null
+  ): Promise<Set<string> | null> {
+    const inventory = await this.refreshMobileSessionPtyInventory(targetWorktreeId)
+    return inventory ? new Set(inventory.livePtyIds) : null
+  }
+
+  protected async refreshMobileSessionPtyInventory(
+    targetWorktreeId: string | null = null
+  ): Promise<PtyControllerInventory | null> {
+    // Targeted mobile polls must not queue behind an aggregate census that may
+    // be waiting on an unrelated SSH provider.
+    if (targetWorktreeId !== null && targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+      return this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
+    }
+    if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+      // Fleet-wide refreshes share one aggregate controller inventory.
+      const pending = this.pendingMobileSessionPtyAggregateInventoryRefresh
+      if (pending) {
+        return pending
+      }
+      // Why: reconnect exit bursts share one authoritative daemon inventory
+      // instead of multiplying a full cross-generation list RPC per stale tab.
+      const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
+        if (this.pendingMobileSessionPtyAggregateInventoryRefresh === refresh) {
+          this.pendingMobileSessionPtyAggregateInventoryRefresh = null
+        }
+      })
+      this.pendingMobileSessionPtyAggregateInventoryRefresh = refresh
+      return refresh
+    }
+    return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
+  }
+
   protected async performMobileSessionPtyRecordsRefresh(
     targetWorktreeId: string | null
   ): Promise<PtyControllerInventory | null> {
