@@ -33,9 +33,18 @@ export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'co
 // `:line` and `:col` suffixes (e.g. `src/foo.ts:12:3`, `./bin`, `/abs/path`).
 // Why: framework route files commonly use punctuation segments like
 // `app/(shop)/products/[id]/page.tsx`; keep those links whole.
-// Keep Japanese middle dots and tildes without admitting prose delimiters.
+// Why the leading and trailing classes also take \u30FB\uFF65 (kana middle
+// dots): CJK folder names use them, they are category Po, and letters/marks/numbers
+// cut the link in front of them. Not \p{Po} — it reintroduces the ASCII delimiters
+// the spaced detectors trim on, and fullwidth `，`/`。` would absorb the prose after
+// a path.
+// Wave dashes \u301C/\uFF5E stay in the continuation class so a directory
+// name like `前〜後` still links (#23322). A dash in the final segment is
+// range prose (`app.log〜古い`) and is trimmed back off below.
+// A relative segment must still start with a name character, so a bullet such
+// as `・/tmp/foo.txt` links the absolute path rather than absorbing the dot.
 const LOCAL_PATH_REGEX =
-  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]\u30FB\uFF65\u301C\uFF5E]*(?::\d+)?(?::\d+)?/gu
+  /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-][\p{L}\p{N}\p{M}._\-\u30FB\uFF65]*[\\/])[\p{L}\p{N}\p{M}._~\-/%+@\\()[\]\u30FB\uFF65\u301C\uFF5E]*(?::\d+)?(?::\d+)?/gu
 
 // Matches separator paths whose file or folder names include spaces. This runs
 // before LOCAL_PATH_REGEX so `/Users/A/Foo Bar/file.ts` is claimed as one link
@@ -169,6 +178,24 @@ function trimTrailingWhitespace(
   }
 }
 
+// A wave dash inside an earlier directory is part of the name. The same dash
+// in the final segment starts Japanese range prose, so the link stops there.
+function trimFinalSegmentWaveDash(
+  range: DetectedTerminalFileLinkRange
+): DetectedTerminalFileLinkRange {
+  const lastSeparator = Math.max(range.text.lastIndexOf('/'), range.text.lastIndexOf('\\'))
+  const dashAt = range.text.slice(lastSeparator + 1).search(/[\u301C\uFF5E]/)
+  if (dashAt < 0) {
+    return range
+  }
+  const text = range.text.slice(0, lastSeparator + 1 + dashAt)
+  return {
+    text,
+    startIndex: range.startIndex,
+    endIndex: range.startIndex + text.length
+  }
+}
+
 function buildLineEndingSpacedPathPrefixRanges(
   range: DetectedTerminalFileLinkRange
 ): DetectedTerminalFileLinkRange[] {
@@ -213,10 +240,11 @@ function detectLocalPathLinks(
     if (isInsideUriScheme(lineText, range)) {
       continue
     }
-    if (!/[\\/]/.test(range.text)) {
+    const trimmed = trimFinalSegmentWaveDash(range)
+    if (!/[\\/]/.test(trimmed.text)) {
       continue
     }
-    const link = toParsedTerminalFileLink(range)
+    const link = toParsedTerminalFileLink(trimmed)
     if (link) {
       links.push(link)
     }
