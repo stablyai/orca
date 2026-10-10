@@ -864,6 +864,10 @@ export function createRelayApp(
       ...(operations.cellAdmitModeEffective
         ? { admitModeEffective: operations.cellAdmitModeEffective() }
         : {}),
+      // Placement as built, not as configured: `on` only when this director books reserve cells.
+      ...(config.role === 'director'
+        ? { reservePlacement: operations.reservePlacement?.placementMode ?? 'off' }
+        : {}),
       connectionCapacity:
         config.connectionHardCap === undefined
           ? null
