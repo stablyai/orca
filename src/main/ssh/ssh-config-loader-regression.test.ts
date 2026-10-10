@@ -1,6 +1,6 @@
 import type * as FsModule from 'node:fs'
 import type * as OsModule from 'node:os'
-import { win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 afterEach(() => {
@@ -12,6 +12,14 @@ afterEach(() => {
 
 function normalizeWin(value: string): string {
   return win32.normalize(value.replaceAll('/', '\\'))
+}
+
+/** Shapes paths like `globSync(..., { withFileTypes: true })` results. */
+function globEntries(paths: string[]) {
+  return paths.map((entry) => {
+    const pathApi = /^[a-zA-Z]:\\/.test(entry) ? win32 : posix
+    return { parentPath: pathApi.dirname(entry), name: pathApi.basename(entry) }
+  })
 }
 
 function platformSshHome(): string {
@@ -79,10 +87,10 @@ describe('loadUserSshConfig regressions', () => {
         existsSync: (filePath: string) => files.has(normalizeWin(filePath)),
         globSync: (pattern: string) =>
           normalizeWin(pattern) === normalizeWin('C:/Users/Test User/.ssh/conf.d/*.conf')
-            ? [
+            ? globEntries([
                 normalizeWin('C:/Users/Test User/.ssh/conf.d/alpha.conf'),
                 normalizeWin('C:/Users/Test User/.ssh/conf.d/zeta.conf')
-              ]
+              ])
             : [],
         readFileSync: (filePath: string) => {
           const content = files.get(normalizeWin(filePath))
@@ -205,7 +213,7 @@ describe('loadUserSshConfig regressions', () => {
         ...actual,
         existsSync: (filePath: string) =>
           filePath === configPath || includePaths.includes(filePath),
-        globSync: () => [...includePaths].toReversed(),
+        globSync: () => globEntries([...includePaths].toReversed()),
         readFileSync: (filePath: string) => {
           if (filePath === configPath) {
             return 'Include conf.d/*.conf\n'
