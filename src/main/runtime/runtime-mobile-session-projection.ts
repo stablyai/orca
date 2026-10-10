@@ -294,7 +294,7 @@ export function projectRuntimeMobileSessionTabs(
       id: tab.id,
       parentTabId: tab.parentTabId,
       leafId: tab.leafId,
-      title,
+      title: tab.customTitle?.trim() || title,
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
       // Bind identity to the handle's live owner, never a stale persisted surface.
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),

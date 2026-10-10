@@ -213,7 +213,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       // Why: a manual rename must outrank later agent OSC title updates (which
       // win by timestamp), so stamp it as the freshest title.
       pty.pty.titleUpdatedAt = Date.now()
-      this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
+      this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId, { customTitle: title })
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
       if (!this.notifier?.renameTerminal && pty.pty.tabId) {

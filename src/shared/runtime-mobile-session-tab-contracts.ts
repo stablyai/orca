@@ -10,6 +10,8 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** Explicit rename scoped to this terminal surface; absent in older snapshots. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

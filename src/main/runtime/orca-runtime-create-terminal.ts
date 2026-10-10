@@ -240,6 +240,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             tabId,
             leafId,
             title: launchOpts.title ?? null,
+            customTitle: opts.title ?? null,
             activate: presentation === 'focused',
             selectIfNoActiveTab: presentation !== 'background',
             ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),

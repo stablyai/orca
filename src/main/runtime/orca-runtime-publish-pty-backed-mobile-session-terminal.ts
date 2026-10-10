@@ -28,6 +28,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       tabId: string
       leafId: string
       title: string | null
+      customTitle?: string | null
       activate: boolean
       selectIfNoActiveTab?: boolean
       startupCwd?: string
@@ -54,6 +55,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
         candidate.parentTabId === args.tabId &&
         candidate.leafId === args.leafId
     )
+    const customTitle = args.customTitle === undefined ? existingTab?.customTitle : args.customTitle
     // Why: a split inserts into the parent tab's layout, which lives on the
     // sibling surface, not this new leaf's (empty) existing surface.
     const baseLayout = args.split
@@ -89,6 +91,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       title,
+      ...(customTitle?.trim() ? { customTitle: customTitle.trim() } : {}),
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       ...(viewMode ? { viewMode } : {}),
@@ -151,7 +154,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
 
   protected touchMobileSessionSnapshotsForPty(
     ptyId: string,
-    options: { immediate?: boolean } = {}
+    options: { immediate?: boolean; customTitle?: string | null } = {}
   ): void {
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const hasPtyBackedTab = snapshot.tabs.some(
@@ -161,6 +164,18 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       )
       if (!hasPtyBackedTab) {
         continue
+      }
+      if (options.customTitle !== undefined) {
+        this.storeMobileSessionSnapshot(worktreeId, {
+          ...snapshot,
+          snapshotVersion: snapshot.snapshotVersion + 1,
+          tabs: snapshot.tabs.map((tab) =>
+            tab.type === 'terminal' &&
+            (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+              ? { ...tab, customTitle: options.customTitle }
+              : tab
+          )
+        })
       }
       this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }

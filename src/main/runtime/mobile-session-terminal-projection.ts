@@ -36,6 +36,9 @@ export function buildHeadlessMobileSessionTerminalTabs(
             parentTabId: tab.id,
             leafId,
             title,
+            ...(leafIds.length === 1 && tab.customTitle?.trim()
+              ? { customTitle: tab.customTitle.trim() }
+              : {}),
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),

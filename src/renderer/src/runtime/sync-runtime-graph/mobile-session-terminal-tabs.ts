@@ -105,6 +105,9 @@ export function buildMobileTerminalSurfaceTabs(
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
+      ...(tabWideFallbackSafe && terminal.customTitle?.trim()
+        ? { customTitle: terminal.customTitle.trim() }
+        : {}),
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),
