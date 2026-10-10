@@ -85,6 +85,34 @@ afterEach(async () => {
   latest = null
 })
 
+describe('project group manual creation', () => {
+  it('creates a standalone group without moving any project into it', async () => {
+    mocks.createProjectGroup.mockResolvedValue({
+      id: 'group-new',
+      name: 'Standalone',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      executionHostId: null,
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    })
+    await renderHookProbe()
+    await act(async () => {
+      latest!.handleCreateStandaloneProjectGroup()
+    })
+    await act(async () => {
+      await latest!.handleSubmitProjectGroupName('Standalone')
+    })
+
+    expect(mocks.createProjectGroup).toHaveBeenCalledWith('Standalone')
+    expect(mocks.moveProjectToGroup).not.toHaveBeenCalled()
+  })
+})
+
 describe('project group dialogs carry the owner host', () => {
   it('renames through the host that owns the group row', async () => {
     await renderHookProbe()
