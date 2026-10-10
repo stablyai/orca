@@ -109,6 +109,50 @@ describe('automation schedules', () => {
     expect(formatAutomationSchedule('FREQ=YEARLY')).toBe('Invalid schedule')
   })
 
+  it.each([
+    ['TU,TH,SA', new Date(2026, 9, 6, 8)],
+    ['MO,WE,FR,SU', new Date(2026, 9, 7, 8)],
+    ['MO,TU,WE,TH,FR,SA,SU', new Date(2026, 9, 6, 8)]
+  ])(
+    'labels a runnable multi-day weekly rule %s without calling it invalid (#24985)',
+    (days, next) => {
+      const rrule = `FREQ=WEEKLY;BYDAY=${days};BYHOUR=8;BYMINUTE=0`
+      const start = new Date(2026, 9, 5, 9).getTime()
+
+      expect(isValidAutomationSchedule(rrule)).toBe(true)
+      expect(nextAutomationOccurrenceAfter(rrule, start, start)).toBe(next.getTime())
+      expect(formatAutomationSchedule(`  ${rrule}  `)).toBe(rrule)
+      expect(describeAutomationSchedule(`  ${rrule}  `)).toEqual({
+        kind: 'custom',
+        expression: rrule
+      })
+    }
+  )
+
+  it.each(['FREQ=WEEKLY;BYDAY=TU,NO;BYHOUR=8;BYMINUTE=0', 'FREQ=YEARLY', '0 0 31 2 *'])(
+    'keeps the invalid label for schedules the scheduler rejects: %s',
+    (schedule) => {
+      expect(isValidAutomationSchedule(schedule)).toBe(false)
+      expect(formatAutomationSchedule(schedule)).toBe('Invalid schedule')
+      expect(describeAutomationSchedule(schedule)).toEqual({ kind: 'invalid' })
+    }
+  )
+
+  it.each([
+    ['\u001b[2J', '\\x1b[2J'],
+    ['\u001b]52;c;ZXZpbA==\u0007', '\\x1b]52;c;ZXZpbA==\\x07'],
+    ['\u009b2J', '\\x9b2J'],
+    ['\t\r\n', '\\x09\\x0d\\x0a']
+  ])('renders accepted control bytes as printable schedule text', (control, escaped) => {
+    const prefix = 'FREQ=WEEKLY;BYDAY=TU,TH;BYHOUR=8;BYMINUTE=0;X='
+    const expression = `${prefix}${control};Y=keep`
+    const expected = `${prefix}${escaped};Y=keep`
+
+    expect(isValidAutomationSchedule(expression)).toBe(true)
+    expect(formatAutomationSchedule(expression)).toBe(expected)
+    expect(describeAutomationSchedule(expression)).toEqual({ kind: 'custom', expression: expected })
+  })
+
   it('formats hourly schedules using the stored minute', () => {
     expect(formatAutomationSchedule('FREQ=HOURLY;BYMINUTE=5')).toBe('Hourly at :05')
   })

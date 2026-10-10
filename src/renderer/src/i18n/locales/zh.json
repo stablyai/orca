@@ -5299,7 +5299,9 @@
           "b79b39d865": "删除项目",
           "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复。",
           "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在您的磁盘上。",
-          "removeDescriptionVmRecipe": "这会从 Orca 中删除 {{name}}。其VM配方决定是否永久删除环境及其文件。"
+          "removeDescriptionVmRecipe": "这会从 Orca 中删除 {{name}}。其VM配方决定是否永久删除环境及其文件。",
+          "openTerminalWarningOne": "此项目中 1 个打开的终端将被关闭。",
+          "openTerminalWarningMany": "此项目中 {{count}} 个打开的终端将被关闭。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "显示活动工作区"

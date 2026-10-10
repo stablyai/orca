@@ -188,7 +188,9 @@ describe('rich Markdown alternate browser click', () => {
 
   it('keeps Shift-modified relative files on the client OS path', async () => {
     expect(clickLink({ href: 'child.md' })).toBe(true)
-    await vi.waitFor(() => expect(openFileUri).toHaveBeenCalledWith('file:///repo/docs/child.md'))
+    await vi.waitFor(() =>
+      expect(openFileUri).toHaveBeenCalledWith('file:///repo/docs/child.md', 'local')
+    )
     expect(activateMarkdownLink).not.toHaveBeenCalled()
     expect(createBrowserTab).not.toHaveBeenCalled()
   })
@@ -199,7 +201,9 @@ describe('rich Markdown alternate browser click', () => {
       activeRuntimeEnvironmentId: 'env-1'
     }
     expect(clickLink({ href: 'child.md' })).toBe(true)
-    await vi.waitFor(() => expect(openFileUri).toHaveBeenCalledWith('file:///repo/docs/child.md'))
+    await vi.waitFor(() =>
+      expect(openFileUri).toHaveBeenCalledWith('file:///repo/docs/child.md', 'local')
+    )
   })
 
   it('refuses a runtime-owned document even when the path exists locally', async () => {

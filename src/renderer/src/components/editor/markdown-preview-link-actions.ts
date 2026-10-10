@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
@@ -154,7 +155,7 @@ export async function handleMarkdownPreviewLinkClick({
       showLocalPathOpenBlockedToast()
       return
     }
-    void window.api.shell.openFileUri(target.toString())
+    void window.api.shell.openFileUri(target.toString(), LOCAL_EXECUTION_HOST_ID)
     return
   }
 

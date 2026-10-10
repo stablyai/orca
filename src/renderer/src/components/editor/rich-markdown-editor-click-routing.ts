@@ -19,7 +19,10 @@ import {
 import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
 import { getRichMarkdownCommentAtPos } from './rich-markdown-review-annotations'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import {
   classifyHtmlSuperscriptLinkAction,
@@ -255,9 +258,12 @@ function openShiftModifiedMarkdownLink({
         )
         return
       }
-      void window.api.shell.openFileUri(toFileUrlForOsEscape(classified.absolutePath))
+      void window.api.shell.openFileUri(
+        toFileUrlForOsEscape(classified.absolutePath),
+        LOCAL_EXECUTION_HOST_ID
+      )
     })
     return
   }
-  void window.api.shell.openFileUri(classified.uri)
+  void window.api.shell.openFileUri(classified.uri, LOCAL_EXECUTION_HOST_ID)
 }

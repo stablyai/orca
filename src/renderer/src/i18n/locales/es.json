@@ -5318,7 +5318,9 @@
           "b79b39d865": "Quitar proyecto",
           "removeDescriptionSsh": "Esto solo elimina {{name}} de Orca. Sus archivos permanecen en {{host}}; vuelve a añadir ese host SSH para recuperarlo.",
           "removeDescriptionLocal": "Esto solo elimina {{name}} de Orca. Sigue estando en tu disco.",
-          "removeDescriptionVmRecipe": "Esto elimina {{name}} de Orca. Su receta de VM determina si el entorno y sus archivos se eliminan permanentemente."
+          "removeDescriptionVmRecipe": "Esto elimina {{name}} de Orca. Su receta de VM determina si el entorno y sus archivos se eliminan permanentemente.",
+          "openTerminalWarningOne": "Se cerrará 1 terminal abierto en este proyecto.",
+          "openTerminalWarningMany": "Se cerrarán {{count}} terminales abiertos en este proyecto."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Mostrar espacio de trabajo activo"

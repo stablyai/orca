@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -76,10 +77,10 @@ export function handleMarkdownPreviewSystemLinkClick({
         )
         return
       }
-      void window.api.shell.openFileUri(cleanUri)
+      void window.api.shell.openFileUri(cleanUri, LOCAL_EXECUTION_HOST_ID)
     })
     return true
   }
-  void window.api.shell.openFileUri(parsed.toString())
+  void window.api.shell.openFileUri(parsed.toString(), LOCAL_EXECUTION_HOST_ID)
   return true
 }

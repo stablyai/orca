@@ -107,6 +107,7 @@ const useAppStoreMock = Object.assign(
       settings: Record<string, unknown>
       unifiedTabsByWorktree: Record<string, unknown[]>
       groupsByWorktree: Record<string, unknown[]>
+      worktreesByRepo: Record<string, { id: string; repoId: string; hostId: 'local' }[]>
     }) => unknown
   ) =>
     selector({
@@ -116,7 +117,8 @@ const useAppStoreMock = Object.assign(
       },
       groupsByWorktree: {
         'wt-1': [{ id: 'group-1', tabOrder: ['tab-1', 'tab-2'] }]
-      }
+      },
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }] }
     }),
   {
     getState: () => ({
@@ -407,7 +409,13 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
       throw new Error('Reveal item has no select handler')
     }
     onSelect()
-    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts')
+    expect(revealInFileManager).toHaveBeenCalledWith('/repo/foo.ts', 'local')
+  })
+
+  it('reveals a local file while a remote server is focused', async () => {
+    storeSettings.activeRuntimeEnvironmentId = 'env-1'
+
+    expect((await renderRevealItem()).props.disabled).toBe(false)
   })
 
   it.each([

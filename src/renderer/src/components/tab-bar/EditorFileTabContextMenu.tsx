@@ -26,9 +26,10 @@ import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
-  isRevealInFileManagerBlocked,
+  getWorkspaceFileRevealOwner,
   revealInFileManager
 } from '@/lib/reveal-in-file-manager'
+import { isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
@@ -101,12 +102,13 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
-  const revealBlocked = useAppStore((s) =>
-    isRevealInFileManagerBlocked(s.settings, {
+  const revealOwner = useAppStore((s) =>
+    getWorkspaceFileRevealOwner(s, file.worktreeId, {
       connectionId: file.externalSshTargetId ?? repoConnectionId,
       runtimeEnvironmentId: file.runtimeEnvironmentId
     })
   )
+  const revealBlocked = isLocalPathOpenBlocked(revealOwner)
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -246,7 +248,7 @@ export function EditorFileTabContextMenu({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={revealBlocked}
-              onSelect={() => void revealInFileManager(file.filePath)}
+              onSelect={() => void revealInFileManager(file.filePath, revealOwner)}
             >
               <ExternalLink className="size-3.5" />
               {getRevealInFileManagerLabel()}
