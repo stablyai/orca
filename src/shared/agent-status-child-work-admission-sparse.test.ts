@@ -157,6 +157,15 @@ describe('child-work admission of sparse observations', () => {
     expect(store.getChild('child-1')?.totalTokens).toBe(5_000)
   })
 
+  it('clears the model when the agent type changes without a replacement model', () => {
+    const { store, admission } = setup()
+    admission.announce(observation(described))
+    admission.announce(observation({ agentType: 'Plan', observedAt: 11 }))
+    const child = store.getChild('child-1')
+    expect(child?.agentType).toBe('Plan')
+    expect(child).not.toHaveProperty('model')
+  })
+
   function settledFirstRun() {
     const { store, admission } = setup()
     admission.announce(
@@ -192,6 +201,14 @@ describe('child-work admission of sparse observations', () => {
     expect(child).not.toHaveProperty('providerTiming')
     // Restarted by the main agent: it no longer nests under the child that first spawned it.
     expect(child).not.toHaveProperty('parentChildWorkId')
+  })
+
+  it('does not carry the model into a resumed invocation of a different agent type', () => {
+    const { store, resume } = settledFirstRun()
+    expect(resume({ agentType: 'Plan' })).toMatchObject({ accepted: true })
+    const child = store.getChild('child-1')
+    expect(child).toMatchObject({ membership: 'live', agentType: 'Plan', name: 'researcher' })
+    expect(child).not.toHaveProperty('model')
   })
 
   it('nests a resumed invocation under the child that restarted it', () => {
