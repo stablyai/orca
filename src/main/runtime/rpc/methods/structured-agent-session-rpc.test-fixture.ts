@@ -17,6 +17,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RpcAnyMethodDeclaration, RpcRequest, RpcResponse } from '../core'
+import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -253,6 +254,8 @@ export function dispatcher(
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
+    // No creator record: every listed restart offer reads as the host user's own.
+    restartOfferWorkspaceProvenance: () => undefined,
     ...runtimeCalls,
     ...runtimeOverrides
   }
@@ -267,12 +270,8 @@ export function dispatcher(
 export async function call(
   method: string,
   params: unknown,
-  client?: {
-    clientId?: string
-    clientKind?: 'mobile' | 'runtime'
-    clientCapabilities?: string[]
-    signal?: AbortSignal
-  },
+  // What a transport tells the dispatcher about its caller.
+  client?: RpcDispatchStreamingOptions,
   runtimeOverrides: Record<string, unknown> = {},
   methods?: readonly RpcAnyMethodDeclaration[]
 ): Promise<RpcResponse> {

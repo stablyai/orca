@@ -10,7 +10,8 @@
 import type {
   AgentSessionRecoveryCapsule,
   AgentSessionResumeFailureInput,
-  AgentSessionResumeFailureRecord
+  AgentSessionResumeFailureRecord,
+  ListedRestartOffer
 } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
@@ -34,7 +35,13 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 
 type FailureCapsule = Pick<
   AgentSessionRecoveryCapsule,
-  'listFailed' | 'completeResume' | 'failResume' | 'rollbackResume' | 'dismiss' | 'clearAll'
+  | 'listFailed'
+  | 'completeResume'
+  | 'failResume'
+  | 'rollbackResume'
+  | 'dismiss'
+  | 'dismissListed'
+  | 'clearAll'
 >
 
 export type StructuredAgentSessionRestartFailureLedger = {
@@ -63,6 +70,12 @@ export type StructuredAgentSessionRestartFailureLedger = {
   dismiss: (
     sessionIds: readonly string[] | undefined,
     beforeClearAll: (audience?: StructuredAgentSessionRestartAudience) => void | Promise<void>,
+    audience?: StructuredAgentSessionRestartAudience
+  ) => Promise<number>
+  /** Forgets offers exactly as a client listed them; see the capsule's `dismissListed`. With an
+   *  audience, only records of agents it sees go. */
+  dismissListed: (
+    listed: readonly ListedRestartOffer[],
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<number>
 }
@@ -252,6 +265,17 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
         // A newer Orca's offers and failures were never shown here, so "dismiss all" keeps them.
         const keep = (marker: AgentSessionResumeMarker) => deps.savedByNewerOrca(marker.sessionId)
         return (await deps.capsule?.clearAll(deps.now(), keep)) ?? 0
+      }),
+    dismissListed: (listed, audience) =>
+      deps.enqueue(async () => {
+        // Decided under the capsule lock, as `dismiss` does.
+        const hidden = audience
+          ? (marker: AgentSessionResumeMarker) => {
+              const record = deps.getRecord(marker.sessionId)
+              return record === null || !audience(record.provider)
+            }
+          : undefined
+        return (await deps.capsule?.dismissListed(listed, deps.now(), hidden)) ?? 0
       })
   }
 }

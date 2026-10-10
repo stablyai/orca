@@ -11,11 +11,12 @@ import type {
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import { TooltipProvider } from './ui/tooltip'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
-import { consumeNativeChatResumeOnRestartDialogRequest } from './native-chat-resume-on-restart-dialog'
 import {
-  _resetNativeChatRestartOffer,
-  getNativeChatRestartOffer
+  getNativeChatRestartOffers,
+  readNativeChatRestartMachine
 } from './native-chat-resume-on-restart-store'
+import { continueNativeChatRestartOffers } from './native-chat-restart-offer-actions'
+import { _resetNativeChatRestartOffer } from './native-chat-restart-offer-triggers'
 
 export const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   sessionId,
@@ -25,8 +26,26 @@ export const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   latestPrompt: `Prompt ${sessionId}`,
   recordedAt: 1_800_000_000_000,
   executionHostId: 'local',
-  workspaceKind: 'git-worktree'
+  workspaceKind: 'git-worktree',
+  origin: 'own'
 }))
+
+/** This computer's listing, empty when it lists nothing. */
+export function localOffer(): {
+  candidates: readonly ResumeCandidate[]
+  failed: readonly ResumeFailure[]
+} {
+  return getNativeChatRestartOffers().get('local') ?? { candidates: [], failed: [] }
+}
+
+export async function readLocalOffer(): Promise<void> {
+  await readNativeChatRestartMachine({ kind: 'local' })
+}
+
+/** One resume of this computer's named chats, as a click or an opted-in launch sends it. */
+export function continueLocal(sessionIds: readonly string[]): Promise<void> {
+  return continueNativeChatRestartOffers([{ machine: 'local', sessionIds }])
+}
 
 /** A chat the host acted on and could not carry on, as it reports it. */
 export function failure(
@@ -80,7 +99,13 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
   }
 
   function offerIds(): string[] {
-    return getNativeChatRestartOffer().candidates.map((candidate) => candidate.sessionId)
+    return (getNativeChatRestartOffers().get('local')?.candidates ?? []).map(
+      (candidate) => candidate.sessionId
+    )
+  }
+
+  function failedIds(): string[] {
+    return (getNativeChatRestartOffers().get('local')?.failed ?? []).map((entry) => entry.sessionId)
   }
 
   /** What each toast said: its title, and its description when it has one. */
@@ -207,7 +232,6 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     statusStream.snapshot.clear()
     statusStream.emit = () => {}
     _resetNativeChatRestartOffer()
-    consumeNativeChatResumeOnRestartDialogRequest()
     vi.mocked(toast).mockClear()
     useAppStore.setState(useAppStore.getInitialState(), true)
     useAppStore.setState({
@@ -228,7 +252,6 @@ export function createResumeModalFixture(rpc: Mock<RestartRpc>, statusStream: Re
     container.remove()
     useAppStore.setState(useAppStore.getInitialState(), true)
     _resetNativeChatRestartOffer()
-    consumeNativeChatResumeOnRestartDialogRequest()
   })
-  return { mount, button, checkbox, offerIds, toasts, fakeHost, runStatus, calls }
+  return { mount, button, checkbox, offerIds, failedIds, toasts, fakeHost, runStatus, calls }
 }

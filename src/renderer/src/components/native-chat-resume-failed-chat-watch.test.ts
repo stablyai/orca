@@ -7,12 +7,14 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import {
-  _resetNativeChatRestartOffer,
-  continueNativeChatRestartOffer,
-  dismissNativeChatRestartOffer,
-  getNativeChatRestartOffer,
-  refreshNativeChatRestartOffer
+  getNativeChatRestartOffers,
+  readNativeChatRestartMachine
 } from './native-chat-resume-on-restart-store'
+import {
+  continueNativeChatRestartOffers,
+  dismissNativeChatRestartOffer
+} from './native-chat-restart-offer-actions'
+import { _resetNativeChatRestartOffer } from './native-chat-restart-offer-triggers'
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -24,6 +26,14 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
+function getNativeChatRestartOffer() {
+  return getNativeChatRestartOffers().get('local') ?? { candidates: [], failed: [] }
+}
+
+function refreshNativeChatRestartOffer() {
+  return readNativeChatRestartMachine({ kind: 'local' })
+}
+
 // When the user sends in an offered or failed chat, its status bar entry must retire without the
 // user reopening anything, and nothing may run while nothing is offered or failed.
 
@@ -34,6 +44,7 @@ const failure = {
   trigger: 'update',
   latestPrompt: 'Fix it',
   recordedAt: 1,
+  origin: 'own',
   failedAt: 2,
   outcome: 'refused',
   reason: 'agent_session_restart_work_superseded'
@@ -170,7 +181,7 @@ it('never lets a re-read that was already in flight bring back a dismissed failu
   await vi.advanceTimersByTimeAsync(500)
   expect(offerReads()).toBe(2)
 
-  await dismissNativeChatRestartOffer(['a'])
+  await dismissNativeChatRestartOffer('local', ['a'])
   expect(getNativeChatRestartOffer().failed).toEqual([])
   stale.resolve({ sessions: [], failed: [failure] })
   await vi.advanceTimersByTimeAsync(0)
@@ -189,7 +200,7 @@ it('waits for a resume in flight instead of re-reading under it', async () => {
       ? acting.promise
       : Promise.resolve({ sessions: [], failed })
   )
-  const retry = continueNativeChatRestartOffer(['a'])
+  const retry = continueNativeChatRestartOffers([{ machine: 'local', sessionIds: ['a'] }])
   hostEmit()({ type: 'status', session: summary('working', 'Carry on please', Date.now() + 1) })
   await vi.advanceTimersByTimeAsync(500)
   expect(offerReads()).toBe(1)

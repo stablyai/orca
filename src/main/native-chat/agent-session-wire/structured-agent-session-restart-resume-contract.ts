@@ -1,6 +1,7 @@
 // What a host's restart-resume surface offers: teardown's offer recording, the offer list and its
 // actions, and Continue on a cut reply.
 
+import type { ListedRestartOffer } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import type { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
@@ -42,6 +43,12 @@ export type StructuredAgentSessionRestartResume = {
    *  newer Orca's stay). An audience limits either to the agents it sees. */
   dismiss: (
     sessionIds?: readonly string[],
+    audience?: StructuredAgentSessionRestartAudience
+  ) => Promise<number>
+  /** Forgets offers exactly as a client listed them: a chat interrupted again since, or being
+   *  resumed by another action right now, keeps its record. An audience limits it as `dismiss`. */
+  dismissListed: (
+    listed: readonly ListedRestartOffer[],
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<number>
   /** The chat's agent proved a start: its offer ends unless the start is a resume's own. */

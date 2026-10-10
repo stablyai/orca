@@ -45,6 +45,10 @@ export class TrackedTestRecoveryCapsule extends AgentSessionRecoveryCapsule {
     return this.track(super.dismiss(...args))
   }
 
+  override dismissListed(...args: Parameters<Capsule['dismissListed']>) {
+    return this.track(super.dismissListed(...args))
+  }
+
   override forgetSuperseded(...args: Parameters<Capsule['forgetSuperseded']>) {
     return this.track(super.forgetSuperseded(...args))
   }

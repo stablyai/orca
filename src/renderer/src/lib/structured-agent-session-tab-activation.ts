@@ -12,6 +12,9 @@ import {
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { Tab } from '../../../shared/tab-types'
 
+/** The pairing a paired machine's chat was listed under; a machine re-paired since is not asked. */
+export type StructuredSessionPairing = { pairingRevision?: number }
+
 export function findStructuredAgentSessionTab(
   unifiedTabsByWorktree: Readonly<Record<string, readonly Tab[]>>,
   args: { workspaceId: string; sessionId: string; target?: RuntimeClientTarget }
@@ -29,11 +32,13 @@ export function findStructuredAgentSessionTab(
   )
 }
 
-export function activateStructuredAgentSessionTab(args: {
-  worktreeId: string
-  tabId: string
-  target?: RuntimeClientTarget
-}): boolean {
+export function activateStructuredAgentSessionTab(
+  args: {
+    worktreeId: string
+    tabId: string
+    target?: RuntimeClientTarget
+  } & StructuredSessionPairing
+): boolean {
   const state = useAppStore.getState()
   const tab = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
     (candidate) =>
@@ -50,22 +55,27 @@ export function activateStructuredAgentSessionTab(args: {
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
-  void callRuntimeRpc(
-    args.target ?? getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
-    'session.tabs.activate',
-    {
-      worktree: toRuntimeWorktreeSelector(args.worktreeId),
-      tabId: `agent-session:${tab.entityId}`
-    }
-  )
+  const target =
+    args.target ?? getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId })
+  const params = {
+    worktree: toRuntimeWorktreeSelector(args.worktreeId),
+    tabId: `agent-session:${tab.entityId}`
+  }
+  void (args.pairingRevision === undefined
+    ? callRuntimeRpc(target, 'session.tabs.activate', params)
+    : callRuntimeRpc(target, 'session.tabs.activate', params, {
+        expectedEnvironmentPairingRevision: args.pairingRevision
+      }))
   return true
 }
 
-export function activateStructuredAgentSessionById(args: {
-  worktreeId: string
-  sessionId: string
-  target?: RuntimeClientTarget
-}): boolean {
+export function activateStructuredAgentSessionById(
+  args: {
+    worktreeId: string
+    sessionId: string
+    target?: RuntimeClientTarget
+  } & StructuredSessionPairing
+): boolean {
   const tab = findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, {
     workspaceId: args.worktreeId,
     sessionId: args.sessionId,
@@ -75,7 +85,8 @@ export function activateStructuredAgentSessionById(args: {
     ? activateStructuredAgentSessionTab({
         worktreeId: args.worktreeId,
         tabId: tab.id,
-        target: args.target
+        target: args.target,
+        ...(args.pairingRevision === undefined ? {} : { pairingRevision: args.pairingRevision })
       })
     : false
 }

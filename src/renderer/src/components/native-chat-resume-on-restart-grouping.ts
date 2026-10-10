@@ -5,6 +5,7 @@ import { projectGroupIdFromRepoId } from '../../../shared/folder-workspace-workt
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session-restart-activity'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
+import type { RestartOfferOrigin } from '../../../shared/restart-offer-origin'
 
 /**
  * The offered chats, arranged the way the sidebar arranges workspaces: project/repo, then workspace,
@@ -29,6 +30,8 @@ export type ResumeCandidate = {
   model?: string
   /** What the chat was doing, snapshotted by the host as it stopped; an older host omits it. */
   activity?: AgentSessionRestartActivity
+  /** Whose chat it is for this desktop, judged by the host; absent from a host that predates it. */
+  origin?: RestartOfferOrigin
 }
 
 /** An offer that was acted on and did not end with the agent carrying on. The host keeps it until

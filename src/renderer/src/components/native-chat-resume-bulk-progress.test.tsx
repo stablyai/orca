@@ -4,7 +4,10 @@ import {
   offered,
   failure,
   type RestartRpc,
-  type ResumeStatusStream
+  type ResumeStatusStream,
+  continueLocal,
+  localOffer,
+  readLocalOffer
 } from './native-chat-resume-modal.test-support'
 import { act } from 'react'
 import { expect, it, vi, type Mock } from 'vitest'
@@ -14,11 +17,6 @@ import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStat
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import { requestNativeChatResumeOnRestartDialog } from './native-chat-resume-on-restart-dialog'
-import {
-  continueNativeChatRestartOffer,
-  getNativeChatRestartOffer,
-  refreshNativeChatRestartOffer
-} from './native-chat-resume-on-restart-store'
 
 const rpc: Mock<RestartRpc> = vi.hoisted(() => vi.fn<RestartRpc>())
 const statusStream: ResumeStatusStream = vi.hoisted(() => ({
@@ -27,6 +25,7 @@ const statusStream: ResumeStatusStream = vi.hoisted(() => ({
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: rpc,
+  pairedRestartOffersSupport: async () => 'supported',
   subscribeStructuredAgentSessionStatus: async (
     _target: unknown,
     emit: (event: Parameters<ResumeStatusStream['emit']>[0]) => void
@@ -39,7 +38,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { dismiss: vi.fn() }) }))
 
 const { mount, button, offerIds, toasts, fakeHost, runStatus } = createResumeModalFixture(
   rpc,
@@ -78,8 +77,8 @@ it('resumes a 21-chat selection with one action and no redundant listing', async
           continued: candidates.map(({ sessionId }) => ({ sessionId, outcome: 'continued' }))
         }
   )
-  await refreshNativeChatRestartOffer()
-  await continueNativeChatRestartOffer(candidates.map(({ sessionId }) => sessionId))
+  await readLocalOffer()
+  await continueLocal(candidates.map(({ sessionId }) => sessionId))
   expect(rpc.mock.calls.map((call) => [call[1], call[2]])).toEqual([
     ['agentSession.restartResumable', undefined],
     ['agentSession.restartContinue', { sessionIds: candidates.map(({ sessionId }) => sessionId) }]
@@ -105,13 +104,10 @@ it('uses the host unconfirmed result after a lost bulk reply without reporting a
         }
   })
   try {
-    await refreshNativeChatRestartOffer()
-    await continueNativeChatRestartOffer(['a', 'b'])
+    await readLocalOffer()
+    await continueLocal(['a', 'b'])
     expect(toasts()).toEqual([['Couldn’t confirm 2 chats were resumed']])
-    expect(getNativeChatRestartOffer().failed.map((row) => row.outcome)).toEqual([
-      'unconfirmed',
-      'unconfirmed'
-    ])
+    expect(localOffer().failed.map((row) => row.outcome)).toEqual(['unconfirmed', 'unconfirmed'])
   } finally {
     warn.mockRestore()
   }
@@ -137,7 +133,7 @@ it('publishes a refusal reply without needing a second host read', async () => {
   await act(async () => button('Resume 1 chat').click())
   expect(reads).toBe(1)
   expect(offerIds()).toEqual(['b'])
-  expect(getNativeChatRestartOffer().failed.map((row) => row.sessionId)).toEqual(['a'])
+  expect(localOffer().failed.map((row) => row.sessionId)).toEqual(['a'])
   expect(toasts()).toEqual([['1 chat couldn’t be resumed']])
 })
 
@@ -268,7 +264,7 @@ it('uses reply skipped ids even when the skip frame was missed', async () => {
         }
   )
   await mount(<NativeChatResumeOnRestartModal />)
-  await act(async () => continueNativeChatRestartOffer(['a', 'b']))
+  await act(async () => continueLocal(['a', 'b']))
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 1 of 1 chat')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('All1')
   expect(runStatus('Prompt b')).toBeNull()
@@ -283,7 +279,7 @@ it.each(['unknown', 'pending'] as const)(
         : { sessions: [], failed: [], continued: [{ sessionId: 'a', outcome }] }
     )
     await mount(<NativeChatResumeOnRestartModal />)
-    await act(async () => continueNativeChatRestartOffer(['a']))
+    await act(async () => continueLocal(['a']))
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 1 of 1 chat')
     expect(runStatus('Prompt a')).toBe('Prompt a: Resumed')
     expect(toasts()).toEqual([['Resumed 1 chat']])
@@ -293,7 +289,7 @@ it.each(['unknown', 'pending'] as const)(
 it('dismissing a failure after the reply never promotes it to resumed history', async () => {
   fakeHost({ sessions: [offered[0]!] }, () => 'unknown')
   await mount(<NativeChatResumeOnRestartModal />)
-  await act(async () => continueNativeChatRestartOffer(['a']))
+  await act(async () => continueLocal(['a']))
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 0 of 1 chat')
   const dismiss = document.querySelector<HTMLButtonElement>('button[aria-label^="Dismiss"]')
   expect(dismiss).not.toBeNull()
@@ -311,7 +307,7 @@ it('keeps an unknown reply unconfirmed when it carries no confirmed failure list
       : { sessions: [], continued: [{ sessionId: 'a', outcome: 'unknown' }] }
   )
   await mount(<NativeChatResumeOnRestartModal />)
-  await act(async () => continueNativeChatRestartOffer(['a']))
+  await act(async () => continueLocal(['a']))
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 0 of 1 chat')
   expect(runStatus('Prompt a')).toBeNull()
   expect(toasts()).toEqual([['Couldn’t confirm 1 chat was resumed']])
@@ -335,7 +331,7 @@ it('a retry hides its old failure, then a dismissed final failure leaves Need yo
   const dismiss = document.querySelector<HTMLButtonElement>('button[aria-label^="Dismiss"]')
   expect(dismiss).not.toBeNull()
   await act(async () => dismiss?.click())
-  expect(getNativeChatRestartOffer().failed).toEqual([])
+  expect(localOffer().failed).toEqual([])
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Need you0')
   expect(runStatus('Prompt b')).toBeNull()
 })

@@ -42,6 +42,26 @@ beforeEach(() => {
 })
 
 describe('revealStructuredSession', () => {
+  it('asks the machine the caller names, under its pairing, never the workspace owner', async () => {
+    mocks.environmentIdFor.mockReturnValue('env-other')
+
+    await expect(
+      revealStructuredSession({
+        ...target,
+        target: { kind: 'environment', environmentId: 'studio' },
+        pairingRevision: 7
+      })
+    ).resolves.toBe('revealed')
+
+    expect(mocks.environmentIdFor).not.toHaveBeenCalled()
+    expect(mocks.call).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'studio' },
+      'agentSession.reveal',
+      { sessionId: 'session-1' },
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 7 })
+    )
+  })
+
   it('asks a local host without a capability round trip', async () => {
     // The renderer and its local host are one build, so probing would only cost a round trip on a
     // user's click to prove something already known.

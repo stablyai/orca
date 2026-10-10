@@ -11,15 +11,20 @@ import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest
 } from '../native-chat-resume-on-restart-dialog'
-import { _resetNativeChatRestartOffer } from '../native-chat-resume-on-restart-store'
+import { _resetNativeChatRestartOffer } from '../native-chat-restart-offer-triggers'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
+import { nativeChatResumePendingText } from './native-chat-resume-status-text'
+import { readNativeChatRestartMachine } from '../native-chat-resume-on-restart-store'
+import { pairedEnvironment } from '../native-chat-restart-offer-test-support'
 
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: rpc,
+  pairedRestartOffersSupport: async () => 'supported',
   // A failed row opens the status feed; these cases never drive it.
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { dismiss: vi.fn() }) }))
 
 const candidates: ResumeCandidate[] = [
   {
@@ -28,7 +33,8 @@ const candidates: ResumeCandidate[] = [
     agent: 'codex',
     trigger: 'quit',
     latestPrompt: 'Fix it',
-    recordedAt: 1
+    recordedAt: 1,
+    origin: 'own'
   },
   {
     sessionId: 'b',
@@ -36,7 +42,8 @@ const candidates: ResumeCandidate[] = [
     agent: 'claude',
     trigger: 'update',
     latestPrompt: 'Review it',
-    recordedAt: 2
+    recordedAt: 2,
+    origin: 'own'
   }
 ]
 
@@ -92,14 +99,14 @@ describe('NativeChatResumeStatusSegment', () => {
     expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
     expect(screen.getByText('2 chats to resume')).toBeTruthy()
 
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBeNull()
     await act(async () => screen.getByRole('button').click())
     // The launch read, then a second one taken before the dialog is allowed to reopen.
     expect(rpc.mock.calls.map((call) => call[1])).toEqual([
       'agentSession.restartResumable',
       'agentSession.restartResumable'
     ])
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+    expect(getNativeChatResumeOnRestartDialogRequest()).toEqual({ focus: 'local' })
   })
 
   // The offer is spent once acted on, so this entry is the one summary a failed resume leaves.
@@ -122,7 +129,7 @@ describe('NativeChatResumeStatusSegment', () => {
 
     rpc.mockResolvedValue({ sessions: [], failed: [failed] })
     await act(async () => entry.click())
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+    expect(getNativeChatResumeOnRestartDialogRequest()).toEqual({ focus: 'local' })
     // With the offer gone, only the failure entry is left — and it stays.
     expect(screen.queryByText('1 chat to resume')).toBeNull()
     expect(screen.getByText('1 chat failed to resume')).toBeTruthy()
@@ -163,9 +170,9 @@ describe('NativeChatResumeStatusSegment', () => {
     rpc.mockResolvedValueOnce({ sessions: candidates }).mockResolvedValue({ sessions: [] })
     await mount()
 
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBeNull()
     await act(async () => screen.getByRole('button').click())
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
   })
 
@@ -252,5 +259,157 @@ describe('NativeChatResumeStatusSegment', () => {
 
     expect(screen.getByRole('button').textContent).toContain('2')
     expect(screen.queryByText('2 chats to resume')).toBeNull()
+  })
+
+  // One entry across machines: it names the machine only when there is just one.
+  it('names a paired server when it is the only machine with chats, and opens on it', async () => {
+    rpc.mockImplementation(async (target) =>
+      target.kind === 'environment' ? { sessions: candidates } : { sessions: [] }
+    )
+    useAppStore.setState({
+      runtimeEnvironments: [pairedEnvironment('studio', 'studio-mac')]
+    })
+    await mount()
+    await act(async () => {
+      await readNativeChatRestartMachine({ kind: 'environment', environmentId: 'studio' })
+    })
+    expect(screen.getByText('2 chats to resume on studio-mac')).toBeTruthy()
+    await act(async () => screen.getByRole('button').click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toEqual({ focus: 'environment:studio' })
+  })
+
+  // Another device's or an automation's chats are theirs to resume; the entry counts the user's.
+  it("counts only the user's own chats, and adds nothing for a server holding only others'", async () => {
+    const others = (['other-device', 'automation', 'server-made'] as const).map(
+      (origin, index) => ({
+        ...candidates[0]!,
+        sessionId: `o${index}`,
+        origin
+      })
+    )
+    let studio = [...candidates, ...others]
+    rpc.mockImplementation(async (target) =>
+      target.kind === 'environment' ? { sessions: studio } : { sessions: [] }
+    )
+    useAppStore.setState({
+      runtimeEnvironments: [pairedEnvironment('studio', 'studio-mac')]
+    })
+    await mount()
+    await act(async () => {
+      await readNativeChatRestartMachine({ kind: 'environment', environmentId: 'studio' })
+    })
+    expect(screen.getByText('2 chats to resume on studio-mac')).toBeTruthy()
+    studio = others
+    await act(async () => {
+      await readNativeChatRestartMachine({ kind: 'environment', environmentId: 'studio' })
+    })
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  // A server's provider refused to carry the user's chat on: the entry says so, counting only the
+  // user's own failures, and opens on that server. The failed label names no machine; the dialog does.
+  it('counts only the user’s own failures on a paired server, and opens on it', async () => {
+    const failure = (sessionId: string, origin: 'own' | 'other-device') => ({
+      ...candidates[0]!,
+      sessionId,
+      origin,
+      failedAt: 60_000,
+      outcome: 'refused',
+      reason: 'provider_refused_continuation'
+    })
+    rpc.mockImplementation(async (target) =>
+      target.kind === 'environment'
+        ? { sessions: [], failed: [failure('a', 'own'), failure('o', 'other-device')] }
+        : { sessions: [] }
+    )
+    useAppStore.setState({
+      runtimeEnvironments: [pairedEnvironment('studio', 'studio-mac')]
+    })
+    await mount()
+    await act(async () => {
+      await readNativeChatRestartMachine({ kind: 'environment', environmentId: 'studio' })
+    })
+    const entry = screen.getByRole('button', {
+      name: '1 chat failed to resume. Click for details.'
+    })
+    expect(entry.textContent).toBe('1 chat failed to resume')
+    await act(async () => entry.click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toEqual({ focus: 'environment:studio' })
+  })
+
+  it('counts every machine in one entry and opens on none in particular', async () => {
+    rpc.mockImplementation(async (target) =>
+      target.kind === 'environment' ? { sessions: candidates } : { sessions: [candidates[0]] }
+    )
+    useAppStore.setState({
+      runtimeEnvironments: [pairedEnvironment('studio', 'studio-mac')]
+    })
+    await mount()
+    await act(async () => {
+      await readNativeChatRestartMachine({ kind: 'environment', environmentId: 'studio' })
+    })
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.getByText('3 chats to resume')).toBeTruthy()
+    await act(async () => screen.getByRole('button').click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toEqual({ focus: null })
+  })
+
+  it('breaks the tooltip down by machine only when there is more than one', () => {
+    expect(
+      nativeChatResumePendingText(4, null, [
+        { count: 1, name: 'Local Mac' },
+        { count: 2, name: 'studio-mac' },
+        { count: 1, name: 'build-box' }
+      ]).tooltip
+    ).toBe('4 chats to resume: 1 on Local Mac, 2 on studio-mac, 1 on build-box. Click to choose.')
+    expect(
+      nativeChatResumePendingText(2, 'studio-mac', [{ count: 2, name: 'studio-mac' }])
+    ).toEqual({
+      label: '2 chats to resume on studio-mac',
+      ariaLabel: '2 chats available to resume',
+      tooltip: 'Open interrupted chats available to resume'
+    })
+    expect(nativeChatResumePendingText(1, null, [{ count: 1, name: 'Local Mac' }]).label).toBe(
+      '1 chat to resume'
+    )
+  })
+
+  // Read first, as this computer's entry always has; a server out of contact is not waited on.
+  it('re-reads this computer and opens over a disconnected server’s last listing', async () => {
+    let hang = false
+    rpc.mockImplementation((target) => {
+      if (hang && target.kind === 'environment') {
+        // An unreachable server: a re-read would never answer.
+        return new Promise(() => {})
+      }
+      return Promise.resolve({ sessions: candidates })
+    })
+    useAppStore.setState({
+      runtimeEnvironments: [pairedEnvironment('studio', 'studio-mac')]
+    })
+    await mount()
+    await act(async () => {
+      await readNativeChatRestartMachine({ kind: 'environment', environmentId: 'studio' })
+    })
+    hang = true
+    await act(async () => screen.getByRole('button').click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toEqual({ focus: null })
+    // This computer was asked again; the server, with no connection, was not.
+    expect(
+      rpc.mock.calls
+        .filter((call) => call[1] === 'agentSession.restartResumable')
+        .map((call) => call[0].kind)
+    ).toEqual(['local', 'environment', 'local'])
+  })
+
+  // A failed re-read is loss of contact, never evidence the offers are gone: keep the last answer.
+  it('keeps the last answer when a refresh of this computer fails', async () => {
+    rpc.mockResolvedValueOnce({ sessions: candidates }).mockRejectedValue(new Error('host busy'))
+    await mount()
+    expect(screen.getByText('2 chats to resume')).toBeTruthy()
+    await act(async () => {
+      await readNativeChatRestartMachine({ kind: 'local' })
+    })
+    expect(screen.getByText('2 chats to resume')).toBeTruthy()
   })
 })

@@ -6,15 +6,15 @@ import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStat
 import {
   createResumeModalFixture,
   type RestartRpc,
-  type ResumeStatusStream
+  type ResumeStatusStream,
+  readLocalOffer
 } from './native-chat-resume-modal.test-support'
 import { lastToastShow } from './native-chat-resume-toast.test-support'
+import { _resetNativeChatRestartOffer } from './native-chat-restart-offer-triggers'
 import {
-  _resetNativeChatRestartOffer,
-  getNativeChatRestartRun,
-  refreshNativeChatRestartOffer,
-  releaseFinishedNativeChatRestartRun
-} from './native-chat-resume-on-restart-store'
+  getNativeChatRestartRuns,
+  releaseFinishedNativeChatRestartRuns
+} from './native-chat-restart-runs'
 import {
   consumeNativeChatResumeOnRestartDialogRequest,
   requestNativeChatResumeOnRestartDialog
@@ -29,6 +29,7 @@ const statusStream: ResumeStatusStream = vi.hoisted(() => ({
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: rpc,
+  pairedRestartOffersSupport: async () => 'supported',
   subscribeStructuredAgentSessionStatus: async (
     _target: unknown,
     emit: ResumeStatusStream['emit']
@@ -38,7 +39,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     return { unsubscribe: () => {} }
   }
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { dismiss: vi.fn() }) }))
 
 const { mount, button, fakeHost, runStatus, toasts } = createResumeModalFixture(rpc, statusStream)
 const dialog = () => document.querySelector('[role="dialog"]')?.textContent
@@ -162,7 +163,7 @@ it('does not consume a finished run if its requested view never rendered', async
   await act(async () => {
     requestNativeChatResumeOnRestartDialog()
     consumeNativeChatResumeOnRestartDialogRequest()
-    releaseFinishedNativeChatRestartRun()
+    releaseFinishedNativeChatRestartRuns()
   })
   expect(dialog()).toBeUndefined()
   await act(async () => lastToastShow()?.())
@@ -183,8 +184,8 @@ it('keeps the run out of settings and storage and loses it on a fresh renderer s
     expect(storage).not.toHaveBeenCalled()
     await mount(null)
     _resetNativeChatRestartOffer()
-    expect(getNativeChatRestartRun()).toBeNull()
-    await refreshNativeChatRestartOffer()
+    expect(getNativeChatRestartRuns().size).toBe(0)
+    await readLocalOffer()
     await mountSurfaces()
     await act(async () => button('1 chat failed to resume').click())
     expect(dialog()).toContain('Resume interrupted chats?')

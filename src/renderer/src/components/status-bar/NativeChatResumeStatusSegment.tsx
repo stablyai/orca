@@ -1,20 +1,33 @@
 import { AlertCircle, Loader2, RotateCcw } from 'lucide-react'
 import { useNativeChatRestartOfferEnabled } from '../native-chat-restart-offer-gate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
 import {
-  reopenNativeChatRestartOffer,
-  useNativeChatRestartOffer,
-  useNativeChatRestartRun
-} from '../native-chat-resume-on-restart-store'
+  checkText,
+  failedText,
+  nativeChatResumePendingText,
+  resumingText
+} from './native-chat-resume-status-text'
+import { useNativeChatRestartOffers } from '../native-chat-resume-on-restart-store'
+import { useNativeChatRestartRuns } from '../native-chat-restart-runs'
 import { resumeRunInFlight } from '../native-chat-resume-run'
 import { resumeRunView } from '../native-chat-resume-run-view'
+import { reopenNativeChatRestartOffer } from '../native-chat-restart-offer-reopen'
+import { useNativeChatRestartOfferSources } from '../native-chat-restart-offer-triggers'
+import { LOCAL_RESTART_MACHINE, type RestartMachineKey } from '../native-chat-restart-machines'
+import { restartMachineNameFromState } from '../native-chat-restart-machine-name'
+import { useAppStore } from '../../store'
+import type { ResumeCandidate } from '../native-chat-resume-on-restart-grouping'
+import { resumeCandidateOwnership } from '../native-chat-resume-ownership'
 
-// Why: closing the resume dialog is a snooze, not a decline — the host keeps the offer. This is
+// Why: closing the resume dialog is a snooze, not a decline — each host keeps its offer. This is
 // then the only surface left carrying it, so it is always rendered rather than gated by
 // `statusBarItems`. Pressing Resume closes the dialog too, so this entry carries the run while it
-// is in flight. It is also the lasting summary of chats the resume could not carry on: its
-// toast says so once, and each chat it reached carries its own note.
+// is in flight. It is also the lasting summary of the user's own chats a resume could not carry
+// on: its toast says so once, and each chat it reached carries its own note.
+//
+// ONE entry across every machine: the dialog covers them all. It counts only the user's own chats
+// (another device's or an automation's are listed in the dialog, not counted here), names the
+// machine only when there is just one, and its tooltip breaks the count down by machine.
 
 function Segment({
   icon,
@@ -22,7 +35,8 @@ function Segment({
   ariaLabel,
   tooltip,
   iconOnly,
-  count
+  count,
+  machines
 }: {
   icon: React.ReactNode
   label: string
@@ -30,13 +44,14 @@ function Segment({
   tooltip: string
   iconOnly: boolean
   count: number
+  machines: readonly RestartMachineKey[]
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          onClick={() => void reopenNativeChatRestartOffer()}
+          onClick={() => void reopenNativeChatRestartOffer(machines)}
           className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
           aria-label={ariaLabel}
         >
@@ -51,156 +66,93 @@ function Segment({
   )
 }
 
-type SegmentText = { label: string; ariaLabel: string; tooltip: string }
-
-/** Chats answered out of the chats asked, each counted as its own answer arrives. */
-function resumingText(done: number, total: number): SegmentText {
-  return {
-    label: translate(
-      'auto.components.status.bar.NativeChatResumeStatusSegment.resumingProgressLabel',
-      'Resuming chats {{value0}}/{{value1}}',
-      { value0: done, value1: total }
-    ),
-    ariaLabel: translate(
-      'auto.components.status.bar.NativeChatResumeStatusSegment.resumingProgressAria',
-      'Resuming chats, {{value0}} of {{value1}} done. Click to open details.',
-      { value0: done, value1: total }
-    ),
-    tooltip: translate(
-      'auto.components.status.bar.NativeChatResumeStatusSegment.resumingTooltip',
-      'Restoring interrupted chats and asking them to carry on…'
-    )
-  }
-}
-
-function failedText(count: number): SegmentText {
-  return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabelOne',
-            '1 chat failed to resume'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedLabel',
-            '{{value0}} chats failed to resume',
-            { value0: count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAriaOne',
-            '1 chat failed to resume. Click for details.'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.failedAria',
-            '{{value0}} chats failed to resume. Click for details.',
-            { value0: count }
-          ),
-    tooltip: translate(
-      'auto.components.status.bar.NativeChatResumeStatusSegment.failedTooltip',
-      'Chats Orca could not resume after the restart. Click for details.'
-    )
-  }
-}
-
-/** True of a refused chat and an unconfirmed one alike, for a list holding either. */
-function checkText(count: number): SegmentText {
-  return {
-    label:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabelOne',
-            '1 chat to check'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkLabel',
-            '{{value0}} chats to check',
-            { value0: count }
-          ),
-    ariaLabel:
-      count === 1
-        ? translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAriaOne',
-            '1 chat to check after resuming. Click for details.'
-          )
-        : translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.checkAria',
-            '{{value0}} chats to check after resuming. Click for details.',
-            { value0: count }
-          ),
-    tooltip: translate(
-      'auto.components.status.bar.NativeChatResumeStatusSegment.checkTooltip',
-      'Chats Orca couldn’t resume, or couldn’t confirm it resumed, after the restart. Click for details.'
-    )
-  }
-}
-
 export function NativeChatResumeStatusSegment({
   iconOnly
 }: {
   iconOnly: boolean
 }): React.JSX.Element | null {
-  const offerEnabled = useNativeChatRestartOfferEnabled()
-  const { candidates, failed } = useNativeChatRestartOffer(offerEnabled)
-  const run = useNativeChatRestartRun()
-  const failureBySession = new Map(failed.map((entry) => [entry.sessionId, entry]))
-  const view = run ? resumeRunView(run, candidates, (id) => failureBySession.get(id), 'all') : null
-  if (!offerEnabled) {
-    return null
+  const localEnabled = useNativeChatRestartOfferEnabled()
+  useNativeChatRestartOfferSources(localEnabled)
+  const offers = useNativeChatRestartOffers()
+  const runs = useNativeChatRestartRuns()
+  const machines = [...offers.keys()]
+  // Joined so the selector returns a primitive and re-renders only when a name changes.
+  const names = useAppStore((state) =>
+    machines.map((machine) => restartMachineNameFromState(state, machine)).join('\u0000')
+  ).split('\u0000')
+  const nameByMachine = new Map(machines.map((machine, index) => [machine, names[index]]))
+  // Chats answered out of the chats asked while a resume runs, counted over every machine it
+  // reached (a machine already done included), as the dialog counts it.
+  let resumingDone = 0
+  let resumingTotal = 0
+  const resumingMachines = [...runs]
+    .filter(([, entry]) => resumeRunInFlight(entry.run))
+    .map(([machine]) => machine)
+  for (const [machine, { run }] of resumingMachines.length > 0 ? runs : []) {
+    const offer = offers.get(machine)
+    const failureById = new Map(offer?.failed.map((failure) => [failure.sessionId, failure]))
+    const { counts } = resumeRunView(
+      run,
+      offer?.candidates ?? [],
+      (sessionId) => failureById.get(sessionId),
+      'all'
+    )
+    resumingDone += counts.done
+    resumingTotal += counts.total
   }
-
-  // Count the selection once until the action publishes the host's remaining list.
-  const running = run !== null && resumeRunInFlight(run)
-  const inRun = new Set(running ? run.entries.map((entry) => entry.candidate.sessionId) : [])
-  const waiting = failed.filter((failure) => !inRun.has(failure.sessionId))
-  const pending = candidates.filter((candidate) => !inRun.has(candidate.sessionId)).length
-  const failures = waiting.length
-  // An unconfirmed chat may be working, so "failed" would invite a duplicate "continue".
-  const unconfirmed = waiting.some((failure) => failure.outcome === 'unconfirmed')
+  let pending = 0
+  let failures = 0
+  let unconfirmed = false
+  const breakdown: { machine: RestartMachineKey; count: number; name: string }[] = []
+  const failingMachines: RestartMachineKey[] = []
+  for (const [machine, offer] of offers) {
+    // A chat being resumed is counted once, as in flight, until the host answers for it. Only the
+    // user's own chats count: another device's or an automation's are theirs to resume.
+    const run = runs.get(machine)?.run
+    const inFlight = new Set(
+      run && resumeRunInFlight(run) ? run.entries.map((entry) => entry.candidate.sessionId) : []
+    )
+    const counted = (row: ResumeCandidate): boolean =>
+      !inFlight.has(row.sessionId) && resumeCandidateOwnership(row) === 'own'
+    const waiting = offer.failed.filter(counted)
+    const machinePending = offer.candidates.filter(counted).length
+    pending += machinePending
+    failures += waiting.length
+    if (waiting.length > 0) {
+      failingMachines.push(machine)
+    }
+    // An unconfirmed chat may be working, so "failed" would invite a duplicate "continue".
+    unconfirmed ||= waiting.some((failure) => failure.outcome === 'unconfirmed')
+    if (machinePending > 0) {
+      breakdown.push({
+        machine,
+        count: machinePending,
+        name: nameByMachine.get(machine) ?? machine
+      })
+    }
+  }
+  const onlyPairedName =
+    breakdown.length === 1 && breakdown[0]!.machine !== LOCAL_RESTART_MACHINE
+      ? breakdown[0]!.name
+      : null
   return (
     <>
-      {running && (
+      {resumingMachines.length > 0 && (
         <Segment
           iconOnly={iconOnly}
-          count={view?.counts.total ?? 0}
+          count={resumingTotal}
+          machines={resumingMachines}
           icon={<Loader2 className="size-3 animate-spin text-muted-foreground" />}
-          {...resumingText(view?.counts.done ?? 0, view?.counts.total ?? 0)}
+          {...resumingText(resumingDone, resumingTotal)}
         />
       )}
       {pending > 0 && (
         <Segment
           iconOnly={iconOnly}
           count={pending}
+          machines={breakdown.map((entry) => entry.machine)}
           icon={<RotateCcw className="size-3 text-muted-foreground" />}
-          label={
-            pending === 1
-              ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.labelOne',
-                  '1 chat to resume'
-                )
-              : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.label',
-                  '{{value0}} chats to resume',
-                  { value0: pending }
-                )
-          }
-          ariaLabel={
-            pending === 1
-              ? translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabelOne',
-                  '1 chat available to resume'
-                )
-              : translate(
-                  'auto.components.status.bar.NativeChatResumeStatusSegment.ariaLabel',
-                  '{{value0}} chats available to resume',
-                  { value0: pending }
-                )
-          }
-          tooltip={translate(
-            'auto.components.status.bar.NativeChatResumeStatusSegment.tooltip',
-            'Open interrupted chats available to resume'
-          )}
+          {...nativeChatResumePendingText(pending, onlyPairedName, breakdown)}
         />
       )}
       {failures > 0 && (
@@ -209,6 +161,7 @@ export function NativeChatResumeStatusSegment({
         <Segment
           iconOnly={iconOnly}
           count={failures}
+          machines={failingMachines}
           icon={<AlertCircle className="size-3 text-status-warning" />}
           {...(unconfirmed ? checkText(failures) : failedText(failures))}
         />

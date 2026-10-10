@@ -58,6 +58,17 @@ function installRestartHost() {
         return gone.length
       }
     ),
+    dismissListed: vi.fn(
+      async (
+        listed: readonly { sessionId: string }[],
+        audience?: StructuredAgentSessionRestartAudience
+      ) => {
+        const named = new Set(listed.map((offer) => offer.sessionId))
+        const gone = restartRowsFor(offers, audience).filter((offer) => named.has(offer.sessionId))
+        offers = offers.filter((offer) => !gone.includes(offer))
+        return gone.length
+      }
+    ),
     continueAfterRestart: vi.fn(
       async (
         _sessionIds: readonly string[] | undefined,
@@ -108,6 +119,19 @@ describe("a paired client too old to show the host's other agents", () => {
       )
     ).toMatchObject({ ok: true, result: { dismissed: 0, sessions: [CLAUDE_OFFER], failed: [] } })
     expect(host.offers()).toEqual([CLAUDE_OFFER, GROK_OFFER])
+  })
+
+  it('cannot dismiss an offer it was not shown by listing it', async () => {
+    const host = installRestartHost()
+    const listed = [CLAUDE_OFFER, GROK_OFFER].map(({ sessionId }) => ({ sessionId, recordedAt: 1 }))
+    expect(
+      await call(
+        'agentSession.restartResumableDismiss',
+        { sessionIds: listed.map((offer) => offer.sessionId), offers: listed },
+        OLD_CLIENT
+      )
+    ).toMatchObject({ ok: true, result: { dismissed: 1, sessions: [], failed: [] } })
+    expect(host.offers()).toEqual([GROK_OFFER])
   })
 
   it('hands the host its audience when it continues all, so hidden offers are not run', async () => {

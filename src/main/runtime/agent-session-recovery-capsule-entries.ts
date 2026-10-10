@@ -215,16 +215,90 @@ export function shouldReplaceMarker(
 /** Records "dismiss all" leaves as they were: this host does not list them (a newer Orca's chats). */
 export type KeepRecord = (marker: AgentSessionResumeMarker) => boolean
 
-/** What a "dismiss all" keeps, and how many pending offers it ends. */
+/** What a "dismiss all" keeps, and how many pending offers it ends. A chat another action is
+ *  resuming right now (another device's, on a shared host) stays with its earlier failure for that
+ *  action to settle; the action lease ends a reservation whose action died. */
 export function splitDismissedAll(
   state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
   keep: KeepRecord
 ): { kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>; dismissedPending: number } {
-  const entries = state.entries.filter((entry) => keep(entry.marker))
+  const resuming = new Set(
+    state.entries
+      .filter((entry) => entry.state === 'in-progress')
+      .map((entry) => entry.marker.sessionId)
+  )
+  const kept = (marker: AgentSessionResumeMarker): boolean =>
+    resuming.has(marker.sessionId) || keep(marker)
   return {
-    kept: { entries, failed: state.failed.filter((failure) => keep(failure.marker)) },
+    kept: {
+      entries: state.entries.filter((entry) => kept(entry.marker)),
+      failed: state.failed.filter((failure) => kept(failure.marker))
+    },
     dismissedPending: state.entries.filter(
       (entry) => entry.state === 'pending' && !keep(entry.marker)
     ).length
+  }
+}
+
+/** One offer as a client listed it: the chat and the interruption it was shown. */
+export type ListedRestartOffer = { sessionId: string; recordedAt: number }
+
+/** What dismissing listed offers keeps: a record no longer the one listed (a newer interruption),
+ *  and every record of a chat another action is resuming right now. */
+export function splitDismissedListed(
+  state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
+  listed: readonly ListedRestartOffer[],
+  keepRecord: KeepRecord = () => false
+): { kept: Pick<RecoveryCapsuleState, 'entries' | 'failed'>; dismissed: Set<string> } {
+  const shown = new Map(listed.map((offer) => [offer.sessionId, offer.recordedAt]))
+  const resuming = new Set(
+    state.entries
+      .filter((entry) => entry.state === 'in-progress')
+      .map((entry) => entry.marker.sessionId)
+  )
+  const dismissed = new Set<string>()
+  const keep = (marker: AgentSessionResumeMarker): boolean => {
+    if (
+      resuming.has(marker.sessionId) ||
+      shown.get(marker.sessionId) !== marker.recordedAt ||
+      keepRecord(marker)
+    ) {
+      return true
+    }
+    dismissed.add(marker.sessionId)
+    return false
+  }
+  return {
+    kept: {
+      entries: state.entries.filter((entry) => keep(entry.marker)),
+      failed: state.failed.filter((failure) => keep(failure.marker))
+    },
+    dismissed
+  }
+}
+
+/** Records the chat itself has since superseded go; witness-keyed, so a newer record stays. */
+export function withoutSuperseded(
+  state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
+  superseded: readonly { sessionId: string; recordedAt: number; failedAt?: number }[]
+): Pick<RecoveryCapsuleState, 'entries' | 'failed'> {
+  return {
+    entries: state.entries.filter(
+      (entry) =>
+        entry.state !== 'pending' ||
+        !superseded.some(
+          (gone) =>
+            gone.failedAt === undefined &&
+            gone.sessionId === entry.marker.sessionId &&
+            gone.recordedAt === entry.marker.recordedAt
+        )
+    ),
+    failed: state.failed.filter(
+      (failure) =>
+        !superseded.some(
+          (gone) =>
+            gone.sessionId === failure.marker.sessionId && gone.failedAt === failure.failedAt
+        )
+    )
   }
 }

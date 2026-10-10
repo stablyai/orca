@@ -15,6 +15,7 @@ import {
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
+import { AGENT_SESSION_PAIRED_RESTART_OFFERS_RUNTIME_CAPABILITY } from '../../../shared/agent-session-restart-capabilities'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
 import {
   callRuntimeRpc,
@@ -64,6 +65,23 @@ export function supportsStructuredAgentSessionQuietRepeatedStop(
   return structuredAgentSessionHostSupports(target, AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY)
 }
 
+/** Whether a paired server takes the restart-offer read on connect and named dismissal. A probe
+ *  that failed proves nothing either way, so it is `unknown`, never `unsupported`. */
+export async function pairedRestartOffersSupport(
+  environmentId: string
+): Promise<'supported' | 'unsupported' | 'unknown'> {
+  try {
+    return (await runtimeEnvironmentSupportsCapability(
+      environmentId,
+      AGENT_SESSION_PAIRED_RESTART_OFFERS_RUNTIME_CAPABILITY
+    ))
+      ? 'supported'
+      : 'unsupported'
+  } catch {
+    return 'unknown'
+  }
+}
+
 export function supportsStructuredAgentSessionQuestionAnswers(
   target: RuntimeClientTarget
 ): Promise<boolean> {
@@ -98,17 +116,26 @@ const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = 
   ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
   // The host may start an agent at rest before rewinding it, as it does for a command.
   ['agentSession.rewind', 195_000],
+  // The host answers once each continued chat's agent has started and taken the message.
+  ['agentSession.restartContinue', 195_000],
   // A waiting catalog read lasts as long as the host's listing: Claude's is 60 s, after up to 15 s
   // for an account switch to settle and 5 s of login-shell environment.
   ['agentSession.modelCatalog', 90_000]
 ])
 
+/** The pairing a caller's state was read under; a server re-paired since is refused before the
+ *  call is sent (`runtime_environment_changed`) instead of acting on another server's state. */
+export type StructuredAgentSessionCallFence = {
+  expectedEnvironmentPairingRevision?: number
+}
+
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown,
-  /** For a caller that checked the remote host's compatibility itself, just before. */
-  options: { skipCompatibilityCheck?: true } = {}
+  /** A fence refuses the call once the server is re-paired; a caller that checked the remote host's
+   *  compatibility itself, just before, may skip that check. */
+  options: StructuredAgentSessionCallFence & { skipCompatibilityCheck?: true } = {}
 ): Promise<TResult> {
   if (
     method === 'agentSession.rewind' &&
@@ -121,12 +148,10 @@ export async function callStructuredAgentSession<TResult>(
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
   const timeoutMs = STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS.get(method)
-  return timeoutMs === undefined && !options.skipCompatibilityCheck
+  const callOptions = { ...(timeoutMs === undefined ? {} : { timeoutMs }), ...options }
+  return Object.keys(callOptions).length === 0
     ? callRuntimeRpc<TResult>(target, method, params)
-    : callRuntimeRpc<TResult>(target, method, params, {
-        ...(timeoutMs === undefined ? {} : { timeoutMs }),
-        ...options
-      })
+    : callRuntimeRpc<TResult>(target, method, params, callOptions)
 }
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(

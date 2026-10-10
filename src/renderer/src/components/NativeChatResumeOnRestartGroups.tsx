@@ -26,8 +26,10 @@ import {
   chatState,
   coveredKeys,
   ResumeTreeDepthContext,
+  treeBusy,
   useResumeTreeExpansion,
   type FailureProps,
+  type MachineProps,
   type TreeProps
 } from './native-chat-resume-tree-state'
 import {
@@ -62,6 +64,7 @@ export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 /** A group node: its row, then (while open) what is under it. */
 function GroupNode({
   nodeKey,
+  hostId,
   depth,
   name,
   checkboxLabel,
@@ -71,6 +74,7 @@ function GroupNode({
   children
 }: {
   nodeKey: string
+  hostId: ExecutionHostId
   depth: number
   name: string
   checkboxLabel: string
@@ -81,16 +85,16 @@ function GroupNode({
   children: React.ReactNode
 }): React.JSX.Element {
   const selection = resumeSelectionState(covered, tree.selected)
-  const expanded = tree.isExpanded(nodeKey)
+  const expanded = tree.isExpanded(nodeKey, hostId)
   return (
     <>
       <ResumeTreeRow
         depth={depth}
         expanded={expanded}
-        onExpandedChange={(next) => tree.setExpanded(nodeKey, next)}
+        onExpandedChange={(next) => tree.setExpanded(nodeKey, next, hostId)}
         name={name}
         checked={selection.checked}
-        disabled={tree.busy || selection.total === 0}
+        disabled={treeBusy(tree, hostId) || selection.total === 0}
         onCheckedChange={() => toggleResumeSelection(covered, selection, tree.onToggle)}
         checkboxLabel={checkboxLabel}
       >
@@ -125,6 +129,7 @@ function WorkspaceNode({
   return (
     <GroupNode
       nodeKey={`workspace:${hostId}:${group.workspaceId}`}
+      hostId={hostId}
       depth={depth}
       name={name}
       checkboxLabel={translate(
@@ -156,10 +161,11 @@ function WorkspaceNode({
               workspaceName={name}
               listedAt={tree.listedAt}
               checked={chat.checked}
-              disabled={tree.busy}
+              disabled={treeBusy(tree, hostId)}
               onCheckedChange={chat.onCheckedChange}
               failure={chat.failure}
-              onFailureAction={tree.onFailureAction}
+              onFailureAction={chat.onFailureAction}
+              originLabel={chat.originLabel}
               renderStatus={chat.renderStatus}
             />
           )
@@ -205,6 +211,7 @@ function ProjectNode({
   return (
     <GroupNode
       nodeKey={`project:${hostId}:${repoId}`}
+      hostId={hostId}
       depth={depth}
       name={header.name}
       checkboxLabel={translate(
@@ -299,18 +306,21 @@ function MachineNode({
   candidates,
   workspaces,
   hostLabelById,
+  subtitle,
   tree
 }: {
   hostId: ExecutionHostId
   candidates: readonly ResumeCandidate[]
   workspaces: readonly ResumeWorkspaceGroup[]
   hostLabelById: ReadonlyMap<ExecutionHostId, string>
+  subtitle: string | undefined
   tree: TreeProps
 }): React.JSX.Element {
   const name = getHostContextLabel(hostId, { hostLabelById })
   return (
     <GroupNode
       nodeKey={`machine:${hostId}`}
+      hostId={hostId}
       depth={0}
       name={name}
       checkboxLabel={translate(
@@ -329,6 +339,9 @@ function MachineNode({
               label={translate('auto.components.NativeChatResumeOnRestartModal.sshHost', 'SSH')}
             />
           )}
+          {subtitle && (
+            <span className="min-w-0 truncate text-[11px] text-muted-foreground">{subtitle}</span>
+          )}
         </>
       }
     >
@@ -345,15 +358,15 @@ export function ResumeOnRestartGroups({
   onToggle,
   failureFor,
   onFailureAction,
-  renderStatus,
-  selectableIds
+  ...machineProps
 }: {
   candidates: readonly ResumeCandidate[]
   listedAt: number
   busy: boolean
   selected: ReadonlySet<string>
-  onToggle: (sessionId: string, checked: boolean) => void
-} & FailureProps): React.JSX.Element {
+  onToggle: (key: string, checked: boolean) => void
+} & FailureProps &
+  MachineProps): React.JSX.Element {
   const machines = useMemo(
     () =>
       groupResumeCandidatesByHost(candidates).map((machine) => ({
@@ -370,7 +383,11 @@ export function ResumeOnRestartGroups({
     () => new Map(hostOptions.map((host) => [host.id, host.label])),
     [hostOptions]
   )
-  const expansion = useResumeTreeExpansion()
+  const { defaultExpanded, listingOf } = machineProps
+  const expansion = useResumeTreeExpansion(
+    defaultExpanded,
+    listingOf && { listingOf, shown: machines.map((machine) => listingOf(machine.hostId)) }
+  )
   const tree: TreeProps = {
     listedAt,
     busy,
@@ -381,8 +398,7 @@ export function ResumeOnRestartGroups({
     ancestorsOf,
     failureFor,
     onFailureAction,
-    renderStatus,
-    selectableIds
+    ...machineProps
   }
   // Why: the machine is worth a level only when it is not obvious.
   const showMachines =
@@ -397,6 +413,7 @@ export function ResumeOnRestartGroups({
             candidates={machine.candidates}
             workspaces={machine.workspaces}
             hostLabelById={hostLabelById}
+            subtitle={machineProps.machineSubtitle?.(machine.hostId)}
             tree={tree}
           />
         ) : (

@@ -19,3 +19,22 @@ export function normalizeWorkspaceCreatorProvenance(
   }
   return undefined
 }
+
+/** Who made a workspace, from one viewer's side: the viewer themselves, the host machine's own user,
+ *  or another paired device. `viewerDeviceId` null is the host's own user. A workspace with no
+ *  creator record is the viewer's: the sidebar shows it as theirs. */
+export type WorkspaceCreatorRelation = 'viewer' | 'host' | 'other-device'
+
+export function workspaceCreatorRelation(
+  value: unknown,
+  viewerDeviceId: string | null
+): WorkspaceCreatorRelation {
+  const creator = normalizeWorkspaceCreatorProvenance(value)
+  if (!creator) {
+    return 'viewer'
+  }
+  if (creator.kind === 'host') {
+    return viewerDeviceId === null ? 'viewer' : 'host'
+  }
+  return creator.deviceId === viewerDeviceId ? 'viewer' : 'other-device'
+}

@@ -1,7 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentSessionResumeMarker } from '../../shared/agent-session-resume-marker'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import {
   durableWriteTempPath,
@@ -13,23 +12,29 @@ import { withFileTransactionLock } from '../file-transaction-lock'
 import {
   MAX_FAILURE_FIELD_LENGTH,
   normalizeState,
-  parseState,
   shouldReplaceMarker,
   splitDismissedAll,
+  splitDismissedListed,
+  withoutSuperseded,
   type AgentSessionResumeFailureInput,
   type AgentSessionResumeFailureRecord,
   type KeepRecord,
+  type ListedRestartOffer,
   type RecoveryCapsuleState,
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
+import {
+  MAX_RECOVERY_CAPSULE_BYTES,
+  readRecoveryCapsuleState
+} from './agent-session-recovery-capsule-read'
 
 export type {
   AgentSessionResumeFailureInput,
-  AgentSessionResumeFailureRecord
+  AgentSessionResumeFailureRecord,
+  ListedRestartOffer
 } from './agent-session-recovery-capsule-entries'
 
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
-const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
 
 /** Crash-leftover temp files only; offers themselves have no expiry. */
 const STALE_WRITE_TEMP_FILE_AGE_MS = 24 * 60 * 60 * 1000
@@ -48,6 +53,19 @@ export class AgentSessionRecoveryCapsule {
     return withFileTransactionLock(this.filePath, async () => {
       const { entries } = normalizeState(await this.readState(), now)
       return entries.filter((entry) => entry.state === 'pending').map((entry) => entry.marker)
+    })
+  }
+
+  /** Whether the file holds anything at all — any entry in any state, any failure — read raw so a
+   *  reservation or replacement counts too. Unreadable bytes count: only provable emptiness is no. */
+  holdsAnyRecord(): Promise<boolean> {
+    return withFileTransactionLock(this.filePath, async () => {
+      try {
+        const { entries, failed } = await this.readState()
+        return entries.length > 0 || failed.length > 0
+      } catch {
+        return true
+      }
     })
   }
 
@@ -232,6 +250,20 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
+  /** Forgets offers exactly as a client listed them. A chat interrupted again since, or being
+   *  resumed by another action right now, keeps its record: the listing never named those. A
+   *  record `keep` answers true for stays too, read against the stored marker under the lock. */
+  dismissListed(listed: readonly ListedRestartOffer[], now: number, keep?: KeepRecord) {
+    return withFileTransactionLock(this.filePath, async () => {
+      const state = await this.readState()
+      const { kept, dismissed } = splitDismissedListed(normalizeState(state, now), listed, keep)
+      if (dismissed.size > 0) {
+        await this.publish(kept, now, state.dismissedAt)
+      }
+      return dismissed.size
+    })
+  }
+
   /** Drops records the chat itself has since superseded — the user's own newer message ends both a
    *  pending offer and a recorded failure. Witness-keyed (`recordedAt`, and `failedAt` for a
    *  failure) so a fresh record written after the caller read the stale one is kept. */
@@ -242,25 +274,9 @@ export class AgentSessionRecoveryCapsule {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
-      const keptEntries = entries.filter(
-        (entry) =>
-          entry.state !== 'pending' ||
-          !superseded.some(
-            (gone) =>
-              gone.failedAt === undefined &&
-              gone.sessionId === entry.marker.sessionId &&
-              gone.recordedAt === entry.marker.recordedAt
-          )
-      )
-      const keptFailures = failed.filter(
-        (failure) =>
-          !superseded.some(
-            (gone) =>
-              gone.sessionId === failure.marker.sessionId && gone.failedAt === failure.failedAt
-          )
-      )
-      if (keptEntries.length !== entries.length || keptFailures.length !== failed.length) {
-        await this.publish({ entries: keptEntries, failed: keptFailures }, now, state.dismissedAt)
+      const kept = withoutSuperseded({ entries, failed }, superseded)
+      if (kept.entries.length !== entries.length || kept.failed.length !== failed.length) {
+        await this.publish(kept, now, state.dismissedAt)
       }
     })
   }
@@ -292,9 +308,9 @@ export class AgentSessionRecoveryCapsule {
         return 0
       }
       const { kept, dismissedPending } = splitDismissedAll(state, keep)
-      // Dismiss is the explicit user request to forget every recovery record it was shown. An
-      // in-flight action may still finish, but its later complete/rollback becomes a no-op and
-      // cannot resurrect a row the user dismissed.
+      // Dismiss is the explicit user request to forget every recovery record it was shown. A chat
+      // in-flight on another action was never shown (listing returns pending only); that action
+      // settles it, and the fence still stops a stale teardown writer.
       await this.publish(kept, now, now)
       return dismissedPending
     })
@@ -304,19 +320,8 @@ export class AgentSessionRecoveryCapsule {
     return entry.state === 'in-progress' && entry.operationId === operationId
   }
 
-  private async readState(): Promise<RecoveryCapsuleState> {
-    let raw: string
-    try {
-      raw = (await readNodeFileWithinLimit(this.filePath, MAX_CAPSULE_BYTES)).buffer.toString(
-        'utf8'
-      )
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return { entries: [], failed: [] }
-      }
-      throw error
-    }
-    return parseState(raw)
+  private readState(): Promise<RecoveryCapsuleState> {
+    return readRecoveryCapsuleState(this.filePath)
   }
 
   private async publish(
@@ -332,7 +337,7 @@ export class AgentSessionRecoveryCapsule {
         ...(dismissedAt === undefined ? {} : { dismissedAt }),
         ...(failed.length === 0 ? {} : { failed })
       },
-      MAX_CAPSULE_BYTES
+      MAX_RECOVERY_CAPSULE_BYTES
     )
     await removeStaleDurableWriteTempFiles(this.filePath, {
       minimumAgeMs: STALE_WRITE_TEMP_FILE_AGE_MS

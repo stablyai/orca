@@ -18,6 +18,47 @@ function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSess
 }
 
 describe('activateAiVaultStructuredSession', () => {
+  // The resume dialog knows which machine listed the chat and under which pairing; every step asks
+  // that machine under it, not whichever machine owns a workspace that happens to share the id.
+  it('asks the named machine under its pairing for the refresh, the reveal and the tab', async () => {
+    const parts = deps({
+      activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true)
+    })
+    const studio = { kind: 'environment', environmentId: 'studio' } as const
+
+    await expect(
+      activateAiVaultStructuredSession(structuredSession, parts, studio, { pairingRevision: 3 })
+    ).resolves.toBe(true)
+
+    expect(parts.refresh).toHaveBeenCalledWith('workspace-1', studio, { pairingRevision: 3 })
+    const named = {
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target: studio,
+      pairingRevision: 3
+    }
+    expect(parts.reveal).toHaveBeenCalledWith(named)
+    expect(parts.activate).toHaveBeenLastCalledWith(named)
+  })
+
+  it('treats the same session id on two machines as two activations, not one in flight', async () => {
+    const pending = Promise.withResolvers<void>()
+    const parts = deps({
+      activate: vi.fn(() => false),
+      refresh: vi.fn(() => pending.promise),
+      reveal: vi.fn(async () => 'gone' as const)
+    })
+    const here = activateAiVaultStructuredSession(structuredSession, parts, { kind: 'local' })
+    const there = activateAiVaultStructuredSession(structuredSession, parts, {
+      kind: 'environment',
+      environmentId: 'studio'
+    })
+    // Settled before asserting, so a failure here never strands an activation for later cases.
+    pending.resolve()
+    await Promise.all([here, there])
+    expect(parts.refresh).toHaveBeenCalledTimes(2)
+  })
+
   it('refreshes an unpublished structured tab before activating it', async () => {
     const parts = deps({
       activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)

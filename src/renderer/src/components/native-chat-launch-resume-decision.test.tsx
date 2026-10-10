@@ -8,11 +8,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
+import { useNativeChatRestartResuming } from './native-chat-resume-on-restart-store'
 import {
   _resetNativeChatRestartOffer,
-  useNativeChatRestartOffer,
-  useNativeChatRestartResuming
-} from './native-chat-resume-on-restart-store'
+  useNativeChatRestartOfferSources
+} from './native-chat-restart-offer-triggers'
 import {
   _resetNativeChatLaunchResumeDecision,
   useNativeChatLaunchResumePending
@@ -21,9 +21,10 @@ import {
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: rpc,
+  pairedRestartOffersSupport: async () => 'supported',
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { dismiss: vi.fn() }) }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root
@@ -36,16 +37,17 @@ const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   latestPrompt: `Prompt ${sessionId}`,
   recordedAt: 1_800_000_000_000,
   executionHostId: 'local',
-  workspaceKind: 'git-worktree'
+  workspaceKind: 'git-worktree',
+  origin: 'own'
 }))
 
 /** What Continue reads, rendered each time it changes. */
 const seen: { pending: boolean; resuming: readonly string[] }[] = []
 function Probe({ launch }: { launch: boolean }): null {
-  useNativeChatRestartOffer(launch)
+  useNativeChatRestartOfferSources(launch)
   seen.push({
     pending: useNativeChatLaunchResumePending(),
-    resuming: useNativeChatRestartResuming()
+    resuming: useNativeChatRestartResuming().get('local') ?? []
   })
   return null
 }

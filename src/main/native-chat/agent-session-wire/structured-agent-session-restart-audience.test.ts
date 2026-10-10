@@ -34,6 +34,17 @@ it('neither lists nor dismisses an offer the caller cannot show', async () => {
   expect(await offersIn(root)).toEqual([])
 })
 
+it('does not dismiss an offer the caller cannot show, even listed with its interruption', async () => {
+  const { host, root } = await interruptedRestart()
+  const [offer] = await host.restartResume.list()
+  const listed = [{ sessionId: SESSION, recordedAt: offer!.recordedAt }]
+
+  expect(await host.restartResume.dismissListed(listed, cannotShowCodex)).toBe(0)
+  expect(await offersIn(root)).toHaveLength(1)
+  expect(await host.restartResume.dismissListed(listed, showsCodex)).toBe(1)
+  expect(await offersIn(root)).toEqual([])
+})
+
 it('neither continues nor reserves an offer the caller cannot show, named or not', async () => {
   const { host, root, acquire, dispatch } = await interruptedRestart()
 

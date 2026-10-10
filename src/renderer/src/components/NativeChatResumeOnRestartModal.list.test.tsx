@@ -21,17 +21,18 @@ import {
   consumeNativeChatResumeOnRestartDialogRequest,
   requestNativeChatResumeOnRestartDialog
 } from './native-chat-resume-on-restart-dialog'
-import { _resetNativeChatRestartOffer } from './native-chat-resume-on-restart-store'
+import { _resetNativeChatRestartOffer } from './native-chat-restart-offer-triggers'
 
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: rpc,
+  pairedRestartOffersSupport: async () => 'supported',
   subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
 vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: vi.fn(async () => true)
 }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { dismiss: vi.fn() }) }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 let root: Root
@@ -221,6 +222,10 @@ it('disables Select all and the workspace checkbox while a resume runs', async (
   for (const box of boxes) {
     expect(box.hasAttribute('disabled')).toBe(true)
   }
+  // Select all shows the run, as the rows under it do.
+  const selectAll = namedBox('Select all chats')
+  expect(selectAll.getAttribute('aria-checked')).toBe('true')
+  expect(selectAll.closest('label')?.textContent).toContain('2 of 2 selected')
   await act(async () => continued.resolve({ sessions: [], failed: [], resumed: [], continued: [] }))
 })
 

@@ -22,6 +22,8 @@ import {
   isFloatingWorkspaceSelector
 } from '../../shared/floating-workspace-worktree'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { readRestartOfferWorkspaceProvenance } from './restart-offer-workspace-provenance'
+import type { RestartOfferWorkspaceProvenance } from '../../shared/restart-offer-origin'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
@@ -33,6 +35,11 @@ import {
 import { agentSessionWireProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
+  /** Who made the workspace an offered restart chat ran in; see `restartOfferOrigin`. */
+  restartOfferWorkspaceProvenance(workspaceId: string): RestartOfferWorkspaceProvenance | undefined {
+    return readRestartOfferWorkspaceProvenance(this.store, workspaceId)
+  }
+
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
     agent: StructuredAgentId

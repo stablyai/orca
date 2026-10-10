@@ -107,6 +107,20 @@ describe('callStructuredAgentSession rewind capability', () => {
     })
   })
 
+  // The host answers once each continued chat's agent has started; the default 15 s would lose
+  // that answer on a paired server while the chats carry on.
+  it('gives a restart continue as long as a command, under its pairing fence', async () => {
+    await callStructuredAgentSession(target, 'agentSession.restartContinue', params, {
+      expectedEnvironmentPairingRevision: 3
+    })
+    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(
+      target,
+      'agentSession.restartContinue',
+      params,
+      { timeoutMs: 195_000, expectedEnvironmentPairingRevision: 3 }
+    )
+  })
+
   it('does not dispatch rewind when host capability cannot be verified', async () => {
     mocks.supportsCapability.mockRejectedValue(new Error('Host unreachable'))
 

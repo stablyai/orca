@@ -71,20 +71,42 @@ export function ResumeFailureStatus({
           <span className="mt-0.5 block font-mono text-[10px] opacity-75">{failure.reason}</span>
         </TooltipContent>
       </Tooltip>
-      <Button
-        variant="ghost"
-        size="icon-xs"
+      <ResumeRowDismiss
+        title={title}
+        workspaceName={workspaceName}
         disabled={disabled}
-        aria-label={translate(
-          'auto.components.NativeChatResumeOutcomeRow.dismissChat',
-          'Dismiss "{{value0}}" in {{value1}}',
-          { value0: title, value1: workspaceName }
-        )}
-        onClick={() => onAction('dismiss')}
-      >
-        <X className="size-3" />
-      </Button>
+        onDismiss={() => onAction('dismiss')}
+      />
     </>
+  )
+}
+
+/** Forgets one listed chat's offer: a failed resume's, or one Dismiss all leaves for its owner. */
+export function ResumeRowDismiss({
+  title,
+  workspaceName,
+  disabled,
+  onDismiss
+}: {
+  title: string
+  workspaceName: string
+  disabled: boolean
+  onDismiss: () => void
+}): React.JSX.Element {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      disabled={disabled}
+      aria-label={translate(
+        'auto.components.NativeChatResumeOutcomeRow.dismissChat',
+        'Dismiss "{{value0}}" in {{value1}}',
+        { value0: title, value1: workspaceName }
+      )}
+      onClick={onDismiss}
+    >
+      <X className="size-3" />
+    </Button>
   )
 }
 

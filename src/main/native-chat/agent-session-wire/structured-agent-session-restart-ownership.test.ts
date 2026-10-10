@@ -518,3 +518,24 @@ it('files a restart refused by a conflicted claim under its code, with its detai
     ])
   )
 })
+
+it('continues a chat once when two desktops both resume it, and the second hears nothing failed', async () => {
+  const { host } = await interruptedRestart()
+  await host.restartResume.list()
+
+  const [first, second] = await Promise.all([
+    host.restartResume.continueAfterRestart([SESSION], 'desktop-a'),
+    host.restartResume.continueAfterRestart([SESSION], 'desktop-b')
+  ])
+  const later = await host.restartResume.continueAfterRestart([SESSION], 'desktop-b')
+
+  expect([...first.continued, ...second.continued]).toMatchObject([{ outcome: 'continued' }])
+  // The loser reserved nothing, so it sent nothing and has no failure to file or report.
+  expect(later.continued).toEqual([])
+  expect([...first.failed!, ...second.failed!, ...later.failed!]).toEqual([])
+  expect(
+    (await statusNotes(host)).filter(
+      (note) => note.text === AGENT_SESSION_RESTART_CONTINUATION_NOTE
+    )
+  ).toHaveLength(1)
+})

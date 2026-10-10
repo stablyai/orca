@@ -10,7 +10,8 @@ export const offered: ResumeCandidate[] = ['a', 'b'].map((sessionId) => ({
   latestPrompt: `Prompt ${sessionId}`,
   recordedAt: 1_800_000_000_000,
   executionHostId: 'local',
-  workspaceKind: 'git-worktree'
+  workspaceKind: 'git-worktree',
+  origin: 'own'
 }))
 
 /** A chat the host acted on and could not carry on, as it reports it. */

@@ -1,5 +1,6 @@
 import { useContext } from 'react'
 import { AgentIcon } from '@/lib/agent-catalog'
+import { Badge } from './ui/badge'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { translate } from '@/i18n/i18n'
@@ -8,7 +9,11 @@ import {
   resumeFailureSelectable,
   type ResumeFailureAction
 } from './native-chat-resume-failure-guidance'
-import { ResumeFailureGuidanceLine, ResumeFailureStatus } from './NativeChatResumeFailureDetails'
+import {
+  ResumeFailureGuidanceLine,
+  ResumeFailureStatus,
+  ResumeRowDismiss
+} from './NativeChatResumeFailureDetails'
 import { resumeActivityLabel } from './native-chat-resume-activity-label'
 import { ResumeTreeRow } from './NativeChatResumeTreeRow'
 import { ResumeTreeDepthContext } from './native-chat-resume-tree-state'
@@ -46,6 +51,7 @@ export function ResumeCandidateRow({
   onCheckedChange,
   failure,
   onFailureAction,
+  originLabel,
   renderStatus
 }: {
   candidate: ResumeCandidate
@@ -58,6 +64,8 @@ export function ResumeCandidateRow({
   /** Present when an earlier resume of this chat did not carry on. */
   failure?: ResumeFailure
   onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
+  /** Where the chat came from, for one that does not start ticked; absent for the user's own. */
+  originLabel?: string
   renderStatus?: (sessionId: string, title: string) => React.ReactNode
 }): React.JSX.Element {
   const agentLabel = formatAgentTypeLabel(candidate.agent)
@@ -84,10 +92,11 @@ export function ResumeCandidateRow({
       )}
       compact
       checkboxSlot={status}
-      // Outside the label, so pressing them never toggles the checkbox.
+      // Outside the label, so pressing them never toggles the checkbox. A chat that is not the
+      // user's is never cleared by Dismiss; its own control ends it here. A run's status replaces
+      // both while it follows the chat.
       trailing={
-        failure &&
-        !status && (
+        status ? null : failure ? (
           <ResumeFailureStatus
             failure={failure}
             title={title}
@@ -95,6 +104,16 @@ export function ResumeCandidateRow({
             disabled={disabled}
             onAction={act}
           />
+        ) : (
+          originLabel &&
+          onFailureAction && (
+            <ResumeRowDismiss
+              title={title}
+              workspaceName={workspaceName}
+              disabled={disabled}
+              onDismiss={() => act('dismiss')}
+            />
+          )
         )
       }
       below={
@@ -115,6 +134,8 @@ export function ResumeCandidateRow({
         <span className="text-foreground/90">{title}</span>
         {activity && <span className="text-muted-foreground"> - {activity.summary}</span>}
       </span>
+      {/* The same quiet context chip that names a workspace's machine. */}
+      {originLabel && <Badge variant="hostContext">{originLabel}</Badge>}
       {model && (
         <span
           className="min-w-0 max-w-24 shrink-0 truncate font-mono text-[10px] text-muted-foreground"

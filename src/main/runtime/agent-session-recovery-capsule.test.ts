@@ -270,6 +270,33 @@ describe('durable restart offers', () => {
     expect(await capsule.list(NOW)).toEqual([marker({ sessionId: 'third' }), marker()])
   })
 
+  it('forgets listed records only while they are still the interruption the client listed', async () => {
+    await capsule.record(
+      [marker(), marker({ sessionId: 'second' }), marker({ sessionId: 'third' })],
+      NOW
+    )
+    // Interrupted again after the listing: the newer offer was never shown, so it stays.
+    await capsule.record([marker({ sessionId: 'second', recordedAt: NOW + 5 })], NOW + 5)
+
+    const listed = [SESSION, 'second', 'third'].map((sessionId) => ({ sessionId, recordedAt: NOW }))
+    expect(await capsule.dismissListed(listed, NOW + 6)).toBe(2)
+    expect(await capsule.list(NOW + 6)).toEqual([
+      marker({ sessionId: 'second', recordedAt: NOW + 5 })
+    ])
+  })
+
+  it('leaves a listed chat another action is resuming, and its earlier failure, to that action', async () => {
+    await capsule.record([marker()], NOW)
+    await fileFailure()
+    // A retry on another desktop reserves the failed chat; this desktop listed it before that.
+    await capsule.beginResume([SESSION], 'operation-b', NOW)
+
+    expect(await capsule.dismissListed([{ sessionId: SESSION, recordedAt: NOW }], NOW)).toBe(0)
+    expect(await capsule.listFailed(NOW)).toHaveLength(1)
+    await capsule.failResume('operation-b', [failure({ reason: 'retry_failed' })], NOW)
+    expect(await capsule.listFailed(NOW)).toMatchObject([{ reason: 'retry_failed' }])
+  })
+
   it('forgets every record of any state except the ones kept, without a fence', async () => {
     await capsule.record(
       [marker(), marker({ sessionId: 'second' }), marker({ sessionId: 'kept' })],
@@ -487,16 +514,17 @@ describe('durable restart offers', () => {
     expect(await capsule.list(later)).toEqual([])
   })
 
-  it('dismisses pending and active recovery records', async () => {
+  // On a shared host the action may be another device's resume: dismissing what this listing showed
+  // must not take its reservation, or a refusal it meets would never be filed.
+  it('dismisses pending records and leaves a chat another action is resuming to that action', async () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     await capsule.beginResume([SESSION], 'operation-a', NOW)
 
     expect(await capsule.clearAll(NOW)).toBe(1)
     expect(await capsule.list(NOW)).toEqual([])
 
-    // A later failed action cannot resurrect a record the user explicitly dismissed.
-    await capsule.rollbackResume('operation-a', NOW)
-    expect(await capsule.list(NOW)).toEqual([])
+    await capsule.failResume('operation-a', [failure()], NOW)
+    expect(await capsule.listFailed(NOW)).toMatchObject([{ marker: marker() }])
   })
 
   it('fences a late teardown write until a genuinely newer interruption', async () => {
@@ -646,4 +674,30 @@ it('does not retain lock timers after reads, writes, or failed publications', as
   } finally {
     vi.useRealTimers()
   }
+})
+
+describe('whether the capsule holds anything', () => {
+  it('is no for a missing file and for one every record left', async () => {
+    expect(await capsule.holdsAnyRecord()).toBe(false)
+    await capsule.record([marker()], NOW)
+    await capsule.dismiss([SESSION], NOW)
+    expect(await capsule.holdsAnyRecord()).toBe(false)
+  })
+
+  it('counts a pending offer, a reservation, and a filed failure alike', async () => {
+    await capsule.record([marker()], NOW)
+    expect(await capsule.holdsAnyRecord()).toBe(true)
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+    // Reserved, so the listing no longer shows it — the file still holds it.
+    expect(await capsule.list(NOW)).toEqual([])
+    expect(await capsule.holdsAnyRecord()).toBe(true)
+    await capsule.failResume('operation-a', [failure()], NOW)
+    expect(await capsule.list(NOW)).toEqual([])
+    expect(await capsule.holdsAnyRecord()).toBe(true)
+  })
+
+  it('counts unreadable bytes as holding something', async () => {
+    await writeFile(filePath, '{not json')
+    expect(await capsule.holdsAnyRecord()).toBe(true)
+  })
 })
