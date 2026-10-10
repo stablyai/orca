@@ -12,7 +12,6 @@ import {
   cancelledAiVaultListResult,
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
-import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
 import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
@@ -27,15 +26,7 @@ import {
 } from '../../shared/ai-vault-types'
 import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-handler'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseRoutableExecutionHostId,
-  requestedExecutionHostScope,
-  toRuntimeExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostScope
-} from '../../shared/execution-host'
-import { getActiveSshAiVaultHostInfos } from './ssh'
+import { LOCAL_EXECUTION_HOST_ID, parseRoutableExecutionHostId, requestedExecutionHostScope, toRuntimeExecutionHostId, type ExecutionHostScope } from '../../shared/execution-host'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {
@@ -133,27 +124,9 @@ async function scanAiVaultSessionsByHostScope(
   }
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
-    const sshHosts = getActiveSshAiVaultHostInfosResult()
-    const runtimeResults = [
-      ...(runtimeHosts.issue ? [runtimeHosts.issue] : []),
-      ...(sshHosts.issue ? [sshHosts.issue] : [])
-    ]
+    const runtimeResults = runtimeHosts.issue ? [runtimeHosts.issue] : []
     const scannedResults = await Promise.all([
       scanLocalAiVaultSessionsAsIssue(args, signal),
-      ...sshHosts.hostInfos.map((hostInfo) =>
-        scanHostLegWithCache({
-          cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
-          depth,
-          scopePaths,
-          force: args?.force === true,
-          scan: () =>
-            scanSshAiVaultSessions(hostInfo.targetId, args, {
-              signal,
-              timeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScan,
-              relayTimeoutMs: AI_VAULT_ALL_HOST_TIMEOUT_MS.sshScanRelay
-            })
-        })
-      ),
       ...runtimeHosts.hostInfos.map((hostInfo) =>
         scanHostLegWithCache({
           cacheKey: `${cacheKey}|${hostInfo.executionHostId}`,
@@ -178,9 +151,6 @@ async function scanAiVaultSessionsByHostScope(
   }
 
   const parsed = parseRoutableExecutionHostId(executionHostScope)
-  if (parsed?.kind === 'ssh') {
-    return scanSshAiVaultSessions(parsed.targetId, args, { signal })
-  }
   if (parsed?.kind === 'runtime') {
     return scanRuntimeAiVaultSessions({
       hostInfo: {
@@ -204,15 +174,6 @@ export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryRe
   return discoverAiVaultHosts(() => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [], {
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'
-  })
-}
-
-export function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{
-  targetId: string
-}> {
-  return discoverAiVaultHosts(getActiveSshAiVaultHostInfos, {
-    path: 'SSH hosts',
-    fallbackMessage: 'SSH hosts are unavailable.'
   })
 }
 

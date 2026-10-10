@@ -6226,7 +6226,6 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "必须填写主机或 SSH 配置别名。",
           "sshPortInvalid": "端口必须介于 1 到 65535 之间。",
-          "sshRelayGraceInvalid": "终端超时时间必须介于 60 到 {{value0}} 秒之间。",
           "sshSaved": "已添加 SSH 主机。",
           "sshSaveFailed": "添加 SSH 主机失败。",
           "serverFieldsRequired": "必须填写服务器名称和配对码。",
@@ -8472,10 +8471,6 @@
           "f8050f6307": "已同步 {{value0}} 服务器{{value1}}",
           "68c13b4589": "测试失败",
           "81d08bcddf": "连接成功",
-          "2c4ee7332b": "无法重置远程中继",
-          "db2e48975e": "远程中继已重置",
-          "025e107643": "无法结束远程终端",
-          "90e308c98b": "远程终端结束",
           "a43de1d3ee": "断开连接失败",
           "e95d5ae10e": "连接失败",
           "c2a69510e3": "删除目标失败",
@@ -8483,12 +8478,10 @@
           "2227ce47b6": "保存目标失败",
           "f602009125": "目标已添加",
           "b4ba0ce33d": "目标已更新",
-          "3879cbaa52": "终端超时时间必须介于 60 到 {{value0}} 秒之间，或保持终端运行直到重置。",
           "4db9afce1c": "端口必须介于 1 和 65535 之间",
           "0e5aa04161": "需要主机或 SSH 配置别名",
           "f1fc50dad2": "无法加载 SSH 目标",
-          "0cda732f43": "连接测试失败",
-          "terminateUnverifiable": "无法访问 {{terminals}} 远程终端。重新连接以结束它们。"
+          "0cda732f43": "连接测试失败"
         },
         "SshPassphraseDialog": {
           "d5a234456f": "取消",
@@ -8517,30 +8510,17 @@
           "7f7b3d7ab4": "删除目标",
           "3d21a22d0e": "移除目标",
           "3d8af2949f": "编辑目标",
-          "762a48c662": "重置远程中继",
-          "97dea4e8cf": "正在重置远程中继",
-          "da16e108e6": "结束远程终端",
-          "c77f1abfe3": "结束远程终端",
           "18968ede9e": "错误",
           "f0871e6bfb": "连接",
-          "47e94bd6ba": "已连接",
-          "a883f5a00f": "终端超时：{{value0}}",
-          "8ce71262f4": "终端保持运行直到重置"
+          "47e94bd6ba": "已连接"
         },
         "SshTargetDestructiveActions": {
-          "7e66942808": "这将停止此 SSH 目标上的活动终端会话。重新连接不会恢复它们。",
-          "accf177a03": "结束远程终端？",
-          "26be00392d": "这将强制停止此 SSH 目标的远程中继。该目标的活动远程终端和端口转发将结束。",
-          "570a7a0574": "重置远程中继？",
           "3bb0cf0ee4": "这将删除目标并结束任何活动的远程终端。",
           "4808966c41": "删除 SSH 目标"
         },
         "SshTargetForm": {
           "fea9cb402e": "取消",
-          "1b19b00e93": "有限超时时间必须介于 60 秒到 7 天之间。",
           "137e88ce8d": "Orca 与此主机断开连接后，远程终端会继续运行。",
-          "b574994adc": "需要停止它们时，请使用“结束远程终端”或“重置中继”。",
-          "71fc546097": "保持终端运行直到重置",
           "92f80edbfd": "远程终端持久化",
           "feae1d1e69": "可选。相当于 ProxyJump / ssh -J。",
           "11bcb4507a": "bastion.example.com",
@@ -8562,8 +8542,6 @@
           "a62b4cb39a": "保存更改",
           "29af933cd5": "新的 SSH 目标",
           "f2331ce599": "编辑 SSH 目标",
-          "7c13f58c91": "直到重置",
-          "55c56cf2c7": "断开连接后的超时时间（秒）",
           "4a342f44c1": "高级连接",
           "e9609ddca6": "代理、跳板主机和连接复用",
           "8c922dffba": "复用 SSH 连接以加快设置",
@@ -8572,12 +8550,7 @@
           "addTitle": "添加 SSH 主机",
           "editDescription": "更新此机器的连接详情。更改将在下次连接时生效。",
           "addDescription": "添加一台可通过 SSH 登录的持久机器。",
-          "editingPrefix": "正在编辑",
-          "remoteRuntime": "运行时",
-          "remoteRuntimeHelp": "哪个 Node.js 在此主机上运行 Orca。 Orca 管理的Node自己上传，不需要npm；主机节点使用已安装在那里的 Node.js。",
-          "remoteRuntimeAuto": "自动",
-          "remoteRuntimePinnedNode": "Orca 管理的节点",
-          "remoteRuntimeHostNode": "主机节点"
+          "editingPrefix": "正在编辑"
         },
         "TasksPane": {
           "f71d8a9dd3": "任务提供者",
@@ -12391,8 +12364,6 @@
         },
         "sshHostServer": {
           "sourceChanged": "在较旧版本的 Orca 上发生了更改：会持续运行中继，直到再次迁移到其受管服务器。",
-          "unavailable": "运行中继：此主机上无法运行受管的 Orca 服务器（{{reason}}）。",
-          "tunnelUnavailable": "运行中继：此主机的 SSH 服务器不允许端口转发，Orca 也无法通过 SSH 会话连接到受管服务器。",
           "deploying": "正在设置受管的 Orca 服务器…",
           "converting": "正在将此主机的项目迁移到其受管的 Orca 服务器…",
           "connecting": "正在连接到受管的 Orca 服务器…",
@@ -12400,13 +12371,7 @@
           "starting": "正在启动受管服务器…",
           "notServing": "Orca 无法确认受管服务器是否正在响应。",
           "hostNewer": "运行来自较新版本 Orca 的受管 Orca 服务器；它会保留该版本。",
-          "terminalsLive": "在其 {{count}} 个打开的终端全部关闭前运行中继，然后迁移到受管服务器。",
-          "terminalsLive_one": "在其 {{count}} 个打开的终端关闭前运行中继，然后迁移到受管服务器。",
-          "terminalsLive_other": "在其 {{count}} 个打开的终端全部关闭前运行中继，然后迁移到受管服务器。",
-          "terminalsUnverifiable": "运行中继：Orca 无法确认其终端已关闭。它会在下次连接时迁移。",
-          "retry": "本次会话运行中继；它会在下次连接时迁移到受管服务器。",
           "failureDetails": "详情",
-          "unavailableUnknown": "运行中继：此主机上无法运行受管的 Orca 服务器。",
           "cause": {
             "unsupportedHost": "Orca 没有适用于此系统的服务器构建",
             "artifactsUnavailable": "此 Orca 构建不包含该服务器",
@@ -12417,12 +12382,16 @@
           },
           "updateDeferredLater": "运行受管的 Orca 服务器；它会在下次连接时更新。",
           "updateFailedPrevious": "在其先前版本上运行受管的 Orca 服务器；更新失败。",
-          "terminalsLiveUncounted": "在其打开的终端全部关闭前运行中继，然后迁移到受管服务器。",
           "refusedBlocked": "未迁移到受管服务器：此主机上的某些因素阻止了迁移。",
-          "terminalsElsewhere": "当另一台 Orca 桌面端或会话在此主机上打开的 {{count}} 个终端仍在运行时，会运行中继。",
-          "terminalsElsewhere_one": "当另一台 Orca 桌面端或会话在此主机上打开的 {{count}} 个终端仍在运行时，会运行中继。",
-          "terminalsElsewhere_other": "当另一台 Orca 桌面端或会话在此主机上打开的 {{count}} 个终端仍在运行时，会运行中继。",
-          "terminalsElsewhereUncounted": "当另一台 Orca 桌面端或会话在此主机上打开的终端仍在运行时，会运行中继。"
+          "unsupported": "此版本的 Orca 不支持此主机（{{reason}}）。如需继续使用，请安装旧版本的 Orca。",
+          "unsupportedUnknown": "此版本的 Orca 不支持此主机。如需继续使用，请安装旧版本的 Orca。",
+          "tunnelUnsupported": "此版本的 Orca 不支持此主机：其 SSH 服务器不允许端口转发，Orca 也无法通过 SSH 会话连接到其服务器。如需继续使用，请安装旧版本的 Orca。",
+          "setupRetry": "Orca 无法在此主机上启动其服务器。请重新连接。",
+          "olderTerminalsUncounted": "由旧版本 Orca 启动的终端仍在此主机上运行。待它们退出后，请重新连接以继续。",
+          "olderTerminalsUnverifiable": "Orca 无法确认由旧版本 Orca 启动的终端是否已退出。请重新连接后重试。",
+          "olderTerminals_one": "由旧版本 Orca 启动的 {{count}} 个终端仍在此主机上运行。待它们退出后，请重新连接以继续。",
+          "olderTerminals_other": "由旧版本 Orca 启动的 {{count}} 个终端仍在此主机上运行。待它们退出后，请重新连接以继续。",
+          "olderTerminals": "由旧版本 Orca 启动的 {{count}} 个终端仍在此主机上运行。待它们退出后，请重新连接以继续。"
         },
         "deltaMove": {
           "action": "迁移新项目…",
@@ -17736,28 +17705,6 @@
         "connecting": "正在连接…",
         "reconnect": "重新连接",
         "retry": "重试"
-      },
-      "managedServerMove": {
-        "offer": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其 {{count}} 个打开的终端将重新启动。",
-        "offer_one": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其 {{count}} 个打开的终端将重新启动。",
-        "offer_other": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其 {{count}} 个打开的终端将重新启动。",
-        "moved": "{{host}} 现在运行受管的 Orca 服务器。",
-        "refusedLive": "未迁移：{{host}} 上的 {{count}} 个终端仍在运行。",
-        "refusedLive_one": "未迁移：{{host}} 上的 {{count}} 个终端仍在运行。",
-        "refusedLive_other": "未迁移：{{host}} 上的 {{count}} 个终端仍在运行。",
-        "refusedUnverifiable": "未迁移：Orca 无法确认 {{host}} 上的 {{count}} 个终端已停止。",
-        "refusedUnverifiable_one": "未迁移：Orca 无法确认 {{host}} 上的 {{count}} 个终端已停止。",
-        "refusedUnverifiable_other": "未迁移：Orca 无法确认 {{host}} 上的 {{count}} 个终端已停止。",
-        "stayed": "{{host}} 仍在运行中继。设置中的“SSH 主机”会显示原因。",
-        "failed": "无法迁移 {{host}}：{{reason}}",
-        "running": "正在将 {{host}} 迁移到受管的 Orca 服务器…",
-        "title": "迁移到受管服务器",
-        "confirm": "迁移",
-        "notNow": "暂不",
-        "close": "关闭",
-        "offerUncounted": "将 {{host}} 迁移到受管的 Orca 服务器以获得更可靠的连接。其打开的终端将重新启动。",
-        "refusedUnverifiableUncounted": "未迁移：Orca 无法确认 {{host}} 上的终端已停止。",
-        "retry": "重试"
       }
     },
     "main": {
@@ -17868,8 +17815,7 @@
         "agentNotSignedIn": "请登录 {{agent}}。",
         "thenSendAgain": "然后再次发送消息。",
         "runCommandWhenDone": "完成后再运行 /{{command}}。",
-        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。",
-        "sessionNotRestored": "{{agent}} 无法重新打开之前的会话，因此此聊天将在新会话中继续。{{agent}} 不记得之前的消息。"
+        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",

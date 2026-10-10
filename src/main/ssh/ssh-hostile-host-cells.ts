@@ -1,7 +1,7 @@
 /**
  * The design D5/D6 hostile-host matrix: each cell is an SSH target (a container, or the runner's
  * own loopback sshd) and the place the relay runtime ladder must land there.
- * `ssh-relay-hostile-hosts.docker.test.ts` drives the real client-side deploy against each one;
+ * `ssh-hostile-hosts.docker.test.ts` drives the real client-side deploy against each one;
  * `.github/workflows/ssh-hostile-hosts.yml` runs it.
  */
 import type { NodeRuntimeTarget, ServerTarget } from '../../shared/node-runtime-pin'

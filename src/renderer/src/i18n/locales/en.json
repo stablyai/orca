@@ -6443,7 +6443,6 @@
         "AddRemoteHostDialog": {
           "sshHostRequired": "Host or SSH config alias is required.",
           "sshPortInvalid": "Port must be between 1 and 65535.",
-          "sshRelayGraceInvalid": "Terminal timeout must be between 60 and {{value0}} seconds.",
           "sshSaved": "SSH host added.",
           "sshSaveFailed": "Failed to add SSH host.",
           "serverFieldsRequired": "Server name and pairing code are required.",
@@ -8776,10 +8775,6 @@
           "f8050f6307": "Synced {{value0}} server{{value1}}",
           "68c13b4589": "Test failed",
           "81d08bcddf": "Connection successful",
-          "2c4ee7332b": "Failed to reset remote relay",
-          "db2e48975e": "Remote relay reset",
-          "025e107643": "Failed to end remote terminals",
-          "90e308c98b": "Remote terminals ended",
           "a43de1d3ee": "Disconnect failed",
           "e95d5ae10e": "Connection failed",
           "c2a69510e3": "Failed to remove target",
@@ -8787,12 +8782,10 @@
           "2227ce47b6": "Failed to save target",
           "f602009125": "Target added",
           "b4ba0ce33d": "Target updated",
-          "3879cbaa52": "Terminal timeout must be between 60 and {{value0}} seconds, or keep terminals alive until reset.",
           "4db9afce1c": "Port must be between 1 and 65535",
           "0e5aa04161": "Host or SSH config alias is required",
           "f1fc50dad2": "Failed to load SSH targets",
-          "0cda732f43": "Connection test failed",
-          "terminateUnverifiable": "{{terminals}} remote terminal(s) could not be reached. Reconnect to end them."
+          "0cda732f43": "Connection test failed"
         },
         "SshPassphraseDialog": {
           "d5a234456f": "Cancel",
@@ -8814,8 +8807,6 @@
           "c624f64b86": "Continue"
         },
         "SshTargetCard": {
-          "a883f5a00f": "terminal timeout: {{value0}}",
-          "8ce71262f4": "terminals until reset",
           "ec6543cee9": "Connect",
           "0e53e9f8e8": "Test",
           "1810b51482": "Connecting",
@@ -8823,32 +8814,17 @@
           "7f7b3d7ab4": "Remove target",
           "3d21a22d0e": "Removing target",
           "3d8af2949f": "Edit target",
-          "762a48c662": "Reset remote relay",
-          "97dea4e8cf": "Resetting remote relay",
-          "da16e108e6": "End remote terminals",
-          "c77f1abfe3": "Ending remote terminals",
           "18968ede9e": "Error",
           "f0871e6bfb": "connect",
-          "47e94bd6ba": "connected",
-          "hostNodeFallback": "Unsupported configuration: Orca-managed Node isn’t available for this connection, so Orca runs on this host’s Node.js with terminal support installed by npm on the host.",
-          "hostNodeUnsupported": "Unsupported configuration: Orca runs on this host’s Node.js with terminal support installed by npm on the host. Set Runtime to Auto in this host’s SSH settings to use Orca-managed Node."
+          "47e94bd6ba": "connected"
         },
         "SshTargetDestructiveActions": {
-          "7e66942808": "This will stop active terminal sessions on this SSH target. Reconnecting will not restore them.",
-          "accf177a03": "End Remote Terminals?",
-          "26be00392d": "This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end.",
-          "570a7a0574": "Reset Remote Relay?",
           "3bb0cf0ee4": "This will remove the target and end any active remote terminals.",
           "4808966c41": "Remove SSH Target"
         },
         "SshTargetForm": {
           "fea9cb402e": "Cancel",
-          "1b19b00e93": "Bounded timeouts must be between 60 seconds and 7 days.",
-          "7c13f58c91": "Until reset",
-          "55c56cf2c7": "Timeout after disconnect (seconds)",
           "137e88ce8d": "Remote terminals keep running after Orca disconnects from this host.",
-          "b574994adc": "Use End Remote Terminals or Reset Relay when you want to stop them.",
-          "71fc546097": "Keep terminals alive until reset",
           "92f80edbfd": "Remote Terminal Persistence",
           "feae1d1e69": "Optional. Equivalent to ProxyJump / ssh -J.",
           "11bcb4507a": "bastion.example.com",
@@ -8874,11 +8850,6 @@
           "e9609ddca6": "Proxy, jump host, and connection reuse",
           "8c922dffba": "Reuse SSH connection for faster setup",
           "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions.",
-          "remoteRuntime": "Runtime",
-          "remoteRuntimeHelp": "Which Node.js runs Orca on this host. Orca-managed Node uploads its own and needs no npm; Host Node uses the Node.js already installed there.",
-          "remoteRuntimeAuto": "Auto",
-          "remoteRuntimePinnedNode": "Orca-managed Node",
-          "remoteRuntimeHostNode": "Host Node",
           "allowRemoteCliControl": "Allow this host's orca CLI to control Orca",
           "allowRemoteCliControlHelp": "When off, orca commands run on this host reach only its own terminals. Turn on to let them reach other hosts, orchestration, files, and integrations on this computer.",
           "editTitle": "Edit SSH host",
@@ -12596,8 +12567,6 @@
         },
         "sshHostServer": {
           "sourceChanged": "Changed on an older Orca: runs the relay until it is moved to its managed server again.",
-          "unavailable": "Runs the relay: a managed Orca server can’t run on this host ({{reason}}).",
-          "tunnelUnavailable": "Runs the relay: this host’s SSH server doesn’t allow port forwarding, and Orca couldn’t reach a managed server through the SSH session either.",
           "deploying": "Setting up a managed Orca server…",
           "converting": "Moving this host’s projects to its managed Orca server…",
           "connecting": "Connecting to the managed Orca server…",
@@ -12605,13 +12574,7 @@
           "starting": "Starting managed server…",
           "notServing": "Orca couldn’t confirm that the managed server is answering.",
           "hostNewer": "Runs a managed Orca server from a newer Orca; it keeps that version.",
-          "terminalsLive": "Runs the relay until its {{count}} open terminals are closed, then moves to a managed server.",
-          "terminalsLive_one": "Runs the relay until its {{count}} open terminal is closed, then moves to a managed server.",
-          "terminalsLive_other": "Runs the relay until its {{count}} open terminals are closed, then moves to a managed server.",
-          "terminalsUnverifiable": "Runs the relay: Orca couldn’t confirm its terminals are closed. It moves on a later connect.",
-          "retry": "Runs the relay this session; it moves to a managed server on a later connect.",
           "failureDetails": "Details",
-          "unavailableUnknown": "Runs the relay: a managed Orca server can’t run on this host.",
           "cause": {
             "unsupportedHost": "Orca has no server build for this system",
             "artifactsUnavailable": "this Orca build doesn’t include the server",
@@ -12622,12 +12585,16 @@
           },
           "updateDeferredLater": "Runs a managed Orca server; it updates on a later connect.",
           "updateFailedPrevious": "Runs a managed Orca server on its previous version; updating it failed.",
-          "terminalsLiveUncounted": "Runs the relay until its open terminals are closed, then moves to a managed server.",
           "refusedBlocked": "Not moved to a managed server: something on this host stops the move.",
-          "terminalsElsewhere": "Runs the relay while {{count}} terminals another Orca desktop or session opened on this host are running.",
-          "terminalsElsewhere_one": "Runs the relay while {{count}} terminal another Orca desktop or session opened on this host is running.",
-          "terminalsElsewhere_other": "Runs the relay while {{count}} terminals another Orca desktop or session opened on this host are running.",
-          "terminalsElsewhereUncounted": "Runs the relay while terminals another Orca desktop or session opened on this host are running."
+          "unsupported": "This host isn’t supported by this version of Orca ({{reason}}). To keep using it, install an older version of Orca.",
+          "unsupportedUnknown": "This host isn’t supported by this version of Orca. To keep using it, install an older version of Orca.",
+          "tunnelUnsupported": "This host isn’t supported by this version of Orca: its SSH server doesn’t allow port forwarding, and Orca couldn’t reach its server through the SSH session either. To keep using it, install an older version of Orca.",
+          "setupRetry": "Orca couldn’t start its server on this host. Try connecting again.",
+          "olderTerminalsUncounted": "Terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.",
+          "olderTerminalsUnverifiable": "Orca couldn’t confirm that terminals started by an older version of Orca have exited. Reconnect to try again.",
+          "olderTerminals_one": "{{count}} terminal started by an older version of Orca is still running on this host. Reconnect to continue once it has exited.",
+          "olderTerminals_other": "{{count}} terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited.",
+          "olderTerminals": "{{count}} terminals started by an older version of Orca are still running on this host. Reconnect to continue once they have exited."
         },
         "ZcodePlanAccountsSection": {
           "site": {
@@ -17962,28 +17929,6 @@
         "retry": "Retry",
         "connect": "Connect",
         "connecting": "Connecting…"
-      },
-      "managedServerMove": {
-        "offer": "Move {{host}} to a managed Orca server for more reliable connections. Its {{count}} open terminals will restart.",
-        "offer_one": "Move {{host}} to a managed Orca server for more reliable connections. Its {{count}} open terminal will restart.",
-        "offer_other": "Move {{host}} to a managed Orca server for more reliable connections. Its {{count}} open terminals will restart.",
-        "moved": "{{host}} now runs a managed Orca server.",
-        "refusedLive": "Not moved: {{count}} terminals on {{host}} are still running.",
-        "refusedLive_one": "Not moved: {{count}} terminal on {{host}} is still running.",
-        "refusedLive_other": "Not moved: {{count}} terminals on {{host}} are still running.",
-        "refusedUnverifiable": "Not moved: Orca couldn’t confirm that {{count}} terminals on {{host}} stopped.",
-        "refusedUnverifiable_one": "Not moved: Orca couldn’t confirm that {{count}} terminal on {{host}} stopped.",
-        "refusedUnverifiable_other": "Not moved: Orca couldn’t confirm that {{count}} terminals on {{host}} stopped.",
-        "stayed": "{{host}} still runs the relay. SSH Hosts in Settings shows why.",
-        "failed": "Could not move {{host}}: {{reason}}",
-        "running": "Moving {{host}} to a managed Orca server…",
-        "title": "Move to managed server",
-        "confirm": "Move",
-        "notNow": "Not now",
-        "close": "Close",
-        "offerUncounted": "Move {{host}} to a managed Orca server for more reliable connections. Its open terminals will restart.",
-        "refusedUnverifiableUncounted": "Not moved: Orca couldn’t confirm that the terminals on {{host}} stopped.",
-        "retry": "Try again"
       }
     },
     "main": {

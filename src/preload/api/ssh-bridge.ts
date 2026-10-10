@@ -1,24 +1,10 @@
 import { ipcRenderer } from 'electron'
-import type {
-  SshConnectionState,
-  SshConfigHostListArgs,
-  SshConfigHostListResult,
-  SshConfigHostResolution,
-  SshConfigImportResult,
-  SshTargetAddResult,
-  SshTargetCreateInput,
-  SshTarget,
-  SshTargetUpdateInput,
-  SshTerminateSessionsResult,
-  PortForwardEntry,
-  EnrichedDetectedPort
-} from '../../shared/ssh-types'
+import type { SshConnectionState, SshConfigHostListArgs, SshConfigHostListResult, SshConfigHostResolution, SshConfigImportResult, SshTargetAddResult, SshTargetCreateInput, SshTarget, SshTargetUpdateInput, PortForwardEntry, EnrichedDetectedPort } from '../../shared/ssh-types'
 import {
   admitSshConnectionStateForAuthorityReconciliation,
   admitSshDetectedPorts
 } from '../../shared/ssh-retained-payload-admission'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
-import type { SshManagedServerMoveResult } from '../../shared/ssh-managed-server-move'
 import type { PreloadApi } from '../api-types'
 
 export const sshApi = {
@@ -52,17 +38,6 @@ export const sshApi = {
 
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
-
-  terminateSessions: (args: {
-    targetId: string
-    forRemoval?: boolean
-  }): Promise<SshTerminateSessionsResult> => ipcRenderer.invoke('ssh:terminateSessions', args),
-
-  moveToManagedServer: (args: { targetId: string }): Promise<SshManagedServerMoveResult> =>
-    ipcRenderer.invoke('ssh:moveToManagedServer', args),
-
-  resetRelay: (args: { targetId: string }): Promise<void> =>
-    ipcRenderer.invoke('ssh:resetRelay', args),
 
   getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:getState', args)

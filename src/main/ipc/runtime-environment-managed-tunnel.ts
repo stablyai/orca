@@ -19,7 +19,7 @@ import {
 import { getSshHostServerStatus, setSshHostServerStatus } from '../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
-import { broadcastSshState, relayStateOverrides } from './ssh-renderer-broadcast'
+import { broadcastSshState } from './ssh-renderer-broadcast'
 
 export async function resolveManagedRuntimeEnvironment(
   userDataPath: string,
@@ -100,12 +100,8 @@ export function publishResolvedChangedHostStatus(target: SshTarget, environmentI
 
 export function publishHostServerStatus(targetId: string, status: SshManagedServerStatus): void {
   setSshHostServerStatus(targetId, status)
-  const override = relayStateOverrides.get(targetId)
-  if (override) {
-    relayStateOverrides.set(targetId, { ...override, managedServer: status })
-  }
   // Only a host with a connection state has a status line to refresh.
-  const state = relayStateOverrides.get(targetId) ?? connectionManager?.getState(targetId)
+  const state = connectionManager?.getState(targetId)
   if (state) {
     broadcastSshState(getCurrentMainWindow, targetId, { ...state, managedServer: status })
   }

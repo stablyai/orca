@@ -11,8 +11,6 @@ vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegist
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
-vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
-vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../providers/ssh-pty-provider', () => mocks.sshPtyProvider)
 vi.mock('../providers/ssh-filesystem-provider', () => mocks.sshFilesystemProvider)
@@ -31,7 +29,6 @@ import { createSshIpcHarness } from './ssh-ipc-test-harness'
 const {
   mockSshStore,
   mockConnectionManager,
-  mockDeployAndLaunchRelay,
   mockAcceptSshPtyOutputData,
   mockAcceptSshPtyOutputExit,
   mockPtyProvider,
@@ -110,7 +107,6 @@ describe('SSH IPC handlers', () => {
     expect(await handlers.get('ssh:listPortForwards')!(null, { targetId: 'ssh-1' })).toEqual([
       forward
     ])
-    mockDeployAndLaunchRelay.mockClear()
     mockPortForwardManager.removeAllForwards.mockClear()
 
     await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toEqual({
@@ -118,7 +114,6 @@ describe('SSH IPC handlers', () => {
       providerEpoch: expect.any(String),
       connectionGeneration: 1
     })
-    expect(mockDeployAndLaunchRelay).not.toHaveBeenCalled()
     expect(mockPortForwardManager.removeAllForwards).not.toHaveBeenCalled()
     expect(await handlers.get('ssh:listPortForwards')!(null, { targetId: 'ssh-1' })).toEqual([
       forward

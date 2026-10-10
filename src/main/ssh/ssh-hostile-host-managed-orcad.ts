@@ -1,8 +1,8 @@
 /**
  * The managed-orcad half of a hostile-host cell: on a fresh host, resolve the context, deploy
  * orcad, and prove it picked the cell's runtime and uploaded no other. An activated server must
- * be live; a refused one must be classified as unable to run, so the relay that follows runs the
- * pinned ladder and lands on the cell's rung.
+ * be live; a refused one must be classified as unable to run, which the connect reports as an
+ * unsupported host.
  */
 import { posix } from 'node:path'
 import { expect } from 'vitest'
@@ -20,7 +20,7 @@ import { orcadLivenessProbeCommand, parseOrcadLiveness } from './orcad-remote-la
 import { execOrcadRemote } from './orcad-remote-runtime-control'
 import { decommissionRemoteOrcad } from './orcad-remote-decommission'
 import type { HostileHostCellCore, ManagedOrcadExpectation } from './ssh-hostile-host-cells'
-import { connectHostileHost, deployOnce } from './ssh-hostile-host-test-harness'
+import { connectHostileHost } from './ssh-hostile-host-test-harness'
 import { hostExecStatus, type HostileHostTarget } from './ssh-hostile-host-test-fixture'
 
 const EMPTY_CENSUS = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: null }
@@ -53,7 +53,6 @@ export async function proveManagedOrcadCell(
         code: expected.code
       })
       expect(classifyOrcadHostUnavailable(deployed)).toBe('native_preflight')
-      await assertRelayFallback(sshTarget, expected.relayRung)
       return
     }
     expect(deployed, JSON.stringify(deployed)).toMatchObject({ outcome: 'installed-and-activated' })
@@ -79,22 +78,6 @@ async function assertOnlyRuntimeUploaded(
         await hostExecStatus(target, `test -e '${runtimeDir(asset.executableSha256)}'`)
       ).not.toBe(0)
     }
-  }
-}
-
-/** The connect's next step: no runtime setting, but orcad recorded unable to run on this host. */
-async function assertRelayFallback(sshTarget: SshTarget, rung: 'A' | 'B'): Promise<void> {
-  const { remoteRuntime: _setting, ...withoutSetting } = sshTarget
-  const conn = await connectHostileHost({
-    ...withoutSetting,
-    managedServerUnavailable: { reason: 'native_preflight', appVersion: 'hostile-hosts' }
-  })
-  try {
-    const attempt = await deployOnce(conn)
-    expect(attempt.error).toBeNull()
-    expect(attempt.settledRung).toBe(rung)
-  } finally {
-    await conn.disconnect().catch(() => {})
   }
 }
 

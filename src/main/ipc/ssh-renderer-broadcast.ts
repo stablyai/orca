@@ -1,11 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { SshPortForwardManager } from '../ssh/ssh-port-forward'
-import type {
-  DetectedPort,
-  EnrichedDetectedPort,
-  SshConnectionStatus,
-  SshConnectionState
-} from '../../shared/ssh-types'
+import type { DetectedPort, EnrichedDetectedPort, SshConnectionState } from '../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import {
   enrichSshDetectedPorts,
@@ -14,11 +9,8 @@ import {
 } from '../ports/ssh-advertised-url-enrichment'
 import { isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
-import { getSshPlainSshMode } from '../ssh/ssh-plain-ssh-mode'
-import { isSshRelayOnHostNodeRuntime } from '../ssh/ssh-host-node-runtime-mode'
 import { clearSshHostServerStatus, getSshHostServerStatus } from '../ssh/ssh-host-server-status'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
-import { activeSessions } from './ssh-active-relay-sessions'
 import {
   connectionManager,
   currentRuntime,
@@ -26,8 +18,6 @@ import {
   persistedStore,
   portForwardManager
 } from './ssh-ipc-context'
-
-export const relayStateOverrides = new Map<string, SshConnectionState>()
 
 export function broadcastSshState(
   getMainWindow: () => BrowserWindow | null,
@@ -50,44 +40,15 @@ export function broadcastSshState(
 }
 
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
-  const session = activeSessions.get(targetId)
-  const remotePlatform =
-    session?.getHostPlatform()?.os ?? session?.getPlainSshSession()?.remotePlatform
   const authority = getSshProviderAuthority(targetId)
-  const plainSsh = state.status === 'connected' ? getSshPlainSshMode(targetId) : undefined
   const managedServer = state.managedServer ?? getSshHostServerStatus(targetId)
-  // Why the managed check: a host that moved to its managed server no longer runs that relay.
-  const hostNodeRuntime =
-    state.status === 'connected' &&
-    !plainSsh &&
-    managedServer?.kind !== 'managed' &&
-    isSshRelayOnHostNodeRuntime(targetId)
   return {
     ...state,
     targetId,
     providerEpoch: authority.providerEpoch,
     connectionGeneration: authority.connectionGeneration,
-    ...(remotePlatform ? { remotePlatform } : {}),
-    ...(plainSsh ? { plainSsh } : {}),
-    ...(hostNodeRuntime ? { hostNodeRuntime } : {}),
     ...(managedServer ? { managedServer } : {})
   }
-}
-
-export function publishRelayOverride(
-  getMainWindow: () => BrowserWindow | null,
-  targetId: string,
-  status: SshConnectionStatus,
-  error: string | null,
-  reconnectAttempt: number
-): void {
-  const state = withSshRemotePlatform(targetId, { targetId, status, error, reconnectAttempt })
-  relayStateOverrides.set(targetId, state)
-  broadcastSshState(getMainWindow, targetId, state)
-}
-
-export function clearRelayStateOverride(targetId: string): void {
-  relayStateOverrides.delete(targetId)
 }
 
 export function connectionSupportsFolderDownload(targetId: string): boolean {
@@ -102,19 +63,14 @@ export function connectionSupportsFolderDownload(targetId: string): boolean {
  */
 export function clearPublishedManagedServer(targetId: string): void {
   clearSshHostServerStatus(targetId)
-  const override = relayStateOverrides.get(targetId)
-  if (override?.managedServer) {
-    const { managedServer: _removed, ...rest } = override
-    relayStateOverrides.set(targetId, rest)
-  }
-  const state = relayStateOverrides.get(targetId) ?? connectionManager?.getState(targetId)
+  const state = connectionManager?.getState(targetId)
   if (state) {
     broadcastSshState(getCurrentMainWindow, targetId, state)
   }
 }
 
 export function getPublicSshState(targetId: string): SshConnectionState | undefined {
-  const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
+  const state = connectionManager!.getState(targetId)
   return state ? withSshRemotePlatform(targetId, state) : undefined
 }
 
