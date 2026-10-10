@@ -12,6 +12,10 @@ import {
 } from './agent-session-context-usage'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import {
+  isAgentSessionContextClear,
+  latestAgentSessionContextClearSequence
+} from './agent-session-context-clear'
 
 export type StructuredAgentContextUsage = {
   usedTokens: number
@@ -28,11 +32,24 @@ type ContextFactSource = Pick<AgentJournalRenderItem, 'sequence' | 'body'>
 
 /** The newest of each part these rows carry, in any order; a part none of them carries is absent. */
 export function latestStructuredAgentContextFacts(
-  items: Iterable<ContextFactSource>
+  items: Iterable<ContextFactSource>,
+  minimumSequence = 0
 ): AgentSessionContextUsage {
   let used: { sequence: number; fact: AgentSessionContextUsed } | null = null
   let window: { sequence: number; fact: AgentSessionContextWindow } | null = null
   for (const item of items) {
+    if (isAgentSessionContextClear(item.body) && item.sequence > minimumSequence) {
+      minimumSequence = item.sequence
+      if (used && used.sequence <= minimumSequence) {
+        used = null
+      }
+      if (window && window.sequence <= minimumSequence) {
+        window = null
+      }
+    }
+    if (item.sequence <= minimumSequence) {
+      continue
+    }
     const facts = readAgentJournalTurn(item.body)?.contextUsage
     if (facts?.used && (used === null || item.sequence >= used.sequence)) {
       used = { sequence: item.sequence, fact: facts.used }
@@ -52,10 +69,16 @@ export function latestStructuredAgentContextFacts(
  */
 export function selectStructuredAgentContextUsage(
   items: readonly AgentJournalRenderItem[],
-  wholeJournal?: AgentSessionContextUsage
+  wholeJournal?: AgentSessionContextUsage,
+  minimumSequence = 0
 ): StructuredAgentContextUsage | null {
-  const loaded = latestStructuredAgentContextFacts(items)
-  return summarizeStructuredAgentContextFacts({ ...wholeJournal, ...loaded })
+  const clearedSequence = latestAgentSessionContextClearSequence(items)
+  const loaded = latestStructuredAgentContextFacts(
+    items,
+    Math.max(minimumSequence, clearedSequence)
+  )
+  const fallback = clearedSequence > minimumSequence ? undefined : wholeJournal
+  return summarizeStructuredAgentContextFacts({ ...fallback, ...loaded })
 }
 
 function summarizeStructuredAgentContextFacts({

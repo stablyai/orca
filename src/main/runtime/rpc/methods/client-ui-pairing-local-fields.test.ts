@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import { PAIRING_LOCAL_UI_FIELDS } from '../../../../shared/pairing-local-ui-fields'
@@ -45,8 +46,12 @@ describe('client UI RPC pairing-local field seams', () => {
       { hostId: 'runtime:web-11111111-2222-3333-4444-555555555555', repoId: 'repo-a' }
     ],
     workspaceHostOrder: ['runtime:web-11111111-2222-3333-4444-555555555555', 'local'],
+    sidebarOpen: false,
     agentsVisibleHostIds: ['runtime:web-11111111-2222-3333-4444-555555555555'],
     agentsFilterRepoIds: ['repo-a'],
+    agentsHideWorkspacesFromOtherDevices: true,
+    agentsHideAutomationGeneratedWorkspaces: true,
+    agentsHideCliCreatedWorkspaces: true,
     agentsShowChildAgents: true,
     agentsCompactMode: false,
     agentsShowSearch: false,

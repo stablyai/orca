@@ -192,7 +192,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
           )
           .map((tab) => tab.id)
       )
-    )
+    ),
+    state.remoteWorkspaceHydratedTargetIds.has(authority.targetId)
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return 'stale'
@@ -229,7 +230,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       //     replaces the host snapshot - it would delete the very tabs we failed to adopt;
       //   - workspace-terminal-host-authority.ts treats `offline`/`error` on an un-hydrated target
       //     as `none`, its bounded floor, which authorises seeding AND sleeping-agent resume.
-      //     `conflict` is deliberately not in that set, so authority stays `unverifiable`.
+      //     `conflict` is deliberately not in that set: the unplaced paths stay `unverifiable`,
+      //     and only the worktrees this apply did place read `none`.
       // Hydration is cleared, not merely withheld: the set is add-only, so a target that synced
       // cleanly before would otherwise keep uploading from this incomplete picture (STA-3593).
       currentStore.clearRemoteWorkspaceHydrated(authority.targetId)
@@ -238,7 +240,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
         direction: 'pull',
         revision: snapshot.revision,
         updatedAt: snapshot.updatedAt,
-        hostObservationToken: snapshot.hostObservationToken
+        hostObservationToken: snapshot.hostObservationToken,
+        unplacedTabWorktreePaths: [...unplacedTabWorktreePaths]
       })
     }
     const reconnectAbort = new AbortController()

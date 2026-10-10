@@ -1,3 +1,4 @@
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../shared/abort-signal-reason'
 import { annotateWorktreeLocksFromAdmin } from '../shared/git-worktree-admin'
 import { expandTilde } from './context'
 import { stat } from 'node:fs/promises'
@@ -46,21 +47,20 @@ const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
  *  harmless backstop. The relay owns the filesystem, so a plain stat is
  *  authoritative. */
 export async function annotatePrunableWorktreesByExistence(
-  worktrees: GitWorktreeInfo[]
+  worktrees: GitWorktreeInfo[],
+  signal?: AbortSignal
 ): Promise<GitWorktreeInfo[]> {
   const annotated = [...worktrees]
   let nextIndex = 0
 
   async function probeNext(): Promise<void> {
     while (nextIndex < worktrees.length) {
+      throwIfSignalAborted(signal)
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
       const worktreePath = worktree?.path ?? ''
-      // Git only marks linked worktrees prunable, and never locked ones (a
-      // lock shields the registration even when the directory is missing). The
-      // Older Git locks are annotated from the host admin directory. A missing main
-      // worktree is surfaced by the repo-level failure paths.
+      // Locks protect missing linked worktrees; repository failures own the main row.
       if (
         !worktreePath ||
         worktree.isMainWorktree === true ||
@@ -73,7 +73,7 @@ export async function annotatePrunableWorktreesByExistence(
       try {
         await stat(worktreePath)
       } catch (err) {
-        if ((err as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+        if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
           annotated[index] = { ...worktree, prunable: true }
         }
       }
@@ -81,7 +81,11 @@ export async function annotatePrunableWorktreesByExistence(
   }
 
   const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
-  await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+  await waitForPromiseWithSignal(
+    Promise.all(Array.from({ length: workerCount }, () => probeNext())),
+    signal
+  )
+  throwIfSignalAborted(signal)
   return annotated
 }
 

@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
@@ -225,6 +226,30 @@ describe('aiVault.prepareSessionResume', () => {
       executionHostId: 'local'
     })
   })
+
+  it('carries a fork request through to the host preparation', async () => {
+    const prepareAiVaultSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: false })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these runtime members.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
+      prepareAiVaultSessionResume
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('aiVault.prepareSessionResume', {
+        agent: 'codex',
+        filePath: '/managed/sessions/rollout-a.jsonl',
+        codexHome: '/managed',
+        fork: true
+      })
+    )
+
+    expect(prepareAiVaultSessionResume).toHaveBeenCalledWith(
+      expect.objectContaining({ fork: true, executionHostId: 'local' })
+    )
+  })
 })
 
 // Session history and terminal resume are not chats: a process whose chats are refused still
@@ -297,6 +322,22 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
   afterEach(() => {
     resetAiVaultSessionListCacheForTests()
+  })
+
+  it('isolates IDE opt-in scans from legacy clients sharing the host cache', async () => {
+    const dispatcher = makeDispatcher()
+    await dispatcher.dispatch(
+      makeRequest('aiVault.listSessions', { includeAntigravityIdeSessions: true })
+    )
+    await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
+    await dispatcher.dispatch(makeRequest('aiVault.listSessions', {}))
+    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
+    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
+      includeAntigravityIdeSessions: true
+    })
+    expect(scanAiVaultSessionsInService.mock.calls[1]?.[0]?.includeAntigravityIdeSessions).not.toBe(
+      true
+    )
   })
 
   it('returns the AiVaultListResult unchanged', async () => {

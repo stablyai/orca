@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
+import {
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,
+  AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY
+} from '../../../src/shared/agent-launch-runtime-capability'
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capabilities'
 
 /** Mirrors the host's `parseRuntimeClientCapabilities`, which returns an EMPTY list — silently
@@ -32,6 +36,15 @@ describe('mobile runtime client capabilities', () => {
     // Why: `supportsAgentLaunch` refuses the method outright unless the client claims it, so
     // without this every mobile create with an agent stays a terminal no matter the user default.
     expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toContain(AGENT_LAUNCH_RUNTIME_CAPABILITY)
+  })
+
+  it('reads an early launch tab as not started and a closed one as stopped', () => {
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toEqual(
+      expect.arrayContaining([
+        AGENT_LAUNCH_UNSTARTED_TAB_CLIENT_CAPABILITY,
+        AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY
+      ])
+    )
   })
 
   it('stays inside the bounds the host parses, which fail closed to no capabilities at all', () => {

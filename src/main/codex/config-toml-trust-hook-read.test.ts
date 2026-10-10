@@ -70,6 +70,31 @@ describe('readHookTrustEntries', () => {
     expect(readHookTrustEntries(configPath).get(key)?.trustedHash).toBeUndefined()
   })
 
+  it('reads a literal-string trusted_hash', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(configPath, `[hooks.state."${key}"]\ntrusted_hash = 'sha256:LITERAL'\n`, 'utf-8')
+
+    expect(readHookTrustEntries(configPath).get(key)?.trustedHash).toBe('sha256:LITERAL')
+  })
+
+  it('fails closed when a literal and a basic hash conflict', () => {
+    const key = '/x/hooks.json:stop:0:0'
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state."${key}"]`,
+        "trusted_hash = 'sha256:USER'",
+        '',
+        `[hooks.state.'${key}']`,
+        'trusted_hash = "sha256:ORCA"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    expect(readHookTrustEntries(configPath).get(key)?.trustedHash).toBeUndefined()
+  })
+
   it('ignores trust-looking fields inside multiline strings', () => {
     const key = '/x/hooks.json:stop:0:0'
     writeFileSync(

@@ -1,11 +1,13 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
+import type { ExecutionHostScope } from '../../shared/execution-host'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { StatsCollector } from '../stats/collector'
 import type { IPtyProvider } from '../providers/types'
 import type { PrepareClaudeAuth } from '../ipc/pty/host-env/types'
 import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
+import type { ClaudeTerminalEvidence } from '../../shared/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
@@ -45,6 +47,10 @@ import { RuntimeMachineName } from './runtime-machine-name'
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
+  protected readonly getAgentStatusSnapshotForPaneFn:
+    | ((paneKey: string) => AgentStatusIpcPayload[])
+    | null
+
   protected readonly machineName = new RuntimeMachineName(
     () => this.store?.getSettings?.().machineName
   )
@@ -59,10 +65,12 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
+      onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
       // Why: agent status mostly arrives via hooks (agent-hooks/server), not OSC
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
       /** Where structured (native chat) sessions publish into that same store, so the snapshot
        *  above lists them like every other agent. */
       structuredAgentStatusSink?: StructuredAgentSessionStatusSink
@@ -86,6 +94,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         paneKey: string
       ) => Promise<'live' | 'unverifiable' | 'exited' | null>
       reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+      dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
       // a closure defers the lookup past that ordering instead of inverting ownership.
@@ -107,6 +116,8 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       resolveCodexStructuredLaunchHome?: (input: {
         launchEnv: NodeJS.ProcessEnv
       }) => string | null | Promise<string | null>
+      // The sync launch prep runs on the shared mirror, for the catalog probe's read-only server.
+      prepareCodexCatalogProbeHome?: (homePath: string) => void
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
       agentSessionClaimSigner?: AgentSessionClaimSigner
@@ -218,6 +229,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       this.stats = stats
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))
@@ -230,6 +242,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       deps?.retireAgentHookCompatibilityAuthority ?? null
     this.checkHookAgentPresenceFn = deps?.checkHookAgentPresence ?? null
     this.reconcileAgentStatusForEndedProcessFn = deps?.reconcileAgentStatusForEndedProcess ?? null
+    this.dropAgentStatusForRemovedWorktreeFn = deps?.dropAgentStatusForRemovedWorktree ?? null
     this.canRecoverPersistentLocalPtysFn = deps?.canRecoverPersistentLocalPtys ?? (() => true)
     this.getPairedDeviceNameFn = deps?.getPairedDeviceName ?? (() => null)
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
@@ -253,11 +266,13 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     this.getSshProviderFn = deps?.getSshProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
+    this.onClaudeTerminalEvidence = deps?.onClaudeTerminalEvidence ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
     this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.prepareAiVaultSessionResumeFn = deps?.prepareAiVaultSessionResume ?? null
     this.prepareCodexStructuredLaunchFn = deps?.prepareCodexStructuredLaunch ?? null
     this.resolveCodexStructuredLaunchHomeFn = deps?.resolveCodexStructuredLaunchHome ?? null
+    this.prepareCodexCatalogProbeHomeFn = deps?.prepareCodexCatalogProbeHome ?? null
     this.agentSessionClaimSigner =
       deps?.agentSessionClaimSigner ?? createEphemeralAgentSessionClaimSigner(this.runtimeId)
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null

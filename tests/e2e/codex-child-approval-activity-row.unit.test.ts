@@ -20,6 +20,7 @@ import type { AgentJournalItemBody } from '../../src/shared/agent-session-journa
 import { parseAgentJournalItemKey } from '../../src/shared/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
+import type * as WorktreeRuntimeOwnerModule from '../../src/renderer/src/lib/worktree-runtime-owner'
 import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'
 import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/codex-structured-prompt-replies'
 import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
@@ -58,7 +59,9 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+// Partial: the status projection also resolves each chat's owner from the worktree.
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
   getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
     state.testRuntimeOwner ?? null
 }))
@@ -73,6 +76,7 @@ import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/compo
 import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'
 const CODEX_THREAD = 'thread-parent'
@@ -139,7 +143,7 @@ async function openHost() {
       workspaceId: 'wt-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: CODEX_THREAD }
+      providerHandle: codexProviderHandle(CODEX_THREAD)
     },
     now: tick,
     stateDirectory: join(root, SESSION)

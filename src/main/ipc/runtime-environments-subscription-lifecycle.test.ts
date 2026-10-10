@@ -104,6 +104,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     removeHandlerMock.mockReset()
     removeAllListenersMock.mockReset()
     sendRemoteRuntimeRequestMock.mockReset()
+    // A re-pair restarts status; left unanswered so it never settles mid-test.
+    sendRemoteRuntimeRequestMock.mockReturnValue(new Promise(() => {}))
     subscribeRemoteRuntimeRequestMock.mockReset()
     sendRemoteRuntimeConnectionRequestMock.mockReset()
     sendRemoteRuntimeSharedControlRequestMock.mockReset()
@@ -118,6 +120,62 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   afterEach(() => {
     resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  it('cancels connecting search setup only for its owner and closes a late handle', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this suite supplies the complete mocked handler store.
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<{ name: string; pairingCode: string }, unknown>(
+      'runtimeEnvironments:addFromPairingCode'
+    )
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    let setupSignal: AbortSignal | undefined
+    let resolveSetup:
+      | ((value: { requestId: string; close: () => void; sendBinary: () => boolean }) => void)
+      | undefined
+    const close = vi.fn()
+    subscribeRemoteRuntimeRequestMock.mockImplementation(
+      (_pairing, _method, _params, _timeout, _callbacks, options) => {
+        setupSignal = options.signal
+        return new Promise((resolve) => {
+          resolveSetup = resolve
+        })
+      }
+    )
+    const subscribe = handler<
+      { selector: string; method: string; subscriptionId: string },
+      { requestId: string }
+    >('runtimeEnvironments:subscribe')
+    const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
+      'runtimeEnvironments:unsubscribe'
+    )
+    const sender = {
+      id: 1,
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      removeListener: vi.fn()
+    }
+    const pending = subscribe(
+      { sender },
+      { selector: 'desk', method: 'files.search', subscriptionId: 'pending-search' }
+    )
+    await vi.waitFor(() => expect(setupSignal).toBeDefined())
+    expect(await unsubscribe({ sender: { id: 2 } }, { subscriptionId: 'pending-search' })).toEqual({
+      unsubscribed: false
+    })
+    expect(setupSignal?.aborted).toBe(false)
+    expect(await unsubscribe({ sender }, { subscriptionId: 'pending-search' })).toEqual({
+      unsubscribed: true
+    })
+    expect(setupSignal?.aborted).toBe(true)
+    resolveSetup?.({ requestId: 'late', close, sendBinary: () => true })
+    await pending
+    expect(close).toHaveBeenCalledOnce()
+    expect(await unsubscribe({ sender }, { subscriptionId: 'pending-search' })).toEqual({
+      unsubscribed: false
+    })
+    expect(sender.removeListener).toHaveBeenCalledWith('destroyed', expect.any(Function))
   })
 
   it('starts and stops streaming subscriptions for a saved remote runtime', async () => {
@@ -189,7 +247,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { terminal: 't1' },
       25,
       expect.any(Object),
-      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+      {
+        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        signal: expect.any(AbortSignal)
+      }
     )
     expect(sent).toEqual([
       expect.objectContaining({ subscriptionId: result.subscriptionId, type: 'response' }),

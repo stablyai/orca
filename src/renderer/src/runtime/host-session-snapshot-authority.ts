@@ -1,4 +1,7 @@
-import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
+import {
+  CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX,
+  UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
+} from '../../../shared/runtime-types'
 
 type SnapshotPublication = {
   publicationEpoch: string
@@ -19,16 +22,17 @@ type AgentSessionPublication = SnapshotPublication & {
  * A runtime that has published nothing for a worktree still answers a forced snapshot, with a
  * synthesized empty frame. Every worktree is in that state for a moment after the host process
  * restarts, and the frame is indistinguishable from "the user closed everything" unless the epoch
- * is read: `UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` at version 0 is the runtime saying "ask me
- * later". Absence in such a frame proves nothing, so it must not drive a cull.
+ * is read: `UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH`, bare or with a paired client's navigation
+ * suffix, is the runtime saying "ask me later". Absence in such a frame proves nothing, so it must not drive a cull.
  *
  * Deliberately not part of the staleness gate: the frame is not stale, and rejecting it outright
  * would also drop the terminal reconciliation that legitimately rides on it.
  */
 export function hostSnapshotAffirmsWorktreeContents(snapshot: SnapshotPublication): boolean {
-  return !(
-    snapshot.publicationEpoch === UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH &&
-    snapshot.snapshotVersion === 0
+  return (
+    snapshot.publicationEpoch !== UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH &&
+    snapshot.publicationEpoch !==
+      `${UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH}${CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX}`
   )
 }
 

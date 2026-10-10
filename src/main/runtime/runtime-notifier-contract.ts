@@ -1,4 +1,9 @@
+import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
+import type {
+  AgentLaunchTabPublished,
+  AgentLaunchTabPublishRequest
+} from '../../shared/agent-launch-tab-publication'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -75,6 +80,12 @@ export type RuntimeNotifier = {
     | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
     | void
+  /** Shows an agent launch's tab before its process exists; the pane attaches when it does. */
+  publishAgentLaunchTab?(
+    request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
+  ): Promise<AgentLaunchTabPublished>
+  /** A launch pane's fate, for the window to keep on its tab or act on. */
+  agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
@@ -93,7 +104,8 @@ export type RuntimeNotifier = {
       newLeafId?: string
     }
   ): void
-  renameTerminal(tabId: string, title: string | null): void
+  /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
+  renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>

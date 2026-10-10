@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { spawnProcess } from '../../src/shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 
 const buildScript = fileURLToPath(new URL('./build-native-for-platform.mjs', import.meta.url))
 const directories = []
@@ -328,7 +328,9 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     )
     await sleep(300)
     build.releaseExit()
-    await waitFor(() => build.events().some(({ event }) => event === 'completed'))
+    await waitFor(() =>
+      build.events().some(({ event, name }) => event === 'completed' && name.includes('computer'))
+    )
     const accepted = Math.max(
       ...build
         .events()

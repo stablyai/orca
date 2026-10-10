@@ -69,6 +69,7 @@ describe('getBranchCompare', () => {
     headOid?: string | Error
     baseOid?: string | Error
     mergeBase?: string | Error
+    onMergeBase?: () => void
     nameStatus?: string | Error
     numstat?: string | Error
     revList?: string | Error
@@ -99,6 +100,7 @@ describe('getBranchCompare', () => {
         return reply(responses.baseOid, `rev-parse ${args.at(-1)}`)
       }
       if (args[0] === 'merge-base') {
+        responses.onMergeBase?.()
         return reply(responses.mergeBase, 'merge-base')
       }
       if (args.includes('--raw')) {
@@ -127,6 +129,62 @@ describe('getBranchCompare', () => {
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
   }
+
+  it.each([40, 64])(
+    'skips change and count reads for identical %i-character commit tips',
+    async (length) => {
+      const oid = 'a'.repeat(length)
+      mockBranchCompareGit({
+        branch: 'feature\n',
+        probe: { 'refs/remotes/origin/main^{commit}': `${oid}\n` },
+        headOid: `${oid}\n`,
+        baseOid: `${oid}\n`,
+        mergeBase: `${oid}\n`
+      })
+
+      await expect(getBranchCompare('/repo', 'origin/main')).resolves.toEqual({
+        summary: {
+          baseRef: 'origin/main',
+          baseOid: oid,
+          compareRef: 'feature',
+          headOid: oid,
+          mergeBase: oid,
+          changedFiles: 0,
+          commitsAhead: 0,
+          commitsBehind: 0,
+          status: 'ready'
+        },
+        entries: []
+      })
+      expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'merge-base')).toBe(true)
+      expect(
+        gitExecFileAsyncMock.mock.calls.some(([args]) => ['diff', 'rev-list'].includes(args[0]))
+      ).toBe(false)
+    }
+  )
+
+  it('keeps cancellation effective when equal-tip validation settles', async () => {
+    const oid = 'a'.repeat(40)
+    const controller = new AbortController()
+    mockBranchCompareGit({
+      branch: 'feature\n',
+      probe: { 'refs/remotes/origin/main^{commit}': `${oid}\n` },
+      headOid: `${oid}\n`,
+      baseOid: `${oid}\n`,
+      mergeBase: `${oid}\n`,
+      onMergeBase: () => controller.abort(new Error('compare canceled'))
+    })
+
+    await expect(
+      getBranchCompare('/repo', 'origin/main', { signal: controller.signal })
+    ).resolves.toMatchObject({
+      summary: { status: 'error', errorMessage: 'compare canceled' },
+      entries: []
+    })
+    expect(
+      gitExecFileAsyncMock.mock.calls.some(([args]) => ['diff', 'rev-list'].includes(args[0]))
+    ).toBe(false)
+  })
 
   it('returns a pinned branch compare snapshot and parsed branch entries', async () => {
     mockBranchCompareGit({

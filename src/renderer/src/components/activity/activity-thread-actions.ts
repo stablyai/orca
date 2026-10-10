@@ -26,7 +26,7 @@ function getActivityThreadExecutionHostId(
 
 type ActivityThreadWorkspaceCatalog = Pick<
   AppState,
-  'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'
+  'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
 > & { defaultHostId: ExecutionHostId }
 
 function readActivityThreadWorkspaceCatalog(): ActivityThreadWorkspaceCatalog {
@@ -58,23 +58,33 @@ export function createActivityThreadActions({
    *  badge-coherent set (child-filter only), not the search/scope-narrowed one,
    *  so Mark all read always drives the Agents badge to zero. */
   getMarkAllReadThreads: () => AgentPaneThread[]
-  acknowledgeAgents: (paneKeys: string[]) => void
+  acknowledgeAgents: (paneKeys: string[], reads?: undefined, intent?: 'explicit') => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   setSelectedPaneKey: (paneKey: string | null) => void
 }): {
   markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
+  markThreadsRead: (threads: readonly AgentPaneThread[]) => void
+  markThreadsUnread: (threads: readonly AgentPaneThread[]) => void
   selectThread: (thread: AgentPaneThread) => void
   jumpToWorkspace: (thread: AgentPaneThread) => void
   markAllThreadsRead: () => void
 } {
-  const markThreadRead = (thread: AgentPaneThread): void => {
-    acknowledgeAgents([thread.paneKey])
+  const markThreadsRead = (threads: readonly AgentPaneThread[]): void => {
+    acknowledgeAgents(
+      threads.map((thread) => thread.paneKey),
+      undefined,
+      'explicit'
+    )
   }
 
-  const markThreadUnread = (thread: AgentPaneThread): void => {
-    unacknowledgeAgents([thread.paneKey])
+  const markThreadsUnread = (threads: readonly AgentPaneThread[]): void => {
+    unacknowledgeAgents(threads.map((thread) => thread.paneKey))
   }
+
+  const markThreadRead = (thread: AgentPaneThread): void => markThreadsRead([thread])
+
+  const markThreadUnread = (thread: AgentPaneThread): void => markThreadsUnread([thread])
 
   const activateThreadTarget = (thread: AgentPaneThread): void => {
     const isFloatingTerminal = thread.worktree.id === FLOATING_TERMINAL_WORKTREE_ID
@@ -145,12 +155,14 @@ export function createActivityThreadActions({
     if (unreadKeys.length === 0) {
       return
     }
-    acknowledgeAgents(unreadKeys)
+    acknowledgeAgents(unreadKeys, undefined, 'explicit')
   }
 
   return {
     markThreadRead,
     markThreadUnread,
+    markThreadsRead,
+    markThreadsUnread,
     selectThread,
     jumpToWorkspace,
     markAllThreadsRead

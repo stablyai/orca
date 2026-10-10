@@ -13,7 +13,8 @@ vi.mock('@/lib/agent-launch-route-input', () => ({
 }))
 vi.mock('@/lib/agent-launch-routing', () => ({
   resolveAgentLaunchRoute: mocks.resolveAgentLaunchRoute,
-  structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported
+  structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported,
+  structuredAgentLaunchDowngrade: () => null
 }))
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   beginStructuredAgentLaunchSettlement: mocks.beginStructuredAgentLaunchSettlement
@@ -44,6 +45,7 @@ describe('planAgentSessionLaunch', () => {
 
   it('decides the route once, from the builder input, and never again on launch', async () => {
     const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-1',
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
       prompt: 'Fix it',
@@ -64,10 +66,11 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.resolveAgentLaunchRoute).toHaveBeenCalledOnce()
   })
 
-  it('hands the settle loop exactly the prompt, mode, resume source, and delivery hook it planned on', async () => {
+  it('hands the settle loop exactly the request, prompt, mode, resume source, and delivery hook it planned on', async () => {
     const onPromptDelivered = vi.fn()
     const resumeFrom = { providerSessionId: 'provider-1' }
     const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-2',
       agent: 'claude',
       workspace: { kind: 'folder', worktreeId: 'folder:ws-1' },
       prompt: 'Review this',
@@ -81,10 +84,13 @@ describe('planAgentSessionLaunch', () => {
       'folder:ws-1',
       'claude',
       {
+        requestId: 'request-2',
         prompt: 'Review this',
         promptDelivery: 'submit-after-ready',
         resumeFrom,
-        onPromptDelivered
+        onPromptDelivered,
+        // The chat is created on the host the route was decided for.
+        executionHostId: 'local'
       },
       hooks
     )
@@ -92,6 +98,7 @@ describe('planAgentSessionLaunch', () => {
 
   it('sends no delivery fields the request did not carry', async () => {
     const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-3',
       agent: 'codex',
       workspace: { kind: 'folder', worktreeId: 'folder:ws-1' }
     })
@@ -100,14 +107,33 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'folder:ws-1',
       'codex',
-      {},
+      { requestId: 'request-3', executionHostId: 'local' },
       hooks
     )
   })
 
-  it('returns null for an agent that cannot hold a structured session even on the structured route', async () => {
+  // The route is the one gate: it admits only an agent the host registered as structured.
+  it('launches any agent the structured route admitted', async () => {
     const plan = planAgentSessionLaunch(store, {
-      agent: 'gemini',
+      requestId: 'request-4',
+      agent: 'grok',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
+    })
+
+    await expect(plan.launch(hooks)).resolves.toEqual(STRUCTURED)
+    expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
+      'wt-1',
+      'grok',
+      { requestId: 'request-4', executionHostId: 'local' },
+      hooks
+    )
+  })
+
+  it('opens nothing structured on a route that is not', async () => {
+    mocks.resolveAgentLaunchRoute.mockReturnValue('terminal-tui')
+    const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-4b',
+      agent: 'grok',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
     })
 
@@ -118,6 +144,7 @@ describe('planAgentSessionLaunch', () => {
 
   it('launches into the workspace created after planning when the target names one', async () => {
     const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-5',
       agent: 'codex',
       workspace: { kind: 'git-worktree', repoId: 'repo-1' },
       prompt: 'Fix it',
@@ -128,13 +155,19 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'wt-created',
       'codex',
-      { prompt: 'Fix it', promptDelivery: 'auto-submit' },
+      {
+        requestId: 'request-5',
+        prompt: 'Fix it',
+        promptDelivery: 'auto-submit',
+        executionHostId: 'local'
+      },
       hooks
     )
   })
 
   it('refuses to launch a prospective workspace that was never created', async () => {
     const plan = planAgentSessionLaunch(store, {
+      requestId: 'request-6',
       agent: 'codex',
       workspace: { kind: 'git-worktree', repoId: 'repo-1' }
     })
@@ -153,7 +186,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
 
   it.each([true, false])('answers from feasibility alone (supported=%s)', (supported) => {
     mocks.structuredAgentLaunchSupported.mockReturnValue(supported)
-    const settings = { experimentalStructuredNativeChat: true } as never
+    const settings = { experimentalNativeChat: true }
 
     expect(
       structuredAgentSessionLaunchFeasible(store, {
@@ -167,7 +200,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
   })
 
   it('builds the input from the named settings, not the store copy', () => {
-    const settings = { experimentalStructuredNativeChat: true } as never
+    const settings = { experimentalNativeChat: true }
     structuredAgentSessionLaunchFeasible(store, {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
@@ -196,6 +229,7 @@ describe('adoptAgentSessionLaunchVerdict', () => {
 
   it('re-enters a persisted verdict without resolving the route again', async () => {
     const plan = adoptAgentSessionLaunchVerdict({
+      requestId: 'request-7',
       route: 'structured-native-chat',
       agent: 'codex',
       prompt: 'Fix it',
@@ -210,13 +244,14 @@ describe('adoptAgentSessionLaunchVerdict', () => {
     expect(mocks.beginStructuredAgentLaunchSettlement).toHaveBeenCalledWith(
       'wt-recovered',
       'codex',
-      { prompt: 'Fix it', promptDelivery: 'draft' },
+      { requestId: 'request-7', prompt: 'Fix it', promptDelivery: 'draft' },
       hooks
     )
   })
 
   it('keeps a non-structured verdict out of the loop', async () => {
     const plan = adoptAgentSessionLaunchVerdict({
+      requestId: 'request-8',
       route: 'terminal-tui',
       agent: 'codex',
       worktreeId: 'wt-1'

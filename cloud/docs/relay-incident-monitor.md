@@ -252,6 +252,16 @@ paused. Do not drain or restart cells for a director hold. A cell that has
 stopped reporting emits no hold sample, so these policies catch lock convoys,
 not outages.
 
+Since the step-1 observability deploy, director holds also include the
+regional target rows a drain return locks (`cellInventoryHoldMaxSite:
+isolated-replacement`), so the director policy can fire during a roll's drain.
+That is expected and needs no action; `isolatedReplacementHoldMsP99` is the
+per-site view. The same deploy adds that lock's NOWAIT refusals and bounded-wait
+timeouts to the director's `cellInventoryLockUnavailable` and
+`cellInventoryLockTimeouts`, so compare those fields across the deploy only with
+that site subtracted; `orca_relay_cloud_sql_lock_timeouts` is unaffected. Drain
+returns run only on directors, so the paging cell policy is unchanged.
+
 ## Implementation log
 
 - Gave `collector_failed` the same two-consecutive-sample tolerance as an unread

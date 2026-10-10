@@ -152,11 +152,44 @@ describe('forkAgentSessionFromPane', () => {
       })
     )
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-      sidebarRevealBehavior: 'auto'
+      sidebarRevealBehavior: 'auto',
+      providesInitialSurface: true
     })
     expect(mockToast.success).toHaveBeenCalledWith(
       'Top-level session fork opened in a new workspace'
     )
+  })
+
+  // A paired server's surface is published by the launcher; a seeding reveal would add a blank
+  // host terminal beside the chat or agent terminal.
+  it('reveals a paired fork without seeding a surface of its own', async () => {
+    store.agentStatusByPaneKey = {
+      [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
+    }
+    mockLaunchAgentInNewTab.mockImplementationOnce(
+      (args: { beforeSurfaceOpen?: (surface: { kind: 'host-published' }) => boolean }) => {
+        args.beforeSurfaceOpen?.({ kind: 'host-published' })
+        return {
+          surface: { kind: 'host-published' },
+          startupPlan: {},
+          pasteDraftAfterLaunch: false
+        }
+      }
+    )
+    const { forkAgentSessionFromPane } = await import('./terminal-agent-session-fork')
+
+    await forkAgentSessionFromPane({
+      pane: makePane('User: compare OAuth options'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(mockActivateAndRevealWorktree).toHaveBeenCalledOnce()
+    expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
+      sidebarRevealBehavior: 'auto',
+      providesInitialSurface: true
+    })
   })
 
   it('announces the provisional chat without waiting for structured settlement', async () => {
@@ -164,20 +197,14 @@ describe('forkAgentSessionFromPane', () => {
       [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
     }
     const result = {
-      surface: {
-        kind: 'local-agent-session',
-        tabId: 'structured-agent-session-session-1',
-        sessionId: 'session-1'
-      },
+      surface: { kind: 'host-published' },
       startupPlan: {},
       pasteDraftAfterLaunch: false,
       structuredSettlement: new Promise(() => {})
     }
     mockLaunchAgentInNewTab.mockImplementationOnce(
-      (args: {
-        beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
-      }) => {
-        args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+      (args: { beforeSurfaceOpen?: (surface: { kind: 'host-published' }) => void }) => {
+        args.beforeSurfaceOpen?.({ kind: 'host-published' })
         return result
       }
     )
@@ -209,20 +236,14 @@ describe('forkAgentSessionFromPane', () => {
         [`tab-1:${LEAF_ID}`]: { agentType: 'codex' }
       }
       const result = {
-        surface: {
-          kind: 'local-agent-session',
-          tabId: 'structured-agent-session-session-1',
-          sessionId: 'session-1'
-        },
+        surface: { kind: 'host-published' },
         startupPlan: {},
         pasteDraftAfterLaunch: false,
         structuredSettlement: Promise.resolve(settlement)
       }
       mockLaunchAgentInNewTab.mockImplementationOnce(
-        (args: {
-          beforeSurfaceOpen?: (surface: { kind: 'local-agent-session'; sessionId: string }) => void
-        }) => {
-          args.beforeSurfaceOpen?.({ kind: 'local-agent-session', sessionId: 'session-1' })
+        (args: { beforeSurfaceOpen?: (surface: { kind: 'host-published' }) => void }) => {
+          args.beforeSurfaceOpen?.({ kind: 'host-published' })
           return result
         }
       )

@@ -1,10 +1,48 @@
 import { describe, expect, it } from 'vitest'
 import type { HostSectionRow } from './host-section-rows'
+import type { FolderWorkspaceRow } from './worktree-list/grouping/row-types'
 import {
+  getCyclableRowIdentity,
+  getCyclableWorktreeRows,
   getCyclableWorktreeIds,
   getCyclableWorktrees,
+  resolveActiveCycleIdentity,
   resolveCycledWorktreeId
 } from './worktree-keyboard-cycle'
+
+const folderRow: FolderWorkspaceRow = {
+  type: 'folder-workspace',
+  key: 'folder-workspace:folder-1',
+  folderWorkspace: {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    name: 'Folder 1',
+    folderPath: '/group-1/folder-1',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 1,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1
+  },
+  projectGroup: {
+    id: 'group-1',
+    name: 'Group 1',
+    parentPath: '/group-1',
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  },
+  depth: 0,
+  groupDepth: 0
+}
 
 describe('resolveCycledWorktreeId', () => {
   const worktreeIds = ['a', 'b', 'c']
@@ -110,22 +148,62 @@ describe('getCyclableWorktreeIds', () => {
     ])
   })
 
-  it('leaves folder workspaces out of the rotation', () => {
-    // Why: their synthetic `folder:` id is not activatable through
-    // activateAndRevealWorktree, so arrowing onto one would be a dead keypress.
-    const rows: HostSectionRow[] = [
-      {
-        type: 'folder-workspace',
-        key: 'folder-workspace:folder-1',
-        folderWorkspace: { id: 'folder-1', projectGroupId: 'group-1' } as never,
-        projectGroup: { id: 'group-1' } as never,
-        depth: 0,
-        groupDepth: 0
-      },
-      worktree('plain-b')
+  it('includes folder workspaces between git worktrees in visible order', () => {
+    const rows = [worktree('a'), folderRow, worktree('b')]
+
+    expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['a', 'folder:folder-1', 'b'])
+  })
+
+  it('anchors both directions on the active folder workspace', () => {
+    const rows = getCyclableWorktreeRows(
+      [worktree('a'), folderRow, worktree('b')],
+      'single-location'
+    )
+    const activeWorktreeId = resolveActiveCycleIdentity({
+      rows,
+      activeWorktreeId: 'folder:folder-1',
+      activeWorkspaceExecutionHostId: 'local'
+    })
+    const worktreeIds = rows.map(getCyclableRowIdentity)
+
+    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId, direction: 'up' })).toBe(
+      getCyclableRowIdentity(rows[0])
+    )
+    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId, direction: 'down' })).toBe(
+      getCyclableRowIdentity(rows[2])
+    )
+  })
+
+  it('keeps folder placement while preferring a pinned worktree natural row', () => {
+    const rows = [
+      worktree('dup', true),
+      folderRow,
+      { ...worktree('dup'), rowKey: 'row:dup-natural' },
+      worktree('b')
     ]
 
-    expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['plain-b'])
+    expect(getCyclableWorktreeIds(rows, 'duplicate-in-groups')).toEqual([
+      'folder:folder-1',
+      'dup',
+      'b'
+    ])
+  })
+
+  it('keeps folder keys distinct from git ids and preserves same-id host ownership', () => {
+    const otherHostFolder = {
+      ...folderRow,
+      folderWorkspace: { ...folderRow.folderWorkspace, executionHostId: 'ssh:host-b' as const }
+    }
+    const rows = getCyclableWorktreeRows(
+      [worktree('folder-1'), folderRow, otherHostFolder],
+      'single-location'
+    )
+
+    expect(rows.map(getCyclableRowIdentity)).toEqual([
+      'local|folder-1',
+      'local|folder:folder-1',
+      'ssh:host-b|folder:folder-1'
+    ])
   })
 
   it('drops worktrees the sidebar elided inside a collapsed host section', () => {

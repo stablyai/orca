@@ -12,13 +12,15 @@ import { createDeferredStructuredAgentSessionEventSink } from './structured-agen
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 }
 
 let root: string | null = null
@@ -57,6 +59,8 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
@@ -111,6 +115,8 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
@@ -156,6 +162,8 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: {
         cancelTurn: vi.fn(async () => ({ cancelled: false }))
       } as unknown as StructuredAgentSessionAdapter,
@@ -190,6 +198,8 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
@@ -228,6 +238,8 @@ describe('performCancel', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
       resolvedBy: 'client-1',
@@ -254,6 +266,66 @@ describe('performCancel', () => {
     })
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(journal.snapshot().items).toEqual([])
+  })
+
+  async function backgroundStopWith(
+    stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'],
+    operation: string
+  ) {
+    root = await mkdtemp(join(tmpdir(), 'orca-background-task-failed-cancel-'))
+    const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
+    const cancelTurn = vi.fn(async () => ({ cancelled: true }))
+    const ctx: AgentSessionTurnContext = {
+      logger: createStructuredAgentSessionLogger(),
+      sessionId: 'session-1',
+      journal,
+      fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
+      adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
+      persistOptions: async () => undefined,
+      resolvedBy: 'client-1',
+      publish: vi.fn(),
+      now: () => 1
+    }
+    const result = await performCancel(ctx, {
+      clientOperationId: operation,
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      taskId: 'task-1',
+      childWork: () => [liveTask('task-1')]
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+    expect(journal.snapshot().items).toEqual([])
+    return result
+  }
+
+  it('refuses a background Stop the agent shows still running, so the person hears it failed', async () => {
+    const result = await backgroundStopWith(
+      async () => ({ cancelled: false, stillRunning: true }),
+      'cancel-background-task-survived'
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid' }
+    })
+    expect(result.ok ? undefined : result.refusal.details).toBeUndefined()
+  })
+
+  it.each([
+    ['timed out', 'codex app-server request timed out'],
+    ['lost the agent', 'codex app-server connection closed']
+  ])('answers a background Stop that %s as unconfirmed, never not stopped', async (_, message) => {
+    const result = await backgroundStopWith(async () => {
+      throw new Error(message)
+    }, 'cancel-background-task-unconfirmed')
+
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown' }
+    })
+    expect(result.ok ? undefined : result.refusal.details).toBeUndefined()
   })
 })
 
@@ -309,6 +381,8 @@ describe('what a conversation Stop reports when the provider stopped nothing', (
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: {
         acquire: vi.fn(),
         dispatch: vi.fn(),
@@ -392,6 +466,8 @@ describe('the note a Stop writes', () => {
       sessionId: 'session-1',
       journal,
       fence: 1,
+      agents: NO_STRUCTURED_AGENTS,
+      agent: 'codex',
       adapter: {
         acquire: vi.fn(),
         dispatch: vi.fn(),

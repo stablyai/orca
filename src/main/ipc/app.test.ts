@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AppRelaunch from '../app-relaunch'
 
 const {
   handlers,
@@ -10,7 +11,7 @@ const {
   destroySystemTrayMock,
   relaunchAppMock,
   showOpenDialogMock,
-  grantFloatingWorkspaceDirectoryMock,
+  trustFloatingWorkspaceDirectoryMock,
   registerRendererShutdownCheckpointHandlerMock,
   registerMacKeyboardLayoutChangeNotificationsMock
 } = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ const {
   destroySystemTrayMock: vi.fn(),
   relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
-  grantFloatingWorkspaceDirectoryMock: vi.fn(),
+  trustFloatingWorkspaceDirectoryMock: vi.fn(),
   registerRendererShutdownCheckpointHandlerMock: vi.fn(),
   registerMacKeyboardLayoutChangeNotificationsMock: vi.fn()
 }))
@@ -97,13 +98,14 @@ vi.mock('../tray/system-tray', () => ({
   destroySystemTray: destroySystemTrayMock
 }))
 
-vi.mock('../app-relaunch', () => ({
+vi.mock('../app-relaunch', async (importOriginal) => ({
+  ...(await importOriginal<typeof AppRelaunch>()),
   relaunchApp: relaunchAppMock
 }))
 
 vi.mock('./floating-workspace-directory', () => ({
   ensureDefaultFloatingWorkspacePath: vi.fn(),
-  grantFloatingWorkspaceDirectory: grantFloatingWorkspaceDirectoryMock,
+  trustFloatingWorkspaceDirectory: trustFloatingWorkspaceDirectoryMock,
   resolveFloatingTerminalCwd: vi.fn()
 }))
 
@@ -155,7 +157,7 @@ describe('registerAppHandlers', () => {
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
     showOpenDialogMock.mockReset()
-    grantFloatingWorkspaceDirectoryMock.mockReset()
+    trustFloatingWorkspaceDirectoryMock.mockReset()
     registerRendererShutdownCheckpointHandlerMock.mockReset()
     registerMacKeyboardLayoutChangeNotificationsMock.mockReset()
     for (const probe of Object.values(windowsProbes)) {
@@ -416,7 +418,7 @@ describe('registerAppHandlers', () => {
     expect(showOpenDialogMock).toHaveBeenCalledWith({
       properties: ['openDirectory']
     })
-    expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
+    expect(trustFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
 
   // Why: the renderer reads these on every Windows capability refresh; the sync probes

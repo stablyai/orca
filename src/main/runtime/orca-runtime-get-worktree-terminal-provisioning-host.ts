@@ -6,8 +6,19 @@ import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../project-runtime-git-options'
 import type { Worktree } from '../../shared/worktree/types'
+import {
+  navigationTargetsHost,
+  type RuntimeNavigationTarget
+} from '../../shared/runtime-navigation'
 
 export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
+  protected shouldProvisionWorktreeInBackground(navigation?: RuntimeNavigationTarget): boolean {
+    return (
+      navigationTargetsHost(navigation ?? 'host') &&
+      (!this.notifier || this.graphStatus !== 'ready' || !this.getAvailableAuthoritativeWindow())
+    )
+  }
+
   protected getWorktreeTerminalProvisioningHost(
     createdWorktree?: Worktree
   ): WorktreeTerminalProvisioningHost {
@@ -16,7 +27,18 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
       createTerminal: (selector, options) =>
         this.createTerminal(selector, options, createdWorktree),
       splitTerminal: (handle, options) => this.splitTerminal(handle, options, createdWorktree),
-      setTabColor: async (worktreeId, tabId, color) => {
+      setTabTitle: async (handle, title) => {
+        const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
+        // Why not renameTerminal: it writes the pane's title, stamped to outrank every later
+        // agent title, which would hide the agent's own titles and status for the pane's life.
+        this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
+        if (!this.getAvailableAuthoritativeWindow()) {
+          this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
+          this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { title })
+        }
+      },
+      setTabColor: async (handle, color) => {
+        const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
       getSettings: () => this.requireStore().getSettings(),
@@ -24,6 +46,17 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
     }
+  }
+
+  protected getProvisionedTerminalTab(handle: string): { worktreeId: string; tabId: string } {
+    const pty = this.getLivePtyForHandle(handle)?.pty
+    if (pty?.tabId) {
+      return { worktreeId: pty.worktreeId, tabId: pty.tabId }
+    }
+    // Why: once the window's graph sync adopts the handle it names the window's leaf, not the
+    // runtime's pty, as renameTerminal also resolves it.
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    return { worktreeId: leaf.worktreeId, tabId: leaf.tabId }
   }
 
   protected getWorktreeStartupReadinessHost(): WorktreeStartupReadinessHost {

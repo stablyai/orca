@@ -1,6 +1,9 @@
+import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
 import { NativeChatSkillPill } from './NativeChatSkillPill'
+import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+export { promptTextContent } from './native-chat-prompt-document-text'
 
 export const NativeChatSkill = Node.create({
   name: 'nativeChatSkill',
@@ -24,13 +27,23 @@ export const NativeChatSkill = Node.create({
   ]
 })
 
-export function promptTextContent(text: string): JSONContent {
+/** A file attached by path. `token` is the reference the agent reads; the pill shows the filename. */
+export const NativeChatFileReference = Node.create({
+  name: 'nativeChatFileReference',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addNodeView: () => ReactNodeViewRenderer(NativeChatFileReferencePill),
+  addAttributes: () => ({ token: { default: '' }, path: { default: '' } }),
+  renderText: ({ node }) => node.attrs.token,
+  renderHTML: ({ node }) => ['span', { 'data-native-chat-file-reference': node.attrs.path }]
+})
+
+export function fileReferenceContent(path: string): JSONContent {
   return {
-    type: 'doc',
-    content: text.split('\n').map((line) => ({
-      type: 'paragraph',
-      content: line ? [{ type: 'text', text: line }] : []
-    }))
+    type: NativeChatFileReference.name,
+    attrs: { token: formatNativeChatFileReference(path), path }
   }
 }
 

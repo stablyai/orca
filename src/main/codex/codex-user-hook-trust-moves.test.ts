@@ -48,7 +48,7 @@ function mutate(
   after: Record<string, HookDefinition[]>
 ): void {
   mutateRealHomeHooksPreservingUserTrust({
-    sourcePath: hooksPath,
+    sourcePaths: [hooksPath],
     tomlPath: configPath,
     beforeHooks: before,
     afterHooks: after,

@@ -1,10 +1,13 @@
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type {
+  AgentJournalAnsweredTurnIdentity,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
-import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
+import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type {
   CodexAppServerConnection,
   openCodexAppServerConnection
@@ -24,6 +27,7 @@ import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import type { NativeChatVisualsLaunch } from '../native-chat/native-chat-visuals-delivery'
 
 export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess
 
@@ -41,7 +45,18 @@ export type CodexStructuredLaunch = {
   /** The model the session chose; the thread opens on it so its first turn is not a switch. */
   model?: string
   env?: Record<string, string>
+  /** This chat's visuals folder and skill; absent when the chat has no visuals. */
+  visuals?: NativeChatVisualsLaunch
 }
+
+/** Turn and item boundaries, timed by when the host received them, never by when a buffered or
+ *  retried delivery got round to them. */
+export const CODEX_RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
+  'turn/started',
+  'turn/completed',
+  'item/started',
+  'item/completed'
+])
 
 export type CodexStructuredSessionEvent =
   | {
@@ -50,7 +65,8 @@ export type CodexStructuredSessionEvent =
       threadId: string
       method: string
       params: unknown
-      /** Host receipt time of a turn boundary; survives retry and deferral so a replay is not re-stamped. */
+      /** Host receipt time of a `CODEX_RECEIPT_TIMED_METHODS` boundary; survives retry and
+       *  deferral so a replay is not re-stamped. */
       observedAt?: number
       /** Highest dispatch sequence armed when this turn-start was first received. */
       dispatchSequenceAtReceipt?: number
@@ -71,12 +87,13 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
+  resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
-  /** Host capability seam; production uses the native Windows process table. */
-  isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
+  /** Where bookkeeping a close or exit does after the child is gone reports a failure. */
+  logger?: StructuredAgentSessionLogger
   /** What the session's child work did, delivered after the journal handled the frame. */
   onChildWorkEvidence?: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** A send admitted earlier: its identity once Codex echoes it, or its rejection when the turn
@@ -84,7 +101,10 @@ export type CodexStructuredSessionAdapterDeps = {
   onDispatchSettledLate?: (
     input: { sessionId: string; clientMessageId: string } & (
       | { providerIdentity: AgentJournalItemIdentity }
-      | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+      | ({
+          state: 'rejected'
+          answeredInTurn?: AgentJournalAnsweredTurnIdentity
+        } & AgentJournalDispatchRejection)
     )
   ) => void
   /** Codex reported its thread not running with no turn open: a send whose
@@ -101,19 +121,24 @@ export type CodexStructuredSessionAdapterDeps = {
 }
 
 export type CodexSession = {
+  account?: AgentSessionAccountKind
   connection: CodexAppServerConnection
   ended: boolean
   /** First observed child exit survives rejected settlement admission. */
   exitObservedAt?: number
-  requestedClose: boolean
+  /** The close Orca began for this child: asked for, or forced as a death, and why. Whatever ends
+   *  the child after it (that close, or the exit the connection reports meanwhile) keeps this. */
+  orcaClose?: { requested: boolean; reason: Error }
   fence: number
   acquisitionGeneration: string
   threadId: string
-  historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
   /** Primary-thread turns Codex reported started and not yet ended, as read off the wire: what
    *  rewind waits out and what a Stop naming no turn interrupts when the journal shows none. */
   activeTurnIds?: Set<string>
+  /** Of those, the turns whose interrupt Codex answered. It answers as the turn aborts, ahead of
+   *  that turn's `turn/completed`, so none of them can take a steer any more. */
+  abortedTurnIds?: Set<string>
   /** Stops waiting for the turn Codex answered a send into to open. */
   turnOpenWaits: CodexTurnOpenWaits
   dispatchPending?: boolean
@@ -125,8 +150,6 @@ export type CodexSession = {
     serviceTier?: string | null
     serviceTierKnown?: true
   }
-  /** Exact provider-advertised Fast request value for each discovered model. */
-  fastModeTierByModel: Map<string, string>
   /** Absent when the adapter runs without a host catalog store (tests). */
   catalogAccess?: CodexSessionCatalogAccess
   /** Sends whose identity is still to be settled by the provider echo. */
@@ -146,13 +169,9 @@ export function mintCodexAcquisitionGeneration(deps: CodexStructuredSessionAdapt
 export function codexSessionLifecycle(
   fence: number,
   acquisitionGeneration: string
-): Pick<
-  CodexSession,
-  'ended' | 'requestedClose' | 'fence' | 'acquisitionGeneration' | 'turnOpenWaits'
-> {
+): Pick<CodexSession, 'ended' | 'fence' | 'acquisitionGeneration' | 'turnOpenWaits'> {
   return {
     ended: false,
-    requestedClose: false,
     fence,
     acquisitionGeneration,
     turnOpenWaits: createCodexTurnOpenWaits()

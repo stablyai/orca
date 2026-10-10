@@ -350,7 +350,7 @@ describe('OrcaRuntimeService', () => {
       // an unqualified purge would evict a same-id row owned by another host.
       expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
-      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     } finally {
       await rm(parentDir, { recursive: true, force: true })
@@ -376,7 +376,7 @@ describe('OrcaRuntimeService', () => {
       // an unqualified purge would evict a same-id row owned by another host.
       expect(removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
-      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalledWith(runtimeStore, TEST_REPO_ID)
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     } finally {
       await rm(parentDir, { recursive: true, force: true })

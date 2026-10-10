@@ -393,7 +393,7 @@ describe('registerFilesystemHandlers', () => {
 
   it('prepares the selected Claude auth environment before local generation', async () => {
     const previousAnthropicApiKey = process.env.ANTHROPIC_API_KEY
-    process.env.ANTHROPIC_API_KEY = 'do-not-leak-managed-auth-conflict'
+    process.env.ANTHROPIC_API_KEY = 'shell-proxy-key'
     const context = {
       branch: 'feature/ai',
       stagedSummary: 'M\tREADME.md',
@@ -412,7 +412,6 @@ describe('registerFilesystemHandlers', () => {
         prepareForClaudeLaunch: async () => ({
           configDir: '/managed/claude',
           envPatch: { CLAUDE_CONFIG_DIR: '/managed/claude' },
-          stripAuthEnv: true,
           provenance: 'managed:account-1'
         })
       })
@@ -429,12 +428,58 @@ describe('registerFilesystemHandlers', () => {
           CLAUDE_CONFIG_DIR: '/managed/claude'
         })
       )
-      expect(target?.env?.ANTHROPIC_API_KEY).toBeUndefined()
+      // The shell's own key stays with the account, as on System default.
+      expect(target?.env?.ANTHROPIC_API_KEY).toBe('shell-proxy-key')
     } finally {
       if (previousAnthropicApiKey === undefined) {
         delete process.env.ANTHROPIC_API_KEY
       } else {
         process.env.ANTHROPIC_API_KEY = previousAnthropicApiKey
+      }
+    }
+  })
+
+  it('starts local generation from the login-shell environment', async () => {
+    const previousBaseUrl = process.env.ANTHROPIC_BASE_URL
+    delete process.env.ANTHROPIC_BASE_URL
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'claude', model: 'haiku' }
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'Update README'
+    })
+
+    try {
+      registerFilesystemHandlers(store as never, {
+        resolveBaseEnvironment: async () => ({ ANTHROPIC_BASE_URL: 'https://proxy.example' }),
+        prepareForClaudeLaunch: async () => ({
+          configDir: '/home/me/.claude',
+          envPatch: {},
+          provenance: 'system'
+        })
+      })
+
+      await handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+
+      expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+        context,
+        params,
+        expect.objectContaining({
+          kind: 'local',
+          env: { ANTHROPIC_BASE_URL: 'https://proxy.example' }
+        })
+      )
+    } finally {
+      if (previousBaseUrl !== undefined) {
+        process.env.ANTHROPIC_BASE_URL = previousBaseUrl
       }
     }
   })
@@ -459,9 +504,11 @@ describe('registerFilesystemHandlers', () => {
       message: 'Add remote file'
     })
 
+    const resolveBaseEnvironment = vi.fn(async () => ({}))
     registerFilesystemHandlers(store as never, {
       prepareForCodexLaunch,
-      prepareForClaudeLaunch
+      prepareForClaudeLaunch,
+      resolveBaseEnvironment
     })
 
     await expect(
@@ -495,6 +542,7 @@ describe('registerFilesystemHandlers', () => {
     )
     expect(prepareForCodexLaunch).not.toHaveBeenCalled()
     expect(prepareForClaudeLaunch).not.toHaveBeenCalled()
+    expect(resolveBaseEnvironment).not.toHaveBeenCalled()
   })
 
   it('routes SSH generation cancellations to separate provider operations', async () => {

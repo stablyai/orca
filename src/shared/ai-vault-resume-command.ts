@@ -1,6 +1,11 @@
 // Resume-command construction for Agent Session History rows: turns a scanned
 // session into the shell line that re-enters it, quoted for the target platform
 // and (when known) the live tab's shell.
+import {
+  isAntigravityReferenceSession,
+  antigravityTranscriptReferencePrompt
+} from './antigravity-session-origin'
+import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
   clearEnvCommand,
@@ -41,7 +46,11 @@ export function buildAiVaultResumeCommand(args: {
       : shell
         ? quoteStartupArg(resumeTarget, shell)
         : quoteShellArg(resumeTarget, platform)
-  const resumeCommand = buildAgentResumeInvocation(agent, baseCommand, sessionArg)
+  const referencePath = normalizeAiVaultResumeFilePath(resumeFilePath ?? undefined, platform)
+  const resumeCommand =
+    isAntigravityReferenceSession({ agent, filePath: referencePath }) && referencePath
+      ? `${baseCommand} --prompt-interactive ${quoteResumeArg(antigravityTranscriptReferencePrompt(referencePath), platform, shell)}`
+      : buildAgentResumeInvocation(agent, baseCommand, sessionArg)
 
   return buildAiVaultResumeShellCommand({
     resumeCommand,
@@ -184,8 +193,9 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
   if (agent === 'hermes') {
     return 'hermes'
   }
-  if (agent === 'rovo') {
-    return 'acli'
+  // Preserve launch subcommands and mode flags when resuming.
+  if (agent === 'rovo' || agent === 'opencode2' || agent === 'kiro') {
+    return TUI_AGENT_CONFIG[agent].launchCmd
   }
   return TUI_AGENT_CONFIG[agent].detectCmd
 }
@@ -199,9 +209,9 @@ function buildAgentResumeInvocation(
     case 'codex':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':
-      return `${baseCommand} rovodev run --restore ${sessionArg}`
+      // Why: the base is the full launch command, as a settings override is.
+      return `${baseCommand} --restore ${sessionArg}`
     case 'opencode2':
-      return `${baseCommand} --standalone --session ${sessionArg}`
     case 'opencode':
     case 'pi':
     // Why: Kimi Code resumes with `kimi --session <id>` (alias `-S`). Sessions
@@ -229,6 +239,7 @@ function buildAgentResumeInvocation(
     case 'devin':
     case 'openclaw':
     case 'droid':
+    case 'jcode':
     // Why: OMP and Prime Agent resume by absolute transcript path (see
     // buildAiVaultResumeCommand), but the `--resume <arg>` invocation form is
     // identical to the others here.
@@ -238,6 +249,8 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':
       return `${baseCommand} --conversation ${sessionArg}`
+    case 'kiro':
+      return `${baseCommand} --resume-id ${sessionArg}`
   }
 }
 

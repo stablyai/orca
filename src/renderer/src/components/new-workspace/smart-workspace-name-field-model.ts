@@ -7,7 +7,10 @@ import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { SmartNameMode, SmartWorkspaceSourceRow } from './smart-workspace-source-results'
+import type {
+  SmartNameMode,
+  SmartWorkspaceSourceRow
+} from '../../../../shared/new-workspace/smart-workspace-source-results'
 
 export type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 
@@ -26,6 +29,8 @@ export type SmartWorkspaceNameFieldProps = {
   onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
+  gitlabSourceContext?: TaskSourceContext | null
+  linearSourceContext?: TaskSourceContext | null
   githubSourceContext?: TaskSourceContext | null
   jiraSourceContext?: TaskSourceContext | null
   inputRef?: React.RefObject<HTMLInputElement | null>
@@ -39,27 +44,6 @@ export type SmartWorkspaceNameFieldProps = {
   allowCrossRepoProjectAdd?: boolean
   crossRepoSwitchTarget?: 'project' | 'task-source'
   onActiveSourceModeChange?: (mode: SmartNameMode) => void
-}
-
-export type NormalizedSmartWorkspaceNameFieldProps = Omit<
-  SmartWorkspaceNameFieldProps,
-  | 'jiraSourceContext'
-  | 'disabled'
-  | 'textOnly'
-  | 'branchesEnabled'
-  | 'repoBackedSourcesDisabled'
-  | 'repoBackedSearchRepos'
-  | 'allowCrossRepoProjectAdd'
-  | 'crossRepoSwitchTarget'
-> & {
-  jiraSourceContext: TaskSourceContext | null
-  disabled: boolean
-  textOnly: boolean
-  branchesEnabled: boolean
-  repoBackedSourcesDisabled: boolean
-  repoBackedSearchRepos: readonly RepoOption[]
-  allowCrossRepoProjectAdd: boolean
-  crossRepoSwitchTarget: 'project' | 'task-source'
 }
 
 export type SmartWorkspaceNameSelection = {
@@ -103,3 +87,29 @@ export type CachedRepoSlug = RepoSlug
 export const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
 export const SEARCH_DEBOUNCE_MS = 200
 export const RESULT_LIMIT = 12
+
+export type WorkItemSourceSearchProps = Pick<
+  SmartWorkspaceNameFieldProps,
+  | 'repos'
+  | 'repoId'
+  | 'value'
+  | 'disabled'
+  | 'textOnly'
+  | 'branchesEnabled'
+  | 'repoBackedSourcesDisabled'
+  | 'repoBackedSearchRepos'
+  | 'crossRepoSwitchTarget'
+  | 'githubSourceContext'
+  | 'gitlabSourceContext'
+  | 'linearSourceContext'
+  | 'jiraSourceContext'
+> & { sourceSelected?: boolean; gitlabEnabled?: boolean; typedTextEnabled?: boolean }
+export type NormalizedWorkItemSourceSearchProps = WorkItemSourceSearchProps & {
+  disabled: boolean
+  textOnly: boolean
+  branchesEnabled: boolean
+  repoBackedSourcesDisabled: boolean
+  repoBackedSearchRepos: readonly RepoOption[]
+  crossRepoSwitchTarget: 'project' | 'task-source'
+  jiraSourceContext: TaskSourceContext | null
+}

@@ -21,6 +21,7 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/structured-agent-session-launch-registry'
 
@@ -56,6 +57,8 @@ export function isAgentSessionTab(
 
 export function buildMirroredAgentTabs(
   snapshot: RuntimeMobileSessionTabsResult,
+  /** The host that published the snapshot; stamped so later operations reach the chat there. */
+  executionHostId: ExecutionHostId,
   hostGroupIdByTabId: ReadonlyMap<string, string>,
   fallbackGroupId: string,
   sortOffset: number,
@@ -120,6 +123,7 @@ export function buildMirroredAgentTabs(
         // user's split choice and must not move the mounted pane during adoption.
         groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
+        executionHostId,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
         // Why: `title` is wire data typed `string`; a host that violates that must
@@ -135,17 +139,6 @@ export function buildMirroredAgentTabs(
       }
     }
   })
-}
-
-export function localEditorFileId(tab: ReadyEditorSurface): string {
-  if (tab.type === 'markdown' && tab.mode === 'markdown-preview') {
-    return `markdown-preview::${tab.sourceFilePath}`
-  }
-  return tab.filePath
-}
-
-export function editorSourceFileId(tab: ReadyEditorSurface): string | undefined {
-  return tab.type === 'markdown' && tab.mode === 'markdown-preview' ? tab.sourceFilePath : undefined
 }
 
 export function isRuntimeTerminalTabForEnvironment(
@@ -237,7 +230,8 @@ export function shouldReplaceTerminalTab(
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  exactProvisionalHandoffs: ReadonlySet<string>
+  exactProvisionalHandoffs: ReadonlySet<string>,
+  persistedLeafPtyIds: Readonly<Record<string, string>> | undefined
 ): boolean {
   if (exactProvisionalHandoffs.has(tab.id)) {
     // Why: agent kind is not session identity; retire only the provisional tab
@@ -249,7 +243,13 @@ export function shouldReplaceTerminalTab(
     return true
   }
   if (tab.pendingActivationSpawn && tab.ptyId === null && nextRemotePtyIds.size > 0) {
-    return true
+    // Why: a fresh placeholder has no identity, so the host's first terminal takes it over. A
+    // restored row names its own PTYs, and only those may retire it (#25339).
+    return (
+      !tab.restoredFromSession ||
+      nextMirroredTerminalIds.has(toWebTerminalSurfaceTabId(tab.id)) ||
+      Object.values(persistedLeafPtyIds ?? {}).some((ptyId) => nextRemotePtyIds.has(ptyId))
+    )
   }
   if (!isRuntimeTerminalTabForEnvironment(tab, environmentId)) {
     return false

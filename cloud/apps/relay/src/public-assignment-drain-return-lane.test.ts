@@ -37,12 +37,14 @@ describe('drain-return lane', () => {
       relayHostId === drained ? isolatedHome(relayHostId) : assignment('cell-o', relayHostId)
     )
     const outcomes: string[] = []
+    const servedLanes: string[] = []
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: { assign, resolve } as never,
       drain: vi.fn(),
       ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome)
+      recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
+      recordAdmissionServiceMs: (lane) => servedLanes.push(lane)
     })
 
     // The re-placement holds the drain lane; the sticky lane's only slot is free.
@@ -61,6 +63,8 @@ describe('drain-return lane', () => {
     replacement.resolve(assignment('cell-new', drained))
     expect((await moving).status).toBe(200)
     expect(outcomes).toEqual(['drain-return', 'sticky'])
+    // The drained host held a sticky slot for its verification read too.
+    expect(servedLanes).toEqual(['sticky', 'sticky', 'drain-return'])
   })
 
   it('defers an overflowing drain return with a paced Retry-After and says why', async () => {
@@ -73,6 +77,7 @@ describe('drain-return lane', () => {
     const outcomes: string[] = []
     const reasons: string[] = []
     const retryAfters: number[] = []
+    const causes: string[] = []
     const app = createRelayApp(config({ drainReturnQueueMax: 1, drainReturnWaitMs: 50 }), {
       store: {} as never,
       assignments: { assign, resolve } as never,
@@ -80,7 +85,8 @@ describe('drain-return lane', () => {
       ready: vi.fn(async () => true),
       recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
       recordAssignmentRejectionReason: (lane, reason) => reasons.push(`${lane}:${reason}`),
-      recordDrainReturnRetryAfter: (seconds) => retryAfters.push(seconds)
+      recordDrainReturnRetryAfter: (seconds) => retryAfters.push(seconds),
+      recordAssignmentUnavailable: (cause) => causes.push(cause)
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -103,6 +109,7 @@ describe('drain-return lane', () => {
     expect(reasons).toEqual(['drain-return:queue-full', 'drain-return:wait-timeout'])
     expect(retryAfters).toEqual([2, Number(timedOut.headers.get('retry-after'))])
     expect(outcomes.filter((outcome) => outcome === 'drain-return-deferred')).toHaveLength(2)
+    expect(causes).toEqual(['drain-return-deferred', 'drain-return-deferred'])
     expect(warn.mock.calls.flat().join('\n')).toMatch(
       /lane=drain-return hinted=true reason=queue-full .*retryAfter=2/
     )
@@ -115,12 +122,14 @@ describe('drain-return lane', () => {
     const assign = vi.fn(async () => assignment('cell-s', host))
     const resolve = vi.fn(async () => assignment('cell-s', host))
     const outcomes: string[] = []
+    const causes: string[] = []
     const app = createRelayApp(config(), {
       store: {} as never,
       assignments: { assign, resolve } as never,
       drain: vi.fn(),
       ready: vi.fn(async () => true),
-      recordAssignmentAdmission: (outcome) => outcomes.push(outcome)
+      recordAssignmentAdmission: (outcome) => outcomes.push(outcome),
+      recordAssignmentUnavailable: (cause) => causes.push(cause)
     })
 
     expect(
@@ -131,6 +140,27 @@ describe('drain-return lane', () => {
     expect(repeat.status).toBe(503)
     expect(repeat.headers.get('retry-after')).toBe('2')
     expect(outcomes).toEqual(['sticky', 'sticky-rejected'])
+    expect(causes).toEqual(['sticky-lane'])
+  })
+
+  it('names the cause of a placement that found no capacity', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const assign = vi.fn(async () => {
+      throw new Error('relay_capacity_exhausted')
+    })
+    const causes: string[] = []
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: { assign, resolve: vi.fn() } as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true),
+      recordAssignmentUnavailable: (cause) => causes.push(cause)
+    })
+
+    const response = await app.request('/v1/assign', assignmentRequest('cccccccccccccccc'))
+
+    expect(response.status).toBe(503)
+    expect(causes).toEqual(['relay_capacity_exhausted'])
   })
 
   it('never classifies an unhinted request, which keeps the placement lane', async () => {

@@ -17,6 +17,7 @@ import {
 } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import {
+  agentSessionReadFailureRefusal,
   agentSessionReadFailureText,
   callAgentSession
 } from './mobile-structured-agent-session-rpc'
@@ -138,6 +139,18 @@ export function useMobileStructuredAgentState(args: {
     },
     [sessionKey]
   )
+  // The refusal rides beside its words, so the view can tell a failure no retry gets past.
+  const applyReadFailure = useCallback(
+    (failure: unknown) => {
+      const refusal = agentSessionReadFailureRefusal(failure)
+      apply({
+        type: 'error',
+        message: agentSessionReadFailureText(failure),
+        ...(refusal ? { refusal } : {})
+      })
+    },
+    [apply]
+  )
 
   const applyQueued = useCallback(
     (event: AgentSessionSubscribeEvent) => {
@@ -187,7 +200,7 @@ export function useMobileStructuredAgentState(args: {
     })
     const endStream = openTranscriptAfterHold(client, sessionId, held, (raw) => {
       if (typeof raw === 'object' && raw !== null && 'type' in raw && raw.type === 'error') {
-        apply({ type: 'error', message: agentSessionReadFailureText(raw) })
+        applyReadFailure(raw)
         return
       }
       if (isSubscribeEvent(raw)) {
@@ -212,7 +225,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, applyQueued, client, connected, enabled, sessionId, sessionKey])
+  }, [apply, applyQueued, applyReadFailure, client, connected, enabled, sessionId, sessionKey])
 
   const loadEarlier = useCallback(() => {
     const current = stateRef.current
@@ -280,7 +293,7 @@ export function useMobileStructuredAgentState(args: {
     })()
       .catch((error: unknown) => {
         if (isCurrentRead()) {
-          apply({ type: 'error', message: agentSessionReadFailureText(error) })
+          applyReadFailure(error)
         }
       })
       .finally(() => {
@@ -288,7 +301,7 @@ export function useMobileStructuredAgentState(args: {
           setLoadingOlder(false)
         }
       })
-  }, [apply, client, loadingOlder, sessionId, sessionKey])
+  }, [apply, applyReadFailure, client, loadingOlder, sessionId, sessionKey])
 
   // A window of only a subagent's rows draws nothing, and an empty list cannot be scrolled
   // to ask for more, so it reads back once from each such head. A first page can be one: an

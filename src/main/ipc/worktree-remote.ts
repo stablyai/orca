@@ -140,6 +140,7 @@ import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
+import { attributedSparsePresetId } from './sparse-preset-attribution'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
 import {
@@ -1516,6 +1517,9 @@ async function resolveRemoteTrackingBaseSsh(
   repoPath: string,
   baseBranch: string
 ): Promise<RemoteTrackingBase | null> {
+  if (baseBranch.startsWith('refs/') && !baseBranch.startsWith('refs/remotes/')) {
+    return null
+  }
   let remotes: string[]
   try {
     const { stdout } = await provider.exec(['remote'], repoPath)
@@ -1887,24 +1891,12 @@ export async function createRemoteWorktree(
   if (args.sparseCheckout && sparseDirectories.length === 0) {
     throw new Error('Sparse checkout requires at least one repo-relative directory.')
   }
-  let sparsePresetId: string | undefined
-  if (args.sparseCheckout?.presetId) {
-    const preset = store
-      .getSparsePresets(repo.id)
-      .find((entry) => entry.id === args.sparseCheckout?.presetId)
-    if (preset?.repoId === repo.id) {
-      try {
-        const presetDirectories = normalizeSparseDirectories(preset.directories)
-        const presetSet = new Set(presetDirectories)
-        const directoriesMatch =
-          presetDirectories.length === sparseDirectories.length &&
-          sparseDirectories.every((entry) => presetSet.has(entry))
-        sparsePresetId = directoriesMatch ? preset.id : undefined
-      } catch {
-        // Why: corrupt preset data should not block creation or falsely label the new worktree.
-      }
-    }
-  }
+  const sparsePresetId = attributedSparsePresetId(
+    () => store.getSparsePresets(repo.id),
+    repo.id,
+    args.sparseCheckout?.presetId,
+    sparseDirectories
+  )
 
   // Why: addWorktree/setup probes run inside the new path; older relays need that root registered before accepting git/fs ops there.
   await registerRequiredSshWorktreeCreateRoots(repo.connectionId!, [remotePath])
@@ -2116,6 +2108,7 @@ export async function createRemoteWorktree(
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+    ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {}),
@@ -2376,25 +2369,12 @@ async function performLocalWorktreeCreate(
   if (args.sparseCheckout && sparseDirectories.length === 0) {
     throw new Error('Sparse checkout requires at least one repo-relative directory.')
   }
-  let sparsePresetId: string | undefined
-  if (args.sparseCheckout?.presetId) {
-    const preset = store
-      .getSparsePresets(repo.id)
-      .find((entry) => entry.id === args.sparseCheckout?.presetId)
-    if (preset?.repoId === repo.id) {
-      try {
-        const presetDirectories = normalizeSparseDirectories(preset.directories)
-        // Why: Set-based compare so directory order doesn't affect attribution — matches renderer's sparseDirectoriesMatch.
-        const presetSet = new Set(presetDirectories)
-        const directoriesMatch =
-          presetDirectories.length === sparseDirectories.length &&
-          sparseDirectories.every((entry) => presetSet.has(entry))
-        sparsePresetId = directoriesMatch ? preset.id : undefined
-      } catch {
-        // Why: corrupt preset data should not block creation or falsely label the new worktree.
-      }
-    }
-  }
+  const sparsePresetId = attributedSparsePresetId(
+    () => store.getSparsePresets(repo.id),
+    repo.id,
+    args.sparseCheckout?.presetId,
+    sparseDirectories
+  )
 
   let effectiveRequestedName = requestedName
   let effectiveSanitizedName = sanitizedName
@@ -2822,6 +2802,7 @@ async function performLocalWorktreeCreate(
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+    ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {}),

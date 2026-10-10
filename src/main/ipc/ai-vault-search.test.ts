@@ -26,11 +26,15 @@ import { registerAiVaultSearchHandlers } from './ai-vault-search'
 import { aiVaultApi } from '../../preload/api/ai-vault-bridge'
 import { setSessionSearchService } from '../ai-vault-search/session-search-service-registry'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import {
   fakeSearchService,
   searchHit,
   searchResults
 } from '../../shared/ai-vault-search-test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 beforeEach(() => {
   handlers.clear()
   sshSearch.mockReset()
@@ -42,7 +46,10 @@ beforeEach(() => {
     callRuntimeSearch: runtimeSearch
   })
 })
-afterEach(() => setSessionSearchService(null))
+afterEach(() => {
+  setSessionSearchService(null)
+  setStructuredAgentSessionHost(null)
+})
 
 describe('desktop IPC and preload search boundary', () => {
   it('round-trips local results and separate status through the actual preload', async () => {
@@ -86,7 +93,9 @@ describe('desktop IPC and preload search boundary', () => {
     expect(sshSearch).toHaveBeenCalledWith('ssh-host', 'aiVault.searchSessions', {
       query: 'needle',
       limit: 20,
-      supportsQoderHistory: true
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
     })
     expect(result).toMatchObject({
       hits: [{ executionHostId: 'ssh:ssh-host', source: { presence: 'present' } }]
@@ -107,7 +116,9 @@ describe('desktop IPC and preload search boundary', () => {
     expect(runtimeSearch).toHaveBeenCalledWith('env-1', 'aiVault.searchSessions', {
       query: 'needle',
       limit: 20,
-      supportsQoderHistory: true
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
     })
     expect(result).toMatchObject({
       hits: [{ executionHostId: 'runtime:env-1', source: { presence: 'present' } }]
@@ -118,6 +129,38 @@ describe('desktop IPC and preload search boundary', () => {
     expect(await aiVaultApi.searchStatus('runtime:env-1')).toEqual(unavailableSessionSearchStatus())
     expect(runtimeSearch).toHaveBeenLastCalledWith('env-1', 'aiVault.searchStatus', {})
   })
+  it.each(['ssh:ssh-host', 'runtime:env-1', 'all'] as const)(
+    'negotiates each actual remote leg once through preload scope %s',
+    async (scope) => {
+      const local = fakeSearchService()
+      setSessionSearchService(local)
+      sshHostInfos.mockReturnValue([{ targetId: 'ssh-host' }])
+      const remoteReply = async (_host: string, method: string) =>
+        method === 'aiVault.searchStatus'
+          ? { ...unavailableSessionSearchStatus(), supportedAgents: [...AI_VAULT_AGENTS] }
+          : { ...searchResults(), hits: [{ ...searchHit(), agent: 'jcode' }] }
+      sshSearch.mockImplementation(remoteReply)
+      runtimeSearch.mockImplementation(remoteReply)
+      const result = await aiVaultApi.searchSessions(
+        { query: 'needle', filters: { agents: [...AI_VAULT_AGENTS] } },
+        scope
+      )
+      const calls = scope === 'runtime:env-1' ? runtimeSearch : sshSearch
+      expect(calls.mock.calls.map((call) => call[1])).toEqual([
+        'aiVault.searchStatus',
+        'aiVault.searchSessions'
+      ])
+      const remoteHits =
+        result.kind === 'results'
+          ? result.hits.filter((hit) => hit.executionHostId !== 'local')
+          : []
+      expect(remoteHits).toMatchObject([{ agent: 'jcode', source: { presence: 'present' } }])
+      expect(JSON.stringify(remoteHits)).not.toContain('/host/transcript')
+      expect(JSON.stringify(remoteHits)).not.toContain('resumeCommand')
+      expect(local.search).toHaveBeenCalledTimes(scope === 'all' ? 1 : 0)
+      expect(scope === 'runtime:env-1' ? sshSearch : runtimeSearch).not.toHaveBeenCalled()
+    }
+  )
   it('maps a runtime unknown-method refusal to unavailable and keeps transport errors', async () => {
     runtimeSearch.mockRejectedValue(
       Object.assign(new Error('unknown method'), { code: 'method_not_found' })
@@ -234,5 +277,50 @@ describe('desktop IPC and preload search boundary', () => {
     handlers.clear()
     registerAiVaultSearchHandlers()
     await expect(aiVaultApi.setSearchEnabled('runtime:env-1', true)).rejects.toThrow('host-too-old')
+  })
+})
+
+describe('local search hits owned by a native chat', () => {
+  function installChatHost(): { sessionId: string; workspaceId: string } {
+    const record = {
+      ...agentSessionRecordFixture(),
+      provider: 'codex' as const,
+      conversationName: 'Login repair'
+    }
+    record.providerHandleChain = [
+      { ...record.providerHandleChain[0]!, handle: codexProviderHandle('host-session') }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ownership projection only reads this record-list member.
+    setStructuredAgentSessionHost({ deps: { store: { listRecords: () => [record] } } } as never)
+    return { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
+  }
+
+  it('names and owns a hit after installing the chat host', async () => {
+    setSessionSearchService(fakeSearchService())
+    let owner: { sessionId: string; workspaceId: string } | null = null
+    registerAiVaultSearchHandlers({
+      ensureStructuredSessionOwnership: async () => {
+        owner = installChatHost()
+      }
+    })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' })
+    expect(result).toMatchObject({
+      hits: [{ title: 'Login repair', structuredSession: owner! }]
+    })
+  })
+
+  it('still answers with plain hits when the chat host will not install', async () => {
+    setSessionSearchService(fakeSearchService())
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    registerAiVaultSearchHandlers({
+      ensureStructuredSessionOwnership: async () => {
+        throw new Error('chat journal unavailable')
+      }
+    })
+    const result = await aiVaultApi.searchSessions({ query: 'needle' })
+    expect(result).toMatchObject({ hits: [{ title: 'Indexed conversation' }] })
+    expect(JSON.stringify(result)).not.toContain('structuredSession')
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 })

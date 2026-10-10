@@ -56,6 +56,13 @@ describe('isTransientReconnectError', () => {
     ).toBe(false)
   })
 
+  it('treats a pre-banner socket close as recoverable on the ladder only', () => {
+    // ssh2 attaches no errno here, so the code table alone stranded hosts in 'error' after an outage.
+    const err = Object.assign(new Error('Connection lost before handshake'), { level: 'protocol' })
+    expect(isTransientError(err)).toBe(false)
+    expect(isTransientReconnectError(err)).toBe(true)
+  })
+
   it('keeps credential failures permanent', () => {
     expect(
       isTransientReconnectError(new Error('All configured authentication methods failed'))

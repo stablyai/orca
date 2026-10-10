@@ -16,6 +16,7 @@ import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
+import { agentSessionProviderHandleBelongsTo } from '../../shared/agent-session-provider-handle-encoding'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type {
   AgentSessionDeathEvidence,
@@ -145,7 +146,7 @@ export function proveAgentSessionOwner(args: {
       reason: 'spawnIdentityMismatch'
     })
   }
-  if (args.link.handle.provider !== record.provider) {
+  if (!agentSessionProviderHandleBelongsTo(args.link.handle, record.provider)) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
   }
   if (args.link.mintedAtFence !== args.fence) {
@@ -177,8 +178,9 @@ export function proveAgentSessionOwner(args: {
 
 /**
  * A renewal asserts two things at once: the host is running its loop, and the child still matches
- * the recorded identity. A host that cannot re-verify the child stops renewing rather than
- * extending a lease it can no longer vouch for.
+ * the recorded identity — re-proven by a PID probe, or held by this runtime with no exit seen. A
+ * host that cannot re-verify the child stops renewing rather than extending a lease it can no
+ * longer vouch for.
  */
 export function renewAgentSessionLease(args: {
   record: AgentSessionRecord

@@ -4,6 +4,7 @@ import type {
   FeatureInteractionState
 } from '../../../../../shared/feature-interactions'
 import type { FeatureTipId } from '../../../../../shared/feature-tips'
+import type { NativeChatUpgradeTipVariant } from '../../../../../shared/native-chat-upgrade-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import type { OrcaHookScriptKind } from '../../../lib/orca-hook-trust'
 import type { SettingsNavigationTarget } from '../../../lib/settings-navigation-types'
@@ -15,11 +16,11 @@ export type UISliceContextual = {
   settingsNavigationTarget: SettingsNavigationTarget | null
   openSettingsTarget: (target: NonNullable<UISliceContextual['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
-  /** Which host the Projects Settings pane shows per project (keyed by projectId). Ephemeral on purpose — never persisted, so reload reopens on the effective host. */
+  /** Entry keys retain last-pick order so regrouping resolves aliases. Renderer-only; never persisted. */
   settingsProjectHostSelection: Record<string, ExecutionHostId>
   settingsProjectSetupSelection: Record<string, string>
   setSettingsProjectHostSelection: (
-    projectId: string,
+    selectionKey: string,
     hostId: ExecutionHostId,
     setupId?: string
   ) => void
@@ -55,6 +56,9 @@ export type UISliceContextual = {
   closeModal: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
+  /** Main's once-decided native chat upgrade tip variant; null until read. */
+  nativeChatUpgradeTipVariant: NativeChatUpgradeTipVariant | null
+  setNativeChatUpgradeTipVariant: (variant: NativeChatUpgradeTipVariant) => void
   featureInteractions: FeatureInteractionState
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<void>
   contextualToursSeenIds: ContextualTourId[]
@@ -112,8 +116,12 @@ export type UISliceContextual = {
   dismissProjectOrderManualDefaultNotice: () => void
   usagePercentageDisplayChangeNoticeDismissed: boolean
   dismissUsagePercentageDisplayChangeNotice: () => void
+  statusBarCompactChangeNoticeDismissed: boolean
+  dismissStatusBarCompactChangeNotice: () => void
   usageEmptyStateDismissed: boolean
   dismissUsageEmptyState: () => void
   codexTerminalServerIsolationNoticeSeen: boolean
   markCodexTerminalServerIsolationNoticeSeen: () => void
+  codexSharedSettingsNoticeSeen: boolean
+  markCodexSharedSettingsNoticeSeen: () => void
 }

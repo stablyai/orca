@@ -17,7 +17,6 @@ export type ComposerAsyncModel = {
   setLoadedIssueCommand: React.Dispatch<
     React.SetStateAction<{ contextKey: string; result: IssueCommandReadResult } | null>
   >
-  currentIssueCommand: IssueCommandReadResult | null
   issueCommandTemplate: string
   hasLoadedIssueCommand: boolean
   setupDecision: 'skip' | 'run' | null

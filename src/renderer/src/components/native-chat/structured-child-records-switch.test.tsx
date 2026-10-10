@@ -23,6 +23,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 
 type TestStore = {
   getState: () => AppState
@@ -51,7 +52,9 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+// Partial: the status projection also resolves each chat's owner from the worktree.
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
   getRuntimeEnvironmentIdForWorktree: () => null
 }))
 
@@ -73,7 +76,7 @@ vi.mock('@/components/sidebar/CacheTimer', () => ({
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
-import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
+import { structuredSessionBackgroundTasksView } from '../../../../shared/structured-session-background-tasks-view'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
 import { buildSubagentChildRows } from '@/components/sidebar/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -196,11 +199,9 @@ function Surfaces(props: { roster: AgentSessionBackgroundTaskState | null }): Re
       <NativeChatStructuredSessionStatus
         sessionId={tab.entityId}
         paneKey={PANE_KEY}
-        error={null}
-        composerError={null}
         isVisible
         backgroundTasks={structuredSessionBackgroundTasksView(props.roster, null)}
-        stopBackgroundTask={async () => undefined}
+        stopBackgroundTask={async () => null}
       />
     </TooltipProvider>
   )

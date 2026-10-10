@@ -1,5 +1,5 @@
 /**
- * `ssh_remote_runtime_resolved` (design D6): once per host per app session, enum-only.
+ * `ssh_remote_runtime_resolved` (design D6): once per host and outcome per app session, enum-only.
  * The dedupe key is the local target id, which never leaves this process.
  */
 import type { SshRemoteRuntimeRung } from '../../shared/ssh-types'
@@ -12,12 +12,15 @@ import {
 import { track } from '../telemetry/client'
 import type { OrcadDeploymentTargetFacts } from './orcad-deployment-target'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import { sshHostLibc } from './ssh-host-platform-memo'
 import type { HostNodeVersion } from './ssh-remote-node-toolchain-probe'
 
 type Props = EventProps<'ssh_remote_runtime_resolved'>
+export type SshRemoteRuntimeOutcome = Props['outcome']
 
 export type SshRemoteRuntimeResolvedFacts = {
   rung: SshRemoteRuntimeRung
+  outcome: SshRemoteRuntimeOutcome
   host: RemoteHostPlatform
   facts: OrcadDeploymentTargetFacts | null
   firstRefusal: string | null
@@ -37,7 +40,7 @@ const RUNG_VALUES: Record<SshRemoteRuntimeRung, Props['rung']> = {
   legacy: 'legacy'
 }
 
-function pick<T extends string>(values: readonly T[], value: string, fallback: T): T {
+export function pick<T extends string>(values: readonly T[], value: string, fallback: T): T {
   return values.find((candidate) => candidate === value) ?? fallback
 }
 
@@ -62,19 +65,6 @@ export function durationBucket(durationMs: number): Props['duration_bucket'] {
   return durationMs < 60_000 ? '15s_60s' : 'gte_60s'
 }
 
-function hostLibc(
-  facts: OrcadDeploymentTargetFacts | null,
-  host: RemoteHostPlatform
-): Props['host_libc'] {
-  if (host.os !== 'linux') {
-    return 'none'
-  }
-  if (!facts) {
-    return 'unknown'
-  }
-  return facts.target.endsWith('-musl') ? 'musl' : 'glibc'
-}
-
 export function sshRemoteRuntimeResolvedProps(input: SshRemoteRuntimeResolvedFacts): Props {
   const hostNodeMajor = input.hostNode
     ? pick(SSH_RUNTIME_HOST_NODE_MAJOR_VALUES, String(input.hostNode.major), 'above_30')
@@ -83,13 +73,14 @@ export function sshRemoteRuntimeResolvedProps(input: SshRemoteRuntimeResolvedFac
     rung: RUNG_VALUES[input.rung],
     host_os: input.host.os,
     host_arch: input.host.arch,
-    host_libc: hostLibc(input.facts, input.host),
+    host_libc: sshHostLibc(input.host.os, input.facts?.target ?? null),
     glibc_minor: glibcMinorBucket(input.facts),
     first_refusal: pick(SSH_RUNTIME_REFUSAL_VALUES, input.firstRefusal ?? 'none', 'none'),
     self_test: input.selfTest,
     runtime_transfer: input.runtimeTransfer,
     ...(hostNodeMajor ? { host_node_major: hostNodeMajor } : {}),
-    duration_bucket: durationBucket(input.durationMs)
+    duration_bucket: durationBucket(input.durationMs),
+    outcome: input.outcome
   }
 }
 
@@ -97,10 +88,12 @@ export function trackSshRemoteRuntimeResolved(
   hostKey: string,
   input: SshRemoteRuntimeResolvedFacts
 ): void {
-  if (reportedHosts.has(hostKey)) {
+  // Why per outcome: an unverifiable attempt must not use up the host's later resolved report.
+  const key = `${input.outcome}:${hostKey}`
+  if (reportedHosts.has(key)) {
     return
   }
-  reportedHosts.add(hostKey)
+  reportedHosts.add(key)
   try {
     // track() applies the existing consent gate and validates against the strict schema.
     track('ssh_remote_runtime_resolved', sshRemoteRuntimeResolvedProps(input))

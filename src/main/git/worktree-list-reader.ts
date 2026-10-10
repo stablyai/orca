@@ -1,3 +1,4 @@
+import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { annotateWorktreeLocksFromAdmin } from '../../shared/git-worktree-admin'
 import { stat } from 'node:fs/promises'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
@@ -263,6 +264,7 @@ async function annotatePrunableByExistence(
 
   async function probeNext(): Promise<void> {
     while (nextIndex < worktrees.length) {
+      throwIfSignalAborted(options.signal)
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
@@ -287,7 +289,11 @@ async function annotatePrunableByExistence(
   }
 
   const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
-  await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+  await waitForPromiseWithSignal(
+    Promise.all(Array.from({ length: workerCount }, () => probeNext())),
+    options.signal
+  )
+  throwIfSignalAborted(options.signal)
   return annotated
 }
 

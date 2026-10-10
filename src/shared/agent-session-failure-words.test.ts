@@ -48,6 +48,8 @@ function factsFor(kind: AgentSessionFailureKind): AgentSessionFailureFact[] {
     facts.push({ kind, retry: { error: 'rate_limit', status: 429 } })
     facts.push({ kind, retry: { error: 'overloaded', status: 529 } })
     facts.push({ kind, retry: { status: 500 } })
+    facts.push({ kind, retry: { error: 'server_error', status: 502, attempt: 3, maxRetries: 10 } })
+    facts.push({ kind, retry: { attempt: 1 } })
   }
   if (kind === 'attachmentInvalid') {
     for (const reason of AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS) {
@@ -67,11 +69,11 @@ describe('the words written beside a failure fact', () => {
           [undefined, undefined],
           ['Codex', 'clear']
         ] as const) {
-          const sentence = agentSessionFailureSentence(fact, surface, { agentName, command })
+          const context = { agentName, command, provider: 'claude' } as const
+          const sentence = agentSessionFailureSentence(fact, surface, context)
           expect([fact, sentence]).toEqual([fact, expect.stringMatching(/[^.]\.$/)])
           expect(sentence).not.toMatch(/\.\./)
           expect(sentence).not.toMatch(ORCA_INTERNAL)
-          const context = { agentName, command, provider: 'claude' } as const
           if (surface === 'row') {
             expect(agentSessionFailureWords(fact, { ...context, surface }).text).toBe(sentence)
           } else if (isSubmissionRejectionFact(fact) && !LEGACY_MARKER_KINDS.has(fact.kind)) {
@@ -114,7 +116,15 @@ describe('the words written beside a failure fact', () => {
         command: 'compact'
       })
     expect(compact('notSignedIn')).toBe(
-      'Claude is not signed in for the selected account. Sign in, then run /compact again.'
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings. Run /compact again."
+    )
+    expect(
+      agentSessionFailureSentence({ kind: 'notSignedIn', account: 'managed' }, 'rejection', {
+        agentName: 'Codex',
+        command: 'compact'
+      })
+    ).toBe(
+      "This Codex account isn't signed in. Sign in again in Codex Accounts settings. Run /compact again."
     )
     expect(compact('startFailed')).toBe("Claude couldn't start. Run /compact again.")
     expect(compact('restartFailed')).toBe("Claude couldn't restart. Run /compact again.")
@@ -149,6 +159,28 @@ describe('the words written beside a failure fact', () => {
         { agentName: 'Codex' }
       )
     ).toBe("Codex couldn't start. Start a new chat to continue.")
+  })
+
+  it('says a start refused beside a process Orca could not stop in its own words', () => {
+    const refused = (context: { command?: 'compact'; retryControl?: boolean } = {}) =>
+      agentSessionFailureSentence(
+        {
+          kind: 'restartFailed',
+          refusal: {
+            code: 'agent_session_ownership_unknown',
+            details: { reason: 'previousExitUnverifiable' }
+          }
+        },
+        'rejection',
+        { agentName: 'Claude', ...context }
+      )
+    expect(refused()).toBe(
+      "Couldn't stop Claude from before. Send your message again to try once more."
+    )
+    expect(refused({ command: 'compact' })).toBe(
+      "Couldn't stop Claude from before. Run /compact again."
+    )
+    expect(refused({ retryControl: true })).toBe("Couldn't stop Claude from before.")
   })
 
   it('names the exit a row reports differently from the message it left unsent', () => {
@@ -217,7 +249,7 @@ describe('the words written beside a failure fact', () => {
         detail: { text: '{"type":"system","subtype":"api_retry"}', audience: 'log' },
         retry: { error: 'rate_limit', status: 429 }
       })
-    ).toBe('Codex is rate-limited and retrying.')
+    ).toBe('Codex is rate-limited and retrying.\nLast error: HTTP 429 rate limit.')
     expect(retrying({})).toBe('Codex hit a temporary problem and is retrying.')
   })
 
@@ -235,6 +267,35 @@ describe('the words written beside a failure fact', () => {
     expect(retrying({ retry: { status: 429, cause: 'Too many requests' } })).toBe(
       'Codex is rate-limited and retrying.\nToo many requests'
     )
+  })
+
+  it("says which retry it is, and the provider's codes when it wrote no account", () => {
+    const retrying = (retry: AgentSessionFailureFact['retry']) =>
+      agentSessionFailureSentence({ kind: 'providerRetrying', retry }, 'row', {
+        agentName: 'Claude'
+      })
+    expect(retrying({ error: 'server_error', status: 502, attempt: 3, maxRetries: 10 })).toBe(
+      'Claude hit a temporary problem and is retrying. Retry 3 of 10.\nLast error: HTTP 502 server error.'
+    )
+    expect(retrying({ status: 502, attempt: 3 })).toBe(
+      'Claude hit a temporary problem and is retrying. Retry 3.\nLast error: HTTP 502.'
+    )
+    // The provider's own account outranks its codes.
+    expect(retrying({ status: 429, cause: 'Too many requests', attempt: 2, maxRetries: 5 })).toBe(
+      'Claude is rate-limited and retrying. Retry 2 of 5.\nToo many requests'
+    )
+    // A provider that words its own progress is quoted alone, never counted twice.
+    expect(
+      agentSessionFailureSentence(
+        {
+          kind: 'providerRetrying',
+          detail: { text: 'Reconnecting... 2/5', audience: 'person' },
+          retry: { status: 502, attempt: 2, maxRetries: 5 }
+        },
+        'row',
+        { agentName: 'Codex' }
+      )
+    ).toBe('Codex is retrying: Reconnecting... 2/5.')
   })
 
   it('says which limit an attachment broke, in megabytes', () => {

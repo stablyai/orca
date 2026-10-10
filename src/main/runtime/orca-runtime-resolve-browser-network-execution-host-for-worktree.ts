@@ -1,6 +1,11 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from './orca-runtime-transition-graph-reload-to-terminal-state'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import {
+  floatingWorkspaceToWorktree,
+  isFloatingWorkspaceSelector
+} from '../../shared/floating-workspace-worktree'
+import { resolveFloatingTerminalCwd } from '../ipc/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -14,19 +19,37 @@ import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { Worktree } from '../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import type { ResolvedTerminalWorkspaceLaunchTarget } from './orca-runtime-core'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './orca-runtime-core'
+import { ensureJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from './runtime-worktree-selection'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import { WorktreeIdRequiresFullPathError } from './runtime-worktree-lineage-resolution'
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
-import type { Worktree } from '../../shared/worktree/types'
 import { resolveCreatedWorktreeTerminalTarget } from './runtime-created-worktree-terminal-target'
+
+// Why: folder and floating workspaces have no worktree row, so no parent, children or lineage.
+function withoutWorktreeLineage(worktree: Worktree): ResolvedWorktree {
+  return {
+    ...worktree,
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    lineage: null,
+    git: {
+      path: worktree.path,
+      head: worktree.head,
+      branch: worktree.branch,
+      isBare: worktree.isBare,
+      isMainWorktree: worktree.isMainWorktree
+    }
+  }
+}
 
 export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
   protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
@@ -65,21 +88,21 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
       : this.resolveEmulatorWorkspaceId(selector)
   }
 
+  // Why one resolver: host-launched floating terminals and floating chat sessions run in the same
+  // directory the panel's own terminals use — the user's floating-workspace setting.
+  protected async resolveFloatingWorkspacePath(): Promise<string> {
+    const store = this.store
+    return store
+      ? resolveFloatingTerminalCwd(store, { path: store.getSettings().floatingTerminalCwd })
+      : homedir()
+  }
+
+  protected floatingWorkspaceToResolvedWorktree(path: string): ResolvedWorktree {
+    return withoutWorktreeLineage(floatingWorkspaceToWorktree(path))
+  }
+
   protected folderWorkspaceToResolvedWorktree(folderWorkspace: FolderWorkspace): ResolvedWorktree {
-    const worktree = folderWorkspaceToWorktree(folderWorkspace)
-    return {
-      ...worktree,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git: {
-        path: worktree.path,
-        head: worktree.head,
-        branch: worktree.branch,
-        isBare: worktree.isBare,
-        isMainWorktree: worktree.isMainWorktree
-      }
-    }
+    return withoutWorktreeLineage(folderWorkspaceToWorktree(folderWorkspace))
   }
 
   protected resolveWorkspaceTerminalStartupCwd(
@@ -100,15 +123,12 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     selector: string,
     createdWorktree?: Worktree
   ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
-    const floatingTerminalSelector =
-      selector === FLOATING_TERMINAL_WORKTREE_ID ||
-      selector === `id:${FLOATING_TERMINAL_WORKTREE_ID}`
-    if (floatingTerminalSelector) {
-      // Why: the floating sentinel is terminal-only — no backing repo/worktree record for other workspace APIs.
+    if (isFloatingWorkspaceSelector(selector)) {
+      // Why no managed worktree: the floating sentinel has no repo or worktree record behind it.
       return {
         scope: {
           id: FLOATING_TERMINAL_WORKTREE_ID,
-          path: homedir(),
+          path: await this.resolveFloatingWorkspacePath(),
           connectionId: null,
           repo: null,
           folderWorkspace: null
@@ -161,21 +181,26 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     }
   }
 
-  protected buildTerminalWorkspaceEnv(
+  protected async buildTerminalWorkspaceEnv(
     scope: TerminalWorkspaceLaunchScope,
     baseEnv: Record<string, string>,
     paneKey: string,
     tabId: string,
     agentTeamsEnv?: Record<string, string>
-  ): Record<string, string> {
+  ): Promise<Record<string, string>> {
     const cleanBaseEnv = { ...baseEnv }
     for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
       delete cleanBaseEnv[key]
     }
+    const jcodeRuntimeDirEnv =
+      scope.connectionId === null ? await ensureJcodeRuntimeDir(paneKey) : undefined
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,
       ...this.buildAgentHookPtyEnv?.(),
+      // Why: the runtime dir is a local unix-socket path; remote (SSH)
+      // terminals must keep jcode on its own guest-side default daemon.
+      ...jcodeRuntimeDirEnv,
       ORCA_PANE_KEY: paneKey,
       ORCA_TAB_ID: tabId,
       ORCA_WORKTREE_ID: scope.id

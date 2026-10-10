@@ -8,14 +8,17 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session-jour
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
-  AgentSessionSendResult
+  AgentSessionSendResult,
+  AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import type { SendSettlementWaitOptions } from './structured-agent-session-send-settlement'
 
 export type StructuredAgentSessionRestartResumeSurfaces = {
-  revealSession: (sessionId: string) => Promise<{ readable: boolean }>
+  revealSession: (
+    sessionId: string
+  ) => Promise<{ readable: boolean; openRefusal?: AgentSessionWireRefusal }>
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
@@ -31,6 +34,7 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
   /** The session's child records, the host's one read of them. */
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
+  publishStatus?: (sessionId: string) => void
   now: () => number
 }
 
@@ -41,7 +45,7 @@ export const STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER =
 /** Exactly the host members this binds. Structural, so the host satisfies it without declaring a
  *  dependency, and nothing outside this list is reachable from here. */
 type RestartResumeHostBindings = {
-  revealSession: (sessionId: string) => Promise<{ readable: boolean }>
+  revealSession: StructuredAgentSessionRestartResumeSurfaces['revealSession']
   send: (
     caller: { callerKey: string },
     params: {

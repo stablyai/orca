@@ -221,7 +221,7 @@ describe('chat strip rows from a legacy background-task roster', () => {
     container.innerHTML = markup
     expect([...container.querySelectorAll('li')].map((row) => row.textContent)).toEqual([
       'Failed child · failed',
-      'Background agent · no recent updateStop',
+      'Background agent · status unavailableStop',
       'Cancelled child',
       'Approve edits · needs approvalStop',
       'Summarize logs900',

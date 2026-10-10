@@ -7,6 +7,7 @@ import {
   launchAgentInNewTab,
   shouldQueueTerminalFocusAfterMenuClose
 } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useAppStore } from '../../store'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
@@ -223,10 +224,12 @@ export function useTabBarCreateMenuController({
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
     const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
     const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
       agent,
       worktreeId,
       groupId: resolvedGroupId,
-      launchSource: 'tab_bar_quick_launch'
+      launchSource: 'tab_bar_quick_launch',
+      freshNewTab: true
     })
     if (!result) {
       toast.error(

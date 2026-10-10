@@ -35,12 +35,15 @@ export type RuntimeServiceCommandSurface = {
   reconcileDismissedPushes: RuntimeMobileNotificationController['reconcileDismissedPushes']
   getMobileNotificationEpoch: RuntimeMobileNotificationController['getEpoch']
   dismissMobileNotification: RuntimeMobileNotificationController['dismiss']
+  retireStructuredAttention: RuntimeMobileNotificationController['retireStructuredAttention']
+  reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
   setMobilePushRegistrar: RuntimeMobileNotificationController['setPushRegistrar']
   testMobilePushDevice: RuntimeMobileNotificationController['testPushDevice']
   registerMobilePushDevice: RuntimeMobileNotificationController['registerPushDevice']
   unregisterMobilePushDevice: RuntimeMobileNotificationController['unregisterPushDevice']
   setAccountServices: RuntimeAccountController['setServices']
+  getDataAccountsSnapshot: RuntimeAccountController['dataAccountsSnapshot']
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
   getCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['getCommitMessageAgentEnvironment']
   getAccountsSnapshot: RuntimeAccountController['getSnapshot']
@@ -51,9 +54,14 @@ export type RuntimeServiceCommandSurface = {
   selectCodexAccountForTarget: RuntimeAccountController['selectCodexForTarget']
   consumeCodexRateLimitResetCredit: RuntimeAccountController['consumeCodexResetCredit']
   removeClaudeAccount: RuntimeAccountController['removeClaude']
-  addClaudeAccountFromConfigDir: RuntimeAccountController['addClaudeFromConfigDir']
+  beginClaudeSignIn: RuntimeAccountController['beginClaudeSignIn']
+  finishClaudeSignIn: RuntimeAccountController['finishClaudeSignIn']
+  cancelClaudeSignIn: RuntimeAccountController['cancelClaudeSignIn']
   removeCodexAccount: RuntimeAccountController['removeCodex']
   addCodexAccountFromHome: RuntimeAccountController['addCodexFromHome']
+  addDataAccountFromHome: RuntimeAccountController['addDataFromHome']
+  selectDataAccount: RuntimeAccountController['selectData']
+  removeDataAccount: RuntimeAccountController['removeData']
   onAccountsChanged: RuntimeAccountController['onChanged']
   listMobileSpeechModels: RuntimeMobileSpeechCatalog['list']
   downloadMobileSpeechModel: RuntimeMobileSpeechCatalog['download']
@@ -126,12 +134,16 @@ export function installRuntimeServiceCommandSurface(
     reconcileDismissedPushes: notifications.reconcileDismissedPushes.bind(notifications),
     getMobileNotificationEpoch: notifications.getEpoch.bind(notifications),
     dismissMobileNotification: notifications.dismiss.bind(notifications),
+    retireStructuredAttention: notifications.retireStructuredAttention.bind(notifications),
+    reconcileStructuredPromptAttention:
+      notifications.reconcileStructuredPromptAttention.bind(notifications),
     dispatchPluginNotification: notifications.dispatchPlugin.bind(notifications),
     setMobilePushRegistrar: notifications.setPushRegistrar.bind(notifications),
     testMobilePushDevice: notifications.testPushDevice.bind(notifications),
     registerMobilePushDevice: notifications.registerPushDevice.bind(notifications),
     unregisterMobilePushDevice: notifications.unregisterPushDevice.bind(notifications),
     setAccountServices: accounts.setServices.bind(accounts),
+    getDataAccountsSnapshot: accounts.dataAccountsSnapshot.bind(accounts),
     setCommitMessageAgentEnvironmentResolvers:
       accounts.setCommitMessageAgentEnvironment.bind(accounts),
     getCommitMessageAgentEnvironmentResolvers:
@@ -144,9 +156,14 @@ export function installRuntimeServiceCommandSurface(
     selectCodexAccountForTarget: accounts.selectCodexForTarget.bind(accounts),
     consumeCodexRateLimitResetCredit: accounts.consumeCodexResetCredit.bind(accounts),
     removeClaudeAccount: accounts.removeClaude.bind(accounts),
-    addClaudeAccountFromConfigDir: accounts.addClaudeFromConfigDir.bind(accounts),
+    beginClaudeSignIn: accounts.beginClaudeSignIn.bind(accounts),
+    finishClaudeSignIn: accounts.finishClaudeSignIn.bind(accounts),
+    cancelClaudeSignIn: accounts.cancelClaudeSignIn.bind(accounts),
     removeCodexAccount: accounts.removeCodex.bind(accounts),
     addCodexAccountFromHome: accounts.addCodexFromHome.bind(accounts),
+    addDataAccountFromHome: accounts.addDataFromHome.bind(accounts),
+    selectDataAccount: accounts.selectData.bind(accounts),
+    removeDataAccount: accounts.removeData.bind(accounts),
     onAccountsChanged: accounts.onChanged.bind(accounts),
     listMobileSpeechModels: speech.list.bind(speech),
     downloadMobileSpeechModel: speech.download.bind(speech),

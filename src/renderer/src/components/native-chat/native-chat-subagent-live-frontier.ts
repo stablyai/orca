@@ -18,14 +18,20 @@ import { normalizeSubagentState } from '../../../../shared/native-chat-subagent-
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat-row-content'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { compareMessages } from './native-chat-session-assembler'
-import { nativeChatSubagentDelegation } from './native-chat-subagent-delegation'
+import {
+  isNativeChatCodexCollabCallFrameRow,
+  nativeChatSubagentDelegation
+} from './native-chat-subagent-delegation'
 import type { NativeChatSubagentSections } from './native-chat-subagent-sections'
 
 const NONE: ReadonlySet<string> = new Set()
 
-/** A row the reader sees the scope's agent produce. */
+/** A row the reader sees the scope's agent produce, or a collab call it made. */
 function isOutput(message: NativeChatMessage): boolean {
-  return message.role !== 'user' && nativeChatRowRendersContent(message.blocks)
+  return (
+    message.role !== 'user' &&
+    (nativeChatRowRendersContent(message.blocks) || isNativeChatCodexCollabCallFrameRow(message))
+  )
 }
 
 /** `scopeActive`: the session is running. */
@@ -150,7 +156,12 @@ function handDownNestedDelegations(
     const [spawner] = spawners
     if (spawners.size === 1 && spawner !== undefined && spawner !== null) {
       rowIds.add(message.id)
-      byScope.set(spawner, [...(byScope.get(spawner) ?? []), message])
+      const rows = byScope.get(spawner)
+      if (rows) {
+        rows.push(message)
+      } else {
+        byScope.set(spawner, [message])
+      }
     }
   }
   return { rowIds, byScope }

@@ -141,6 +141,34 @@
   },
   "overrides": [
     {
+      "files": ["**/*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}"],
+      "excludeFiles": [
+        "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
+        "**/__tests__/**",
+        "src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@linear/sdk",
+                "allowTypeImports": true,
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/linear-sdk.ts."
+              }
+            ],
+            "patterns": [
+              {
+                "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
+                "message": "This module is unit-test support. Import the production web-session owner instead."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/renderer/src/**/*.{ts,tsx}"],
       "rules": {
         "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
@@ -208,6 +236,7 @@
     }
   ],
   "ignorePatterns": [
+    "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
     "**/node_modules",
     "**/dist",

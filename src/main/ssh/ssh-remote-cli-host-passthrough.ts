@@ -15,6 +15,12 @@ import {
 } from '../../shared/orchestration-compatibility-evidence'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
+import { ORCA_SSH_BRIDGE_CREDENTIAL_ENV } from '../../shared/ssh-bridge-credential-env'
+import {
+  sshBridgeCredentials,
+  type SshBridgeCallerScope,
+  type SshBridgeCredentialRegistry
+} from '../runtime/rpc/ssh-bridge-credentials'
 import {
   REMOTE_ARTIFACT_INPUT_ENV,
   sshArtifactSourceKey,
@@ -35,6 +41,8 @@ export type RemoteOrcaCliRequest = {
   stdin?: string
   artifactInput?: RemoteArtifactInput
   runtimeAuthority?: SshCliRuntimeAuthority
+  // Why: required so no bridged invocation can run with owner authority over this Orca.
+  callerScope: SshBridgeCallerScope
 }
 
 export type RemoteOrcaCliResult = {
@@ -66,6 +74,7 @@ export type HostCliPassthroughOptions = {
   spawn?: typeof nodeSpawn
   entryExists?: (path: string) => boolean
   killTimeoutMs?: number
+  credentials?: SshBridgeCredentialRegistry
 }
 
 /** Thrown when the host CLI entry cannot be launched at all; callers fall back
@@ -103,6 +112,7 @@ export function buildHostCliEnv(args: {
   remoteEnv: Record<string, string>
   userDataPath: string
   remoteCwd: string
+  bridgeCredential: string
   runtimeAuthority?: SshCliRuntimeAuthority
   artifactInput?: RemoteArtifactInput
 }): NodeJS.ProcessEnv {
@@ -137,6 +147,11 @@ export function buildHostCliEnv(args: {
   // when Orca was launched inside a session, and identity by session id is same-host only.
   delete env[ORCA_AGENT_SESSION_ID_ENV]
   delete env[ORCA_STRUCTURED_SESSION_ENV]
+  // Why: this machine's paired-server selection would route the remote command with its credentials.
+  delete env.ORCA_PAIRING_CODE
+  delete env.ORCA_REMOTE_PAIRING
+  delete env.ORCA_ENVIRONMENT
+  env[ORCA_SSH_BRIDGE_CREDENTIAL_ENV] = args.bridgeCredential
   if (args.runtimeAuthority) {
     env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
     env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
@@ -196,16 +211,33 @@ export async function runHostOrcaCliPassthrough(
     throw new HostCliUnavailableError(`Orca CLI entry not found at ${cliEntryPath}`)
   }
 
+  const credential = (options.credentials ?? sshBridgeCredentials).mint(request.callerScope)
   const env = buildHostCliEnv({
     hostEnv,
     remoteEnv: request.env,
     userDataPath,
     remoteCwd: request.cwd,
+    bridgeCredential: credential.token,
     runtimeAuthority: request.runtimeAuthority,
     artifactInput: request.artifactInput
   })
 
-  return await new Promise<RemoteOrcaCliResult>((resolve, reject) => {
+  try {
+    return await spawnHostCli(spawn, execPath, cliEntryPath, request, env, killTimeoutMs)
+  } finally {
+    credential.revoke()
+  }
+}
+
+function spawnHostCli(
+  spawn: typeof nodeSpawn,
+  execPath: string,
+  cliEntryPath: string,
+  request: RemoteOrcaCliRequest,
+  env: NodeJS.ProcessEnv,
+  killTimeoutMs: number
+): Promise<RemoteOrcaCliResult> {
+  return new Promise<RemoteOrcaCliResult>((resolve, reject) => {
     let settled = false
     const child = spawn(execPath, [cliEntryPath, ...request.argv], {
       env,

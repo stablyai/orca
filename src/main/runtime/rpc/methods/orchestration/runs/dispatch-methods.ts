@@ -1,9 +1,7 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import {
-  buildDispatchPreamble,
-  dispatchPreambleSendOptions
-} from '../../../../orchestration/preamble'
+import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
@@ -16,10 +14,18 @@ import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty
 } from '../../../../orchestration/orchestration-party'
+import {
+  admitChatAssignee,
+  chatAssigneeOf,
+  refuseChatSelfAssignment
+} from '../chat-assignee-admission'
+import { sendChatTask } from '../chat-task-delivery'
+import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
     name: 'orchestration.dispatch',
+    permission: 'workspace',
     params: DispatchParams,
     handler: async (
       params,
@@ -51,7 +57,13 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           runId: run.id
         })
       }
-      const assignee = params.to ? resolveDispatchAssigneeParty(params.to, db).address : undefined
+      const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
+      const assignee = assigneeParty?.address
+      // A chat has no pane, process or agent to probe: it is reached as mail to it is.
+      const chatAssignee = assigneeParty ? chatAssigneeOf(assigneeParty) : null
+      if (chatAssignee) {
+        await admitChatAssignee(runtime, chatAssignee, db)
+      }
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
@@ -86,9 +98,10 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         )
       }
 
-      const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
-      const assigneePaneKey =
-        dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined
+      const dispatchAuthority = chatAssignee ? null : runtime.getOrchestrationDispatchAuthority(to)
+      const assigneePaneKey = chatAssignee
+        ? undefined
+        : (dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey(to) ?? undefined)
       const processIncarnation =
         dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
           ? dispatchAuthority.processIncarnation
@@ -100,6 +113,14 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           runtime.getTerminalPaneKey(params.from) ??
           null)
         : null
+      if (params.inject && chatAssignee) {
+        // The session wins over `--from`, so a chat calling with none is still refused here.
+        refuseChatSelfAssignment({
+          sessionId: chatAssignee,
+          coordinatorSessionId: orchestrationCaller?.orcaSessionId,
+          remedy: 'Dispatch to a different agent, or use worker-start to create one.'
+        })
+      }
       if (
         params.inject &&
         params.from &&
@@ -115,14 +136,14 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       }
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
-      if (params.inject) {
+      if (params.inject && !chatAssignee) {
         const hasAgent = await runtime.isTerminalRunningAgent(to)
         if (!hasAgent) {
           throw injectRejectedError(to, 'no_agent_detected')
         }
       }
 
-      if (params.inject && (!assigneePaneKey || !processIncarnation)) {
+      if (params.inject && !chatAssignee && (!assigneePaneKey || !processIncarnation)) {
         throw new OrchestrationError(
           'stable_pane_required',
           `Terminal ${to} has no stable pane/process incarnation for lifecycle authority.`
@@ -156,14 +177,34 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       let prompt
       if (params.inject) {
         try {
-          prompt = await runtime.sendTerminalAgentPrompt(
-            to,
-            preamble,
-            dispatchPreambleSendOptions(orchestrationMutation?.requestId ?? ctx.id)
-          )
+          if (chatAssignee) {
+            const from = dispatchTaskSource({
+              db,
+              dispatch: ctx,
+              from: params.from,
+              senderName: (party, reported) =>
+                runtime.orchestrationSenderNames.nameOf(party, reported)
+            })
+            await sendChatTask({ db, dispatch: ctx, from, preamble })
+          } else {
+            prompt = await sendAgentTurn({
+              kind: 'terminal',
+              runtime,
+              handle: to,
+              turn: {
+                purpose: 'dispatch-preamble',
+                body: preamble,
+                operationId: orchestrationMutation?.requestId ?? ctx.id
+              }
+            })
+          }
           injected = true
         } catch (err) {
-          db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          // Unknown is not undelivered: the chat may be running it, so the Dispatch stays open, as
+          // an unknown worker-start does, for the worker's report or the coordinator's abandon.
+          if (!(err instanceof OrchestrationError && err.code === 'operation_unknown')) {
+            db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
+          }
           throw err
         }
       }
@@ -183,6 +224,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
 
   defineMethod({
     name: 'orchestration.dispatchShow',
+    permission: 'workspace',
     params: DispatchShowParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()

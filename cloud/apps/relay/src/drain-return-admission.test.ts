@@ -9,7 +9,13 @@ import { RelayPublicAssignmentAdmission } from './public-assignment-admission.js
 
 type Timer = { at: number; callback: () => void; cancelled: boolean }
 
-function harness(overrides: { maxQueued?: number; maxRetryAfterSeconds?: number } = {}) {
+function harness(
+  overrides: {
+    maxQueued?: number
+    maxRetryAfterSeconds?: number
+    onServiceMs?: (durationMs: number) => void
+  } = {}
+) {
   let now = 0
   const timers: Timer[] = []
   const placement = new RelayPublicAssignmentAdmission({
@@ -33,7 +39,8 @@ function harness(overrides: { maxQueued?: number; maxRetryAfterSeconds?: number 
   const lane = new RelayDrainReturnAdmission(placement, {
     maxConcurrent: 1,
     maxRetryAfterSeconds: overrides.maxRetryAfterSeconds ?? 300,
-    now: () => now
+    now: () => now,
+    onServiceMs: overrides.onServiceMs
   })
   return {
     lane,
@@ -131,6 +138,21 @@ describe('drain-return admission', () => {
     // ~50 ms per re-placement: twenty deferrals span about one second, where the
     // 860 ms starting estimate would have spread them over seventeen.
     expect(Math.max(...retries)).toBe(3)
+  })
+
+  // The unclamped sample: the EWMA's floor and ceiling would hide the real tail.
+  it('reports each slot hold once, as measured', async () => {
+    const samples: number[] = []
+    const { lane, advance } = harness({ onServiceMs: (ms) => samples.push(ms) })
+    const fast = admitted(await lane.acquire(host(1)))
+    advance(5)
+    fast.lease.release()
+    fast.lease.release()
+    const slow = admitted(await lane.acquire(host(2)))
+    advance(20_000)
+    slow.lease.release()
+
+    expect(samples).toEqual([5, 20_000])
   })
 
   it('answers a host’s own early retry with its interval, not a place behind the cohort', async () => {

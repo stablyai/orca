@@ -28,10 +28,14 @@ import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import process from 'node:process'
+import { ORCAD_SERVER_ENTRY_FILENAME } from '../../src/shared/orcad-artifacts.ts'
+import { packagedNodeRuntimePath } from './build-orcad-node.mjs'
+import { currentTarget } from './server-build-target.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const serveEntry = join(projectDir, 'out', 'main', 'index.js')
-const ORCAD_ENTRY = join(projectDir, 'out', 'orcad', 'orcad.js')
+const ORCAD_DIR = join(projectDir, 'out', 'orcad')
+const ORCAD_ENTRY = join(ORCAD_DIR, ORCAD_SERVER_ENTRY_FILENAME)
 const READY_TIMEOUT_MS = 120_000
 const OUTPUT_TIMEOUT_MS = 30_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
@@ -175,7 +179,7 @@ function resolveLaunch(userDataDir) {
   if (target === 'orcad') {
     return {
       label: `orcad (${ORCAD_ENTRY})`,
-      command: process.execPath,
+      command: packagedNodeRuntimePath(ORCAD_DIR, currentTarget()),
       args: [ORCAD_ENTRY, '--port', String(PORT), '--json'],
       env: { ORCA_USER_DATA: userDataDir }
     }
@@ -198,7 +202,7 @@ function resolveLaunch(userDataDir) {
     label: `electron (${serveEntry})`,
     command: override ?? 'npx',
     args: override ? serveArgs : ['electron', ...serveArgs],
-    env: {}
+    env: { ORCA_DEV_USER_DATA_PATH: userDataDir }
   }
 }
 
@@ -347,6 +351,22 @@ async function main() {
       )
     }
     log('terminal round trip OK')
+    if (launch.env.ORCA_USER_DATA && process.platform !== 'win32') {
+      const cliNonce = randomBytes(8).toString('hex')
+      orca(pairingCode, [
+        'terminal',
+        'send',
+        '--terminal',
+        terminal.handle,
+        '--text',
+        `orca status && orca worktree ps --json && printf 'ORCA_CLI_%s\\n' '${cliNonce}'`,
+        '--enter'
+      ])
+      if (!(await waitForNonce(pairingCode, terminal.handle, `ORCA_CLI_${cliNonce}`))) {
+        throw new Error('The managed terminal could not run the execution host CLI')
+      }
+      log('execution host CLI round trip OK')
+    }
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
   } finally {

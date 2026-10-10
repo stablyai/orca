@@ -45,6 +45,40 @@ __orca_osc133_preexec() {
   # which prints a warning above every command under warn_create_global.
   builtin typeset -g __orca_in_command=1
 }
+__orca_deferred_line_init() {
+  builtin emulate -L zsh
+  (( ${+functions[__orca_deferred_init]} )) || return 0
+  local __orca_direct_line_init=0
+  [[ "${widgets[zle-line-init]:-}" == user:__orca_deferred_line_init ]] && __orca_direct_line_init=1
+  __orca_deferred_init
+  if (( __orca_direct_line_init && ${+widgets[zle-line-init]} )); then
+    zle zle-line-init "$@"
+  elif [[ "${widgets[zle-line-init]:-}" == user:__orca_prompt_mark ]]; then
+    local __orca_prev_line_init_fn=""
+    __orca_prompt_mark "$@"
+  fi
+}
+# Why: scheduled callbacks run after user prompt hooks without copying their function metadata.
+__orca_deferred_sched_init() {
+  local __orca_prompt_status=$?
+  builtin emulate -L zsh
+  (( ${+functions[__orca_deferred_init]} )) && __orca_deferred_init
+  builtin unset __orca_deferred_sched_armed
+  builtin unfunction __orca_deferred_sched_init
+  return $__orca_prompt_status
+}
+__orca_arm_deferred_line_init() {
+  builtin emulate -L zsh
+  if [[ "${widgets[zle-line-init]:-}" != user:__orca_deferred_line_init ]]; then
+    if (( ${+widgets[zle-line-init]} )); then
+      zle -A zle-line-init __orca_saved_line_init
+    fi
+    zle -N zle-line-init __orca_deferred_line_init
+  fi
+  if (( ! $+__orca_deferred_sched_armed )) && builtin zmodload -F zsh/sched b:sched 2>/dev/null; then
+    builtin sched +0 __orca_deferred_sched_init && builtin typeset -g __orca_deferred_sched_armed=1
+  fi
+}
 __orca_deferred_init() {
   # Why first: this body runs after the user's own config, so it would otherwise
   # inherit whatever options that config left set. Under NO_UNSET an unset
@@ -54,8 +88,17 @@ __orca_deferred_init() {
   (( $+_orca_deferred_init_done )) && return 0
   builtin typeset -g _orca_deferred_init_done=1
   builtin typeset -g precmd_functions
+  if (( ${+widgets[__orca_saved_line_init]} )); then
+    if [[ "${widgets[zle-line-init]:-}" == user:__orca_deferred_line_init ]]; then
+      zle -A __orca_saved_line_init zle-line-init
+    fi
+    zle -D __orca_saved_line_init
+  elif [[ "${widgets[zle-line-init]:-}" == user:__orca_deferred_line_init ]]; then
+    zle -D zle-line-init
+  fi
   if __orca_has_feature markers; then
     precmd_functions=(${precmd_functions:/__orca_deferred_init/__orca_osc133_precmd})
+    (( ${precmd_functions[(Ie)__orca_osc133_precmd]} )) || precmd_functions+=(__orca_osc133_precmd)
     preexec_functions=(__orca_osc133_preexec ${preexec_functions[@]})
   else
     precmd_functions=(${precmd_functions:#__orca_deferred_init})
@@ -66,6 +109,12 @@ __orca_deferred_init() {
     else
       printf 'Orca CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" >&2
     fi
+  fi
+  if [ -n "${ORCA_CLI_BIN_DIR:-}" ]; then
+    case "${PATH:-}" in
+      "$ORCA_CLI_BIN_DIR"|"$ORCA_CLI_BIN_DIR":*) ;;
+      *) export PATH="$ORCA_CLI_BIN_DIR${PATH:+:$PATH}" ;;
+    esac
   fi
   if __orca_has_feature overlay; then
     # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
@@ -78,6 +127,14 @@ __orca_deferred_init() {
     }
     __orca_restore_agent_teams_path
     [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
+    if [[ -n "${ORCA_DATA_ACCOUNT_DATA_HOME:-}" ]]; then
+      export XDG_DATA_HOME="${ORCA_DATA_ACCOUNT_DATA_HOME}"
+      export XDG_STATE_HOME="${ORCA_DATA_ACCOUNT_STATE_HOME}"
+      if [[ "${ORCA_DATA_ACCOUNT_PROVIDER:-}" == opencode ]]; then
+        export OPENCODE_AUTH_CONTENT=""
+        export OPENCODE_DB="opencode.db"
+      fi
+    fi
     [[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
     # Why: OMP does not auto-load Orca's managed status extension; wrap only
     # interactive launch invocations so subcommands such as `omp config` keep
@@ -170,6 +227,30 @@ __orca_deferred_init() {
     }
   fi
   unset __orca_codex_binary
+  __orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
+  if [[ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "${__orca_claude_binary:-}" && -x "${__orca_claude_binary}" ]]; then
+    function claude {
+      local __orca_claude_home __orca_claude_pointer="${ORCA_CLAUDE_PROFILE_POINTER:-}"
+      # Why: a WSL pane's pointer is relative to the guest home, which the host cannot know at spawn.
+      case "$__orca_claude_pointer" in '~/'*) __orca_claude_pointer="${HOME:-}/${__orca_claude_pointer#??}" ;; esac
+      __orca_claude_home="$(cat "$__orca_claude_pointer" 2>/dev/null || :)"
+      if [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ "$CLAUDE_CONFIG_DIR" != "${ORCA_CLAUDE_INJECTED_CONFIG_DIR:-}" ]; then
+        command claude "$@"; return
+      fi
+      # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
+      if [ -z "$__orca_claude_home" ] && [ -n "${CLAUDE_CONFIG_DIR:-}" ] && [ -n "${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
+        ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+      fi
+      if [ -z "$__orca_claude_home" ]; then
+        ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      fi
+      case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
+      # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
+      [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
+      ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    }
+  fi
+  unset __orca_claude_binary
   if [[ -n "${_orca_histfile:-}" ]]; then
     HISTFILE="$_orca_histfile"
   fi
@@ -211,13 +292,25 @@ __orca_deferred_init() {
   # the permanent hook has not run yet and the first prompt would lose its mark.
   __orca_has_feature markers && __orca_osc133_precmd
   builtin unset _orca_shell_features _orca_histfile
-  builtin unfunction __orca_deferred_init __orca_has_feature
+  (( $+__orca_deferred_sched_armed )) || builtin unfunction __orca_deferred_sched_init
+  local __orca_widget __orca_line_init_bound=0
+  for __orca_widget in "${(v)widgets[@]}"; do
+    if [[ "$__orca_widget" == user:__orca_deferred_line_init ]]; then
+      __orca_line_init_bound=1
+      break
+    fi
+  done
+  (( __orca_line_init_bound )) || builtin unfunction __orca_deferred_line_init
+  builtin unfunction __orca_deferred_init __orca_has_feature __orca_arm_deferred_line_init
 }
 {
   builtin typeset _orca_user_zshenv="${ZDOTDIR-$HOME}/.zshenv"
   [[ ! -r "$_orca_user_zshenv" ]] || builtin source -- "$_orca_user_zshenv"
 } always {
   builtin unset _orca_user_zshenv
-  builtin typeset -ag precmd_functions
-  (( ${precmd_functions[(Ie)__orca_deferred_init]} )) || precmd_functions+=(__orca_deferred_init)
+  if (( ! $+_orca_deferred_init_done )); then
+    builtin typeset -ag precmd_functions
+    (( ${precmd_functions[(Ie)__orca_deferred_init]} )) || precmd_functions+=(__orca_deferred_init)
+    __orca_arm_deferred_line_init
+  fi
 }

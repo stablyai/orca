@@ -13,7 +13,7 @@ export { copyFileWithWindowsRetry, renameFileWithWindowsRetry, renameFileWithWin
 
 export function writeFileAtomically(
   targetPath: string,
-  contents: string,
+  contents: string | Uint8Array,
   options?: { mode?: number }
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`

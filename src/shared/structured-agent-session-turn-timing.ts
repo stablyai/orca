@@ -13,6 +13,7 @@ import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-sessi
 import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import { structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
+import type { AgentSessionLatestTurn } from './agent-session-wire'
 
 export type StructuredAgentTurnTiming = {
   state: AgentJournalTurnLifecycleState
@@ -36,7 +37,7 @@ export type StructuredAgentTurnTiming = {
 }
 
 function readTiming(
-  item: AgentJournalRenderItem,
+  item: Pick<AgentJournalRenderItem, 'body' | 'observedAt'>,
   precedingTurnEndedAt: number | undefined
 ): StructuredAgentTurnTiming | null {
   const turn = readAgentJournalTurn(item.body)
@@ -220,14 +221,27 @@ function settledTurnsOf(
 export function selectStructuredAgentTurnBars(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
-  turnId: string | null
+  turnId: string | null,
+  /** The host's newest turn record, which times a running turn whose row is not loaded. */
+  latestTurn?: AgentSessionLatestTurn | null
 ): {
   settledTurns: NativeChatSettledTurns
   runningTiming: StructuredAgentTurnTiming | null
 } {
   const turns = readStructuredAgentJournalTurns(items, submissions)
+  const unloaded =
+    turnId !== null && !turns.byTurnId.has(turnId) && latestTurn?.turn.turnId === turnId
+      ? latestTurn
+      : null
   return {
     settledTurns: settledTurnsOf(turns, submissions),
-    runningTiming: turnId === null ? null : (turns.byTurnId.get(turnId) ?? null)
+    runningTiming: unloaded
+      ? readTiming(
+          { body: { kind: 'turn', ...unloaded.turn }, observedAt: unloaded.observedAt },
+          undefined
+        )
+      : turnId === null
+        ? null
+        : (turns.byTurnId.get(turnId) ?? null)
   }
 }

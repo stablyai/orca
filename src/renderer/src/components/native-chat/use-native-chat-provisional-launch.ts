@@ -7,6 +7,7 @@ import {
   useStructuredAgentSessionLaunchLifecycle,
   useStructuredAgentSessionLaunchSelection
 } from '@/lib/structured-agent-session-launch'
+import { relaunchFailedStructuredAgentSessionWithMessage } from '@/lib/structured-agent-session-launch-message'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 
 /** A chat this view launched: a new conversation, or one resumed from history. */
@@ -73,22 +74,32 @@ export function useNativeChatProvisionalLaunch(
       retryStructuredAgentSessionLaunch(worktreeId, sessionId)
     }
   }, [sessionId, worktreeId])
-  const sendThroughRelaunch = useCallback(
-    (send: () => boolean): boolean => {
-      const accepted = send()
-      if (accepted && worktreeId) {
-        relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)
+  // While the chat starts it takes no send, so Send stays off and the text stays in the box.
+  const starting = lifecycle === 'pending' || lifecycle === 'visibility-unknown'
+  const sendThroughLaunch = useCallback(
+    (text: string, withImages: boolean, send: () => boolean | 'queued'): boolean | 'queued' => {
+      if (starting) {
+        return false
       }
-      return accepted
+      if (lifecycle !== 'failed' || !worktreeId) {
+        return send()
+      }
+      // A failed start restarts, and a text message goes as the restart's first message.
+      if (!withImages && text.trim()) {
+        return relaunchFailedStructuredAgentSessionWithMessage(worktreeId, sessionId, text) !== null
+      }
+      relaunchFailedStructuredAgentSessionForMessage(worktreeId, sessionId)
+      return false
     },
-    [sessionId, worktreeId]
+    [lifecycle, sessionId, starting, worktreeId]
   )
   return {
     lifecycle,
     launch,
     failure,
     retry,
-    sendThroughRelaunch,
+    starting,
+    sendThroughLaunch,
     transportEnabled: lifecycle === null || lifecycle === 'published'
   }
 }

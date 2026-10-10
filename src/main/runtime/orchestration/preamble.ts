@@ -44,15 +44,21 @@ export type PreambleParams = {
 // cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
 const HEARTBEAT_INTERVAL_MIN = 5
 
+/** A session address names a chat worker; any other handle is a terminal. */
+function isSessionHandle(handle: string): boolean {
+  return handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
+}
+
 /** Terminal agents keep their handle's wording; only a session is named by its Orca session ID. */
 function dispatchIdentityLines(params: PreambleParams): string {
-  const isSession = (handle: string) => handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
   return [
-    isSession(params.coordinatorHandle)
+    isSessionHandle(params.coordinatorHandle)
       ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
       : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
     `Your task ID is: ${params.taskId}`,
-    ...(isSession(params.workerHandle) ? [`Your Orca session ID is: ${params.workerHandle}`] : [])
+    ...(isSessionHandle(params.workerHandle)
+      ? [`Your Orca session ID is: ${params.workerHandle}`]
+      : [])
   ].join('\n')
 }
 
@@ -66,9 +72,12 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
   const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  const chat = isSessionHandle(params.workerHandle)
+  const surface = chat ? 'chat' : 'terminal'
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
-    workerKind: params.workerKind ?? 'prompt-returning-agent'
+    workerKind: params.workerKind ?? 'prompt-returning-agent',
+    chat
   })
 
   // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
@@ -78,8 +87,8 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 ${dispatchIdentityLines(params)}
 
-The coordinator cannot see this terminal, so reach it with the \`${cli} orchestration\`
-commands below; a question or result left only in this terminal never gets to it.
+The coordinator cannot see this ${surface}, so reach it with the \`${cli} orchestration\`
+commands below; a question or result left only in this ${surface} never gets to it.
 Don't post to Slack, GitHub, or other channels during the run; report through these commands.
 
 === CLI COMMANDS ===
@@ -117,7 +126,7 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   #
   # Use this instead of AskUserQuestion: that opens a local prompt the
   # coordinator cannot see or answer, so the task would stall until someone
-  # happened to look at this terminal. Send every question through \`ask\`.
+  # happened to look at this ${surface}. Send every question through \`ask\`.
   #
   # The \`ask\` verb durably records a question in this Dispatch's Run and
   # blocks until the coordinator replies, then prints the reply body. If the
@@ -156,7 +165,7 @@ ${params.taskSpec}`
 
 export type DispatchPreambleSendOptions = Pick<
   RuntimeAgentPromptWriteOptions,
-  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId' | 'inputKind'
+  'leadLine' | 'acceptQueued' | 'observationTimeoutMs' | 'requestId' | 'inputKind' | 'beforeWrite'
 >
 
 export function dispatchPreambleSendOptions(requestId: string): DispatchPreambleSendOptions {
@@ -170,16 +179,28 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
   }
 }
 
+export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. Your terminal stays available, and if the
+coordinator has more for you it will re-engage this terminal with a fresh
+preamble + TASK block, which arrives as new input. Treat that as supervised
+work under the new Dispatch; ignore stale follow-ups from the settled task.`
+
+export const CHAT_REDISPATCH_PARAGRAPH = `If the coordinator has more for you, it will send this chat a fresh
+preamble + TASK block, which arrives as a new message. Treat that as supervised
+work under the new Dispatch; ignore stale follow-ups from the settled task.`
+
 function buildPostWorkerDoneInstructions({
   cli,
-  workerKind
+  workerKind,
+  chat
 }: {
   cli: string
   workerKind: NonNullable<PreambleParams['workerKind']>
+  chat: boolean
 }): string {
-  // Why: re-dispatch reaches idle agents as terminal input; inbox polling
+  // Why: re-dispatch reaches idle agents as new input; inbox polling
   // after completion cannot receive that new TASK block and looks hung.
-  if (workerKind === 'bare-shell') {
+  // Why chat first: a chat has no shell to exit, whatever workerKind says.
+  if (workerKind === 'bare-shell' && !chat) {
     return `=== AFTER YOU SEND worker_done ===
 
 worker_done ends your turn for this task. Your dispatched work is complete:
@@ -206,10 +227,7 @@ Treat it as new user-owned work: follow it without coordinator approval or a
 fresh Dispatch, and do not send lifecycle messages using the settled task or
 Dispatch IDs. Never refuse a direct user request because you were a worker.
 
-Do not exit the shell. Your terminal stays available, and if the
-coordinator has more for you it will re-engage this terminal with a fresh
-preamble + TASK block, which arrives as new input. Treat that as supervised
-work under the new Dispatch; ignore stale follow-ups from the settled task.`
+${chat ? CHAT_REDISPATCH_PARAGRAPH : TERMINAL_REDISPATCH_PARAGRAPH}`
 }
 
 // Why the whole section is omitted rather than softened when nesting is off: a

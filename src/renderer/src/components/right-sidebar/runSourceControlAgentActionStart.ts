@@ -1,5 +1,6 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -102,6 +103,7 @@ export async function runSourceControlAgentActionStart({
     }
   } else if (worktreeId) {
     const result = launchAgentInNewTab({
+      requestId: newAgentLaunchRequestId(),
       agent: selectedAgent,
       worktreeId,
       groupId: groupId ?? worktreeId,

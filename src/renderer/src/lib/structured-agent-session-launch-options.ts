@@ -26,6 +26,7 @@ import {
   agentSessionThrownFailure,
   type AgentSessionWriteFailure
 } from '../../../shared/agent-session-write-failure'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -82,6 +83,7 @@ export function holdStructuredAgentSessionLaunchOption(
 }
 
 async function setLaunchOption(
+  target: RuntimeClientTarget,
   sessionId: string,
   fence: number,
   key: string,
@@ -91,7 +93,7 @@ async function setLaunchOption(
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionOptionResult>
-    >({ kind: 'local' }, 'agentSession.setOption', {
+    >(target, 'agentSession.setOption', {
       envelope: {
         sessionId,
         clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid),
@@ -140,6 +142,17 @@ function settleHeldOption(
     replies.delete(id)
   }
   notifyStructuredLaunchListeners()
+  state.callers.onSettled()
+}
+
+/** Selections included in the durable create are already the host's option intent. */
+export function settleStructuredLaunchCreateOptions(
+  state: StructuredLaunchState,
+  options: Readonly<Record<string, string>>
+): void {
+  for (const [id, encoded] of Object.entries(options)) {
+    settleHeldOption(state, id, encoded, { kind: 'accepted', options })
+  }
 }
 
 /**
@@ -161,7 +174,13 @@ export async function applyStructuredLaunchHeldOptions(
     if (!id || encoded === undefined) {
       return receipt
     }
-    const outcome = await setLaunchOption(state.intent.sessionId, receipt.fence, id, encoded)
+    const outcome = await setLaunchOption(
+      state.intent.target,
+      state.intent.sessionId,
+      receipt.fence,
+      id,
+      encoded
+    )
     settleHeldOption(state, id, encoded, outcome)
   }
 }

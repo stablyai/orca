@@ -46,6 +46,7 @@ export const jiraApi = {
     title: string
     description?: string
     customFields?: Record<string, unknown>
+    userFieldKeys?: string[]
   }): Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('jira:createIssue', args),
 
@@ -78,6 +79,11 @@ export const jiraApi = {
 
   listAssignableUsers: (args: { key: string; query?: string; siteId?: string }) =>
     ipcRenderer.invoke('jira:listAssignableUsers', args),
+  listAssignableUsersForProject: (args: {
+    projectIdOrKey: string
+    query?: string
+    siteId?: string
+  }) => ipcRenderer.invoke('jira:listAssignableUsersForProject', args),
   searchUsers: (args?: { query?: string; siteId?: string }) =>
     ipcRenderer.invoke('jira:searchUsers', args),
 

@@ -410,7 +410,6 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'win32',
       isRemote: false
     })
@@ -465,11 +464,8 @@ describe('launchWorkItemDirect', () => {
     })
     expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
     // Why: the draft is inside `--prefill`, so the plan sets no draftPrompt.
-    // launchDraftText is the only thing that lets the view-mode gate see a
-    // draft here — without it this tab opens in chat unconditionally.
     const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
     expect(startup?.draftPrompt).toBeUndefined()
-    expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
   })
 
   it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
@@ -586,6 +582,45 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
+  // A paired server that declines the chat opens this launch's terminal, which must keep the
+  // recipe's saved CLI arguments the terminal route applied.
+  it("hands a server's decline terminal the caller's own CLI arguments", async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    vi.mocked(beginDirectWorkItemStructuredLaunch).mockReturnValueOnce({
+      completed: true,
+      structuredLaunch: true,
+      primaryTabId: null
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await launchWorkItemDirect({
+      repoId: 'repo-1',
+      launchSource: 'task_page',
+      openModalFallback: vi.fn(),
+      agentOverride: 'claude',
+      agentArgs: '--model opus',
+      launchPlatform: 'linux',
+      promptDelivery: 'submit-after-ready',
+      item: {
+        type: 'pr',
+        number: 7,
+        title: 'Fix checks',
+        url: 'https://github.com/acme/repo/pull/7',
+        pasteContent: 'Fix the failing checks.'
+      }
+    })
+
+    expect(beginDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        declinedTerminal: {
+          agentArgs: '--model opus',
+          launchPlatform: 'linux',
+          launchSource: 'task_page'
+        }
+      })
+    )
+  })
+
   it('uses remote cursor-agent detection and paste launch for SSH repos', async () => {
     mocks.store.repos = [
       {
@@ -633,7 +668,6 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true
     })
@@ -643,7 +677,6 @@ describe('launchWorkItemDirect', () => {
       cmdOverrides: {},
       agentArgs: '--yolo',
       agentEnv: {},
-      sessionOptions: undefined,
       platform: 'linux',
       isRemote: true,
       allowEmptyPromptLaunch: true

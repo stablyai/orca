@@ -9,6 +9,7 @@ import {
   openTestJournalHostDatabase,
   liveTestJournalRows
 } from './journal-host-database-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 // Which rows an older host can still read: only rows that carry a turn item
 // are stamped with the version it does not know, and the epoch row never is.
@@ -33,7 +34,7 @@ describe('journal row schema versions', () => {
         workspaceId: 'workspace-1',
         hostId: 'local',
         agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+        providerHandle: codexProviderHandle('thread-1')
       },
       now: () => 1_000,
       stateDirectory: join(root, 'session-1')

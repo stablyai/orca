@@ -11,13 +11,9 @@ import {
   parseAgentSessionOperationTimestamp
 } from '../../shared/agent-session-host-authority'
 import { createHash } from 'node:crypto'
-import {
-  AGENT_SESSION_OPERATION_GLOBAL_LIMIT,
-  AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT
-} from './orca-runtime-core'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import { buildExecutionHostAgentStartupPlan } from '../opencode/opencode-model-startup-plan'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type {
   AgentSessionCreateOperation,
@@ -90,21 +86,6 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       // be reinterpreted as permission to start another fresh agent.
       throw new Error('agent_session_operation_expired')
     }
-    let callerOperationCount = 0
-    const callerPrefix = `${callerKey}\0`
-    for (const key of this.agentSessionCreateOperations.keys()) {
-      if (key.startsWith(callerPrefix)) {
-        callerOperationCount += 1
-      }
-    }
-    if (
-      callerOperationCount >= AGENT_SESSION_OPERATION_PER_CLIENT_LIMIT ||
-      this.agentSessionCreateOperations.size >= AGENT_SESSION_OPERATION_GLOBAL_LIMIT
-    ) {
-      // Why: tombstones cannot be evicted early without making an old replay
-      // capable of spawning again; reject new IDs until retained entries age out.
-      throw new Error('agent_session_operation_capacity')
-    }
     let retainReplayFence = false
     const reclaim: AgentSessionCreateOperation['reclaim'] = {}
     const operation = (async (): Promise<RuntimeCreateAgentSessionResult> => {
@@ -159,14 +140,14 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences)
       })
-      const startup =
-        request.promptDelivery === 'draft'
-          ? buildAgentDraftLaunchPlan({ ...startupArgs, draft: request.prompt ?? '' })
-          : buildAgentStartupPlan({
-              ...startupArgs,
-              prompt: request.prompt ?? '',
-              allowEmptyPromptLaunch: true
-            })
+      const startup = await buildExecutionHostAgentStartupPlan({
+        inputs: startupArgs,
+        cwd: startupCwd ?? workspace.path,
+        prompt: request.prompt ?? '',
+        promptDelivery: request.promptDelivery,
+        hostIdentity: this.runtimeId,
+        signal: caller.signal
+      })
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }

@@ -36,7 +36,7 @@
 
 휴대폰에서 에이전트를 모니터링하고 조종하세요 — 에이전트가 완료되면 알림을 받고 어디서든 후속 지시를 보낼 수 있습니다.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK 0.0.50](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.50/app-release.apk) · [문서 →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK 0.0.52](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.52/app-release.apk) · [문서 →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -217,7 +217,6 @@ diff의 어느 줄에든 코멘트를 남기고 에이전트에게 바로 보내
 
 - **[onOrca.dev에서 다운로드](https://onorca.dev/download)**
 - 또는 빌드를 직접 받기: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [전체 빌드](https://github.com/stablyai/orca/releases/latest)
-- headless Linux 서버에서 `orca serve`를 실행하시나요? [Headless Linux 서버 가이드](../reference/headless-linux-server.md)를 확인하세요.
 
 _또는 패키지 매니저로 설치:_
 
@@ -234,7 +233,7 @@ yay -S stably-orca-bin
 데스크톱 앱과 페어링해 휴대폰에서 에이전트를 모니터링하고 조종하세요.
 
 - **iOS:** [App Store에서 다운로드](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [APK 0.0.50 다운로드](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.50/app-release.apk) · [설치 가이드](https://www.onorca.dev/docs/android-apk)
+- **Android:** [APK 0.0.52 다운로드](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.52/app-release.apk) · [설치 가이드](https://www.onorca.dev/docs/android-apk)
 
 ---
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
@@ -27,6 +28,7 @@ describe('web runtime connection capability advertisement', () => {
       expect.objectContaining({
         type: 'e2ee_auth',
         clientCapabilities: expect.arrayContaining([
+          REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
           WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
           // The web client runs the desktop renderer, which shows Deleting from the marker.
           WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY

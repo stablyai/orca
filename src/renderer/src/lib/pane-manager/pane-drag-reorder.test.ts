@@ -263,6 +263,7 @@ describe('attachPaneDrag', () => {
       [targetPane.id, targetPane]
     ])
     const onDragActiveChange = vi.fn()
+    const onLayoutChanged = vi.fn()
     const state = createDragReorderState()
 
     attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
@@ -274,6 +275,7 @@ describe('attachPaneDrag', () => {
       applyPaneOpacity: vi.fn(),
       applyDividerStyles: vi.fn(),
       refitPanesUnder: vi.fn(),
+      onLayoutChanged,
       onDragActiveChange
     })
 
@@ -293,6 +295,7 @@ describe('attachPaneDrag', () => {
     expect(state.currentExternalDropTarget).toBeNull()
     expect(state.cleanupActiveDrag).toBeNull()
     expect(onDragActiveChange).toHaveBeenLastCalledWith(false)
+    expect(onLayoutChanged).toHaveBeenCalledExactlyOnceWith('gesture')
   })
 
   it('drops onto an external target when no pane target is under the pointer', () => {

@@ -4,7 +4,8 @@ import {
   resolveOpenCodeGoApiKey,
   type OpenCodeGoApiKeyResolution
 } from './opencode-go-api-key-source'
-import type { OpenCodeGoUsageWindows } from './opencode-go-status-parsing'
+import { makeOpenCodeGoZenBalance, type OpenCodeGoUsageWindows } from './opencode-go-status-parsing'
+import type { OpenCodeCredentialBackend } from '../opencode/opencode-credential-backend'
 import {
   fetchOpenCodeGoUsageWithApiKey,
   type OpenCodeGoUsageApiOutcome
@@ -14,6 +15,9 @@ import { fetchOpenCodeGoRateLimits, normalizeCookieInput } from './opencode-go-u
 export type OpenCodeGoUsageSourceInput = {
   /** Explicit Orca override; the highest-precedence key tier. */
   settingsApiKey?: string
+  environment?: NodeJS.ProcessEnv
+  backend?: OpenCodeCredentialBackend
+  cwd?: string
   cookie: string
   workspaceIdOverride?: string
   networkProxySettings?: NetworkProxySettings
@@ -48,6 +52,7 @@ function usageResult(
     session: windows.session,
     weekly: windows.weekly,
     monthly: windows.monthly,
+    extraUsage: makeOpenCodeGoZenBalance(null, 'api-key-source'),
     updatedAt: Date.now(),
     error: null,
     status: 'ok',
@@ -96,8 +101,16 @@ function apiFailureResult(
 export async function fetchOpenCodeGoUsage(
   input: OpenCodeGoUsageSourceInput
 ): Promise<ProviderRateLimits> {
+  const context = input.settingsApiKey?.trim()
+    ? {}
+    : {
+        ...(input.environment ? { environment: input.environment } : {}),
+        ...(input.backend ? { backend: input.backend } : {}),
+        ...(input.cwd ? { cwd: input.cwd } : {})
+      }
   const apiKeyResolution = await resolveOpenCodeGoApiKey({
-    settingsOverride: input.settingsApiKey
+    settingsOverride: input.settingsApiKey,
+    ...context
   })
   input.onApiKeyResolved?.(apiKeyResolution)
   const hasCookie = Boolean(normalizeCookieInput(input.cookie))

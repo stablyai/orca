@@ -13,6 +13,7 @@ import {
 import { readArchivedWorkerOutput } from './worker-archive-read'
 import { readStructuredWorkerOutput } from '../../orchestration-structured-worker-lifecycle'
 import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+import { sessionIdFromStructuredWorkerIncarnation } from '../../../../structured-worker-identity'
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-release-completion'
 import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
@@ -25,6 +26,7 @@ import {
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.workerShow',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -78,6 +80,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerRead',
+    permission: 'workspace',
     params: WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
@@ -198,9 +201,11 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   }),
   defineMethod({
     name: 'orchestration.workerAbandon',
+    permission: 'workspace',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller }) => {
-      const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(
+      const db = runtime.getOrchestrationDb()
+      const abandoned = db.abandonWorkerDispatch(
         params.dispatch,
         runtime.getRuntimeId(),
         // Why: only a session caller is verified; terminal env could name anyone.
@@ -225,7 +230,14 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       }
       const worker = abandoned.worker
       if (abandoned.disposition === 'abandoned') {
-        releaseStructuredWorkerSession(params.dispatch, runtime)
+        // Only the worker's own Dispatch settles the worker; a side task's parked mail stays.
+        releaseStructuredWorkerSession(
+          params.dispatch,
+          runtime,
+          sessionIdFromStructuredWorkerIncarnation(
+            db.getDispatchContextById(params.dispatch)?.process_incarnation
+          )
+        )
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
       }
       return {

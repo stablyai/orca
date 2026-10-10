@@ -14,6 +14,7 @@ import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directo
 import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
 import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
+import { assertNestedWorktreeRemovalApproval } from '../../../nested-worktree-removal-plan'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../worktree-remote'
@@ -21,7 +22,7 @@ import {
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths
 } from '../../worktree-symlinks'
-import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCacheForRepo } from '../../filesystem-auth'
 import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
@@ -71,6 +72,9 @@ export async function removeRegisteredLocalWorktree(
     throw new Error(
       `Worktree registration changed during deletion: ${canonicalWorktreePath}. Retry deletion.`
     )
+  }
+  if (args.expectedCheckout) {
+    assertNestedWorktreeRemovalApproval([refreshedRegisteredWorktree], [args.expectedCheckout])
   }
   try {
     // Why: an archive hook can race another Git client that locks the row; recheck before linked-path/watcher/terminal teardown.
@@ -272,7 +276,7 @@ async function finishLocalWorktreeRemoval({
             hostId: removalHostId
           })
         )
-        invalidateAuthorizedRootsCache()
+        invalidateAuthorizedRootsCacheForRepo(store, repoId)
         removalCompleted = true
         return {}
       } else {
@@ -311,7 +315,7 @@ async function finishLocalWorktreeRemoval({
     )
   })
   await withWorktreeRemoveStageSpan('cache_invalidation', 'local', async () => {
-    invalidateAuthorizedRootsCache()
+    invalidateAuthorizedRootsCacheForRepo(store, repoId)
   })
   return removalResult ?? {}
 }

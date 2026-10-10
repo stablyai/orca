@@ -1,4 +1,7 @@
-import { isAdmissibleAgentJournalItemBody } from '../../../shared/agent-session-journal-schemas'
+import {
+  AGENT_JOURNAL_ITEM_BODY_KINDS,
+  isAdmissibleAgentJournalItemBody
+} from '../../../shared/agent-session-journal-schemas'
 import {
   AGENT_JOURNAL_TURN_LIFECYCLE_STATES,
   AGENT_JOURNAL_TURN_OUTCOMES,
@@ -9,9 +12,21 @@ import { NATIVE_CHAT_ROLES } from '../../../shared/native-chat-types'
 
 type StoredBody = AgentSessionRewindRecord['retained'][number]['body']
 
+function hasKnownKind(body: StoredBody): body is AgentJournalItemBody {
+  return AGENT_JOURNAL_ITEM_BODY_KINDS.has(body.kind)
+}
+
 /** A row this build cannot place stays visible as a row, never invented turn or prompt state —
- *  and never as its stored JSON, which is Orca's record, not something a person reads. */
-export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody {
+ *  and never as its stored JSON, which is Orca's record, not something a person reads. An item of
+ *  a kind this build does not know is carried as it was: kept by its place, as every other row. */
+export function restoreRewindJournalBody(stored: StoredBody): AgentJournalItemBody {
+  if (!hasKnownKind(stored)) {
+    if (!isAdmissibleAgentJournalItemBody(stored)) {
+      throw new Error('agent_session_rewind:invalid-retained-body')
+    }
+    return stored
+  }
+  const body = stored
   let normalized: unknown = body
   // A placeholder, not a failure anyone can act on, so it carries no fact.
   const fallback = () => ({
@@ -99,4 +114,17 @@ function withKnownTurnOutcome(
   }
   const { outcome: _outcome, ...rest } = lifecycle
   return { ...body, turnLifecycle: rest }
+}
+
+export function renameRewindTurnOpener(
+  body: AgentJournalItemBody,
+  rename: (itemId: string) => string
+): AgentJournalItemBody {
+  if (body.kind === 'turn' && body.userItemId !== undefined) {
+    return { ...body, userItemId: rename(body.userItemId) }
+  }
+  const lifecycle = body.kind === 'status' ? body.turnLifecycle : undefined
+  return body.kind === 'status' && lifecycle?.userItemId !== undefined
+    ? { ...body, turnLifecycle: { ...lifecycle, userItemId: rename(lifecycle.userItemId) } }
+    : body
 }

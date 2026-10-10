@@ -200,6 +200,19 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     expect(parseGitChangeList(root.stdout)).toEqual([
       { path: 'tracked.txt', status: 'added', added: 1, removed: 0 }
     ])
+    const names = await runGit([
+      'diff-tree',
+      '--root',
+      '--no-commit-id',
+      '-r',
+      '--name-status',
+      '-z',
+      head,
+      '--'
+    ])
+    expect(parseGitChangeList(names.stdout, 'name-status')).toEqual([
+      { path: 'tracked.txt', status: 'added' }
+    ])
   })
 
   it('reads signed history without launching configured signature verification', async () => {
@@ -394,12 +407,21 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await expect(readFile(lockPath, 'utf8')).resolves.toBe(lockReason)
     await expect(readFile(join(repoPath, 'compat-prepared', 'tracked.txt'))).rejects.toThrow()
     await runGit(['-C', 'compat-prepared', 'reset', '--hard', 'HEAD'])
-    expect(
-      (await runGit(['-C', 'compat-prepared', 'rev-parse', '--git-path', 'locked'])).stdout.trim()
-    ).toContain('worktrees/compat-prepared/locked')
-    expect(
-      (await runGit(['-C', 'compat-prepared', 'rev-parse', '--git-common-dir'])).stdout.trim()
-    ).toContain('.git')
+    const lockPointers = await runGit([
+      '-C',
+      'compat-prepared',
+      'rev-parse',
+      '--git-path',
+      'locked',
+      '--git-common-dir'
+    ])
+    const pointerLines = lockPointers.stdout.split('\n')
+    expect(pointerLines).toHaveLength(3)
+    expect(pointerLines[0]?.replace(/\r$/, '').replaceAll('\\', '/')).toMatch(
+      /\.git\/worktrees\/compat-prepared\/locked$/
+    )
+    expect(pointerLines[1]?.replace(/\r$/, '').replaceAll('\\', '/')).toMatch(/(?:^|\/)\.git$/)
+    expect(pointerLines[2]).toBe('')
     // Why: `-f -f` moves a locked preparation while preserving its lock reason (Git >=2.25).
     await runGit(['worktree', 'move', '-f', '-f', 'compat-prepared', 'compat-final'])
     await runGit([

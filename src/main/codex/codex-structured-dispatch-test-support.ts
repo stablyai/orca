@@ -14,6 +14,7 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from './codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from './codex-structured-session-state'
+import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 export const CODEX_TEST_THREAD_ID = 'thread-abc'
 
@@ -114,7 +115,7 @@ export async function acquiredCodexAdapter(input: {
     workspaceId: 'ws-1',
     hostId: 'host-1',
     agent: 'codex',
-    providerHandle: { kind: 'codex', threadId: CODEX_TEST_THREAD_ID }
+    providerHandle: codexProviderHandle(CODEX_TEST_THREAD_ID)
   }
   await adapter.acquire({
     identity,

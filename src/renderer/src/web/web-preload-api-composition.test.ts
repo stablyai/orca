@@ -46,6 +46,7 @@ describe('web preload API composition', () => {
       'gl',
       'hostedReview',
       'linear',
+      'jira',
       'hooks',
       'stats',
       'memory',
@@ -53,6 +54,7 @@ describe('web preload API composition', () => {
       'preflight',
       'notifications',
       'rateLimits',
+      'opencodeGoCredentials',
       'minimaxCredentials',
       'zcodePlanCredentials',
       'grokAccounts',
@@ -79,6 +81,7 @@ describe('web preload API composition', () => {
       'telemetryGetConsentState',
       'telemetryAcknowledgeBanner'
     ])
+    expect('onFileDrop' in globals.window.api.ui).toBe(false)
     expect(Object.keys(globals.window.api.projects)).toEqual([])
     const projects: Record<string, unknown> = globals.window.api.projects
     expect(projects.then).toBeUndefined()

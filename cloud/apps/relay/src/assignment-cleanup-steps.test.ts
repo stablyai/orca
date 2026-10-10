@@ -16,6 +16,7 @@ function stubStore(overrides: Partial<AssignmentCleanupStore> = {}) {
     abortExpiredRegionalRehomes: method('abortExpiredRegionalRehomes'),
     reapRegionalRehomeAttempts: method('reapRegionalRehomeAttempts'),
     releaseExpiredActivityLeases: method('releaseExpiredActivityLeases'),
+    pruneReleasedControlReservations: method('pruneReleasedControlReservations'),
     releaseExpiredActivity: method('releaseExpiredActivity'),
     releaseExpiredRegionPreferences: method('releaseExpiredRegionPreferences'),
     evacuateDeadCells: method('evacuateDeadCells'),
@@ -43,6 +44,7 @@ describe('assignment cleanup steps', () => {
       'abortExpiredRegionalRehomes',
       'reapRegionalRehomeAttempts',
       'releaseExpiredActivityLeases',
+      'pruneReleasedControlReservations',
       'releaseExpiredActivity',
       'releaseExpiredRegionPreferences',
       'evacuateDeadCells'

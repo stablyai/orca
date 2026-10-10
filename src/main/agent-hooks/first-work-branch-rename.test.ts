@@ -21,7 +21,7 @@ const {
   gitExecFileAsyncMock: vi.fn(),
   resolveLocalGitUsernameMock: vi.fn(async () => 'you'),
   getSshGitUsernameMock: vi.fn(async () => 'you'),
-  getSshGitProviderMock: vi.fn(() => undefined),
+  getSshGitProviderMock: vi.fn((_connectionId: string): unknown => undefined),
   generateBranchNameMock: vi.fn(),
   resolveTextGenerationParamsMock: vi.fn(),
   prepareLocalEnvMock: vi.fn(async () => ({ ok: true as const })),
@@ -65,6 +65,14 @@ import {
 } from './first-work-branch-rename-test-harness'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 
+const REMOTE_REPO_BASE: Repo = {
+  id: REPO_ID,
+  path: '/repo',
+  displayName: 'repo',
+  badgeColor: '',
+  addedAt: 0
+}
+
 function makeDeps(overrides: Partial<FirstWorkBranchRenameDeps> = {}) {
   return makeBranchRenameDeps(vi.fn, overrides)
 }
@@ -104,10 +112,11 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       // A real journal's sequence only ever advances, so the feed's projection
       // cache must miss on every publish here: this test is about the rename.
       let sequence = 0
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
       const journal = {
-        snapshot: () => ({ items }),
+        snapshot: () => ({ items, submissions: [] }),
+        stopMarks: { latest: () => null, revision: () => 0 },
         lastActivityAt: () => 1,
-        isReadOnly: false,
         cursor: () => ({ epoch: 1, sequence: (sequence += 1) })
       } as unknown as AgentSessionJournal
       const pending: Promise<void>[] = []
@@ -192,9 +201,10 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const { deps, setDisplayName, setRenameError } = makeDeps({
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the status feed reads only cursor(), lastActivityAt(), stopMarks and snapshot() of a journal.
     const journal = {
-      isReadOnly: false,
       lastActivityAt: () => 1,
+      stopMarks: { latest: () => null, revision: () => 0 },
       cursor: () => ({ epoch: 1, sequence: 1 }),
       snapshot: () => ({
         items: [
@@ -206,7 +216,8 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
               turnLifecycle: { turnId: 'turn-1', state: 'running' }
             }
           }
-        ]
+        ],
+        submissions: []
       })
     } as unknown as AgentSessionJournal
     const location = {
@@ -729,5 +740,45 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
     expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('routes a row that names its SSH owner only as executionHostId to that target', async () => {
+    const provider = {
+      exec: vi.fn(gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })),
+      renameCurrentBranch: vi.fn(async () => undefined),
+      executeCommitMessagePlan: vi.fn()
+    }
+    getSshGitProviderMock.mockReturnValue(provider)
+    const repo: Repo = { ...REMOTE_REPO_BASE, executionHostId: 'ssh:ssh-1' }
+    const { deps } = makeDeps({ getRepo: () => repo })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-1')
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(provider.renameCurrentBranch).toHaveBeenCalledWith('/repo/wt', 'you/fix-auth')
+  })
+
+  it("never dials a paired server's nested SSH target from this client", async () => {
+    const provider = {
+      exec: vi.fn(gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })),
+      renameCurrentBranch: vi.fn(async () => undefined),
+      executeCommitMessagePlan: vi.fn()
+    }
+    getSshGitProviderMock.mockReturnValue(provider)
+    const repo: Repo = {
+      ...REMOTE_REPO_BASE,
+      connectionId: 'ssh-1',
+      executionHostId: 'runtime:env-1'
+    }
+    const { deps, onRenamed } = makeDeps({ getRepo: () => repo })
+
+    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+    expect(provider.exec).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(onRenamed).not.toHaveBeenCalled()
   })
 })

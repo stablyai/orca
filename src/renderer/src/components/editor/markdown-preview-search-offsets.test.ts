@@ -15,7 +15,7 @@ function referenceMatchRanges(text: string, query: string): { start: number; end
     normalized += lowercase
     originalOffset += char.length
   }
-  const normalizedQuery = query.toLocaleLowerCase()
+  const normalizedQuery = Array.from(query, (char) => char.toLocaleLowerCase()).join('')
   const matches: { start: number; end: number }[] = []
   let searchStart = 0
   while (searchStart <= normalized.length - normalizedQuery.length) {
@@ -88,7 +88,7 @@ describe('case-insensitive Markdown search offsets', () => {
   )
 
   it.each(['en-US', 'tr', 'az', 'lt', 'el'])(
-    'matches the previous algorithm in locale %s',
+    'matches reference code-point folding in locale %s',
     (locale) => {
       mockLowercaseLocale(locale)
       const random = createRandom(101)

@@ -27,7 +27,7 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-terra',
         thinkingLevel: 'low',
         customPrompt: 'Use Conventional Commits.',
         commandInputTemplate: '{basePrompt}\n\nUse Conventional Commits.'
@@ -69,7 +69,7 @@ describe('resolveCommitMessageSettings', () => {
       ok: true,
       params: {
         agentId: 'codex',
-        model: 'gpt-5.5',
+        model: 'gpt-5.6-terra',
         thinkingLevel: 'low'
       }
     })

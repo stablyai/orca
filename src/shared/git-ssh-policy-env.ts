@@ -1,3 +1,4 @@
+import { isWindowsAbsolutePathLike } from './cross-platform-path'
 import { quotePosixShell } from './wsl-login-shell-command'
 
 export type GitSshPolicyMode =
@@ -41,99 +42,90 @@ function isMergeableOpenSshCommand(command: string): boolean {
   return basename === 'ssh' || basename === 'ssh.exe'
 }
 
-function shellTokenize(command: string): string[] | null {
-  const tokens: string[] = []
-  let current = ''
-  let quote: "'" | '"' | null = null
-  let escaped = false
-
-  for (let i = 0; i < command.length; i++) {
-    const char = command[i]
-    if (escaped) {
-      current += char
-      escaped = false
-      continue
-    }
-    if (char === '\\') {
-      const next = command[i + 1]
-      if (next && /[\s'"\\]/.test(next)) {
-        escaped = true
-      } else {
-        current += char
-      }
-      continue
-    }
-    if (quote) {
-      if (char === quote) {
-        quote = null
-      } else {
-        current += char
-      }
-      continue
-    }
-    if (char === "'" || char === '"') {
-      quote = char
-      continue
-    }
-    if (/\s/.test(char)) {
-      if (current) {
-        tokens.push(current)
-        current = ''
-      }
-      continue
-    }
-    if (';&|<>()`'.includes(char)) {
-      return null
-    }
-    current += char
-  }
-
-  if (escaped || quote) {
-    return null
-  }
-  if (current) {
-    tokens.push(current)
-  }
-  return tokens
-}
-
-function shellQuoteToken(token: string): string {
-  return /^[A-Za-z0-9_@%+=:,./~-]+$/.test(token) ? token : quotePosixShell(token)
-}
-
 function containsShellExpansionSyntax(command: string): boolean {
   return /[$#*?[\]{}\r\n]/.test(command) || /(?:^|\s)['"]~/.test(command) || command.includes('\\~')
 }
 
-function withoutBatchModeOptions(tokens: string[]): string[] {
-  const next: string[] = []
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i]
-    const lower = token.toLowerCase()
-    if (lower === '-o') {
-      const option = tokens[i + 1]?.toLowerCase()
-      if (option?.startsWith('batchmode')) {
-        i += 1
-        continue
+function containsShellControlSyntax(command: string): boolean {
+  let quote: "'" | '"' | null = null
+  let escaped = false
+  for (const char of command) {
+    if (escaped) {
+      escaped = false
+    } else if (quote === "'") {
+      if (char === quote) {
+        quote = null
       }
+    } else if (char === '\\') {
+      escaped = true
+    } else if (quote === '"') {
+      if (char === quote) {
+        quote = null
+      } else if (char === '`') {
+        return true
+      }
+    } else if (char === "'" || char === '"') {
+      quote = char
+    } else if (';&|<>()`'.includes(char)) {
+      return true
     }
-    if (lower.startsWith('-obatchmode')) {
-      continue
-    }
-    next.push(token)
   }
-  return next
+  return escaped || quote !== null
+}
+
+function openSshExecutableEnd(command: string): number | null {
+  const match = /^[ \t]*(?:'([^']*)'|"((?:\\.|[^"\\])*)"|([^ \t'"]+))(?=[ \t]|$)/.exec(command)
+  const executable = match?.[1] ?? match?.[2] ?? match?.[3] ?? ''
+  if (
+    !match ||
+    (match[3]?.includes('\\') && !isWindowsAbsolutePathLike(executable)) ||
+    !isMergeableOpenSshCommand(executable)
+  ) {
+    return null
+  }
+  return match[0].length
+}
+
+function quoteBareWindowsPathWords(command: string): string {
+  return command.replace(
+    /'[^']*'|"(?:\\.|[^"\\])*"|(?:\\.|[^ \t'"\\])+/g,
+    (word: string, offset: number) => {
+      const end = offset + word.length
+      const windowsPath = /(?:^|=|^-[A-Za-z])([A-Za-z]:\\|\\\\)/.exec(word)
+      if (
+        word.startsWith("'") ||
+        word.startsWith('"') ||
+        (offset > 0 && !/[ \t]/.test(command[offset - 1])) ||
+        (end < command.length && !/[ \t]/.test(command[end])) ||
+        !windowsPath
+      ) {
+        return word
+      }
+      const uncPrefixOffset =
+        windowsPath[1] === '\\\\' ? windowsPath.index + windowsPath[0].length - 2 : -1
+      return quotePosixShell(
+        word.replace(/\\([ \t'"\\;&|<>()`])/g, (match, escaped: string, offset: number) =>
+          offset === uncPrefixOffset && word[offset + 2] !== '\\' ? match : escaped
+        )
+      )
+    }
+  )
 }
 
 function buildOpenSshBatchModeCommand(configuredCommand: string): string | null {
-  if (containsShellExpansionSyntax(configuredCommand)) {
+  if (
+    containsShellExpansionSyntax(configuredCommand) ||
+    containsShellControlSyntax(configuredCommand)
+  ) {
     return null
   }
-  const tokens = shellTokenize(configuredCommand)
-  if (!tokens || tokens.length === 0 || !isMergeableOpenSshCommand(tokens[0])) {
+  const command = quoteBareWindowsPathWords(configuredCommand)
+  const end = openSshExecutableEnd(command)
+  if (end === null) {
     return null
   }
-  return [...withoutBatchModeOptions(tokens), '-o', 'BatchMode=yes'].map(shellQuoteToken).join(' ')
+  // OpenSSH keeps the first value; avoid rebuilding the configured argument list.
+  return `${command.slice(0, end)} -o BatchMode=yes${command.slice(end)}`
 }
 
 export function buildGitSshPolicyEnv(

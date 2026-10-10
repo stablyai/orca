@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { listFilesWithRg } from './fs-handler-utils'
 import { listFilesWithGit } from './fs-handler-git-fallback'
 import { listFilesWithReaddir } from './fs-handler-readdir-fallback'
@@ -17,14 +17,16 @@ export async function runListFilesScan(
   excludePathPrefixes: string[],
   signal: AbortSignal,
   maxResults?: number,
-  searchQuery?: string
+  searchQuery?: string,
+  options: { includeIgnored?: boolean; followSymlinks?: boolean; candidatePaths?: string[] } = {}
 ): Promise<string[]> {
   throwIfFileListingCancelled(signal)
   try {
     return await listFilesWithRg(rootPath, excludePathPrefixes, {
       signal,
       maxResults,
-      searchQuery
+      searchQuery,
+      ...options
     })
   } catch (error) {
     throwIfFileListingCancelled(signal)
@@ -32,22 +34,26 @@ export async function runListFilesScan(
       throw error
     }
   }
-  if (searchQuery !== undefined) {
+  if (
+    searchQuery !== undefined ||
+    options.includeIgnored === false ||
+    options.followSymlinks ||
+    options.candidatePaths !== undefined
+  ) {
     throw new Error(await buildRipgrepRequiredMessage())
   }
-  // Why: git ls-files only works inside git repos. Use rev-parse to detect
-  // git ancestry — unlike checking for a local .git entry, this works from
-  // subdirectories of a checkout (e.g. /repo/packages/app added as a folder).
-  // Without this, a git subdirectory would fall through to readdir and
-  // surface .gitignore'd build artifacts.
-  const isGitRepo = await new Promise<boolean>((resolve) => {
-    execFile(
-      'git',
-      ['rev-parse', '--is-inside-work-tree'],
-      { cwd: rootPath, env: buildRelayCommandEnv() },
-      (err) => resolve(!err)
-    )
+  // Detect Git ancestry so folder roots inside a checkout still honor its ignores.
+  const isGitRepo = await runProcess({
+    program: 'git',
+    args: ['rev-parse', '--is-inside-work-tree'],
+    cwd: rootPath,
+    env: buildRelayCommandEnv(),
+    timeoutMs: 5_000,
+    signal
   })
+    .then((result) => result.code === 0 && !result.timedOut)
+    .catch(() => false)
+  throwIfFileListingCancelled(signal)
   if (isGitRepo) {
     // Why: a git monorepo parent fills nested-repo subtrees via the readdir
     // walk, which can exhaust the same cap/deadline. Translate only those

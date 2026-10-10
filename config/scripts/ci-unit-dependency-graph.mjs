@@ -1,6 +1,7 @@
 import { globSync, readFileSync } from 'node:fs'
 import { posix, join } from 'node:path'
 import ts from 'typescript-api'
+import { createWorkspaceSourceResolver } from './workspace-source-exports.mjs'
 
 const EXTENSIONS = [
   '',
@@ -30,29 +31,41 @@ function localPath(file, specifier) {
   return null
 }
 
-export function buildUnitDependencyGraph(sources) {
+export function buildUnitDependencyGraph(sources, workspace = { resolve: () => null }) {
   const reverse = new Map()
   const opaque = new Set()
+  function addConsumer(input, file) {
+    if (!reverse.has(input)) {
+      reverse.set(input, new Set())
+    }
+    reverse.get(input).add(file)
+  }
   for (const [file, source] of sources) {
     if (INDIRECT_INPUT.test(source) || file.startsWith('config/') || file.startsWith('tests/')) {
       opaque.add(file)
     }
     for (const imported of ts.preProcessFile(source, true, true).importedFiles) {
-      const path = localPath(file, imported.fileName)
+      const workspaceSource = workspace.resolve(imported.fileName)
+      const path = workspaceSource?.file ?? localPath(file, imported.fileName)
       if (path === null) {
         continue
       }
-      const resolved = EXTENSIONS.map((extension) => path + extension).find((candidate) =>
-        sources.has(candidate)
-      )
+      let resolved
+      for (const extension of EXTENSIONS) {
+        const candidate = path + extension
+        if (sources.has(candidate)) {
+          resolved = candidate
+          break
+        }
+      }
       if (!resolved) {
         opaque.add(file)
         continue
       }
-      if (!reverse.has(resolved)) {
-        reverse.set(resolved, new Set())
+      if (workspaceSource) {
+        addConsumer(workspaceSource.manifest, file)
       }
-      reverse.get(resolved).add(file)
+      addConsumer(resolved, file)
     }
   }
   return { reverse, opaque }
@@ -65,12 +78,13 @@ export function collectUnitDependencyGraph(root = process.cwd()) {
       'config/**/*.{ts,tsx,js,mjs,cjs,json}',
       'tests/**/*.{ts,tsx,js,mjs,cjs,json}'
     ],
-    { cwd: root }
+    { cwd: root, exclude: ['**/node_modules/**', '**/dist/**'] }
   )
   const sources = new Map(
     files.map((file) => [file.replaceAll('\\', '/'), readFileSync(join(root, file), 'utf8')])
   )
-  return { ...buildUnitDependencyGraph(sources), files: new Set(sources.keys()) }
+  const workspace = createWorkspaceSourceResolver(root)
+  return { ...buildUnitDependencyGraph(sources, workspace), files: new Set(sources.keys()) }
 }
 
 export function unitConsumers(seeds, reverse) {

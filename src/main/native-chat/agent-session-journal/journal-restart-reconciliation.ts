@@ -10,6 +10,7 @@
 // through the user's Retry, which rotates the client message id; Orca still
 // never puts a message back on the wire on the user's behalf.
 
+import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import type {
@@ -44,7 +45,11 @@ function comparableBody(body: AgentJournalMessageItem | undefined): boolean {
 }
 
 function comparableSubmissions(journal: AgentSessionJournal): AgentJournalSubmission[] {
-  const { items, submissions } = journal.snapshot()
+  const snapshot = journal.snapshot()
+  const { items, submissions } = agentSessionCurrentContextRows(
+    snapshot.items,
+    snapshot.submissions
+  )
   const bodies = new Map(items.map((item) => [item.itemId, item.body]))
   return submissions.filter((submission) => {
     if (
@@ -77,7 +82,11 @@ function unseenHistory(
   }
   return {
     ...history,
-    items: history.items.filter((item) => !committed.has(agentJournalItemKey(item.identity)))
+    // An item with no identity of its own cannot be one the journal committed under it; the
+    // adapter bounds its window to after the journal's last accepted send instead.
+    items: history.items.filter(
+      (item) => item.identity === undefined || !committed.has(agentJournalItemKey(item.identity))
+    )
   }
 }
 

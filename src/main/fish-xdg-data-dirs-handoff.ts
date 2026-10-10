@@ -4,6 +4,8 @@
  * that dir's fish/vendor_conf.d, and the snippet's first act is to undo it.
  */
 import { getFishCodexShellLaunchPreflight } from '../shared/codex-shell-function'
+import { getFishClaudeShellFunction } from '../shared/claude-shell-function'
+import { MANAGED_DATA_ACCOUNT_FISH_RESTORE } from '../shared/managed-data-account-shell'
 import type { ShellWrapperFile } from './shell-wrapper-file-writer'
 
 /** Exactly what Orca prepended, so the snippet can remove that and nothing else. */
@@ -47,9 +49,9 @@ export function getFishXdgDataDirsLaunchEnv(
 }
 
 // Why a function: its variables stay function-scoped, so nothing but the
-// restored XDG_DATA_DIRS and the codex hook outlives this file.
-// Why codex waits for fish_prompt: config.fish has not run yet, and the user's
-// own codex function or PATH entry must be seen first, as in wrapped panes.
+// restored XDG_DATA_DIRS and the codex and claude hooks outlives this file.
+// Why they wait for fish_prompt: config.fish has not run yet, and the user's
+// own codex/claude function or PATH entry must be seen first, as in wrapped panes.
 export function getFishVendorConfSnippet(): string {
   return `# Orca-generated. Loaded only because Orca put this directory on
 # XDG_DATA_DIRS for one fish launch; the first thing it does is take it off.
@@ -69,7 +71,8 @@ function __orca_fish_xdg_handoff
     status is-interactive; or return 0
     function __orca_define_codex --on-event fish_prompt
         functions -e __orca_define_codex
-${getFishCodexShellLaunchPreflight()}
+${MANAGED_DATA_ACCOUNT_FISH_RESTORE}
+${getFishCodexShellLaunchPreflight()}${getFishClaudeShellFunction()}
     end
 end
 __orca_fish_xdg_handoff

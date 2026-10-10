@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useState } from 'react'
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -50,7 +51,7 @@ export function PendingBrowserAnnotationCard({
         />
       </PopoverAnchor>
       <PopoverContent
-        side={anchor.below ? 'bottom' : 'top'}
+        side={anchor.side}
         align="center"
         sideOffset={10}
         collisionBoundary={portalContainer ?? undefined}
@@ -66,20 +67,21 @@ export function PendingBrowserAnnotationCard({
           onCancel()
         }}
       >
-        <div className="mb-2 min-w-0">
-          <div className="truncate text-xs font-medium text-foreground">
+        {/* Selector lives in the tooltip: truncated to a popover width it reads as noise. */}
+        <div className="mb-2 flex min-w-0 items-center gap-1.5" title={payload.target.selector}>
+          <span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] leading-none text-muted-foreground">
+            {payload.target.tagName}
+          </span>
+          <span className="truncate text-xs font-medium text-foreground">
             {payload.target.accessibility.accessibleName ||
               payload.target.textSnippet ||
-              payload.target.tagName}
-          </div>
-          <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-            {payload.target.selector}
-          </div>
+              payload.target.selector}
+          </span>
         </div>
         <Label htmlFor="browser-annotation-comment" className="sr-only">
           {translate('auto.components.browser.pane.BrowserPane.d2a7092e6e', 'Annotation comment')}
         </Label>
-        <textarea
+        <ImeTextarea
           id="browser-annotation-comment"
           value={comment}
           onChange={(event) => setComment(event.target.value)}
@@ -106,42 +108,37 @@ export function PendingBrowserAnnotationCard({
             }
           }}
         />
-        <div className="mt-2 min-w-0">
-          <Label className="mb-1 block text-xs text-muted-foreground">
-            {translate('auto.components.browser.pane.BrowserPane.8f87e6c2e5', 'Intent')}
-          </Label>
-          <ToggleGroup
-            type="single"
-            size="sm"
-            variant="outline"
-            value={intent}
-            onValueChange={(value) => {
-              if (value) {
-                setIntent(value as BrowserAnnotationIntent)
-              }
-            }}
-            className="h-8 w-full [&_[data-slot=toggle-group-item]]:h-8 [&_[data-slot=toggle-group-item]]:flex-1 [&_[data-slot=toggle-group-item]]:px-2"
-            aria-label={translate(
-              'auto.components.browser.pane.BrowserPane.0cb3bd6221',
-              'Annotation intent'
-            )}
-          >
-            {BROWSER_ANNOTATION_INTENT_OPTIONS.map((option) => {
-              const Icon = option.icon
-              return (
-                <ToggleGroupItem
-                  key={option.value}
-                  value={option.value}
-                  aria-label={option.label}
-                  className="gap-1.5 text-xs data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground"
-                >
-                  <Icon className="size-3.5" />
-                  <span>{option.label}</span>
-                </ToggleGroupItem>
-              )
-            })}
-          </ToggleGroup>
-        </div>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          value={intent}
+          onValueChange={(value) => {
+            if (value) {
+              setIntent(value as BrowserAnnotationIntent)
+            }
+          }}
+          className="mt-2 h-8 w-full [&_[data-slot=toggle-group-item]]:h-8 [&_[data-slot=toggle-group-item]]:flex-1"
+          aria-label={translate(
+            'auto.components.browser.pane.BrowserPane.0cb3bd6221',
+            'Annotation intent'
+          )}
+        >
+          {BROWSER_ANNOTATION_INTENT_OPTIONS.map((option) => {
+            const Icon = option.icon
+            return (
+              <ToggleGroupItem
+                key={option.value}
+                value={option.value}
+                aria-label={option.label}
+                className="gap-1.5 text-xs data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground"
+              >
+                <Icon className="size-3.5" />
+                <span>{option.label}</span>
+              </ToggleGroupItem>
+            )
+          })}
+        </ToggleGroup>
         <div className="mt-3 flex justify-end gap-2">
           <Button size="sm" variant="ghost" className="h-8" onClick={onCancel}>
             {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}

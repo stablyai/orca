@@ -18,7 +18,13 @@ const port = parentPort
 type ReaderRequest = OpenCodeSqliteWorkerRequest | ForeignSqliteReaderRequest
 
 function isOpenCodeRequest(request: ReaderRequest): request is OpenCodeSqliteWorkerRequest {
-  return request.kind === 'list' || request.kind === 'parse' || request.kind === 'capture'
+  return (
+    request.kind === 'list' ||
+    request.kind === 'parse' ||
+    request.kind === 'capture' ||
+    request.kind === 'native-page' ||
+    request.kind === 'native-signal'
+  )
 }
 
 function handle(request: ReaderRequest): Promise<ForeignSqliteReaderResponse> {

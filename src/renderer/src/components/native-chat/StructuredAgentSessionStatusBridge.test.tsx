@@ -47,7 +47,9 @@ vi.mock('@/store', async () => {
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
-    state.testRuntimeOwner ?? null
+    state.testRuntimeOwner ?? null,
+  getExecutionHostIdForWorktree: (state: { testRuntimeOwner?: string | null }) =>
+    state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
@@ -64,7 +66,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 import {
   getStructuredAgentSessionTabs,
   StructuredAgentSessionStatusBridge,
-  useStructuredAgentSessionHostExecutionPhase
+  useStructuredAgentSessionHostExecutionPhase,
+  useStructuredAgentSessionHostStopping
 } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 
@@ -685,10 +688,39 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(feed().target).toEqual({ kind: 'environment', environmentId: 'env-1' })
   })
 
-  it('does not project an unknown provider as Codex', async () => {
+  // Two hosts can publish the same workspace id; the tab records which one holds this chat.
+  it("reads a chat's status from the host recorded on its tab, not its workspace", async () => {
+    mocks.store?.setState({
+      testRuntimeOwner: null,
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...structuredTab, executionHostId: 'runtime:server-1' }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    expect(feed().target).toEqual({ kind: 'environment', environmentId: 'server-1' })
+  })
+
+  // Hosts publish chat tabs only of agents they registered; each projects as itself.
+  it("projects a host-registered agent's status as that agent, never as Codex", async () => {
     mocks.store?.setState({
       unifiedTabsByWorktree: {
-        'wt-1': [{ ...structuredTab, agentSessionAgent: 'gemini' }]
+        'wt-1': [{ ...structuredTab, agentSessionAgent: 'grok' }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+
+    expect(statuses()).toEqual([expect.objectContaining({ agentType: 'grok' })])
+  })
+
+  it('does not project a tab naming no agent', async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...structuredTab, agentSessionAgent: undefined }]
       }
     })
     render(<StructuredAgentSessionStatusBridge />)
@@ -730,6 +762,29 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(phases.at(-1)).toBe('ready')
     act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'starting' }) }))
     expect(phases.at(-1)).toBe('starting')
+  })
+
+  it('re-renders a Stopping reader only when the host starts or stops saying so', async () => {
+    const stops: boolean[] = []
+    function StoppingProbe(): null {
+      stops.push(useStructuredAgentSessionHostStopping('session-1', { kind: 'local' }))
+      return null
+    }
+    render(<StoppingProbe />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'status', session: summary({ stopping: true }) }))
+    expect(stops.at(-1)).toBe(true)
+    const rendersWhileStopping = stops.length
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({ stopping: true, latestPrompt: 'next', updatedAt: 2 })
+      })
+    )
+    expect(stops).toHaveLength(rendersWhileStopping)
+    act(() => feed().emit({ type: 'status', session: summary({}) }))
+    expect(stops.at(-1)).toBe(false)
   })
 })
 

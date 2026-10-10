@@ -217,7 +217,50 @@ describe('LocalPtyProvider', () => {
         expect(mockProc.write).not.toHaveBeenCalled()
 
         await vi.advanceTimersByTimeAsync(200)
-        expect(mockProc.write).toHaveBeenCalledWith(`${command}\n`)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stages a long startup command and types only the line that sources it', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const command = `claude '${'x'.repeat(600)}'`
+
+        const result = await provider.spawn({ cols: 80, rows: 24, command })
+
+        expect(result).not.toHaveProperty('startupDelivery')
+        const staged = writeFileSyncMock.mock.calls.find(([path]) =>
+          String(path).includes('orca-launch-')
+        )
+        expect(staged?.[1]).toContain(`\n${command}\n`)
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`. '${staged?.[0]}'\r`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('prints a notice in the terminal when it types a line it could not stage', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const received: string[] = []
+        provider.configure({ onData: (_id, data) => received.push(data) })
+        writeFileSyncMock.mockImplementationOnce(() => {
+          throw new Error('ENOSPC: no space left on device')
+        })
+        const command = `claude '${'x'.repeat(600)}'`
+
+        await provider.spawn({ cols: 80, rows: 24, command })
+
+        expect(received.join('')).toContain(
+          '[orca] Could not stage the launch command (ENOSPC: no space left on device)'
+        )
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
       } finally {
         vi.useRealTimers()
       }
@@ -269,7 +312,7 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(1)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
+        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\r")
       } finally {
         vi.useRealTimers()
       }
@@ -298,7 +341,7 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(200)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith('printf ready\n')
+        expect(mockProc.write).toHaveBeenCalledWith('printf ready\r')
       } finally {
         vi.useRealTimers()
       }

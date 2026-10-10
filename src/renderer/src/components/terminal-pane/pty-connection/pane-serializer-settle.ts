@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
 import type { SessionRestoredBannerReason } from '../session-restored-banner-pane-state'
 import { hasPtySerializer } from '../pty-buffer-serializer'
@@ -9,9 +10,9 @@ import { resolveDraftPasteReadyTimeoutMs } from '../../../../../shared/draft-pas
 import { createDraftPasteReadyScanner } from '../../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
 import { writeTerminalPastePtyInput } from '../terminal-pty-paste-writer'
+import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
 
 import { STARTUP_DRAFT_PASTE_QUIET_MS } from './pty-connect-limits'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -174,6 +175,19 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     }
     startupDraftHardTimer = setTimeout(() => {
       startupDraftHardTimer = null
+      if (session.startupDraftAgent === 'codex') {
+        startupDraftPasteSettled = true
+        // A timed-out launch stays consumed across pane disposal and remount.
+        session.startupDraftPasteAttempted = true
+        session.cleanupStartupDraftPasteTimers()
+        createPasteReadinessTimeoutNotice({
+          worktreeId: session.deps.worktreeId,
+          tabId: session.deps.tabId,
+          agent: 'codex',
+          submitted: false
+        }).onTimeout()
+        return
+      }
       void deliverStartupDraftIfAgentOwnsPty()
     }, resolveDraftPasteReadyTimeoutMs(session.startupDraftAgent))
   }

@@ -36,7 +36,7 @@
 
 Monitor and steer your agents from your phone — get notified when an agent finishes and send follow-ups from anywhere.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK 0.0.50](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.50/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK 0.0.52](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.52/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -218,7 +218,6 @@ Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 
 - **[Download from onOrca.dev](https://onorca.dev/download)**
 - Or grab a build directly: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [All builds](https://github.com/stablyai/orca/releases/latest)
-- Running `orca serve` on a headless Linux server? See the [headless Linux server guide](docs/reference/headless-linux-server.md).
 
 _Or via a package manager:_
 
@@ -235,7 +234,7 @@ yay -S stably-orca-bin
 Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **iOS:** [Download on the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download APK 0.0.50](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.50/app-release.apk) · [Install guide](https://www.onorca.dev/docs/android-apk)
+- **Android:** [Download APK 0.0.52](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.52/app-release.apk) · [Install guide](https://www.onorca.dev/docs/android-apk)
 
 ---
 

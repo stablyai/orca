@@ -1,9 +1,10 @@
-// Which turn a person's Stop that named no turn binds: only a turn a send it stopped opens. A Stop
-// of a start that never landed stopped a send that opens no turn; a card it held, which Resume
-// releases, and anything sent after it open their own; a rewind keeps the binding. Turn rows name
-// the send that opened them, as Codex writes them.
+// Which turn a person's Stop that named no turn binds: one that ends while the Stop settles, and
+// the turn its interrupt took. A Stop that stopped nothing binds no turn that opens after it, nor
+// does a Stop of a start that never landed; a card it held, which Resume releases, and anything
+// sent after it end as their own. Turn rows name the send that opened them, as Codex writes them.
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -12,12 +13,17 @@ import {
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { JournalStopEvent } from '../agent-session-journal/journal-row-schema'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
-import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
 import {
   createQueuedMessageTestRig,
   eventually,
+  QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
+import {
+  openRigTurnFor,
+  withdrawnByStop
+} from './structured-agent-session-queued-rig-turn.test-fixture'
 
 let rig: QueuedMessageTestRig
 
@@ -63,6 +69,18 @@ async function laterTurn() {
     .find((turn) => turn?.turnId === 'turn-later')
 }
 
+/** Every end row written for the later turn, in order: a relabel would show as two. */
+function laterTurnEndRows() {
+  const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
+  if (!since.ok) {
+    throw new Error(`expected rows, got reset ${since.reset}`)
+  }
+  return since.rows.flatMap((row) => {
+    const turn = row.kind === 'item' ? readAgentJournalTurn(row.body) : undefined
+    return turn?.turnId === 'turn-later' && turn.state !== 'running' ? [turn] : []
+  })
+}
+
 /** The turn send `clientMessageId` opens, running, named by its row as Codex writes it. */
 async function turnOpenedBy(clientMessageId: string, state: 'running' | 'interrupted' = 'running') {
   await journal().appendItem(
@@ -90,34 +108,41 @@ async function queuedDraft(text: string): Promise<string> {
  *  behind the start, which the Stop holds. */
 async function stopOfStart(options: { held?: true } = {}): Promise<string | undefined> {
   rig = await createQueuedMessageTestRig({ starting: true, restartable: true })
-  let release: () => void = () => undefined
-  rig.awaitStarted.mockImplementation(
-    () => new Promise<undefined>((resolve) => (release = () => resolve(undefined)))
-  )
+  // Held for a child that never proves its start, so it is never handed over.
   rig.send('work on this')
   await eventually(() => expect(childPhase()).toBe('starting'))
   const held = options.held ? await queuedDraft('queued behind the start') : undefined
   expect(await rig.stop()).toMatchObject({ ok: true })
-  release()
   expect(stopEvents()).toEqual([expect.objectContaining({ reason: 'user-stop' })])
   expect(stopEvents()[0]).not.toHaveProperty('turnId')
   await eventually(() => expect(childPhase()).toBeUndefined())
-  rig.awaitStarted.mockImplementation(async () => undefined)
   return held
 }
 
 /** Orchestration mail after the Stop starts a new child and its turn runs. */
 async function mailTurn(): Promise<void> {
-  const mail = rig.send('mail for the worker', undefined, { internal: true })
+  const handedOver = rig.dispatch.mock.calls.length
+  const mail = rig.send('mail for the worker')
   await mail.result
-  await eventually(() => expect(rig.dispatch).toHaveBeenCalled())
+  await rig.proveStart()
+  await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(handedOver + 1))
   await turnOpenedBy(mail.id)
 }
 
 /** The host evicts the chat; the Stop events as its provider close finds them. */
+/** The person's Stop still pauses the reopened chat. The close hides its row, as every close of a
+ *  chat does: nothing runs there until its next turn. */
+async function stillStopped(): Promise<boolean> {
+  expect(await rig.queuePause()).toBeNull()
+  return structuredQueuePauses(journal()).some((pause) => pause.reason === 'stopped')
+}
+
 async function evictedAt(): Promise<string[]> {
   let atClose: JournalStopEvent[] = []
   rig.closeSession.mockImplementationOnce(async () => {
+    // The event is issued before the kill, never awaited by it: the journal writes it ahead of
+    // anything the kill makes the child write.
+    await new Promise((resolve) => setImmediate(resolve))
     atClose = stopEvents()
     return true
   })
@@ -142,7 +167,7 @@ describe('a Stop of a start that never landed binds no later turn', () => {
 
   it('reads a mail turn the child end cut, with no verdict of its own, as news', async () => {
     await stopOfStart()
-    const mail = rig.send('mail for the worker', undefined, { internal: true })
+    const mail = rig.send('mail for the worker')
     await mail.result
     await turnOpenedBy(mail.id)
 
@@ -185,24 +210,55 @@ describe('a Stop of a start that never landed binds no later turn', () => {
   })
 })
 
-describe('a Stop pressed before its send opened a turn binds only that turn', () => {
+describe('a Stop pressed before its send opened a turn binds only the turn it stopped', () => {
   /** The send the Stop stopped is handed over and unopened; a card waits behind it. */
-  async function stopBeforeTheTurnShowed(): Promise<{ stopped: string; held: string }> {
+  async function stopBeforeTheTurnShowed(
+    answer: Awaited<ReturnType<QueuedMessageTestRig['cancelTurn']>> = { cancelled: true }
+  ): Promise<{ stopped: string; held: string }> {
     rig = await createQueuedMessageTestRig()
     const stopped = await rig.workingSend()
     const held = await queuedDraft('queued behind the turn')
+    rig.cancelTurn.mockResolvedValueOnce(answer)
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
     return { stopped, held }
   }
 
-  it("binds the stopped send's own turn", async () => {
-    const { stopped } = await stopBeforeTheTurnShowed()
+  it('binds the turn its interrupt took, whose end lands after the Stop answered', async () => {
+    const { stopped } = await stopBeforeTheTurnShowed({ cancelled: true, turnId: 'turn-later' })
     await rig.settleAccepted(stopped, 'stopped')
 
     await turnOpenedBy(stopped, 'interrupted')
 
     expect(await laterTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+  })
+
+  // The interrupt reaches the turn as it opens; its end is written before the Stop answers.
+  it('reads a turn that ends while the Stop settles as interrupted from its first end row', async () => {
+    rig = await createQueuedMessageTestRig()
+    const stopped = await rig.workingSend()
+    rig.cancelTurn.mockImplementationOnce(async () => {
+      await turnOpenedBy(stopped)
+      await turnOpenedBy(stopped, 'interrupted')
+      return { cancelled: true, turnId: 'turn-later' }
+    })
+
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+
+    expect(laterTurnEndRows()).toEqual([
+      expect.objectContaining({ state: 'interrupted', outcome: 'cancellation' })
+    ])
+    expect(journal().activeTurnId()).toBeNull()
+  })
+
+  it('binds no turn that opens after a Stop that stopped nothing', async () => {
+    const { stopped } = await stopBeforeTheTurnShowed({ cancelled: false })
+    await rig.settleAccepted(stopped, 'stopped')
+
+    await turnOpenedBy(stopped)
+    await turnOpenedBy(stopped, 'interrupted')
+
+    await expectNews()
   })
 
   it("writes the host's event when it evicts the turn of the card Resume sent", async () => {
@@ -219,7 +275,7 @@ describe('a Stop pressed before its send opened a turn binds only that turn', ()
   it('reads a mail turn the child end cut as news', async () => {
     const { stopped } = await stopBeforeTheTurnShowed()
     await rig.settleAccepted(stopped, 'stopped')
-    const mail = rig.send('mail for the lead', undefined, { internal: true })
+    const mail = rig.send('mail for the lead')
     await mail.result
     await turnOpenedBy(mail.id)
 
@@ -229,21 +285,128 @@ describe('a Stop pressed before its send opened a turn binds only that turn', ()
   })
 })
 
-describe('a host stop with no turn running after a Stop that named none', () => {
-  it('writes nothing while every unanswered send is one the Stop stopped', async () => {
+describe('a press that writes no Stop event of its own', () => {
+  // A turnless Stop long since settled, then a later turn the person's own send opened.
+  async function laterTurnAfterAnEarlierStop(): Promise<string> {
     rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
+    const stopped = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true })
     expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
+    // Its turn never opened, so the Stop took it back, as the provider's Stop settles one.
+    await withdrawnByStop(rig, stopped)
+    const sent = await rig.workingSend()
+    await rig.settleAccepted(sent, 'sent')
+    await turnOpenedBy(sent)
+    return sent
+  }
+
+  it('reopens no earlier Stop: a late Stop naming a turn already over binds no turn', async () => {
+    const sent = await laterTurnAfterAnEarlierStop()
+    const earlier = journal().stopMarks.latest()
+    rig.cancelTurn.mockImplementationOnce(async () => {
+      await turnOpenedBy(sent, 'interrupted')
+      return { cancelled: false }
+    })
+
+    const late = await rig.host.cancel(QUEUED_RIG_CALLER, {
+      envelope: rig.envelope({ turnId: 'turn-gone' }, 'agentSession.cancel', hostTestOperationId()),
+      turnId: 'turn-gone'
+    })
+
+    expect(late).toMatchObject({ ok: true })
+    expect(journal().stopMarks.latest()).toBe(earlier)
+    await expectNews()
+  })
+
+  // The event is in the fold by its write's return, so one that failed leaves the earlier Stop latest.
+  it('reopens no earlier Stop: a press whose event row failed binds no turn', async () => {
+    const sent = await laterTurnAfterAnEarlierStop()
+    const earlier = journal().stopMarks.latest()
+    vi.spyOn(journal(), 'appendStopEvent').mockRejectedValueOnce(new Error('disk full'))
+    rig.cancelTurn.mockImplementationOnce(async () => {
+      await turnOpenedBy(sent, 'interrupted')
+      return { cancelled: false }
+    })
+
+    expect(await rig.stop()).toMatchObject({ ok: true })
+
+    expect(journal().stopMarks.latest()).toBe(earlier)
+    await expectNews()
+  })
+})
+
+describe("a Stop's settle that ends the turn its interrupt took", () => {
+  it("ends a turn still running at the Stop's settle, as the Stop's, once", async () => {
+    rig = await createQueuedMessageTestRig()
+    const stopped = await rig.workingSend()
+    await rig.settleAccepted(stopped, 'stopped')
+    await turnOpenedBy(stopped)
+    rig.cancelTurn.mockResolvedValueOnce({ cancelled: true, turnId: 'turn-later' })
+
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: true } })
+
+    expect(await laterTurn()).toMatchObject({ state: 'interrupted', outcome: 'cancellation' })
+    expect(journal().activeTurnId()).toBeNull()
+  })
+})
+
+describe('a host stop with no turn running after a Stop that named none', () => {
+  it('defers to that Stop while it settles, and not after', async () => {
+    rig = await createQueuedMessageTestRig()
+    await rig.workingSend()
+    let whileSettling: boolean | undefined
+    rig.cancelTurn.mockImplementationOnce(async () => {
+      whileSettling = journal().stopMarks.personStopDecides(null)
+      return { cancelled: true }
+    })
+
+    expect(await rig.stop()).toMatchObject({ ok: true })
+
+    expect(whileSettling).toBe(true)
+    expect(journal().stopMarks.personStopDecides(null)).toBe(false)
+  })
+
+  it.each([
+    ['stopped nothing', { cancelled: false }],
+    ['took', { cancelled: true }]
+  ] as const)(
+    'writes nothing while the Stop, which %s, still pauses the queue, and the card stays held',
+    async (_, answer) => {
+      rig = await createQueuedMessageTestRig()
+      await rig.workingSend()
+      const card = await queuedDraft('queued behind the send')
+      rig.cancelTurn.mockResolvedValueOnce(answer)
+      expect(await rig.stop()).toMatchObject({ ok: true })
+      expect(journal().stopMarks.latest()?.event).not.toHaveProperty('turnId')
+
+      expect(await evictedAt()).toEqual(['user-stop'])
+      expect(await stillStopped()).toBe(true)
+      expect(await rig.handoff(card)).toBeUndefined()
+    }
+  )
+
+  // Codex could not reach a turn still able to open, and its process could not be ended.
+  it('writes nothing after a Stop whose kill failed, and the card stays held', async () => {
+    rig = await createQueuedMessageTestRig()
+    await rig.workingSend()
+    const card = await queuedDraft('queued behind the send')
+    rig.cancelTurn.mockResolvedValueOnce({ cancelled: false, refusal: { turnMayOpen: true } })
+    rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
 
     expect(await evictedAt()).toEqual(['user-stop'])
+    expect(await stillStopped()).toBe(true)
+    expect(await rig.handoff(card)).toBeUndefined()
   })
 
   it("writes the host's event when a send after the Stop is unanswered beside the stopped one", async () => {
     rig = await createQueuedMessageTestRig()
-    await rig.workingSend()
+    const stopped = await rig.workingSend()
     expect(await rig.stop()).toMatchObject({ ok: true })
-    const mail = rig.send('mail for the lead', undefined, { internal: true })
+    // The stopped send's turn opens after that turnless Stop, and ends interrupted, unanswered.
+    await openRigTurnFor(rig, stopped)
+    await openRigTurnFor(rig, stopped, 'interrupted')
+    const mail = rig.send('mail for the lead')
     await mail.result
     await eventually(async () =>
       expect((await rig.submission(mail.id))?.handedOverAt).toBeDefined()
@@ -283,7 +446,7 @@ describe('a rewind that restates a turnless Stop', () => {
         body: { ...ended, completedAt: Date.now() + 1, outcome: 'cancellation' }
       }
     ])
-    const mail = rig.send('mail after the rewind', undefined, { internal: true })
+    const mail = rig.send('mail after the rewind')
     await mail.result
     await turnOpenedBy(mail.id)
     await turnOpenedBy(mail.id, 'interrupted')

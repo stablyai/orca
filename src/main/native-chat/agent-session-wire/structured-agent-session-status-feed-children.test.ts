@@ -23,6 +23,7 @@ import {
   statusFeedChildView as childView
 } from './structured-agent-session-status-feed-test-session'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const SESSION = 'status-session'
 const USER_IDENTITY = {
@@ -32,14 +33,14 @@ const USER_IDENTITY = {
   ordinal: 1
 } as const
 /** The legacy row an older client reads for `childView()`, derived from it. These sessions are
- *  Codex's, so a subagent keeps the id its row carried before views. */
+ *  Codex's, so a subagent keeps the id its row carried before views, which no Stop can name. */
 const LEGACY_TASK = {
   id: 'codex-agent:task-1',
   kind: 'agent',
   name: 'deep_review',
   state: 'working',
   startedAt: 100,
-  stoppable: true
+  stoppable: false
 } as const
 
 let root: string
@@ -61,7 +62,7 @@ async function feedWithChildren(provider: AgentSessionHandleProvider = 'codex') 
       workspaceId: 'workspace-1',
       hostId: 'local',
       agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      providerHandle: codexProviderHandle('thread-1')
     },
     stateDirectory: join(root, SESSION)
   })

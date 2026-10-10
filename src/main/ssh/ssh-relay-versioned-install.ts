@@ -7,7 +7,7 @@
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execHostCommand } from './ssh-relay-host-exec'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import { remoteInstallDirSegments } from './ssh-relay-install-namespace'
@@ -31,18 +31,6 @@ const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 type RelayInstalledProbeOptions = {
   rethrowSessionLimitErrors?: boolean
   signal?: AbortSignal
-}
-
-function execHostCommand(
-  conn: SshConnection,
-  host: RemoteHostPlatform,
-  command: string,
-  options?: { signal?: AbortSignal }
-): Promise<string> {
-  return execCommand(conn, command, {
-    wrapCommand: host.commandDialect !== 'powershell',
-    signal: options?.signal
-  })
 }
 
 /**
@@ -180,13 +168,18 @@ export async function abandonInstall(
   conn: SshConnection,
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
-): Promise<void> {
+): Promise<boolean> {
   const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
-  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch((error) => {
-    if (isUnconfirmedSshCommandTermination(error)) {
-      throw error
+  return execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).then(
+    () => true,
+    (error) => {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
+      // Not confirmed removed: the lock may remain.
+      return false
     }
-  })
+  )
 }
 
 /**

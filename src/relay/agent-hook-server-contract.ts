@@ -24,6 +24,8 @@ export type RelayHookServerOptions = {
    * with no PTY handler behind it (the WSL relay) keeps forwarding everything.
    */
   getTmuxManagedPty?: (paneKey: string) => Promise<TmuxManagedPty | null>
+  /** Token captured from the successful host spawn; absent authority keeps the physical poster. */
+  getAgentLaunchToken?: (paneKey: string) => string | undefined
   isPaneSurfaceRetired?: (paneKey: string) => boolean
 }
 

@@ -58,8 +58,7 @@ describe('session search service registry', () => {
     expect(service.search).toHaveBeenCalledWith(
       {
         query: 'needle',
-        limit: 20,
-        filters: { agents: AI_VAULT_AGENTS.filter((a) => a !== 'qoder') }
+        limit: 20
       },
       undefined
     )
@@ -68,33 +67,68 @@ describe('session search service registry', () => {
       'debug'
     )
   })
-  it.each(['ipc', 'runtime', 'relay'] as const)(
-    'negotiates Qoder hits before retrieval on %s, without widening explicit filters',
-    async (transport) => {
+  describe.each(['qoder', 'jcode'] as const)('%s history compatibility', (agent) => {
+    it.each(['runtime', 'relay'] as const)(
+      'negotiates hits before retrieval on %s, without widening explicit filters',
+      async (transport) => {
+        const service = fakeSearchService()
+        setSessionSearchService(service)
+        await searchSessionService(
+          { query: 'proof', supportedAgents: ['claude'], filters: { agents: ['claude', agent] } },
+          transport
+        )
+        expect(service.search).toHaveBeenLastCalledWith(
+          { query: 'proof', limit: 20, filters: { agents: ['claude'] } },
+          undefined
+        )
+        expect(
+          await searchSessionService(
+            { query: 'proof', supportedAgents: ['claude'], filters: { agents: [agent] } },
+            transport
+          )
+        ).toMatchObject({ kind: 'results', hits: [], page: { cursor: null, hasMore: false } })
+        expect(service.search).toHaveBeenCalledTimes(2)
+        expect(service.reconcile).not.toHaveBeenCalled()
+        const client = createSessionSearchClient(
+          (method, request) =>
+            method === 'aiVault.searchStatus'
+              ? sessionSearchServiceStatus(request, transport)
+              : searchSessionService(request, transport),
+          transport
+        )
+        await client.searchSessions({ query: 'proof', filters: { agents: [agent] } })
+        expect(service.search).toHaveBeenLastCalledWith(
+          { query: 'proof', limit: 20, filters: { agents: [agent] } },
+          undefined
+        )
+      }
+    )
+  })
+  it('keeps the current catalog for same-build direct IPC calls', async () => {
+    const service = fakeSearchService()
+    setSessionSearchService(service)
+    await searchSessionService({ query: 'proof', filters: { agents: ['qoder', 'jcode'] } }, 'ipc')
+    expect(service.search).toHaveBeenCalledExactlyOnceWith(
+      { query: 'proof', limit: 20, filters: { agents: ['qoder', 'jcode'] } },
+      undefined
+    )
+    expect((await sessionSearchServiceStatus({}, 'ipc')).supportedAgents).toEqual(AI_VAULT_AGENTS)
+  })
+  it.each(['disabled', 'not-ready'] as const)(
+    'preserves %s precedence for empty negotiated host intersections',
+    async (reason) => {
       const service = fakeSearchService()
+      service.search.mockResolvedValue({ kind: 'unavailable', reason })
       setSessionSearchService(service)
-      await searchSessionService(
-        { query: 'proof', filters: { agents: ['claude', 'qoder'] } },
-        transport
-      )
-      expect(service.search).toHaveBeenLastCalledWith(
-        { query: 'proof', limit: 20, filters: { agents: ['claude'] } },
-        undefined
-      )
       expect(
-        await searchSessionService({ query: 'proof', filters: { agents: ['qoder'] } }, transport)
-      ).toMatchObject({ kind: 'results', hits: [], page: { cursor: null, hasMore: false } })
-      const client = createSessionSearchClient(
-        (method, request) =>
-          method === 'aiVault.searchStatus'
-            ? sessionSearchServiceStatus(request, transport)
-            : searchSessionService(request, transport),
-        transport
-      )
-      await client.searchSessions({ query: 'proof', filters: { agents: ['qoder'] } })
-      expect(service.search).toHaveBeenLastCalledWith(
-        { query: 'proof', limit: 20, filters: { agents: ['qoder'] } },
-        undefined
+        await searchSessionService(
+          { query: 'proof', supportedAgents: [], filters: { agents: ['jcode'] } },
+          'runtime'
+        )
+      ).toEqual({ kind: 'unavailable', reason })
+      expect(service.search).toHaveBeenCalledExactlyOnceWith(
+        { query: 'proof', limit: 20, filters: { agents: ['jcode'] } },
+        { kind: 'resolved', paths: [''] }
       )
     }
   )

@@ -47,6 +47,8 @@ export const worktreesApi = {
 
   resolveMrBase: (args) => ipcRenderer.invoke('worktrees:resolveMrBase', args),
 
+  previewNestedRemoval: (args) => ipcRenderer.invoke('worktrees:previewNestedRemoval', args),
+
   remove: (args) => ipcRenderer.invoke('worktrees:remove', args),
 
   forgetLocal: (args) => ipcRenderer.invoke('worktrees:forgetLocal', args),

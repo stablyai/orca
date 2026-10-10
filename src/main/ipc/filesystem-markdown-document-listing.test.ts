@@ -6,6 +6,7 @@ import {
   store,
   WORKTREE_FEATURE_PATH,
   readdirMock,
+  realpathMock,
   getSshFilesystemProviderMock,
   resetFilesystemIpcMocks
 } from './filesystem-test-harness'
@@ -114,6 +115,52 @@ describe('registerFilesystemHandlers', () => {
     expect(listMarkdownDocumentsMock).not.toHaveBeenCalled()
   })
 
+  it('exposes registered alias paths that remain readable and rejects child symlink escapes', async () => {
+    const alias = path.resolve('/alias-folder')
+    const canonical = path.resolve('/canonical-folder')
+    const outside = path.resolve('/outside/secret.md')
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [{ id: 'folder', folderPath: alias, projectGroupId: 'group' }]
+    }
+    realpathMock.mockImplementation(async (target: string) =>
+      target === path.join(alias, 'escape.md')
+        ? outside
+        : target === alias || target.startsWith(alias + path.sep)
+          ? canonical + target.slice(alias.length)
+          : target
+    )
+    listMarkdownDocumentsMock.mockResolvedValue([
+      {
+        filePath: path.join(canonical, 'Target.md'),
+        relativePath: 'Target.md',
+        basename: 'Target.md',
+        name: 'Target'
+      }
+    ])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This IPC fixture implements the store reads used by filesystem authorization.
+    registerFilesystemHandlers(folderStore as never)
+    const documents = await handlers.get('fs:listMarkdownDocuments')!(null, { rootPath: alias })
+    expect(documents).toEqual([
+      {
+        filePath: path.join(alias, 'Target.md'),
+        relativePath: 'Target.md',
+        basename: 'Target.md',
+        name: 'Target'
+      }
+    ])
+    expect(listMarkdownDocumentsMock).toHaveBeenCalledWith(canonical, {})
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.join(alias, 'Target.md') })
+    ).resolves.toEqual({ content: 'a'.repeat(10), isBinary: false })
+    await expect(
+      handlers.get('fs:stat')!(null, { filePath: path.join(alias, 'Target.md') })
+    ).resolves.toHaveProperty('isDirectory', false)
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.join(alias, 'escape.md') })
+    ).rejects.toThrow('Access denied')
+  })
+
   it('lists remote markdown documents through the SSH filesystem provider', async () => {
     const provider = {
       listFiles: vi
@@ -145,5 +192,42 @@ describe('registerFilesystemHandlers', () => {
     ])
     expect(listMarkdownDocumentsMock).not.toHaveBeenCalled()
     expect(localOptionsMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps late Markdown documents from legacy providers with large source inventories', async () => {
+    const paths = Array.from({ length: 25_002 }, (_, index) => `src/file-${index}.ts`)
+    paths.push('docs/late.md')
+    const provider = { listFiles: vi.fn().mockResolvedValue(paths) }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store reads used by filesystem handler registration.
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('fs:listMarkdownDocuments')!(null, {
+        rootPath: '/repo',
+        connectionId: 'legacy'
+      })
+    ).resolves.toEqual([
+      {
+        filePath: '/repo/docs/late.md',
+        relativePath: 'docs/late.md',
+        basename: 'late.md',
+        name: 'late'
+      }
+    ])
+    expect(provider.listFiles).toHaveBeenCalledWith('/repo')
+  })
+
+  it('still bounds legacy source inventories before constructing Markdown metadata', async () => {
+    getSshFilesystemProviderMock.mockReturnValue({
+      listFiles: vi.fn().mockResolvedValue([`${'x'.repeat(65_537)}.ts`, 'README.md'])
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies the store reads used by filesystem handler registration.
+    registerFilesystemHandlers(store as never)
+    await expect(
+      handlers.get('fs:listMarkdownDocuments')!(null, {
+        rootPath: '/repo',
+        connectionId: 'legacy'
+      })
+    ).rejects.toThrow('File inventory is too large')
   })
 })

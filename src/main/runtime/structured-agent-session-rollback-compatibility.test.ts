@@ -1,10 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { safeParseWorkspaceSession } from '../../shared/workspace-session-schema'
-import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
 import {
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore,
@@ -86,9 +85,6 @@ describe('structured session rollback compatibility', () => {
       runtimeKind: 'native'
     })
     await seedTestAgentSessionRecordStore(root, { records: [record] })
-    const journalDir = journalDirectoryFor(root, { workspaceId: WORKSPACE, sessionId: SESSION })
-    await mkdir(journalDir, { recursive: true })
-    await writeFile(join(journalDir, 'journal.log'), 'durable-journal-fixture\n')
 
     const target = await openTestAgentSessionRecordStore(root)
     expect(target.getVisibleSessionTabIndex()).toEqual({ present: false, sessionIds: [] })
@@ -120,9 +116,6 @@ describe('structured session rollback compatibility', () => {
     const reloaded = await openTestAgentSessionRecordStore(root)
     expect(reloaded.listVisibleSessionIds()).toEqual([SESSION])
     expect(reloaded.getRecord(SESSION)?.providerHandleChain).toHaveLength(1)
-    await expect(readFile(join(journalDir, 'journal.log'), 'utf8')).resolves.toBe(
-      'durable-journal-fixture\n'
-    )
     expect((await readPersistedTestAgentSessionStore(root)).sessionTabs).toEqual([
       { tabId: expect.any(String), sessionId: SESSION }
     ])

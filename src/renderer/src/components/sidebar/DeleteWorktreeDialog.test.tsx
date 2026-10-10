@@ -295,6 +295,7 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       <DeleteWorktreeLineageNotice
         descendants={[child]}
         dirtyChangeCountsByWorktreeId={new Map()}
+        dirtyChangePreviewsByWorktreeId={new Map()}
       />
     )
 
@@ -358,7 +359,9 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
 
     expect(markup).toContain('2 uncommitted or untracked changes')
-    expect(markup).toContain('Deleting this workspace permanently removes these changes from disk.')
+    expect(markup).toContain(
+      'Any uncommitted or untracked changes in Git workspaces will be permanently deleted.'
+    )
     expect(markup).not.toContain('Also delete local branch')
   })
 

@@ -1,4 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { resolveAbsoluteDirOverride } from '../shared/absolute-dir-override'
+import { joinRemotePath } from '../main/ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
 import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
 import { createRelayAiVaultFilesystemProvider } from './ai-vault-service-filesystem'
@@ -50,9 +52,14 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
       provider,
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       remoteHome: init.remoteHome,
+      kiroHomeDir: resolveAbsoluteDirOverride(
+        process.env.KIRO_HOME,
+        joinRemotePath(init.hostPlatform, init.remoteHome, '.kiro')
+      ),
       hostPlatform: init.hostPlatform,
       limit: request.params.limit,
       unlimited: request.params.unlimited,
+      includeAntigravityIdeSessions: request.params.includeAntigravityIdeSessions,
       scopePaths: request.params.scopePaths,
       signal: controller.signal
     })
@@ -98,6 +105,9 @@ process.on('message', (raw: RelayAiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'cancel') {
+    if (!pending.has(raw.id)) {
+      return
+    }
     cancelled.add(raw.id)
     controllers.get(raw.id)?.abort()
     return

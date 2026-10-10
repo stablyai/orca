@@ -8,11 +8,12 @@ import {
   getHiddenRendererPtyDeliveryDebug,
   resetRendererScopedHiddenPtyDeliveryState
 } from '../pty-hidden-delivery-gate'
-import { localProvider } from './provider/registry'
+import { localProvider, type ResolvedPtyHost } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
 import { installPtyCodexSharedServerIpcHandler } from './ipc/codex-shared-server'
+import { installPtyClaudeOldTerminalIpcHandler } from './ipc/claude-old-terminal'
 import {
   installPtyKillIpcHandler,
   stopReplacedPanePty,
@@ -20,6 +21,7 @@ import {
 } from './ipc/renderer-kill'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
+import { installPtyLeafMoveIpcHandler } from './ipc/leaf-move'
 import { installPtyRuntimeController } from './runtime/controller'
 import { installPtySnapshotIpcHandlers } from './ipc/snapshot'
 import {
@@ -64,6 +66,7 @@ import {
   stripSequencedStartupResumeArgv
 } from './host-env/codex-resume'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 export function registerPtyHandlers(
   mainWindow?: PtyRendererDelivery,
@@ -93,8 +96,11 @@ export function registerPtyHandlers(
   setRebindProviderListeners(() => {})
   registerRendererLifecycleResetHandlers(mainWindow?.webContents)
 
-  const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
-    if (connectionId) {
+  // Why only `local`: the daemon swap re-owns this machine's PTYs; no other host waits on it.
+  const getLocalPtyStartupPromise = (
+    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
+  ): Promise<void> | undefined => {
+    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
       return undefined
     }
     // Why: during cold start the daemon provider swap overlaps first paint, so local spawns must wait; SSH/headless don't use the desktop daemon.
@@ -102,9 +108,9 @@ export function registerPtyHandlers(
   }
 
   const getLocalPtyProviderStartupPromise = (
-    connectionId?: string | null
+    hostId: ResolvedPtyHost = LOCAL_EXECUTION_HOST_ID
   ): Promise<void> | undefined => {
-    if (connectionId) {
+    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
       return undefined
     }
     return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
@@ -112,6 +118,7 @@ export function registerPtyHandlers(
 
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
+  ipcMain.removeHandler('pty:moveLeafToNewTab')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
@@ -122,6 +129,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:isCodexOnSharedServer')
   ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')
   ipcMain.removeHandler('pty:stopCodexSharedServer')
+  ipcMain.removeHandler('pty:openedBeforeClaudeAccounts')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
   ipcMain.removeHandler('pty:getAuthoritativeBufferSnapshotCapabilities')
@@ -255,6 +263,7 @@ export function registerPtyHandlers(
     rememberSyntheticKillExit: session.rememberSyntheticKillExit,
     sendPtyExitToRenderer: session.sendPtyExitToRenderer
   }
+  installPtyLeafMoveIpcHandler({ store, runtime })
   installPtySpawnIpcHandler({
     runtime,
     store,
@@ -283,5 +292,6 @@ export function registerPtyHandlers(
   installPtyResizeVisibilityIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
   installPtyCodexSharedServerIpcHandler({ getLocalPtyProviderStartupPromise })
+  installPtyClaudeOldTerminalIpcHandler({ getLocalPtyProviderStartupPromise })
   installPtyKillIpcHandler(killDeps)
 }

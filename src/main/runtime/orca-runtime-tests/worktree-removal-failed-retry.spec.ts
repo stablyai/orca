@@ -58,6 +58,7 @@ describe('runtime Delete on a failed delete’s leftover', () => {
   })
 
   afterEach(async () => {
+    await _settlePendingWorktreeRemovalsForTests()
     _resetPendingWorktreeRemovalsForTests()
     await rm(directory, { recursive: true, force: true })
   })
@@ -159,6 +160,7 @@ describe('runtime listing straight after a delete fails partway', () => {
   })
 
   afterEach(async () => {
+    await _settlePendingWorktreeRemovalsForTests()
     _resetPendingWorktreeRemovalsForTests()
     vi.restoreAllMocks()
     await rm(directory, { recursive: true, force: true })

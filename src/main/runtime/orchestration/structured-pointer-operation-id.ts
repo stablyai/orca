@@ -17,12 +17,8 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto'
-import type {
-  AgentJournalMessageItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { OrchestrationDb } from './db'
 import type { StructuredPointerOperationRow } from './db/messages/structured-pointer-operation-store'
 
@@ -86,26 +82,22 @@ export function mintAgentSessionOperationId(now: number): string {
 /** Batch identity, and the only thing reuse may be keyed on. */
 export function structuredPointerBatchFingerprint(
   sessionId: string,
-  messageIds: readonly string[]
+  messageIds: readonly string[],
+  contextClearOperationId?: string
 ): string {
   return createHash('sha256')
-    .update(JSON.stringify([sessionId, messageIds]))
+    .update(
+      JSON.stringify(
+        contextClearOperationId
+          ? [sessionId, messageIds, contextClearOperationId]
+          : [sessionId, messageIds]
+      )
+    )
     .digest('base64url')
 }
 
-export function structuredPointerPayloadFingerprint(
-  sessionId: string,
-  body: AgentJournalMessageItem
-): string {
-  return computeAgentSessionPayloadFingerprint({
-    method: 'agentSession.send',
-    sessionId,
-    fields: { body }
-  })
-}
-
 export type StructuredPointerOperation =
-  | { kind: 'send'; operationId: string; payloadFingerprint: string }
+  | { kind: 'send'; operationId: string }
   | { kind: 'stamp' }
   | { kind: 'park' }
 
@@ -113,17 +105,20 @@ export function resolveStructuredPointerOperation(args: {
   db: OrchestrationDb
   mailboxHandle: string
   sessionId: string
-  body: AgentJournalMessageItem
   /** The rows this nudge stands for; batch identity, not the body, decides reuse. */
   messageIds: readonly string[]
+  contextClearOperationId?: string
   submissions: readonly StructuredPointerSubmission[]
   /** The operation id this process last sent for this mailbox, if any. */
   sentByThisProcess: string | undefined
   now?: number
 }): StructuredPointerOperation {
   const now = args.now ?? Date.now()
-  const payloadFingerprint = structuredPointerPayloadFingerprint(args.sessionId, args.body)
-  const batchFingerprint = structuredPointerBatchFingerprint(args.sessionId, args.messageIds)
+  const batchFingerprint = structuredPointerBatchFingerprint(
+    args.sessionId,
+    args.messageIds,
+    args.contextClearOperationId
+  )
   const stored = args.db.getStructuredPointerOperation(args.mailboxHandle)
   const attempt = decideStructuredPointerAttempt({
     row: stored,
@@ -137,7 +132,7 @@ export function resolveStructuredPointerOperation(args: {
     return { kind: attempt }
   }
   if (attempt === 'reuse' && stored) {
-    return { kind: 'send', operationId: stored.operation_id, payloadFingerprint }
+    return { kind: 'send', operationId: stored.operation_id }
   }
   const operationId = mintAgentSessionOperationId(now)
   args.db.putStructuredPointerOperation({
@@ -151,5 +146,5 @@ export function resolveStructuredPointerOperation(args: {
       now
     )
   })
-  return { kind: 'send', operationId, payloadFingerprint }
+  return { kind: 'send', operationId }
 }

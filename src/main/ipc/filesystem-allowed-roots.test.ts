@@ -15,7 +15,7 @@ import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Project } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import { getAllowedRoots } from './filesystem-allowed-roots'
-import { authorizeExternalPath, resolveAuthorizedPath } from './filesystem-auth'
+import { resolveAuthorizedPath } from './filesystem-auth'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 
@@ -357,25 +357,6 @@ describe('resolveAuthorizedPath allowed-root reuse', () => {
       expect(vi.mocked(listRepoWorktreeGraph)).toHaveBeenCalled()
     }
   )
-
-  it('builds no allowed-root list at all for a granted external path', async () => {
-    const external = join(outsideRoot, 'external.md')
-    await writeFile(external, 'notes\n')
-    authorizeExternalPath(external)
-    counts.getRepos = 0
-    counts.getProjects = 0
-    counts.getFolderWorkspaces = 0
-
-    for (let index = 0; index < 5; index += 1) {
-      await expect(resolveAuthorizedPath(external, store)).resolves.toBe(external)
-    }
-
-    // The grant answers on its own; hoisting the snapshot must not turn zero builds into one per read.
-    expect.soft(counts.getRepos).toBe(0)
-    expect.soft(counts.getProjects).toBe(0)
-    expect.soft(counts.getFolderWorkspaces).toBe(0)
-    expect.soft(vi.mocked(buildProjectGroupChildIndex)).not.toHaveBeenCalled()
-  })
 
   it.skipIf(process.platform === 'win32')(
     'still refuses a directory symlink that escapes every allowed root',

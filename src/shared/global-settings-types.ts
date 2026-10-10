@@ -1,3 +1,4 @@
+import type { NativeChatGlobalSettings } from './native-chat-appearance-settings'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/project-types'
@@ -39,25 +40,14 @@ import type {
   TaskViewPresetId
 } from './ui-chrome-types'
 import type { SetupScriptLaunchMode } from './worktree/launch-types'
-import type {
-  CustomWorktreeVisibilitySource,
-  ExternalWorktreeVisibility,
-  WorktreeVisibilitySourcePreferences
-} from './repo-types'
+import type { WorktreeVisibilityDefaults } from './repo-types'
+
+export type { WorktreeVisibilityDefaults } from './repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
 
-export type WorktreeVisibilityDefaults = {
-  /** Default for worktrees outside a recognized source. */
-  external?: ExternalWorktreeVisibility
-  /** Host-owned roots applied to every repository on that host. */
-  customSources?: CustomWorktreeVisibilitySource[]
-  /** Defaults for built-in and host-owned custom sources. */
-  sourcePreferences?: WorktreeVisibilitySourcePreferences
-}
-
-export type GlobalSettings = {
+export type GlobalSettings = NativeChatGlobalSettings & {
   workspaceDir: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
@@ -226,18 +216,16 @@ export type GlobalSettings = {
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
-  /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
-  openAgentTabsInChatByDefault?: boolean
-  /** Experimental native chat surface for Claude/Codex sessions; off by default. */
+  /** New supported agent launches use structured Chat UI; off defaults to terminal UI. */
   experimentalNativeChat?: boolean
-  /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
-  experimentalStructuredNativeChat?: boolean
   /** Opt-in: resume working structured chats automatically on the next launch. Off still offers
    *  the list, so the user sees exactly what would run before anything spends tokens. */
   nativeChatResumeWorkOnRestart?: boolean
   /** Chat-wide: hold a mid-turn send as an editable queued draft that goes when the turn ends
    *  (capable hosts only). Absent = on; off keeps mid-turn sends immediate. */
   nativeChatQueueFollowUps?: boolean
+  /** Teach newly started native chats to create inline visuals; absent means on. */
+  nativeChatInlineVisuals?: boolean
   /** Structured chat only: Codex/Claude children inherit the whole login-shell environment.
    *  Off passes only `nativeChatShellEnvironmentVariables` (plus a PATH/locale baseline). */
   nativeChatInheritShellEnvironment?: boolean
@@ -249,6 +237,7 @@ export type GlobalSettings = {
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
+  followSymlinkedDirectories?: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
@@ -327,6 +316,8 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+  /** Dismissed the "System default may hold a copied login" notice in Settings > Accounts. */
+  claudeCopiedSystemDefaultNoticeDismissed?: boolean
   /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
    *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
@@ -368,6 +359,8 @@ export type GlobalSettings = {
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** Why: worktree deletion is destructive (rm -rf of the working dir), so confirm by default. */
   skipDeleteWorktreeConfirm: boolean
+  /** Opt-in: workspace deletion discards changes and may waive terminal-stop verification. */
+  alwaysForceDeleteWorktrees?: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */
@@ -394,8 +387,6 @@ export type GlobalSettings = {
   opencodeSessionCookie: string
   /** Optional OpenCode Go workspace ID override; when set, skips the workspaces lookup and fetches usage directly. */
   opencodeWorkspaceId: string
-  /** Optional OpenCode Go API key override. Takes precedence over OpenCode's own stored key and OPENCODE_API_KEY. Stored encrypted. */
-  opencodeGoApiKey: string
   /** Optional MiniMax group id. When empty, the usage fetcher extracts minimax_group_id_v2 from the cookie. */
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */

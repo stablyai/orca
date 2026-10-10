@@ -1,3 +1,4 @@
+import '../unused-default-rpc-methods.test-fixture'
 // A transcript stream ends when its client says so: the host drops that subscriber, so nothing is
 // derived or sent for it any more, and a sibling stream of the same session keeps going.
 

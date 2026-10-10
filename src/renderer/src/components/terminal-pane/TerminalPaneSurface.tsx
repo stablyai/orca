@@ -1,4 +1,6 @@
 import { createPortal } from 'react-dom'
+import { TerminalPaneFileDropOwner } from './TerminalPaneFileDropOwner'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
@@ -7,6 +9,7 @@ import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { AgentLaunchPaneNoticePortal } from './AgentLaunchPaneNotice'
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
@@ -23,6 +26,9 @@ import {
   TerminalPaneSshReconnectPortals
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import { useAppStore } from '@/store'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 export function TerminalPaneSurface({
   controller
@@ -109,16 +115,20 @@ export function TerminalPaneSurface({
     terminalLinkActionRequest,
     titleUsesLightSurface,
     visibleQuickCommandHosts,
+    visibleLaunchRefusal,
     visibleTerminalError,
     worktreeId
   } = controller
+  // Why: an SSH, runtime, or not-yet-known host must not be described with this client's OS/shell.
+  const paneOnClient = useAppStore(
+    (state) => getKnownExecutionHostIdForWorktree(state, worktreeId) === LOCAL_EXECUTION_HOST_ID
+  )
 
   return (
     <>
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"
-        data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
@@ -160,13 +170,31 @@ export function TerminalPaneSurface({
           })
         }}
       />
+      {managedPanes.map((pane) => (
+        <TerminalPaneFileDropOwner
+          key={makePaneKey(tabId, pane.leafId)}
+          pane={pane}
+          tabId={tabId}
+          worktreeId={worktreeId}
+          cwd={cwd}
+          managerRef={managerRef}
+          paneTransportsRef={paneTransportsRef}
+        />
+      ))}
       <TerminalPaneCodexRestartPortals controller={controller} />
+      <AgentLaunchPaneNoticePortal
+        refusal={visibleLaunchRefusal}
+        isActive={isActive}
+        pane={activePane}
+        tabId={tabId}
+      />
       {/* Why: the reconnect banner already owns SSH recovery UX; the z-50 error
           toast was painting over it (same bottom strip) with the raw ssh:connect failure. */}
       {visibleTerminalError && isActive && !showSshReconnectOverlay && activePane
         ? createPortal(
             <TerminalErrorToast
               error={visibleTerminalError}
+              paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRetry={

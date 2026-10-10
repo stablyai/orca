@@ -5,7 +5,7 @@ import {
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { expandTilde } from './context'
-import { isBranchInDetachedWorktree } from '../shared/git-worktree-admin'
+import { isBranchReservedByWorktreeOperation } from '../shared/git-worktree-admin'
 import { parseWorktreeList } from '../shared/git-worktree-porcelain-parser'
 
 export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
@@ -106,6 +106,6 @@ async function isRelayBranchCheckedOut(
       (worktree) =>
         typeof worktree.branch === 'string' &&
         worktree.branch.replace(/^refs\/heads\//, '') === branchName
-    ) || isBranchInDetachedWorktree(expandTilde(repoPath), branchName, worktrees)
+    ) || isBranchReservedByWorktreeOperation(expandTilde(repoPath), branchName, worktrees)
   )
 }

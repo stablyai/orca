@@ -90,6 +90,9 @@ export function useMarkdownPreviewFoundation({
   const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
   const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
   const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
+  const pendingReviewActionFrameIdsRef = useRef<number[]>([])
+  const pendingReviewActionTimeoutIdsRef = useRef<number[]>([])
+  const reviewActionFrameGenerationRef = useRef(0)
   const markdownReviewNotes = useMemo(
     () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
     [markdownComments]
@@ -98,20 +101,16 @@ export function useMarkdownPreviewFoundation({
     () => markdownReviewNotes.filter((note) => !note.sentAt),
     [markdownReviewNotes]
   )
-  const unsentMarkdownReviewPrompt = useMemo(
-    () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, renderedContent),
-    [renderedContent, unsentMarkdownReviewNotes]
-  )
   const unsentMarkdownReviewScope = useMemo<NotesSendMenuScope<MarkdownReviewNote>[]>(
     () => [
       {
         id: 'all',
         label: translate('auto.components.editor.MarkdownPreview.ddf087d12e', 'All unsent notes'),
         notes: unsentMarkdownReviewNotes,
-        prompt: unsentMarkdownReviewPrompt
+        formatPrompt: (notes) => formatMarkdownReviewNotes(notes, renderedContent)
       }
     ],
-    [unsentMarkdownReviewNotes, unsentMarkdownReviewPrompt]
+    [renderedContent, unsentMarkdownReviewNotes]
   )
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null
@@ -137,6 +136,9 @@ export function useMarkdownPreviewFoundation({
     attentionReviewCommentId,
     setAttentionReviewCommentId,
     attentionReviewCommentTimeoutRef,
+    pendingReviewActionFrameIdsRef,
+    pendingReviewActionTimeoutIdsRef,
+    reviewActionFrameGenerationRef,
     markdownReviewNotes,
     unsentMarkdownReviewScope,
     canShowReviewTools

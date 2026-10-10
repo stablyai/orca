@@ -4,12 +4,12 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
 import { DiffNavigationProvider } from './diff-navigation-context'
+import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
@@ -278,21 +278,6 @@ function EditorPanelInner({
       { sourceFileId: activeFile.id }
     )
   }
-  const handleOpenContainingFolder = (): void => {
-    // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
-    if (activeFile.mode === 'check-details') {
-      return
-    }
-    if (
-      isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId), {
-        connectionId: getConnectionId(activeFile.worktreeId)
-      })
-    ) {
-      showLocalPathOpenBlockedToast()
-      return
-    }
-    window.api.shell.openPath(activeFile.filePath)
-  }
   const disableRenameBrowse = Boolean(
     settingsForRuntimeOwner(
       settings,
@@ -333,62 +318,66 @@ function EditorPanelInner({
     )
 
   return (
-    // Why: each split pane needs an isolated bridge between its diff editor and header controls.
-    <DiffNavigationProvider>
-      <EditorPanelShell
-        panelRef={setPanelRef}
-        activeFile={activeFile}
-        activeViewStateId={activeViewStateId}
-        model={model}
-        copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
-        showMarkdownTableOfContents={isMarkdownTableOfContentsVisible}
-        canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
-        markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
-        sideBySide={sideBySide}
-        openFiles={openFiles}
-        fileContents={fileContents}
-        diffContents={diffContents}
-        editorDrafts={editorDrafts}
-        pendingEditorReveal={pendingEditorReveal}
-        renameDialogFile={renameDialogFile}
-        renameError={renameError}
-        disableRenameBrowse={disableRenameBrowse}
-        onCopyPath={() => void handleCopyPath()}
-        onOpenDiffTargetFile={handleOpenDiffTargetFile}
-        onOpenPreviewToSide={handleOpenPreviewToSide}
-        onOpenMarkdownPreview={handleOpenMarkdownPreview}
-        onOpenContainingFolder={handleOpenContainingFolder}
-        onToggleSideBySide={() => setSideBySide((prev) => !prev)}
-        onEditorToggleChange={handleEditorToggleChange}
-        onToggleMarkdownTableOfContents={() =>
-          setMarkdownTableOfContentsVisible(
-            markdownDocumentStateFileId,
-            !isMarkdownTableOfContentsVisible
-          )
-        }
-        onToggleMarkdownFrontmatter={() =>
-          setMarkdownFrontmatterVisible(markdownDocumentStateFileId, !isMarkdownFrontmatterVisible)
-        }
-        onExportMarkdownToPdf={() =>
-          void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
-        }
-        createMarkdownArtifactRequest={
-          activeMarkdownContent === null ? undefined : createActiveMarkdownArtifactRequest
-        }
-        onContentChange={handleContentChange}
-        onContentChangeForFile={handleContentChangeForFile}
-        onDirtyStateHint={handleDirtyStateHint}
-        onSave={handleSave}
-        onSaveForFile={handleSaveForFile}
-        onReloadContent={reloadContent}
-        onCloseMarkdownTableOfContents={() =>
-          setMarkdownTableOfContentsVisible(markdownDocumentStateFileId, false)
-        }
-        onCloseRenameDialog={closeRenameDialog}
-        onRenameConfirm={handleRenameConfirm}
-        markdownAnnotationsEnabled={markdownAnnotationsEnabled && markdownReviewNotesEnabled}
-      />
-    </DiffNavigationProvider>
+    <EditorCommandOwnerContext value={isCmdSaveOwner}>
+      {/* Why: each split pane needs an isolated bridge between its diff editor and header controls. */}
+      <DiffNavigationProvider>
+        <EditorPanelShell
+          panelRef={setPanelRef}
+          activeFile={activeFile}
+          activeViewStateId={activeViewStateId}
+          model={model}
+          copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
+          showMarkdownTableOfContents={isMarkdownTableOfContentsVisible}
+          canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+          markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
+          sideBySide={sideBySide}
+          openFiles={openFiles}
+          fileContents={fileContents}
+          diffContents={diffContents}
+          editorDrafts={editorDrafts}
+          pendingEditorReveal={pendingEditorReveal}
+          renameDialogFile={renameDialogFile}
+          renameError={renameError}
+          disableRenameBrowse={disableRenameBrowse}
+          onCopyPath={() => void handleCopyPath()}
+          onOpenDiffTargetFile={handleOpenDiffTargetFile}
+          onOpenPreviewToSide={handleOpenPreviewToSide}
+          onOpenMarkdownPreview={handleOpenMarkdownPreview}
+          onToggleSideBySide={() => setSideBySide((prev) => !prev)}
+          onEditorToggleChange={handleEditorToggleChange}
+          onToggleMarkdownTableOfContents={() =>
+            setMarkdownTableOfContentsVisible(
+              markdownDocumentStateFileId,
+              !isMarkdownTableOfContentsVisible
+            )
+          }
+          onToggleMarkdownFrontmatter={() =>
+            setMarkdownFrontmatterVisible(
+              markdownDocumentStateFileId,
+              !isMarkdownFrontmatterVisible
+            )
+          }
+          onExportMarkdownToPdf={() =>
+            void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
+          }
+          createMarkdownArtifactRequest={
+            activeMarkdownContent === null ? undefined : createActiveMarkdownArtifactRequest
+          }
+          onContentChange={handleContentChange}
+          onContentChangeForFile={handleContentChangeForFile}
+          onDirtyStateHint={handleDirtyStateHint}
+          onSave={handleSave}
+          onSaveForFile={handleSaveForFile}
+          onReloadContent={reloadContent}
+          onCloseMarkdownTableOfContents={() =>
+            setMarkdownTableOfContentsVisible(markdownDocumentStateFileId, false)
+          }
+          onCloseRenameDialog={closeRenameDialog}
+          onRenameConfirm={handleRenameConfirm}
+          markdownAnnotationsEnabled={markdownAnnotationsEnabled && markdownReviewNotesEnabled}
+        />
+      </DiffNavigationProvider>
+    </EditorCommandOwnerContext>
   )
 }
 

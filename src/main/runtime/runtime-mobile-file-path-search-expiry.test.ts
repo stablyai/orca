@@ -11,10 +11,11 @@ async function collect(): Promise<void> {
   if (typeof globalThis.gc !== 'function') {
     throw new Error('Run with the repository Vitest --expose-gc config')
   }
-  for (let round = 0; round < 3; round++) {
+  for (let round = 0; round < 6; round++) {
     await new Promise<void>((resolve) => setImmediate(resolve))
     globalThis.gc()
   }
+  await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
 function inventory(path: string): RuntimeMobileFilePathInventory {

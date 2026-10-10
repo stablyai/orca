@@ -80,13 +80,27 @@ export function getExplicitHomeCodexHookSourcePath(sourcePath: string): string {
   if (process.platform !== 'win32' && isUnambiguousWindowsPath(sourcePath)) {
     return normalizeCodexTrustSourcePath(sourcePath)
   }
-  try {
-    // Why: hook discovery resolves the explicit home but keeps the hooks.json leaf logical.
-    return normalizeCodexTrustSourcePath(
-      join(realpathSync.native(dirname(sourcePath)), basename(sourcePath))
-    )
-  } catch {
-    return normalizeCodexTrustSourcePath(sourcePath)
+  // Why: hook discovery resolves the explicit home but keeps the hooks.json leaf logical.
+  return normalizeCodexTrustSourcePath(
+    join(resolveThroughExistingAncestor(dirname(sourcePath)), basename(sourcePath))
+  )
+}
+
+// Why the nearest existing ancestor: a home not created yet still sits under a resolved HOME.
+function resolveThroughExistingAncestor(path: string): string {
+  const missing: string[] = []
+  let current = path
+  for (;;) {
+    try {
+      return join(realpathSync.native(current), ...missing.toReversed())
+    } catch {
+      const parent = dirname(current)
+      if (parent === current) {
+        return path
+      }
+      missing.push(basename(current))
+      current = parent
+    }
   }
 }
 

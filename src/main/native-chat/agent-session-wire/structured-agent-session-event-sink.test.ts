@@ -21,10 +21,10 @@ import {
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
-import { openJournalOwingImport } from '../agent-session-journal/journal-owed-import-test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const BODY: AgentJournalItemBody = {
   kind: 'message',
@@ -37,7 +37,7 @@ const JOURNAL_IDENTITY = {
   workspaceId: 'workspace-1',
   hostId: 'host-1',
   agent: 'codex',
-  providerHandle: { kind: 'codex', threadId: 'thread-1' }
+  providerHandle: codexProviderHandle('thread-1')
 } as const
 
 function identity(ordinal: number): AgentJournalItemIdentity {
@@ -116,41 +116,6 @@ function target(
     fence,
     publish: (activity) =>
       log.push({ call: 'publish', fence, ...(activity !== undefined ? { activity } : {}) })
-  }
-}
-
-/** A real journal whose copy from an earlier build's per-chat file is still owed: its first write
- *  pays it, and every write issued meanwhile waits in its queue. The one real backlog a chat has. */
-async function owingTarget(fence: number) {
-  const root = await mkdtemp(join(tmpdir(), 'orca-event-sink-owed-'))
-  const { journal, history } = await openJournalOwingImport({
-    stateDirectory: root,
-    identity: JOURNAL_IDENTITY
-  })
-  const published: (AgentSessionTurnActivity | null | undefined)[] = []
-  const bound: StructuredAgentSessionEventTarget = {
-    journal,
-    fence,
-    publish: (activity) => published.push(activity)
-  }
-  /** The row each of these ordinals created, in journal order. */
-  const landed = (): number[] =>
-    journal.snapshot().items.flatMap((item) => {
-      const ordinal = [0, 1, 2, 3, 4].find(
-        (index) => item.itemId === agentJournalItemKey(identity(index))
-      )
-      return ordinal === undefined ? [] : [ordinal]
-    })
-  return {
-    bound,
-    journal,
-    history: history.length,
-    published,
-    landed,
-    dispose: async () => {
-      await journal.close()
-      await rm(root, { recursive: true, force: true })
-    }
   }
 }
 
@@ -243,25 +208,21 @@ describe('deferred structured agent-session event sink', () => {
     expect(log).toEqual([])
   })
 
-  it('lands writes already handed to the journal when closed; only never-bound ones drop', async () => {
-    const owed = await owingTarget(3)
+  it('says its writes landed only when they ran, though a close still settles drained()', async () => {
+    const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    deferred.bind(owed.bound)
-
+    deferred.bind(target(1, log))
     deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    deferred.sink.appendItem(identity(2), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    // Handed over, waiting behind the copy: none has landed when the sink closes.
-    expect(owed.landed()).toEqual([])
-    deferred.close()
-    expect(
-      deferred.sink.tryAppendItem?.(identity(3), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    ).toEqual({ accepted: false, reason: 'closed' })
-    await expect(deferred.drained()).resolves.toEqual({ ok: true })
+    expect(await deferred.sink.written?.()).toEqual({ ok: true })
 
-    expect(owed.landed()).toEqual([0, 1, 2])
-    expect(owed.journal.cursor().sequence).toBe(owed.history + 3)
-    await owed.dispose()
+    deferred.unbind()
+    deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    const written = deferred.sink.written?.()
+    deferred.close()
+
+    expect(await written).toMatchObject({ ok: false })
+    expect(await deferred.drained()).toEqual({ ok: true })
+    expect(log).toEqual([{ call: 'appendItem', fence: 1, ordinal: 0 }])
   })
 
   it('reports one refused append, fails the barrier, and stops later writes', async () => {
@@ -298,10 +259,11 @@ describe('deferred structured agent-session event sink', () => {
 
   it('replaces a failed cached sink before recovery drain', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the cached-sink path reads only the logger, on the failed drain.
-    const runtime = new StructuredAgentSessionHostRuntimeState({
+    const deps = {
       store: {},
       logger: createStructuredAgentSessionLogger()
-    } as never)
+    } as never
+    const runtime = new StructuredAgentSessionHostRuntimeState(deps, new Map())
     const failed = runtime.eventSinkFor('session-1')
     failed.bind(target(1, [], 0))
     failed.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
@@ -353,47 +315,6 @@ describe('deferred structured agent-session event sink', () => {
     expect(readingControl.pauseReading).toHaveBeenCalledOnce()
     expect(readingControl.resumeReading).toHaveBeenCalledOnce()
     expect(log).toHaveLength(2)
-  })
-
-  it('pauses and resumes the reader at the same watermarks over writes the journal has not landed', async () => {
-    const changes: boolean[] = []
-    const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
-    const deferred = createDeferredStructuredAgentSessionEventSink({
-      ...testEventSinkLogging(),
-      watermarks: {
-        pauseQueuedBytes: 1_000_000,
-        maxQueuedBytes: 1_000_000,
-        lowQueuedBytes: 1_000_000,
-        pauseQueuedOperations: 3,
-        maxQueuedOperations: 4,
-        lowQueuedOperations: 1
-      },
-      readingControl,
-      onBackpressureChange: (paused) => changes.push(paused)
-    })
-    const owed = await owingTarget(5)
-    deferred.bind(owed.bound)
-    const append = (ordinal: number) =>
-      deferred.sink.tryAppendItem?.(identity(ordinal), BODY, {
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE
-      })
-
-    expect([append(0), append(1)]).toEqual([{ accepted: true }, { accepted: true }])
-    expect(readingControl.pauseReading).not.toHaveBeenCalled()
-    expect(append(2)).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ backpressured: true, queuedOperations: 3 })
-    expect(readingControl.pauseReading).toHaveBeenCalledOnce()
-    expect(append(3)).toEqual({ accepted: true })
-    expect(append(4)).toEqual({ accepted: false, reason: 'backpressure' })
-
-    // Nothing has landed yet: every admitted write waits behind the copy it owes.
-    expect(owed.landed()).toEqual([])
-    await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(changes).toEqual([true, false])
-    expect(readingControl.resumeReading).toHaveBeenCalledOnce()
-    expect(deferred.state()).toMatchObject({ backpressured: false, queuedOperations: 0 })
-    expect(owed.landed()).toEqual([0, 1, 2, 3])
-    await owed.dispose()
   })
 
   it('admits a resolved append and publication as one bounded operation', async () => {
@@ -632,28 +553,6 @@ describe('deferred structured agent-session event sink', () => {
         activity: { turnId: 'turn-1', text: 'Checking the result' }
       }
     ])
-  })
-
-  it('skips a publication handed over and then replaced, and runs its replacement after the write between them', async () => {
-    const owed = await owingTarget(6)
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    deferred.bind(owed.bound)
-    const seen: string[] = []
-    owed.bound.publish = (activity) =>
-      seen.push(`${activity?.text ?? 'none'} over ${owed.landed().join(',')}`)
-
-    deferred.sink.appendItem(identity(0), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    deferred.sink.setActivity?.({ turnId: 'turn-1', text: 'Thinking' })
-    deferred.sink.appendItem(identity(1), BODY, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-    deferred.sink.setActivity?.({ turnId: 'turn-1', text: 'Checking the result' })
-    // The first publication was handed over and waits behind the copy; the second replaced it.
-    expect(deferred.state().queuedOperations).toBe(3)
-    expect(seen).toEqual([])
-
-    await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(seen).toEqual(['Checking the result over 0,1'])
-    expect(deferred.state().queuedOperations).toBe(0)
-    await owed.dispose()
   })
 })
 

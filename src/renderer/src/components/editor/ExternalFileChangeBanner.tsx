@@ -3,6 +3,7 @@ import { TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { getConnectionIdForFile } from '@/lib/connection-context'
+import { editorTabFileAccess } from '@/lib/local-file-access'
 import { readRuntimeFileContent } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
@@ -92,7 +93,8 @@ export function keepTabEditsOverExternalChange(file: OpenFile): void {
     relativePath: file.relativePath,
     worktreeId: file.worktreeId,
     connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
-    expectedExternalSshTargetId: file.externalSshTargetId
+    expectedExternalSshTargetId: file.externalSshTargetId,
+    access: editorTabFileAccess(state, file)
   })
     .then((result) => {
       if (result.isBinary) {

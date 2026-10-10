@@ -1,320 +1,51 @@
-// A worker's result reaching the structured chat that coordinates it, end to end in one process.
-//
-// Real: the structured agent-session host, its record store, journal, lease and Codex adapter; the
-// orchestration database, RPC dispatcher and methods; the runtime's pointer lanes. Fake: only the
-// Codex app-server child, which answers the JSON-RPC calls the real one does.
+import './rpc/unused-default-rpc-methods.test-fixture'
+// A worker's result reaching the structured chat that coordinates it, end to end in one process,
+// on the coordinator-mail rig.
 
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import { describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../shared/agent-session-host-authority'
 import { refuse } from '../../shared/agent-session-wire-refusals'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
-import { OrcaRuntimeService } from './orca-runtime'
-import { OrchestrationDb } from './orchestration/db'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
 import { formatMessagePointer } from './orchestration/formatter'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
-import type { RpcRequest } from './rpc/core'
-import { RpcDispatcher } from './rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
-import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
+import { idOf } from './rpc/orchestration-session-caller-test-fixture'
+import { operationId, providerFaults } from './structured-chat-coordinator-fake-codex-fixture'
+
 import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import { createCoordinatorMailObservationClock } from './structured-chat-coordinator-observation-clock.test-fixture'
-import {
-  attachParams,
-  fakeCodex,
-  operationId,
-  providerFaults,
-  resetProviderFaults,
-  type FakeConnection
-} from './structured-chat-coordinator-fake-codex-fixture'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-
-const COORDINATOR = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
-const PEER_CHAT = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
-const WORKER_PANE = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
-const WORKER_2_PANE = 'tab_worker2:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-
-let codex: ReturnType<typeof fakeCodex>
-let root: string
-let runtime: OrcaRuntimeService
-let db: OrchestrationDb
-let host: StructuredAgentSessionHost
-let dispatcher: RpcDispatcher
-let requests = 0
-const observationClock = createCoordinatorMailObservationClock(() => host, COORDINATOR)
-
-function request(
-  method: string,
-  params: Record<string, unknown>,
-  options: { sessionId?: string } = {}
-): RpcRequest {
-  requests += 1
-  return {
-    id: `rpc-${requests}`,
-    authToken: 'test',
-    method,
-    params,
-    orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-    orchestrationRequestId: `req-${requests}`,
-    ...(options.sessionId
-      ? { orchestrationCompatibilityEvidence: { agentSessionId: options.sessionId } }
-      : {})
-  }
-}
-
-async function call(
-  method: string,
-  params: Record<string, unknown>,
-  options?: { sessionId?: string }
-): Promise<Record<string, unknown>> {
-  const response = await dispatcher.dispatch(request(method, params, options))
-  if (!response.ok) {
-    throw new Error(`${method} failed: ${JSON.stringify(response)}`)
-  }
-  return resultOf(response)
-}
-
-async function openChat(sessionId: string): Promise<FakeConnection> {
-  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId))
-  expect(attached, JSON.stringify(attached)).toMatchObject({ ok: true })
-  await host.setSessionTabVisibility(sessionId, true)
-  threadBySession.set(sessionId, codex.connections.at(-1)!.threadId!)
-  return connectionFor(sessionId)
-}
-
-const threadBySession = new Map<string, string>()
-
-function connectionFor(sessionId: string): FakeConnection {
-  // A cleared chat's successor starts on its first message; its record then names its thread.
-  const head = agentSessionProviderHandleChainHead(
-    host.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
-  )
-  const thread =
-    threadBySession.get(sessionId) ?? (head?.handle.provider === 'codex' && head.handle.threadId)
-  const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
-  if (!connection) {
-    throw new Error(`no app-server for ${sessionId}`)
-  }
-  return connection
-}
-
-/** Codex's own sequence for a turn: it starts, echoes the user message, and completes. */
-async function settleTurn(sessionId: string, turnIndex: number): Promise<void> {
-  const connection = connectionFor(sessionId)
-  const turn = connection.turns[turnIndex]!
-  const turnId = `turn-${turnIndex + 1}`
-  const notify = (method: string, params: unknown) =>
-    connection.handlers.onNotification?.(method, params)
-  notify('turn/started', { turn: { id: turnId } })
-  notify('item/completed', {
-    item: {
-      type: 'userMessage',
-      id: `echo-${turn.clientUserMessageId}`,
-      clientId: turn.clientUserMessageId,
-      content: [{ type: 'text', text: 'pointer' }]
-    }
-  })
-  notify('turn/completed', { turn: { id: turnId } })
-  await host.flushStreamedEvents(sessionId)
-}
-
-/** A user message typed into the chat, as the chat surface sends it. */
-function sendUserMessage(sessionId: string, text: string) {
-  const body = {
-    kind: 'message' as const,
-    role: 'user' as const,
-    blocks: [{ type: 'text' as const, text }]
-  }
-  return host.send(
-    { callerKey: 'test-surface' },
-    {
-      envelope: {
-        sessionId,
-        clientOperationId: operationId(),
-        expectedRuntimeFence: host.deps.store.getRecord(sessionId)!.lease.runtimeFence,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.send',
-          sessionId,
-          fields: { body }
-        })
-      },
-      body
-    }
-  )
-}
-
-async function userTexts(sessionId: string): Promise<string[]> {
-  return (await host.journalSnapshot(sessionId)).items.flatMap((item: AgentJournalRenderItem) =>
-    item.body?.kind === 'message' && item.body.role === 'user'
-      ? item.body.blocks.map((block) => (block.type === 'text' ? block.text : ''))
-      : []
-  )
-}
-
-/** A supervised terminal worker under the coordinator's Run, and its worker_done. */
-async function finishWorker(
-  taskId: string,
-  worker: { handle: string; paneKey: string } = { handle: 'term_worker', paneKey: WORKER_PANE }
-): Promise<void> {
-  const started = db.createStartingWorkerDispatch({
-    creator: { kind: 'system' },
-    maxDepth: Number.MAX_SAFE_INTEGER,
-    taskId,
-    startOptions: {}
-  })
-  db.prepareStartingWorkerAuthority({
-    dispatchId: started.dispatch.id,
-    handle: worker.handle,
-    paneKey: worker.paneKey,
-    processIncarnation: `runtime_test:${worker.handle}:1`,
-    worktreeId: 'repo::worker',
-    effects: [],
-    setupState: 'not_applicable'
-  })
-  db.markWorkerDispatchReady(started.dispatch.id)
-  await call('orchestration.send', {
-    from: worker.handle,
-    subject: 'Done',
-    type: 'worker_done',
-    payload: JSON.stringify({ taskId, dispatchId: started.dispatch.id, outcome: 'succeeded' })
-  })
-}
-
-async function coordinatorRunAndTask(): Promise<{ runId: string; taskId: string }> {
-  const created = await call(
-    'orchestration.runCreate',
-    { objective: 'ship' },
-    {
-      sessionId: COORDINATOR
-    }
-  )
-  const runId = idOf(created.run)
-  const task = await call(
-    'orchestration.taskCreate',
-    { spec: 'build it' },
-    {
-      sessionId: COORDINATOR
-    }
-  )
-  return { runId, taskId: idOf(task.task) }
-}
-
-/** `/clear` as the chat surface runs it: the conversation continues in a new session. */
-async function clearChat(sessionId: string): Promise<string> {
-  const command = 'clear' as const
-  const cleared = await host.conversationCommand(
-    { callerKey: 'test-surface' },
-    {
-      command,
-      envelope: {
-        sessionId,
-        clientOperationId: operationId(),
-        expectedRuntimeFence: host.deps.store.getRecord(sessionId)!.lease.runtimeFence,
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.conversationCommand',
-          sessionId,
-          fields: { command }
-        })
-      }
-    }
-  )
-  const successor = cleared.ok ? cleared.value.replacementSessionId : undefined
-  if (!successor) {
-    throw new Error(`clear failed: ${JSON.stringify(cleared)}`)
-  }
-  // The surface swaps the tab over to the session that continues the chat.
-  await host.setSessionTabVisibility(sessionId, false)
-  await host.setSessionTabVisibility(successor, true)
-  return successor
-}
-
-/** A cleared chat's successor runs once the user writes to it; only then can its agent act. */
-async function startSuccessor(successor: string): Promise<void> {
-  expect(await sendUserMessage(successor, 'hello')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(1), WAIT)
-  await settleTurn(successor, 0)
-}
-
-beforeEach(async () => {
-  resetProviderFaults()
-  root = await mkdtemp(join(tmpdir(), 'orca-structured-coordinator-mail-'))
-  codex = fakeCodex()
-  db = new OrchestrationDb(':memory:')
-  runtime = startRuntime()
-  host = await ensureStructuredAgentSessionHost({
-    logger: createStructuredAgentSessionLogger(),
-    stateDirectory: root,
-    hostId: 'local',
-    claimKeyId: 'key-1',
-    resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
-    resolveCodexCommand: () => '/usr/local/bin/codex',
-    resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
-    resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
-    openCodexConnection: codex.openConnection,
-    readProcessStartTime: async () => 1_700_000_000_000,
-    // The same call the runtime's own host install makes on every status change.
-    onSessionStatusChanged: (summary) => runtime.onStructuredSessionStatusForMail(summary)
-  })
-  dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-})
-
-/** The runtime over the shared database; a second call is what an Orca restart leaves behind. */
-function startRuntime(): OrcaRuntimeService {
-  const started = new OrcaRuntimeService()
-  started.setOrchestrationDb(db)
-  vi.spyOn(started, 'ensureStructuredAgentSessionHost').mockResolvedValue()
-  vi.spyOn(started, 'getTerminalPaneKey').mockImplementation((handle) =>
-    handle === 'term_worker' ? WORKER_PANE : handle === 'term_worker_2' ? WORKER_2_PANE : null
-  )
-  return started
-}
-
-afterEach(async () => {
-  try {
-    await stopStructuredAgentSessionRuntime()
-    db.close()
-    await observationClock.drainClosedDatabaseRepair()
-    vi.restoreAllMocks()
-    await rm(root, { recursive: true, force: true })
-  } finally {
-    observationClock.restore()
-  }
-})
-
-// Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
-const WAIT = { timeout: 10_000 }
-
-const POINTER =
-  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
-
-/** The text the PTY lane types into a local terminal for this mailbox, byte for byte. */
-function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
-}
-
-/** The text of a turn the fake provider received. */
-function turnText(turn: { text: string }): string {
-  const input: unknown = JSON.parse(turn.text)
-  return Array.isArray(input)
-    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
-    : ''
-}
+  COORDINATOR,
+  PEER_CHAT,
+  WORKER_2_PANE,
+  codex,
+  runtime,
+  db,
+  host,
+  dispatcher,
+  observationClock,
+  request,
+  call,
+  openChat,
+  connectionFor,
+  settleTurn,
+  sendUserMessage,
+  userTexts,
+  finishWorker,
+  coordinatorRunAndTask,
+  clearChat,
+  startClearedContext,
+  WAIT,
+  POINTER,
+  ptyPointer,
+  turnText,
+  queuedCardTexts,
+  restartRuntime
+} from './structured-chat-coordinator-mail-rig.test-fixture'
 
 describe('a worker result reaches the structured chat that coordinates it', () => {
   it('lands as a turn in the coordinator journal, and a flagless check returns the worker_done', async () => {
@@ -523,8 +254,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
     // The next process: a fresh runtime over the same database redrives restored mail. The
     // provider still dies, so exactly one start proves it is pointed once, not in a loop.
-    runtime = startRuntime()
-    dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    restartRuntime()
     const before = providerFaults.starts
     await vi.waitFor(() => expect(providerFaults.turnStarts).toBe(2), WAIT)
     await observationClock.observe(1_500)
@@ -659,9 +389,10 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     }
   })
 
-  it('holds mail a refused turn left in doubt until the next result, then points it once', async () => {
+  it("holds mail a refused turn left in doubt, then queues the next pointer behind it as the person's message would wait", async () => {
     // A failed turn/start cannot prove the turn never started, so the host records it `unknown`
-    // and a resend under its id replays that; new mail is a new send.
+    // and a resend under its id replays that. A live doubt counts as work still owed, so the next
+    // result's pointer waits in the chat's queue, as a message the person sent then would.
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const second = await call(
@@ -677,10 +408,14 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(chat.turns).toHaveLength(0)
 
     await finishWorker(idOf(second.task), { handle: 'term_worker_2', paneKey: WORKER_2_PANE })
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    expect(turnText(chat.turns[0]!)).toBe(
-      formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
+    await vi.waitFor(
+      async () =>
+        expect(await queuedCardTexts()).toEqual([
+          formatMessagePointer(2, `run:${runId}`, localOrchestrationCliCommand()).trim()
+        ]),
+      WAIT
     )
+    expect(chat.turns).toHaveLength(0)
     expect(codex.connections.length).toBe(before)
   })
 
@@ -754,37 +489,38 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 })
 
 describe('a /clear keeps the chat its orchestration address', () => {
-  it("delivers the conversation's Run to the session that continues it, and acts as it", async () => {
+  it("delivers the conversation's Run to its fresh context under the same address", async () => {
     await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     const generation = db.getRunRaw(runId)!.consumer_generation
-    const successor = await clearChat(COORDINATOR)
+    const cleared = await clearChat(COORDINATOR)
+    expect(cleared).toBe(COORDINATOR)
     const opened = codex.connections.length
 
-    // The worker's result is the successor's first message, which starts it on a new thread.
+    // The worker's result starts the fresh context on a new thread.
     await finishWorker(taskId)
-    await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(1), WAIT)
-    const next = connectionFor(successor)
+    await vi.waitFor(() => expect(connectionFor(cleared).turns).toHaveLength(1), WAIT)
+    const next = connectionFor(cleared)
     expect(codex.connections.slice(opened)).toEqual([next])
     expect(next.methods.filter((method) => method.startsWith('thread/'))).toEqual(['thread/start'])
     expect(next.turns[0]!.text).toMatch(POINTER)
-    await settleTurn(successor, 0)
+    await settleTurn(cleared, 0)
     await expect(
-      call('orchestration.runCurrent', {}, { sessionId: successor })
+      call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
-    await expect(call('orchestration.check', {}, { sessionId: successor })).resolves.toMatchObject({
+    await expect(call('orchestration.check', {}, { sessionId: cleared })).resolves.toMatchObject({
       runId,
       count: 1,
       messages: [{ type: 'worker_done' }]
     })
-    // Nothing was rewritten: the Run is bound exactly as the first session bound it.
+    // Clear preserves the original Run binding and consumer generation.
     expect(db.getRunRaw(runId)).toMatchObject({
       coordinator_orca_session_id: COORDINATOR,
       consumer_generation: generation
     })
   })
 
-  it('points mail the cleared chat never took at the successor, with no message from the user', async () => {
+  it('points mail the earlier context never took at the fresh context, without a user message', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
     await finishWorker(taskId)
@@ -796,31 +532,32 @@ describe('a /clear keeps the chat its orchestration address', () => {
     )
     expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toHaveLength(1)
 
-    const successor = await clearChat(COORDINATOR)
-    await vi.waitFor(() => expect(connectionFor(successor).turns[0]?.text).toMatch(POINTER), WAIT)
-    await settleTurn(successor, 0)
+    const cleared = await clearChat(COORDINATOR)
+    expect(cleared).toBe(COORDINATOR)
+    await vi.waitFor(() => expect(connectionFor(cleared).turns[0]?.text).toMatch(POINTER), WAIT)
+    await settleTurn(cleared, 0)
     await vi.waitFor(
       () => expect(db.getUndeliveredUnreadMessages(`run:${runId}`, undefined, {})).toEqual([]),
       WAIT
     )
   })
 
-  it("stores the successor's own Run under the conversation's address, through a chain of clears", async () => {
+  it('keeps a Run under the same conversation address through repeated clears', async () => {
     await openChat(COORDINATOR)
-    const middle = await clearChat(COORDINATOR)
-    await startSuccessor(middle)
+    const firstClear = await clearChat(COORDINATOR)
+    await startClearedContext(firstClear)
     const created = await call(
       'orchestration.runCreate',
       { objective: 'next' },
-      { sessionId: middle }
+      { sessionId: firstClear }
     )
     const runId = idOf(created.run)
     expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
-    const successor = await clearChat(middle)
-    await startSuccessor(successor)
+    const cleared = await clearChat(firstClear)
+    await startClearedContext(cleared)
 
     await expect(
-      call('orchestration.runCurrent', {}, { sessionId: successor })
+      call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: runId } })
     expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
     // What it sends carries the same address.
@@ -829,20 +566,20 @@ describe('a /clear keeps the chat its orchestration address', () => {
       call(
         'orchestration.send',
         { to: `orca_session_id:${PEER_CHAT}`, subject: 'hi' },
-        { sessionId: successor }
+        { sessionId: cleared }
       )
     ).resolves.toMatchObject({ message: { from_handle: `orca_session_id:${COORDINATOR}` } })
   })
 
-  it("binds a Run a cleared chat creates or uses to the conversation's root, at the Run's current generation", async () => {
+  it('binds a Run a cleared chat creates or uses to the same conversation at the current generation', async () => {
     const root = COORDINATOR
     const boundOrcaSessionId = (runId: string): string | null =>
       currentRunCoordinatorOrcaSessionId(db.getRunRaw(runId)!)
     await openChat(COORDINATOR)
-    const middle = await clearChat(COORDINATOR)
-    await startSuccessor(middle)
+    const firstClear = await clearChat(COORDINATOR)
+    await startClearedContext(firstClear)
     const first = idOf(
-      (await call('orchestration.runCreate', { objective: 'first' }, { sessionId: middle })).run
+      (await call('orchestration.runCreate', { objective: 'first' }, { sessionId: firstClear })).run
     )
     expect(db.getRunRaw(first)).toMatchObject({
       coordinator_orca_session_id: root,
@@ -850,40 +587,44 @@ describe('a /clear keeps the chat its orchestration address', () => {
     })
     expect(boundOrcaSessionId(first)).toBe(root)
     const second = idOf(
-      (await call('orchestration.runCreate', { objective: 'second' }, { sessionId: middle })).run
+      (await call('orchestration.runCreate', { objective: 'second' }, { sessionId: firstClear }))
+        .run
     )
     expect(boundOrcaSessionId(first)).toBeNull()
 
-    const successor = await clearChat(middle)
-    await startSuccessor(successor)
-    await call('orchestration.runUse', { id: first }, { sessionId: successor })
+    const cleared = await clearChat(firstClear)
+    await startClearedContext(cleared)
+    await call('orchestration.runUse', { id: first }, { sessionId: cleared })
     const rebound = db.getRunRaw(first)!
     expect(rebound.coordinator_orca_session_id).toBe(root)
     expect(rebound.coordinator_orca_session_id_generation).toBe(rebound.consumer_generation)
     expect(boundOrcaSessionId(second)).toBeNull()
     await expect(
-      call('orchestration.runCurrent', {}, { sessionId: successor })
+      call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: first } })
   })
 
-  it('lands mail sent to any session of the conversation in the live one', async () => {
+  it('lands successive mail at the same conversation after repeated clears', async () => {
     await openChat(PEER_CHAT)
-    const middle = await clearChat(PEER_CHAT)
-    const successor = await clearChat(middle)
-    // The first ping starts the live session, which neither clear did.
-    for (const [index, spelling] of [PEER_CHAT, middle, successor].entries()) {
+    const firstClear = await clearChat(PEER_CHAT)
+    const cleared = await clearChat(firstClear)
+    expect(firstClear).toBe(PEER_CHAT)
+    expect(cleared).toBe(PEER_CHAT)
+    // The first ping starts the fresh context, which neither clear did.
+    for (const [index, spelling] of [PEER_CHAT, firstClear, cleared].entries()) {
       const sent = await call('orchestration.send', {
         from: 'term_worker',
         to: `orca_session_id:${spelling}`,
         subject: `ping ${index}`
       })
       expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
-      await vi.waitFor(() => expect(connectionFor(successor).turns).toHaveLength(index + 1), WAIT)
-      await settleTurn(successor, index)
+      await vi.waitFor(() => expect(connectionFor(cleared).turns).toHaveLength(index + 1), WAIT)
+      await settleTurn(cleared, index)
+      // Read each ping before the next is sent, so each check holds exactly one.
+      const checked = await call('orchestration.check', {}, { sessionId: cleared })
+      expect(checked).toMatchObject({ count: 1, messages: [{ subject: `ping ${index}` }] })
+      await call('orchestration.check', { ack: checked.deliveryId }, { sessionId: cleared })
     }
-    await expect(call('orchestration.check', {}, { sessionId: successor })).resolves.toMatchObject({
-      count: 3
-    })
   })
 })
 

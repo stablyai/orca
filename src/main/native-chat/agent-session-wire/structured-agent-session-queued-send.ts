@@ -1,6 +1,5 @@
-// A send's queue step around its immediate path: the queue decision before it. A
-// person's send lifts a paused queue through its recorded origin once its turn
-// starts (`structured-agent-session-queued-pause.ts`), not through anything here.
+// A send's queue step around its immediate path: the queue decision before it. Its
+// accepted turn lifts a paused queue (`queued-message-pause.ts`), not anything here.
 
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -16,6 +15,7 @@ export async function runQueueableStructuredAgentSessionSend(
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
     userSend?: true
+    personsMessage?: true
   },
   immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
@@ -26,9 +26,5 @@ export async function runQueueableStructuredAgentSessionSend(
   if (queued) {
     return queued
   }
-  const accepted = await immediate()
-  if (accepted.ok) {
-    context.wakeDelivery(ctx.sessionId)
-  }
-  return accepted
+  return immediate()
 }

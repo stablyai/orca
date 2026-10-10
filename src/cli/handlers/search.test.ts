@@ -4,6 +4,7 @@ import { AiVaultSearchResponseSchema } from '../../shared/ai-vault-search-contra
 import type { AiVaultSearchResponse, AiVaultSearchStatus } from '../../shared/ai-vault-search-types'
 import { REPEATED_FLAG_SEPARATOR } from '../args'
 import { RuntimeClientError } from '../runtime/types'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -62,7 +63,17 @@ async function runSearch(
 ): Promise<{ call: ReturnType<typeof vi.fn>; output: string }> {
   const call = options.error
     ? vi.fn().mockRejectedValue(options.error)
-    : vi.fn().mockResolvedValue(envelope(options.result ?? resultsResponse))
+    : vi
+        .fn()
+        .mockImplementation((method: string) =>
+          Promise.resolve(
+            envelope(
+              method === 'aiVault.searchStatus'
+                ? statusResponse
+                : (options.result ?? resultsResponse)
+            )
+          )
+        )
   const lines: string[] = []
   vi.spyOn(console, 'log').mockImplementation((value: unknown) => {
     lines.push(String(value))
@@ -105,7 +116,9 @@ describe('orca search over the runtime RPC', () => {
     expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
       query: 'resize race',
       limit: 20,
-      supportsQoderHistory: true
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
     })
   })
 
@@ -158,12 +171,18 @@ describe('orca search over the runtime RPC', () => {
     ]
   ]
 
-  it.each(flagCases)('sends %s', async (_name, flags, params) => {
+  it.each(flagCases)('sends %s', async (name, flags, params) => {
     const { call } = await runSearch(flags)
 
+    expect(call).toHaveBeenCalledTimes(name === 'filters' ? 2 : 1)
+    if (name === 'filters') {
+      expect(call).toHaveBeenNthCalledWith(1, 'aiVault.searchStatus', {})
+    }
     expect(call).toHaveBeenCalledWith('aiVault.searchSessions', {
       ...params,
-      supportsQoderHistory: true
+      supportedAgents: [...AI_VAULT_AGENTS],
+      supportsQoderHistory: true,
+      supportsJcodeHistory: true
     })
   })
 

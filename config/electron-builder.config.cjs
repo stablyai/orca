@@ -8,6 +8,7 @@ const {
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
   assertPackagedNativeVariantsInstalled,
+  assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
@@ -92,6 +93,12 @@ const skillFreshnessResources = {
   from: 'resources/skills',
   to: 'skills'
 }
+// Why a real directory: native-chat agents load this skill plugin by path (Claude --plugin-dir,
+// Codex skill roots), and neither can read inside app.asar.
+const nativeChatVisualsResource = {
+  from: 'resources/native-chat-visuals',
+  to: 'native-chat-visuals'
+}
 // Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
 // apps. Keeping relay assets as extraResources makes them real directories
 // instead of paths hidden inside app.asar.
@@ -123,6 +130,7 @@ const commonExtraResources = [
   ...bundledRipgrepExtraResources,
   bundledPluginResources,
   skillFreshnessResources,
+  nativeChatVisualsResource,
   emojiShortcodeDatasetResource
 ]
 // Why: native speech addons must be real files outside app.asar; copy only the
@@ -164,9 +172,10 @@ const rpmElectronRuntimeDependencies = [
 ]
 
 // Why mirrored, not imported: this config is CJS loaded by electron-builder outside the TS build.
-// Keep in sync with isMarkdownDocumentName() in src/main/ipc/markdown-documents.ts and with
+// Keep in sync with isOsOpenedDocumentName() in src/main/startup/os-opened-documents.ts and with
 // config/nsis/orca-installer-hooks.nsh, which registers the same set on Windows.
 const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
+const TABULAR_FILE_EXTENSIONS = ['csv', 'tsv']
 
 // Why: the config must load on a host-only install without resolving unused Windows addons.
 // This is load-time tolerance only; beforePack enforces that the target's natives are installed.
@@ -205,6 +214,8 @@ module.exports = {
     '!out/runtimes{,/**/*}',
     '!out/node-runtime-cache{,/**/*}',
     '!config{,/**/*}',
+    // Release archives and other build staging are not runtime resources.
+    '!.build{,/**/*}',
     '!docs{,/**/*}',
     '!mobile{,/**/*}',
     '!native{,/**/*}',
@@ -253,6 +264,7 @@ module.exports = {
     // it from process.resourcesPath; exclude the source copy from app.asar.
     '!resources/onboarding/feature-wall/**',
     '!resources/skills/**',
+    '!resources/native-chat-visuals/**',
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',
@@ -302,6 +314,7 @@ module.exports = {
     'out/main/cursor/**',
     'out/main/droid/**',
     'out/main/gemini/**',
+    'out/main/gitlab/project-ref-parser.js',
     'out/main/grok/**',
     'out/main/hermes/**',
     'out/main/orca-profiles/profile-index-store.js',
@@ -331,6 +344,7 @@ module.exports = {
   beforePack: (context, mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR) => {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
+    assertProcessHostOutputBuilt()
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
   },
@@ -509,16 +523,25 @@ module.exports = {
     include: resolve(__dirname, 'nsis', 'orca-installer-hooks.nsh')
   },
   mac: {
-    // Why rank Alternate: Orca joins Finder's "Open With" list for Markdown without claiming
+    // Why rank Alternate: Orca joins Finder's "Open With" list without claiming
     // LSHandlerRank ownership, so whichever editor the user already prefers stays the default.
     // Why one entry per extension: app-builder-lib globs `*.${ext}`, which an array would break.
-    fileAssociations: MARKDOWN_FILE_EXTENSIONS.map((ext) => ({
-      ext,
-      name: 'Markdown Document',
-      description: 'Markdown Document',
-      role: 'Editor',
-      rank: 'Alternate'
-    })),
+    fileAssociations: [
+      ...MARKDOWN_FILE_EXTENSIONS.map((ext) => ({
+        ext,
+        name: 'Markdown Document',
+        description: 'Markdown Document',
+        role: 'Editor',
+        rank: 'Alternate'
+      })),
+      ...TABULAR_FILE_EXTENSIONS.map((ext) => ({
+        ext,
+        name: `${ext.toUpperCase()} Document`,
+        description: `${ext.toUpperCase()} Document`,
+        role: 'Editor',
+        rank: 'Alternate'
+      }))
+    ],
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
@@ -611,7 +634,7 @@ module.exports = {
     // override. A desktop entry's MimeType only adds a handler - mimeapps.list still owns the
     // default. .mdx is deliberately absent: Ubuntu 24.04's mime database maps it to
     // application/x-genesis-32x-rom, so claiming it here would need a glob override.
-    mimeTypes: ['text/markdown'],
+    mimeTypes: ['text/markdown', 'text/csv', 'text/tab-separated-values'],
     // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',

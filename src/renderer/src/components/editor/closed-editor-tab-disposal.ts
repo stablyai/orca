@@ -17,7 +17,9 @@ import {
 } from './closed-editor-tab-cache-sweep'
 import { toEditorModelUri } from './editor-model-uri'
 
-export type ClosedEditorTab = Pick<OpenFile, 'id' | 'mode' | 'filePath'>
+export type ClosedEditorTab = Pick<OpenFile, 'id' | 'mode' | 'filePath'> & {
+  modelOwnerKey?: string
+}
 
 // One registry sweep avoids quadratic close-all work.
 export function disposeClosedEditorModels(
@@ -37,7 +39,7 @@ export function disposeClosedEditorModels(
     }
     if (closedFile.mode === 'edit') {
       const model = monacoRegistry.editor.getModel(
-        monacoRegistry.Uri.parse(toEditorModelUri(closedFile.filePath))
+        monacoRegistry.Uri.parse(toEditorModelUri(closedFile.filePath, closedFile.modelOwnerKey))
       )
       if (model?.isAttachedToEditor()) {
         onAttachedModel?.(model, closedFile)
@@ -115,6 +117,7 @@ export function disposeClosedEditorTabCaches(
       case 'conflict-review':
         break
       case 'check-details':
+      case 'chat-visual':
         break
     }
   }

@@ -13,7 +13,7 @@ import {
 } from '../codex-cli/codex-home-process-lock'
 import { isCodexStateDbBackfillPending } from '../codex/codex-state-db'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import {
   fetchCodexRateLimitsViaBackend,

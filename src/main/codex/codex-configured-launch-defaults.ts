@@ -12,13 +12,14 @@ function configuredText(value: unknown): string | null {
 
 /** The model and effort the user's Codex config selects, or null when Codex can't say. */
 export async function readCodexConfiguredLaunchDefaults(
-  connection: Pick<CodexAppServerConnection, 'request'>
+  connection: Pick<CodexAppServerConnection, 'request'>,
+  timeoutMs = CONFIG_READ_TIMEOUT_MS
 ): Promise<CodexConfiguredLaunchDefaults | null> {
   try {
     const response = await connection.request(
       'config/read',
       {},
-      { timeoutMs: CONFIG_READ_TIMEOUT_MS }
+      { timeoutMs: Math.min(timeoutMs, CONFIG_READ_TIMEOUT_MS) }
     )
     const config =
       typeof response === 'object' && response !== null && 'config' in response

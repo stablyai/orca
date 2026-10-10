@@ -102,6 +102,26 @@ describe('cell inventory hold samples', () => {
     expect(samples.consumeCounts()).toEqual(emptyCellInventoryHoldCounts())
   })
 
+  // Why: the shared max and p95 mix every lock, so only the per-site p99 says
+  // whether a drain return waits on its own regional rows or on the inventory.
+  it('reports a p99 per hold site', () => {
+    const samples = new CellInventoryHoldSamples()
+    for (let ms = 1; ms <= 100; ms++) {
+      samples.record(ms)
+      samples.record(ms * 2, 'isolated-replacement')
+    }
+    samples.record(7, 'rehome-target-row')
+
+    expect(samples.readCounts()).toMatchObject({
+      cellInventoryHolds: 201,
+      cellInventoryHoldMaxSite: 'isolated-replacement',
+      inventoryHoldMsP99: 99,
+      isolatedReplacementHoldMsP99: 198,
+      isolatedReplacementHolds: 100,
+      rehomeTargetRowHoldMsP99: 7
+    })
+  })
+
   // Why: the alert reads one max across every lock, so the label is the only
   // thing that says whether a long hold was the inventory or a rehome target row.
   it('names the site of the longest hold and reports rehome target rows apart', () => {

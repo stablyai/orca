@@ -207,6 +207,7 @@ describe('connectPanePty', () => {
     expect(dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Claude done',
+      ptyId: 'tab-pty',
       paneKey
     })
     expect(mockStoreState.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
@@ -303,6 +304,7 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith({
       source: 'agent-task-complete',
       terminalTitle: '* Claude cross-agent done',
+      ptyId: 'tab-pty',
       paneKey
     })
     expect(pane.terminal.write).toHaveBeenCalledWith(

@@ -24,6 +24,8 @@ export type CodexItemStreamDeps = {
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
+  /** Host clock when the item started, for a row its stream writes first. */
+  startedAt?: number
 }
 
 export type CodexPendingItemPatch = {
@@ -47,7 +49,8 @@ export type CodexStructuredItemStreams = {
     threadId: string,
     turnId: string | null,
     item: CodexThreadItem,
-    identity: AgentJournalItemIdentity
+    identity: AgentJournalItemIdentity,
+    startedAt?: number
   ) => boolean
   handle: (
     threadId: string,

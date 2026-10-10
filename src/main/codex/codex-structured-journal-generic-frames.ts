@@ -15,13 +15,22 @@ import {
   MAX_CODEX_GENERIC_BOOKKEEPING_BYTES,
   MAX_CODEX_GENERIC_BOOKKEEPING_ENTRIES,
   MAX_CODEX_GENERIC_ROWS_PER_TURN,
-  MAX_CODEX_GENERIC_TURN_BUCKETS
+  MAX_CODEX_GENERIC_TURN_BUCKETS,
+  MAX_CODEX_WORDLESS_ROWS_PER_TURN
 } from './codex-structured-journal-limits'
-import { readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexTurnId, readCodexErrorWillRetry } from './codex-structured-thread-facts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import {
+  CODEX_PLAN_UPDATED_FRAME_KIND,
+  isWordlessProviderFrame
+} from '../../shared/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
+import { codexAuthenticationFailure } from './codex-authentication-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
+/** A turn's rows by whether a client draws them; each kind has its own cap. */
+type TurnRows = { drawn: number; wordless: number }
 /** `producer` is absent only on the overflow bucket, which pools every thread's
  *  evicted turns and so has no single author: it reads as the session's own. */
 type SuppressedSummary = {
@@ -54,7 +63,7 @@ function publish(sink: StructuredAgentSessionEventSink): CodexJournalTranslation
 }
 
 export class CodexJournalGenericFrames {
-  private readonly genericRowsByTurn = new Map<string, number>()
+  private readonly genericRowsByTurn = new Map<string, TurnRows>()
   private readonly suppressedRowsByTurn = new Map<string, SuppressedSummary>()
   private readonly bucketOrder = new Map<string, number>()
   private readonly schedule: NonNullable<CodexJournalTranslatorDeps['schedule']>
@@ -67,7 +76,7 @@ export class CodexJournalGenericFrames {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId'
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account'
     > & {
       attributionFor: CodexRowAttribution
     },
@@ -92,7 +101,25 @@ export class CodexJournalGenericFrames {
     )
     // A frame the classifier declines is deliberately not journaled, which is success.
     // Failing admission here force-closes the provider through the retry queue.
-    return translated ? this.appendFrameRow(threadId, payload, translated) : CODEX_JOURNAL_ADMITTED
+    const auth =
+      kind === 'notification:error' && !readCodexErrorWillRetry(payload)
+        ? codexAuthenticationFailure(payload, this.deps.account?.())
+        : null
+    return translated
+      ? this.appendFrameRow(threadId, payload, {
+          ...translated,
+          body: auth
+            ? {
+                ...translated.body,
+                ...agentSessionFailureWords(auth, {
+                  provider: 'codex',
+                  agentName: 'Codex',
+                  surface: 'row'
+                })
+              }
+            : translated.body
+        })
+      : CODEX_JOURNAL_ADMITTED
   }
 
   /** One frame's own row, under the identity every frame row gets, however it is worded. */
@@ -107,11 +134,19 @@ export class CodexJournalGenericFrames {
     const frameTurnId = readCodexTurnId(payload) ?? this.activeTurn(threadId)
     const turnId = frameTurnId ?? 'outside-turn'
     const bucket = this.bucketFor(threadId, turnId)
-    const rowCount = this.genericRowsByTurn.get(bucket) ?? 0
-    // The cap bounds noise, never evidence: an error frame is always journaled, and
-    // capped frames stay countable through one summary row per turn.
+    const rows = this.genericRowsByTurn.get(bucket) ?? { drawn: 0, wordless: 0 }
+    // The cap bounds noise, never evidence: an error frame is always journaled, and capped
+    // frames a client draws stay countable through one summary row per turn.
     const isError = translated.classification === 'error-surface'
-    if (!isError && rowCount >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
+    // The task list reads every plan update; capping one would freeze it mid-turn.
+    const isPlan = translated.body.providerFrame?.kind === CODEX_PLAN_UPDATED_FRAME_KIND
+    // A row no client draws is bounded silently: past its own cap it is dropped and counted
+    // nowhere, since a summary of rows nobody sees would be the only line drawn.
+    const wordless = !isPlan && isWordlessProviderFrame(translated.body)
+    if (!isError && wordless && rows.wordless >= MAX_CODEX_WORDLESS_ROWS_PER_TURN) {
+      return CODEX_JOURNAL_ADMITTED
+    }
+    if (!isError && !isPlan && !wordless && rows.drawn >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
       this.addSuppressed(bucket, 1, { threadId, turnId })
       this.recordBucket(bucket)
       this.scheduleSuppressedRows()
@@ -136,7 +171,14 @@ export class CodexJournalGenericFrames {
       this.fallbackSequence -= 1
       return admission
     }
-    this.genericRowsByTurn.set(bucket, rowCount + 1)
+    this.genericRowsByTurn.set(
+      bucket,
+      isPlan
+        ? rows
+        : wordless
+          ? { ...rows, wordless: rows.wordless + 1 }
+          : { ...rows, drawn: rows.drawn + 1 }
+    )
     this.recordBucket(bucket)
     return publish(this.deps.sink)
   }

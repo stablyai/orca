@@ -1,9 +1,10 @@
 'use client'
 
 import * as React from 'react'
-import { Popover as PopoverPrimitive } from 'radix-ui'
+import * as PopoverPrimitive from 'radix-ui/popover'
 
 import { cn } from '@/lib/utils'
+import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
 
 // React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
 const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
@@ -187,6 +188,7 @@ function PopoverContent({
         onWheel={handleConsumerWheel}
         onWheelCapture={handleConsumerWheelCapture}
         {...props}
+        onEscapeKeyDown={(event) => handleImeOverlayEscape(event, props.onEscapeKeyDown)}
       />
     </PopoverPrimitive.Portal>
   )

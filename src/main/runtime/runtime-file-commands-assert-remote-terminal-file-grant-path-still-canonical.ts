@@ -15,14 +15,11 @@ import {
   runtimeFileRouteForTarget,
   runtimeFileSshTargetId
 } from './runtime-file-command-target'
-import { readdir, stat } from 'node:fs/promises'
+import { stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
-import {
-  isRuntimeDirectoryEntry,
-  watchWindowsRuntimeFileExplorer
-} from './runtime-file-command-host'
+import { watchWindowsRuntimeFileExplorer } from './runtime-file-command-host'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import {
   armSshFileExplorerWatchRearm,
@@ -33,6 +30,8 @@ import {
   watchFileExplorerInWatcherProcess
 } from './file-watcher-host'
 import { registerRuntimeFileWatcherRelease } from './runtime-file-watcher-leases'
+import { requireFilesystemProviderForHost } from '../providers/execution-host-provider-dispatch'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 
 export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanonical extends RuntimeFileCommandsWithWriteTerminalArtifactFile {
   protected async assertRemoteTerminalFileGrantPathStillCanonical(
@@ -41,10 +40,7 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     if (!grant.connectionId) {
       throw new Error('terminal_file_grant_mismatch')
     }
-    const provider = getSshFilesystemProvider(grant.connectionId)
-    if (!provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
+    const provider = requireFilesystemProviderForHost(toSshExecutionHostId(grant.connectionId))
     const canonicalPath =
       grant.provenance === 'native-chat'
         ? await provider.realpath(grant.absolutePath)
@@ -59,23 +55,16 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     return provider
   }
 
-  async readFileExplorerDir(worktreeSelector: string, relativePath: string): Promise<DirEntry[]> {
+  async readFileExplorerDir(
+    worktreeSelector: string,
+    relativePath: string,
+    options: { followSymlinks?: boolean } = {}
+  ): Promise<DirEntry[]> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = requireRuntimeFileProvider(target)
-    if (provider) {
-      // Why: re-sort locally — the remote relay may be an older build with
-      // lexicographic ordering.
-      return sortDirEntries(await provider.readDir(target.path))
-    }
-
-    const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
-    const entries = await readdir(dirPath, { withFileTypes: true })
-    const mapped = entries.map((entry) => ({
-      name: entry.name,
-      isDirectory: isRuntimeDirectoryEntry(entry),
-      isSymlink: entry.isSymbolicLink()
-    }))
-    return sortDirEntries(mapped)
+    // Why: re-sort here — the remote relay may be an older build with lexicographic ordering.
+    return sortDirEntries(
+      await requireRuntimeFileProvider(target, this.host).readDir(target.path, options)
+    )
   }
 
   async watchFileExplorer(

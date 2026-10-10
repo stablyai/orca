@@ -114,6 +114,9 @@ function boundMessage(
     ...served,
     id: boundIdentifier(message.id, transcriptPath, state),
     ...(message.turnId ? { turnId: boundIdentifier(message.turnId, transcriptPath, state) } : {}),
+    ...(message.parentId
+      ? { parentId: boundIdentifier(message.parentId, transcriptPath, state) }
+      : {}),
     blocks: blocks.map((block) => boundBlock(block, state))
   }
 }

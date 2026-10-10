@@ -25,6 +25,7 @@ import {
 import {
   SESSION_PARSE_CACHE_JSON_LIMITS,
   SESSION_PARSE_CACHE_MAX_BYTES,
+  SESSION_PARSE_CACHE_SCHEMA_VERSION,
   serializeSessionParseCacheSnapshotPiecesCooperatively
 } from './session-parse-cache-snapshot-serialization'
 
@@ -59,7 +60,14 @@ it('loads the newest 4096 unique rows across duplicate-heavy input and keeps in-
   entries.push(...Array.from({ length: 5000 }, (_, index) => row('p4199', 5000 + index)))
   entries.push(row('in-process', 1))
   seedSessionParseCache([row('in-process', 20_000)])
-  await writeFile(file, JSON.stringify({ schemaVersion: 3, appVersion: 'old-release', entries }))
+  await writeFile(
+    file,
+    JSON.stringify({
+      schemaVersion: SESSION_PARSE_CACHE_SCHEMA_VERSION,
+      appVersion: 'old-release',
+      entries
+    })
+  )
   await ensureSessionParseCacheLoaded()
   expect(snapshotSessionParseCacheForPersistence()).toHaveLength(4096)
   expect(getSessionParseCacheEntry('p4199')?.mtimeMs).toBe(9999)
@@ -93,10 +101,10 @@ it('rejects an oversized sparse file before decoding and preserves resident work
 
 it('rejects excessive tokens, depth, and malformed older rows before seeding any tail', async () => {
   for (const raw of [
-    `{"schemaVersion":3,"appVersion":"old","entries":[],"wide":[${'0,'.repeat(1_000_000)}0]}`,
-    `{"schemaVersion":3,"appVersion":"old","entries":[],"deep":${'['.repeat(33)}0${']'.repeat(33)}}`,
+    `{"schemaVersion":${SESSION_PARSE_CACHE_SCHEMA_VERSION},"appVersion":"old","entries":[],"wide":[${'0,'.repeat(1_000_000)}0]}`,
+    `{"schemaVersion":${SESSION_PARSE_CACHE_SCHEMA_VERSION},"appVersion":"old","entries":[],"deep":${'['.repeat(33)}0${']'.repeat(33)}}`,
     JSON.stringify({
-      schemaVersion: 3,
+      schemaVersion: SESSION_PARSE_CACHE_SCHEMA_VERSION,
       appVersion: 'old',
       entries: [['bad', {}], ...Array.from({ length: 4200 }, (_, index) => row(`p${index}`, index))]
     })

@@ -1,4 +1,7 @@
-import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalAnsweredTurnIdentity,
+  AgentJournalItemIdentity
+} from '../../../shared/agent-session-journal-types'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session-failure-words'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
@@ -12,7 +15,10 @@ export async function settleStructuredAgentSessionLateDispatch(
     clientMessageId: string
   } & (
     | { providerIdentity: AgentJournalItemIdentity }
-    | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+    | ({
+        state: 'rejected'
+        answeredInTurn?: AgentJournalAnsweredTurnIdentity
+      } & AgentJournalDispatchRejection)
     | { state: 'unknown'; reason: string }
   )
 ): Promise<void> {
@@ -43,6 +49,7 @@ export async function settleStructuredAgentSessionLateDispatch(
             state: 'rejected',
             reason: input.reason,
             rejection: input.rejection,
+            ...(input.answeredInTurn ? { answeredInTurn: input.answeredInTurn } : {}),
             fence
           }
   )
