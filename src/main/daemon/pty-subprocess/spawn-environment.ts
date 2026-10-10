@@ -5,6 +5,7 @@ import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/chromium-session-bus-env'
+import { removeInheritedFigtermSessionEnv } from '../../pty/figterm-session-env'
 import { stripInheritedBuildModeEnv } from '../../pty/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../../pty/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
@@ -202,6 +203,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeAppImageRuntimeEnv(env)
   removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
+  removeInheritedFigtermSessionEnv(env)
   // Why last: the aliases mirror pane identity AFTER every strip above has settled, so an
   // alias can never outlive the value it mirrors.
   applyScrubSafeAgentEnvAliases(env)
