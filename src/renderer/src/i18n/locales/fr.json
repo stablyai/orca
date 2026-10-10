@@ -7862,7 +7862,9 @@
           "274af61bc0": "système",
           "6e6df3a09a": "Choisir un fichier personnalisé",
           "76e02467b8": "Changer de fichier personnalisé",
-          "d3756cf5bc": "désactivé"
+          "d3756cf5bc": "désactivé",
+          "a5e9bc227c": "Mettre Orca au premier plan",
+          "e5f3653f9c": "Lorsqu’un agent termine pendant que vous êtes dans une autre app, met Orca au premier plan et bascule vers son onglet."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Enregistrer la clé",

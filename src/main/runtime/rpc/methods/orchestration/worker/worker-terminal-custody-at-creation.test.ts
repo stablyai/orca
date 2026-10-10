@@ -94,15 +94,18 @@ describe('worker terminal custody is recorded at terminal creation', () => {
       ownership_state: 'external',
       retained_reason: 'external_terminal'
     })
+    expect(h.db.isPaneOrchestrationOwned(h.workerPaneKey)).toBe(false)
   })
 
   it('lets a keystroke during the boot wait take the pane, and release then retains it', async () => {
     h.setup()
     const held = await startHeldAtBootWait()
 
+    expect(h.db.isPaneOrchestrationOwned(h.workerPaneKey)).toBe(true)
     await expect(
       h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
     ).resolves.toEqual({ changed: 1 })
+    expect(h.db.isPaneOrchestrationOwned(h.workerPaneKey)).toBe(false)
 
     held.finish()
     await expect(held.start).resolves.toMatchObject({ state: 'ready' })

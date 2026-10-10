@@ -1,4 +1,4 @@
-import { isEquivalentPaneKey } from '../pane-key-match'
+import { isEquivalentPaneKey, paneKeyMatchSuffix } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 
 // Real user input durably relinquishes orchestration ownership.
@@ -60,4 +60,16 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
     this.db.exec('ROLLBACK')
     throw error
   }
+}
+
+// True while orchestration opened this pane and the user has not typed into it.
+export function isPaneOrchestrationOwned(this: OrchestrationDb, paneKey: string): boolean {
+  const rows = this.db
+    .prepare(
+      `SELECT pane_key FROM worker_terminal_resources
+        WHERE ownership_state = 'owned' AND release_state != 'released'
+          AND substr(pane_key, instr(pane_key, ':') + 1) = ?`
+    )
+    .all(paneKeyMatchSuffix(paneKey)) as { pane_key: string }[]
+  return rows.some((row) => isEquivalentPaneKey(row.pane_key, paneKey))
 }

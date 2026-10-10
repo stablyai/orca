@@ -8,6 +8,7 @@ import {
   MacNotificationPermissionCard,
   useMacNotificationPermissionState
 } from '@/components/notifications/mac-notification-permission-card'
+import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
 import { NotificationHostToggles } from './NotificationHostToggles'
 import { NotificationSoundSection } from './NotificationSoundSection'
@@ -35,6 +36,7 @@ export function NotificationsPane({
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+  const isMac = isMacUserAgent()
   const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
     notificationSettings.enabled
   )
@@ -213,6 +215,26 @@ export function NotificationsPane({
           })
         }
       />
+
+      {isMac ? (
+        <NotificationSettingToggle
+          label={translate(
+            'auto.components.settings.NotificationsPane.a5e9bc227c',
+            'Bring Orca to Front'
+          )}
+          description={translate(
+            'auto.components.settings.NotificationsPane.e5f3653f9c',
+            'When an agent finishes while you are in another app, bring Orca forward and switch to its tab.'
+          )}
+          checked={notificationSettings.bringToFrontOnAgentTaskComplete}
+          disabled={!notificationSettings.enabled || !notificationSettings.agentTaskComplete}
+          onToggle={() =>
+            void updateNotificationSettings({
+              bringToFrontOnAgentTaskComplete: !notificationSettings.bringToFrontOnAgentTaskComplete
+            })
+          }
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2 pt-3">
         <Button
