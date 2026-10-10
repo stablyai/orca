@@ -3,25 +3,30 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 
-const mocks = vi.hoisted(() => ({
-  state: {
-    activeModal: 'confirm-remove-folder' as string | null,
-    modalData: {
-      repoId: 'repo-1',
-      displayName: 'Example',
-      hostId: 'ssh:target-1'
-    } as Record<string, unknown>,
-    repos: [] as Repo[],
-    sshTargetLabels: new Map<string, string>(),
-    removedSshTargetLabels: new Map<string, string>(),
-    worktreesByRepo: {} as Record<string, { id: string; hostId?: string }[]>,
-    detectedWorktreesByRepo: {},
-    tabsByWorktree: {} as Record<string, { id: string }[]>,
-    ptyIdsByTabId: {} as Record<string, string[]>,
-    closeModal: vi.fn(),
-    removeProject: vi.fn()
+const mocks = vi.hoisted(() => {
+  const worktreesByRepo: Record<string, { id: string; hostId?: string }[]> = {}
+  const tabsByWorktree: Record<string, { id: string }[]> = {}
+  const ptyIdsByTabId: Record<string, string[]> = {}
+  return {
+    state: {
+      activeModal: 'confirm-remove-folder' as string | null,
+      modalData: {
+        repoId: 'repo-1',
+        displayName: 'Example',
+        hostId: 'ssh:target-1'
+      } as Record<string, unknown>,
+      repos: [] as Repo[],
+      sshTargetLabels: new Map<string, string>(),
+      removedSshTargetLabels: new Map<string, string>(),
+      worktreesByRepo,
+      detectedWorktreesByRepo: {},
+      tabsByWorktree,
+      ptyIdsByTabId,
+      closeModal: vi.fn(),
+      removeProject: vi.fn()
+    }
   }
-}))
+})
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
