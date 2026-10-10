@@ -118,6 +118,14 @@ describe('AgentKanbanBoard', () => {
     expect(headers.map((h) => h.textContent)).toEqual(['Needs You', 'Working', 'Done'])
   })
 
+  it('names each column region after its bucket label', () => {
+    renderBoard([card({ bucket: 'attention', worktreeName: 'a1' })])
+    const attention = screen.getByRole('region', { name: 'Needs You' })
+    expect(within(attention).getByText('a1')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Working' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Done' })).toBeInTheDocument()
+  })
+
   it('hides the agent map from dashboard chrome', () => {
     renderBoard([])
 

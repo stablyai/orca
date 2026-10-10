@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { XIcon } from 'lucide-react'
 import {
   DASHBOARD_BUCKET_ORDER,
@@ -80,12 +80,20 @@ function KanbanColumn({
   now: number
   onOpenTerminal: (card: DashboardCard) => void
 }): React.JSX.Element {
+  const labelId = useId()
   return (
     // Why: attention no longer tints the whole column — the cards inside carry
     // their own state color, so a column border would double-signal it.
-    <section className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30">
+    // A named <section> is a region, so screen readers announce the column boundary.
+    <section
+      aria-labelledby={labelId}
+      className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30"
+    >
       <header className="flex items-center gap-2 px-3 py-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span
+          id={labelId}
+          className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground"
+        >
           {bucketLabel(bucket)}
         </span>
         <span className="ml-auto rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
