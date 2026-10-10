@@ -334,6 +334,47 @@ function formatGenericTermRegressions(regressions) {
     .join('\n')
 }
 
+// Why: JSON.parse keeps the last duplicate silently, and esbuild-based builds fail on the warning.
+export function collectDuplicateCatalogKeys(fileName, text) {
+  const sourceFile = ts.parseJsonText(fileName, text)
+  const duplicates = []
+  const visit = (node, prefix) => {
+    if (!node || !ts.isObjectLiteralExpression(node)) {
+      return
+    }
+    const seen = new Set()
+    for (const property of node.properties) {
+      if (!ts.isPropertyAssignment(property)) {
+        continue
+      }
+      const name = property.name.text
+      const key = prefix ? `${prefix}.${name}` : name
+      if (seen.has(name)) {
+        const { line } = sourceFile.getLineAndCharacterOfPosition(property.getStart(sourceFile))
+        duplicates.push(`${fileName}:${line + 1} ${key}`)
+      }
+      seen.add(name)
+      visit(property.initializer, key)
+    }
+  }
+  for (const statement of sourceFile.statements) {
+    visit(statement.expression, '')
+  }
+  return duplicates
+}
+
+async function readCatalogFile(catalogPath) {
+  const text = await fs.readFile(catalogPath, 'utf8')
+  const duplicates = collectDuplicateCatalogKeys(path.basename(catalogPath), text)
+  if (duplicates.length > 0) {
+    console.error('Localization catalog has duplicate keys; JSON keeps only the last value.')
+    console.error('')
+    console.error(duplicates.map((duplicate) => `- ${duplicate}`).join('\n'))
+    return undefined
+  }
+  return JSON.parse(text)
+}
+
 function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   const { enEntries, localeEntries, missingInLocale, extraInLocale, interpolationMismatches } =
     collectLocaleParityIssues(enCatalog, localeCatalog)
@@ -465,7 +506,10 @@ export async function main(
 ) {
   const localesDir = path.join(root, LOCALES_RELATIVE_DIR)
   const catalogPath = path.join(localesDir, 'en.json')
-  const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'))
+  const catalog = await readCatalogFile(catalogPath)
+  if (catalog === undefined) {
+    return 1
+  }
   const pluginCatalogs = options.pluginCatalogs ?? []
   if (pluginCatalogs.length > 0) {
     if (options.fix) {
@@ -538,7 +582,10 @@ export async function main(
   for (const fileName of localeFiles) {
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
-    const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
+    const localeCatalog = await readCatalogFile(localeCatalogPath)
+    if (localeCatalog === undefined) {
+      return 1
+    }
     const exitCode = verifyLocaleCatalog(catalog, localeName, localeCatalog)
     if (exitCode !== 0) {
       console.error('')

@@ -5,6 +5,7 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  collectDuplicateCatalogKeys,
   collectGenericTermRegressions,
   main as verifyLocalizationCatalog
 } from './verify-localization-catalog.mjs'
@@ -182,5 +183,31 @@ describe('verify-localization-catalog', () => {
         'zh'
       )
     ).toEqual([])
+  })
+
+  it('reports duplicate keys with their nested path and line', () => {
+    const text =
+      '{\n  "a": {\n    "b": "one",\n    "c": "two",\n    "b": "one"\n  },\n  "b": "top"\n}\n'
+    expect(collectDuplicateCatalogKeys('es.json', text)).toEqual(['es.json:5 a.b'])
+  })
+
+  it('fails when a target catalog repeats a key', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText:
+        "import { translate } from '@/i18n/i18n'\nexport const label = translate('auto.example.greeting', 'Hello')\n",
+      enCatalog: { auto: { example: { greeting: 'Hello' } } }
+    })
+    writeFileSync(
+      path.join(localesDir, 'es.json'),
+      '{ "auto": { "example": { "greeting": "Hola", "greeting": "Hola" } } }\n',
+      'utf8'
+    )
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await expect(verifyLocalizationCatalog(root, { fix: false })).resolves.toBe(1)
+      expect(report.mock.calls.flat().join('\n')).toContain('es.json:1 auto.example.greeting')
+    } finally {
+      report.mockRestore()
+    }
   })
 })

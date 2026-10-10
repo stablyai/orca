@@ -17903,8 +17903,7 @@
         "agentNotSignedIn": "{{agent}}에 로그인하세요.",
         "thenSendAgain": "그런 다음 메시지를 다시 보내세요.",
         "runCommandWhenDone": "작업이 끝나면 /{{command}}을(를) 실행하세요.",
-        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요.",
-        "sessionNotRestored": "{{agent}}이(가) 이전 세션을 다시 열 수 없어 이 채팅은 새 세션에서 계속됩니다. {{agent}}은(는) 이전 메시지를 기억하지 않습니다."
+        "commandAfterAnswer": "에이전트의 질문 또는 승인에 응답한 다음 /{{command}}을(를) 실행하세요."
       },
       "writeNotice": {
         "notDoneReadHistory": "이 채팅의 기록을 불러오지 못했습니다.",

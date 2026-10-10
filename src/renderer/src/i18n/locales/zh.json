@@ -17868,8 +17868,7 @@
         "agentNotSignedIn": "请登录 {{agent}}。",
         "thenSendAgain": "然后再次发送消息。",
         "runCommandWhenDone": "完成后再运行 /{{command}}。",
-        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。",
-        "sessionNotRestored": "{{agent}} 无法重新打开之前的会话，因此此聊天将在新会话中继续。{{agent}} 不记得之前的消息。"
+        "commandAfterAnswer": "请先回答智能体的问题或审批，然后再运行 /{{command}}。"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录。",
