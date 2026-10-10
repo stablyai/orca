@@ -1,5 +1,10 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import {
+  isRecoverableRemoteRuntimeConnectionError,
+  toRemoteRuntimeClientErrorLike
+} from '../../../shared/remote-runtime-client-error-classification'
+import { healUnreachableActiveEnvironment } from './startup-unreachable-host-heal'
 import { useAppStore } from '../store'
 import { getStartupErrorFallbackUI } from '../lib/startup-ui-hydration'
 import {
@@ -58,6 +63,12 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
   if (isCancelled()) {
     return
   }
+  // Why: an unreachable paired host is not a session fault — nothing half-hydrated, so
+  // mount offline and reload on reconnect instead of locking into no-save degraded mode.
+  if (isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))) {
+    recoverFromUnreachableStartup({ isCancelled, abortSignal })
+    return
+  }
   // Why: degraded mode stays interactive; later repo/runtime changes must not remain gated forever.
   useAppStore.setState({ startupWorktreeRefreshCompleted: true })
   // Why (issue #1158): only apply default UI if ui.get() never hydrated; otherwise defaults would clobber ui.json via the debounced writer.
@@ -106,4 +117,44 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
       forceWorkspaceSessionReady()
     }
   }
+}
+
+/**
+ * Mounts the app in offline mode when hydration could not reach the paired host.
+ * Nothing half-hydrated, so no save-lock is needed: the shell mounts empty, an
+ * honest toast offers a manual retry, and the first `ready` transport snapshot
+ * reloads into a clean hydration (the transport retries on its own meanwhile).
+ */
+function recoverFromUnreachableStartup(args: {
+  isCancelled: () => boolean
+  abortSignal: AbortSignal
+}): void {
+  const { isCancelled, abortSignal } = args
+  if (isCancelled()) {
+    return
+  }
+  useAppStore.setState({ startupWorktreeRefreshCompleted: true })
+  forceWorkspaceSessionReady()
+  toast.error(translate('auto.startup.hostUnreachable.title', 'Could not reach the Orca host'), {
+    description: translate(
+      'auto.startup.hostUnreachable.description',
+      'Retrying in the background. Workspaces will load once the host answers.'
+    ),
+    duration: Infinity,
+    dismissible: true,
+    action: {
+      label: translate('auto.startup.hostUnreachable.retry', 'Retry now'),
+      onClick: () => {
+        void window.api.app.relaunch()
+      }
+    }
+  })
+  const unsubscribe = window.api.runtimeEnvironments.onStatusChanged((snapshot) => {
+    if (snapshot.transport === 'ready') {
+      unsubscribe()
+      void window.api.app.relaunch()
+    }
+  })
+  abortSignal.addEventListener('abort', unsubscribe, { once: true })
+  void healUnreachableActiveEnvironment({ isCancelled, abortSignal }).catch(() => {})
 }

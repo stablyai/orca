@@ -23,7 +23,8 @@ export const RECOVERABLE_MESSAGE_FRAGMENTS: readonly string[] = [
   'remote runtime connection closed',
   'remote runtime subscription closed before it started',
   'remote terminal stream is not connected',
-  'timed out waiting for the remote orca runtime'
+  'timed out waiting for the remote orca runtime',
+  'timed out while connecting to the remote orca runtime'
 ]
 
 export function isRuntimeRpcQueueOverloadError(error: RemoteRuntimeClientErrorLike): boolean {

@@ -1,4 +1,5 @@
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { getEndpointOverride } from './web-runtime-endpoint-overrides'
 import type { WebPairingOffer } from './web-pairing'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
@@ -132,7 +133,10 @@ export function getPreferredWebPairingOffer(
   }
   return {
     v: 2,
-    endpoint: endpoint.endpoint,
+    // Why: endpoint overrides live outside the env record — the server-store merge
+    // resurrects stale stored endpoints, so a redirect written into `endpoints`
+    // would be clobbered back to the dead address.
+    endpoint: getEndpointOverride(environment)?.endpoint ?? endpoint.endpoint,
     deviceToken: endpoint.deviceToken,
     publicKeyB64: endpoint.publicKeyB64,
     ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
