@@ -14825,7 +14825,9 @@
                       "42525ba8a4": "主要なリポジトリを Orca に取り込んでおくと、フォルダーを探し回らずに Agent の作業を始められます。",
                       "workOnTwoTasks": "2つのタスクを同時に進める",
                       "agentSkillsName": "Agent に Orca スキルを追加",
-                      "agentSkillsDescription": "Agent が Orca のブラウザを操作し、コンピューターを制御し、複数ステップの作業を調整するためのスキルをインストールします。"
+                      "agentSkillsDescription": "Agent が Orca のブラウザを操作し、コンピューターを制御し、複数ステップの作業を調整するためのスキルをインストールします。",
+                      "cliSetupName": "Orca CLI をセットアップ",
+                      "cliSetupDescription": "シェルコマンド `orca` を PATH に登録し、CLI スキルをインストールして、どこからでも Orca コマンドを実行できるようにします。"
                     }
                   }
                 }

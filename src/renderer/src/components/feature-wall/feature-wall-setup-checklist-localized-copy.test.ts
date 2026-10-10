@@ -37,9 +37,9 @@ describe('feature-wall-setup-checklist-localized-copy', () => {
     }
   })
 
-  it('has 16 English catalog entries for the setup checklist steps', () => {
+  it('has 18 English catalog entries for the setup checklist steps', () => {
     const enKeys = en.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
-    expect(Object.keys(enKeys).length).toBe(16)
+    expect(Object.keys(enKeys).length).toBe(18)
     for (const enVal of Object.values(enKeys)) {
       expect(typeof enVal).toBe('string')
     }
@@ -51,7 +51,7 @@ describe('feature-wall-setup-checklist-localized-copy', () => {
       const enKeys = en.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
       const localeKeys: Record<string, string> =
         catalog.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
-      expect(Object.keys(localeKeys).length).toBe(16)
+      expect(Object.keys(localeKeys).length).toBe(18)
       for (const [hash, enVal] of Object.entries(enKeys)) {
         const localeVal = localeKeys[hash]
         expect(typeof localeVal, hash).toBe('string')

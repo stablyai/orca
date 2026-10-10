@@ -30,6 +30,7 @@ import { WslCliRegistration } from './WslCliRegistration'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
 import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
+import { notifyCliInstallStatusChanged } from '@/lib/cli-install-status-events'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -113,6 +114,8 @@ export function CliSection({
     (nextStatus: CliInstallStatus): void => {
       if (mountedRef.current) {
         setStatus(nextStatus)
+        // Why: the setup checklist holds its own probe of the same status.
+        notifyCliInstallStatusChanged()
       }
     },
     [mountedRef]

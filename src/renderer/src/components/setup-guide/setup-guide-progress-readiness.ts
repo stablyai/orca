@@ -21,6 +21,7 @@ export type SetupGuideProgressReadinessInput = {
   setupScriptProbeReady: boolean
   computerUseSkillInstalled: boolean
   computerUsePermissionStatusChecked: boolean
+  cliInstallStatusChecked: boolean
 }
 
 export const INITIAL_SETUP_SCRIPT_PROBE_STATE: SetupScriptProbeState = {
@@ -89,6 +90,7 @@ export function getSetupGuideProgressReady(input: SetupGuideProgressReadinessInp
     !input.computerUseSkillDiscoveryLoading &&
     !input.orchestrationSkillDiscoveryLoading &&
     input.setupScriptProbeReady &&
+    input.cliInstallStatusChecked &&
     (!input.computerUseSkillInstalled || input.computerUsePermissionStatusChecked)
   )
 }

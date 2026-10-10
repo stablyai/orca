@@ -15064,7 +15064,9 @@
                       "2cf795433b": "Start work in multiple repos",
                       "42525ba8a4": "Bring your key repos into Orca so you can start agent work without hunting for folders.",
                       "agentSkillsName": "Give agents Orca skills",
-                      "agentSkillsDescription": "Install the skills agents use to drive Orca's browser, control your computer, and coordinate multi-step work."
+                      "agentSkillsDescription": "Install the skills agents use to drive Orca's browser, control your computer, and coordinate multi-step work.",
+                      "cliSetupName": "Set up the Orca CLI",
+                      "cliSetupDescription": "Register the `orca` shell command on your PATH and install the CLI skill so agents can run Orca commands from any terminal."
                     }
                   }
                 }

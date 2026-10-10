@@ -38,7 +38,7 @@ describe('settings setup guide progress', () => {
       ready: true,
       doneCount: 4,
       total: FEATURE_WALL_SETUP_STEPS.length,
-      firstIncompleteStepId: 'agent-capabilities'
+      firstIncompleteStepId: 'cli-setup'
     })
   })
 

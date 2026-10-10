@@ -14818,6 +14818,8 @@
                       "42525ba8a4": "주요 저장소를 Orca로 가져와 폴더를 일일이 찾을 필요 없이 에이전트 작업을 시작하세요.",
                       "agentSkillsName": "에이전트에 Orca 스킬 제공",
                       "agentSkillsDescription": "에이전트가 Orca 브라우저를 조작하고, 컴퓨터를 제어하고, 여러 단계 작업을 조율하는 데 쓰는 스킬을 설치하세요.",
+                      "cliSetupName": "Orca CLI 설정",
+                      "cliSetupDescription": "셸 명령 `orca`를 PATH에 등록하고 CLI 스킬을 설치해 어디서든 Orca 명령을 쓸 수 있게 하세요.",
                       "workOnTwoTasks": "두 작업을 동시에 진행하기"
                     }
                   }

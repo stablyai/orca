@@ -13,6 +13,8 @@ export type FeatureWallSetupProgressInput = {
   featureInteractions: FeatureInteractionState
   hasConnectedTaskSource: boolean
   browserUseSkillInstalled: boolean
+  /** `orca` registered on the user PATH, i.e. callable from terminals outside Orca. */
+  cliPathRegistered: boolean
   computerUseSkillInstalled: boolean
   computerUsePermissionsReady: boolean
   computerUseUnavailable?: boolean
@@ -79,6 +81,9 @@ export function getFeatureWallSetupProgress(
     // opening any real page in Orca's browser durably completes this milestone.
     browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
     'task-sources': input.hasConnectedTaskSource,
+    // Why: the CLI step needs both halves — a PATH registration agents can call,
+    // and the orca-cli skill they call it with.
+    'cli-setup': input.cliPathRegistered === true && input.browserUseSkillInstalled,
     'agent-capabilities': agentCapabilitiesDone,
     'setup-script': input.hasSetupScript
   }

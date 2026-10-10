@@ -15,6 +15,14 @@ import {
   WorkspacesAction
 } from './FeatureWallSetupWorkflowActions'
 import { ConnectIntegrationsList } from './ConnectIntegrationsList'
+import { CliSection } from '../settings/CliSection'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import {
+  isWindowsTerminalCapabilityHost,
+  useLocalWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { BrowserAction } from './FeatureWallBrowserAction'
 import {
   SetupBrowserVisual,
@@ -151,6 +159,9 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   if (activeStep.id === 'task-sources') {
     return <TaskSourcesAction />
   }
+  if (activeStep.id === 'cli-setup') {
+    return <CliSetupAction />
+  }
   if (activeStep.id === 'agent-capabilities') {
     return (
       <AgentCapabilitiesSetupAction
@@ -163,6 +174,41 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
     return <SetupScriptAction />
   }
   return null
+}
+
+// Reuses the Settings CLI section: PATH registration + the orca-cli skill in one place.
+function CliSetupAction(): React.JSX.Element | null {
+  const settings = useAppStore((s) => s.settings)
+  const isWindowsRenderer =
+    typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+  const isWebClient = isWebClientLocation()
+  const runtimeCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
+    settings?.activeRuntimeEnvironmentId
+  )
+  // Why: without WSL capabilities CliSection always targets the Windows host, so a
+  // WSL-default user would install the skill where Settings and progress never look.
+  const wslCapabilities = useLocalWindowsTerminalCapabilities(
+    isWindowsRenderer || isWebClient,
+    false,
+    isWebClient ? runtimeCapabilityOwnerKey : 'local'
+  )
+  if (!settings) {
+    return null
+  }
+  return (
+    <CliSection
+      currentPlatform={getRendererAppPlatform()}
+      settings={settings}
+      wslSupportedPlatform={isWindowsTerminalCapabilityHost({
+        isWindowsRenderer,
+        isWebClient,
+        target: { kind: 'local' },
+        hostPlatform: wslCapabilities.hostPlatform
+      })}
+      wslAvailable={wslCapabilities.wslAvailable}
+      wslCapabilitiesLoading={wslCapabilities.isLoading}
+    />
+  )
 }
 
 // Full-width content below the caption/visual grid.
