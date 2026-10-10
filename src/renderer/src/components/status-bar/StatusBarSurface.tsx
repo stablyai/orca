@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { UsageRosterPanel } from './UsageRosterPanel'
-import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
@@ -28,6 +27,11 @@ import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
+import {
+  UsageUnitLabel,
+  getUsageUnitLabelState,
+  usageChipShowsPercentage
+} from './usage-unit-label'
 import { useStatusBarController } from './use-status-bar-controller'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
@@ -62,6 +66,7 @@ export function StatusBarSurface({
     anyFetching,
     anyVisible,
     barRef,
+    canSignInFromUsageRow,
     collapseUsage,
     collapsedUsageProviders,
     compact,
@@ -96,6 +101,8 @@ export function StatusBarSurface({
     usageRef,
     usageTightestOnly
   } = controller
+  const usageMode = usageTightestOnly ? 'compact' : statusBarUsageMode
+  const unitLabelState = getUsageUnitLabelState(rosterProviders, collapsedUsageProviders, usageMode)
 
   return (
     <div
@@ -141,12 +148,19 @@ export function StatusBarSurface({
                       'Usage'
                     )}
                   >
+                    {unitLabelState !== 'absent' ? (
+                      <UsageUnitLabel
+                        collapsed={unitLabelState === 'collapsed'}
+                        display={usagePercentageDisplay}
+                      />
+                    ) : null}
                     {rosterProviders.map((p) => (
                       // Why: collapsed chips leave the row but stay measurable, so the density hook can bring them back.
                       <span
                         key={p.provider}
                         data-usage-chip={p.provider}
                         data-usage-urgent={getUsageTone(p) === 'urgent'}
+                        data-usage-percentage={usageChipShowsPercentage(p, usageMode)}
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
                         className="inline-flex data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
@@ -155,7 +169,7 @@ export function StatusBarSurface({
                           p={p}
                           compact={compact}
                           display={usagePercentageDisplay}
-                          mode={usageTightestOnly ? 'compact' : statusBarUsageMode}
+                          mode={usageMode}
                         />
                       </span>
                     ))}
@@ -191,7 +205,7 @@ export function StatusBarSurface({
                     onRefresh={handleRefresh}
                     onOpenProvider={handleOpenProviderAccounts}
                     onSignIn={handleOpenProviderAccounts}
-                    canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
+                    canSignIn={canSignInFromUsageRow}
                     onManageAccounts={handleManageAccounts}
                     onUsageDetails={handleUsageDetails}
                     renderRow={(p, rowNode) => {

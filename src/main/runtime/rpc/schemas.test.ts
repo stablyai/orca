@@ -7,7 +7,7 @@ import {
   OptionalPlainString,
   OptionalPositiveInt,
   OptionalString
-} from './schemas'
+} from '../../../shared/rpc-contract/rpc-param-primitives'
 import {
   InterceptEnable,
   Screenshot,

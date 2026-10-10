@@ -11,7 +11,7 @@ const testState: { executionHostId: ExecutionHostId } = vi.hoisted(() => ({
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () => testState.executionHostId
+  getKnownExecutionHostIdForWorktree: () => testState.executionHostId
 }))
 
 const { CombinedDiffFileTreeRow } = await import('./combined-diff-file-tree-row')

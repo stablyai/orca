@@ -82,6 +82,17 @@ export function rejectPendingSnapshotRequest(
   request.reject(new Error(message))
 }
 
+export function disposeRemoteTerminalStreamState(
+  stream: RemoteRuntimeMultiplexedTerminalState,
+  message: string
+): void {
+  discardOutputAcknowledgements(stream)
+  stream.watchdog.dispose()
+  clearSnapshot(stream)
+  clearResyncTimer(stream)
+  rejectPendingSnapshotRequest(stream, message)
+}
+
 export function decodeSnapshotInfo(
   payload: Uint8Array<ArrayBufferLike>
 ): RemoteRuntimeSnapshotInfo | null {
@@ -160,10 +171,9 @@ export function isTerminalDriverState(
   if (!value || typeof value !== 'object' || !('kind' in value)) {
     return false
   }
-  const driver = value as { kind?: unknown; clientId?: unknown }
   return (
-    driver.kind === 'idle' ||
-    driver.kind === 'desktop' ||
-    (driver.kind === 'mobile' && typeof driver.clientId === 'string')
+    value.kind === 'idle' ||
+    value.kind === 'desktop' ||
+    (value.kind === 'mobile' && 'clientId' in value && typeof value.clientId === 'string')
   )
 }

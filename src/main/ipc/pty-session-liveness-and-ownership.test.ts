@@ -476,7 +476,7 @@ describe('registerPtyHandlers', () => {
     }
     registerSshPtyProvider('ssh-1', provider as never)
     registerPtyHandlers(mainWindow as never)
-    setPtyOwnership('remote-pty', 'ssh-1')
+    setPtyOwnership('remote-pty', 'ssh:ssh-1')
     unregisterSshPtyProvider('ssh-1')
 
     await expect(handlers.get('pty:hasChildProcesses')!(null, { id: 'remote-pty' })).resolves.toBe(

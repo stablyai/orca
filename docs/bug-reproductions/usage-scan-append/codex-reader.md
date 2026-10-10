@@ -8,7 +8,8 @@ The shared JSONL reader now pins verification, parsing and checkpoint creation
 to one descriptor and the initial file size. It proves complete range consumption
 and validates generation and byte evidence before publishing. Stable short reads
 propagate errors; only evidence that the file changed permits a retry. Each failed
-attempt closes its handle. Metadata-less caches reparse once.
+attempt closes its handle. A successful attempt closes before ownership publication
+and aggregate work. Metadata-less caches reparse once.
 
 Codex folds owned records into the existing session/day accumulator while reading.
 It commits ownership after validation, and lets unchanged forks reclaim keys that
@@ -73,3 +74,30 @@ Regression contracts exercise short reads, exact comparison, unsafe offsets,
 large file identities, fractional timestamps, and discovery failures. The
 original retained-heap artifact above predates this hardening; its source hashes
 describe that earlier measurement, rather than the final reader.
+
+## Further risk reduction
+
+The [refreshed memory comparison](./codex-parser-memory-final.json) captures the
+final parser and reader source. Its two counterbalanced rounds use eight fresh
+Node workers and preserve exact output parity with the original baseline.
+
+| Owned records             | Original sampled retained heap | Final sampled retained heap |
+| ------------------------- | -----------------------------: | --------------------------: |
+| 100,000                   |                43.87–44.54 MiB |               8.07–8.30 MiB |
+| 10,000, with 90% deferred |                  4.53–4.58 MiB |             1.231–1.235 MiB |
+
+The median reductions are approximately 81.5% and 72.9%. Final output retention
+stays similar or slightly higher: 6.49 → 6.53–6.55 MiB for owned events, and
+0.975 → 1.005–1.014 MiB for deferred events. These are forced-GC samples, not
+absolute peaks, full-app memory, or speed measurements.
+
+Real-file lifetime contracts cover both tiny and streamed transcripts. They
+prove the descriptor is closed before an ownership callback replaces the path,
+the verified old projection keeps its captured metadata, and the next parse
+observes the replacement. Failure cases check cleanup when validation fails or
+the first close attempt rejects before reaching the native close.
+
+This shortens Windows replacement contention to reading and validation; parsing
+can still include asynchronous attribution while the descriptor is pinned.
+Ordinary append writes remain compatible. Tiny verification still reads the full
+file twice, and bounded append evidence retains its append-only assumption.

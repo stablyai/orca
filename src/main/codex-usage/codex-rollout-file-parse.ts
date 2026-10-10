@@ -170,6 +170,8 @@ export async function parseCodexUsageFile(
         continue
       }
 
+      await reader.handle.close()
+
       // Discarded reads cannot claim keys that would hide records in another file.
       for (const eventKey of ownedEventKeys) {
         parseOptions.commitEventKey?.(eventKey)

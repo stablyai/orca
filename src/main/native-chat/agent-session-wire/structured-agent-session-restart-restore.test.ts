@@ -28,7 +28,7 @@ afterAll(() => {
 })
 
 const NO_OPEN_DEPS = {
-  store: { getRecord: () => null, listRecords: () => [] },
+  store: { getRecord: () => null, listRecords: () => [], replacedRuntime: () => undefined },
   journalDatabase: openTestJournalHostDatabase(stateDirectory),
   logger: recordingStructuredAgentSessionLogger().logger
 }

@@ -31,6 +31,7 @@ test('no workflow names the retired generic production deploy identity', async (
     'deploy-relay-production-same-cap.yml',
     'deploy-relay-production.yml',
     'operate-relay-asia-admission.yml',
+    'operate-relay-production-cell-flags.yml',
     'operate-relay-production-rehome-job.yml',
     'publish-relay-production.yml'
   ].map((name) => relayWorkflowFile(name)).sort())

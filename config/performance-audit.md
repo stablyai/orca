@@ -16,10 +16,9 @@ manual review. A warning identifies repeated setup, not proof of visible lag.
 
 `pnpm test:perf:contracts` runs the explicit selection in
 `vitest.performance.config.ts`: SQLite statement reuse and schema parity, relay
-filesystem concurrency, Codex append-only byte budgets, verified small-file buffer
-reads and exact file-generation metadata, tokenizer rejection, highlighting cache,
-queued
-cancellation, terminal backing-memory retention and detector fixtures. Missing
+filesystem concurrency, incremental Codex scans and reader lifetimes, pinned JSONL
+readers and snapshots, tokenizer rejection, highlighting cache, queued cancellation,
+terminal backing-memory retention and detector fixtures. Missing
 listed files fail configuration loading. Tests run serially, without retries,
 and inherit the full suite's setup and forced-GC support. This makes existing
 regression coverage easy to run and attribute; it does not create new workload
