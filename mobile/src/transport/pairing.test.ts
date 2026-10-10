@@ -72,4 +72,20 @@ describe('pairing deep links', () => {
 
     expect(parsePairingCode(code)).toEqual(proxiedOffer)
   })
+
+  it('preserves optional iroh.endpointId from pairing offers', () => {
+    const withIroh = {
+      ...offer,
+      iroh: { endpointId: 'a'.repeat(64) }
+    }
+    expect(parsePairingCode(encodeOffer(withIroh))).toEqual(withIroh)
+  })
+
+  it('rejects invalid iroh endpoint ids on pairing offers', () => {
+    const bad = {
+      ...offer,
+      iroh: { endpointId: 'not-a-valid-id' }
+    }
+    expect(parsePairingCode(encodeOffer(bad))).toBeNull()
+  })
 })

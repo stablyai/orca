@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { subscribeIrohHostStatus } from '../transport/mobile-iroh-host-status'
 import { Alert, StyleSheet } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
@@ -45,6 +46,9 @@ export function MobileHomeScreen() {
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
+  // Why: re-render host cards when iroh race/status updates (attempting/failed).
+  const [, setIrohStatusTick] = useState(0)
+  useEffect(() => subscribeIrohHostStatus(() => setIrohStatusTick((n) => n + 1)), [])
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
 
   const openResume = useCallback(

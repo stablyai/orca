@@ -11462,6 +11462,9 @@
           "relayUnavailable": "Orca Relay no está disponible en esta compilación. Usa LAN.",
           "signInAgain": "Volver a iniciar sesión para Relay",
           "localTitle": "LAN",
+          "irohTitle": "Iroh",
+          "irohDescription": "El teléfono puede estar en datos móviles o cualquier Wi‑Fi. Sin inicio de sesión ni configuración de dirección. P2P directo (hole punching) con relay público de respaldo.",
+          "irohUnavailable": "El transporte no pudo iniciarse. Reinicia Orca o revisa los registros.",
           "retrying": "Reintentando",
           "relayCell": "celda de relevo"
         },

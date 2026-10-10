@@ -1,0 +1,47 @@
+{
+  "name": "@orca/expo-iroh",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Native Iroh transport pipe for Orca mobile (ALPN orca-mobile-rpc/1)",
+  "keywords": [
+    "ExpoIroh",
+    "expo",
+    "expo-iroh",
+    "iroh",
+    "react-native"
+  ],
+  "homepage": "https://github.com/stablyai/orca/tree/main/mobile/packages/expo-iroh",
+  "bugs": {
+    "url": "https://github.com/stablyai/orca/issues"
+  },
+  "license": "MIT",
+  "author": "Orca contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stablyai/orca.git",
+    "directory": "mobile/packages/expo-iroh"
+  },
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "expo-module clean",
+    "dev": "expo-module build",
+    "lint": "expo-module lint",
+    "test": "expo-module test",
+    "format": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "typecheck": "pnpm --dir ../.. exec tsc --noEmit",
+    "expo-module": "expo-module"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.25",
+    "expo-module-scripts": "^3.5.2",
+    "expo-modules-core": "^2.0.4"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

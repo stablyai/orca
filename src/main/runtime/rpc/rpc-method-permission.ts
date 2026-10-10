@@ -26,6 +26,12 @@ export const RUNTIME_DEVICE_GRANTS = [
 ] as const satisfies readonly RpcMethodPermission[]
 export type RuntimeDeviceGrant = (typeof RUNTIME_DEVICE_GRANTS)[number]
 
+const GRANTABLE: ReadonlySet<string> = new Set(RUNTIME_DEVICE_GRANTS)
+
+export function isRuntimeDeviceGrant(value: unknown): value is RuntimeDeviceGrant {
+  return typeof value === 'string' && GRANTABLE.has(value)
+}
+
 export const RPC_METHOD_PERMISSIONS: readonly RpcMethodPermission[] = [
   'workspace',
   'desktop-control',

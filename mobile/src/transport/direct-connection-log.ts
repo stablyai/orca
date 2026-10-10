@@ -35,6 +35,14 @@ export class DirectConnectionLog {
     })
   }
 
+  emitWarning = (
+    message: string,
+    detail: string,
+    evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
+  ): void => {
+    this.emit('warn', message, detail, evidence)
+  }
+
   livenessTimeout = (evidence: LivenessTimeoutEvidence): void => {
     this.emit(
       'error',
