@@ -4,6 +4,19 @@ import {
   QUICK_OPEN_RESULT_LIMIT
 } from './quick-open-search'
 
+/** Keeps a host-ranked page in host order; recent files on the page still lead, newest first. */
+export function orderHostRankedQuickOpenFiles(
+  files: readonly string[],
+  history: readonly string[]
+): { path: string; score: number }[] {
+  const available = new Set(files)
+  const recent = history.filter((path) => available.has(path))
+  const recentPaths = new Set(recent)
+  return [...recent, ...files.filter((path) => !recentPaths.has(path))]
+    .slice(0, QUICK_OPEN_RESULT_LIMIT)
+    .map((path, index) => ({ path, score: index }))
+}
+
 export function rankQuickOpenFilesWithHistory(
   query: string,
   files: readonly string[],

@@ -30,6 +30,13 @@ import {
   nextCappedLocalListing,
   type CappedLocalListing
 } from '@/components/quick-open-capped-local-listing'
+import { useLocalRankedPathSearch } from '@/components/quick-open-local-ranked-search'
+import {
+  cleanRuntimeFileListError,
+  NO_LISTING,
+  type RuntimeFileListState
+} from '@/components/quick-open-file-list-state'
+export { cleanRuntimeFileListError, type RuntimeFileListState } from './quick-open-file-list-state'
 import { useAppStore } from '@/store'
 import { useKnownWorktreeById, useWorktreesForRepo } from '@/store/selectors'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
@@ -38,30 +45,6 @@ import {
   getFileExplorerOwnerUnresolvedMessage,
   getFileExplorerOperationRoute
 } from '@/components/right-sidebar/file-explorer-operation-owner'
-
-export type RuntimeFileListState = {
-  files: string[]
-  loading: boolean
-  loadError: string | null
-  recentError?: string | null
-  truncated?: boolean
-  operationOwner?: FileExplorerOperationOwner
-}
-
-/** Files settled for one request key; local listings key without the query, so they answer every query. */
-type RuntimeFileListing = {
-  requestKey: string
-  files: string[]
-  truncated: boolean
-  recentError?: string | null
-}
-
-const NO_LISTING: RuntimeFileListing = { requestKey: '', files: [], truncated: false }
-
-export function cleanRuntimeFileListError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error)
-  return raw.replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, '')
-}
 
 export function useRuntimeFileListForWorktree({
   enabled,
@@ -124,8 +107,13 @@ export function useRuntimeFileListForWorktree({
     activeTargetStatus === 'connecting' ||
     activeTargetStatus === 'deploying-relay' ||
     activeTargetStatus === 'reconnecting'
+  const indexRanked = useLocalRankedPathSearch(
+    enabled && target.canList && query !== undefined ? operationRoute : null,
+    worktreePath
+  )
   const usesRuntimePathSearch =
-    (runtimeEnvironmentId !== null || connectionId !== undefined) && query !== undefined
+    (runtimeEnvironmentId !== null || connectionId !== undefined || indexRanked === true) &&
+    query !== undefined
   const remoteQuery = usesRuntimePathSearch ? query.trim() : ''
   const remoteQueryTooLarge = usesRuntimePathSearch && isQuickOpenRemoteQueryTooLarge(remoteQuery)
   const includeIgnored = useAppStore((state) => state.settings?.showGitIgnoredFiles ?? true)
@@ -143,7 +131,7 @@ export function useRuntimeFileListForWorktree({
       : ''
   const eligibilityKey = `${listingKey}\n${recentKey}`
   const eligibleRecentCache = useQuickOpenRecentCache(enabled, eligibilityKey)
-  const requestKey = `${listingKey}\n${recentKey}${usesRuntimePathSearch ? `\n${remoteQuery}` : ''}${hostNameFilter ? `\nname-filter\n${hostNameFilter}` : ''}`
+  const requestKey = `${listingKey}\n${recentKey}\n${indexRanked}${usesRuntimePathSearch ? `\n${remoteQuery}` : ''}${hostNameFilter ? `\nname-filter\n${hostNameFilter}` : ''}`
   // Why: the render between a request change and the effect that starts the next request must
   // not show the previous listing, so a listing is only visible for the request that produced it.
   const currentListing = listing.requestKey === requestKey ? listing : NO_LISTING
@@ -169,6 +157,12 @@ export function useRuntimeFileListForWorktree({
       setListedOperationOwner({ kind: 'unresolved' })
       setLoadError(!operationRouteAvailable ? getFileExplorerOwnerUnresolvedMessage() : null)
       setLoadingRequest({ requestKey, loading: false })
+      return
+    }
+
+    // Wait for the local index answer so the palette does not start a full listing it then drops.
+    if (indexRanked === null) {
+      setLoadingRequest({ requestKey, loading: true })
       return
     }
 
@@ -213,9 +207,11 @@ export function useRuntimeFileListForWorktree({
         files,
         truncated: files.length >= QUICK_OPEN_LISTING_MAX_RESULTS
       }))
+    // Why: the debounce spares remote hosts a scan per keystroke; a local index answers in ms.
+    const queryDebounceMs = indexRanked ? 0 : 120
     const request =
       usesRuntimePathSearch && remoteQuery.length > 0
-        ? debounceRuntimeFileRequest(120, requestAbortController.signal, () =>
+        ? debounceRuntimeFileRequest(queryDebounceMs, requestAbortController.signal, () =>
             searchRuntimeFilePaths(requestContext, {
               includeIgnored,
               ...(includeIgnored === false ? { allowLegacyIncludeIgnored: true } : {}),
@@ -318,7 +314,8 @@ export function useRuntimeFileListForWorktree({
     worktreePath,
     remoteQuery,
     remoteQueryTooLarge,
-    usesRuntimePathSearch
+    usesRuntimePathSearch,
+    indexRanked
   ])
 
   return {
@@ -326,6 +323,8 @@ export function useRuntimeFileListForWorktree({
     loading: loading || connectionPending,
     loadError,
     truncated: currentListing.truncated,
+    // The local index already ranked these; re-scoring would drop its typo-tolerant matches.
+    hostRanked: indexRanked === true && usesRuntimePathSearch && remoteQuery.length > 0,
     recentError: currentListing.recentError,
     operationOwner: listedOperationOwner
   }

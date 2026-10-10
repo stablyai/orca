@@ -2,6 +2,7 @@ import { resolveSshQuickOpenDiscoveryOptions } from '../../providers/ssh-quick-o
 import { ipcMain } from 'electron'
 import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { listQuickOpenFiles } from '../filesystem-list-files'
+import { searchQuickOpenFilePaths } from '../filesystem-search-file-paths'
 import {
   isFileNameFilterQueryTooLarge,
   pathMatchesFileNameFilterTokens,
@@ -10,12 +11,14 @@ import {
 import { QuickOpenPathRanker } from '../../../shared/quick-open-path-search'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemContentSearchHandler } from './filesystem-content-search-handler'
+import { registerFilesystemExternalSearchHandlers } from './filesystem-external-search-handlers'
 
 // 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.
 const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
 
 export function registerFilesystemSearchHandlers(context: FilesystemHandlerContext): void {
   registerFilesystemContentSearchHandler(context)
+  registerFilesystemExternalSearchHandlers(context)
   const { store } = context
   const { listFilesCancellations } = context
   ipcMain.handle(
@@ -91,6 +94,18 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             ...(args.searchQuery === undefined ? {} : { searchQuery: args.searchQuery }),
             signal: controller?.signal
           })
+        }
+        if (args.searchQuery !== undefined) {
+          // Local ranked search, offered only where an index ranks every path (see fs:rankedPathSearch).
+          const result = await searchQuickOpenFilePaths(args.rootPath, store, {
+            query: args.searchQuery,
+            limit: args.maxResults ?? QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT,
+            includeIgnored: args.includeIgnored,
+            followSymlinks: args.followSymlinks,
+            excludePaths: args.excludePaths,
+            signal: controller?.signal
+          })
+          return result.paths
         }
         if (args.nameFilter !== undefined && isFileNameFilterQueryTooLarge(args.nameFilter)) {
           return []

@@ -4,7 +4,6 @@ import { sep } from 'node:path'
 import type { Store } from '../persistence'
 import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
 import {
-  buildExcludePathPrefixes,
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,
   shouldExcludeQuickOpenRelPath,
@@ -23,12 +22,12 @@ import {
   RipgrepLaunchFailureError,
   RipgrepUnavailableError
 } from '../../shared/ripgrep-process-availability'
-import { parseWslPath, toWindowsWslPath } from '../wsl'
-import { resolveAuthorizedPath } from './filesystem-auth'
-import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
+import { toWindowsWslPath } from '../wsl'
+import { resolveQuickOpenSearchRoot } from './quick-open-search-root'
 import { QuickOpenSubprocessPathAccumulator } from '../../shared/quick-open-listing-limits'
 import { bundledRipgrepUnavailableError } from '../ripgrep/bundled-ripgrep-path'
 import { spawnBundledRipgrep } from '../ripgrep/bundled-ripgrep-spawn'
+import { searchFilePathsFromExternalIndex } from '../search/external-workspace-search-provider'
 
 export type QuickOpenFilePathSearchResult = {
   paths: string[]
@@ -51,20 +50,12 @@ export async function searchQuickOpenFilePaths(
   if (args.limit <= 0 || !args.query.trim() || isQuickOpenQueryTooLarge(args.query)) {
     return { paths: [], totalCount: 0, truncated: false }
   }
-  const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
-  const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
-    store,
-    rootPath,
-    authorizedRootPath
-  )
-  const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
-
-  const excludePathPrefixes = [
-    ...new Set([
-      ...buildExcludePathPrefixes(rootPath, args.excludePaths),
-      ...buildExcludePathPrefixes(authorizedRootPath, args.excludePaths)
-    ])
-  ]
+  const root = await resolveQuickOpenSearchRoot(rootPath, store, args.excludePaths)
+  const { authorizedRootPath, localGitOptions, excludePathPrefixes, wslDistroForOutput } = root
+  const indexed = await searchFilePathsFromExternalIndex(root, args)
+  if (indexed) {
+    return indexed
+  }
   const { primary, ignoredPass } = buildRgArgsForQuickOpen({
     searchRoot: '.',
     followSymlinks: args.followSymlinks,

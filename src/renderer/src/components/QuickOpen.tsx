@@ -16,7 +16,10 @@ import {
   isQuickOpenAbsolutePath
 } from '../../../shared/quick-open-query-target'
 import { openQuickOpenFile } from './quick-open-file-navigation'
-import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
+import {
+  orderHostRankedQuickOpenFiles,
+  rankQuickOpenFilesWithHistory
+} from './quick-open-history-ranking'
 import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
@@ -69,12 +72,13 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   const [selectedPath, setSelectedPath] = useState('')
   const worktreePath = activeWorktree?.path ?? null
   const history = useQuickOpenHistory(activeWorktreeId, worktreePath)
-  const { files, loading, loadError, truncated, recentError } = useRuntimeFileListForWorktree({
-    enabled: visible && !absoluteQuery,
-    worktreeId: activeWorktreeId,
-    query: parsedTarget.pathQuery,
-    recentPaths: history
-  })
+  const { files, loading, loadError, truncated, recentError, hostRanked } =
+    useRuntimeFileListForWorktree({
+      enabled: visible && !absoluteQuery,
+      worktreeId: activeWorktreeId,
+      query: parsedTarget.pathQuery,
+      recentPaths: history
+    })
 
   // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
   // the dialog (Esc / click-away) would otherwise leave the active panel
@@ -101,8 +105,10 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     if (absoluteQuery) {
       return [{ path: parsedTarget.pathQuery, score: 0 }]
     }
-    return rankQuickOpenFilesWithHistory(effectiveTarget.pathQuery, files, history)
-  }, [absoluteQuery, parsedTarget.pathQuery, effectiveTarget.pathQuery, files, history])
+    return hostRanked
+      ? orderHostRankedQuickOpenFiles(files, history)
+      : rankQuickOpenFilesWithHistory(effectiveTarget.pathQuery, files, history)
+  }, [absoluteQuery, parsedTarget.pathQuery, effectiveTarget.pathQuery, files, history, hostRanked])
 
   const handleSelect = useCallback(
     async (selectedPath: string) => {

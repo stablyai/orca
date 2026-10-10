@@ -172,13 +172,14 @@ export async function searchRuntimeFilePaths(
 ): Promise<{ files: string[]; truncated: boolean }> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment') {
-    if (!context.connectionId || !context.worktreePath) {
+    // Local roots reach here only after fs.rankedPathSearch said an index ranks them.
+    if (!context.worktreePath) {
       return { files: [], truncated: false }
     }
     const limit = args.limit ?? 32
     const files = await window.api.fs.listFiles({
       rootPath: context.worktreePath,
-      connectionId: context.connectionId,
+      ...(context.connectionId ? { connectionId: context.connectionId } : {}),
       excludePaths: args.excludePaths,
       requestToken: args.requestToken,
       maxResults: limit + 1,

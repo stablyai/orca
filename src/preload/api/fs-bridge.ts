@@ -177,6 +177,12 @@ export const fsApi = {
   }): Promise<string[]> => ipcRenderer.invoke('fs:listFiles', args),
   cancelListFiles: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('fs:cancelListFiles', args),
+  /** True when a local index ranks quick-open paths per query (`listFiles` with `searchQuery`). */
+  rankedPathSearch: (args: {
+    rootPath: string
+    includeIgnored?: boolean
+    followSymlinks?: boolean
+  }): Promise<boolean> => ipcRenderer.invoke('fs:rankedPathSearch', args),
   cancelSearch: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('fs:cancelSearch', args),
   search: (args: {

@@ -5,14 +5,9 @@ import { RipgrepFilenameDecoder, RipgrepFilenameError } from '../../shared/ripgr
 import { sep } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { Store } from '../persistence'
-import { resolveAuthorizedPath } from './filesystem-auth'
-import { parseWslPath, toWindowsWslPath } from '../wsl'
-import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
-import {
-  buildExcludePathPrefixes,
-  buildRgArgsForQuickOpen,
-  normalizeQuickOpenRgLine
-} from '../../shared/quick-open-filter'
+import { toWindowsWslPath } from '../wsl'
+import { resolveQuickOpenSearchRoot } from './quick-open-search-root'
+import { buildRgArgsForQuickOpen, normalizeQuickOpenRgLine } from '../../shared/quick-open-filter'
 import {
   limitQuickOpenFilesBySerializedBytes,
   serializedQuickOpenPathBytes
@@ -31,6 +26,7 @@ import {
   RipgrepUnavailableError
 } from '../../shared/ripgrep-process-availability'
 import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
+import { listFilesFromExternalIndex } from '../search/external-workspace-search-provider'
 
 export async function listQuickOpenFiles(
   rootPath: string,
@@ -43,25 +39,19 @@ export async function listQuickOpenFiles(
   pathFilter?: (relativePath: string) => boolean,
   options: { includeIgnored?: boolean; followSymlinks?: boolean; candidatePaths?: string[] } = {}
 ): Promise<string[]> {
-  const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
-  const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
-    store,
-    rootPath,
-    authorizedRootPath
-  )
-
-  // Why: when the main worktree sits at the repo root, linked worktrees are
-  // nested subdirectories. Without excluding them, rg/git lists files from
-  // every worktree instead of just the active one. The shared helper
-  // normalizes, validates, and root-relativizes every input.
-  const excludePathPrefixes = [
-    ...new Set([
-      ...buildExcludePathPrefixes(rootPath, excludePaths),
-      ...buildExcludePathPrefixes(authorizedRootPath, excludePaths)
-    ])
-  ]
+  const root = await resolveQuickOpenSearchRoot(rootPath, store, excludePaths)
+  const { authorizedRootPath, localGitOptions, excludePathPrefixes, wslDistroForOutput } = root
   const includePath = quickOpenListingPathFilter(excludePathPrefixes, options.candidatePaths)
-  const wslDistroForOutput = parseWslPath(authorizedRootPath)?.distro ?? localGitOptions.wslDistro
+  const indexed = await listFilesFromExternalIndex(root, {
+    ...options,
+    maxResults,
+    maxSerializedBytes,
+    pathFilter,
+    signal
+  })
+  if (indexed) {
+    return indexed
+  }
 
   const inventoryBudget =
     maxResults === undefined && maxSerializedBytes === undefined ? new FileInventoryBudget() : null

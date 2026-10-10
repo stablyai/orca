@@ -179,6 +179,11 @@ export type FilesystemApi = {
       nameFilter?: string
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
+    rankedPathSearch: (args: {
+      rootPath: string
+      includeIgnored?: boolean
+      followSymlinks?: boolean
+    }) => Promise<boolean>
     cancelSearch: (args: { requestToken: string }) => Promise<void>
     search: (
       args: SearchOptions & { connectionId?: string; requestToken?: string }

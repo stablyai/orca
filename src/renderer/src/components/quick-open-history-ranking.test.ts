@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest'
-import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
+import {
+  orderHostRankedQuickOpenFiles,
+  rankQuickOpenFilesWithHistory
+} from './quick-open-history-ranking'
 import { prepareQuickOpenFiles, rankQuickOpenFiles } from './quick-open-search'
 
 it('puts recently visited matching files first, including empty queries', () => {
@@ -24,4 +27,11 @@ it('preserves ranking without history and excludes ignored/deleted unlisted hist
   expect(
     rankQuickOpenFilesWithHistory('', files, ['ignored.bin', 'missing.ts']).map((item) => item.path)
   ).not.toContain('ignored.bin')
+})
+
+it('keeps host ranking for daemon-ranked pages and lifts only listed recents', () => {
+  const files = ['src/usr-effect.ts', 'src/use-effect.ts', 'src/other.ts']
+  expect(
+    orderHostRankedQuickOpenFiles(files, ['missing.ts', 'src/other.ts']).map((item) => item.path)
+  ).toEqual(['src/other.ts', 'src/usr-effect.ts', 'src/use-effect.ts'])
 })

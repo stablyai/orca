@@ -24,16 +24,9 @@ import { toWindowsWslPath } from '../wsl'
 import { bundledRipgrepUnavailableError } from './bundled-ripgrep-path'
 import { spawnBundledRipgrep } from './bundled-ripgrep-spawn'
 import { stopBundledRipgrep } from './bundled-ripgrep-stop'
+import { searchTextFromExternalIndex } from '../search/external-workspace-search-provider'
 
-export function runBundledRipgrepTextSearch({
-  options,
-  rootPath,
-  resultRootPath,
-  wslDistro,
-  wslDistroForOutput,
-  signal,
-  onSpawn
-}: {
+type BundledRipgrepTextSearchArgs = {
   options: SearchOptions
   rootPath: string
   resultRootPath: string
@@ -41,7 +34,24 @@ export function runBundledRipgrepTextSearch({
   wslDistroForOutput?: string
   signal?: AbortSignal
   onSpawn: (child: ChildProcessHandle) => () => void
-}): Promise<SearchResult> {
+}
+
+export async function runBundledRipgrepTextSearch(
+  args: BundledRipgrepTextSearchArgs
+): Promise<SearchResult> {
+  throwIfSignalAborted(args.signal)
+  return (await searchTextFromExternalIndex(args)) ?? runRipgrepTextSearchProcess(args)
+}
+
+function runRipgrepTextSearchProcess({
+  options,
+  rootPath,
+  resultRootPath,
+  wslDistro,
+  wslDistroForOutput,
+  signal,
+  onSpawn
+}: BundledRipgrepTextSearchArgs): Promise<SearchResult> {
   throwIfSignalAborted(signal)
   const maxResults = Math.max(
     1,
