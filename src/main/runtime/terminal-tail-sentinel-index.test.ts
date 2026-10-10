@@ -426,3 +426,41 @@ describe('terminal tail sentinel index property', () => {
     }
   }
 })
+
+describe('terminal tail sentinel index deferral', () => {
+  it('never tests rows a flood evicted before the next read', () => {
+    const sim = saturatedSim()
+    computeTerminalTailWaitState(sim.lines, sim.partialLine, sim.preview)
+    const floodLines = MAX_TAIL_LINES * 3
+    const tests = countSentinelTests(() => {
+      for (let index = 0; index < floodLines; index += 1) {
+        feed(sim, `flood line ${index}\n`)
+      }
+      computeTerminalTailWaitState(sim.lines, sim.partialLine, sim.preview)
+    })
+    // Only the rows still retained at the read, plus the partial-line test.
+    expect(tests).toBeLessThanOrEqual(MAX_TAIL_LINES + 1)
+    assertIndexedPositionsAreExact(sim.lines)
+  })
+
+  for (const profile of ['streaming', 'tui'] as const) {
+    for (const seed of [3, 11, 99]) {
+      it(`matches a full scan when reads skip many appends (${profile}, seed ${seed})`, () => {
+        const random = mulberry32(seed)
+        const sim = newSim()
+        let reads = 0
+        for (let step = 0; step < 1500; step += 1) {
+          feed(sim, randomChunk(random, profile))
+          if (random() < 0.08) {
+            reads += 1
+            assertIndexedPositionsAreExact(sim.lines)
+            expect(computeTerminalTailWaitState(sim.lines, sim.partialLine, sim.preview)).toEqual(
+              computeTerminalTailWaitState(unindexed(sim), sim.partialLine, sim.preview)
+            )
+          }
+        }
+        expect(reads).toBeGreaterThan(50)
+      })
+    }
+  }
+})

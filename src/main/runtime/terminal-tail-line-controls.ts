@@ -21,36 +21,26 @@ export function splitRetainedTerminalTailSegments(value: string): {
   partialSegment: string
   completeLineCount: number
 } {
+  // Why indexOf: a per-code-unit `value[index]` walk was the costliest step for plain log output.
   let completeLineCount = 0
-  for (let index = 0; index < value.length; index += 1) {
-    if (value[index] === '\n') {
-      completeLineCount += 1
-    }
+  for (let index = value.indexOf('\n'); index !== -1; index = value.indexOf('\n', index + 1)) {
+    completeLineCount += 1
   }
 
   const retainedCompleteCount = Math.min(completeLineCount, MAX_TAIL_LINES)
   const omittedCompleteCount = completeLineCount - retainedCompleteCount
   let startIndex = 0
-  if (omittedCompleteCount > 0) {
-    let seen = 0
-    for (let index = 0; index < value.length; index += 1) {
-      if (value[index] !== '\n') {
-        continue
-      }
-      seen += 1
-      if (seen === omittedCompleteCount) {
-        startIndex = index + 1
-        break
-      }
-    }
+  for (let seen = 0; seen < omittedCompleteCount; seen += 1) {
+    startIndex = value.indexOf('\n', startIndex) + 1
   }
 
   const completeSegments: string[] = []
   let segmentStart = startIndex
-  for (let index = startIndex; index < value.length; index += 1) {
-    if (value[index] !== '\n') {
-      continue
-    }
+  for (
+    let index = value.indexOf('\n', startIndex);
+    index !== -1;
+    index = value.indexOf('\n', index + 1)
+  ) {
     completeSegments.push(value.slice(segmentStart, index))
     segmentStart = index + 1
   }
