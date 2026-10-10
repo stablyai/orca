@@ -12,6 +12,9 @@ import {
 const projectDir = resolve(import.meta.dirname, '../..')
 
 const ORACLE_ROUTE = PR_E2E_SOURCE_ROUTES.find((route) => route.id === 'workspace-layout.oracle')
+const TAB_STORE_ROUTE = PR_E2E_SOURCE_ROUTES.find(
+  (route) => route.id === 'workspace-layout.oracle-tab-store'
+)
 
 /** One product file per layout writer family; each alone must run the oracle. */
 const LAYOUT_AUTHORITIES = [
@@ -21,9 +24,9 @@ const LAYOUT_AUTHORITIES = [
   'src/main/persistence/loading-store/pty-binding-persistence.ts',
   'src/main/runtime/orca-runtime-split-pty-backed-terminal.ts',
   'src/main/runtime/orca-runtime-move-headless-mobile-session-tab.ts',
-  'src/renderer/src/store/slices/tabs.ts',
-  'src/renderer/src/store/slices/tabs/tabs-move-actions.ts',
+  'src/main/runtime/orca-runtime-create-terminal.ts',
   'src/renderer/src/runtime/mobile-session-tab-close.ts',
+  'src/renderer/src/runtime/runtime-layout-client.ts',
   'tests/e2e/workspace-layout-oracle-known-on-main.ts',
   'tests/e2e/helpers/workspace-layout-oracle-compare.ts'
 ]
@@ -34,6 +37,16 @@ describe('workspace layout oracle PR E2E routing', () => {
     for (const file of LAYOUT_AUTHORITIES) {
       expect(selectPrE2eSpecs([file]), file).toEqual(ORACLE_ROUTE.specs.toSorted())
       expect(shouldRunReusablePrE2e([file]), file).toBe(true)
+    }
+  })
+
+  it('runs the window and headless oracles, not the SSH lane, for the tab store', () => {
+    for (const file of [
+      'src/renderer/src/store/slices/tabs.ts',
+      'src/renderer/src/store/slices/tabs/tabs-move-actions.ts'
+    ]) {
+      expect(selectPrE2eSpecs([file]), file).toEqual(TAB_STORE_ROUTE.specs.toSorted())
+      expect(existsSync(join(projectDir, file)), file).toBe(true)
     }
   })
 
@@ -64,10 +77,13 @@ describe('workspace layout oracle PR E2E routing', () => {
       'src/main/runtime/orchestration/db/worker-terminal/worker-terminal-store.ts',
       'src/main/runtime/rpc/methods/terminal/terminal-create.ts',
       'src/main/runtime/runtime-rpc-database.ts',
+      'src/main/runtime/orca-runtime-files.ts',
+      'src/renderer/src/runtime/sync-runtime-graph.ts',
+      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts',
       'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts',
       'tests/e2e/workspace-layout-oracle-latency.spec.ts'
     ]) {
-      expect(ORACLE_ROUTE.matches(file), file).toBe(false)
+      expect(ORACLE_ROUTE.matches(file) || TAB_STORE_ROUTE.matches(file), file).toBe(false)
     }
   })
 })
