@@ -55,12 +55,21 @@ export const RESERVE_MODE_CACHE_WAIT_MS = 10_000
 export const REREGISTER_WAIT_MIN_MS = 8 * 60_000
 export const REREGISTER_WAIT_MAX_MS = 50 * 60_000
 const REREGISTER_CONTROLS_PER_LANE_PER_SEC = 0.3
-// The smallest default a cell uses (a third of a US pool of 10).
-const REREGISTER_DEFAULT_LANES = 3
+// Cell database pool sizes (US 10, Asia 16): the cell takes a third, and caps the switch at the
+// pool less two (host-session-registry.ts reregisterInFlightLimit).
+const CELL_DATABASE_POOL_MAX = { 'asia-east2': 16 }
+const CELL_DATABASE_POOL_MAX_DEFAULT = 10
+
+export function reregisterLanes(runtime) {
+  const pool = CELL_DATABASE_POOL_MAX[runtime?.region] ?? CELL_DATABASE_POOL_MAX_DEFAULT
+  const flag = runtime?.flagsApplied?.flags?.reregisterInFlight
+  if (flag === undefined) return Math.max(1, Math.floor(pool / 3))
+  return Math.max(1, Math.min(Number(flag), pool - 2))
+}
 
 export function reregisterWaitMs(runtime) {
   const controls = Number(runtime?.runtime?.controls ?? 0)
-  const lanes = Number(runtime?.flagsApplied?.flags?.reregisterInFlight ?? REREGISTER_DEFAULT_LANES)
+  const lanes = reregisterLanes(runtime)
   const estimate = (controls / (lanes * REREGISTER_CONTROLS_PER_LANE_PER_SEC)) * 1_000
   return Math.min(REREGISTER_WAIT_MAX_MS, Math.max(REREGISTER_WAIT_MIN_MS, Math.ceil(estimate)))
 }
@@ -346,8 +355,9 @@ async function waitForLeasedControls(fetchImpl, request, idToken, { now, sleep, 
   log(JSON.stringify({ event: 'orca_relay_cell_reregistration_still_running', cellId: request.cellId }))
   throw new Error(
     `cell still re-registering after ${waitMs ?? REREGISTER_WAIT_MIN_MS} ms. Its connections are safe and Postgres ` +
-      'keeps reserve, so sweeps stay off the cell. Raise reregisterInFlight to speed it up, and once runtime-status ' +
-      'reports admitModeEffective=db run again with --set admitMode=db to record db'
+      'keeps reserve, so sweeps stay off the cell. Run again with --set admitMode=db, which records db once ' +
+      'runtime-status reports admitModeEffective=db; to speed it up, name both in one write: ' +
+      '--set admitMode=db,reregisterInFlight=N'
   )
 }
 
@@ -355,6 +365,26 @@ async function waitForLeasedControls(fetchImpl, request, idToken, { now, sleep, 
 // so a cell that comes back boots in db, and Postgres says db so the sweeps re-place its hosts.
 async function breakGlassToDatabase(request, dependencies, { fetchImpl, log, sleep }) {
   const { accessToken, idToken, audit } = dependencies
+  // Only for a dead cell: one that answers, or still heartbeats, takes the ordinary flip back.
+  const answered = await fetchImpl(`${request.cellOrigin}/v1/admin/runtime-status`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${idToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ v: 1 }),
+    signal: AbortSignal.timeout(10_000)
+  })
+    .then(async (response) => {
+      await response.body?.cancel().catch(() => undefined)
+      return response.ok
+    })
+    .catch(() => false)
+  if (answered) throw new Error('the cell answers runtime-status: flip it back with --set admitMode=db, not break glass')
+  const recorded = await directorAdmitMode(fetchImpl, request, idToken, sleep)
+  if (recorded?.heartbeatFresh !== false) {
+    throw new Error(
+      `the director ${recorded?.heartbeatFresh ? 'still sees heartbeats from' : 'cannot say whether it hears'} ` +
+        'the cell: break glass is only for a cell that has stopped'
+    )
+  }
   const current = await readCurrentObject(fetchImpl, request, accessToken)
   if (current.generation !== request.expectedGeneration) {
     throw new Error(`current generation is ${current.generation}, not expected ${request.expectedGeneration}`)
@@ -381,6 +411,18 @@ export async function operateCellFlags(request, dependencies) {
   const current = await readCurrentObject(fetchImpl, request, accessToken)
   const object = desiredObject(request, current.object)
   assertSupportedObject(object.flags, runtime)
+  // A tripped dead-man: any new generation that keeps reserve re-arms it, so the cell trips
+  // again and its re-registration restarts. Only a write that also says db is safe.
+  if (
+    runtime.flagsApplied.flags?.admitMode === 'reserve' &&
+    runtime.admitModeEffective === 'db' &&
+    (object.flags.admitMode ?? 'db') === 'reserve'
+  ) {
+    throw new Error(
+      'the cell tripped its dead-man (reserve configured, db effective); a write that keeps reserve re-arms it. ' +
+        'Name admitMode=db in the same write, e.g. --set admitMode=db,reregisterInFlight=N'
+    )
+  }
   const plan = {
     event: 'orca_relay_cell_flags_plan',
     mode: request.mode,
@@ -425,7 +467,13 @@ export async function operateCellFlags(request, dependencies) {
     // Every director's cached set expires (5 s) before the cell starts admitting from memory;
     // the second write re-runs the open-flow check over anything started meanwhile.
     await sleep(RESERVE_MODE_CACHE_WAIT_MS)
-    await directorAdmitMode(fetchImpl, request, idToken, sleep, 'reserve')
+    try {
+      await directorAdmitMode(fetchImpl, request, idToken, sleep, 'reserve')
+    } catch (error) {
+      // A drain, migration or rehome opened during the wait: Postgres goes back as it was.
+      if (before?.admitMode === 'db') await directorAdmitMode(fetchImpl, request, idToken, sleep, 'db')
+      throw error
+    }
     try {
       generation = await writeObject(fetchImpl, request, object, accessToken, audit)
     } catch (error) {

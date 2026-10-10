@@ -9,6 +9,7 @@ import {
   READ_BACK_TIMEOUT_MS,
   REREGISTER_WAIT_MAX_MS,
   REREGISTER_WAIT_MIN_MS,
+  reregisterLanes,
   reregisterWaitMs,
   WRITE_CONFIRMATION
 } from './operate-relay-cell-flags.mjs'
@@ -46,7 +47,12 @@ function fakeGoogleAndCell({
   supportedFlags = SUPPORTED,
   // Polls that still report admitModeEffective=reserve after a flip back.
   reregisteringPolls = 0,
-  controls
+  controls,
+  // Forces admitModeEffective, as a tripped dead-man reports it.
+  effectiveOverride,
+  heartbeatFresh = false,
+  // The director refuses this numbered reserve post (1-based) with this error.
+  refuseReservePost
 } = {}) {
   const state = {
     stored,
@@ -57,6 +63,7 @@ function fakeGoogleAndCell({
       ? { generation: Number(stored.generation), flags: stored.object.flags }
       : { generation: 0, flags: { readinessLocal: false, ticketCheck: 'off' } },
     directorAdmitMode: 'db',
+    reservePosts: 0,
     order: [],
     reregisteringPolls
   }
@@ -64,11 +71,17 @@ function fakeGoogleAndCell({
     const target = new URL(url)
     if (target.pathname === '/v1/admin/cell-admit-mode') {
       const body = JSON.parse(String(init.body))
+      if (body.admitMode === 'reserve') {
+        state.reservePosts += 1
+        if (refuseReservePost?.post === state.reservePosts) {
+          return Response.json({ error: refuseReservePost.error }, { status: 409 })
+        }
+      }
       if (body.admitMode) {
         state.directorAdmitMode = body.admitMode
         state.order.push(`director:${body.admitMode}`)
       }
-      return Response.json({ v: 1, cellId: body.cellId, admitMode: state.directorAdmitMode, updatedAt: 1 })
+      return Response.json({ v: 1, cellId: body.cellId, admitMode: state.directorAdmitMode, updatedAt: 1, heartbeatFresh })
     }
     if (target.pathname === '/v1/admin/runtime-status') {
       state.polls += 1
@@ -82,7 +95,7 @@ function fakeGoogleAndCell({
         role,
         cellId,
         flagsApplied: state.applied,
-        admitModeEffective: effective,
+        admitModeEffective: effectiveOverride ?? effective,
         ...(controls === undefined ? {} : { runtime: { controls } }),
         ...(supportedFlags ? { supportedFlags } : {})
       })
@@ -412,9 +425,59 @@ test('the flip-back wait scales with the control count and the switch-file pace'
   assert.equal(reregisterWaitMs({ runtime: { controls: 1_500 } }), 1_666_667)
   assert.equal(
     reregisterWaitMs({ runtime: { controls: 1_500 }, flagsApplied: { flags: { reregisterInFlight: 10 } } }),
-    500_000
+    // The cell caps 10 at its US pool of 10 less two.
+    625_000
   )
   assert.equal(reregisterWaitMs({ runtime: { controls: 3_000 } }), REREGISTER_WAIT_MAX_MS)
+})
+
+test('the wait counts the lanes the cell actually uses', () => {
+  assert.equal(reregisterLanes({ region: 'us-central1' }), 3)
+  assert.equal(reregisterLanes({ region: 'asia-east2' }), 5)
+  assert.equal(reregisterLanes({ region: 'us-central1', flagsApplied: { flags: { reregisterInFlight: 16 } } }), 8)
+  assert.equal(reregisterLanes({ region: 'asia-east2', flagsApplied: { flags: { reregisterInFlight: 16 } } }), 14)
+})
+
+test('a tripped cell takes no write that keeps reserve, only one that also says db', async () => {
+  const stored = { generation: '7', object: { v: 1, cellId: CELL, flags: { admitMode: 'reserve' } } }
+  const tripped = () => fakeGoogleAndCell({ stored, effectiveOverride: 'db' })
+  for (const set of ['readinessLocal=true', 'reregisterInFlight=4']) {
+    const fake = tripped()
+    const request = parseCellFlagsRequest(values({ set, 'expected-generation': '7' }))
+    await assert.rejects(run(request, fake).result, /tripped its dead-man[\s\S]*admitMode=db,reregisterInFlight=N/)
+    assert.deepEqual(fake.state.writes, [])
+  }
+  const fake = tripped()
+  fake.state.directorAdmitMode = 'reserve'
+  const request = parseCellFlagsRequest(
+    values({ ...DIRECTOR, set: 'admitMode=db,reregisterInFlight=4', 'expected-generation': '7' })
+  )
+  assert.equal((await run(request, fake).result).written, true)
+  assert.deepEqual(fake.state.writes[0].object.flags, { admitMode: 'db', reregisterInFlight: 4 })
+})
+
+test('a migration opened during the cache wait puts Postgres back to db', async () => {
+  const fake = fakeGoogleAndCell({ refuseReservePost: { post: 2, error: 'cell_has_open_migration' } })
+  const request = parseCellFlagsRequest(values({ ...RESERVE, set: 'admitMode=reserve' }))
+  await assert.rejects(run(request, fake).result, /cell_has_open_migration/)
+  assert.deepEqual(fake.state.order, ['director:reserve', 'director:db'])
+  assert.deepEqual(fake.state.writes, [])
+})
+
+test('break glass refuses a cell that answers or that the director still hears', async () => {
+  const glass = { ...RESERVE, set: 'admitMode=default', 'expected-generation': '7', 'break-glass': `BREAK GLASS ${CELL}` }
+  const stored = { generation: '7', object: { v: 1, cellId: CELL, flags: { admitMode: 'reserve' } } }
+  const answering = fakeGoogleAndCell({ stored })
+  await assert.rejects(run(parseCellFlagsRequest(values(glass)), answering).result, /answers runtime-status/)
+  const heard = fakeGoogleAndCell({ stored, heartbeatFresh: true })
+  const inner = heard.fetchImpl
+  heard.fetchImpl = async (url, init) => {
+    if (new URL(url).pathname === '/v1/admin/runtime-status') throw new Error('connect refused')
+    return await inner(url, init)
+  }
+  await assert.rejects(run(parseCellFlagsRequest(values(glass)), heard).result, /still sees heartbeats/)
+  assert.deepEqual(heard.state.writes, [])
+  assert.deepEqual(answering.state.writes, [])
 })
 
 test('a flip back that outlasts its wait keeps Postgres on reserve and says how to finish', async () => {
@@ -426,7 +489,7 @@ test('a flip back that outlasts its wait keeps Postgres on reserve and says how 
   fake.state.directorAdmitMode = 'reserve'
   const request = parseCellFlagsRequest(values({ ...DIRECTOR, set: 'admitMode=default', 'expected-generation': '7' }))
   const { lines, result } = run(request, fake)
-  await assert.rejects(result, /after 1666667 ms[\s\S]*reports admitModeEffective=db run again with --set admitMode=db/)
+  await assert.rejects(result, /after 1666667 ms[\s\S]*Run again with --set admitMode=db[\s\S]*--set admitMode=db,reregisterInFlight=N/)
   assert.deepEqual(fake.state.order, ['file:db'])
   assert.equal(lines.find((line) => line.event === 'orca_relay_cell_reregistration_wait')?.waitMs, 1_666_667)
 })
