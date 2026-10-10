@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 import { openDelayedPostgresDatabase, type StatementDelay } from './test-fixtures/delayed-postgres-database.js'
-import { startReserveModeCell } from './test-fixtures/reserve-mode-cell.js'
+import { RESERVE_MODE_CELL_ID, startReserveModeCell } from './test-fixtures/reserve-mode-cell.js'
 
 // E-mix on PostgreSQL: a reserve-mode cell flipped back to db leases every control it admitted
 // from memory, disconnecting nobody, with the pool mostly left to DB-path work and one
@@ -28,6 +28,19 @@ describePostgres('flipping a reserve-mode cell back on PostgreSQL', () => {
   afterEach(async () => {
     for (const close of cleanup.splice(0).reverse()) await close()
     vi.restoreAllMocks()
+    // The database is shared with the other PostgreSQL suites, some of which read every cell.
+    const database = await openRelayDatabase({ databaseUrl, dataDir: tmpdir() })
+    try {
+      const tables = await database.query(
+        `SELECT table_name FROM information_schema.columns
+         WHERE table_schema = current_schema() AND column_name = 'cell_id' AND table_name LIKE 'relay_%'`
+      )
+      for (const row of tables) {
+        await database.query(`DELETE FROM ${String(row.table_name)} WHERE cell_id = ?`, [RESERVE_MODE_CELL_ID])
+      }
+    } finally {
+      await database.close()
+    }
   })
 
   async function cellOn(database: RelayDatabase, databasePoolMax = 10) {
