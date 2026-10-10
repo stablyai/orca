@@ -15,6 +15,8 @@ import { createRelayServer } from '../relay-server.js'
 // One reserve-mode cell over a real database, with desktops that complete the host proof.
 // For the flip-back tests (E-mix), on SQLite and on a latency-injected PostgreSQL.
 
+export const RESERVE_MODE_CELL_ID = 'production-gce-c3'
+
 export type ReserveModeCell = Awaited<ReturnType<typeof startReserveModeCell>>
 
 async function unusedPort(): Promise<number> {
@@ -60,7 +62,7 @@ export async function startReserveModeCell(input: {
   const issuer = `http://127.0.0.1:${jwksAddress.port}`
   const port = await unusedPort()
   const relayUrl = `http://127.0.0.1:${port}`
-  const cellId = 'production-gce-c3'
+  const cellId = RESERVE_MODE_CELL_ID
   const config = {
     port,
     publicUrl: relayUrl,
