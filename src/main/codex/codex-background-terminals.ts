@@ -25,7 +25,7 @@ export type CodexBackgroundTerminal = { threadId: string; processId: string }
 const CODEX_BACKGROUND_TERMINAL_TIMEOUT_MS = 10_000
 const MAX_LIST_PAGES = 32
 
-function boundedTimeout(timeoutMs: number | undefined): number {
+export function boundedTimeout(timeoutMs: number | undefined): number {
   return Math.min(
     timeoutMs ?? CODEX_BACKGROUND_TERMINAL_TIMEOUT_MS,
     CODEX_BACKGROUND_TERMINAL_TIMEOUT_MS

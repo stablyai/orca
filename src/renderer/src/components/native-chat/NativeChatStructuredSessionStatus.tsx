@@ -29,7 +29,8 @@ export function NativeChatStructuredSessionStatus(props: {
   stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
 }): React.JSX.Element {
   const [stopping, setStopping] = useState<StoppingBackgroundTasks | null>(null)
-  // Stops the host confirmed: each row keeps its stopping button until it leaves the strip.
+  // Stops the host confirmed, with the run each was pressed on: each row keeps its stopping button
+  // until that run leaves the strip.
   const [confirmed, setConfirmed] = useState<ConfirmedStops | null>(null)
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const activeStopping = stopping?.sessionId === props.sessionId ? stopping : null

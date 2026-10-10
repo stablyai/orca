@@ -4,15 +4,13 @@
 
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
+  boundedTimeout,
   terminateCodexBackgroundTerminals,
   type CodexBackgroundTerminal
 } from './codex-background-terminals'
 import { requireLiveCodexSession, type CodexSession } from './codex-structured-session-state'
 import { interruptCodexSubagents } from './codex-subagent-interrupts'
 import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-work-stop-targets'
-
-/** Why bounded: a Stop the app-server never answers must not hold the session's other actions. */
-const CODEX_BACKGROUND_STOP_TIMEOUT_MS = 10_000
 
 type StopTally = { stopped: number; survived: boolean }
 
@@ -29,7 +27,9 @@ export function codexBackgroundTaskStops(
 function distinctTerminals(
   terminals: readonly CodexBackgroundTerminal[]
 ): CodexBackgroundTerminal[] {
-  const byKey = new Map(terminals.map((terminal) => [JSON.stringify(terminal), terminal]))
+  const byKey = new Map(
+    terminals.map((terminal) => [JSON.stringify([terminal.threadId, terminal.processId]), terminal])
+  )
   return [...byKey.values()]
 }
 
@@ -51,10 +51,7 @@ export async function stopCodexBackgroundTasks(
   ])
   const { acquisitionGeneration } = session
   const options = {
-    timeoutMs: Math.min(
-      timeoutMs ?? CODEX_BACKGROUND_STOP_TIMEOUT_MS,
-      CODEX_BACKGROUND_STOP_TIMEOUT_MS
-    ),
+    timeoutMs: boundedTimeout(timeoutMs),
     isCurrent: () =>
       sessions.get(input.sessionId) === session &&
       !session.ended &&

@@ -278,4 +278,52 @@ describe('Codex sub-agent Stop', () => {
     await expect(codex.stopBoth()).rejects.toBe(timeout)
     expect(codex.terminated).toEqual([])
   })
+
+  it("leaves a helper's sibling and the session's own background process alone", async () => {
+    const codex = await helperAndDevServer(() => ({}))
+    codex.notify('item/started', {
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-sibling',
+        kind: 'started',
+        agentThreadId: 'thread-sibling',
+        agentPath: '/root/sibling'
+      }
+    })
+    codex.notify('turn/started', {
+      threadId: 'thread-sibling',
+      turn: { id: 'sibling-turn-1', status: 'inProgress' }
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    await expect(codex.stop([HELPER])).resolves.toEqual({ cancelled: true })
+    expect(codex.interrupts()).toEqual([{ threadId: HELPER, turnId: HELPER_TURN }])
+    expect(codex.terminated).toEqual([])
+    expect(codex.running).toEqual(['4242'])
+  })
+
+  it("does not terminate a helper's processes once its interrupt timed out", async () => {
+    const timeout = new CodexAppServerTimeoutError('codex app-server turn/interrupt timed out')
+    const codex = await helperAndDevServer(() => {
+      throw timeout
+    })
+    codex.notify('item/started', {
+      threadId: HELPER,
+      turnId: HELPER_TURN,
+      item: {
+        type: 'commandExecution',
+        id: 'helper-exec',
+        processId: '4343',
+        source: 'unifiedExecStartup',
+        command: 'sleep 90',
+        status: 'inProgress'
+      }
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+
+    await expect(codex.stop([HELPER])).rejects.toBe(timeout)
+    expect(codex.terminated).toEqual([])
+  })
 })
