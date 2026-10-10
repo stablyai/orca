@@ -74,8 +74,13 @@ export function createTerminalTabCreationActions(
             : undefined
         // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
         // Why a bare leaf id too: a host launch lays out its pane before the process it attaches to exists.
+        // Why launchAgent too: phone-created agent tabs stay unmounted on desktop until clicked;
+        // a real leaf lets the sidebar address the row immediately.
         const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup || requestedInitialLeafId
+          options?.initialPtyId ||
+          options?.pendingStartup ||
+          options?.launchAgent ||
+          requestedInitialLeafId
             ? (requestedInitialLeafId ?? createBrowserUuid())
             : undefined
         const shouldActivate = options?.activate !== false

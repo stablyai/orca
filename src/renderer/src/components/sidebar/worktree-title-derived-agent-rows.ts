@@ -15,7 +15,7 @@ import {
   resolveRuntimePaneTitleLeafIdFromSparseSlots,
   collectRuntimePaneLeafIds
 } from '@/lib/runtime-pane-title-leaf-id'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   normalizeCompatibleAgentTitleForOwner,
@@ -56,81 +56,108 @@ export function buildTitleDerivedAgentRows(args: {
   const paneForegroundAgentByPaneKey = args.paneForegroundAgentByPaneKey ?? EMPTY_PANE_FOREGROUND
 
   for (const tab of args.tabs) {
-    if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
+    const hasLivePty = tabHasLivePty(ptyIdsByTabId, tab.id)
+    // Why: phone-created agent tabs often exist in the host store before the
+    // desktop mounts a PTY or receives a hook ping. launchAgent is enough to
+    // keep them on the worktree card; a later live status replaces this row.
+    if (!hasLivePty && !tab.launchAgent) {
       continue
     }
     const layout = terminalLayoutsByTabId[tab.id]
-    const paneTitles = runtimePaneTitlesByTabId[tab.id]
-    const paneTitleEntries =
-      paneTitles && Object.keys(paneTitles).length > 0
-        ? Object.entries(paneTitles).sort(([a], [b]) => {
-            const paneIdA = Number(a)
-            const paneIdB = Number(b)
-            const isLiveA = paneIdA >= FIRST_PANE_ID
-            return isLiveA !== paneIdB >= FIRST_PANE_ID ? (isLiveA ? -1 : 1) : paneIdA - paneIdB
-          })
-        : []
+    if (hasLivePty) {
+      const paneTitles = runtimePaneTitlesByTabId[tab.id]
+      const paneTitleEntries =
+        paneTitles && Object.keys(paneTitles).length > 0
+          ? Object.entries(paneTitles).sort(([a], [b]) => {
+              const paneIdA = Number(a)
+              const paneIdB = Number(b)
+              const isLiveA = paneIdA >= FIRST_PANE_ID
+              return isLiveA !== paneIdB >= FIRST_PANE_ID ? (isLiveA ? -1 : 1) : paneIdA - paneIdB
+            })
+          : []
 
-    if (paneTitleEntries.length > 0) {
-      // Why: hoisted per tab — the leaf lists are layout-derived, not pane-derived.
-      const leafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
-      const liveSlotIds = paneTitleEntries
-        .map(([paneId]) => Number(paneId))
-        .filter((paneId) => paneId >= FIRST_PANE_ID)
-      // Why: pane ids only encode creation order while they are the dense sequence a
-      // fresh mount or replay allocates; an in-session pane close leaves them sparse.
-      const liveSlotsAreDense =
-        liveSlotIds.length === leafIds.length &&
-        liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
-      for (const [paneId, title] of paneTitleEntries) {
-        const leafId = resolveLeafIdForTitleFallback({
-          layout,
-          leafIds,
-          ptyIds: ptyIdsByTabId[tab.id] ?? [],
-          liveSlotIds,
-          liveSlotsAreDense,
-          paneId: Number(paneId),
-          title
-        })
-        if (!leafId) {
-          continue
+      if (paneTitleEntries.length > 0) {
+        // Why: hoisted per tab — the leaf lists are layout-derived, not pane-derived.
+        const leafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
+        const liveSlotIds = paneTitleEntries
+          .map(([paneId]) => Number(paneId))
+          .filter((paneId) => paneId >= FIRST_PANE_ID)
+        // Why: pane ids only encode creation order while they are the dense sequence a
+        // fresh mount or replay allocates; an in-session pane close leaves them sparse.
+        const liveSlotsAreDense =
+          liveSlotIds.length === leafIds.length &&
+          liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+        for (const [paneId, title] of paneTitleEntries) {
+          const leafId = resolveLeafIdForTitleFallback({
+            layout,
+            leafIds,
+            ptyIds: ptyIdsByTabId[tab.id] ?? [],
+            liveSlotIds,
+            liveSlotsAreDense,
+            paneId: Number(paneId),
+            title
+          })
+          if (!leafId) {
+            continue
+          }
+          const row = buildTitleDerivedAgentRow({
+            tab,
+            leafId,
+            title,
+            ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+            paneForegroundAgentByPaneKey,
+            now: args.now,
+            runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
+          })
+          if (!row || args.seenPaneKeys.has(row.paneKey)) {
+            continue
+          }
+          rows.push(row)
+          args.seenPaneKeys.add(row.paneKey)
         }
+        continue
+      }
+
+      const liveLeafId = layout?.activeLeafId ?? collectRuntimePaneLeafIds(layout?.root ?? null)[0]
+      if (liveLeafId) {
         const row = buildTitleDerivedAgentRow({
           tab,
-          leafId,
-          title,
-          ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+          leafId: liveLeafId,
+          title: tab.title,
+          ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, liveLeafId),
           paneForegroundAgentByPaneKey,
           now: args.now,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
-        if (!row || args.seenPaneKeys.has(row.paneKey)) {
+        if (row && !args.seenPaneKeys.has(row.paneKey)) {
+          rows.push(row)
+          args.seenPaneKeys.add(row.paneKey)
           continue
         }
-        rows.push(row)
-        args.seenPaneKeys.add(row.paneKey)
       }
+    }
+
+    // Why: the launchAgent fallback only exists for phone-launched tabs the
+    // desktop has not mounted a PTY for yet. A mounted tab is represented by its
+    // pane titles above; falling through here would let a stale launch identity
+    // (a hookless remote agent has no completion hook and no shell-foreground
+    // signal to clearTabLaunchAgent) pin an idle row to a plain shell forever.
+    if (hasLivePty) {
       continue
     }
 
-    const leafId = layout?.activeLeafId ?? collectRuntimePaneLeafIds(layout?.root ?? null)[0]
-    if (!leafId) {
-      continue
-    }
-    const row = buildTitleDerivedAgentRow({
+    const launchAgentRow = buildLaunchAgentFallbackRow({
       tab,
-      leafId,
-      title: tab.title,
-      ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
-      paneForegroundAgentByPaneKey,
+      layout,
+      seenPaneKeys: args.seenPaneKeys,
       now: args.now,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
-    if (!row || args.seenPaneKeys.has(row.paneKey)) {
+    if (!launchAgentRow) {
       continue
     }
-    rows.push(row)
-    args.seenPaneKeys.add(row.paneKey)
+    rows.push(launchAgentRow)
+    args.seenPaneKeys.add(launchAgentRow.paneKey)
   }
 
   return rows
@@ -238,6 +265,80 @@ function buildTitleDerivedAgentRow(args: {
     // `isExplicitAgentStatusFresh` alone; give this a real timestamp and every one of them starts
     // serving stale counts, with no test failing at the point of the change.
     startedAt: 0
+  }
+}
+
+function launchAgentFallbackLeafId(tabId: string): string {
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let index = 0; index < tabId.length; index += 1) {
+    const code = tabId.charCodeAt(index)
+    h1 = Math.imul(h1 ^ code, 0x01000193)
+    h2 = Math.imul(h2 ^ code, 0x811c9dc5)
+  }
+  const hex = [
+    (h1 >>> 0).toString(16).padStart(8, '0'),
+    (h2 >>> 0).toString(16).padStart(8, '0'),
+    ((h1 ^ h2) >>> 0).toString(16).padStart(8, '0'),
+    ((h1 + h2) >>> 0).toString(16).padStart(8, '0')
+  ].join('')
+  // Why: makePaneKey requires a UUID leaf; this is only for unmounted
+  // launchAgent tabs whose layout has not been minted yet.
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}
+
+function tabHasSeenPaneKey(seenPaneKeys: ReadonlySet<string>, tabId: string): boolean {
+  for (const paneKey of seenPaneKeys) {
+    if (parsePaneKey(paneKey)?.tabId === tabId) {
+      return true
+    }
+  }
+  return false
+}
+
+function buildLaunchAgentFallbackRow(args: {
+  tab: TerminalTab
+  layout: TerminalLayoutSnapshot | undefined
+  seenPaneKeys: ReadonlySet<string>
+  now: number
+  runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+}): DashboardAgentRow | null {
+  if (!args.tab.launchAgent || tabHasSeenPaneKey(args.seenPaneKeys, args.tab.id)) {
+    return null
+  }
+  const layoutLeafId =
+    args.layout?.activeLeafId ?? collectRuntimePaneLeafIds(args.layout?.root ?? null)[0]
+  const leafId =
+    layoutLeafId && isTerminalLeafId(layoutLeafId)
+      ? layoutLeafId
+      : launchAgentFallbackLeafId(args.tab.id)
+  const agentType =
+    resolveCompatibleAgentTypeForOwner(args.tab.launchAgent, args.tab.launchAgent) ??
+    args.tab.launchAgent
+  const paneKey = makePaneKey(args.tab.id, leafId)
+  const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
+  const rowLabel = formatAgentTypeLabel(agentType)
+  const entry: AgentStatusEntry = {
+    paneKey,
+    state: 'working',
+    prompt: rowLabel,
+    updatedAt: args.now,
+    stateStartedAt: args.tab.createdAt || args.now,
+    stateHistory: [],
+    agentType,
+    terminalTitle: args.tab.title,
+    lastAssistantMessage: 'Idle',
+    worktreeId: args.tab.worktreeId,
+    ...(orchestration ? { orchestration } : {})
+  }
+  return {
+    paneKey,
+    entry,
+    tab: args.tab,
+    agentType,
+    rowSource: 'live',
+    state: 'idle',
+    startedAt: args.tab.createdAt
   }
 }
 
