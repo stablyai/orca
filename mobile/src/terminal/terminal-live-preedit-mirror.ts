@@ -13,12 +13,43 @@ export type TerminalLiveMirrorStep = {
   readonly heldText: string
 }
 
+function isTerminalLiveConjoiningJamo(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
+    (codePoint >= 0xa960 && codePoint <= 0xa97c) ||
+    (codePoint >= 0xd7b0 && codePoint <= 0xd7c6) ||
+    (codePoint >= 0xd7cb && codePoint <= 0xd7fb)
+  )
+}
+
+function heldTrailingConjoiningJamoLength(
+  fieldCodePoints: readonly string[],
+  stableLength: number
+): number {
+  let held = 0
+  while (
+    held < fieldCodePoints.length - stableLength &&
+    isTerminalLiveConjoiningJamo(
+      fieldCodePoints[fieldCodePoints.length - 1 - held]?.codePointAt(0) ?? 0
+    )
+  ) {
+    held += 1
+  }
+  return held
+}
+
 /**
  * How much of the field the text system can still rewrite, in code points.
  *
  * Preedit is a fact about the field, never about the script — Chinese pinyin
- * preedit is plain ASCII — so the marked-text range decides and no code point is
- * ever classified. That is what makes this hold for input methods nobody tested.
+ * preedit is plain ASCII — so the marked-text range decides. That is what makes
+ * this hold for input methods nobody tested.
+ *
+ * One exception holds when nothing is composing: a trailing run of Hangul
+ * conjoining jamo. The iOS Korean 10-key keyboard types unfinished syllables as
+ * such runs (`ᄉᆞ`, one grapheme) without marked text, then replaces them. Claude
+ * Code erases a grapheme per DEL and zsh a code point, so no DEL count is right
+ * for both; holding the run until it is replaced or committed never erases it.
  *
  * `composing` is undefined only where the platform reports no range at all —
  * today React Native Android and the page on Android. The fallback holds the
@@ -32,7 +63,9 @@ function heldPreeditLength(
   composing: boolean | undefined
 ): number {
   if (composing !== undefined) {
-    return composing ? fieldCodePoints.length - stableLength : 0
+    return composing
+      ? fieldCodePoints.length - stableLength
+      : heldTrailingConjoiningJamoLength(fieldCodePoints, stableLength)
   }
   let held = 0
   while (
