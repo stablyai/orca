@@ -72,7 +72,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
-  private readonly presenceChecks = new RelayAgentPresence()
+  private readonly presenceChecks = new RelayAgentPresence(this.state)
   private retryScheduler: AgentHookResultRetryScheduler
   readonly claudeTerminalInterrupts = createRelayClaudeTerminalInterrupts(this.state, () =>
     this.relayInterruptHost()
@@ -243,7 +243,7 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
       () => this.state.lastStatusByPaneKey.get(paneKey),
       (event) => {
         if (meta) {
-          this.applyEvent(event, meta.source, meta.env, meta.version)
+          this.applyEvent(event, meta.source, meta.env, meta.version, { isReplay: event.isReplay })
         }
       }
     )
