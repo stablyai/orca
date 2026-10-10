@@ -10,9 +10,11 @@ import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../shared/worktree/id'
 import { getWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspace-worktree'
-import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
+import {
+  getWorkspaceAttachments,
+  matchesLegacyWorkspaceAttachment
+} from '../../shared/workspace-attachments'
 import { legacyWorkspaceAttachments } from '../../shared/workspace-attachment-legacy'
-import { matchesWorkspaceAttachmentIdentity } from '../../shared/workspace-attachment-normalization'
 import { getWorkspaceReferenceIdentity } from '../../shared/workspace-reference-identity'
 import {
   isPathInsideOrEqual,
@@ -47,7 +49,10 @@ export function listReferenceWorkspaces(
   const cachedByIdentity = new Map(cached.map((row) => [getWorktreeHostIdentity(row), row]))
   const reposByIdentity = new Map(
     repos.map((repo) => [
-      getWorktreeHostIdentity({ id: repo.id, hostId: getRepoExecutionHostId(repo) }),
+      getWorktreeHostIdentity({
+        id: repo.id,
+        hostId: getRepoExecutionHostId(repo)
+      }),
       repo
     ])
   )
@@ -125,11 +130,7 @@ export function listWorkspaceReferences(worktree: ReferenceWorkspace): RuntimeRe
     references: getWorkspaceAttachments(worktree).map((item) => ({
       ...item,
       key: getWorkspaceReferenceIdentity(item),
-      selected: selected.some(
-        (legacy) =>
-          getWorkspaceReferenceIdentity(item) === getWorkspaceReferenceIdentity(legacy) ||
-          matchesWorkspaceAttachmentIdentity(item, legacy)
-      )
+      selected: selected.some((legacy) => matchesLegacyWorkspaceAttachment(item, legacy))
     }))
   }
 }

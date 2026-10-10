@@ -161,12 +161,16 @@ function parseReferenceRoute(
   )
 }
 
+export function getWorkspaceReferenceIdentifier(item: WorkspaceAttachment): string | undefined {
+  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+}
+
 function externalUrl(item: WorkspaceAttachment): string | undefined {
   if (item.url) {
     return item.url
   }
   const identity = item.taskSourceContext?.providerIdentity
-  const identifier = item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+  const identifier = getWorkspaceReferenceIdentifier(item)
   if (item.provider === 'linear' && item.linearOrganizationUrlKey && identifier) {
     return `https://linear.app/${encodeURIComponent(item.linearOrganizationUrlKey)}/issue/${encodeURIComponent(identifier)}`
   }
@@ -195,7 +199,7 @@ export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): 
   if (candidate) {
     try {
       const parsed = parseWorkspaceReferenceUrl(candidate, item.provider)
-      const identifier = item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+      const identifier = getWorkspaceReferenceIdentifier(item)
       if (
         parsed.provider === item.provider &&
         parsed.type === item.type &&
@@ -224,7 +228,7 @@ export function getWorkspaceReferenceIdentity(item: WorkspaceAttachment): string
       'legacy',
       item.provider,
       item.type,
-      item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.number,
+      getWorkspaceReferenceIdentifier(item) ?? item.number,
       item.taskSourceContext ? getTaskSourceCacheScope(item.taskSourceContext) : '',
       item.repoId ?? '',
       item.linearWorkspaceId ?? '',
@@ -281,7 +285,6 @@ export function matchesWorkspaceReferenceQuery(
   }
   return (
     item.type === 'issue' &&
-    (item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier)?.toUpperCase() ===
-      query.identifier
+    getWorkspaceReferenceIdentifier(item)?.toUpperCase() === query.identifier
   )
 }

@@ -4,6 +4,7 @@ import type {
 } from '../../shared/runtime-reference-contracts'
 import type { WorkspaceAttachment } from '../../shared/worktree/types'
 import {
+  getWorkspaceReferenceIdentifier,
   getWorkspaceReferenceIdentity,
   parseWorkspaceReferenceQuery
 } from '../../shared/workspace-reference-identity'
@@ -60,9 +61,7 @@ function workspaceTarget({ flags, client, cwd }: HandlerContext, required = true
 function label(item: WorkspaceAttachment): string {
   return (
     item.url ??
-    item.identifier ??
-    item.linearIdentifier ??
-    item.jiraIdentifier ??
+    getWorkspaceReferenceIdentifier(item) ??
     `${item.provider}:${item.type}:${item.number}`
   )
 }
@@ -100,6 +99,10 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
   }
   await assertReferenceWritesSupported(client)
   const before = await callReference<RuntimeReferenceListResult>(client, 'reference.list', target)
+  const workspace = before.result.worktree
+  const workspaceSelector = workspace.identity
+    ? `identity:${workspace.identity.key}`
+    : `id:${workspace.id}`
   const stored = before.result.references.map(({ key, selected: _selected, ...item }) => ({
     item,
     // Why: --key values come from the host's `reference list`; the CLI may be a different build.
@@ -120,42 +123,30 @@ async function mutateReferences(context: HandlerContext, operation: 'add' | 'rem
   if (changes.some((change) => change.changed)) {
     // Why: storage may hold same-URL twins with different source contexts; derive from `base`
     // so the host's delta merge never sees an unrequested twin as removed.
-    let linkedItems: WorkspaceAttachment[]
-    if (operation === 'add') {
-      const seen = new Set<string>()
-      const added = input.filter((item) => {
-        const key = getWorkspaceReferenceIdentity(item)
-        if (seen.has(key) || isLinked(key)) {
-          return false
-        }
-        seen.add(key)
-        return true
-      })
-      linkedItems = [...base, ...added]
-    } else {
-      linkedItems = stored
-        .filter(({ keys }) => ![...keys].some((key) => requestedKeys.has(key)))
-        .map(({ item }) => item)
-    }
+    // parseReferenceUrls already dedupes input by identity.
+    const linkedItems =
+      operation === 'add'
+        ? [...base, ...input.filter((item) => !isLinked(getWorkspaceReferenceIdentity(item)))]
+        : stored
+            .filter(({ keys }) => ![...keys].some((key) => requestedKeys.has(key)))
+            .map(({ item }) => item)
     const updates = {
       linkedItemsBase: base,
       linkedItems,
       linkedItemsSelectionChanged: false
     }
-    const { worktree } = before.result
-    await (worktree.kind === 'folder'
+    await (workspace.kind === 'folder'
       ? client.call('folderWorkspace.update', {
-          folderWorkspaceId: worktree.id.slice('folder:'.length),
+          folderWorkspaceId: workspace.id.slice('folder:'.length),
           updates
         })
       : client.call('worktree.set', {
-          worktree: worktree.identity ? `identity:${worktree.identity.key}` : `id:${worktree.id}`,
+          worktree: workspaceSelector,
           ...updates
         }))
   }
-  const workspace = before.result.worktree
   const result = await callReference<RuntimeReferenceListResult>(client, 'reference.list', {
-    worktree: workspace.identity ? `identity:${workspace.identity.key}` : `id:${workspace.id}`
+    worktree: workspaceSelector
   })
   printResult({ ...result, result: { ...result.result, changes } }, json, () =>
     changes
