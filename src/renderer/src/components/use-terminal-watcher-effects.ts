@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { findPendingWorktreeCreationId } from '@/lib/pending-worktree-creation'
 import {
   canWatcherCoverParkedTerminalTab,
   disposeAllParkedTerminalWatchers,
@@ -201,9 +202,18 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     [activeWorktreeId]
   )
   const activeWorktreeHostAuthority = useAppStore(hostAuthoritySelector)
+  const activeWorktreeCreationPending = useAppStore(
+    (state) =>
+      findPendingWorktreeCreationId(state.pendingWorktreeCreations, activeWorktreeId) !== null
+  )
 
   useEffect(() => {
-    if (!workspaceSessionReady || !terminalStartupRestorationReady || !activeWorktreeId) {
+    if (
+      !workspaceSessionReady ||
+      !terminalStartupRestorationReady ||
+      !activeWorktreeId ||
+      activeWorktreeCreationPending
+    ) {
       return
     }
     // Why: the execution host owns terminal creation, and a host that has not answered is not a host
@@ -219,6 +229,10 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       if (
         cancelled ||
         outcome === 'blocked' ||
+        findPendingWorktreeCreationId(
+          useAppStore.getState().pendingWorktreeCreations,
+          activeWorktreeId
+        ) !== null ||
         useAppStore.getState().activeWorktreeId !== activeWorktreeId
       ) {
         return
@@ -257,6 +271,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
   }, [
     activeWorktreeId,
     activeWorktreeHostAuthority,
+    activeWorktreeCreationPending,
     createTab,
     reconcileWorktreeTabModel,
     terminalStartupRestorationReady,

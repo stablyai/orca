@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
@@ -134,6 +135,8 @@ export type WorktreeCreationRequest = {
  *  retry. */
 export type PendingWorktreeCreation = {
   creationId: string
+  /** Resolved before checkout publication so passive activation can defer its initial surface. */
+  worktreeId?: string
   phase: WorktreeCreationPhase
   status: 'creating' | 'error'
   startedAt: number
@@ -148,6 +151,23 @@ export type PendingWorktreeCreation = {
   error?: string
   provisioningLog?: string
   request: WorktreeCreationRequest
+}
+
+export function findPendingWorktreeCreationId(
+  pendingCreations: Readonly<Record<string, PendingWorktreeCreation>> | undefined,
+  worktreeId: string | null
+): string | null {
+  if (!pendingCreations || !worktreeId) {
+    return null
+  }
+  return (
+    Object.values(pendingCreations).find(
+      (entry) =>
+        entry.status === 'creating' &&
+        entry.worktreeId !== undefined &&
+        worktreeIdsEqual(entry.worktreeId, worktreeId)
+    )?.creationId ?? null
+  )
 }
 
 export function findPendingLinkedWorkItemCreationId(

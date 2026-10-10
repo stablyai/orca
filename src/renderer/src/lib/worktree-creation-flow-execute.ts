@@ -60,10 +60,10 @@ export async function executeWorktreeCreation(
     return
   }
 
+  const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
   let result: CreateWorktreeResult
   try {
     const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
-    const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
     const backendStartup =
       provisionedRoot || structuredLaunch ? undefined : resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
@@ -146,7 +146,6 @@ export async function executeWorktreeCreation(
   }
 
   const worktree = result.worktree
-  const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
   // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     if (preparedRequest.ephemeralVmRuntimeId) {
@@ -165,6 +164,12 @@ export async function executeWorktreeCreation(
   const startupOpt = structuredLaunch
     ? undefined
     : buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
+  // Why: preserve a user-opened terminal while delivering the pending agent launch.
+  const creationTerminalOptions = {
+    worktreeCreationId: creationId,
+    ...(startupOpt ? { createNewTerminalForStartup: true } : {}),
+    ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+  }
 
   // Why: only a user still watching the creation surface (or already on the new
   // workspace) is handed it; anyone who moved on (another workspace or an app
@@ -185,7 +190,7 @@ export async function executeWorktreeCreation(
         ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
         ...(startupOpt ? { startup: startupOpt } : {}),
         ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+        ...creationTerminalOptions
       })
       primaryTabId = activation === false ? null : activation.primaryTabId
     } catch (error) {
@@ -193,17 +198,16 @@ export async function executeWorktreeCreation(
       // Activation can publish the worktree before a later step throws. Do not
       // infer a primary tab from default-tab ordering; only a fresh seed may
       // return one here.
-      const stateAfterActivationFailure = useAppStore.getState()
-      const existingTabs = stateAfterActivationFailure.tabsByWorktree[worktree.id] ?? []
+      const existingTabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
       const launchAgent = startupOpt?.launchAgent ?? preparedRequest.agent
       const verifiedLaunchTabId =
         result.startupTerminal?.tabId ??
-        (launchAgent ? existingTabs.find((tab) => tab.launchAgent === launchAgent)?.id : undefined)
+        (launchAgent && existingTabs.find((tab) => tab.launchAgent === launchAgent)?.id)
       if (verifiedLaunchTabId) {
         // Startup terminal ids and stamped agent tabs are the only safe primary
         // ids when activation returned no result.
         primaryTabId = verifiedLaunchTabId
-      } else if (existingTabs.length === 0) {
+      } else if (existingTabs.length === 0 || startupOpt) {
         try {
           primaryTabId = ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
@@ -213,7 +217,7 @@ export async function executeWorktreeCreation(
             preparedRequest.issueCommand,
             result.defaultTabs,
             // Activation failed before providing its promised surface, so recovery must seed one.
-            backendSpawned ? { backendStartupTerminalSpawned: true } : undefined
+            creationTerminalOptions
           )
         } catch (recoveryError) {
           console.error(
@@ -255,7 +259,7 @@ export async function executeWorktreeCreation(
           {
             activateCreatedTabs: false,
             ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
-            ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+            ...creationTerminalOptions
           }
         )
       } catch (error) {

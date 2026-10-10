@@ -150,6 +150,47 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
   })
 
+  it.each([true, false])(
+    'keeps a blank shell and queues setup-gated Codex in a new terminal (activate=%s)',
+    (activateCreatedTabs) => {
+      let createdIndex = 1
+      const store = createMockStore({
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+        createTab: vi.fn(() => ({ id: `tab-${++createdIndex}` })),
+        reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 }))
+      })
+
+      const result = ensureWorktreeHasInitialTerminal(
+        store,
+        'wt-1',
+        { command: 'codex', launchAgent: 'codex' },
+        { runnerScriptPath: '/tmp/setup.sh', envVars: {}, waitForAgentStartup: true },
+        undefined,
+        undefined,
+        { createNewTerminalForStartup: true, activateCreatedTabs }
+      )
+
+      expect(result).toBe('tab-2')
+      expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
+        'tab-2',
+        expect.objectContaining({
+          env: expect.objectContaining({
+            [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: expect.stringContaining('exec codex')
+          })
+        })
+      )
+      expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
+        'tab-3',
+        expect.objectContaining({ command: expect.stringContaining('bash /tmp/setup.sh') })
+      )
+      expect(store.queueTabStartupCommand).toHaveBeenCalledTimes(2)
+      expect(store.queueTabStartupCommand).not.toHaveBeenCalledWith('tab-1', expect.anything())
+      if (!activateCreatedTabs) {
+        expect(store.setActiveTab).not.toHaveBeenCalled()
+      }
+    }
+  )
+
   it('gates startup behind setup completion when both are provided in new-tab mode', () => {
     setSetupScriptLaunchMode('new-tab')
     let createdIndex = 0

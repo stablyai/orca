@@ -537,7 +537,11 @@ describe('staged background worktree creation', () => {
       undefined,
       undefined,
       undefined,
-      { activateCreatedTabs: false, backendStartupTerminalSpawned: true }
+      {
+        activateCreatedTabs: false,
+        worktreeCreationId: 'creation-1',
+        backendStartupTerminalSpawned: true
+      }
     )
     expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
@@ -575,7 +579,7 @@ describe('staged background worktree creation', () => {
         undefined,
         { command: 'gh issue view 42' },
         undefined,
-        { activateCreatedTabs: false }
+        { activateCreatedTabs: false, worktreeCreationId: 'creation-1' }
       )
     )
   })

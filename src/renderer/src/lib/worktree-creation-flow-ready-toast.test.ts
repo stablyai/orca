@@ -217,6 +217,7 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
     // The host already adopted the agent tab, so activation must seed nothing beside it;
     // worktree-creation-backend-startup-focus.test.ts pins that this lands focus on that tab.
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      worktreeCreationId: 'creation-1',
       sidebarRevealBehavior: 'auto',
       agent: 'claude',
       backendStartupTerminalSpawned: true
@@ -249,6 +250,7 @@ describe('a creation that finishes after the user moved on (#9944)', () => {
     await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      worktreeCreationId: 'creation-1',
       sidebarRevealBehavior: 'auto'
     })
     expect(queueWorkspaceActivationTerminalFocus).toHaveBeenCalledWith('wt-1', {

@@ -9,9 +9,11 @@ import type {
 import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
+import type { PendingWorktreeCreation } from './pending-worktree-creation'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
+  pendingWorktreeCreations?: Record<string, PendingWorktreeCreation>
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   createTab: (
@@ -63,6 +65,8 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
 }
 
 export type InitialTerminalOptions = {
+  /** Only the creation owner may seed a plain surface before its pending entry is cleared. */
+  worktreeCreationId?: string
   activateCreatedTabs?: boolean
   backendStartupTerminalSpawned?: boolean
   /** Create a preserved fallback startup beside setup/default terminals. */

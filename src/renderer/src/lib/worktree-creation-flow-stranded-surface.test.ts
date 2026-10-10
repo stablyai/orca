@@ -174,6 +174,67 @@ beforeEach(() => {
 })
 
 describe('a throw after createWorktree succeeds no longer strands the creation surface', () => {
+  it.each(['active', 'background', 'activation-failure'] as const)(
+    '%s creation preserves Codex startup when a blank terminal already exists',
+    async (scenario) => {
+      const request = makeRequest({
+        agent: 'codex',
+        startupPlan: {
+          agent: 'codex',
+          launchCommand: 'codex',
+          expectedProcess: 'codex',
+          followupPrompt: '',
+          launchConfig: { agentArgs: '', agentEnv: {} }
+        }
+      })
+      const setup = {
+        runnerScriptPath: '/tmp/setup.sh',
+        envVars: {},
+        waitForAgentStartup: true
+      }
+      seedPendingCreation(request)
+      store.tabsByWorktree = { 'wt-1': [{ id: 'existing-shell' }] }
+      store.createWorktree.mockResolvedValue({
+        worktree: { id: 'wt-1', repoId: 'repo-1' },
+        setup
+      })
+      if (scenario === 'background') {
+        store.activeView = 'tasks'
+      }
+      if (scenario === 'activation-failure') {
+        vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+          throw new Error('reveal failed with a blank terminal already present')
+        })
+      }
+
+      await executeWorktreeCreation('creation-1', request)
+
+      if (scenario === 'active') {
+        expect(activateAndRevealWorktree).toHaveBeenCalledWith(
+          'wt-1',
+          expect.objectContaining({
+            startup: expect.objectContaining({ command: 'codex' }),
+            setup,
+            createNewTerminalForStartup: true
+          })
+        )
+      } else {
+        expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+          store,
+          'wt-1',
+          expect.objectContaining({ command: 'codex' }),
+          setup,
+          undefined,
+          undefined,
+          expect.objectContaining({ createNewTerminalForStartup: true })
+        )
+      }
+      expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+        cleanupVm: false
+      })
+    }
+  )
+
   it('activating branch: a planless agent throw recovers a terminal and completes', async () => {
     const request = makeRequest({ agent: 'claude' })
     seedPendingCreation(request)
@@ -196,7 +257,7 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       undefined,
       undefined,
       undefined,
-      undefined
+      { worktreeCreationId: 'creation-1' }
     )
     // Contained: completion still tears the surface down.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
-import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { computeWorkspaceRootAsync } from './worktree-logic'
 import type * as WorktreeLogic from './worktree-logic'
@@ -348,10 +347,18 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const result = (await handlers['worktrees:create'](null, {
+    addWorktreeMock.mockImplementationOnce(async () => {
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('createWorktree:progress', {
+        phase: 'creating',
+        creationId: 'creation-1',
+        worktreeId: 'repo-1::/workspace/improve-dashboard-2'
+      })
+    })
+    const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
-      name: 'improve-dashboard'
-    })) as CreateWorktreeResult
+      name: 'improve-dashboard',
+      creationId: 'creation-1'
+    })
 
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
