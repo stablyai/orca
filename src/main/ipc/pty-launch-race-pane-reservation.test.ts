@@ -61,6 +61,39 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 describe('launch race parity: who owns the pane, both spawn lanes', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
 
+  // Row 2: a window mount waits for a host create in progress before its own preflight
+  // (ipc/spawn-begin.ts:108-113). The existing materialization-race test does not catch its removal.
+  it('a window mount waits for a host create in progress before preparing its own launch', async () => {
+    const pane = launchRacePane('race-pending-create', '71717171-7171-4171-8171-717171717171')
+    installLaunchRaceProvider(async () => ({ id: 'pty-after-create' }))
+    let createReleased = false
+    const preparedAfterRelease: boolean[] = []
+    const prepareClaudeAuth = vi.fn(async () => {
+      preparedAfterRelease.push(createReleased)
+      return { configDir: '/tmp/claude', envPatch: {}, provenance: 'managed:test' }
+    })
+    const lanes = registerLaunchRaceLanes({
+      handlers,
+      mainWindow,
+      runtime: createLaunchRaceRuntime(),
+      prepareClaudeAuth
+    })
+    const releaseCreate = lanes.controller.claimStablePaneCreate({
+      worktreeId: pane.worktreeId,
+      connectionId: null,
+      tabId: pane.tabId,
+      leafId: pane.leafId
+    })
+
+    const mount = lanes.spawn.ipc({ ...pane.args, command: 'claude' })
+    await flushMacrotasks()
+    createReleased = true
+    releaseCreate()
+
+    await expect(mount).resolves.toMatchObject({ id: 'pty-after-create' })
+    expect(preparedAfterRelease).toEqual([true])
+  })
+
   // Row 2: IPC joins a spawn holding the pane as a reattach and checks nothing
   // (ipc/spawn-begin.ts:114-119); the runtime lane refuses a winner it cannot verify as the pane
   // owner (runtime/spawn-options.ts:252-273). Here the winner leaves no owner the runtime can see.
