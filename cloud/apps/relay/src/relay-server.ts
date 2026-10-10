@@ -45,7 +45,12 @@ import { startShadowSeatPoller } from './shadow-seat-directory.js'
 import { CellReserveClient } from './cell-reserve-client.js'
 import { googleMetadataIdentityToken, reusedIdentityToken } from './google-metadata-identity-token.js'
 import { ReserveAssignment } from './reserve-assignment.js'
-import { ReservePlacer } from './reserve-placement.js'
+import { RESERVE_CELL_FRESH_MS, ReservePlacer } from './reserve-placement.js'
+import {
+  reconcileReserveLedger,
+  RESERVE_LEDGER_RECONCILE_MS,
+  ReserveLedgerWriter
+} from './reserve-ledger-writer.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
 // A malformed percent-escape in the request target must be a client error, never a URIError
@@ -173,6 +178,11 @@ export function createRelayServer(
   // Step 5 on directors: needs the map and the rehome credential the cells verify.
   const directorId = randomUUID()
   const rehomeAudience = config.rehomeAudience
+  // Only a director that books writes rows, and only for the joins it booked.
+  const reserveLedger =
+    config.role === 'director' && shadowSeatPoller && config.reservePlacement === 'on'
+      ? new ReserveLedgerWriter(observedDatabase, { now: options.now })
+      : undefined
   const reservePlacement =
     config.role === 'director' &&
     shadowSeatPoller &&
@@ -192,6 +202,7 @@ export function createRelayServer(
             )
           }),
           readRow: async (identity) => await assignments.hostWhereabouts(identity),
+          onDemotionWinner: (winner) => reserveLedger?.enqueue({ ...winner, allowEqual: true }),
           now: options.now,
           random: options.random
         })
@@ -210,6 +221,56 @@ export function createRelayServer(
         }, 60_000)
       : null
   offWithReserveTimer?.unref()
+  if (reserveLedger && shadowSeatPoller) {
+    const directory = shadowSeatPoller.directory
+    directory.onBookedJoin = (join) => {
+      if (join.reservedBy !== directorId) return
+      reserveLedger.enqueue({
+        userId: join.userId,
+        relayHostId: join.relayHostId,
+        cellId: join.cellId,
+        epoch: join.epoch
+      })
+    }
+    reserveLedger.start()
+    const reconcile = (): void => {
+      const now = (options.now ?? Date.now)()
+      void reconcileReserveLedger({
+        writer: reserveLedger,
+        seats: () =>
+          directory
+            .cellIds()
+            .filter((cellId) => directory.admitModeOf(cellId) === 'reserve')
+            .flatMap((cellId) =>
+              directory.seatsOnCell(cellId).map(({ userId, relayHostId, seat }) => ({
+                userId,
+                relayHostId,
+                cellId,
+                epoch: seat.epoch,
+                joinedAt: seat.joinedAt
+              }))
+            ),
+        cellDoesNotSeat: (cellId, userId, relayHostId) => {
+          const state = directory.cellState(cellId)
+          return (
+            state?.status === 'live' &&
+            state.polledAt !== undefined &&
+            now - state.polledAt <= RESERVE_CELL_FRESH_MS &&
+            !directory.seatsOf(userId, relayHostId).some((seat) => seat.cellId === cellId)
+          )
+        },
+        now
+      })
+        .catch(() => console.warn('[orca-relay] reserve ledger reconcile deferred'))
+        .finally(schedule)
+    }
+    // Jittered, so five directors do not reconcile together.
+    const schedule = (): void => {
+      const random = options.random ?? Math.random
+      setTimeout(reconcile, RESERVE_LEDGER_RECONCILE_MS + random() * 60_000).unref?.()
+    }
+    schedule()
+  }
   const queuedBytes = new ProcessQueuedByteBudget()
   const sessions = new HostSessionRegistry(
     config,

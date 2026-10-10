@@ -14,6 +14,7 @@ const NEVER_REJECTS = new Map([
   ['cell-heartbeat-client.ts#send', 'one try/catch around the whole send'],
   ['cell-reserve-client.ts#send', 'one try/catch around the request; resolves every item'],
   ['cell-reserve-client.ts#demote', 'one try/catch around the request'],
+  ['reserve-ledger-writer.ts#flush', 'one try/catch around the write; retries with backoff'],
   ['control-renewal-batch.ts#flush', 'rejects the waiters, never itself'],
   ['regional-rehome-worker.ts#run', 'one try/catch around the whole poll'],
   ['relay-control-flag-channel.ts#poll', 'one catch on the whole read']
