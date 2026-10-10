@@ -583,4 +583,34 @@ describe('registerAppMenu', () => {
     expect(appearanceSubmenu.find((item) => item.label === leftLabel)?.accelerator).toBeUndefined()
     expect(appearanceSubmenu.find((item) => item.label === rightLabel)?.accelerator).toBeUndefined()
   })
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'keeps the native quit role unless the host supplies a quit handler (%s, #15537)',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const quitMenu = platform === 'darwin' ? 'Orca' : 'File'
+      const findQuit = (): Electron.MenuItemConstructorOptions | undefined =>
+        getSubmenu(getTemplate(), quitMenu).find(
+          (item) =>
+            item.role === 'quit' || item.accelerator === 'CmdOrCtrl+Q' || item.label === 'Exit'
+        )
+
+      registerAppMenu(buildMenuOptions())
+      expect(findQuit()?.role).toBe('quit')
+
+      buildFromTemplateMock.mockClear()
+      const onQuit = vi.fn()
+      registerAppMenu({ ...buildMenuOptions(), onQuit })
+      const quit = findQuit()
+      expect(quit?.role).toBeUndefined()
+      expect(quit?.label).toBe(platform === 'darwin' ? 'Quit Orca' : 'Exit')
+      expect(quit?.accelerator).toBe(platform === 'win32' ? undefined : 'CmdOrCtrl+Q')
+      // Why untyped: the handler ignores its Electron arguments.
+      const click: unknown = quit?.click
+      if (typeof click === 'function') {
+        click()
+      }
+      expect(onQuit).toHaveBeenCalledOnce()
+    }
+  )
 })

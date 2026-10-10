@@ -5,6 +5,7 @@ import { ProfileStateAccessError } from '../persistence/profile-state/profile-st
 
 export const ORCAD_EXIT_OK = 0
 export const ORCAD_EXIT_FAILED = 1
+/** systemd RestartPreventExitStatus code: a configuration fault restarting cannot fix. */
 export const ORCAD_EXIT_CONFIGURATION = 78
 
 /** Configuration faults cannot be repaired by a supervisor restart. */

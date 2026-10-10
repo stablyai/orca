@@ -1,3 +1,4 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AppState } from '../types'
 import {
@@ -228,7 +229,7 @@ export function buildTerminalTabRetirementPlans(
           environmentId: remote.environmentId?.trim() || null,
           handle: remote.handle
         })
-      } else if (ptyId.startsWith('remote:')) {
+      } else if (isRemoteRuntimePtyId(ptyId)) {
         unroutablePtyIds.push(ptyId)
       } else if (providerOwnership.kind !== 'local-or-ssh') {
         // Why: HUB-native wake hints are not paired-client PTY ids; wait for pane resolution instead of killing the same-looking local id.

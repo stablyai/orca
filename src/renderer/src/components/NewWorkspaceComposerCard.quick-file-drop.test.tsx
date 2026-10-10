@@ -22,7 +22,6 @@ vi.mock('react-i18next', async (importOriginal) => ({
 
 const prepare = vi.fn(async ({ paths }: { paths: string[] }) => ({ paths, failures: [] }))
 const stat = vi.fn(async () => ({ isDirectory: false }))
-const onFileDrop = vi.fn<Window['api']['ui']['onFileDrop']>(() => () => {})
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('api', {
@@ -31,7 +30,6 @@ beforeEach(() => {
       prepareDroppedPaths: prepare,
       stat
     },
-    ui: { onFileDrop },
     gh: {
       repoSlug: vi.fn(async () => null),
       listWorkItems: vi.fn(async () => ({ items: [], hasMore: false }))

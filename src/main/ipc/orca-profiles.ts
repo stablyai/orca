@@ -1,6 +1,7 @@
-import { app, ipcMain, type WebContents } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
+import { quitProcess } from '../startup/process-quit-request'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -149,7 +150,7 @@ function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebConte
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
     // renderer scrollback capture, PTY kill, stats flush, and daemon final
     // checkpoints must not be skipped on a profile switch.
-    app.quit()
+    quitProcess()
   }, 150)
 }
 

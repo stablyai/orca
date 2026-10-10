@@ -53,6 +53,14 @@ const realZshUsage =
   /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|program:\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
+  it('enforces process-host boundaries in the required static-analysis checks', () => {
+    const guard = workflow.jobs.preflight.steps.find((step) =>
+      step.run?.includes('pnpm run check:process-host-imports')
+    )
+    expect(guard?.if).toBe("needs.code_paths.outputs.static_analysis == 'true'")
+    expect(guard?.['continue-on-error']).toBeUndefined()
+  })
+
   it('keeps lightweight orchestration jobs on the free slim runner', () => {
     expect(workflow.jobs.code_paths['runs-on']).toBe('ubuntu-slim')
     expect(workflow.jobs.preflight['runs-on']).toBe('ubuntu-24.04-arm')
@@ -294,9 +302,14 @@ describe('PR workflow parallelism', () => {
       (step) => step.run === 'node config/scripts/smoke-managed-hook-runtime-node18.mjs'
     )
 
+    const processHostIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/smoke-process-host-node18.mjs'
+    )
+
     expect(installIndex).toBeLessThan(buildIndex)
     expect(buildIndex).toBeLessThan(node18Index)
     expect(node18Index).toBeLessThan(smokeIndex)
+    expect(node18Index).toBeLessThan(processHostIndex)
   })
 
   it('restores the pnpm store before dependency installation', () => {

@@ -24,6 +24,7 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
   // its journal epoch already name them, so no host is installed to answer. True: the read applied.
   defineMethod({
     name: 'agentSession.acknowledgeAttention',
+    permission: 'workspace',
     params: AcknowledgeAttentionParams,
     handler: (params, ctx) => {
       requireStructuredCapability(ctx)
@@ -36,6 +37,7 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
   }),
   defineStreamingMethod({
     name: 'agentSession.subscribeTurnCompletions',
+    permission: 'workspace',
     params: SubscribeTurnCompletionsParams,
     handler: async (params, ctx, emit) => {
       const host = requireHost(ctx)

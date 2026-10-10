@@ -1,7 +1,6 @@
 import {
-  LOCAL_EXECUTION_HOST_ID,
+  getConnectionExecutionHostId,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -96,8 +95,7 @@ function resolveDeclaredExecutionHost(owner: ExecutionHostOwner): ExecutionHostI
   if (owner.executionHostId?.trim()) {
     return parseExecutionHostId(owner.executionHostId)?.id ?? null
   }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  return getConnectionExecutionHostId(owner.connectionId?.trim())
 }
 
 /** Resolve persisted workspace ownership; unknown provenance is not local authority. */

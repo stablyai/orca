@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { hasNativeFileDragTypes } from '../../../../shared/native-file-drop'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/hooks/useGlobalFileDrop'
+import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import {

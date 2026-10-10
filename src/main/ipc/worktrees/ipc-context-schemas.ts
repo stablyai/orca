@@ -7,6 +7,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/nested-removal'
 import type { ListDetectedWorktreesArgs } from '../../../shared/detected-worktree-provider-contract'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
+import { WorkspaceAttachmentsSchema } from '../../../shared/workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 
@@ -38,9 +39,18 @@ export const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable(
 export function normalizeLinkedWorkItemFields<
   T extends {
     linkedWorkItem?: unknown
+    linkedItems?: unknown
+    linkedItemsBase?: unknown
+    linkedItemsSelectionChanged?: boolean
     linkedTaskSourceContext?: unknown
   }
 >(input: T): T {
+  if (
+    input.linkedItemsSelectionChanged !== undefined &&
+    typeof input.linkedItemsSelectionChanged !== 'boolean'
+  ) {
+    throw new Error('Invalid attachment selection mutation')
+  }
   const linkedWorkItem =
     input.linkedWorkItem === undefined
       ? undefined
@@ -58,6 +68,12 @@ export function normalizeLinkedWorkItemFields<
   }
   return {
     ...input,
+    ...(input.linkedItems !== undefined
+      ? { linkedItems: WorkspaceAttachmentsSchema.parse(input.linkedItems) }
+      : {}),
+    ...(input.linkedItemsBase !== undefined
+      ? { linkedItemsBase: WorkspaceAttachmentsSchema.parse(input.linkedItemsBase) }
+      : {}),
     ...(linkedWorkItem !== undefined ? { linkedWorkItem } : {}),
     ...(linkedTaskSourceContext !== undefined ? { linkedTaskSourceContext } : {})
   }

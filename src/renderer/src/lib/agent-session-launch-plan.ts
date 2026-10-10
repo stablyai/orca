@@ -17,7 +17,7 @@ import {
   type AgentLaunchRoute,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
-import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-view-mode'
+import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
 import {
   beginStructuredAgentLaunchSettlement,
   type StructuredAgentLaunchHandle,
@@ -71,8 +71,6 @@ export type AgentSessionLaunchTarget = {
   executionHostId?: ExecutionHostId
   /** The saved selection that host said create will seed. */
   seedOptions?: Readonly<Record<string, string>>
-  /** The tab group the chat opens in. */
-  groupId?: string
 }
 
 export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
@@ -121,8 +119,7 @@ function beginStructuredPlanLaunch(
       {
         ...structuredLaunchOptions(verdict),
         ...(executionHostId ? { executionHostId } : {}),
-        ...(target?.seedOptions ? { hostSeedOptions: target.seedOptions } : {}),
-        ...(target?.groupId ? { targetGroupId: target.groupId } : {})
+        ...(target?.seedOptions ? { hostSeedOptions: target.seedOptions } : {})
       },
       hooks
     )

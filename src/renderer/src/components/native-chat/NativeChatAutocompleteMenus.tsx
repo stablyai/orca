@@ -180,6 +180,12 @@ function PickerOption({
   onChoose: (item: NativeChatPickerItem) => void
 }): React.JSX.Element {
   const annotation = getPickerAnnotation(item)
+  const description =
+    item.kind === 'command' &&
+    item.name === 'clear' &&
+    item.description === 'Clear conversation context'
+      ? translate('components.native-chat.composer.clearDescription', 'Clear conversation context')
+      : item.description
   return (
     <PickerOptionButton
       id={`${listboxId}-option-${index}`}
@@ -199,8 +205,8 @@ function PickerOption({
             </span>
           ) : null}
         </span>
-        {item.description ? (
-          <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
+        {description ? (
+          <span className="block truncate text-xs text-muted-foreground">{description}</span>
         ) : null}
         {annotation ? (
           <span className="block truncate text-[11px] text-muted-foreground">{annotation}</span>

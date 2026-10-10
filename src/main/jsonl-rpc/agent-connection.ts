@@ -1,4 +1,5 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { spawnProcess } from '@orca/process-host'
 import {
   spawnManagedProviderProcess,
   type ManagedProviderProcess,
@@ -17,6 +18,8 @@ import { resolveJsonlRpcPeerOptions, type JsonlRpcPeerOptions } from './peer-lim
 export type JsonlRpcAgentConnectionOptions = JsonlRpcPeerHandlers & {
   peer?: JsonlRpcPeerOptions
   onExit?: (error: Error, context: { expected: boolean; exit: ProviderProcessExit }) => void
+  /** Any stdout or stderr chunk from the child. */
+  onOutput?: () => void
 }
 
 /** The owning runtime keeps process exit evidence separate from transport closure. */
@@ -30,12 +33,13 @@ export class JsonlRpcAgentConnection {
   constructor(
     launch: ProviderProcessLaunch,
     private readonly options: JsonlRpcAgentConnectionOptions = {},
-    spawnImpl: typeof spawnProcess = spawnProcess
+    spawnImpl: PipedProcessSpawner = spawnProcess
   ) {
     const peerOptions = resolveJsonlRpcPeerOptions(options.peer)
     this.managed = spawnManagedProviderProcess(launch, {
       spawnImpl,
-      site: 'jsonl-rpc-agent-teardown'
+      site: 'jsonl-rpc-agent-teardown',
+      ...(options.onOutput ? { onOutput: options.onOutput } : {})
     })
     const managed = this.managed
     this.peer = new JsonlRpcPeer(

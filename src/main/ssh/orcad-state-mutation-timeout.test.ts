@@ -158,6 +158,13 @@ describe('a state mutation that outlives the client’s wait', () => {
     await deploy().catch(() => undefined)
     host.crashAt = null
     expect(host.alive.has(NEW)).toBe(true)
+    // An unhealthy candidate, so recovery undoes the activation instead of committing it.
+    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+      const answer = await exec(command)
+      return command.includes(`orcad-${NEW}/`)
+        ? answer.replace('"state":"live"', '"state":"absent"')
+        : answer
+    })
     slow = 'restore'
     const first = await recoverInterruptedOrcadActivation({ ...slot, acceptChangedState: true })
     expect(first).toMatchObject({ outcome: 'refused', verdict: 'unverifiable' })

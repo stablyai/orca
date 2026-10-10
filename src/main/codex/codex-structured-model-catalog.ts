@@ -82,7 +82,7 @@ function modelOption(value: unknown): ParsedCodexModelOption | null {
 }
 
 export type CodexSessionOptionCatalog = {
-  result: AgentSessionOptionsResult
+  result: AgentSessionOptionsResult & { current: { model: string } }
   fastModeTierByModel: Map<string, string>
 }
 

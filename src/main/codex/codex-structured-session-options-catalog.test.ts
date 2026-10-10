@@ -11,10 +11,12 @@ import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSession } from './codex-structured-session-state'
 import {
+  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
   AGENT_MODEL_CATALOG_FRESH_MS,
   AgentModelCatalogStore,
   type AgentModelCatalogProbe
 } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 
@@ -70,20 +72,63 @@ function storeSession(
 }
 
 function seedEntry(store: AgentModelCatalogStore, ...ids: string[]): void {
-  store.recordSuccess(FINGERPRINT, 'codex', {
-    models: ids.map((id, index) => ({
-      id,
-      label: id.toUpperCase(),
-      isDefault: index === 0,
-      efforts: [{ value: 'high', label: 'High' }],
-      defaultEffort: 'high'
-    })),
-    fastModeTierByModel: new Map(),
-    origin: 'live-session'
-  })
+  store.recordSuccess(
+    FINGERPRINT,
+    'codex',
+    {
+      models: ids.map((id, index) => ({
+        id,
+        label: id.toUpperCase(),
+        isDefault: index === 0,
+        efforts: [{ value: 'high', label: 'High' }],
+        defaultEffort: 'high'
+      })),
+      fastModeTierByModel: new Map(),
+      origin: 'live-session'
+    },
+    'discovery'
+  )
 }
 
 describe('Codex session options through the host catalog store', () => {
+  it("keeps the probe's signed-out verdict when the chat's own picker lists", async () => {
+    const store = new AgentModelCatalogStore({ now: () => 1000 })
+    const signedOut: AgentModelCatalogProbe = async () => {
+      throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn', account: 'system' })
+    }
+    await store.refresh(FINGERPRINT, 'codex', signedOut, () =>
+      signedOut({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const result = await readLiveCodexSessionOptions(storeSession(request, store), undefined)
+    expect(result.models.map((model) => model.id)).toEqual(['gpt-live'])
+    expect(store.failure(FINGERPRINT)?.unavailable).toEqual({
+      reason: 'notSignedIn',
+      account: 'system'
+    })
+  })
+
+  it('never re-lists for an aged signed-out verdict beside a fresh entry', async () => {
+    let at = 1_000
+    const store = new AgentModelCatalogStore({ now: () => at })
+    seedEntry(store, 'gpt-live')
+    const signedOut: AgentModelCatalogProbe = async () => {
+      throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn', account: 'system' })
+    }
+    await store.refresh(FINGERPRINT, 'codex', signedOut, () =>
+      signedOut({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
+    at += AGENT_MODEL_CATALOG_FAILURE_TTL_MS
+    const request = vi.fn(async () => listAnswer('gpt-live'))
+    const session = storeSession(request, store)
+    // Only a probe re-derives the verdict, so the chat's own listing would repeat on every read.
+    await readLiveCodexSessionOptions(session, undefined)
+    await readLiveCodexSessionOptions(session, undefined)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(modelListCalls(request)).toBe(0)
+    expect(store.probeDue(FINGERPRINT)).toBe(true)
+  })
+
   it('lists once at the first read and serves every later read from the store', async () => {
     const store = new AgentModelCatalogStore()
     const request = vi.fn(async () => listAnswer('gpt-live', 'gpt-next'))
@@ -108,7 +153,9 @@ describe('Codex session options through the host catalog store', () => {
     const store = new AgentModelCatalogStore()
     // Opening the chat's picker kicked the host probe for this account; its Codex never answers.
     const hungProbe: AgentModelCatalogProbe = () => new Promise<never>(() => {})
-    void store.refresh(FINGERPRINT, 'codex', hungProbe, () => hungProbe('/homes/a'))
+    void store.refresh(FINGERPRINT, 'codex', hungProbe, () =>
+      hungProbe({ variable: 'CODEX_HOME', path: '/homes/a' })
+    )
     const request = vi.fn(async () => listAnswer('gpt-live'))
     const session = storeSession(request, store)
     // The acquire-time restore read: joining the probe would fail the chat at the probe's deadline.

@@ -1,16 +1,10 @@
-const authHeaderWords = 'authorization|x-api-key|api-key|bearer'
-const posixAuthHeaderPattern = authHeaderWords
-  .split('|')
-  .map((word) => `*${word.replace(/[a-z]/g, (letter) => `[${letter}${letter.toUpperCase()}]`)}*`)
-  .join('|')
-
 /**
  * `claude` re-reads the which-account file on every launch, so a switch reaches open terminals
  * (superset's wrapper rule). Defined only in a pane Orca routed (pointer env set) where `claude` is
  * a real executable. A missing or empty file is System default, which restores the user's own value
  * Orca's replaced; a CLAUDE_CONFIG_DIR the user set, as opposed to Orca's twin-marked value, wins.
  * Prints nothing: an account folder with no login is created, and Claude's own first run signs in
- * there. A pointer that names no absolute folder (never written by Orca) runs nothing, since any
+ * there. The shell's Anthropic auth passes through untouched, as on System default. A pointer that names no absolute folder (never written by Orca) runs nothing, since any
  * fallback would be another account.
  */
 export function getPosixClaudeShellFunction(): string {
@@ -34,7 +28,7 @@ if [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" && -n "\${__orca_claude_binary:-}" 
     case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
     # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
     [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
-    ( unset ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN CLAUDE_CODE_OAUTH_TOKEN AWS_BEARER_TOKEN_BEDROCK; case "\${ANTHROPIC_CUSTOM_HEADERS:-}" in ${posixAuthHeaderPattern}) unset ANTHROPIC_CUSTOM_HEADERS ;; esac; export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
   }
 fi
 unset __orca_claude_binary
@@ -66,11 +60,7 @@ if test -n "$ORCA_CLAUDE_PROFILE_POINTER"; and test "$__orca_claude_type" = file
       return 1
     end
     test -d "$profile"; or mkdir -p -m 700 -- "$profile" 2>/dev/null
-    set -l headers
-    if string match -irq '${authHeaderWords}' -- "$ANTHROPIC_CUSTOM_HEADERS"
-      set headers -u ANTHROPIC_CUSTOM_HEADERS
-    end
-    env $headers -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u CLAUDE_CODE_OAUTH_TOKEN -u AWS_BEARER_TOKEN_BEDROCK CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
+    env CLAUDE_CONFIG_DIR="$profile" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$profile" claude $argv
   end
 end
 set -e __orca_claude_type
@@ -84,7 +74,7 @@ $orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-O
 if ($env:ORCA_CLAUDE_PROFILE_POINTER -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
 function Global:claude {
-    $names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CODE_OAUTH_TOKEN', 'AWS_BEARER_TOKEN_BEDROCK', 'ANTHROPIC_CUSTOM_HEADERS')
+    $names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR')
     $saved = @{}
     foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     try {
@@ -103,9 +93,6 @@ function Global:claude {
             return
         } else {
             if (-not [IO.Directory]::Exists($orcaClaudeHome)) { $null = New-Item -ItemType Directory -Path $orcaClaudeHome -Force -ErrorAction SilentlyContinue }
-            foreach ($name in $names) {
-                if ($name -ne 'ANTHROPIC_CUSTOM_HEADERS' -or $env:ANTHROPIC_CUSTOM_HEADERS -match '${authHeaderWords}') { Remove-Item -LiteralPath "Env:$name" -ErrorAction SilentlyContinue }
-            }
             $env:CLAUDE_CONFIG_DIR = $orcaClaudeHome
             $env:ORCA_CLAUDE_INJECTED_CONFIG_DIR = $orcaClaudeHome
         }

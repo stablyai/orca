@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session-provider-handle'
@@ -117,6 +118,26 @@ describe('Pi host launch resolution', () => {
     })
   })
 
+  it('starts a fresh session after clear without reading the previous file', async () => {
+    const h = await setup()
+    const old = join(root, 'old-malformed.jsonl')
+    await writeFile(old, 'not a Pi session header')
+    vi.spyOn(h.store, 'getRecord').mockReturnValue({
+      ...h.record,
+      providerHandleChain: [],
+      providerContextBoundary: { operationId: 'clear', afterFence: 2, clearedAt: 100 }
+    })
+    const launch = await h.resolver({ ...identity, providerHandle: h.prior(old).handle })
+    expect(launch.previous).toBeNull()
+    expect(launch.sessionFile).toBeUndefined()
+    expect(launch.forkFile).toBeUndefined()
+    expect(launch.replacement).toBeUndefined()
+    expect(buildPiRpcLaunch(launch).args).toEqual(['--mode', 'rpc'])
+    expect(piRpcProviderLink(launch, join(root, 'fresh.jsonl'), 3, 'fresh', 101).origin).toBe(
+      'created'
+    )
+  })
+
   it('spawns the binary the Command setting names, and refuses one that is not runnable', async () => {
     const h = await setup()
     h.settings.agentCmdOverrides = { pi: `"${process.execPath}"` }
@@ -223,5 +244,65 @@ describe('Pi host launch resolution', () => {
     })
     await expect(h.resolver(identity)).rejects.toThrow('account home')
     expect(h.resolveCommand).not.toHaveBeenCalled()
+  })
+})
+
+describe('Pi launch folder of a floating chat', () => {
+  async function floatingSetup(launchDirectory?: string) {
+    const h = await setup()
+    const moved = join(root, 'moved-setting')
+    await mkdir(moved)
+    const floating = {
+      ...h.record,
+      location: { ...h.record.location, workspaceId: FLOATING_TERMINAL_WORKTREE_ID },
+      ...(launchDirectory ? { launchDirectory } : {})
+    }
+    vi.spyOn(h.store, 'getRecord').mockReturnValue(floating)
+    const pinLaunchDirectory = vi.spyOn(h.store, 'pinLaunchDirectory').mockResolvedValue(floating)
+    const resolveWorkspacePath = vi.fn(async () => moved)
+    const resolver = createPiRpcLaunchResolver({
+      store: h.store,
+      resolveWorkspacePath,
+      resolveEnvironment: async () => ({ PATH: '/host/bin', HOME: '/host/home' }),
+      resolveCommand: () => '/host/bin/pi',
+      probeVersion
+    })
+    return { ...h, floating, moved, resolver, resolveWorkspacePath, pinLaunchDirectory }
+  }
+
+  it('resumes in the pinned folder after the floating setting moved, without forking', async () => {
+    const h = await floatingSetup(join(root, 'workspace'))
+    const file = join(root, 'pinned.jsonl')
+    await writeFile(file, `${JSON.stringify({ type: 'session', cwd: h.workspace })}\n`)
+    vi.spyOn(h.store, 'getRecord').mockReturnValue({
+      ...h.floating,
+      providerHandleChain: [h.prior(file)]
+    })
+    const launch = await h.resolver(identity)
+    expect(launch.cwd).toBe(h.workspace)
+    expect(launch.sessionFile).toBe(file)
+    expect(launch.forkFile).toBeUndefined()
+    expect(h.resolveWorkspacePath).not.toHaveBeenCalled()
+  })
+
+  it('refuses with the folder-missing reason when the pinned folder is gone', async () => {
+    const h = await floatingSetup(join(root, 'gone'))
+    await expect(h.resolver(identity)).rejects.toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchFolderMissing'
+    })
+    expect(probeVersion).not.toHaveBeenCalled()
+  })
+
+  it('pins an unpinned floating record to the folder its first launch runs in', async () => {
+    const h = await floatingSetup()
+    await expect(h.resolver(identity)).resolves.toMatchObject({ cwd: h.moved })
+    expect(h.pinLaunchDirectory).toHaveBeenCalledExactlyOnceWith(identity.sessionId, h.moved)
+  })
+
+  it('keeps resolving a folder chat by its workspace, ignoring any recorded folder', async () => {
+    const h = await setup()
+    vi.spyOn(h.store, 'getRecord').mockReturnValue({ ...h.record, launchDirectory: '/elsewhere' })
+    await expect(h.resolver(identity)).resolves.toMatchObject({ cwd: h.workspace })
   })
 })

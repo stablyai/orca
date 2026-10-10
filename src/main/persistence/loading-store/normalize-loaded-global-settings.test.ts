@@ -45,6 +45,30 @@ describe('retired managed servers experiment', () => {
   })
 })
 
+describe('retired chat default selectors', () => {
+  it('keeps Chat UI on while dropping both older keys from a saved profile', () => {
+    const normalized = normalizeLegacyProfile({
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: false,
+      openAgentTabsInChatByDefault: true
+    })
+    expect(normalized.experimentalNativeChat).toBe(true)
+    expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
+    expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
+  })
+
+  it('turns Chat UI off when new tabs opened in the terminal, dropping both older keys', () => {
+    const normalized = normalizeLegacyProfile({
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: false,
+      openAgentTabsInChatByDefault: false
+    })
+    expect(normalized.experimentalNativeChat).toBe(false)
+    expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
+    expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
+  })
+})
+
 describe('structured chat shell environment settings', () => {
   it('keeps a valid saved list and an explicit opt-out', () => {
     const normalized = normalizeLegacyProfile({

@@ -33,7 +33,7 @@ function clientFor(
   )
   const client = new ProfileStateWriteWorkerClient(
     { databasePath: join(root, 'unused.db'), profileId: 'protocol-test', revision: 1 },
-    { workerPath, timeoutMs: 1000, onFailure }
+    { workerPath, slowWarningMs: 50, onFailure }
   )
   clients.push(client)
   return client
@@ -88,20 +88,26 @@ describe('writer protocol refuses uncertain acknowledgements', () => {
     })
   })
 
-  it('faults an unanswered request and rejects later work without retry', async () => {
+  it('keeps an unanswered request pending past the slow warning without faulting', async () => {
     const notify = vi.fn()
     const client = clientFor('', undefined, notify)
     await client.ready
-    await expect(
-      client.writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-    ).rejects.toMatchObject({ code: 'profile-state-writer-timeout', outcome: 'indeterminate' })
-    await expect(client.assertCurrentRevision()).rejects.toMatchObject({
-      code: 'profile-state-writer-timeout'
-    })
-    await client.close()
-    expect(notify).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ code: 'profile-state-writer-timeout' })
+    let settled = false
+    const write = client
+      .writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
+      .finally(() => (settled = true))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(settled).toBe(false)
+    expect(notify).not.toHaveBeenCalled()
+    expect(() => client.assertWritable()).toThrow(
+      expect.objectContaining({ code: 'profile-state-writer-busy' })
     )
+    const rejected = expect(write).rejects.toMatchObject({
+      code: 'profile-state-writer-aborted',
+      outcome: 'indeterminate'
+    })
+    await client.abort()
+    await rejected
   })
 
   it('reports an idle writer exit even without a subsequent save', async () => {

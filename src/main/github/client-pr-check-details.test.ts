@@ -50,7 +50,8 @@ vi.mock('./rate-limit', () => ({
   spendsSharedGitHubComQuota: vi.fn(() => true)
 }))
 
-import { getPRCheckDetails, _resetOwnerRepoCache } from './client'
+import { getPRCheckDetails } from './client/check/get-pr-check-details'
+import { _resetOwnerRepoCache } from './gh-utils'
 
 describe('getPRCheckDetails', () => {
   beforeEach(() => {

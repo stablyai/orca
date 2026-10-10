@@ -139,8 +139,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       git: { discoverCommitMessageModels: vi.fn().mockResolvedValue({ success: false }) },
-      pty: { getMainBufferSnapshot: vi.fn().mockResolvedValue(null) },
-      ui: { onFileDrop: () => vi.fn() }
+      pty: { getMainBufferSnapshot: vi.fn().mockResolvedValue(null) }
     }
   })
 })

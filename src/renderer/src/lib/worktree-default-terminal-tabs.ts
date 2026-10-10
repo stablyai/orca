@@ -3,19 +3,12 @@ import type {
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
-import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
-import { getConnectionId } from '@/lib/connection-context'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,
   WorktreeActivationStore
 } from '@/lib/worktree-activation-store-contract'
-import {
-  draftViewModeProps,
-  resolveStartupLaunchDraftText,
-  type WorktreeStartupPayload
-} from '@/lib/worktree-startup-payload'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import {
   queueSetupAndIssueCommands,
   type IssueCommandLaunch
@@ -51,20 +44,7 @@ export function applyDefaultTerminalTabs(
     const tab = store.createTab(worktreeId, undefined, undefined, {
       pendingActivationSpawn: true,
       recordInteraction: false,
-      ...(launchAgent
-        ? {
-            launchAgent,
-            ...initialAgentTabViewModeProps(store.settings ?? null, {
-              agent: launchAgent,
-              ...draftViewModeProps(
-                isStartupTab ? resolveStartupLaunchDraftText(startup) : undefined
-              ),
-              nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                getConnectionId(worktreeId)
-              )
-            })
-          }
-        : {}),
+      ...(launchAgent ? { launchAgent } : {}),
       ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
     })
     if (index === 0) {

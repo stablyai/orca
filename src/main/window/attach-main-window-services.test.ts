@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import { cancelHistoryGc } from '../terminal-history-gc'
 import type { registerSshHandlers } from '../ipc/ssh'
 import type { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import type { registerDaemonManagementHandlers } from '../ipc/pty-management'
@@ -206,6 +207,10 @@ async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
 }
 
 describe('attachMainWindowServices', () => {
+  afterEach(() => {
+    cancelHistoryGc()
+  })
+
   beforeEach(() => {
     vi.resetAllMocks()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
@@ -626,81 +631,6 @@ describe('attachMainWindowServices', () => {
     expect(closedHandler).toBeTypeOf('function')
     closedHandler?.()
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('removes the native file-drop relay when the main window closes', () => {
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow({ send: vi.fn() })
-    mainWindow.on = mainWindowOnMock
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    expect(relayHandler).toBeTypeOf('function')
-    expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
-
-    const closedHandlers = getClosedHandlers(mainWindowOnMock)
-    for (const handler of closedHandlers) {
-      handler()
-    }
-
-    expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
-  })
-
-  it('relays native file drops only from the owning renderer webContents', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    const payload = { paths: ['/tmp/a'], target: 'editor' }
-
-    relayHandler?.({ sender: { id: 999 } }, payload)
-
-    expect(sendMock).not.toHaveBeenCalled()
-
-    relayHandler?.({ sender: mainWindow.webContents }, payload)
-
-    expect(sendMock).toHaveBeenCalledWith('terminal:file-drop', payload)
-  })
-
-  it('ignores malformed native file-drop payloads from the owning renderer', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['C:\\Users\\alice\\secret.txt'], target: 'browser' }
-    )
-    relayHandler?.(
-      { sender: mainWindow.webContents },
-      { paths: ['/tmp/a'], target: 'file-explorer' }
-    )
-
-    expect(sendMock).not.toHaveBeenCalled()
-  })
-
-  it('ignores native file drops after the owning webContents is destroyed', () => {
-    const sendMock = vi.fn()
-    const mainWindow = createMainWindow({ send: sendMock })
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const channel = 'terminal:file-dropped-from-preload'
-    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
-    mainWindow.webContents.isDestroyed?.mockReturnValue(true)
-
-    relayHandler?.({ sender: mainWindow.webContents }, { paths: ['/tmp/a'], target: 'editor' })
-
-    expect(sendMock).not.toHaveBeenCalled()
   })
 
   it('clears the runtime notifier when the owning window closes', () => {

@@ -20,18 +20,21 @@ const ProbeParams = z.object({ id: z.string(), count: z.number().optional() })
 
 const probe = defineMethod({
   name: 'test.typedProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: (params) => ({ id: params.id, count: params.count ?? 0 })
 })
 
 const schemalessProbe = defineMethod({
   name: 'test.schemalessProbe',
+  permission: 'workspace',
   params: null,
   handler: () => ['a', 'b']
 })
 
 const streamingProbe = defineStreamingMethod({
   name: 'test.streamingProbe',
+  permission: 'workspace',
   params: ProbeParams,
   handler: async (params, _ctx, emit) => {
     emit(params.id)

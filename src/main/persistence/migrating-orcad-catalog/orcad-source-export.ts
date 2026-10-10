@@ -107,12 +107,3 @@ export class OrcadSourceExportPersistence {
     })
   }
 }
-
-export function installOrcadSourceExportPersistenceContext(
-  target: OrcadSourceExportPersistence,
-  source: OrcadSourceExportPersistence
-): void {
-  Object.defineProperty(target, orcadSourceExportContext, {
-    value: source[orcadSourceExportContext]
-  })
-}

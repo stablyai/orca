@@ -52,8 +52,10 @@ import {
 import {
   disposeTerminalImeBoundaryProbe,
   installTerminalImeBoundaryProbe,
-  readTerminalImeBoundaryTrace
+  readTerminalImeBoundaryTrace,
+  type TerminalImeBoundaryTrace
 } from './terminal-ime-boundary-probe'
+import { readImeDomDeliveredText } from './terminal-ime-dom-delivery'
 import {
   createTerminalImeByteReader,
   removeTerminalImeByteReader,
@@ -63,6 +65,9 @@ import {
 
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
 const REPETITIONS = Number(process.env.ORCA_E2E_DIGIT_REPETITIONS ?? 3)
+// Why: nested mutter + IBus occasionally discards a preedit or a keydown before Chromium sees it;
+// those attempts are retried, bounded so a broken IME session still fails.
+const MAX_ATTEMPTS = REPETITIONS * 2
 const INJECTOR = process.env.ORCA_E2E_IME_INJECTOR ?? 'xdotool'
 const WAYLAND_INJECT = process.env.ORCA_E2E_WAYLAND_INJECT ?? '/tmp/ime15299/wayland-inject.py'
 // The nested compositor is one X11 window; keys land on it and mutter routes
@@ -209,8 +214,13 @@ test.describe('Hangul terminating digit @headful', () => {
       await waitForActiveTerminalManager(page, 30_000)
 
       const ptyId = await waitForActivePanePtyId(page)
-      const reader = createTerminalImeByteReader(testRepoPath, REPETITIONS)
+      const reader = createTerminalImeByteReader(testRepoPath, MAX_ATTEMPTS)
       let receivedBytes: string[] = []
+      const attempts: {
+        line: string | null
+        domDelivered: string
+        trace: TerminalImeBoundaryTrace
+      }[] = []
       const expectedHex = Buffer.from(`${EXPECTED_LINE}\n`).toString('hex')
       try {
         if (INJECTOR === 'nested') {
@@ -224,21 +234,42 @@ test.describe('Hangul terminating digit @headful', () => {
         if (INJECTOR === 'nested') {
           captureNestedScreen('nested-before-typing')
         }
-        await installTerminalImeBoundaryProbe(page)
-
-        for (let index = 0; index < REPETITIONS; index += 1) {
+        const expectedLine = `${EXPECTED_LINE}\n`
+        let accepted = 0
+        let trace: TerminalImeBoundaryTrace = { dom: [], onData: [] }
+        for (let attempt = 0; attempt < MAX_ATTEMPTS && accepted < REPETITIONS; attempt += 1) {
+          await installTerminalImeBoundaryProbe(page)
           injectKeys(KEY_TOKENS)
-          await page.waitForTimeout(500)
+          const lineIndex = receivedBytes.length
+          receivedBytes = await waitForTerminalImeBytes(page, reader, 10_000, lineIndex + 1).catch(
+            () => receivedBytes
+          )
+          const attemptTrace = await readTerminalImeBoundaryTrace(page)
+          const domDelivered = readImeDomDeliveredText(attemptTrace)
+          const lineHex = receivedBytes[lineIndex]
+          const line = lineHex === undefined ? null : Buffer.from(lineHex, 'hex').toString('utf8')
+          attempts.push({ line, domDelivered, trace: attemptTrace })
+          if (line === expectedLine) {
+            accepted += 1
+            trace = attemptTrace
+            continue
+          }
+          // Why: whenever the page received every key the pty line must match; only input the
+          // IME/compositor itself never delivered (a discarded preedit, a lost keydown) is retried.
+          expect(
+            domDelivered,
+            `Orca lost input the page received: ${JSON.stringify(line)}`
+          ).not.toBe(expectedLine)
+          if (line === null) {
+            // Why: Ctrl-U drops the partial line a lost Enter leaves in the reader's tty buffer.
+            await sendToTerminal(page, ptyId, '\x15')
+          }
         }
         if (INJECTOR === 'nested') {
           captureNestedScreen('nested-after-typing')
         }
-
-        receivedBytes = await waitForTerminalImeBytes(page, reader, 20_000)
-        expect(receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8'))).toEqual(
-          Array.from({ length: REPETITIONS }, () => `${EXPECTED_LINE}\n`)
-        )
-        const trace = await readTerminalImeBoundaryTrace(page)
+        const summary = attempts.map(({ line, domDelivered }) => ({ line, domDelivered }))
+        expect(accepted, `attempts: ${JSON.stringify(summary)}`).toBe(REPETITIONS)
         appendImeEngagementReceipt(testInfo.title, trace)
         completed = true
       } finally {
@@ -246,7 +277,8 @@ test.describe('Hangul terminating digit @headful', () => {
           expectedHex,
           expectedLine: EXPECTED_LINE,
           receivedBytes,
-          decoded: receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8'))
+          decoded: receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8')),
+          attempts
         }).catch(() => undefined)
         await disposeTerminalImeBoundaryProbe(page).catch(() => undefined)
         await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)

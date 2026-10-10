@@ -267,7 +267,7 @@ describe('OrcaRuntimeService', () => {
         Object.assign(repo, updates)
         return { ...repo } as never
       },
-      removeProject: (id: string) => {
+      removeProjectForHost: (id: string) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index !== -1) {
           repos.splice(index, 1)
@@ -309,7 +309,7 @@ describe('OrcaRuntimeService', () => {
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
-      removeProject: (id: string) => {
+      removeProjectForHost: (id: string) => {
         const index = repos.findIndex((repo) => repo.id === id)
         if (index !== -1) {
           repos.splice(index, 1)

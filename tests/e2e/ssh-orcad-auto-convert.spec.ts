@@ -14,7 +14,7 @@
  * Host: `ORCA_E2E_ORCAD_CONVERT_HOST=docker` (Linux fixture) or a Windows host-cell descriptor.
  * Template: `ORCA_E2E_ORCAD_CONVERT_TEMPLATE`, built for that host's target.
  */
-import { cpSync, mkdirSync, rmSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
@@ -46,6 +46,12 @@ import {
   startOrcadConvertHost,
   type OrcadConvertHost
 } from './helpers/orcad-convert-host'
+import {
+  callEnvironment,
+  createPairedHostTerminal,
+  openPairedClientTab
+} from './helpers/paired-host-terminal'
+import { expectTerminalAccessibilityText } from './helpers/terminal-accessibility-tree'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 
 const HOST = process.env[ORCAD_CONVERT_HOST_ENV]
@@ -213,8 +219,9 @@ test('a relay host converts to managed orcad on connect and keeps its source', a
   })
 })
 
-test('a relay-era profile converts its SSH host on the first connect after upgrading', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
-{}, testInfo) => {
+test('a relay-era profile converts its SSH host on the first connect after upgrading', async ({
+  testRepoPath
+}, testInfo) => {
   test.setTimeout(20 * 60_000)
   const host = startHost(testInfo)
   const session = createRestartSession(testInfo, {
@@ -226,6 +233,7 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
     const first = await session.launch()
     app = first.app
     await waitForSessionReady(first.page)
+    await first.page.evaluate((repoPath) => window.api.repos.add({ path: repoPath }), testRepoPath)
     await session.close(app)
     app = null
     const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
@@ -244,6 +252,57 @@ test('a relay-era profile converts its SSH host on the first connect after upgra
     app = upgraded.app
     await waitForSessionReady(upgraded.page)
     await convertAndRetain(upgraded.page, session.userDataDir, seeded)
+    const environment = (
+      await upgraded.page.evaluate(() => window.api.runtimeEnvironments.list())
+    ).find((entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId)
+    if (!environment) {
+      throw new Error('Converted host is missing from the environment catalog')
+    }
+    const hostId = `runtime:${environment.id}` as const
+    await upgraded.page.evaluate((hostId) => {
+      const state = window.__store!.getState()
+      state.setGroupBy('none')
+      window.__store!.setState({ visibleWorkspaceHostIds: ['local', hostId] })
+    }, hostId)
+    const folder = upgraded.page.getByText('orcad upgrade folder', { exact: true })
+    await expect(folder).toBeVisible()
+    await upgraded.page.screenshot({ path: testInfo.outputPath('managed-folder-host-section.png') })
+    const sectionHeader = folder.locator('xpath=preceding::*[@data-host-header-drag-id][1]')
+    await expect(sectionHeader).toHaveAttribute('data-host-header-drag-id', hostId)
+    const managedHeader = upgraded.page.locator(`[data-host-header-drag-id="${hostId}"]`)
+    await managedHeader.click()
+    await expect(folder).toBeHidden()
+    await managedHeader.click()
+    await expect(folder).toBeVisible()
+    if (!host.exec) {
+      return
+    }
+    await upgraded.page.evaluate(
+      ({ worktreeId, environmentId }) => {
+        window.__store!.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
+      },
+      { worktreeId: seeded.worktreeId, environmentId: environment.id }
+    )
+    const terminal = await createPairedHostTerminal(
+      upgraded.page,
+      environment.id,
+      seeded.worktreeId,
+      'bash'
+    )
+    await openPairedClientTab(upgraded.page, seeded.worktreeId, terminal.webTabId)
+    await callEnvironment(upgraded.page, environment.id, 'terminal.send', {
+      terminal: terminal.terminal,
+      text: "orca status --json > /tmp/orca-cli-status.json && orca worktree ps --json > /tmp/orca-cli-workers.json && printf 'QA_%s\\n' 'CLI_READY'",
+      enter: true
+    })
+    await expectTerminalAccessibilityText(upgraded.page, terminal.webTabId, 'QA_CLI_READY')
+    const status = JSON.parse(host.exec('cat /tmp/orca-cli-status.json'))
+    expect(status.result.runtime).toMatchObject({
+      reachable: true,
+      runtimeId: environment.runtimeId
+    })
+    expect(status.result.app.desktopWindowStatus).toBe('blocked')
+    await upgraded.page.screenshot({ path: testInfo.outputPath('managed-cli-ready.png') })
   } finally {
     if (app) {
       await session.close(app)
@@ -413,3 +472,101 @@ function connectOnce(page: Page, targetId: string): Promise<string> {
     }
   }, targetId)
 }
+
+test('reconnect restores the managed host name after its conversion catalog fails', async ({
+  testRepoPath
+}, testInfo) => {
+  test.skip(HOST !== 'docker', 'Catalog fault injection uses the isolated Linux Docker host')
+  test.setTimeout(180_000)
+  const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-catalog-retry-'))
+  const templateDir = path.join(scratch, 'template')
+  const host = startOrcadConvertHost('docker', testInfo)
+  const session = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: templateDir })
+  let app: Awaited<ReturnType<typeof session.launch>>['app'] | null = null
+  try {
+    const first = await session.launch()
+    app = first.app
+    await waitForSessionReady(first.page)
+    // A local project keeps a second host section, so the managed host header renders.
+    await first.page.evaluate((repoPath) => window.api.repos.add({ path: repoPath }), testRepoPath)
+    await session.close(app)
+    app = null
+    const seeded = seedRelayEraProfile(session.userDataDir, host.input, {
+      repoPath: host.remoteRepoPath,
+      folderPath: host.remoteFolderPath
+    })
+    const relay = await session.launch()
+    app = relay.app
+    const page = relay.page
+    await waitForSessionReady(page)
+    await page.evaluate(() => window.__store!.getState().setGroupBy('none'))
+    await reconnect(page, seeded.targetId)
+    await expect.poll(() => managedServer(page, seeded.targetId)).toMatchObject({ kind: 'relay' })
+
+    // Fail the local catalog IPC during a real SSH migration; healing restores its production handler.
+    await app.evaluate(({ ipcMain }) => {
+      type Handler = (event: unknown, ...args: unknown[]) => unknown
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Electron's registered invoke handlers are a Map of channel callbacks.
+      const registry = (ipcMain as unknown as { _invokeHandlers?: Map<string, Handler> })
+        ._invokeHandlers
+      const original = registry?.get('runtimeEnvironments:list')
+      if (!original) {
+        throw new Error('runtimeEnvironments:list is not registered')
+      }
+      ipcMain.removeHandler('runtimeEnvironments:list')
+      ipcMain.handle('runtimeEnvironments:list', () => {
+        throw new Error('catalog-retry: managed-host catalog temporarily unavailable')
+      })
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test installs and removes its own recovery callback within this app.
+      const state = globalThis as typeof globalThis & { healCatalogFault?: () => void }
+      state.healCatalogFault = () => {
+        ipcMain.removeHandler('runtimeEnvironments:list')
+        ipcMain.handle('runtimeEnvironments:list', original)
+      }
+    })
+    const failure = page.waitForEvent('console', {
+      predicate: (message) =>
+        message.text().includes('Could not refresh the managed server list') ||
+        message.text().includes('Could not load the managed server catalogs')
+    })
+    cpSync(TEMPLATE_SOURCE!, templateDir, { recursive: true })
+    await reconnect(page, seeded.targetId)
+    await expect.poll(() => managedServer(page, seeded.targetId)).toMatchObject({ kind: 'managed' })
+    await failure
+    await page.screenshot({ path: testInfo.outputPath('catalog-failure.png') })
+
+    await app.evaluate(() => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fault installation above owns this optional callback.
+      const state = globalThis as typeof globalThis & { healCatalogFault?: () => void }
+      state.healCatalogFault?.()
+    })
+    const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
+      (entry) => entry.orcadDeployment?.sshTargetId === seeded.targetId
+    )
+    if (!environment) {
+      throw new Error('Managed host missing from main catalog')
+    }
+    await page.evaluate(
+      (id) => window.__store!.setState({ visibleWorkspaceHostIds: ['local', `runtime:${id}`] }),
+      environment.id
+    )
+    await reconnect(page, seeded.targetId)
+    // The folder row must retain its managed execution host after the catalog heals.
+    const folder = page.locator('[data-worktree-host-identity]').filter({
+      has: page.getByText('orcad upgrade folder', { exact: true })
+    })
+    await expect(folder).toHaveCount(1, { timeout: 30_000 })
+    await expect(folder).toHaveAttribute('data-worktree-host-identity', /runtime:/)
+    await expect(
+      page.locator('[data-host-header-drag-id^="runtime:"]').filter({ hasText: environment.name })
+    ).toHaveCount(1)
+    await page.screenshot({ path: testInfo.outputPath('catalog-recovered.png') })
+  } finally {
+    if (app) {
+      await session.close(app)
+    }
+    await session.dispose()
+    host.cleanup()
+    rmSync(scratch, { recursive: true, force: true })
+  }
+})

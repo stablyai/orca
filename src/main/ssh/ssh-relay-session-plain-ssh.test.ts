@@ -62,11 +62,11 @@ class FakeShellChannel extends EventEmitter {
 }
 
 function runtimeUnavailable(): RemoteRuntimeUnavailableError {
-  const run = new RelayRuntimeLadderRun('target-1', null)
+  const run = new RelayRuntimeLadderRun('target-1', null, true)
   run.host = getRemoteHostPlatform('linux-x64')
   run.refused('A', 'libc_floor')
   run.refused('C', 'host_node_missing')
-  return new RemoteRuntimeUnavailableError('no_runtime', run)
+  return new RemoteRuntimeUnavailableError(run)
 }
 
 function createConnection(systemSsh = false) {

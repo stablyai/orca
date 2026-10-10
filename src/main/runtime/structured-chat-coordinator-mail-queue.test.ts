@@ -4,7 +4,8 @@ import './rpc/unused-default-rpc-methods.test-fixture'
 // to end on the coordinator-mail rig.
 
 import { describe, expect, it, vi } from 'vitest'
-import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
+import { structuredAgentSessionMessageSendMutation } from '../../shared/structured-agent-session-send-mutation'
+import { operationId, type FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import { idOf } from './rpc/orchestration-session-caller-test-fixture'
 import {
   COORDINATOR,
@@ -148,5 +149,42 @@ describe("a busy chat's orchestration pointer waits in its queue", () => {
     })
     expect(await queuedCardTexts()).toEqual([ptyPointer(`run:${runId}`)])
     await endTurn()
+  })
+
+  // The queue once refused every send past twenty cards, so a busy coordinator's mail locked the
+  // person out of their own chat.
+  it("still queues the person's message behind more than twenty mail cards", async () => {
+    const chat = await openChat(COORDINATOR)
+    const { runId, taskId } = await coordinatorRunAndTask()
+    await runningUserTurn(chat)
+    await finishWorker(taskId)
+    await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(1), WAIT)
+    for (let index = 1; index <= 24; index += 1) {
+      await call('orchestration.send', {
+        from: 'term_worker',
+        to: `run:${runId}`,
+        subject: `mail ${index}`
+      })
+      await vi.waitFor(async () => expect(await queuedCardTexts()).toHaveLength(index + 1), WAIT)
+    }
+    const sent = await host.send(
+      { callerKey: 'test-surface' },
+      {
+        ...structuredAgentSessionMessageSendMutation({
+          sessionId: COORDINATOR,
+          clientOperationId: operationId(),
+          expectedRuntimeFence: host.deps.store.getRecord(COORDINATOR)!.lease.runtimeFence,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'human message' }]
+          },
+          delivery: 'queue-if-active'
+        }),
+        userSend: true
+      }
+    )
+    expect(sent).toMatchObject({ ok: true, value: { queued: { position: 26, state: 'waiting' } } })
+    expect((await queuedCardTexts()).at(-1)).toBe('human message')
   })
 })

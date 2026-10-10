@@ -3,7 +3,7 @@ import { Paperclip } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
-import { getNativeFileDropRejectionMessage } from '@/hooks/useGlobalFileDrop'
+import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
 import {
   makeNativeChatPaneFileDropHandlers,
   type NativeChatPaneDropClaim

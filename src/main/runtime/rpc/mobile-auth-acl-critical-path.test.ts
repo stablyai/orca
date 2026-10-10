@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
-import type { ProcessResult, ProcessSpec } from '../../../shared/child-process/run-process'
-import { runProcess, runProcessSync } from '../../../shared/child-process/run-process'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+import { runProcess, runProcessSync } from '@orca/process-host'
 import { DEVICE_REGISTRY_FILENAME } from '../mobile-pairing-files'
 import { DeviceRegistry, type DeviceEntry } from '../device-registry'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './e2ee-crypto'
@@ -16,7 +17,7 @@ import { MobileSocketWiring, type MobileSocketTransport } from './mobile-socket-
 // Why this module and not `node:child_process`: hardening reaches the OS only through
 // runProcess/runProcessSync, and a hand-written child_process factory silently omitted the one
 // function they call — so every spawn threw, hardening no-opped, and the test double hid it.
-vi.mock('../../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
   runProcessSync: vi.fn()
 }))

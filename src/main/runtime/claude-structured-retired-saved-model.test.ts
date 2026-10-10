@@ -109,20 +109,21 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
     expect(record()?.options?.model).toBe('opus')
   })
 
-  // A slow settings readback lets the turn's error land first; `started` then reports the CLI's
-  // own model, which is still the retired one, and must not write it back.
-  it('does not let a start that lands after the heal write the retired model back', async () => {
+  // A slow settings readback lets the turn's error land first; the report that follows it still
+  // names the CLI's own model, which is the retired one, and must not write it back.
+  it('does not let a settings report that lands after the heal write the retired model back', async () => {
     claude.behave(SESSION, {
       sendsNoStartFrame: true,
       startupSettingsReadHangs: true,
       controlTimeoutMs: 300
     })
     const host = await claude.install()
+    const reports = vi.spyOn(host, 'handleAdapterEvent')
     await expect(
       host.attach(CALLER, claude.attachParams(SESSION, null, { options: { model: RETIRED } }))
     ).resolves.toMatchObject({ ok: true })
     await vi.waitFor(() =>
-      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
+      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready')
     )
     claude.child(SESSION).handlers.onMessage?.({
       type: 'system',
@@ -131,11 +132,16 @@ describe("a Claude chat whose saved model the CLI says doesn't exist", () => {
       model: RETIRED
     })
     claude.child(SESSION).handlers.onMessage?.(modelNotFoundReply('reply-1'))
+    await vi.waitFor(() =>
+      expect(host.deps.store.getRecord(SESSION)?.options).not.toHaveProperty('model')
+    )
 
+    // The settings read gives up at its deadline and reports what the child showed.
     await vi.waitFor(
-      () => expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('ready'),
+      () => expect(reports.mock.calls.map(([event]) => event.type)).toContain('options-reported'),
       { timeout: 5_000 }
     )
+    await host.flushStreamedEvents(SESSION)
     expect(host.deps.store.getRecord(SESSION)?.options).not.toHaveProperty('model')
   })
 })

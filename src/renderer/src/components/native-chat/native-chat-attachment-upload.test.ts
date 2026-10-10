@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   toastLoading: vi.fn(() => 'toast-1'),
@@ -38,6 +39,7 @@ import {
 } from './native-chat-attachment-upload'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { repoFixture, worktreeFixture } from './native-chat-workspace-test-fixtures'
 
 function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   return {
@@ -53,34 +55,33 @@ function terminalTab(overrides: Partial<TerminalTab> = {}): TerminalTab {
   }
 }
 
-function state(overrides: Partial<AppState> = {}): AppState {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every store slice read by the attachment owner resolver.
+type OwnerState = Parameters<typeof resolveNativeChatAttachmentOwner>[0]
+
+function state(overrides: Partial<OwnerState> = {}): OwnerState {
   return {
     detectedWorktreesByRepo: {},
     folderWorkspaces: [],
+    floatingWorkspacePath: null,
     projectGroups: [],
-    repos: [{ id: 'repo', connectionId: null }],
-    settings: { activeRuntimeEnvironmentId: null },
+    repos: [repoFixture({ connectionId: null })],
+    settings: { ...getDefaultSettings('/home/me'), activeRuntimeEnvironmentId: null },
     sshConnectionStates: new Map(),
     tabsByWorktree: {
       'wt-1': [terminalTab()]
     },
+    unifiedTabsByWorktree: {},
     worktreesByRepo: {
       repo: [
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owner resolver reads only the catalog identity, path and host fields supplied here.
-        {
-          id: 'wt-1',
-          repoId: 'repo',
-          path: '/repo/worktree',
+        worktreeFixture('wt-1', '/repo/worktree', {
           hostId:
             overrides.repos?.length === 0
               ? undefined
               : getRepoExecutionHostId(overrides.repos?.[0] ?? { connectionId: null })
-        } as never
+        })
       ]
     },
     ...overrides
-  } as AppState
+  }
 }
 
 describe('resolveNativeChatAttachmentOwner', () => {
@@ -178,7 +179,6 @@ describe('resolveNativeChatAttachmentOwner', () => {
       resolveNativeChatAttachmentOwner(
         state({
           repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
-          getKnownWorktreeById: () => undefined,
           worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo' } as never] },
           tabsByWorktree: { 'wt-1': [terminalTab()] }
         }),

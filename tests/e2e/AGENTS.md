@@ -42,3 +42,20 @@ Terminal-topology refactor PRs must be inert or fix a named bug. `terminal-layou
 - A fix declares itself in `terminal-layout-parity-declared-differences.ts` (scenario, bug id, report path prefixes). Undeclared differences fail, and so does a declaration that matches nothing.
 - Journeys wait for every pane's PTY to bind and for main's `terminal.list` to match the renderer before quitting; without that pacing, `activeLeafId` and the saved host-authority fields race on main. A path main still does not reproduce goes in `TERMINAL_LAYOUT_PARITY_UNSTABLE_ON_MAIN` with its evidence; it is reported, not failed.
 - Follow-ups: setup-script split, SSH Docker relay split plus restart, second client or mobile edit.
+
+## Workspace Layout Oracle
+
+`workspace-layout-oracle.spec.ts` (window attached) and `workspace-layout-oracle-headless.spec.ts` (orcad and Electron `orca serve`, no window) drive layout journeys through the commands users, the CLI and paired clients send, and after every step decide pass/fail with no reviewer:
+
+- **rules**: the runtime's layout (main's session over the read-only `session:get` IPC; a headless runtime's saved profile) against `workspace-layout-rules.ts`: a terminal in two panes, a pane in two tabs, a tab outside exactly one group, tab rows and tab bar disagreeing, two tab orders, an id changing for the same pane, tab or group. A sampler also runs the rules every 100 ms between steps; breaches that heal before a step settles are recorded as `(transient)`. (The unit model test checks every write exactly, via `store.onWorkspaceSessionWritten`.)
+- **roundTrip**: each partition, through the layout module's Loader then Serializer, must reach a fixed point: a second load changes nothing (`workspace-layout-round-trip-check.ts`). This is an idempotence check; its list of change kinds a first load may make is broad. The same check runs in the app on every Store write in dev and e2e, logged as `[workspace-layout] round-trip check:`, with each new kind of first-load change logged as `[workspace-layout] first-load changes:`.
+- **view**: what the window draws, read from the DOM (`[data-tab-group-strip-id]`, `[data-terminal-tab-id] .pane[data-leaf-id][data-pty-id]`), against the runtime. Exited or slept bindings are compared as unbound.
+- **client**: `session.tabs.list` and `terminal.list` against the runtime, including custom titles and running terminals with no pane.
+- **expected**: panes per tab the step must produce, which panes it removes, and that every other pane still shows the terminal it showed before (a command applied to the wrong pane, or lost). An empty layout cannot pass.
+- **restart**: the layout after a relaunch, a cold relaunch with the PTY daemon killed, or the in-app daemon restart, against before.
+- **marker**: an `echo` written to each visible pane's terminal must appear in that pane's xterm accessibility tree (frozen or crossed panes).
+- **remount**: xterm instances are counted per pane in the window; one created again outside a relaunch, reload or daemon restart fails.
+
+`workspace-layout-oracle-latency.spec.ts` records command-to-drawn-update p50/p95 for split, close pane, new tab, rename, tab reorder and close tab, idle and while another tab floods output. It never fails on a number.
+
+A step waits up to `ORCA_LAYOUT_ORACLE_SETTLE_MS` (12 s) for every view to agree before recording. Findings main still has are listed in `workspace-layout-oracle-known-on-main.ts` with their bug; anything else fails. `ORCA_LAYOUT_ORACLE_RECORD=1` records without failing, `ORCA_LAYOUT_ORACLE_REPEAT=<n>` repeats each scenario, and each run writes a JSON report (with the evidence each side held) to `ORCA_LAYOUT_ORACLE_REPORT_DIR`. `node config/scripts/check-workspace-layout-rules.mjs <userDataDir>` runs the rules over any profile, including a running dev app's.

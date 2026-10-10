@@ -9,7 +9,7 @@ import {
   isBlockingJiraUrlIntent,
   isBlockingTaskUrlResolution,
   shouldHoldSourceResultsForQuery
-} from './smart-workspace-source-results'
+} from '../../../../shared/new-workspace/smart-workspace-source-results'
 import {
   getSmartWorkspaceLinearSearchQuery,
   isBlockingLinearUrlIntent,

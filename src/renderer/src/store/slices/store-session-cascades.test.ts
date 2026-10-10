@@ -20,7 +20,7 @@ const mockApi = createStoreSessionMockApi()
 describe('removeProject cascade', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApi.repos.remove.mockResolvedValue(undefined)
+    mockApi.repos.removeForHost.mockResolvedValue(undefined)
     mockApi.pty.kill.mockResolvedValue(undefined)
   })
 
@@ -58,7 +58,7 @@ describe('removeProject cascade', () => {
       activeTabId: 'tab1'
     })
 
-    await store.getState().removeProject('repo1')
+    await store.getState().removeProject('repo1', { hostId: 'local' })
     const s = store.getState()
 
     expect(s.repos).toEqual([])

@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
 import { agentSessionRefusalCauseParts } from '../../../../shared/agent-session-refusal-notice'
-import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
+import type { StructuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
 import { joinSentences } from '../../../../shared/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
@@ -23,8 +23,7 @@ function nativeChatLaunchNotice({
   claudeSignIn = null
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
-  /** The host's refusal behind the failed start; its message is never shown. */
-  failure?: AgentSessionWriteRefusal | null
+  failure?: StructuredLaunchFailure | null
   /** Names the agent in a start failure's words. */
   agentLabel?: string
   onRetry: () => void
@@ -46,9 +45,10 @@ function nativeChatLaunchNotice({
         )
   const cause =
     lifecycle === 'failed' && failure
-      ? agentSessionWriteNoticeText(
+      ? (failure.authStartupMessage ??
+        agentSessionWriteNoticeText(
           agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
-        )
+        ))
       : ''
   // An argument problem already says the start failed; the generic lead would repeat it.
   const saysStartFailure =
@@ -77,17 +77,20 @@ export function structuredSessionNotices({
   agentLabel,
   sessionError,
   composerError,
-  claudeSignIn = null
+  claudeSignIn = null,
+  availability = null
 }: {
   launch: {
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
-    failure: AgentSessionWriteRefusal | null
+    failure: StructuredLaunchFailure | null
     retry: () => void
   }
   agentLabel: string
   sessionError: string | null
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
   claudeSignIn?: NativeChatClaudeSignIn | null
+  /** Why the host says no chat can start here, from `useNativeChatAvailabilityNotice`. */
+  availability?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice[] {
   const launchNotice = nativeChatLaunchNotice({
     lifecycle: launch.lifecycle,
@@ -97,8 +100,18 @@ export function structuredSessionNotices({
     claudeSignIn
   })
   return [
-    ...(launchNotice ? [launchNotice] : []),
-    ...(sessionError ? [{ key: 'session', kind: 'error' as const, text: sessionError }] : []),
+    ...(availability ? [availability] : []),
+    ...(launchNotice && !sessionError ? [launchNotice] : []),
+    ...(sessionError
+      ? [
+          {
+            key: 'session',
+            kind: 'error' as const,
+            text: sessionError,
+            ...(launchNotice ? { action: launchNotice.action } : {})
+          }
+        ]
+      : []),
     ...(composerError ? [{ key: 'composer-error', kind: 'error' as const, ...composerError }] : [])
   ]
 }

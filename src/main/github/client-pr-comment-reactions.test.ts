@@ -26,7 +26,8 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getPRComments, setPRCommentReaction } from './client'
+import { getPRComments } from './client/fetch/get-pr-comments'
+import { setPRCommentReaction } from './client/update/pr-comment-reaction'
 import { resetGraphQLRateLimitGuardMocks } from './client-test-harness'
 import type { RateLimitGuardResult } from './client-test-mocks'
 

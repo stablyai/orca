@@ -1,6 +1,7 @@
 import { NativeChatSkillPill } from './NativeChatSkillPill'
-import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
+import { ReactNodeViewRenderer, Node } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+export { promptTextContent } from './native-chat-prompt-document-text'
 
 export const NativeChatSkill = Node.create({
   name: 'nativeChatSkill',
@@ -23,16 +24,6 @@ export const NativeChatSkill = Node.create({
     ['span', {}, String(node.attrs.token).slice(1)]
   ]
 })
-
-export function promptTextContent(text: string): JSONContent {
-  return {
-    type: 'doc',
-    content: text.split('\n').map((line) => ({
-      type: 'paragraph',
-      content: line ? [{ type: 'text', text: line }] : []
-    }))
-  }
-}
 
 /** Each boundary maps a plain-text caret to a document position, including atomic skills. */
 export function promptTextMap(doc: ProseMirrorNode): { text: string; positions: number[] } {

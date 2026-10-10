@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
+import { ButtonGroup } from '../ui/button-group'
 import { Label } from '../ui/label'
 import { ClaudeIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
@@ -12,6 +13,11 @@ import {
 } from './provider-account-visibility'
 import { formatAccountTimestamp, getClaudeAccountRuntimeLabel } from './accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import {
+  canOfferClaudeSignInLink,
+  ClaudeSignInLinkMenu,
+  withCopiedClaudeLink
+} from './claude-sign-in-link-menu'
 
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
@@ -41,6 +47,24 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     !settings.claudeCopiedSystemDefaultNoticeDismissed &&
     claudeAccounts.accounts.some(
       (account) => account.email.toLowerCase() === systemDefaultEmail.toLowerCase()
+    )
+  // Why: interactive `claude login` needs a desktop browser and
+  // would authenticate against this device, not the server.
+  const addDisabled =
+    isRemoteAccountScope ||
+    claudeAction !== 'idle' ||
+    wslCapabilitiesLoading ||
+    accountRuntimeUnavailable
+  const addClaudeAccount = (copyLink: boolean): Promise<void> =>
+    runClaudeAccountAction('adding', () =>
+      withCopiedClaudeLink(
+        copyLink,
+        window.api.claudeAccounts.add({
+          runtime: accountRuntime.runtime,
+          wslDistro: accountRuntime.wslDistro,
+          copyLink
+        })
+      )
     )
   return (
     <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
@@ -86,34 +110,29 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() =>
-                void runClaudeAccountAction('adding', () =>
-                  window.api.claudeAccounts.add({
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
-                )
-              }
-              disabled={
-                // Why: interactive `claude login` needs a desktop browser and
-                // would authenticate against this device, not the server.
-                isRemoteAccountScope ||
-                claudeAction !== 'idle' ||
-                wslCapabilitiesLoading ||
-                accountRuntimeUnavailable
-              }
-              className="gap-1.5"
-            >
-              {claudeAction === 'adding' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Plus className="size-3" />
-              )}
-              {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-            </Button>
+            <ButtonGroup>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => void addClaudeAccount(false)}
+                disabled={addDisabled}
+                className="gap-1.5"
+              >
+                {claudeAction === 'adding' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
+                {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+              </Button>
+              {canOfferClaudeSignInLink(accountRuntime.runtime) ? (
+                <ClaudeSignInLinkMenu
+                  variant="outline"
+                  disabled={addDisabled}
+                  onCopyLink={() => void addClaudeAccount(true)}
+                />
+              ) : null}
+            </ButtonGroup>
             {claudeAction === 'adding' ? (
               <Button
                 variant="ghost"
@@ -224,6 +243,17 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
               )
               const isReauthing = claudeAction === `reauth:${account.id}`
               const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
+              const accountRuntimeView = getProviderAccountRuntime(account)
+              const reauthenticate = (copyLink: boolean): Promise<void> =>
+                runClaudeAccountAction(
+                  `reauth:${account.id}`,
+                  () =>
+                    withCopiedClaudeLink(
+                      copyLink,
+                      window.api.claudeAccounts.reauthenticate({ accountId: account.id, copyLink })
+                    ),
+                  accountRuntimeView
+                )
 
               return (
                 <div
@@ -238,7 +268,6 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                     <button
                       type="button"
                       onClick={() => {
-                        const accountRuntimeView = getProviderAccountRuntime(account)
                         void runClaudeAccountAction(
                           `select:${account.id}`,
                           () =>
@@ -284,30 +313,32 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void runClaudeAccountAction(
-                            `reauth:${account.id}`,
-                            () =>
-                              window.api.claudeAccounts.reauthenticate({
-                                accountId: account.id
-                              }),
-                            getProviderAccountRuntime(account)
-                          )
-                        }}
-                        disabled={isRemoteAccountScope || isBusy}
-                        className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                      >
-                        {isReauthing ? (
-                          <Loader2 className="size-3 animate-spin" />
-                        ) : (
-                          <RefreshCw className="size-3" />
-                        )}
-                        {translate('accounts.claude.signInAgain', 'Sign in again')}
-                      </Button>
+                      <ButtonGroup>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void reauthenticate(false)
+                          }}
+                          disabled={isRemoteAccountScope || isBusy}
+                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                        >
+                          {isReauthing ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3" />
+                          )}
+                          {translate('accounts.claude.signInAgain', 'Sign in again')}
+                        </Button>
+                        {canOfferClaudeSignInLink(accountRuntimeView.runtime) ? (
+                          <ClaudeSignInLinkMenu
+                            variant="ghost"
+                            disabled={isRemoteAccountScope || isBusy}
+                            onCopyLink={() => void reauthenticate(true)}
+                          />
+                        ) : null}
+                      </ButtonGroup>
                       <Button
                         variant="ghost"
                         size="xs"

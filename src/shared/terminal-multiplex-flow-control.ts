@@ -7,6 +7,8 @@ export const TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES = 8 * 1024 * 1024
 export const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
 export const TERMINAL_MULTIPLEX_ACK_BATCH_BYTES = 192 * 1024
 export const TERMINAL_MULTIPLEX_ACK_FLUSH_MS = 4
+// History a recovery after lost output carries, so the client replaces its stale history instead of splicing it.
+export const TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS = 1000
 // 128 covers large paired clients while fixed ACK windows and per-stream queues bound pressure.
 export const TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION = 128
 export const TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION = 32

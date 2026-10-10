@@ -5,6 +5,7 @@ import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/s
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import type {
   StructuredAgentAdapterContext,
+  StructuredAgentModelCatalogContext,
   StructuredAgentRuntimeAdapter,
   StructuredAgentRuntimeRegistration
 } from '../runtime/structured-agent-runtime-registrations'
@@ -15,6 +16,18 @@ import {
   resolvePiRpcCommand
 } from './rpc-launch-resolution'
 import { PiRpcSessionAdapter } from './rpc-session-adapter'
+import { createPiModelCatalogProbe } from './rpc-model-catalog-probe'
+
+/** The environment every Pi child starts from: a chat's launch and a catalog listing alike. */
+function piEnvironment({
+  deps,
+  environment
+}: StructuredAgentModelCatalogContext): () => Promise<NodeJS.ProcessEnv> {
+  return async () => ({
+    ...(await environment.resolveBaseEnvironment()),
+    ...deps.resolveAgentLaunchEnv?.('pi')
+  })
+}
 
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
@@ -22,10 +35,7 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
     resolveLaunch: createPiRpcLaunchResolver({
       store: context.store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
-      resolveEnvironment: async () => ({
-        ...(await context.environment.resolveBaseEnvironment()),
-        ...deps.resolveAgentLaunchEnv?.('pi')
-      }),
+      resolveEnvironment: piEnvironment(context),
       ...(deps.resolveAgentCommandSettings
         ? { resolveCommandSettings: deps.resolveAgentCommandSettings }
         : {})
@@ -51,6 +61,17 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
 export const PI_RPC_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = {
   definition: PI_RPC_AGENT,
   createAdapter: createPiRpcAdapter,
+  modelCatalog: (context) => ({
+    kind: 'probe',
+    // `--list-models` marks no model as the one Pi runs by default.
+    listingNamesConfiguredModel: false,
+    probe: createPiModelCatalogProbe({
+      resolveEnvironment: piEnvironment(context),
+      ...(context.deps.resolveAgentCommandSettings
+        ? { resolveCommandSettings: context.deps.resolveAgentCommandSettings }
+        : {})
+    })
+  }),
   supportsLocation: supportsSupervisedProviderChildLocation,
   supportsLaunch: async ({ cwd, env, commandSettings }) => {
     let command: string

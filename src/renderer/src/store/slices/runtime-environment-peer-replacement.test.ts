@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  peerReplacedEnvironmentIds,
+  classifyPeerReplacements,
   replacedRuntimeEnvironmentIds,
   resetDeferredPeerChecksForTests
 } from './runtime-environment-peer-replacement'
@@ -25,11 +25,11 @@ function managed(
 }
 
 function retired(previous: ReturnType<typeof managed>, next: ReturnType<typeof managed>): string[] {
-  return peerReplacedEnvironmentIds(
+  return classifyPeerReplacements(
     [previous],
     [next],
     replacedRuntimeEnvironmentIds([previous], [next])
-  )
+  ).retired
 }
 
 describe('which re-paired environments name a different machine', () => {
@@ -46,11 +46,11 @@ describe('which re-paired environments name a different machine', () => {
   it('defers a re-pair whose host key is not known yet instead of retiring it', () => {
     expect(retired(managed(), managed({ pairingRevision: 2, hostKey: null }))).toEqual([])
     expect(
-      peerReplacedEnvironmentIds(
+      classifyPeerReplacements(
         [managed({ pairingRevision: 2, hostKey: null })],
         [managed({ pairingRevision: 2, hostKey: 'key-b' })],
         []
-      )
+      ).retired
     ).toEqual(['env-1'])
   })
 
@@ -61,11 +61,44 @@ describe('which re-paired environments name a different machine', () => {
   it('retires a re-paired environment that is not a managed server', () => {
     const paired = { id: 'env-1', createdAt: 1, pairingRevision: 1, hostKeyFingerprint: 'k' }
     expect(
-      peerReplacedEnvironmentIds([paired], [{ ...paired, pairingRevision: 2 }], ['env-1'])
+      classifyPeerReplacements([paired], [{ ...paired, pairingRevision: 2 }], ['env-1']).retired
     ).toEqual(['env-1'])
   })
 
   it('leaves an environment alone while its pairing is unchanged', () => {
     expect(replacedRuntimeEnvironmentIds([managed()], [managed()])).toEqual([])
+  })
+})
+
+describe('which re-pairs a live pane may follow', () => {
+  const classify = (previous: ReturnType<typeof managed>, next: ReturnType<typeof managed>) =>
+    classifyPeerReplacements([previous], [next], replacedRuntimeEnvironmentIds([previous], [next]))
+
+  it('reports a same-key update as a same-host rotation from the old pairing', () => {
+    expect(classify(managed(), managed({ pairingRevision: 2 }))).toEqual({
+      retired: [],
+      sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }]
+    })
+  })
+
+  it('never reports a changed key or a new registration as a same-host rotation', () => {
+    expect(classify(managed(), managed({ pairingRevision: 2, hostKey: 'key-b' })).sameHost).toEqual(
+      []
+    )
+    expect(classify(managed(), managed({ generation: 2, pairingRevision: 2 })).sameHost).toEqual([])
+  })
+
+  it('reports a deferred re-pair only once its key proves the same host, from the original pairing', () => {
+    expect(classify(managed(), managed({ pairingRevision: 2, hostKey: null }))).toEqual({
+      retired: [],
+      sameHost: []
+    })
+    expect(
+      classifyPeerReplacements(
+        [managed({ pairingRevision: 2, hostKey: null })],
+        [managed({ pairingRevision: 2 })],
+        []
+      )
+    ).toEqual({ retired: [], sameHost: [{ id: 'env-1', fromRevision: 1, toRevision: 2 }] })
   })
 })

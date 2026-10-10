@@ -425,9 +425,16 @@ describe('fetchOpenCodeGoRateLimits', () => {
   ])(
     'keeps valid quota when optional billing has an %s',
     async (_label, billingResponse, disabledReason) => {
+      const billingSignals: AbortSignal[] = []
       netFetchMock
         .mockResolvedValueOnce(makeJsonResponse(STATUS_WITH_MONTHLY))
-        .mockResolvedValueOnce(billingResponse)
+        .mockImplementationOnce((_url, init: RequestInit) => {
+          if (init.signal) {
+            billingSignals.push(init.signal)
+          }
+          return Promise.resolve(billingResponse)
+        })
+      const readBody = vi.spyOn(billingResponse, 'text')
 
       const result = await fetchOpenCodeGoRateLimits('auth=mytoken', 'wrk_OVERRIDE123')
 
@@ -436,6 +443,10 @@ describe('fetchOpenCodeGoRateLimits', () => {
       expect(result.extraUsage).toEqual(
         expect.objectContaining({ balance: null, enabled: false, disabledReason })
       )
+      expect(billingSignals).toHaveLength(1)
+      expect(billingSignals[0]?.aborted).toBe(!billingResponse.ok)
+      expect(readBody).toHaveBeenCalledTimes(billingResponse.ok ? 1 : 0)
+      expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
     }
   )
 

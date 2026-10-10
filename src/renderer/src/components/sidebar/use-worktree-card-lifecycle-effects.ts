@@ -28,6 +28,8 @@ export function useWorktreeCardLifecycleEffects({
   issueCacheKey,
   fetchIssue,
   showLinearIssue,
+  linearSourceContext,
+  linearWorkspaceId,
   fetchLinearIssue
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
   Pick<
@@ -41,6 +43,8 @@ export function useWorktreeCardLifecycleEffects({
     | 'linkedGiteaPR'
     | 'branch'
     | 'issueCacheKey'
+    | 'linearSourceContext'
+    | 'linearWorkspaceId'
   > &
   Pick<
     Foundation,
@@ -156,7 +160,9 @@ export function useWorktreeCardLifecycleEffects({
       if (!isWindowVisible()) {
         return
       }
-      void fetchLinearIssue(linearIssueId, 'all')
+      void fetchLinearIssue(linearIssueId, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      })
     }
     refreshLinearIssueIfVisible()
     window.addEventListener('focus', refreshLinearIssueIfVisible)
@@ -165,18 +171,28 @@ export function useWorktreeCardLifecycleEffects({
       window.removeEventListener('focus', refreshLinearIssueIfVisible)
       document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
     }
-  }, [worktree.linkedLinearIssue, fetchLinearIssue, showLinearIssue])
+  }, [
+    worktree.linkedLinearIssue,
+    fetchLinearIssue,
+    showLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId
+  ])
 
   useEffect(() => {
     if (!newCardStyle || !hoverDetailsOpen || showLinearIssue || !worktree.linkedLinearIssue) {
       return
     }
-    void fetchLinearIssue(worktree.linkedLinearIssue, 'all')
+    void fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+      sourceContext: linearSourceContext
+    })
   }, [
     newCardStyle,
     hoverDetailsOpen,
     showLinearIssue,
     worktree.linkedLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId,
     fetchLinearIssue
   ])
 }

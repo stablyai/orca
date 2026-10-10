@@ -1,3 +1,4 @@
+import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
@@ -39,6 +40,8 @@ export async function discoverModelsLocal(input: {
   options: CommitMessageModelDiscoveryLocalOptions
   backslash: CommandTemplateBackslash
   spawnAgent: SpawnSourceControlAgent
+  /** The command actually spawned, when the caller replaces the plan's; a missing one is typed. */
+  binary?: string
 }): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getAgentModelProbeSpec(input.agentId)
   if (!spec) {
@@ -58,7 +61,15 @@ export async function discoverModelsLocal(input: {
     input.options.wslDistro ? 'linux' : process.platform
   )
 
+  const binary = input.binary ?? planned.plan.binary
   const couldNotStart = `${spec.label} model discovery could not be started. Check the agent CLI configuration and try again.`
+  const startFailure = (error: unknown): DiscoverCommitMessageModelsResult => ({
+    success: false,
+    ...(isMissingProviderExecutable(error, binary)
+      ? { unavailable: { reason: 'cliMissing' as const } }
+      : {}),
+    error: couldNotStart
+  })
   const startDiscovery = (): LocalProcessExecution<DiscoverCommitMessageModelsResult> => {
     let markProcessClosed!: () => void
     const processClosed = new Promise<void>((resolve) => {
@@ -68,7 +79,7 @@ export async function discoverModelsLocal(input: {
       let child: SpawnedSourceControlAgentProcess
       try {
         child = input.spawnAgent({
-          binary: planned.plan.binary,
+          binary,
           args: planned.plan.args,
           cwd: input.options.cwd,
           env: input.options.wslDistro ? input.env : env,
@@ -84,7 +95,7 @@ export async function discoverModelsLocal(input: {
       } catch (error) {
         markProcessClosed()
         console.error('[commit-message] Failed to spawn model discovery:', error)
-        resolve({ success: false, error: couldNotStart })
+        resolve(startFailure(error))
         return
       }
 
@@ -144,6 +155,9 @@ export async function discoverModelsLocal(input: {
         }
         finish({
           success: false,
+          ...(isMissingProviderExecutable(error, binary)
+            ? { unavailable: { reason: 'cliMissing' as const } }
+            : {}),
           error:
             (error as NodeJS.ErrnoException).code === 'ENOENT'
               ? `${spec.modelDiscovery?.binary ?? spec.binary} not found on PATH. Install ${spec.label} to discover models.`
@@ -158,7 +172,7 @@ export async function discoverModelsLocal(input: {
           : supervisedProviderSpawnFailure(code, stderr)
         if (spawnFailure?.thrown) {
           console.error('[commit-message] Failed to spawn model discovery:', spawnFailure.error)
-          finish({ success: false, error: couldNotStart })
+          finish(startFailure(spawnFailure.error))
           return
         }
         if (spawnFailure) {

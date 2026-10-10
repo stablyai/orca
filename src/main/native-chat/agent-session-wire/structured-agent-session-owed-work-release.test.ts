@@ -175,15 +175,21 @@ function waitOutSeveralSweeps(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
 
+function deliverySettled(): Promise<void> {
+  return vi.waitFor(() =>
+    expect(host.collaboratorsForTests().conversationDelivery.loop.isRunning(SESSION)).toBe(false)
+  )
+}
+
 describe('a Claude chat whose CLI is still starting', () => {
-  it('writes a message at once, and keeps the agent inside the idle window while startup is still out', async () => {
+  it('holds a message until startup lands, and keeps the agent inside the idle window meanwhile', async () => {
     await attachStarting()
     const sent = await send('sent while starting')
 
-    // Written before initialize answers: the CLI queues it behind its own start.
-    await untilSent(claude.connections[0])
-    expect(claude.connections[0].sent).toEqual([expect.objectContaining({ type: 'user' })])
-    await vi.waitFor(async () => expect(await dispatchState(sent)).toBe('accepted'))
+    // Held, never written, while initialize is unanswered.
+    await deliverySettled()
+    expect(claude.connections[0].sent).toEqual([])
+    expect(await dispatchState(sent)).toBe('pending')
     clock += IDLE_MS - 1
     await waitOutSeveralSweeps()
 
@@ -192,10 +198,13 @@ describe('a Claude chat whose CLI is still starting', () => {
 
     landInit()
     await claudeStartupSettled(adapter, SESSION)
+    await untilSent(claude.connections[0])
+    expect(claude.connections[0].sent).toEqual([expect.objectContaining({ type: 'user' })])
+    await vi.waitFor(async () => expect(await dispatchState(sent)).toBe('accepted'))
     expect(host.hasSession(SESSION)).toBe(true)
   })
 
-  it('gives a message written while starting a full idle window after startup lands to open its turn', async () => {
+  it('gives a message held while starting a full idle window after startup lands to open its turn', async () => {
     await attachStarting()
     const connection = claude.connections[0]
     // Claude echoes a prompt only when it starts that turn, which a loaded machine delays.
@@ -203,16 +212,19 @@ describe('a Claude chat whose CLI is still starting', () => {
       connection.sent.push(message)
     }
     const held = await send('sent while starting')
-    await untilSent(connection)
-    expect(connection.sent).toEqual([expect.objectContaining({ type: 'user' })])
+    await deliverySettled()
+    expect(connection.sent).toEqual([])
     clock += IDLE_MS - 1
     await waitOutSeveralSweeps()
     expect(host.hasSession(SESSION)).toBe(true)
 
-    // Startup lands just before the window closes; the agent stays while its message waits.
+    // Startup lands just before the window closes and the message is handed over; the agent stays
+    // while its message waits.
     landInit()
     await claudeStartupSettled(adapter, SESSION)
     await Promise.all(lifecycle)
+    await untilSent(connection)
+    expect(connection.sent).toEqual([expect.objectContaining({ type: 'user' })])
     clock += IDLE_MS - 1
     await waitOutSeveralSweeps()
 

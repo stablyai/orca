@@ -343,6 +343,8 @@ async function executePreflightCheck(
 ): Promise<PreflightStatus> {
   if (process.platform === 'win32' && !wslTarget) {
     await mergePersistedWindowsPathAsync(process.env, { forceRefresh: force })
+  } else if (process.platform !== 'win32') {
+    await hydrateShellPathForAgentDetection(context, force)
   }
 
   if (force) {
@@ -369,7 +371,7 @@ async function executePreflightCheck(
     getGiteaAuthStatus()
   ])
 
-  const result = {
+  return {
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
@@ -377,6 +379,4 @@ async function executePreflightCheck(
     azureDevOps,
     gitea
   }
-
-  return result
 }

@@ -339,8 +339,9 @@ describe('terminal multiplex RPC', () => {
       ).toMatchObject({
         requestId: 7
       })
+      // Desktop initial snapshots carry history, not just the screen (#20158).
       expect(runtime.serializeTerminalBuffer).toHaveBeenCalledWith('pty-1', {
-        scrollbackRows: 0
+        scrollbackRows: 1000
       })
       expect(runtime.serializeAuthoritativeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
         scrollbackRows: 5000

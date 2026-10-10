@@ -336,6 +336,28 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).toHaveBeenCalledTimes(2)
   })
 
+  it('starts a create however many unexpired operations are held, and still replays the first', async () => {
+    // Why: a count limit (512 per caller, 4,096 in all) refused a user's create for unrelated traffic.
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const now = Date.now()
+    const ids = Array.from(
+      { length: 4_097 },
+      (_, index) => `${now}-${index.toString(16).padStart(32, '0')}`
+    )
+    const dispositions = new Set<string>()
+    for (const id of ids) {
+      const created = await runtime.createAgentSession(request(id), { clientId: 'device-a' })
+      dispositions.add(created.disposition)
+    }
+
+    expect([...dispositions]).toEqual(['created'])
+    await expect(
+      runtime.createAgentSession(request(ids[0]!), { clientId: 'device-a' })
+    ).resolves.toMatchObject({ disposition: 'replayed' })
+    expect(createTerminal).toHaveBeenCalledTimes(4_097)
+  })
+
   it('rejects an expired unseen operation before terminal creation', async () => {
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
@@ -419,7 +441,7 @@ describe('agent-session create operation ledger', () => {
       disposition: 'replayed',
       terminal: { handle: orphanHandle, ptyId: 'ssh-1:pty2:e:1', worktreeId: 'worktree-1' }
     })
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
     expect(createTerminal).toHaveBeenCalledOnce()
     expect(failure.message).toBe('execution_owner_unavailable')
   })
@@ -433,7 +455,7 @@ describe('agent-session create operation ledger', () => {
     await expect(runtime.createAgentSession(request(id), { clientId: 'device-a' })).rejects.toThrow(
       failure.message
     )
-    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+    expect(listProcesses).toHaveBeenCalledWith('ssh:ssh-1')
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 

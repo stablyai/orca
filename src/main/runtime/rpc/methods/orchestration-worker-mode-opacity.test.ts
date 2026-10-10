@@ -60,13 +60,11 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
 
 const STRUCTURED_DEFAULT = {
   experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
 }
-const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false }
+const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }
 
 /** A coordinator that IS a structured session: registry identity plus a live durable record. */
 function installStructuredCoordinator(handle: string, sessionId: string): string {

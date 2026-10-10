@@ -7,7 +7,7 @@ export type VisibleHostedReviewRefreshTarget = {
   fetchedAt: number | null
   intervalMs: number | null
   selected: boolean
-  refresh: (force?: boolean) => Promise<boolean>
+  refresh: (force?: boolean, signal?: AbortSignal) => Promise<boolean>
 }
 
 type Entry = {
@@ -39,7 +39,10 @@ function discoveryIdentityChanged(
 export function createVisibleHostedReviewRefreshScheduler() {
   const entries = new Map<string, Entry>()
   const recent = new Map<string, Entry>()
-  const inFlight = new Map<string, VisibleHostedReviewRefreshTarget>()
+  const inFlight = new Map<
+    string,
+    { target: VisibleHostedReviewRefreshTarget; controller: AbortController }
+  >()
   let timer: ReturnType<typeof setTimeout> | null = null
   let visible = false
   let disposed = false
@@ -83,13 +86,17 @@ export function createVisibleHostedReviewRefreshScheduler() {
     target: VisibleHostedReviewRefreshTarget,
     succeeded: boolean
   ): void => {
+    const cancelled = inFlight.get(key)?.controller.signal.aborted
+    inFlight.get(key)?.controller.abort()
     inFlight.delete(key)
     if (disposed) {
       return
     }
     const entry = entries.get(key) ?? recent.get(key)
     if (entry && entry.lastAttemptAt === startedAt) {
-      if (!succeeded || !discoveryIdentityChanged(target, entry.target)) {
+      if (cancelled) {
+        entry.discovery = true
+      } else if (!succeeded || !discoveryIdentityChanged(target, entry.target)) {
         entry.discovery = false
         entry.failures = succeeded ? 0 : entry.failures + 1
         entry.retryAt = succeeded
@@ -130,9 +137,10 @@ export function createVisibleHostedReviewRefreshScheduler() {
       entry.lastAttemptAt = now
       entry.discovery = false
       const startedTarget = entry.target
-      inFlight.set(key, startedTarget)
+      const controller = new AbortController()
+      inFlight.set(key, { target: startedTarget, controller })
       try {
-        void entry.target.refresh(force).then(
+        void entry.target.refresh(force, controller.signal).then(
           (succeeded) => finish(key, now, startedTarget, succeeded),
           () => finish(key, now, startedTarget, false)
         )
@@ -163,6 +171,7 @@ export function createVisibleHostedReviewRefreshScheduler() {
       const keep = new Set(targets.map((target) => target.key))
       for (const [key, entry] of entries) {
         if (!keep.has(key)) {
+          inFlight.get(key)?.controller.abort()
           entries.delete(key)
           remember(key, entry)
         }
@@ -191,7 +200,7 @@ export function createVisibleHostedReviewRefreshScheduler() {
         } else if (
           (target.fetchedAt ?? -Infinity) > (entry.target.fetchedAt ?? -Infinity) &&
           (!inFlight.has(target.key) ||
-            !discoveryIdentityChanged(inFlight.get(target.key) ?? target, target))
+            !discoveryIdentityChanged(inFlight.get(target.key)?.target ?? target, target))
         ) {
           entry.failures = 0
           entry.retryAt = null
@@ -206,6 +215,11 @@ export function createVisibleHostedReviewRefreshScheduler() {
         return
       }
       visible = next
+      if (!visible) {
+        for (const request of inFlight.values()) {
+          request.controller.abort()
+        }
+      }
       if (visible) {
         for (const entry of entries.values()) {
           if (
@@ -220,6 +234,9 @@ export function createVisibleHostedReviewRefreshScheduler() {
     },
     dispose(): void {
       disposed = true
+      for (const request of inFlight.values()) {
+        request.controller.abort()
+      }
       clearTimer()
       entries.clear()
       recent.clear()

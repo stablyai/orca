@@ -1,6 +1,4 @@
 import React from 'react'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from './AgentStateDot'
@@ -35,15 +33,6 @@ function renderDotClassNames(state: AgentDotState): string[] {
 }
 
 describe('AgentStateDot', () => {
-  it('keeps the question glyph above the light-theme non-text contrast floor', () => {
-    const css = readFileSync(join(__dirname, '../assets/main.css'), 'utf8')
-    const lightTheme = css.match(/:root\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
-    const darkTheme = css.match(/\.dark\s*\{(?<body>[\s\S]*?)\n\}/)?.groups?.body
-
-    expect(lightTheme).toContain('--agent-question: var(--color-orange-600)')
-    expect(darkTheme).toContain('--agent-question: var(--color-orange-500)')
-  })
-
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
 

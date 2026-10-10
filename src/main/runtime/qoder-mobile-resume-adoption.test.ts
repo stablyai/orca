@@ -125,7 +125,12 @@ it.each([
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
-        webContents: { isDestroyed: () => false, send, setBackgroundThrottling: vi.fn() }
+        webContents: {
+          isDestroyed: () => false,
+          send,
+          setBackgroundThrottling: vi.fn(),
+          capturePage: vi.fn(async () => null)
+        }
       })
       const plan = buildAgentResumeStartupPlan({
         agent: 'qoder',
