@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { RESERVE_DEAD_MAN_MS, reserveDeadManWindowMs } from './cell-reserve-dead-man.js'
 import { openRelayDatabase } from './database.js'
-import { REREGISTER_MAX_ATTEMPTS } from './host-session-registry.js'
+import {
+  REREGISTER_MAX_ATTEMPTS,
+  REREGISTER_STALL_LOG_EVERY,
+  reregisterInFlightLimit
+} from './host-session-registry.js'
 import { startReserveModeCell } from './test-fixtures/reserve-mode-cell.js'
 
 // Flip back (E-mix): a cell leaves reserve mode with hosts it admitted from memory. Nobody is
@@ -123,7 +127,20 @@ describe('flipping a reserve-mode cell back to the database', () => {
     expect(stalls).toBe(3 * REREGISTER_MAX_ATTEMPTS)
     expect(await reserve.controlLeases()).toHaveLength(1)
     expect(host.socket.readyState).toBe(WebSocket.OPEN)
+    // The endless retry is visible: one line per run of consecutive stalls.
+    const stalledLines = vi
+      .mocked(console.warn)
+      .mock.calls.filter(([line]) => String(line).includes('orca_relay_cell_reregistration_stalled'))
+    expect(stalledLines).toHaveLength(Math.floor(stalls / REREGISTER_STALL_LOG_EVERY))
   }, 60_000)
+
+  it('never lets the switch file take the connections hellos and renewals need', () => {
+    expect(reregisterInFlightLimit(undefined, 10)).toBe(3)
+    expect(reregisterInFlightLimit(undefined, 16)).toBe(5)
+    expect(reregisterInFlightLimit(16, 10)).toBe(8)
+    expect(reregisterInFlightLimit(4, 10)).toBe(4)
+    expect(reregisterInFlightLimit(16, 2)).toBe(1)
+  })
 
   it('takes its flip-back pace from the switch file', async () => {
     const reserve = await cell()

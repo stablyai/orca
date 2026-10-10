@@ -242,6 +242,14 @@ export const REREGISTER_POOL_SHARE = 1 / 3
 const REREGISTER_TICK_MS = 100
 // A row the ledger has not written yet gets this long; then the control is closed (4409).
 export const REREGISTER_MAX_ATTEMPTS = 20
+// An endless database retry stays visible: one line per this many consecutive stalls.
+export const REREGISTER_STALL_LOG_EVERY = 20
+
+// The switch-file override never takes the last two connections hellos and renewals need.
+export function reregisterInFlightLimit(flag: number | undefined, databasePoolMax: number): number {
+  if (flag === undefined) return Math.max(1, Math.floor(databasePoolMax * REREGISTER_POOL_SHARE))
+  return Math.max(1, Math.min(flag, databasePoolMax - 2))
+}
 
 // `attempts` counts only wrong-assignment answers; `stalls` paces database retries.
 type ReregistrationEntry = { key: string; generation: number; attempts: number; stalls?: number; dueAt: number }
@@ -470,9 +478,10 @@ export class HostSessionRegistry {
     }
     this.flushReregistrationCellDelta(state)
     const now = this.now()
-    const maxInFlight =
-      this.reserveAdmission?.reregisterInFlight?.() ??
-      Math.max(1, Math.floor(this.config.databasePoolMax * REREGISTER_POOL_SHARE))
+    const maxInFlight = reregisterInFlightLimit(
+      this.reserveAdmission?.reregisterInFlight?.(),
+      this.config.databasePoolMax
+    )
     while (state.inFlight < maxInFlight) {
       const index = state.queue.findIndex((entry) => entry.dueAt <= now)
       if (index < 0) break
@@ -576,10 +585,22 @@ export class HostSessionRegistry {
         if (!wrongAssignment) {
           if (!current) return
           entry.stalls = (entry.stalls ?? 0) + 1
+          if (entry.stalls % REREGISTER_STALL_LOG_EVERY === 0) {
+            console.warn(
+              JSON.stringify({
+                event: 'orca_relay_cell_reregistration_stalled',
+                ...this.logIdentity(),
+                relayHostIdDigest: relayHostLogDigest(session.relayHostId),
+                stalls: entry.stalls,
+                reason: error instanceof Error ? error.message : 'unknown'
+              })
+            )
+          }
           entry.dueAt = this.now() + Math.min(5_000, 250 * 2 ** Math.min(entry.stalls, 5))
           state.queue.push(entry)
           return
         }
+        entry.stalls = 0
         entry.attempts += 1
         if (entry.attempts < REREGISTER_MAX_ATTEMPTS) {
           entry.dueAt = this.now() + Math.min(5_000, 250 * 2 ** entry.attempts)
