@@ -78,9 +78,9 @@ export async function withdrawQueuedMessagesForOperation(
  * cards stay visible where the user now is. The replacement's queue starts
  * paused ('cleared'), lifted exactly like a Stop's: the cards were written for the context /clear just
  * discarded, so they wait for the user's next turn there, or Resume, rather than
- * sending into the fresh context unasked. Each card records the conversation it
- * came from, which IS that pause, so the drain never sees a carried card unpaused
- * and no pause outlives the cards. Runs after the clear commits, opening the
+ * sending into the fresh context unasked. The historical carriedFrom column is
+ * inert on current inserts, so the replacement journal's normal pause state
+ * provides the waiting behavior and no pause outlives the cards. Runs after the clear commits, opening the
  * replacement's conversation only when there are drafts to carry; the source
  * rows are then tombstoned. Bookkeeping around the clear: a failure, or a crash
  * before the carry, leaves the cards on the superseded source — whose
