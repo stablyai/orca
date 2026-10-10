@@ -12,9 +12,9 @@ const runtimeEnvironmentCall = vi.fn()
 
 vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeEnvironmentCall } } })
 
-type HostShape = { hostPlatform?: NodeJS.Platform; scoped: boolean }
+type ServedHostStatus = { hostPlatform?: NodeJS.Platform; scoped: boolean }
 
-function serveHost(host: HostShape): void {
+function serveHost(host: ServedHostStatus): void {
   runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
     const result =
       method === 'status.get'
