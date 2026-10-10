@@ -10,6 +10,7 @@ import type {
   JiraPrioritiesBySite
 } from './jira-issue-sorter'
 import { jiraListPriorities } from '@/runtime/runtime-jira-client'
+import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const { settings, jiraConnected, selectedJiraSiteId, taskSource, jiraTaskSourceContext } = model
   // Jira tab state
@@ -51,7 +52,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
         try {
           return [
             siteId,
-            await jiraListPriorities(jiraTaskSourceContext ?? settings, siteId)
+            await jiraListPriorities(jiraTaskSourceContext ?? defaultScopeSource(settings), siteId)
           ] as const
         } catch {
           return [siteId, [] as JiraPriority[]] as const

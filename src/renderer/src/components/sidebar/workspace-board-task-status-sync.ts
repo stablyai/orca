@@ -177,9 +177,10 @@ async function syncLinearWorktreeStatus(
     return skipped(result)
   }
 
-  const settings = args.getSettingsForWorktree
+  // Why: no source has always meant this computer.
+  const settings = (args.getSettingsForWorktree
     ? args.getSettingsForWorktree(worktreeId)
-    : args.settings
+    : args.settings) ?? { kind: 'local' }
   const linkedWorkspaceId = worktree.linkedLinearIssueWorkspaceId ?? undefined
 
   try {

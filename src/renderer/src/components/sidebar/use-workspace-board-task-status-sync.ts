@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import {
@@ -131,7 +131,10 @@ export function useWorkspaceBoardTaskStatusSync(args: {
         targetStatus: request.targetStatus,
         worktreesById: args.worktreesById,
         getSettingsForWorktree: (worktreeId) =>
-          getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), worktreeId),
+          // Why: a workspace no row places on a server is this computer's.
+          runtimeTargetForWorkspaceOwner(useAppStore.getState(), { workspaceId: worktreeId }) ?? {
+            kind: 'local'
+          },
         getLatestWorkspaceStatus: (worktreeId) =>
           useAppStore.getState().getKnownWorktreeById(worktreeId)?.workspaceStatus
       })

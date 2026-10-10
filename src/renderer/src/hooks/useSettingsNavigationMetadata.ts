@@ -18,7 +18,7 @@ import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useAppStore } from '@/store'
 import { useProjectHostSetupProjection } from '@/store/selectors'
 import type { ProjectGroupingModel } from '@/components/sidebar/worktree-list/grouping/project-grouping'
@@ -130,7 +130,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
-  const runtimeTarget = getActiveRuntimeTarget(settings)
+  // Why: navigation is shared with the palette, which has no host picker.
+  const runtimeTarget = defaultScopeHost(settings)
   const capabilityLoadTarget = isWebClient ? { kind: 'local' as const } : runtimeTarget
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     isWindows || isWebClient || runtimeTarget.kind === 'environment',
