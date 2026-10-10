@@ -6,22 +6,25 @@ import {
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
+import { assignNestedRepoDirNames } from '../ipc/worktree-nested-dir-name'
 import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
 
 // Only what the catalog reads, so a partial store satisfies it.
 export type SessionSearchScopeStore = {
-  getRepos(): readonly (SessionSearchScopeCatalog['repos'][number] & {
-    connectionId?: string | null
-    executionHostId?: ProjectHostSetup['hostId'] | null
-  })[]
+  getRepos(): readonly (SessionSearchScopeCatalog['repos'][number] &
+    Partial<Pick<Repo, 'addedAt' | 'gitRemoteIdentity'>> & {
+      connectionId?: string | null
+      executionHostId?: ProjectHostSetup['hostId'] | null
+    })[]
   getProjects(): readonly SessionSearchScopeCatalog['projects'][number][]
   getProjectHostSetups(): readonly (SessionSearchScopeCatalog['projectHostSetups'][number] & {
     hostId: ProjectHostSetup['hostId']
   })[]
   getAllWorktreeMeta(): Record<string, WorktreeMeta>
   getAllWorktreeMetaForHost?: (executionHostId: ExecutionHostId) => Record<string, WorktreeMeta>
-  getSettings(): Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>
+  getSettings(): Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'worktreeLayout'>
 }
 
 // Filtered by host: a desktop's store also holds its SSH and runtime hosts'
@@ -31,13 +34,22 @@ export function sessionSearchScopeCatalogFromStore(
   executionHostId: ExecutionHostId
 ): SessionSearchScopeCatalog {
   const settings = store.getSettings()
+  const repos = store.getRepos().filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
+  const nestedRepoDirNames = assignNestedRepoDirNames(repos, settings)
   return {
-    repos: store.getRepos().filter((repo) => getRepoExecutionHostId(repo) === executionHostId),
+    repos,
     projects: store.getProjects(),
     projectHostSetups: store
       .getProjectHostSetups()
       .filter((setup) => normalizeExecutionHostId(setup.hostId) === executionHostId),
     worktreeMeta: readAllWorktreeMetaForHost(store, executionHostId),
-    settings: { workspaceDir: settings.workspaceDir, nestWorkspaces: settings.nestWorkspaces }
+    settings: {
+      workspaceDir: settings.workspaceDir,
+      nestWorkspaces: settings.nestWorkspaces,
+      ...(settings.worktreeLayout ? { worktreeLayout: settings.worktreeLayout } : {})
+    },
+    ...(nestedRepoDirNames.size > 0
+      ? { nestedRepoDirNames: Object.fromEntries(nestedRepoDirNames) }
+      : {})
   }
 }

@@ -187,6 +187,28 @@ describe('project scope', () => {
     expect(paths(resolution)).toEqual(['/home/me/orca/workspaces/one', '/work/app'])
   })
 
+  it('claims the owner-qualified folder when a same-named repo holds the plain one', () => {
+    const resolution = resolveSessionSearchScope(
+      { kind: 'project', projectKey: 'repo:repo-1' },
+      catalog({ nestedRepoDirNames: { 'repo-1': 'app-globex' } })
+    )
+    expect(paths(resolution)).toEqual(['/home/me/orca/workspaces/app-globex', '/work/app'])
+  })
+
+  it('claims the sibling .worktrees folder, which belongs to this repo alone', () => {
+    const resolution = resolveSessionSearchScope(
+      { kind: 'project', projectKey: 'repo:repo-1' },
+      catalog({
+        settings: {
+          workspaceDir: '/home/me/orca/workspaces',
+          nestWorkspaces: false,
+          worktreeLayout: 'sibling'
+        }
+      })
+    )
+    expect(paths(resolution)).toEqual(['/work/app', '/work/app.worktrees'])
+  })
+
   it('resolves a project id through this host’s setup for it', () => {
     const resolution = resolveSessionSearchScope(
       { kind: 'project', projectKey: 'project:proj-1' },

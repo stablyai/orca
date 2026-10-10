@@ -90,7 +90,14 @@ export function collectWorktreeTrashSweepRoots(
       continue
     }
     try {
-      const workspaceRoot = computeWorkspaceRoot(repo.path, getWorktreePathSettings(repo, settings))
+      // Why workspaceDir only: trash predates worktreeLayout, so sibling roots never held any.
+      const workspaceRoot = computeWorkspaceRoot(
+        repo.path,
+        getWorktreePathSettings(repo, {
+          workspaceDir: settings.workspaceDir,
+          nestWorkspaces: settings.nestWorkspaces
+        })
+      )
       if (!parseWslPath(workspaceRoot)) {
         roots.add(workspaceRoot)
       }

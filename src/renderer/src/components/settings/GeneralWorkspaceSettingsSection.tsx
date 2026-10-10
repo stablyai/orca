@@ -4,6 +4,7 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
+import { WorktreeLayoutSetting } from './WorktreeLayoutSetting'
 import { translate } from '@/i18n/i18n'
 import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibilitySourcesSetting'
 import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
@@ -37,6 +38,8 @@ export function GeneralWorkspaceSettingsSection({
       />
 
       <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+
+      <WorktreeLayoutSetting settings={settings} updateSettings={updateSettings} />
 
       <div
         id={GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID}
@@ -75,31 +78,6 @@ export function GeneralWorkspaceSettingsSection({
           />
         </SearchableSetting>
       </div>
-
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
-          'Nest Workspaces'
-        )}
-        description={translate(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
-          'Create workspaces inside a repo-named subfolder.'
-        )}
-        keywords={['nested', 'subfolder', 'directory']}
-      >
-        <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
-            'Nest Workspaces'
-          )}
-          description={translate(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
-            'Create workspaces inside a repo-named subfolder.'
-          )}
-          checked={settings.nestWorkspaces}
-          onChange={() => updateSettings({ nestWorkspaces: !settings.nestWorkspaces })}
-        />
-      </SearchableSetting>
 
       {/* Why: the "Don't ask again" toast in the delete-worktree dialog
           deep-links here, so the wrapper id must stay stable. Renaming it

@@ -21,6 +21,7 @@ import {
   hasRepoWorktreeBasePath
 } from './ipc/worktree-logic'
 import { worktreePathComparisonKey } from './ipc/worktree-path-comparison'
+import { resolveNestedRepoDirName } from './ipc/worktree-nested-dir-name'
 import {
   retirementHostIdentity,
   retirementNamespaceKey,
@@ -38,6 +39,7 @@ const RETIREMENT_PROBE_NAME = 'orca-retirement-probe'
 type RetirementRuntimeStore = {
   getProjects?: ProjectRuntimeResolutionStore['getProjects']
   getSettings?: ProjectRuntimeResolutionStore['getSettings']
+  getRepos?: () => readonly Repo[]
 }
 type RetirementReadStore = RetirementRuntimeStore & {
   getRetiredWorktreeNameRegistry(repoId: string): RetiredNameRegistry
@@ -52,17 +54,32 @@ type RetirementWriteStore = RetirementRuntimeStore & {
   mergeRetiredWorktreeNamesForNamespace?(namespaceKey: string, names: Iterable<string>): boolean
   getSshTarget?: SshTargetLookup
 }
-type RetirementPathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
+type RetirementPathSettings = Pick<
+  GlobalSettings,
+  'nestWorkspaces' | 'workspaceDir' | 'worktreeLayout'
+> & {
   wslMirrorDistro?: string
+  nestedRepoDirName?: string
 }
 
-function withMirrorDistro(
+function withRepoPlacement(
   store: RetirementRuntimeStore,
   repo: Repo,
-  settings: RetirementPathSettings
+  settings: RetirementPathSettings,
+  repos: readonly Repo[] | undefined = store.getRepos?.()
 ): RetirementPathSettings {
   const distro = getWorktreeMirrorDistro(store, repo)
-  return distro ? { ...settings, wslMirrorDistro: distro } : settings
+  // Why: the probe must name the same nested folder create uses, or the namespace drifts.
+  const nestedRepoDirName = repos
+    ? resolveNestedRepoDirName(repo, repos, settings, (peer) =>
+        getWorktreeMirrorDistro(store, peer)
+      )
+    : undefined
+  return {
+    ...settings,
+    ...(distro ? { wslMirrorDistro: distro } : {}),
+    ...(nestedRepoDirName ? { nestedRepoDirName } : {})
+  }
 }
 
 /** Only canonical generator output is persisted. Collision retries advance canonical tiers, so a
@@ -87,7 +104,12 @@ async function getRetirementProbePath(
   repo: Repo,
   settings: RetirementPathSettings
 ): Promise<string> {
-  const pathSettings = getWorktreePathSettings(repo, settings)
+  const pathSettings = getWorktreePathSettings(
+    repo,
+    settings,
+    undefined,
+    settings.nestedRepoDirName
+  )
   return repo.connectionId
     ? computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
         useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
@@ -98,12 +120,18 @@ async function getRetirementProbePath(
 export function getRemoteRetirementNamespaceKey(
   repo: Repo,
   settings: RetirementPathSettings,
-  lookupSshTarget?: SshTargetLookup
+  lookupSshTarget?: SshTargetLookup,
+  repos?: readonly Repo[]
 ): string | null {
   if (!repo.connectionId) {
     return null
   }
-  const pathSettings = getWorktreePathSettings(repo, settings)
+  const pathSettings = getWorktreePathSettings(
+    repo,
+    settings,
+    undefined,
+    repos ? resolveNestedRepoDirName(repo, repos, settings) : settings.nestedRepoDirName
+  )
   const probePath = computeRemoteWorktreePath(RETIREMENT_PROBE_NAME, repo.path, pathSettings, {
     useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
   })
@@ -132,6 +160,8 @@ async function getRetirementCollisionKey(
     repo.worktreeBasePath ?? '',
     settings.workspaceDir,
     settings.nestWorkspaces ? 'nested' : 'flat',
+    settings.worktreeLayout ?? '',
+    settings.nestedRepoDirName ?? '',
     settings.wslMirrorDistro ?? ''
   ].join('\u0000')
   const cached = collisionKeyCache.get(cacheKey)
@@ -195,7 +225,7 @@ export async function getRetiredNameRegistryForRepo(
     return EMPTY_RETIRED_NAME_REGISTRY
   }
   const lookup = sshTargetLookup(store)
-  const pathSettings = withMirrorDistro(store, repo, settings)
+  const pathSettings = withRepoPlacement(store, repo, settings, repos)
   let collisionKey: string | null = null
   try {
     collisionKey = await ensureRetiredWorktreeNamesBackfilled(store, repo, pathSettings)
@@ -222,7 +252,7 @@ export async function getRetiredNameRegistryForRepo(
     if (
       (await getRetirementCollisionKey(
         candidate,
-        withMirrorDistro(store, candidate, settings),
+        withRepoPlacement(store, candidate, settings, repos),
         lookup
       )) !== collisionKey
     ) {
@@ -258,7 +288,7 @@ export async function retireGeneratedWorktreeName(
   try {
     const namespaceKey = await getRetirementCollisionKey(
       repo,
-      withMirrorDistro(store, repo, settings),
+      withRepoPlacement(store, repo, settings),
       sshTargetLookup(store)
     )
     store.mergeRetiredWorktreeNamesForNamespace(namespaceKey, [name])
@@ -294,7 +324,7 @@ export async function ensureRetiredWorktreeNamesBackfilled(
   const probePath = await computeWorktreePathAsync(
     RETIREMENT_PROBE_NAME,
     repo.path,
-    getWorktreePathSettings(repo, settings, settings.wslMirrorDistro)
+    getWorktreePathSettings(repo, settings, settings.wslMirrorDistro, settings.nestedRepoDirName)
   )
   const scanKey = `${getRepoExecutionHostId(repo)}:${worktreePathComparisonKey(probePath)}`
   const names = await runRetirementBackfillScan(store, scanKey, () =>

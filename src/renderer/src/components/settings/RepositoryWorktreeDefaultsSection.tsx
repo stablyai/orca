@@ -12,6 +12,8 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/external-worktree-visibility'
+import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
+import { buildSiblingWorktreesBasePath } from '../../../../shared/worktree-layout'
 
 type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'> & {
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
@@ -19,7 +21,10 @@ type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktre
 
 type RepositoryWorktreeDefaultsSectionProps = {
   repo: Repo
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'worktreeVisibilityDefaults'> | null
+  settings:
+    | (Pick<GlobalSettings, 'workspaceDir' | 'worktreeVisibilityDefaults'> &
+        Partial<Pick<GlobalSettings, 'worktreeLayout'>>)
+    | null
   updateRepo: (
     repoId: string,
     updates: Partial<RepositoryWorktreeDefaultsUpdate>
@@ -182,7 +187,7 @@ export function RepositoryWorktreeDefaultsSection({
         <RepoSettingsDraftInput
           repoId={repo.id}
           storeValue={repo.worktreeBasePath ?? ''}
-          placeholder={settings?.workspaceDir ?? ''}
+          placeholder={getInheritedWorktreeLocation(repo, settings)}
           onTextChange={() => {}}
           onBlur={(e) => {
             const worktreeBasePath = e.currentTarget.value.trim() || undefined
@@ -204,4 +209,15 @@ export function RepositoryWorktreeDefaultsSection({
       </SearchableSetting>
     </>
   )
+}
+
+/** What an empty override falls back to, so the placeholder shows the real default. */
+function getInheritedWorktreeLocation(
+  repo: Pick<Repo, 'path'>,
+  settings: RepositoryWorktreeDefaultsSectionProps['settings']
+): string {
+  if (settings?.worktreeLayout === 'sibling') {
+    return buildSiblingWorktreesBasePath(getRuntimePathBasename(repo.path).replace(/\.git$/, ''))
+  }
+  return settings?.workspaceDir ?? ''
 }

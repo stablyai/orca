@@ -13,7 +13,12 @@ export function extractRetiredNameRegistriesByNamespace(
 ): Record<string, RetiredNameRegistry> {
   const lookup = (targetId: string) =>
     sourceState.sshTargets.find((target) => target.id === targetId)
-  const namespaceKey = getRemoteRetirementNamespaceKey(sourceRepo, sourceState.settings, lookup)
+  const namespaceKey = getRemoteRetirementNamespaceKey(
+    sourceRepo,
+    sourceState.settings,
+    lookup,
+    sourceState.repos
+  )
   if (!namespaceKey) {
     return {}
   }

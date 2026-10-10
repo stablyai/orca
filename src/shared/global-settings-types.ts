@@ -1,6 +1,7 @@
 import type { NativeChatGlobalSettings } from './native-chat-appearance-settings'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
+import type { WorktreeLayout } from './worktree-layout'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault-search-settings'
@@ -54,7 +55,11 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a
    *  host-varying setting is `host override ?? client default`. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
+  /** Legacy mirror of `worktreeLayout` (nested = true, flat = false) for builds that only know it. */
   nestWorkspaces: boolean
+  /** Where new git worktrees go. Absent on profiles from before it existed, which derive
+   *  nested/flat from `nestWorkspaces`; read it through `resolveWorktreeLayout`. */
+  worktreeLayout?: WorktreeLayout
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
   /** Set once the user dismisses the "local main is behind" suggestion toast, so

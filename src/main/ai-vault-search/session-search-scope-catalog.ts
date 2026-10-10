@@ -17,7 +17,12 @@ export type SessionSearchScopeCatalog = {
   >[]
   /** Registered workspaces of this host, keyed by worktree id. */
   worktreeMeta: Readonly<Record<string, Pick<WorktreeMeta, 'projectId' | 'priorWorktreeIds'>>>
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
+  settings: Pick<
+    GlobalSettings,
+    'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory' | 'worktreeLayout'
+  >
+  /** Nested worktree folder per repo id, as worktree create assigns it. Absent = basenames. */
+  nestedRepoDirNames?: Readonly<Record<string, string>>
 }
 
 /** Bound to one execution host by whoever installs it: the host that answers. */

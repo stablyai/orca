@@ -47,11 +47,20 @@ function makeRepo(index: number, overrides: Partial<Repo> = {}): Repo {
   } as Repo
 }
 
-function makeStore(repos: Repo[]) {
+function makeStore(repos: Repo[], settingsOverride: Partial<GlobalSettings> = {}) {
   return {
-    getSettings: () => settings,
+    getSettings: () => ({ ...settings, ...settingsOverride }),
     getRepos: () => repos
   }
+}
+
+function buildTargets(repos: Repo[], settingsOverride: Partial<GlobalSettings> = {}) {
+  return buildWorktreeBaseDirectoryWatchTargets(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only getSettings and getRepos from the store.
+    makeStore(repos, settingsOverride) as unknown as Parameters<
+      typeof buildWorktreeBaseDirectoryWatchTargets
+    >[0]
+  )
 }
 
 function makeRemoteProvider() {
@@ -229,6 +238,44 @@ describe('worktree base directory watch target resolution', () => {
     expect([...targets.values()][0]?.path).toBe('C:/Users/alice/orca/.git')
   })
 
+  it('gives same-named repos on one root distinct nested folders, matching create', async () => {
+    const first = makeRepo(0, { path: join(PROJECT_ROOT, 'acme', 'app') })
+    const second = makeRepo(1, {
+      path: join(PROJECT_ROOT, 'globex', 'app'),
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.com/globex/app',
+        remoteName: 'origin',
+        remoteUrl: 'https://gitlab.com/globex/app.git'
+      }
+    })
+
+    const targets = await buildTargets([second, first])
+    const base = [...targets.values()].find((target) => target.kind === 'base')
+
+    expect(base?.path).toBe(WORKTREE_ROOT)
+    expect(
+      [...(base?.repos.values() ?? [])].map(({ repoId, repoName }) => [repoId, repoName])
+    ).toEqual([
+      ['repo-1', 'app-globex'],
+      ['repo-0', 'app']
+    ])
+  })
+
+  it('watches the sibling .worktrees folder of each repo as a flat root', async () => {
+    const repo = makeRepo(0)
+
+    const targets = await buildTargets([repo], { worktreeLayout: 'sibling' })
+    const base = [...targets.values()].find((target) => target.kind === 'base')
+
+    const slashes = (path: string | undefined) => path?.replace(/\\/g, '/')
+    expect(slashes(base?.path)).toBe(slashes(`${repo.path}.worktrees`))
+    expect(base?.repos.get(repo.id)).toEqual({
+      repoId: repo.id,
+      repoName: 'project-0',
+      nestWorkspaces: false
+    })
+  })
+
   it('does not publish ordered partial targets when a repo resolver rejects unexpectedly', async () => {
     const completed = makeRepo(0)
     const broken = makeRepo(1)
@@ -238,9 +285,10 @@ describe('worktree base directory watch target resolution', () => {
       }
     })
 
-    await expect(
-      buildWorktreeBaseDirectoryWatchTargets(makeStore([completed, broken]) as never)
-    ).rejects.toThrow('unexpected resolver failure')
+    // Flat: a nested layout reads every repo path up front to assign folder names.
+    await expect(buildTargets([completed, broken], { nestWorkspaces: false })).rejects.toThrow(
+      'unexpected resolver failure'
+    )
     expect(statMock).toHaveBeenCalled()
   })
 })

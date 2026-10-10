@@ -260,7 +260,8 @@ export function registerSettingsHandlers(
     }
     if (
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
-      ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
+      ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces) ||
+      ('worktreeLayout' in sanitizedArgs && before.worktreeLayout !== result.worktreeLayout)
     ) {
       void prepareLocalWorktreeRootsForRepos(store)
       scheduleCurrentWorktreeBaseDirectoryWatcherSync()

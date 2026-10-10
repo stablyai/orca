@@ -30,7 +30,12 @@ export function collectOrcadMigrationRetiredWorktreeNamespaces(
     { sourceNamespaceKeys: Set<string>; registry: RetiredNameRegistry }
   >()
   for (const repo of catalog.repositories) {
-    const canonicalSource = getRemoteRetirementNamespaceKey(repo, state.settings, lookup)
+    const canonicalSource = getRemoteRetirementNamespaceKey(
+      repo,
+      state.settings,
+      lookup,
+      state.repos
+    )
     if (!canonicalSource) {
       continue
     }

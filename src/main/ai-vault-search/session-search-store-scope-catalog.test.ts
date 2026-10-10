@@ -51,6 +51,20 @@ describe('scope catalog from the profile store', () => {
     expect(Object.keys(remote.worktreeMeta)).toEqual(['ssh-repo::/srv/one'])
   })
 
+  it('assigns nested folders per host the way worktree create does', () => {
+    const sameName = store()
+    const repos = [
+      { id: 'first', path: '/work/acme/app', addedAt: 1 },
+      { id: 'second', path: '/work/globex/app', addedAt: 2 },
+      { id: 'remote', path: '/srv/app', connectionId: 'box', addedAt: 0 }
+    ]
+    const catalog = sessionSearchScopeCatalogFromStore(
+      { ...sameName, getRepos: () => repos },
+      'local'
+    )
+    expect(catalog.nestedRepoDirNames).toEqual({ first: 'app', second: 'app-second' })
+  })
+
   it('carries the placement settings a managed worktree directory is derived from', () => {
     expect(sessionSearchScopeCatalogFromStore(store(), 'local').settings).toEqual({
       workspaceDir: '/home/me/orca/workspaces',

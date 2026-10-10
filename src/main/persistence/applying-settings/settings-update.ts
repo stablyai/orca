@@ -20,6 +20,7 @@ import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeWorktreeLayoutUpdate } from '../../../shared/worktree-layout'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -220,6 +221,11 @@ export function updateSettings(
         mobilePairingCustomAddress
       )
     }
+  }
+  // Why before history: a layout change can flip nestWorkspaces, which history records.
+  const worktreeLayoutUpdate = normalizeWorktreeLayoutUpdate(operations.state.settings, updates)
+  if (worktreeLayoutUpdate) {
+    Object.assign(sanitizedUpdates, worktreeLayoutUpdate)
   }
   const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
     operations.state.settings,

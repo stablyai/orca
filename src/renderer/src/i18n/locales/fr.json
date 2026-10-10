@@ -6605,6 +6605,18 @@
         }
       },
       "settings": {
+        "WorktreeLayoutSetting": {
+          "nestedLabel": "Imbriqué",
+          "nestedDetail": "Dans le dossier des espaces de travail, dans un dossier portant le nom du dépôt.",
+          "flatLabel": "À plat",
+          "flatDetail": "Directement dans le dossier des espaces de travail.",
+          "siblingLabel": "À côté du dépôt",
+          "siblingDetail": "Dans un dossier .worktrees à côté du dépôt, hors de son arbre de travail. Ignore le dossier des espaces de travail; l'Emplacement des worktrees du projet s'applique toujours.",
+          "title": "Disposition des espaces de travail",
+          "description": "Choisissez où sont créés les nouveaux dossiers d'espaces de travail.",
+          "flatKeyword": "à plat",
+          "siblingKeyword": "à côté du dépôt"
+        },
         "keep": {
           "local": {
             "main": {
@@ -7473,8 +7485,6 @@
           "28bc3d085e": "Demander confirmation avant de supprimer un espace de travail depuis le menu contextuel. En cas d'échec, l'option « Forcer la suppression » reste disponible.",
           "9f380934cf": "Confirmer avant de supprimer les espaces de travail",
           "5734db82af": "Afficher une boîte de dialogue de confirmation avant de supprimer un espace de travail.",
-          "4fbf910ded": "Créer les espaces de travail dans un sous-dossier nommé d'après le dépôt.",
-          "ba3480642f": "Imbriquer les espaces de travail",
           "a246f5ce6f": "Dossier racine où sont créés les dossiers des espaces de travail.",
           "5567191a6e": "Parcourir",
           "0e9fc0eadc": "Dossier des espaces de travail",
@@ -9984,8 +9994,6 @@
             "93f6ec5e70": "répertoire",
             "9bde064915": "sous-dossier",
             "ec5049e510": "imbriqué",
-            "b9cffd374d": "Créer les espaces de travail dans un sous-dossier nommé d'après le dépôt.",
-            "141f71c69f": "Imbriquer les espaces de travail",
             "7887a2c262": "dossier",
             "7baf524b04": "espace de travail",
             "d0bc793689": "Dossier racine où sont créés les dossiers des espaces de travail.",

@@ -81,6 +81,24 @@ describe('getRetiredNameRegistryForRepo', () => {
     })
   })
 
+  it('splits same-named repos once the later one nests under its own folder', async () => {
+    const store = storeOf({ 'repo-a': [FIRST], 'repo-b': [SECOND] })
+    const repos = [makeRepo('repo-a', '/repos/x/app'), makeRepo('repo-b', '/repos/y/app')]
+
+    // Both would have shared /workspaces/app; repo-b now creates into /workspaces/app-repob.
+    expect(
+      (await getRetiredNameRegistryForRepo(store, repos[1], repos, settingsFor(true))).names
+    ).toEqual([SECOND])
+    expect(
+      (
+        await getRetiredNameRegistryForRepo(store, repos[1], repos, {
+          ...settingsFor(true),
+          worktreeLayout: 'flat'
+        })
+      ).names.toSorted()
+    ).toEqual([FIRST, SECOND].toSorted())
+  })
+
   it('never probes a path for peers that hold no retirements', async () => {
     const pathReads: string[] = []
     const spyRepo = (id: string, path: string): Repo => {

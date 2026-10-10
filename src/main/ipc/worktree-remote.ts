@@ -97,6 +97,7 @@ import {
   hasRepoWorktreeBasePath,
   mergeWorktree
 } from './worktree-logic'
+import { resolveStoreNestedRepoDirName } from './worktree-nested-dir-name'
 import { findCreatedWorktree, resolveCreatedWorktree } from './created-worktree-reconciliation'
 import type { BranchPrefixSettings } from '../../shared/branch-prefix'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -1733,7 +1734,12 @@ export async function createRemoteWorktree(
   const fsProvider = getSshFilesystemProvider(repo.connectionId!)
 
   const settings = store.getSettings()
-  const worktreePathSettings = getWorktreePathSettings(repo, settings)
+  const worktreePathSettings = getWorktreePathSettings(
+    repo,
+    settings,
+    undefined,
+    resolveStoreNestedRepoDirName(store, repo, settings)
+  )
   let effectiveRequestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   let effectiveSanitizedName = sanitizedName
@@ -2223,7 +2229,8 @@ async function performLocalWorktreeCreate(
   const worktreePathSettings = getWorktreePathSettings(
     repo,
     settings,
-    getWorktreeMirrorDistro(store, repo)
+    getWorktreeMirrorDistro(store, repo),
+    resolveStoreNestedRepoDirName(store, repo, settings)
   )
   const localGitExecOptions = getLocalProjectGitExecOptions(store, repo)
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)

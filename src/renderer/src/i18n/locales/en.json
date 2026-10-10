@@ -7605,8 +7605,6 @@
           "28bc3d085e": "Show a confirmation before deleting a workspace from the context menu. Failed deletes still surface a Force Delete fallback.",
           "9f380934cf": "Ask Before Deleting Workspaces",
           "5734db82af": "Show a confirmation dialog before deleting a workspace.",
-          "4fbf910ded": "Create workspaces inside a repo-named subfolder.",
-          "ba3480642f": "Nest Workspaces",
           "a246f5ce6f": "Root directory where workspace folders are created.",
           "5567191a6e": "Browse",
           "0e9fc0eadc": "Workspace Directory",
@@ -10133,8 +10131,6 @@
             "93f6ec5e70": "directory",
             "9bde064915": "subfolder",
             "ec5049e510": "nested",
-            "b9cffd374d": "Create workspaces inside a repo-named subfolder.",
-            "141f71c69f": "Nest Workspaces",
             "7887a2c262": "folder",
             "7baf524b04": "workspace",
             "d0bc793689": "Root directory where workspace folders are created.",
@@ -12691,6 +12687,18 @@
           "offCount": "{{count}} off",
           "machines": "Machines",
           "machinesDescription": "Choose which machines can show notifications on this computer. A paired server’s switch also covers work reached through it."
+        },
+        "WorktreeLayoutSetting": {
+          "nestedLabel": "Nested",
+          "nestedDetail": "Inside the workspace directory, in a folder named after the repository.",
+          "flatLabel": "Flat",
+          "flatDetail": "Directly inside the workspace directory.",
+          "siblingLabel": "Next to repository",
+          "siblingDetail": "In a .worktrees folder beside the repository, outside its working tree. Ignores the workspace directory; a project's Worktree Location still applies.",
+          "title": "Workspace Layout",
+          "description": "Choose where new workspace folders are created.",
+          "flatKeyword": "flat",
+          "siblingKeyword": "next to repository"
         }
       },
       "right": {

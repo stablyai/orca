@@ -4,7 +4,6 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 
 vi.mock('../../store', () => ({
@@ -66,7 +65,7 @@ function render(
   repo: Repo,
   updateRepo: React.ComponentProps<typeof RepositoryWorktreeDefaultsSection>['updateRepo'],
   options: {
-    settings?: Pick<GlobalSettings, 'workspaceDir' | 'worktreeVisibilityDefaults'> | null
+    settings?: React.ComponentProps<typeof RepositoryWorktreeDefaultsSection>['settings']
     refreshRepo?: (repoId: string) => void | Promise<unknown>
   } = {}
 ): void {
@@ -159,6 +158,16 @@ describe('RepositoryWorktreeDefaultsSection — worktree path', () => {
     blurInput(input)
 
     expect(updateRepo).toHaveBeenCalledWith('repo-1', { worktreeBasePath: undefined })
+  })
+
+  it('shows the location an empty override inherits, including the sibling folder', () => {
+    render(BASE_REPO, vi.fn(), { settings: { workspaceDir: '/home/user/orca/workspaces' } })
+    expect(getWorktreePathInput().placeholder).toBe('/home/user/orca/workspaces')
+
+    render(BASE_REPO, vi.fn(), {
+      settings: { workspaceDir: '/home/user/orca/workspaces', worktreeLayout: 'sibling' }
+    })
+    expect(getWorktreePathInput().placeholder).toBe('../project.worktrees')
   })
 
   it('calls updateRepo with undefined when the value is whitespace-only', () => {

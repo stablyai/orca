@@ -6499,6 +6499,18 @@
         }
       },
       "settings": {
+        "WorktreeLayoutSetting": {
+          "nestedLabel": "Anidado",
+          "nestedDetail": "Dentro del directorio de espacio de trabajo, en una carpeta con el nombre del repositorio.",
+          "flatLabel": "Plano",
+          "flatDetail": "Directamente dentro del directorio de espacio de trabajo.",
+          "siblingLabel": "Junto al repositorio",
+          "siblingDetail": "En una carpeta .worktrees junto al repositorio, fuera de su árbol de trabajo. Ignora el directorio de espacio de trabajo; la Ubicación del worktree del proyecto sigue aplicándose.",
+          "title": "Disposición de espacios de trabajo",
+          "description": "Elige dónde se crean las nuevas carpetas de espacios de trabajo.",
+          "flatKeyword": "plano",
+          "siblingKeyword": "junto al repositorio"
+        },
         "keep": {
           "local": {
             "main": {
@@ -7367,8 +7379,6 @@
           "28bc3d085e": "Muestra una confirmación antes de eliminar un espacio de trabajo desde el menú contextual. Las eliminaciones fallidas aún muestran la opción Forzar eliminación.",
           "9f380934cf": "Preguntar antes de eliminar espacios de trabajo",
           "5734db82af": "Muestra un cuadro de diálogo de confirmación antes de eliminar un espacio de trabajo.",
-          "4fbf910ded": "Crea espacios de trabajo dentro de una subcarpeta con el nombre del repositorio.",
-          "ba3480642f": "Espacios de trabajo anidados",
           "a246f5ce6f": "Directorio raíz donde se crean las carpetas del espacio de trabajo.",
           "5567191a6e": "Examinar",
           "0e9fc0eadc": "Directorio de espacio de trabajo",
@@ -9836,8 +9846,6 @@
             "93f6ec5e70": "directorio",
             "9bde064915": "subcarpeta",
             "ec5049e510": "anidado",
-            "b9cffd374d": "Crea espacios de trabajo dentro de una subcarpeta con el nombre del repositorio.",
-            "141f71c69f": "Espacios de trabajo anidados",
             "7887a2c262": "carpeta",
             "7baf524b04": "espacio de trabajo",
             "d0bc793689": "Directorio raíz donde se crean las carpetas del espacio de trabajo.",

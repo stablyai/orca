@@ -113,7 +113,11 @@ function addRepoScopePaths(
   catalog: SessionSearchScopeCatalog
 ): void {
   paths.add(repo.path)
-  for (const directory of managedWorktreeDirectories(repo, catalog.settings)) {
+  for (const directory of managedWorktreeDirectories(
+    repo,
+    catalog.settings,
+    catalog.nestedRepoDirNames?.[repo.id]
+  )) {
     paths.add(directory)
   }
   for (const worktreeId of Object.keys(catalog.worktreeMeta)) {

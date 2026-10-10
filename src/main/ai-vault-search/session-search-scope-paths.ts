@@ -8,6 +8,7 @@ import {
 import { isFolderRepo } from '../../shared/repo-kind'
 import { resolveConfiguredWorktreeBasePaths } from '../../shared/worktree/configured-worktree-base-path'
 import { buildKnownOrcaWorkspaceLayouts } from '../../shared/worktree/ownership'
+import { buildSiblingWorktreesBasePath, resolveWorktreeLayout } from '../../shared/worktree-layout'
 import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
 
 type ScopeRepo = SessionSearchScopeCatalog['repos'][number]
@@ -50,7 +51,8 @@ export class ScopePathSet {
  */
 export function managedWorktreeDirectories(
   repo: ScopeRepo,
-  settings: SessionSearchScopeCatalog['settings']
+  settings: SessionSearchScopeCatalog['settings'],
+  nestedRepoDirName?: string
 ): string[] {
   if (isFolderRepo(repo)) {
     return []
@@ -58,8 +60,13 @@ export function managedWorktreeDirectories(
   const configured = new Set(
     resolveConfiguredWorktreeBasePaths(repo).map(normalizeRuntimePathForComparison)
   )
-  const repoName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
+  const folderName = getRuntimePathBasename(repo.path).replace(/\.git$/, '')
+  // Why the resolved folder: a same-named repo on this host may own `<root>/<basename>`.
+  const repoName = nestedRepoDirName ?? folderName
   const directories: string[] = []
+  if (configured.size === 0 && resolveWorktreeLayout(settings) === 'sibling' && folderName) {
+    directories.push(resolveRuntimePath(repo.path, buildSiblingWorktreesBasePath(folderName)))
+  }
   for (const layout of buildKnownOrcaWorkspaceLayouts(settings, repo)) {
     if (configured.has(normalizeRuntimePathForComparison(layout.path))) {
       directories.push(layout.path)

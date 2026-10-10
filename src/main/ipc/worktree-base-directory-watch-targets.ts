@@ -10,7 +10,6 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import {
   isRuntimePathAbsolute,
   isWindowsAbsolutePathLike,
-  getRuntimePathBasename,
   normalizeRuntimePathForComparison,
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
@@ -23,6 +22,8 @@ import {
   getWorktreePathSettings,
   hasRepoWorktreeBasePath
 } from './worktree-logic'
+import { getRepoFolderName } from './worktree-workspace-root'
+import { assignNestedRepoDirNames } from './worktree-nested-dir-name'
 import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
 import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
@@ -136,14 +137,20 @@ async function maybeAddBaseTarget(
   targets: Map<string, WorktreeBaseWatchTarget>,
   repo: Repo,
   settings: GlobalSettings,
-  mirrorDistro: string | undefined,
+  placement: RepoPlacement,
   connectionId?: string
 ): Promise<void> {
-  const pathSettings = getWorktreePathSettings(repo, settings, mirrorDistro)
+  const pathSettings = getWorktreePathSettings(
+    repo,
+    settings,
+    placement.mirrorDistro,
+    placement.nestedRepoDirName
+  )
   const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, pathSettings, connectionId)
   const config = {
     repoId: repo.id,
-    repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
+    // Why the resolved folder: two same-named repos on one root must not match each other's events.
+    repoName: pathSettings.nestedRepoDirName ?? getRepoFolderName(repo.path),
     nestWorkspaces
   }
   const remoteProvider = getRemoteProvider(connectionId)
@@ -189,10 +196,12 @@ async function maybeAddBaseTarget(
   }
 }
 
+type RepoPlacement = { mirrorDistro: string | undefined; nestedRepoDirName: string | undefined }
+
 async function resolveRepoTargets(
   repo: Repo,
   settings: GlobalSettings,
-  mirrorDistro: string | undefined
+  placement: RepoPlacement
 ): Promise<Map<string, WorktreeBaseWatchTarget>> {
   const targets = new Map<string, WorktreeBaseWatchTarget>()
   if (isFolderRepo(repo)) {
@@ -200,9 +209,9 @@ async function resolveRepoTargets(
   }
   const executionHostId = getRepoExecutionHostId(repo)
   if (executionHostId === LOCAL_EXECUTION_HOST_ID) {
-    await maybeAddBaseTarget(targets, repo, settings, mirrorDistro)
+    await maybeAddBaseTarget(targets, repo, settings, placement)
   } else if (repo.connectionId) {
-    await maybeAddBaseTarget(targets, repo, settings, mirrorDistro, repo.connectionId)
+    await maybeAddBaseTarget(targets, repo, settings, placement, repo.connectionId)
   }
   return targets
 }
@@ -227,10 +236,22 @@ export async function buildWorktreeBaseDirectoryWatchTargets(
   store: Store
 ): Promise<Map<string, WorktreeBaseWatchTarget>> {
   const settings = store.getSettings()
+  const repos = store.getRepos()
+  const mirrorDistros = new Map(
+    repos.map((repo) => [repo.id, getWorktreeMirrorDistro(store, repo)])
+  )
+  // Why one pass: the nested folder names come from the same assignment worktree create uses.
+  const nestedRepoDirNames = assignNestedRepoDirNames(repos, settings, (repo) =>
+    mirrorDistros.get(repo.id)
+  )
   const resolvedRepoTargets = await mapWithConcurrency(
-    store.getRepos(),
+    repos,
     WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY,
-    (repo) => resolveRepoTargets(repo, settings, getWorktreeMirrorDistro(store, repo))
+    (repo) =>
+      resolveRepoTargets(repo, settings, {
+        mirrorDistro: mirrorDistros.get(repo.id),
+        nestedRepoDirName: nestedRepoDirNames.get(repo.id)
+      })
   )
   const targets = new Map<string, WorktreeBaseWatchTarget>()
   for (const repoTargets of resolvedRepoTargets) {

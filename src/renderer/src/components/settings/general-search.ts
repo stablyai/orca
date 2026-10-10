@@ -43,15 +43,24 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.general.search.141f71c69f', 'Nest Workspaces'),
+    title: translate('auto.components.settings.WorktreeLayoutSetting.title', 'Workspace Layout'),
     description: translate(
-      'auto.components.settings.general.search.b9cffd374d',
-      'Create workspaces inside a repo-named subfolder.'
+      'auto.components.settings.WorktreeLayoutSetting.description',
+      'Choose where new workspace folders are created.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.general.search.ec5049e510', 'nested'),
       ...translateSearchKeyword('auto.components.settings.general.search.9bde064915', 'subfolder'),
-      ...translateSearchKeyword('auto.components.settings.general.search.93f6ec5e70', 'directory')
+      ...translateSearchKeyword('auto.components.settings.general.search.93f6ec5e70', 'directory'),
+      ...translateSearchKeyword(
+        'auto.components.settings.WorktreeLayoutSetting.flatKeyword',
+        'flat'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.WorktreeLayoutSetting.siblingKeyword',
+        'next to repository'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree')
     ]
   },
   {

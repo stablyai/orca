@@ -13,6 +13,7 @@ import { resolveDefaultBaseRefWithLocalGit } from '../git/repo'
 import type { LocalGitExecOptions } from '../git/repo-default-base-ref'
 import { resolveLocalGitUsername } from '../git/git-username'
 import { computeWorkspaceRoot, getWorktreePathSettings } from '../ipc/worktree-logic'
+import { resolveStoreNestedRepoDirName } from '../ipc/worktree-nested-dir-name'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
@@ -63,7 +64,12 @@ export function createRuntimeLocalManagedWorktree<T>(args: RuntimeLocalWorktreeC
 async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
   const { request, repo, store } = args
   const settings = store.getSettings()
-  const pathSettings = getWorktreePathSettings(repo, settings, getWorktreeMirrorDistro(store, repo))
+  const pathSettings = getWorktreePathSettings(
+    repo,
+    settings,
+    getWorktreeMirrorDistro(store, repo),
+    resolveStoreNestedRepoDirName(store, repo, settings)
+  )
   const gitExecOptions = getLocalProjectGitExecOptions(store, repo)
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   args.timing.recordExecutionHost(localWorktreeCreateExecutionHost(gitExecOptions))

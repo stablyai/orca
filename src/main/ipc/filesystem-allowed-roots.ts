@@ -6,6 +6,7 @@ import {
   resolveLocalProjectRuntimesForRepos
 } from '../project-runtime-git-options'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { resolveWorktreeLayout } from '../../shared/worktree-layout'
 import {
   buildProjectGroupChildIndex,
   collectProjectGroupSubtreeIds,
@@ -138,7 +139,8 @@ export function getAllowedRoots(store: Store): string[] {
     ...localRepos.map((repo) => resolve(repo.path)),
     ...getLocalFolderScopeRoots(store, repos)
   ]
-  if (settings.workspaceDir) {
+  // Why the layout check: sibling roots come from each repo path, not from workspaceDir.
+  if (settings.workspaceDir || resolveWorktreeLayout(settings) === 'sibling') {
     if (localRepos.length === 0) {
       const unanchoredRoot = resolveUnanchoredWorkspaceRoot(settings.workspaceDir)
       if (unanchoredRoot) {
