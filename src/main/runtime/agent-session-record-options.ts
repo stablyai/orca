@@ -1,21 +1,21 @@
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type {
-  AgentSessionModelSource,
+  AgentSessionModelChooser,
   AgentSessionOptionsReplacement
 } from '../../shared/agent-session-options-replacement'
 
 /** Who chose the model the new options hold: the replacement's word; else, while the record held a
  *  model, whoever chose that one, since a child's report of it or the start's replacement of a gone
  *  pick stands for the same choice; else nobody. */
-function replacedModelSource(
+function replacedModelChooser(
   record: AgentSessionRecord,
   replacement: AgentSessionOptionsReplacement
-): AgentSessionModelSource | undefined {
+): AgentSessionModelChooser | undefined {
   if (!replacement.options.model) {
     return undefined
   }
-  return replacement.modelSource ?? (record.options?.model ? record.modelSource : undefined)
+  return replacement.modelChosenBy ?? (record.options?.model ? record.modelChosenBy : undefined)
 }
 
 export function replaceAgentSessionRecordOptions(
@@ -28,12 +28,12 @@ export function replaceAgentSessionRecordOptions(
   if (lease.runtimeFence !== replacement.fence || (lease.claimStatus !== 'live' && !atRest)) {
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
-  const { modelSource: _previous, ...rest } = record
-  const modelSource = replacedModelSource(record, replacement)
+  const { modelChosenBy: _previous, ...rest } = record
+  const modelChosenBy = replacedModelChooser(record, replacement)
   return {
     ...rest,
     options: { ...replacement.options },
-    ...(modelSource ? { modelSource } : {}),
+    ...(modelChosenBy ? { modelChosenBy } : {}),
     updatedAt: replacement.now
   }
 }

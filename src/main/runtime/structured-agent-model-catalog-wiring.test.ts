@@ -50,7 +50,7 @@ async function hostCatalog(input: { agent?: 'claude' | 'codex'; stale?: boolean;
   record.location.workspaceKind = 'folder'
   record.options = input.model ? { model: input.model } : {}
   if (input.model) {
-    record.modelSource = 'picker'
+    record.modelChosenBy = 'picker'
   }
   const fingerprint = agentModelCatalogFingerprint({ agent, accountHome: home, wslDistro: null })
   const saved: AgentModelCatalogSuccess = {

@@ -10,12 +10,9 @@ import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { StructuredAgentRegistry } from '../agent-session-wire/structured-agent-registry'
 import {
   AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
-  AGENT_MODEL_CATALOG_START_WAIT_MS,
   type AgentModelCatalogEntry,
   type AgentModelCatalogStore
 } from './agent-model-catalog-store'
-
-const CHILD_LISTING_CLOCK_MAX = 256
 
 /** The rules a catalog read applies to the chat's selected model, for an agent whose host replaces
  *  a gone selection; inert for any other agent, and with no selection it may replace. */
@@ -57,43 +54,24 @@ export function selectedModelRules(input: {
   }
 }
 
-/** Whether the re-listing settled within the wait a read may afford: a start's few seconds, a
- *  picker follow-up's deadline, none for any other read. Bookkeeping never holds a user action. */
+/** Whether the re-listing settled within the wait a read may afford: a start's whole read is
+ *  capped by its caller (`agentModelLaunchOptions`), a picker follow-up waits to its deadline, and
+ *  any other read waits not at all. Bookkeeping never holds a user action. */
 export function relistingSettledInTime(
   relisting: Promise<unknown>,
   read: { forStart?: boolean; waitForListing?: boolean }
 ): Promise<boolean> {
-  const waitMs = read.forStart
-    ? AGENT_MODEL_CATALOG_START_WAIT_MS
-    : read.waitForListing
-      ? AGENT_MODEL_CATALOG_PICKER_WAIT_MS
-      : 0
-  return waitMs > 0
+  if (read.forStart) {
+    return relisting.then(
+      () => true,
+      () => false
+    )
+  }
+  return read.waitForListing
     ? withTimeout(
         relisting.then(() => true),
-        waitMs,
+        AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
         false
       )
     : Promise.resolve(false)
-}
-
-/** When each running child first saved its listing, by the store's clock, for the latest children. */
-export function childListingClock(now: () => number): (child: string) => number {
-  const firstSaves = new Map<string, number>()
-  return (child) => {
-    const first = firstSaves.get(child)
-    if (first !== undefined) {
-      return first
-    }
-    const at = now()
-    firstSaves.set(child, at)
-    // Insertion order is age order: the oldest child's stamp goes first.
-    for (const old of firstSaves.keys()) {
-      if (firstSaves.size <= CHILD_LISTING_CLOCK_MAX) {
-        break
-      }
-      firstSaves.delete(old)
-    }
-    return at
-  }
 }

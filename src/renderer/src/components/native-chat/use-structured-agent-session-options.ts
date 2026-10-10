@@ -16,7 +16,10 @@ import {
   structuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
 } from '../../../../shared/structured-agent-session-options'
-import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
+import {
+  sessionOptionsPredateHostModelReplacement,
+  structuredAgentSessionOptionView
+} from '../../../../shared/structured-agent-session-option-view'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
@@ -112,7 +115,15 @@ export function useStructuredAgentSessionOptions(args: {
     ...(args.providerRunning ? { providerRunning: true } : {}),
     activeOptionRecordRef,
     updateOptionState,
-    onListingSettled: rereadOptions
+    // Once per final answer: the re-read's own answer is current, so it starts no other.
+    onCatalogAnswer: (catalog, waitedForListing) => {
+      if (
+        waitedForListing ||
+        sessionOptionsPredateHostModelReplacement(optionStateRef.current, catalog)
+      ) {
+        rereadOptions()
+      }
+    }
   })
 
   // What a settled pick must remember so the next launch starts where the user left off.

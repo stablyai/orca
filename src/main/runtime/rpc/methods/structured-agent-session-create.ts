@@ -20,7 +20,7 @@ import type {
 import { structuredAgentSessionOptionOverridesRefusal } from '../../../native-chat/agent-session-wire/structured-agent-session-options-read'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { StructuredAgentId } from '../../../../shared/agent-session-provider-handle'
-import type { AgentSessionModelSource } from '../../../../shared/agent-session-options-replacement'
+import type { AgentSessionModelChooser } from '../../../../shared/agent-session-options-replacement'
 import {
   resolveUncommittedStructuredCreate,
   type StructuredCreateRefused
@@ -74,7 +74,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   options?: Readonly<Record<string, string>>
   /** Who chose a model `options` name: a client's picker, else a caller that named it outright. */
-  optionsModelSource?: AgentSessionModelSource
+  optionsModelChosenBy?: AgentSessionModelChooser
   /** The tab id the caller reserved for this chat, taken when its tab is published; absent, the tab
    *  gets the id clients derive. Beside `options`, after the fingerprint, likewise. */
   tabId?: string
@@ -128,14 +128,14 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   } = resolved
   const explicitOptions =
     args.options && (atRest ? { ...resolved.options, ...args.options } : args.options)
-  // A model the explicit options name is theirs to vouch for; one the seed still names is a picker's.
+  // A model the explicit options name is theirs to vouch for; one the seed still names is its own.
   const explicit = explicitOptions
     ? {
         options: explicitOptions,
-        modelSource: args.options?.model
-          ? (args.optionsModelSource ?? 'caller')
+        modelChosenBy: args.options?.model
+          ? (args.optionsModelChosenBy ?? 'caller')
           : explicitOptions.model
-            ? resolved.modelSource
+            ? resolved.modelChosenBy
             : undefined
       }
     : {}

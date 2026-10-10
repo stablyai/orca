@@ -106,4 +106,57 @@ describe('a stopped chat whose saved model the re-listing finds gone', () => {
     expect(reads).toBe(2)
     expect(NO_MUTATE).not.toHaveBeenCalled()
   })
+
+  it('reads the options once more when the catalog answer lands after the listing did', async () => {
+    // The options answer predates the listing; the catalog read reaches the host only after it.
+    const late = deferred<AgentSessionModelCatalogResult>()
+    const optionReads: AgentSessionOptionsResult[] = [
+      { models: MODELS, current: { model: 'gone' } },
+      { models: MODELS, current: { model: 'opus' } }
+    ]
+    let reads = 0
+    let catalogReads = 0
+    mocks.call.mockImplementation((_target: unknown, method: string) => {
+      if (method === 'agentSession.options') {
+        return Promise.resolve(optionReads[Math.min(reads++, optionReads.length - 1)])
+      }
+      if (method === 'agentSession.modelCatalog') {
+        catalogReads += 1
+        return late.promise
+      }
+      return new Promise(() => {})
+    })
+    const view = renderHook(() =>
+      useStructuredAgentSessionOptions({
+        agent: 'claude',
+        sessionId: 'stopped-chat',
+        target: LOCAL,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence: 3,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate: NO_MUTATE
+      })
+    )
+    const shownModel = () => {
+      const model = view.result.current.optionSnapshot.find((entry) => entry.id === 'model')
+      return model?.kind.type === 'select' ? model.kind.currentValue : undefined
+    }
+    await waitFor(() => expect(shownModel()).toBe('gone'))
+
+    late.resolve({
+      origin: 'probe',
+      models: MODELS,
+      fetchedAt: 2_000,
+      unlistedModelReplacement: 'opus'
+    })
+    await waitFor(() => expect(shownModel()).toBe('opus'))
+    // One re-read, and the current answer it brings starts no other.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(reads).toBe(2)
+    expect(catalogReads).toBe(1)
+    expect(NO_MUTATE).not.toHaveBeenCalled()
+  })
 })

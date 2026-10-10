@@ -35,9 +35,9 @@ export function useMobileHostModelCatalogUpgrade(args: {
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
-  /** The listing the host said was running has landed: the session's own options answer (a
-   *  stopped chat's, decided against that listing) is worth reading again. */
-  onListingSettled?: () => void
+  /** Every final host answer, once applied; `waitedForListing` when it is the listing the host
+   *  said was running, which a stopped chat's options answer may predate. */
+  onCatalogAnswer?: (catalog: AgentSessionModelCatalogResult, waitedForListing: boolean) => void
 }): void {
   const {
     activeOptionRecordRef,
@@ -51,10 +51,10 @@ export function useMobileHostModelCatalogUpgrade(args: {
     updateOptionState,
     worktree
   } = args
-  const onListingSettled = useRef(args.onListingSettled)
+  const onCatalogAnswer = useRef(args.onCatalogAnswer)
   useEffect(() => {
-    onListingSettled.current = args.onListingSettled
-  }, [args.onListingSettled])
+    onCatalogAnswer.current = args.onCatalogAnswer
+  }, [args.onCatalogAnswer])
   useEffect(() => {
     if (!client || !sessionId || !enabled || !agent || !optionCatalog) {
       return
@@ -100,11 +100,14 @@ export function useMobileHostModelCatalogUpgrade(args: {
           return read(true).then((settled) => {
             apply(settled)
             if (!stale) {
-              onListingSettled.current?.()
+              onCatalogAnswer.current?.(settled, true)
             }
           })
         }
         apply(catalog)
+        if (!stale) {
+          onCatalogAnswer.current?.(catalog, false)
+        }
         return undefined
       })
       .catch(settleBuiltin)

@@ -272,4 +272,26 @@ describe('structured agent session options', () => {
     expect(viewModel(live, seed, { model: 'gpt-5.5' })).toBe('gpt-5.5')
     expect(live.record.model?.value).toBe('gpt-5.6-luna')
   })
+
+  it('counts a seed saved under the provider id a listed alias runs as listed', () => {
+    const hosted = applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        origin: 'probe',
+        models: [
+          { id: 'luna', label: 'Luna', isDefault: true, efforts: [], resolvedModel: 'gpt-5.6-luna' }
+        ],
+        fetchedAt: 1
+      },
+      { newLaunch: true }
+    )
+    // The same rule the host applies, so the picker never shows the placeholder for a listed seed.
+    expect(
+      structuredAgentSessionOptionView(hosted, { model: 'gpt-5.6-luna' }, {}).catalogSource
+    ).toBe('host')
+    expect(structuredAgentSessionOptionView(hosted, { model: 'gpt-next' }, {}).catalogSource).toBe(
+      'seed'
+    )
+  })
 })

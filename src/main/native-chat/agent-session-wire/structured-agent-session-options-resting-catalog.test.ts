@@ -75,7 +75,7 @@ function restingChat(input: {
   record.options = input.options ?? {}
   // A selection the user picked; a caller's model is never replaced.
   if (record.options.model) {
-    record.modelSource = 'picker'
+    record.modelChosenBy = 'picker'
   }
   const clock = { now: 1_000 }
   const store = new AgentModelCatalogStore({ now: () => clock.now })
@@ -131,10 +131,10 @@ function restingChat(input: {
       { store: { getRecord: () => record }, agents },
       {
         sessionId: record.sessionId,
-        persistOptions: async (options, modelSource) => {
+        persistOptions: async (options, modelChosenBy) => {
           record.options = options
-          if (modelSource) {
-            record.modelSource = modelSource
+          if (modelChosenBy) {
+            record.modelChosenBy = modelChosenBy
           }
         },
         publish: () => {}
@@ -297,5 +297,18 @@ describe('Claude picker catalog at rest', () => {
     const { result } = await chat.read()
     expect(result.current).toEqual({ model: 'gpt-unlisted' })
     expect(chat.probe).not.toHaveBeenCalled()
+  })
+})
+
+describe('who chose a stopped chat model', () => {
+  it("marks a model picked at rest as the picker's, and an effort-only pick keeps who chose it", async () => {
+    const chat = restingChat({ options: { model: 'claude-sonnet-4-5', effort: 'high' } })
+    // A model a caller named, which no later list replaces until the user picks one.
+    chat.record.modelChosenBy = 'caller'
+    await chat.write('effort', 'low')
+    expect(chat.record.modelChosenBy).toBe('caller')
+    await chat.write('model', 'claude-opus-4-5')
+    expect(chat.record.options).toMatchObject({ model: 'claude-opus-4-5' })
+    expect(chat.record.modelChosenBy).toBe('picker')
   })
 })

@@ -27,6 +27,7 @@ import {
 } from './mobile-structured-agent-session-rpc'
 import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session-option-persistence'
 import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
+import { sessionOptionsPredateHostModelReplacement } from '../../../src/shared/structured-agent-session-option-view'
 import {
   forgetMobileCreatedStructuredSession,
   mobileCreatedStructuredSession
@@ -76,7 +77,7 @@ export function useMobileStructuredAgentOptions(args: {
     id: string
     sequence: number
   } | null>(null)
-  // Bumped when a listing the host said was running lands, so the options read runs again.
+  // Bumped when the host's catalog answer may postdate the options answer, so that read runs again.
   const [optionRereads, setOptionRereads] = useState(0)
   const rereadOptions = useCallback(() => setOptionRereads((count) => count + 1), [])
   const [conversationSupport, setConversationSupport] = useState<{
@@ -119,7 +120,15 @@ export function useMobileStructuredAgentOptions(args: {
     optionCatalog,
     activeOptionRecordRef,
     updateOptionState,
-    onListingSettled: rereadOptions
+    // Once per final answer: the re-read's own answer is current, so it starts no other.
+    onCatalogAnswer: (catalog, waitedForListing) => {
+      if (
+        waitedForListing ||
+        sessionOptionsPredateHostModelReplacement(optionStateRef.current, catalog)
+      ) {
+        rereadOptions()
+      }
+    }
   })
 
   useEffect(() => {

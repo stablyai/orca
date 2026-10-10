@@ -5,17 +5,17 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { attachParams, CALLER, hostTestState } from './structured-agent-session-host-test-harness'
-import type { AgentSessionModelSource } from '../../../shared/agent-session-options-replacement'
+import type { AgentSessionModelChooser } from '../../../shared/agent-session-options-replacement'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
 } from './structured-agent-session-host-test-data'
 
-/** A new Claude chat whose saved model a picker chose, unless `modelSource` says otherwise. */
+/** A new Claude chat whose saved model a picker chose, unless `modelChosenBy` says otherwise. */
 function claudeChat(
   options: Record<string, string>,
-  modelSource: AgentSessionModelSource | null = 'picker'
+  modelChosenBy: AgentSessionModelChooser | null = 'picker'
 ) {
   return attachParams({
     provider: 'claude',
@@ -23,7 +23,7 @@ function claudeChat(
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
     providerHandle: undefined,
     options,
-    ...(modelSource ? { modelSource } : {})
+    ...(modelChosenBy ? { modelChosenBy } : {})
   })
 }
 

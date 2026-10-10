@@ -16,7 +16,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session-message-source'
-import type { AgentSessionModelSource } from '../../../shared/agent-session-options-replacement'
+import type { AgentSessionModelChooser } from '../../../shared/agent-session-options-replacement'
 import {
   refuse,
   type AgentSessionRefusalReason,
@@ -60,10 +60,10 @@ export type AgentSessionTurnContext = {
   agent: string
   logger: StructuredAgentSessionLogger
   persistedOptions?: Readonly<Record<string, string>>
-  /** `modelSource` says who chose the model `options` name, when this write is that choice. */
+  /** `modelChosenBy` says who chose the model `options` name, when this write is that choice. */
   persistOptions: (
     options: Readonly<Record<string, string>>,
-    modelSource?: AgentSessionModelSource
+    modelChosenBy?: AgentSessionModelChooser
   ) => Promise<void>
   /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string

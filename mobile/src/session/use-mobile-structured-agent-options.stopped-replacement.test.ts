@@ -28,19 +28,25 @@ function deferred<T>() {
 
 function hostClient(
   optionReads: readonly AgentSessionOptionsResult[],
-  listing: Promise<AgentSessionModelCatalogResult>
+  listing: Promise<AgentSessionModelCatalogResult>,
+  /** The first catalog answer; absent, it says the listing is running. */
+  firstCatalog?: Promise<AgentSessionModelCatalogResult>
 ) {
   let reads = 0
+  let catalogReads = 0
   const client: RpcClient = {
     sendRequest: async (method: string, params?: unknown) => {
       let result: unknown = {}
       if (method === 'agentSession.options') {
         result = optionReads[Math.min(reads++, optionReads.length - 1)]
       } else if (method === 'agentSession.modelCatalog') {
+        catalogReads += 1
         result =
           typeof params === 'object' && params !== null && 'waitForListing' in params
             ? await listing
-            : { origin: 'probe', models: MODELS, fetchedAt: 1_000, listingInProgress: true }
+            : firstCatalog
+              ? await firstCatalog
+              : { origin: 'probe', models: MODELS, fetchedAt: 1_000, listingInProgress: true }
       }
       return { id: 'rpc-1', ok: true as const, result, _meta: { runtimeId: 'runtime-1' } }
     },
@@ -53,7 +59,7 @@ function hostClient(
     notifyForeground: () => {},
     close: () => {}
   }
-  return { client, reads: () => reads }
+  return { client, reads: () => reads, catalogReads: () => catalogReads }
 }
 
 type Controller = ReturnType<typeof useMobileStructuredAgentOptions>
@@ -126,6 +132,55 @@ describe('a stopped chat on the phone whose saved model the re-listing finds gon
     await settle()
     expect(shownModel()).toBe('opus')
     expect(host.reads()).toBe(2)
+    expect(mutate).not.toHaveBeenCalled()
+    await act(async () => renderer?.unmount())
+  })
+
+  it('reads the options once more when the catalog answer lands after the listing did', async () => {
+    const late = deferred<AgentSessionModelCatalogResult>()
+    const host = hostClient(
+      [
+        { models: MODELS, current: { model: 'gone' } },
+        { models: MODELS, current: { model: 'opus' } }
+      ],
+      new Promise(() => {}),
+      late.promise
+    )
+    const mutate: StructuredAgentSessionMutate = vi.fn()
+    const rendered: { current: Controller | null } = { current: null }
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(
+        createElement(Probe, {
+          client: host.client,
+          mutate,
+          onRender: (controller) => {
+            rendered.current = controller
+          }
+        })
+      )
+    })
+    await settle()
+    const shownModel = () => {
+      const model = rendered.current?.optionSnapshot.find((entry) => entry.id === 'model')
+      return model?.kind.type === 'select' ? model.kind.currentValue : undefined
+    }
+    expect(shownModel()).toBe('gone')
+
+    await act(async () => {
+      late.resolve({
+        origin: 'probe',
+        models: MODELS,
+        fetchedAt: 2_000,
+        unlistedModelReplacement: 'opus'
+      })
+    })
+    await settle()
+    await settle()
+    expect(shownModel()).toBe('opus')
+    // One re-read, and the current answer it brings starts no other.
+    expect(host.reads()).toBe(2)
+    expect(host.catalogReads()).toBe(1)
     expect(mutate).not.toHaveBeenCalled()
     await act(async () => renderer?.unmount())
   })

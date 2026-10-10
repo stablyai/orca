@@ -13,6 +13,7 @@ import {
   encodePersistedAgentSessionProviderHandleChain
 } from './agent-session-provider-handle'
 import type { AgentSessionRecord } from './agent-session-record'
+import { readAgentSessionModelChooser } from './agent-session-options-replacement'
 
 /** The in-memory record, plus whether decode changed anything the store must write back. A
  *  handle's stored form is not such a change: every build writes it the same way. */
@@ -26,8 +27,15 @@ export function decodePersistedAgentSessionRecord(record: PersistedAgentSessionR
   if (!providerHandleChain) {
     throw new Error('agent_session_provider_handle_invalid')
   }
+  const { modelChosenBy: storedChooser, ...stored } = record
+  const modelChosenBy = readAgentSessionModelChooser(storedChooser)
   return {
-    record: { ...record, providerHandleChain, lease: normalizeLegacyHandoffLease(record.lease) },
+    record: {
+      ...stored,
+      ...(modelChosenBy ? { modelChosenBy } : {}),
+      providerHandleChain,
+      lease: normalizeLegacyHandoffLease(record.lease)
+    },
     normalized: leaseCarriesLegacyHandoffValues(record.lease)
   }
 }

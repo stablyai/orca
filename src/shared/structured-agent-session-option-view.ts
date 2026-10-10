@@ -2,8 +2,10 @@ import {
   commitStructuredAgentSessionOptionValues,
   type StructuredAgentSessionOptionState
 } from './structured-agent-session-options'
+import type { AgentSessionModelCatalogResult } from './agent-session-wire'
 import { cloneNativeChatSessionOptionRecord } from './native-chat-session-option-state'
 import {
+  agentModelListNames,
   unlistedAgentModelReplacement,
   verifiedListReplacementRecord
 } from './agent-session-model-fallback'
@@ -13,7 +15,7 @@ function catalogListsSeedModel(
   seed: Readonly<Record<string, string>>
 ): boolean {
   const model = seed.model
-  return model === undefined || Boolean(state.catalog?.models.some((entry) => entry.id === model))
+  return model === undefined || agentModelListNames(state.catalog?.models ?? [], model)
 }
 
 /** The host's current list lacks this seed, so the host starts the chat on its replacement. */
@@ -87,4 +89,23 @@ export function structuredAgentSessionOptionView(
     ...commitStructuredAgentSessionOptionValues(view, held),
     pendingId: state.pendingId
   })
+}
+
+/** The session's options answer still holds a selection this host answer would replace: it was
+ *  decided before the listing landed (a catalog answer is never applied over a session's own), so
+ *  it is worth reading once more. */
+export function sessionOptionsPredateHostModelReplacement(
+  state: StructuredAgentSessionOptionState,
+  catalog: AgentSessionModelCatalogResult
+): boolean {
+  const selected = state.record.model?.value
+  return (
+    state.catalogSource === 'live' &&
+    catalog.origin !== 'unknown' &&
+    unlistedAgentModelReplacement(
+      catalog.models,
+      typeof selected === 'string' ? selected : null,
+      catalog.unlistedModelReplacement
+    ) !== null
+  )
 }

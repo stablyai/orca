@@ -63,9 +63,9 @@ export function useHostModelCatalogUpgrade(args: {
   updateOptionState: (
     update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState
   ) => void
-  /** The listing the host said was running has landed: the session's own options answer (a
-   *  stopped chat's, decided against that listing) is worth reading again. */
-  onListingSettled?: () => void
+  /** Every final host answer, once applied; `waitedForListing` when it is the listing the host
+   *  said was running, which a stopped chat's options answer may predate. */
+  onCatalogAnswer?: (catalog: AgentSessionModelCatalogResult, waitedForListing: boolean) => void
 }): { unavailable: AgentSessionUnavailable | null } {
   const {
     activeOptionRecordRef,
@@ -93,10 +93,10 @@ export function useHostModelCatalogUpgrade(args: {
   // A reason the agent's own start gave ends with that agent: its start or stop reads again,
   // dropping an answer read before it.
   const running = args.providerRunning === true
-  const onListingSettled = useRef(args.onListingSettled)
+  const onCatalogAnswer = useRef(args.onCatalogAnswer)
   useEffect(() => {
-    onListingSettled.current = args.onListingSettled
-  }, [args.onListingSettled])
+    onCatalogAnswer.current = args.onCatalogAnswer
+  }, [args.onCatalogAnswer])
   useEffect(() => {
     if (!said) {
       return
@@ -150,7 +150,7 @@ export function useHostModelCatalogUpgrade(args: {
         (catalog) => {
           apply(catalog)
           if (catalog) {
-            onListingSettled.current?.()
+            onCatalogAnswer.current?.(catalog, true)
           }
         }
       )
@@ -173,6 +173,8 @@ export function useHostModelCatalogUpgrade(args: {
           // Only a host that reports the listing knows the wait param; an older one refuses it.
           if (catalog.listingInProgress === true) {
             waitForListing()
+          } else {
+            onCatalogAnswer.current?.(catalog, false)
           }
         })
         .catch(() => {

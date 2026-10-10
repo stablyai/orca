@@ -4,6 +4,7 @@ import type {
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
 import { isLegacyAgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { isReplaceableModelChoice } from '../../../shared/agent-session-options-replacement'
 import {
   agentModelCatalogFingerprint,
   agentModelCatalogFingerprintForRecord
@@ -21,11 +22,8 @@ import {
   recordConfiguredDefault,
   workspaceKeepsListedDefault
 } from './agent-model-catalog-workspace-default'
-import {
-  childListingClock,
-  relistingSettledInTime,
-  selectedModelRules
-} from './agent-model-catalog-selected-model'
+import { relistingSettledInTime, selectedModelRules } from './agent-model-catalog-selected-model'
+import { childListingClock } from './agent-model-catalog-child-listing-clock'
 
 export type AgentModelCatalogServiceDeps = {
   store: AgentModelCatalogStore
@@ -69,10 +67,11 @@ export type AgentModelCatalogService = {
     waitForListing?: boolean
     /** Answer only from the saved entry and held reason; start, join or re-check no listing. */
     savedOnly?: boolean
-    /** The model a decision is about; absent, the session record's model when a picker chose it. */
+    /** The model a decision is about; absent, the session record's model when the user's own
+     *  selection chose it. */
     requiredModel?: string
-    /** A start's read: it waits a few seconds for the one re-listing its selection takes, and
-     *  starts no other listing, since the chat's own child lists. */
+    /** A start's read: it waits for the one re-listing its selection takes (its caller caps the
+     *  whole read at a few seconds), and starts no other listing, since the chat's own child lists. */
     forStart?: boolean
   }) => Promise<AgentSessionModelCatalogResult>
   /** Saves what a running session listed as its account's catalog, so the next chat starts warm. */
@@ -206,10 +205,10 @@ export function createAgentModelCatalogService(
         agents: deps.agents,
         agent: params.agent,
         fingerprint,
-        // Only a picker's selection is ever replaced; a model a caller named runs as given.
+        // Only the user's own selection is ever replaced; a model a caller named runs as given.
         selected:
           params.requiredModel ??
-          (scoped?.modelSource === 'picker' ? scoped.options?.model : undefined)
+          (isReplaceableModelChoice(scoped?.modelChosenBy) ? scoped?.options?.model : undefined)
       })
       // Every answer carries the reason the probe last found, read when the answer is made.
       const answer = async (

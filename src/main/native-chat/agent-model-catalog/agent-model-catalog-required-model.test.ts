@@ -232,13 +232,13 @@ describe('the catalog read for a selected model', () => {
   it.each([
     ['a caller named', 'caller' as const],
     ['a record from before its source was kept holds', undefined]
-  ])('re-lists nothing and names no replacement for a model %s', async (_, modelSource) => {
+  ])('re-lists nothing and names no replacement for a model %s', async (_, modelChosenBy) => {
     const record: AgentSessionRecord = {
       ...agentSessionRecordFixture(),
       provider: 'claude',
       accountHome: HOME,
       options: { model: 'claude-sonnet-4-5' },
-      ...(modelSource ? { modelSource } : {})
+      ...(modelChosenBy ? { modelChosenBy } : {})
     }
     for (const ageMs of [AGENT_MODEL_CATALOG_CURRENT_MS, 0]) {
       const { probe, service } = catalog({ ageMs, record })
@@ -253,18 +253,23 @@ describe('the catalog read for a selected model', () => {
     }
   })
 
-  it("replaces a picker's selection the current list lacks", async () => {
-    const record: AgentSessionRecord = {
-      ...agentSessionRecordFixture(),
-      provider: 'claude',
-      accountHome: HOME,
-      options: { model: 'gone' },
-      modelSource: 'picker'
+  it.each(['picker', 'new-chat-default'] as const)(
+    'replaces a selection the current list lacks when the %s chose it',
+    async (modelChosenBy) => {
+      const record: AgentSessionRecord = {
+        ...agentSessionRecordFixture(),
+        provider: 'claude',
+        accountHome: HOME,
+        options: { model: 'gone' },
+        modelChosenBy
+      }
+      const { service } = catalog({ ageMs: 0, record })
+      const answer = await service.read({ agent: 'claude', sessionId: record.sessionId })
+      expect(answer).toMatchObject({ unlistedModelReplacement: 'sonnet' })
+      const agents = { definition: () => CLAUDE_STRUCTURED_AGENT }
+      expect(await agentModelLaunchOptions(service, agents, record)).toEqual({ model: 'sonnet' })
     }
-    const { service } = catalog({ ageMs: 0, record })
-    const answer = await service.read({ agent: 'claude', sessionId: record.sessionId })
-    expect(answer).toMatchObject({ unlistedModelReplacement: 'sonnet' })
-  })
+  )
 
   it('names the listed default as the replacement even where a workspace hides which it is', async () => {
     const { service } = catalog({
@@ -301,7 +306,7 @@ describe('the options a start launches', () => {
         provider: 'claude',
         sessionId: 'session-1',
         options: { model: 'opus', effort: 'high' },
-        modelSource: 'picker' as const
+        modelChosenBy: 'picker' as const
       }
       // A read held up before any listing, as on a workspace-config check that never answers.
       const read = vi.fn(() => new Promise<never>(() => {}))
