@@ -121,6 +121,21 @@ describe('selectStructuredAgentTurnActivity', () => {
     expect(selectStructuredAgentTurnActivity([turnStart], null, providerActivity)).toBeNull()
   })
 
+  it("shows a send's activity before its turn opens", () => {
+    // Claude compacts before it echoes the send that opens the turn.
+    const providerActivity = {
+      turnId: 'send-2',
+      text: 'Compacting the conversation',
+      beforeTurnOpens: true as const
+    }
+
+    expect(selectStructuredAgentTurnActivity([turnStart], null, providerActivity)).toEqual({
+      kind: 'description',
+      text: 'Compacting the conversation'
+    })
+    expect(selectStructuredAgentTurnActivity([turnStart], 'turn-1', providerActivity)).toBeNull()
+  })
+
   it.each([
     ['active', 'Still running pnpm test'],
     ['most recently settled', 'Running shell pnpm lint now']

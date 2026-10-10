@@ -5,6 +5,7 @@ import type {
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
+import { claudeStartedDispatchUuid } from './claude-command-lifecycle'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 import {
@@ -70,12 +71,12 @@ export async function acquireClaudeSession({
   // Frames are admitted only after launch resolution proves the provider session
   // this acquisition owns. Keep the check ahead of every stateful consumer.
   const initProof = createClaudeInitProof()
-  const translator = createClaudeSessionJournalTranslator(input.events, String(input.fence), {
-    attempt,
-    initProof,
-    callbacks,
-    sessionId
-  })
+  const translator = createClaudeSessionJournalTranslator(
+    input.events,
+    String(input.fence),
+    { attempt, initProof, callbacks, sessionId },
+    () => (liveSession ? claudeStartedDispatchUuid(liveSession) : null)
+  )
 
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
