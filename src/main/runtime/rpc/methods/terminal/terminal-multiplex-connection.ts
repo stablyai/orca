@@ -46,7 +46,11 @@ export type TerminalMultiplexFrameDelivery = {
     frameSeq?: number,
     onRejected?: () => void
   ) => boolean
-  sendStreamError: (streamId: number, message: string) => void
+  sendStreamError: (
+    streamId: number,
+    message: string,
+    diagnostics?: Record<string, number>
+  ) => void
   notifyStreamWriteUnavailable: (
     stream: TerminalMultiplexStream,
     outcome: 'delivered' | 'rejected' | 'failed'

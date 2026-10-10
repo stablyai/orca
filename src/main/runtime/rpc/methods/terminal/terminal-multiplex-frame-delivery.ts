@@ -46,9 +46,13 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     }
     return true
   }
-  state.sendStreamError = (streamId: number, message: string): void => {
+  state.sendStreamError = (
+    streamId: number,
+    message: string,
+    diagnostics?: Record<string, number>
+  ): void => {
     state.sendFrame(streamId, TerminalStreamOpcode.Error, encodeTerminalStreamText(message))
-    emit({ type: 'error', streamId, message })
+    emit({ type: 'error', streamId, message, ...diagnostics })
   }
   state.notifyStreamWriteUnavailable = (
     stream: TerminalMultiplexStream,
