@@ -8556,6 +8556,7 @@
           "localLink": "Local-only link",
           "localLinkHelp": "This link only works in a browser or Orca client running on this computer.",
           "noExternalAddress": "No address for another device was found. Connect this computer to a LAN or Tailscale, refresh, or choose Custom address.",
+          "selectedInterfaceUnavailable": "The selected network interface is unavailable. Reconnect it before generating a link.",
           "staleAddress": "The connection address changed. Generate a new link for {{address}}.",
           "customInvalid": "Enter a valid host, host:port, IPv6 address, or ws(s):// URL."
         },

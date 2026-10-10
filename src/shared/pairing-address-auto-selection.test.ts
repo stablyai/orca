@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isThunderboltBridgeInterface,
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress,
   type PairingNetworkInterface
@@ -51,6 +52,37 @@ describe('selectAutoAdvertisedPairingAddress', () => {
 
   it('filters a vEthernet adapter when route reachability is ambiguous', () => {
     expect(selectAutoAdvertisedPairingAddress([AMBIGUOUS_SWITCH])).toBeUndefined()
+  })
+
+  it('keeps Thunderbolt Bridge explicit-only outside Share this host', () => {
+    expect(isThunderboltBridgeInterface('bridge0', 'darwin')).toBe(true)
+    expect(isThunderboltBridgeInterface('Bridge12', 'darwin')).toBe(true)
+    expect(isVirtualBridgeInterface('bridge0')).toBe(true)
+    expect(isVirtualBridgeInterface('bridge1')).toBe(true)
+    expect(isVirtualBridgeInterface('bridge')).toBe(true)
+    expect(isVirtualBridgeInterface('br-lan')).toBe(true)
+    expect(isVirtualBridgeInterface('docker0')).toBe(true)
+    expect(
+      selectAutoAdvertisedPairingAddress([{ name: 'bridge0', address: '10.99.88.1' }])
+    ).toBeUndefined()
+  })
+
+  it('keeps a Linux bridge0 out of the direct pairing address', () => {
+    const linuxBridge = { name: 'bridge0', address: '10.0.0.1' }
+    const lan = { name: 'eth0', address: '192.168.4.191' }
+    expect(isThunderboltBridgeInterface('bridge0', 'linux')).toBe(false)
+    expect(isVirtualBridgeInterface('bridge0')).toBe(true)
+    expect(selectAutoAdvertisedPairingAddress([linuxBridge])).toBeUndefined()
+    expect(selectAutoAdvertisedPairingAddress([linuxBridge, lan])).toBe(lan.address)
+  })
+
+  it('prefers LAN and tailnet while keeping Thunderbolt out of automatic pairing addresses', () => {
+    const thunderbolt = { name: 'bridge0', address: '10.99.88.1' }
+    const lan = { name: 'en0', address: '192.168.4.191' }
+    const tailnet = { name: 'tailscale0', address: '100.64.1.20' }
+    expect(selectAutoAdvertisedPairingAddress([thunderbolt, lan])).toBe(lan.address)
+    expect(selectAutoAdvertisedPairingAddress([thunderbolt, tailnet])).toBe(tailnet.address)
+    expect(selectAutoAdvertisedPairingAddress([HOST_LOCAL_BRIDGE, thunderbolt])).toBeUndefined()
   })
 
   it.each([

@@ -467,6 +467,10 @@ export type GlobalSettings = NativeChatGlobalSettings & {
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */
   mobilePairingCustomAddresses?: string[]
+  /** Share this host: interface the user picked for "Another device". Restored across restarts. */
+  runtimePairingAdvertisedInterfaceName?: string | null
+  /** Last address of that interface. Kept while the link is briefly absent from discovery. */
+  runtimePairingAdvertisedAddress?: string | null
   /** Name this runtime reports to paired clients; empty uses the host's detected name. */
   machineName: string
   /** Experimental: floating animated pet in the bottom-right corner. Opt-in cosmetic;
