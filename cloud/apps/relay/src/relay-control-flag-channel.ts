@@ -14,9 +14,10 @@ export const CONTROL_FLAG_POLL_MS = 5_000
 // Refresh a cached access token this long before Google says it expires.
 const ACCESS_TOKEN_EARLY_REFRESH_MS = 60_000
 
-export type ControlFlagParse<Flags> = (body: unknown) => Flags | null
+// `ignoredKeys` are names this image does not know: a newer writer's, or a typo.
+export type ControlFlagParse<Flags> = (body: unknown) => { flags: Flags; ignoredKeys: string[] } | null
 
-export type AppliedControlFlags<Flags> = { generation: number; flags: Flags }
+export type AppliedControlFlags<Flags> = { generation: number; flags: Flags; ignoredKeys?: string[] }
 
 export type ControlFlagChannel<Flags> = {
   applied: () => AppliedControlFlags<Flags>
@@ -125,7 +126,6 @@ export function startControlFlagChannel<Flags>(input: {
       discard()
       return
     }
-    seenGeneration = generation
     const text = await readBounded(response, MAX_OBJECT_BYTES)
     if (text === null) throw new ControlFlagPollError('malformed')
     let body: unknown
@@ -134,10 +134,14 @@ export function startControlFlagChannel<Flags>(input: {
     } catch {
       throw new ControlFlagPollError('malformed')
     }
-    const flags = input.parse(body)
-    if (flags === null) throw new ControlFlagPollError('void')
-    applied = { generation, flags }
-    console.log(JSON.stringify({ event: input.appliedEvent, generation, flags }))
+    // Only a body read whole is "seen": a read cut off mid-body must be asked for again, or
+    // every later poll would answer 304 and strand that write.
+    seenGeneration = generation
+    const parsed = input.parse(body)
+    if (parsed === null) throw new ControlFlagPollError('void')
+    const { flags, ignoredKeys } = parsed
+    applied = ignoredKeys.length > 0 ? { generation, flags, ignoredKeys } : { generation, flags }
+    console.log(JSON.stringify({ event: input.appliedEvent, ...applied }))
   }
 
   const poll = (): Promise<void> => {

@@ -15,6 +15,8 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   // its ledger row is written after the fact.
   acquireActivity: 'connect-path',
   activateControl: 'connect-path',
+  // A flip back's re-registration: the cell is leaving reserve mode, so its rows are rebuilt.
+  activateControlDeferringCell: 'connect-path',
   assign: 'connect-path',
   changeActivity: 'connect-path',
   exchangeRegionCorrection: 'connect-path',
@@ -63,6 +65,7 @@ const RESERVE_MODE_CENSUS: Record<string, string> = {
   applyCellAdmissionSelector: 'cell-level',
   applyRegionalRehomeControl: 'cell-level',
   cellAdmitMode: 'cell-level',
+  commitCellReservationDelta: 'cell-level',
   attestCellFence: 'cell-level',
   attestCellFenceAttempt: 'cell-level',
   bindCellFencePlanGeneration: 'cell-level',

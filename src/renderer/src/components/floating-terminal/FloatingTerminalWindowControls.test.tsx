@@ -182,7 +182,8 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
       agent: 'claude',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       launchSource: 'shortcut',
-      activate: false
+      activate: false,
+      freshNewTab: true
     })
     // Why: the whole point of the migration. The shared launcher owns the startup plan and the
     // tab it lands in, so this button must not reach past it into the tab store.

@@ -895,6 +895,27 @@ function inlinePostgresParameters(sql: string, params: unknown[], client: pg.Poo
   return inlined
 }
 
+// A per-query read timeout, when the cell's switch overrides the pool's (pg reads
+// `query_timeout` from a query config object first). Undefined keeps the pool's.
+type PostgresQueryTimeout = () => number | undefined
+
+async function timedQuery(
+  client: pg.PoolClient,
+  text: string,
+  values: unknown[] | undefined,
+  queryTimeout: PostgresQueryTimeout | undefined
+): Promise<pg.QueryResult> {
+  const timeout = queryTimeout?.()
+  if (timeout === undefined) return values === undefined ? await client.query(text) : await client.query(text, values)
+  // pg@8.22 reads it at client.js:660; @types/pg does not declare it on QueryConfig.
+  const config: pg.QueryConfig & { query_timeout: number } = {
+    text,
+    ...(values === undefined ? {} : { values }),
+    query_timeout: timeout
+  }
+  return await client.query(config)
+}
+
 class PostgresTransaction implements RelayDatabase {
   readonly dialect = 'postgres' as const
   private held: { fromMs: number; site: CellLockHoldSite } | undefined
@@ -906,7 +927,10 @@ class PostgresTransaction implements RelayDatabase {
   // later COMMIT would commit a statement its caller saw fail. The connection is finished.
   private lostReply: Error | undefined
 
-  constructor(protected readonly client: pg.PoolClient) {}
+  constructor(
+    protected readonly client: pg.PoolClient,
+    private readonly queryTimeout?: PostgresQueryTimeout
+  ) {}
 
   get poisonedBy(): Error | undefined {
     return this.lostReply
@@ -933,7 +957,7 @@ class PostgresTransaction implements RelayDatabase {
       `WITH final_write AS (${inlinePostgresParameters(sql, params, this.client)}) ` +
       'SELECT 1 / (SELECT count(*)::int FROM final_write); COMMIT'
     try {
-      await this.client.query(message)
+      await timedQuery(this.client, message, undefined, this.queryTimeout)
     } catch (error) {
       // Simple query stops at the first error, so any server error means COMMIT never ran:
       // retryable codes take the caller's normal rollback-and-retry path. A lost connection
@@ -984,7 +1008,7 @@ class PostgresTransaction implements RelayDatabase {
     this.assertNotCommitted()
     this.failIfPoisoned()
     try {
-      const result = await this.client.query(postgresSql(sql), params)
+      const result = await timedQuery(this.client, postgresSql(sql), params, this.queryTimeout)
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
     } catch (error) {
       this.noteFailure(error)
@@ -1149,7 +1173,10 @@ export class PostgresDatabase implements RelayDatabase {
     return this.holds.consumeCounts()
   }
 
-  constructor(private readonly pool: pg.Pool) {
+  constructor(
+    private readonly pool: pg.Pool,
+    private readonly queryTimeout?: PostgresQueryTimeout
+  ) {
     this.pressure = new PostgresPoolPressure(pool)
   }
 
@@ -1173,7 +1200,7 @@ export class PostgresDatabase implements RelayDatabase {
     try {
       client = await this.pressure.connect(lane)
       phase = 'execute'
-      const result = await client.query(postgresSql(sql), params)
+      const result = await timedQuery(client, postgresSql(sql), params, this.queryTimeout)
       return returnsRows(sql) ? (result.rows as SqlRow[]) : [{ changes: result.rowCount ?? 0 }]
     } catch (error) {
       markRelayDatabaseError(error)
@@ -1222,14 +1249,14 @@ export class PostgresDatabase implements RelayDatabase {
   ): Promise<T> {
     for (let attempt = 1; attempt <= POSTGRES_TRANSACTION_ATTEMPTS; attempt++) {
       const client = await this.pressure.connect()
-      const transaction = new PostgresTransaction(client)
+      const transaction = new PostgresTransaction(client, this.queryTimeout)
       let lostReply: Error | undefined
       try {
-        await client.query('BEGIN')
+        await timedQuery(client, 'BEGIN', undefined, this.queryTimeout)
         const result = await operation(transaction)
         // Even when the operation caught it: COMMIT must not run after a lost reply.
         if (transaction.poisonedBy) throw transaction.poisonedBy
-        if (transaction.open) await client.query('COMMIT')
+        if (transaction.open) await timedQuery(client, 'COMMIT', undefined, this.queryTimeout)
         recordMeasuredHold(this.holds, transaction)
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
@@ -1434,6 +1461,8 @@ export type RelayDatabaseOpenInput = {
   applicationName?: string
   statementTimeoutMs?: number
   readTimeoutMarginMs?: number
+  // Read per query, so a cell's switch moves the margin without a restart.
+  readTimeoutMarginOverrideMs?: () => number | undefined
   // Directors own the PostgreSQL schema. A cell skips it and never touches the database
   // at boot, so it starts listening while the database is down and stays unready until
   // its first successful query.
@@ -1467,7 +1496,16 @@ export async function openRelayDatabase(input: RelayDatabaseOpenInput): Promise<
     absorbPostgresIdleClientErrors(pool)
     keepPostgresClientErrorsHandled(pool)
     reportPostgresIdleSessionTimeoutOnce(pool)
-    database = new PostgresDatabase(pool)
+    const override = input.readTimeoutMarginOverrideMs
+    database = new PostgresDatabase(
+      pool,
+      override
+        ? () => {
+            const marginMs = override()
+            return marginMs === undefined ? undefined : statementTimeoutMs + marginMs
+          }
+        : undefined
+    )
   } else {
     mkdirSync(input.dataDir, { recursive: true })
     const sqlite = new DatabaseSync(join(input.dataDir, 'orca-relay.sqlite'))
