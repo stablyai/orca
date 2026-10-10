@@ -10,6 +10,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
@@ -28,8 +29,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     openNewBrowserTabInActiveWorkspace,
     openNewMarkdownInActiveWorkspace,
     openNewTerminalTabInActiveWorkspace,
-    setActiveTabType,
-    setTabBarOrder
+    setActiveTabType
   } = controller
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
@@ -56,35 +56,10 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
       setActiveTabType('terminal', activeWorktreeId)
-      const state = useAppStore.getState()
-      const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
-      const currentEditors = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)
-      const currentBrowsers = state.browserTabsByWorktree[activeWorktreeId] ?? []
-      const stored = state.tabBarOrderByWorktree[activeWorktreeId]
-      const termIds = currentTerminals.map((tab) => tab.id)
-      const editorIds = currentEditors.map((file) => file.id)
-      const browserIds = currentBrowsers.map((tab) => tab.id)
-      const validIds = new Set([...termIds, ...editorIds, ...browserIds])
-      const base = (stored ?? []).filter((id) => validIds.has(id))
-      const inBase = new Set(base)
-      for (const id of [...termIds, ...editorIds, ...browserIds]) {
-        if (!inBase.has(id)) {
-          base.push(id)
-          inBase.add(id)
-        }
-      }
-      const order = base.filter((id) => id !== newTab.id)
-      order.push(newTab.id)
-      setTabBarOrder(activeWorktreeId, order)
+      persistAgentLaunchTabOrder(activeWorktreeId, newTab.id)
       focusTerminalTabSurface(newTab.id)
     },
-    [
-      activeWorktreeId,
-      createTab,
-      openNewTerminalTabInActiveWorkspace,
-      setActiveTabType,
-      setTabBarOrder
-    ]
+    [activeWorktreeId, createTab, openNewTerminalTabInActiveWorkspace, setActiveTabType]
   )
 
   const handleNewAgentTab = useCallback(

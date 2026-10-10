@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   toastError: vi.fn(),
   createBrowserTab: vi.fn(),
+  createTab: vi.fn(),
   openNewBrowserTabInActiveWorkspace: vi.fn(),
   openMobileEmulatorTab: vi.fn()
 }))
@@ -61,12 +62,11 @@ function renderActions() {
     useTerminalCreateActions({
       activeWorktreeId: WORKTREE_ID,
       createBrowserTab: mocks.createBrowserTab,
-      createTab: vi.fn(),
+      createTab: mocks.createTab,
       openNewBrowserTabInActiveWorkspace: mocks.openNewBrowserTabInActiveWorkspace,
       openNewMarkdownInActiveWorkspace: vi.fn(),
       openNewTerminalTabInActiveWorkspace: vi.fn(),
-      setActiveTabType: vi.fn(),
-      setTabBarOrder: vi.fn()
+      setActiveTabType: vi.fn()
     } as unknown as TerminalColdActivationController)
   ).result.current
 }
@@ -115,5 +115,24 @@ describe('useTerminalCreateActions creation gates', () => {
     renderActions().handleNewSimulatorTab()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mocks.toastError).toHaveBeenCalledWith('emulator says no')
+  })
+
+  it('appends a shell-override terminal to the saved order, dropping repeated ids', () => {
+    const setTabBarOrder = vi.fn()
+    const terminals = [{ id: 'term-a' }]
+    mocks.state = {
+      ...mocks.state,
+      tabsByWorktree: { [WORKTREE_ID]: terminals },
+      openFiles: [],
+      tabBarOrderByWorktree: { [WORKTREE_ID]: ['browser-1', 'term-a', 'browser-1'] },
+      setTabBarOrder
+    }
+    mocks.createTab.mockImplementation(() => {
+      terminals.push({ id: 'term-new' })
+      return { id: 'term-new' }
+    })
+    renderActions().handleNewTab('/bin/zsh')
+    expect(mocks.createTab).toHaveBeenCalledWith(WORKTREE_ID, undefined, '/bin/zsh')
+    expect(setTabBarOrder).toHaveBeenCalledWith(WORKTREE_ID, ['browser-1', 'term-a', 'term-new'])
   })
 })
