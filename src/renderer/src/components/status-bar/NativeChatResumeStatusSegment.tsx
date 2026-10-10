@@ -81,14 +81,14 @@ export function NativeChatResumeStatusSegment({
     machines.map((machine) => restartMachineNameFromState(state, machine)).join('\u0000')
   ).split('\u0000')
   const nameByMachine = new Map(machines.map((machine, index) => [machine, names[index]]))
-  // Chats answered out of the chats asked, across every machine resuming right now.
+  // Chats answered out of the chats asked while a resume runs, counted over every machine it
+  // reached (a machine already done included), as the dialog counts it.
   let resumingDone = 0
   let resumingTotal = 0
-  const resumingMachines: RestartMachineKey[] = []
-  for (const [machine, { run }] of runs) {
-    if (!resumeRunInFlight(run)) {
-      continue
-    }
+  const resumingMachines = [...runs]
+    .filter(([, entry]) => resumeRunInFlight(entry.run))
+    .map(([machine]) => machine)
+  for (const [machine, { run }] of resumingMachines.length > 0 ? runs : []) {
     const offer = offers.get(machine)
     const failureById = new Map(offer?.failed.map((failure) => [failure.sessionId, failure]))
     const { counts } = resumeRunView(
@@ -99,7 +99,6 @@ export function NativeChatResumeStatusSegment({
     )
     resumingDone += counts.done
     resumingTotal += counts.total
-    resumingMachines.push(machine)
   }
   let pending = 0
   let failures = 0

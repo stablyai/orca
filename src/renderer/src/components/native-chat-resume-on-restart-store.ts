@@ -129,8 +129,12 @@ function publish(machine: RestartMachineKey, next: NativeChatRestartMachineOffer
   offers = updated.size === 0 ? NO_OFFERS : updated
   syncOfferedChatWatch(machine, offers.get(machine), refreshAfterOfferedChatActivity)
   emit()
+  retireRequestWithNothingToDraw()
+}
+
+/** With nothing left on any machine and no run to follow, an open request has nothing to show. */
+function retireRequestWithNothingToDraw(): void {
   if (offers.size === 0 && getNativeChatRestartRuns().size === 0) {
-    // With nothing left on any machine and no run to follow, an open request has nothing to show.
     consumeNativeChatResumeOnRestartDialogRequest()
   }
 }
@@ -291,6 +295,9 @@ export function forgetNativeChatRestartMachine(machine: RestartMachineKey): void
   forgetNativeChatRestartRun(machine)
   if (offers.has(machine)) {
     publish(machine, null)
+  } else {
+    // Its run may have been all an open dialog showed.
+    retireRequestWithNothingToDraw()
   }
 }
 

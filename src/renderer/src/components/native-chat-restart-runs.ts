@@ -14,8 +14,9 @@ import { watchResumeRunStatus } from './native-chat-resume-run-status-watch'
  * Each machine's latest resume, which the dialog and the status bar follow: the chats it named, each
  * one's live progress from that machine's host, then what became of each.
  *
- * Memory-only history. It retires after its finished summary was shown and then closed, or when the
- * same machine's next resume replaces it, or when the machine is unpaired.
+ * Memory-only history. It retires after its finished summary was shown and then closed, when the
+ * next resume starts (one resume's runs are followed together, as one run was before machines), or
+ * when the machine is unpaired.
  */
 export type NativeChatRestartRun = Readonly<{
   /** The listing the resume started from; it still names the machine once nothing is left there. */
@@ -78,9 +79,9 @@ export type RestartRunAnswer = {
 }
 
 /**
- * Starts following one resume on the listing's machine, replacing that machine's last run. The
- * returned `finish` is called once the host's answer is published, so reopening never shows the old
- * selection as actionable.
+ * Starts following one resume on the listing's machine, replacing that machine's last run and any
+ * finished run of an earlier resume. The returned `finish` is called once the host's answer is
+ * published, so reopening never shows the old selection as actionable.
  */
 export function beginNativeChatRestartRun(
   listing: NativeChatRestartMachineOffer,
@@ -98,6 +99,11 @@ export function beginNativeChatRestartRun(
     )
   }
   releaseStatusWatch(machine)
+  for (const [other, entry] of runs) {
+    if (other !== machine && !resumeRunInFlight(entry.run)) {
+      setRun(other, null)
+    }
+  }
   setRun(machine, current)
   const release = watchResumeRunStatus(
     restartMachineTarget(machine),

@@ -56,10 +56,11 @@ async function readForClick(machine: RestartMachineKey): Promise<void> {
 export async function reopenNativeChatRestartOffer(
   machines: readonly RestartMachineKey[] = [...getNativeChatRestartOffers().keys()]
 ): Promise<void> {
-  // Mid-resume the host's answer is already on its way; a re-read racing it could undo it.
-  if (getNativeChatRestartResuming().size === 0) {
-    await Promise.all(machines.filter(readableNow).map(readForClick))
-  }
+  // Mid-resume that machine's answer is already on its way; a re-read racing it could undo it.
+  const resuming = getNativeChatRestartResuming()
+  await Promise.all(
+    machines.filter((machine) => !resuming.has(machine) && readableNow(machine)).map(readForClick)
+  )
   // Only over rows or a run to follow: a dialog with neither draws nothing, and a request nothing
   // draws would stay open unseen.
   if (getNativeChatRestartOffers().size > 0 || getNativeChatRestartRuns().size > 0) {
