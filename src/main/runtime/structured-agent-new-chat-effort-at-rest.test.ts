@@ -219,11 +219,15 @@ function pills(state: StructuredAgentSessionOptionState) {
  *  names it, then the chat's own options read at rest. */
 async function newChatFrames(
   agent: string,
-  options: Record<string, string> = {},
-  projectFiles: Record<string, string> = {}
+  chat: {
+    saved?: Record<string, string>
+    projectFiles?: Record<string, string>
+    /** False for a client that refuses an answer naming no model, as mobile does today. */
+    readsWithoutModel?: boolean
+  } = {}
 ) {
-  const workspacePath = workspace(projectFiles)
-  const record = newChatRecord(agent, workspacePath, options)
+  const workspacePath = workspace(chat.projectFiles)
+  const record = newChatRecord(agent, workspacePath, chat.saved ?? {})
   const { modelCatalog, context } = host(agent, record)
   const seed = structuredAgentSessionSeedCatalog(agent)
   const first = applyStructuredAgentSessionModelCatalog(
@@ -234,7 +238,9 @@ async function newChatFrames(
   )
   // Read before applying the answer: applying updates the state's option record in place.
   const firstPills = pills(first)
-  const atRest = await readStructuredAgentSessionOptions(context, record.sessionId)
+  const atRest = await readStructuredAgentSessionOptions(context, record.sessionId, {
+    readsWithoutModel: chat.readsWithoutModel ?? true
+  })
   const settled = applyStructuredAgentSessionOptions(first, seed, atRest)
   return { atRest, first: firstPills, settled: pills(settled) }
 }
@@ -262,7 +268,9 @@ describe("a new chat's effort pill before its agent starts", () => {
   ])(
     '%s names no default model or effort at rest where the project’s config may pick one',
     async (agent, file, text) => {
-      const { atRest, first, settled } = await newChatFrames(agent, {}, { [file]: text })
+      const { atRest, first, settled } = await newChatFrames(agent, {
+        projectFiles: { [file]: text }
+      })
 
       expect(first.model?.value).toBeUndefined()
       expect(first.effort).toBeNull()
@@ -271,15 +279,25 @@ describe("a new chat's effort pill before its agent starts", () => {
     }
   )
 
+  it('keeps today’s answer, with its commands, for a client that needs a model', async () => {
+    const { atRest } = await newChatFrames('codex', {
+      projectFiles: { '.codex/config.toml': 'model_reasoning_effort = "high"\n' },
+      readsWithoutModel: false
+    })
+
+    expect(atRest.current).toEqual({ model: 'gpt-5.5', effort: 'medium' })
+    expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
+  })
+
   it('keeps a saved effort over the default model’s', async () => {
-    const { atRest, settled } = await newChatFrames('grok', { effort: 'high' })
+    const { atRest, settled } = await newChatFrames('grok', { saved: { effort: 'high' } })
 
     expect(atRest.current).toEqual({ model: 'grok-4', effort: 'high' })
     expect(settled.effort?.value).toBe('high')
   })
 
   it('leaves the effort of a saved model to the agent, as its running child reports it', async () => {
-    const { atRest } = await newChatFrames('codex', { model: 'gpt-5.5-mini' })
+    const { atRest } = await newChatFrames('codex', { saved: { model: 'gpt-5.5-mini' } })
 
     expect(atRest.current).toEqual({ model: 'gpt-5.5-mini' })
   })

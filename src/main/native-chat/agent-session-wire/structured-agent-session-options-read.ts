@@ -24,6 +24,10 @@ import type { StructuredAgentSessionMutationContext } from './structured-agent-s
 
 type RestingOptions = Pick<AgentSessionOptionsResult, 'models' | 'fastModeSupport' | 'current'>
 
+/** What the asking client takes. One that reads an answer naming no model is answered for the
+ *  chat's own folder, as its first frame is; any other keeps the account's default. */
+export type StructuredAgentSessionOptionsReader = { readsWithoutModel: boolean }
+
 /** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
 export function structuredAgentSessionOptionOverridesRefusal(
   agents: Pick<StructuredAgentRegistry, 'definition'>,
@@ -51,7 +55,8 @@ function restingOptionRules(
 
 async function readStructuredAgentSessionOptionsAtRest(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'agents' | 'modelCatalog'>,
-  sessionId: string
+  sessionId: string,
+  reader: StructuredAgentSessionOptionsReader
 ): Promise<RestingOptions> {
   const record = deps.store.getRecord(sessionId)
   if (!record) {
@@ -59,7 +64,11 @@ async function readStructuredAgentSessionOptionsAtRest(
   }
   const rules = restingOptionRules(deps.agents, record)
   const catalog = (await deps.modelCatalog
-    ?.read({ agent: record.provider, sessionId, inSessionWorkspace: true })
+    ?.read({
+      agent: record.provider,
+      sessionId,
+      ...(reader.readsWithoutModel ? { inSessionWorkspace: true as const } : {})
+    })
     .catch(() => null)) ?? { origin: 'unknown' as const }
   // With no catalog for the account, the list a running child of this agent falls back to.
   const listed = catalog.origin === 'unknown' ? (rules?.fallbackModels() ?? null) : catalog.models
@@ -126,7 +135,8 @@ export async function readStructuredAgentSessionOptions(
     StructuredAgentSessionMutationContext,
     'deps' | 'serialize' | 'openConversation' | 'conversation'
   >,
-  sessionId: string
+  sessionId: string,
+  reader: StructuredAgentSessionOptionsReader = { readsWithoutModel: false }
 ): Promise<AgentSessionOptionsResult> {
   const { adapter, agents, store } = context.deps
   const started = await context.serialize(sessionId, async () => {
@@ -169,7 +179,7 @@ export async function readStructuredAgentSessionOptions(
     }
     options = answer
   } else {
-    options = await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId)
+    options = await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId, reader)
   }
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)

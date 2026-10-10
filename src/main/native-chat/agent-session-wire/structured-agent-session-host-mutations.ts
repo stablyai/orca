@@ -46,7 +46,8 @@ export type { StructuredAgentSessionMutationContext } from './structured-agent-s
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import {
   readStructuredAgentSessionOptions,
-  recordStructuredAgentSessionOptionIntent
+  recordStructuredAgentSessionOptionIntent,
+  type StructuredAgentSessionOptionsReader
 } from './structured-agent-session-options-read'
 
 export function sendStructuredAgentSessionTurn(
@@ -244,6 +245,7 @@ export function structuredAgentSessionMutationDelegates(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof changeStructuredAgentSessionThreadGoal>[2]
     ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
-    readOptions: (sessionId: string) => readStructuredAgentSessionOptions(context(), sessionId)
+    readOptions: (sessionId: string, reader?: StructuredAgentSessionOptionsReader) =>
+      readStructuredAgentSessionOptions(context(), sessionId, reader)
   }
 }

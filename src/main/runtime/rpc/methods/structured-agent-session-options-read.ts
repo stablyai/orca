@@ -44,10 +44,11 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
     permission: 'workspace',
     params: OptionsParams,
     handler: async (params, ctx) => {
+      const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
       const result = await (
         await requireInstalledStructuredHost(ctx, params.sessionId)
-      ).readOptions(params.sessionId)
-      if (result.current.model === undefined && !clientReadsOptionsWithoutModel(ctx)) {
+      ).readOptions(params.sessionId, { readsWithoutModel })
+      if (result.current.model === undefined && !readsWithoutModel) {
         throw agentSessionRefusalError('structured_agent_session_unsupported', {
           reason: 'clientCapabilityMissing'
         })
