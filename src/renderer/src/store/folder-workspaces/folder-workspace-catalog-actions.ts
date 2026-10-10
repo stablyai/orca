@@ -12,9 +12,21 @@ import {
   getFolderWorkspaceCatalogReplacementIdentities,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { listRuntimeEnvironmentsForAllHostLoad } from '../runtime-catalog-hosts'
 import { reuseEqualRecordMap } from '../slices/repo-identity-reconcile'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
+
+function hydratedFolderCatalogHostPatch(
+  hosts: readonly ExecutionHostId[] | undefined,
+  hostId: ExecutionHostId
+): { hydratedFolderCatalogHostIds: readonly ExecutionHostId[] } | Record<string, never> {
+  const current = hosts ?? []
+  if (current.includes(hostId)) {
+    return {}
+  }
+  return { hydratedFolderCatalogHostIds: [...current, hostId] }
+}
 
 export function createFolderWorkspaceCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -48,11 +60,17 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          const hydratedHosts = hydratedFolderCatalogHostPatch(
+            current.hydratedFolderCatalogHostIds,
+            catalog.hostId
+          )
+          // Why: an unchanged list still settles this host; return current only if it is already recorded.
           if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
-            return current
+            return Object.keys(hydratedHosts).length === 0 ? current : hydratedHosts
           }
           return {
             folderWorkspaces,
+            ...hydratedHosts,
             folderWorkspacePathStatuses: {}
           }
         })
@@ -90,11 +108,17 @@ export function createFolderWorkspaceCatalogActions(
             current.folderWorkspaces,
             current.projectGroups
           )
+          const hydratedHosts = hydratedFolderCatalogHostPatch(
+            current.hydratedFolderCatalogHostIds,
+            catalog.hostId
+          )
+          // Why: an unchanged list still settles this host; return current only if it is already recorded.
           if (arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)) {
-            return current
+            return Object.keys(hydratedHosts).length === 0 ? current : hydratedHosts
           }
           return {
             folderWorkspaces,
+            ...hydratedHosts,
             folderWorkspacePathStatuses: {}
           }
         })

@@ -153,6 +153,8 @@ export type RepoSlice = {
   projectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
+  // Hosts whose folder-workspace fetch has settled. Absent hosts are not yet hydrated.
+  hydratedFolderCatalogHostIds: readonly ExecutionHostId[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   /** Host-resolved floating workspace directory; null until the host has answered. */
   floatingWorkspacePath: string | null

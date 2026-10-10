@@ -1,13 +1,31 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import { getExecutionHostIdFromWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   getWorktreeIdFromVisitKey,
   getWorktreeVisitKey,
   getWorktreeVisitTimestamp
 } from '@/lib/worktree-visit-recency'
+import { folderWorkspaceMatchesHost } from '../listing/detected-worktree-meta'
+
+function isFolderCatalogHydrated(
+  hydratedHostIds: readonly ExecutionHostId[] | undefined,
+  ownerHostId: ExecutionHostId | undefined
+): boolean {
+  const owner = parseExecutionHostId(ownerHostId)
+  if (!owner || !hydratedHostIds) {
+    return false
+  }
+  // Why: the local folder fetch also owns direct-SSH rows; runtime hosts settle separately.
+  return hydratedHostIds.includes(owner.kind === 'runtime' ? owner.id : LOCAL_EXECUTION_HOST_ID)
+}
 
 export function createMarkWorktreeVisited(
   set: WorktreeSliceSet,
@@ -70,11 +88,38 @@ export function createPruneLastVisitedTimestamps(
           result.worktrees.forEach(addValidWorktree)
         }
       }
+      const hasLoadedRepos = (s.repos && s.repos.length > 0) || (s.reposFetchGeneration ?? 0) > 0
+      const isKnownWorkspaceOwner = (
+        repoId: string,
+        id: string,
+        ownerHostId?: ExecutionHostId
+      ): boolean => {
+        const scope = parseWorkspaceKey(id)
+        if (scope?.type === 'folder') {
+          // Why: startup loads only local and direct-SSH folders. An unhydrated owner
+          // (a runtime environment) must keep its entry, same as a repo with no list yet.
+          if (!isFolderCatalogHydrated(s.hydratedFolderCatalogHostIds, ownerHostId)) {
+            return true
+          }
+          return (s.folderWorkspaces ?? []).some(
+            (folder) =>
+              folder.id === scope.folderWorkspaceId &&
+              ownerHostId !== undefined &&
+              folderWorkspaceMatchesHost(folder, ownerHostId)
+          )
+        }
+        // Repos missing from a loaded catalog are confirmed removed; unhydrated catalogs defer.
+        return !hasLoadedRepos || (s.repos?.some((r) => r.id === repoId) ?? true)
+      }
       let changed = false
       const next: Record<string, number> = {}
       for (const [key, ts] of Object.entries(s.lastVisitedAtByWorktreeId)) {
         const id = getWorktreeIdFromVisitKey(key)
         const repoId = getRepoIdFromWorktreeId(id)
+        if (!isKnownWorkspaceOwner(repoId, id, getExecutionHostIdFromWorktreeHostIdentity(key))) {
+          changed = true
+          continue
+        }
         const repoIds = validIdsByRepo.get(repoId)
         if (!repoIds) {
           // Repo not yet hydrated (e.g. SSH not connected). Keep the entry.
@@ -108,8 +153,16 @@ export function createPruneLastVisitedTimestamps(
       // the repo is unhydrated, mirroring the timestamp rule above).
       const activeId = s.activeWorktreeId
       if (activeId) {
-        const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
-        if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
+        const activeRepoId = getRepoIdFromWorktreeId(activeId)
+        const activeRepoWorktreeIds = validIdsByRepo.get(activeRepoId)
+        const activeOwnerHostId =
+          parseWorkspaceKey(activeId)?.type === 'folder'
+            ? (parseExecutionHostId(s.activeWorkspaceExecutionHostId)?.id ?? undefined)
+            : undefined
+        const isStaleActive =
+          !isKnownWorkspaceOwner(activeRepoId, activeId, activeOwnerHostId) ||
+          (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId))
+        if (isStaleActive) {
           patch.activeWorktreeId = null
           // Leaving the derived workspace key behind would keep the phantom workspace selected.
           // Only the stale worktree's own key is dropped (same equality check as the rename path),
