@@ -25,7 +25,7 @@ const lines: string[] = [
   ` ${BG_GREEN}${FG_BLACK} PASS ${RESET} src/preview.test.ts`,
   ` ${GREEN}✓${RESET} renders sample output ${DIM}(3ms)${RESET}`,
   ` ${RED}✗ ligatures: => != >= <= ===${RESET}`,
-  ``,
+  ` ${BLUE}CJK${RESET}: 你好 世界 123`,
   `${YELLOW}def${RESET} ${CYAN}total${RESET}(xs: list[${CYAN}int${RESET}]) -> ${CYAN}int${RESET}:`,
   `    ${ITALIC}${GREEN}"""Sum the values."""${RESET}`,
   `    ${YELLOW}return${RESET} ${CYAN}sum${RESET}(x ${YELLOW}for${RESET} x ${YELLOW}in${RESET} xs)`,
