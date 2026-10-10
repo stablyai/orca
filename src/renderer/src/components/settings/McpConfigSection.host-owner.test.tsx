@@ -113,3 +113,12 @@ it('keeps a desktop repo on the desktop while a managed host is focused', async 
     root
   )
 })
+
+it('does not offer the starter over a listed config the host refuses to read', async () => {
+  runtimeFiles.readRuntimeDirectory.mockResolvedValue([{ name: '.mcp.json', isDirectory: false }])
+  runtimeFiles.readRuntimeFileContent.mockRejectedValue(new Error('Remote file is too large'))
+  render(<McpConfigSection repo={repo} />)
+
+  await screen.findByText('Remote file is too large')
+  expect(screen.queryByRole('button', { name: /Add MCP config/ })).toBeNull()
+})
