@@ -73,9 +73,6 @@ vi.mock('../persistence', () => ({
       return {}
     }
     onSettingsChanged() {}
-    getClaudeLivePtySessionIds() {
-      return []
-    }
     getSshTargets() {
       return []
     }
@@ -87,7 +84,6 @@ vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
     store: {
       getSettings: () => ({}),
       onSettingsChanged: () => {},
-      getClaudeLivePtySessionIds: () => [],
       getSshTargets: () => []
     }
   })
@@ -137,7 +133,10 @@ vi.mock('../host/deferred-secret-protection-report', () => ({
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
 vi.mock('../pty/legacy-terminal-shim-dir', () => ({ neutralizeLegacyTerminalShimDir: vi.fn() }))
 vi.mock('./windows-shell-path-hydration', () => ({
-  createWindowsShellPathHydration: () => ({ whenReady: Promise.resolve() })
+  createWindowsShellPathHydration: () => ({
+    configure: vi.fn(),
+    whenReady: Promise.resolve()
+  })
 }))
 vi.mock('../git/runner', () => ({
   configureWindowsHostGitEnvironmentReadiness: vi.fn(),
@@ -145,11 +144,6 @@ vi.mock('../git/runner', () => ({
 }))
 vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
-}))
-vi.mock('../claude-accounts/live-pty-gate', () => ({
-  attachClaudeLivePtyPersistence: vi.fn(),
-  onLiveClaudePtysDrained: vi.fn(),
-  seedLiveClaudePtysFromPersistence: vi.fn()
 }))
 vi.mock('../app-icon', () => ({ applyAppIcon: vi.fn() }))
 vi.mock('./dev-education-suppression', () => ({

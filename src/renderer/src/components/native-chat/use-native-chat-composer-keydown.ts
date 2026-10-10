@@ -1,13 +1,19 @@
-import { useCallback, type Dispatch, type KeyboardEventHandler, type SetStateAction } from 'react'
 import {
-  recallNext,
-  recallPrevious,
-  type ComposerAutocomplete,
-  type HistoryState,
-  type NativeChatPickerItem
-} from './native-chat-composer-state'
+  useCallback,
+  useRef,
+  type Dispatch,
+  type KeyboardEventHandler,
+  type SetStateAction
+} from 'react'
+import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
 import { isMacPlatform } from './native-chat-shortcut'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
+import {
+  isNativeChatRecallActive,
+  nativeChatSentPrompts,
+  stepNativeChatPromptRecall,
+  type NativeChatComposerRecall
+} from './native-chat-sent-prompt-history'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
@@ -17,7 +23,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   draft: string
   /** Image chips count as composer content, like typed text. */
   hasAttachments?: boolean
-  history: HistoryState
+  recall?: NativeChatComposerRecall | undefined
   isComposing: () => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
@@ -30,7 +36,6 @@ export type UseNativeChatComposerKeyDownArgs = {
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   setDraft: Dispatch<SetStateAction<string>>
   setCaret: Dispatch<SetStateAction<number>>
-  setHistory: Dispatch<SetStateAction<HistoryState>>
 }
 
 export function useNativeChatComposerKeyDown({
@@ -40,7 +45,7 @@ export function useNativeChatComposerKeyDown({
   activeSuggestion,
   draft,
   hasAttachments = false,
-  history,
+  recall,
   isComposing,
   completePickerItem,
   dispatchPickerCommand,
@@ -50,9 +55,11 @@ export function useNativeChatComposerKeyDown({
   steerQueued,
   setActiveSuggestion,
   setDraft,
-  setCaret,
-  setHistory
+  setCaret
 }: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLElement> {
+  // Read through a ref: the transcript changes on every streamed frame.
+  const recallRef = useRef(recall)
+  recallRef.current = recall
   return useCallback(
     (event) => {
       if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {
@@ -129,24 +136,33 @@ export function useNativeChatComposerKeyDown({
         send()
         return
       }
-      if (event.key === 'ArrowUp' && (draft === '' || history.index !== null)) {
-        const recall = recallPrevious(history)
-        if (recall.draft !== null) {
-          event.preventDefault()
-          setHistory(recall.history)
-          setDraft(recall.draft)
-          setCaret(recall.draft.length)
-        }
+      const arrow = event.key === 'ArrowUp' || event.key === 'ArrowDown'
+      // A modified arrow selects or jumps; attachments make the composer non-empty.
+      const plain = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
+      const recall = recallRef.current
+      if (!arrow || !plain || hasAttachments || !recall) {
         return
       }
-      if (event.key === 'ArrowDown' && history.index !== null) {
-        const recall = recallNext(history)
-        if (recall.draft !== null) {
-          event.preventDefault()
-          setHistory(recall.history)
-          setDraft(recall.draft)
-          setCaret(recall.draft.length)
-        }
+      const recalling = isNativeChatRecallActive(recall.position, draft)
+      // Checked before the layout read and the prompt scan: a typed draft never recalls.
+      if (!recalling && (event.key === 'ArrowDown' || draft !== '')) {
+        return
+      }
+      if (!recall.isCaretOnVisualEdge(event.key === 'ArrowUp' ? 'start' : 'end')) {
+        return
+      }
+      const step = stepNativeChatPromptRecall({
+        direction: event.key === 'ArrowUp' ? 'back' : 'forward',
+        prompts: nativeChatSentPrompts(recall.source),
+        position: recall.position,
+        draft
+      })
+      if (step) {
+        event.preventDefault()
+        recall.setPosition(step.position)
+        setDraft(step.draft)
+        setCaret(step.draft.length)
+        recall.show(step.draft)
       }
     },
     [
@@ -158,7 +174,6 @@ export function useNativeChatComposerKeyDown({
       dispatchPickerCommand,
       draft,
       hasAttachments,
-      history,
       interrupt,
       isComposing,
       mentionFiles,
@@ -166,8 +181,7 @@ export function useNativeChatComposerKeyDown({
       steerQueued,
       setActiveSuggestion,
       setCaret,
-      setDraft,
-      setHistory
+      setDraft
     ]
   )
 }

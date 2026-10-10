@@ -1,5 +1,7 @@
 import type { AgentJournalItemBody, AgentJournalMessageItem } from './agent-session-journal-types'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
+import type { z } from 'zod'
+import type { SendBody } from './rpc-contract/structured-agent-session-message-params'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
 
 export type StructuredAgentSessionSendMutation = {
@@ -51,5 +53,27 @@ export function structuredAgentSessionMessageSendMutation(message: {
     },
     body: message.body,
     ...delivery
+  }
+}
+
+export type StructuredAgentSessionAttachment = {
+  path: string
+  previewUri: string
+  /** The SSH connection a remote image lives on; kept by the client, never sent. */
+  connectionId?: string
+}
+
+/** The journal body for a message a person sends: its text, then its images. */
+export function structuredAgentSessionSendBody(
+  text: string,
+  attachments: readonly StructuredAgentSessionAttachment[]
+): z.infer<typeof SendBody> {
+  return {
+    kind: 'message',
+    role: 'user',
+    blocks: [
+      ...(text.trim().length > 0 ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
+      ...attachments.map((attachment) => ({ type: 'image-ref' as const, path: attachment.path }))
+    ]
   }
 }

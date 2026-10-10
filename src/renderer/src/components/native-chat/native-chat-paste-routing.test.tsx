@@ -82,6 +82,8 @@ function composerHandle(): NativeChatComposerHandle & { element: HTMLElement } {
       return true
     }),
     insertTypedText: vi.fn(() => true),
+    appendText: vi.fn(),
+    acceptsText: () => true,
     handlePasteEvent: vi.fn(),
     pasteFromClipboard: vi.fn(),
     contains: (node) => element.contains(node)
@@ -106,7 +108,7 @@ function ChatRoot({
   useNativeChatPasteBridge({ rootRef, composerRef, questionAnswerInputRef: answerRef })
   return (
     // Mirrors NativeChatPaneFileDropSurface, which publishes the composer scope pane-wide.
-    <div data-composer-scope-key="pane" data-native-file-drop-target="composer">
+    <div data-composer-scope-key="pane">
       <div
         ref={(node) => {
           rootRef.current = node

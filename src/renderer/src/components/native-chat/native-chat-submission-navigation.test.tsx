@@ -123,6 +123,7 @@ function useReviewTranscript() {
     showsTailRow: true,
     isVisible: true,
     alignToViewportTop: vi.fn(),
+    isAlignPending: () => false,
     scrollToEnd,
     restoreScrollOffset: vi.fn(),
     consumeProgrammaticScroll: () => false,
@@ -155,7 +156,6 @@ it('reveals a structured command at the press, before the host answers it', asyn
       structuredTransport: t,
       isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn()
     })
@@ -193,7 +193,6 @@ it('reveals a goal at the press, before the host sets it', async () => {
         disabled: false,
         sendPty: vi.fn(),
         sendStructured: vi.fn(),
-        setHistory: vi.fn(),
         setDraft: vi.fn(),
         setCaret: vi.fn()
       })
@@ -229,7 +228,6 @@ it.each(['/model', '/effort'])(
         structuredTransport: t,
         isComposing: () => false,
         clearSkillOrigin: vi.fn(),
-        setHistory: vi.fn(),
         setDraft: vi.fn(),
         setCaret: vi.fn()
       })
@@ -251,7 +249,6 @@ function localAnswerArgs() {
     answerCommandLocally: () => 'Context: 20k / 272k tokens',
     sessionOptionsSurface: null,
     trackPendingSend: vi.fn(),
-    setHistory: vi.fn(),
     setDraft: vi.fn(),
     setCaret: vi.fn(),
     clearSkillOrigin: vi.fn(),
@@ -306,8 +303,7 @@ it('reveals only the pane whose option send it was, at the press', async () => {
         agent: 'codex',
         disabled: false,
         resolveTarget: () => ({ ptyId, settings: null }),
-        onSubmitted: reveal.revealLatest,
-        setHistory: vi.fn()
+        onSubmitted: reveal.revealLatest
       })
     },
     { initialProps: { ptyId: 'pty-a' } }
@@ -336,8 +332,7 @@ it('reveals a PTY option send at the press, before the terminal confirms it', as
       agent: 'codex',
       disabled: false,
       resolveTarget: () => ({ ptyId: 'pty-a', settings: null }),
-      onSubmitted: transcript.revealLatest,
-      setHistory: vi.fn()
+      onSubmitted: transcript.revealLatest
     })
     return { ...transcript, command }
   })
@@ -370,7 +365,6 @@ it('control: a refused structured message does not reveal', async () => {
       structuredTransport: t,
       isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn()
     })
@@ -401,9 +395,10 @@ it('reveals a structured prompt answer at the press, before the host accepts it'
     const submits = useStructuredNativeChatSubmitReveal(
       {
         respond: async () => host.promise,
-        retry: vi.fn(),
         queuedMessages: {
           queueCapable: true,
+          editCapable: false,
+          editor: undefined,
           cards: [],
           pause: null,
           resuming: false,
@@ -449,7 +444,6 @@ it('keeps an accepted queued draft out of transcript navigation', async () => {
       structuredTransport: t,
       isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn()
     })

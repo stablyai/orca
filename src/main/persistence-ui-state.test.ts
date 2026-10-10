@@ -93,6 +93,40 @@ describe('Store', () => {
   })
   // ── UI state ───────────────────────────────────────────────────────
 
+  it('defaults new users to compact status bar usage', async () => {
+    const store = await createStore()
+    expect(store.getUI().statusBarUsageMode).toBe('compact')
+  })
+
+  it.each([undefined, null, 'expanded'])(
+    'normalizes saved status bar usage mode %j to compact',
+    async (value) => {
+      const state = getDefaultPersistedState(testState.dir)
+      if (value === undefined) {
+        delete state.ui.statusBarUsageMode
+      } else {
+        Reflect.set(state.ui, 'statusBarUsageMode', value)
+      }
+      writeDataFile(state)
+
+      const store = await createStore()
+      expect(store.getUI().statusBarUsageMode).toBe('compact')
+      store.updateUI({ sidebarWidth: 400 })
+      expect(store.getUI().statusBarUsageMode).toBe('compact')
+    }
+  )
+
+  it.each(['verbose', 'compact'] as const)('preserves saved %s usage mode', async (mode) => {
+    const store = await createStore()
+    store.updateUI({ statusBarUsageMode: mode })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
+    reloaded.updateUI({ sidebarWidth: 400 })
+    expect(reloaded.getUI().statusBarUsageMode).toBe(mode)
+  })
+
   it('updateUI merges partial updates', async () => {
     const store = await createStore()
     store.updateUI({ sidebarWidth: 400 })

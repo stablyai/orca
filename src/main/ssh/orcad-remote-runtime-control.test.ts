@@ -10,6 +10,7 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { launchOrcadAndAwaitReadiness } from './orcad-remote-runtime-control'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { OrcadLaunchSpec } from './orcad-remote-launch'
+import { createSshOperationAbortError } from './ssh-connection-utils'
 
 const host = getRemoteHostPlatform('linux-arm64')
 const spec: OrcadLaunchSpec = {
@@ -24,9 +25,9 @@ const spec: OrcadLaunchSpec = {
 const READY = `${JSON.stringify({ type: 'orca_server_ready', runtimeId: 'r1' })}\n`
 const mockExec = vi.mocked(execCommand)
 
-function launch() {
+function launch(signal?: AbortSignal) {
   return launchOrcadAndAwaitReadiness(
-    { conn: Object.create(null), host, readinessTimeoutMs: 60_000, sleep: async () => {} },
+    { conn: Object.create(null), host, readinessTimeoutMs: 60_000, sleep: async () => {}, signal },
     spec
   )
 }
@@ -53,5 +54,24 @@ describe('waiting for a launched candidate', () => {
   it('still fails at once on an unconfirmed termination, which may have run remotely', async () => {
     mockExec.mockResolvedValueOnce('1786\n').mockRejectedValueOnce(new Error('unconfirmed'))
     await expect(launch()).rejects.toThrow('unconfirmed')
+  })
+
+  it('stops retrying a readiness read that the retired SSH transport cancelled', async () => {
+    const cancelled = createSshOperationAbortError()
+    mockExec
+      .mockResolvedValueOnce('1786\n')
+      .mockRejectedValueOnce(cancelled)
+      .mockResolvedValueOnce(READY)
+    await expect(launch()).rejects.toBe(cancelled)
+    expect(mockExec).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a readiness reply received after its caller cancelled', async () => {
+    const controller = new AbortController()
+    mockExec.mockResolvedValueOnce('1786\n').mockImplementationOnce(async () => {
+      controller.abort()
+      return READY
+    })
+    await expect(launch(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
   })
 })

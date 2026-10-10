@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { constants } from 'node:os'
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { spawnProcess } from '@orca/process-host'
 import { resolveOrcadInstallRoot } from './orcad-app-paths'
 import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
@@ -62,6 +62,23 @@ export function resolveBundledOrcadSlot(script = process.argv[1]): string {
 export function isRunningAsBundledOrcadRuntime(directory: string): boolean {
   const runtime = resolveBundledOrcadRuntime(directory)
   return runtime !== null && realpathSync(process.execPath) === realpathSync(runtime)
+}
+
+/** Refuse an old or substituted runtime before the server opens any profile state. */
+export function assertOrcadServerRuntime(): void {
+  if (Number(process.versions.node.split('.')[0]) < 18) {
+    throw new OrcadBundledRuntimeError('The Orca server requires Node.js 18 or newer')
+  }
+  const directory = resolveBundledOrcadSlot()
+  const runtime = resolveBundledOrcadRuntime(directory)
+  if (runtime && !isRunningAsBundledOrcadRuntime(directory)) {
+    throw new OrcadBundledRuntimeError('Start the Orca server with its bundled Node.js runtime')
+  }
+  if (runtime && process.versions.node !== NODE_RUNTIME_PIN.version) {
+    throw new OrcadBundledRuntimeError(
+      `The bundled Orca runtime must be Node ${NODE_RUNTIME_PIN.version}`
+    )
+  }
 }
 
 /** Keep old Node service commands usable without letting a host Node open the profile. */

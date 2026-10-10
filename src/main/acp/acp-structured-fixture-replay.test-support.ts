@@ -16,7 +16,10 @@ const messageSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   method: z.string().optional(),
   params: z.unknown().optional(),
-  result: z.unknown().optional()
+  result: z.unknown().optional(),
+  error: z
+    .object({ code: z.number(), message: z.string(), data: z.unknown().optional() })
+    .optional()
 })
 
 function promptIdOf(params: unknown): string | undefined {
@@ -83,13 +86,13 @@ export class GrokFixtureReplay {
         agent.send({
           jsonrpc: '2.0',
           id: this.requestIds.get(message.id ?? '') ?? message.id,
-          result: message.result
+          ...(message.error === undefined ? { result: message.result } : { error: message.error })
         })
       }
     }
   }
 
-  private rewrite(message: AcpFixtureFrame['message']): AcpFixtureFrame['message'] {
+  private rewrite(message: AcpFixtureFrame['message']): z.infer<typeof messageSchema> {
     let text = JSON.stringify(message).replaceAll(
       RECORDED_SESSION,
       JSON.stringify(PROVIDER_SESSION)

@@ -103,6 +103,7 @@ export function admitSshConnectionState(
       ? { remotePlatform: input.remotePlatform }
       : {}),
     ...admitSshPlainSshMode(input.plainSsh),
+    ...(input.hostNodeRuntime === true ? { hostNodeRuntime: true } : {}),
     ...admitSshManagedServerStatus(input.managedServer)
   }
 }
@@ -226,6 +227,7 @@ export function admitSshConnectionStateForAuthorityReconciliation(
       supportsFolderDownload: input.supportsFolderDownload,
       remotePlatform: input.remotePlatform,
       plainSsh: input.plainSsh,
+      hostNodeRuntime: input.hostNodeRuntime,
       managedServer: input.managedServer
     },
     expectedTargetId

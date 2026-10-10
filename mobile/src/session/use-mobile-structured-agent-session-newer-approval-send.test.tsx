@@ -7,7 +7,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { RpcClient } from '../transport/rpc-client'
-import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import {
   CAPABLE,
@@ -98,7 +97,7 @@ async function sentDelivery(items: AgentJournalRenderItem[]): Promise<unknown> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resetMobileStructuredSendOperationJournalForTests()
+
   sendRequest.mockImplementation(async (method) =>
     method === 'agentSession.send'
       ? mutationOk({ clientMessageId: 'client-1' })

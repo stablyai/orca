@@ -47,7 +47,7 @@ export type WorkspaceSpaceAgentActivityInputs = {
   now: number
 }
 
-function getPaneKeyTabId(paneKey: string): string | null {
+export function getPaneKeyTabId(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
   if (parsed) {
     return parsed.tabId

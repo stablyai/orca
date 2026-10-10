@@ -1,52 +1,69 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+
+vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
+  loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
+    .loadNodeOniguruma
+}))
 
 afterEach(cleanup)
 
 describe('tool sentence rows', () => {
   it.each([
-    ['Bash', { command: 'pnpm test' }, 'Ran', 'pnpm test'],
-    ['Read', { file_path: '/repo/src/main.ts' }, 'Read', 'main.ts'],
-    ['Edit', { file_path: 'C:\\repo\\main.ts' }, 'Edited', 'main.ts'],
-    ['Write', { file_path: '/repo/new.ts' }, 'Edited', 'new.ts'],
-    ['MultiEdit', { file_path: '/repo/main.ts' }, 'Edited', 'main.ts'],
-    ['Grep', { pattern: 'TODO', path: '/repo' }, 'Searched', 'TODO'],
-    ['Glob', { pattern: '**/*.ts' }, 'Searched', '**/*.ts'],
-    ['search', { query: 'settings', command: 'rg settings' }, 'Searched', 'settings'],
-    ['web_search', { query: 'react docs' }, 'Searched the web', 'react docs'],
-    ['WebFetch', { url: 'https://example.com/docs' }, 'Fetched', 'example.com/docs'],
-    ['CreateWidget', { description: 'a widget' }, 'CreateWidget', 'a widget'],
-    ['list', { directory: '/repo' }, 'Listed', '/repo'],
-    ['exec', { command: 'git diff' }, 'Ran', 'git diff'],
-    ['local_shell', { command: 'pwd' }, 'Ran', 'pwd']
-  ])('describes %s with a verb and target', (name, input, verb, target) => {
+    ['Bash', { command: 'pnpm test' }, 'Ran', 'pnpm test', false],
+    ['Read', { file_path: '/repo/src/main.ts' }, 'Read', 'main.ts', true],
+    ['Edit', { file_path: 'C:\\repo\\main.ts' }, 'Edited', 'main.ts', true],
+    ['Write', { file_path: '/repo/new.ts' }, 'Edited', 'new.ts', true],
+    ['MultiEdit', { file_path: '/repo/main.ts' }, 'Edited', 'main.ts', true],
+    ['Grep', { pattern: 'TODO', path: '/repo' }, 'Searched', 'TODO', true],
+    ['Glob', { pattern: '**/*.ts' }, 'Searched', '**/*.ts', true],
+    ['search', { query: 'settings', command: 'rg settings' }, 'Searched', 'settings', true],
+    ['web_search', { query: 'react docs' }, 'Searched the web', 'react docs', true],
+    ['WebFetch', { url: 'https://example.com/docs' }, 'Fetched', 'example.com/docs', true],
+    ['CreateWidget', { description: 'a widget' }, 'CreateWidget', 'a widget', true],
+    ['list', { directory: '/repo' }, 'Listed', '/repo', true],
+    ['exec', { command: 'git diff' }, 'Ran', 'git diff', false],
+    ['local_shell', { command: 'pwd' }, 'Ran', 'pwd', false]
+  ])('describes %s with a verb and target', (name, input, verb, target, verbShown) => {
     const { container } = render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name, input, state: 'completed' }}
-        initiallyExpanded={false}
-      />
+      <NativeChatToolLine block={{ type: 'tool-call', name, input, state: 'completed' }} />
     )
-    expect(screen.getByText(verb, { selector: 'span:not(.sr-only)' })).toBeInTheDocument()
+    // A command is its own row: the run's header already says it ran.
+    expect(screen.queryByText(verb, { selector: 'span:not(.sr-only)' }) !== null).toBe(verbShown)
     expect(screen.getByText(target, { selector: 'span:not(.sr-only)' })).toHaveClass(
       'text-chat-foreground'
     )
     expect(screen.getByRole('button')).toHaveAccessibleName(new RegExp(name))
+    expect(screen.getByRole('button')).toHaveAccessibleName(new RegExp(verb))
     expect(container.querySelector('.font-semibold')).toBeNull()
-    expect(container.querySelector('.font-mono') !== null).toBe(
-      ['Bash', 'exec', 'local_shell'].includes(name)
-    )
+  })
+
+  it('tints the glyph of a failed call, and of no other', () => {
+    const glyphOf = (state: 'completed' | 'failed', isError: boolean): Element | null => {
+      const { container, unmount } = render(
+        <NativeChatToolLine
+          block={{ type: 'tool-call', name: 'Bash', input: { command: 'ls src' }, state }}
+          result={{ type: 'tool-result', output: 'out', isError }}
+        />
+      )
+      const tinted = container.querySelector('.text-destructive\\/70')
+      unmount()
+      return tinted
+    }
+    expect(glyphOf('failed', true)).not.toBeNull()
+    expect(glyphOf('completed', true)).not.toBeNull()
+    expect(glyphOf('completed', false)).toBeNull()
   })
 
   it('retains full paths in titles and accessible targets', () => {
     render(
       <NativeChatToolLine
         block={{ type: 'tool-call', name: 'Read', input: { file_path: '/repo/src/main.ts' } }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.getByTitle('/repo/src/main.ts')).toHaveTextContent('main.ts')
@@ -64,7 +81,6 @@ describe('tool sentence rows', () => {
           state: 'completed',
           mcpIdentity: { server: 'my_server', tool: 'shell' }
         }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.getByText('My server')).toBeInTheDocument()
@@ -81,7 +97,7 @@ describe('tool sentence rows', () => {
       input: { file_path: 'main.ts', old_string: 'same\nold\n', new_string: 'same\nnew\nextra\n' },
       state: 'completed'
     }
-    render(<NativeChatToolRun blocks={[block]} expandSignal={false} expandOverride />)
+    render(<NativeChatToolRun blocks={[block]} expandSignal />)
     expect(screen.getByRole('button', { name: /^Edited main\.ts/ })).toBeInTheDocument()
     expect(screen.getByText('+2')).toBeInTheDocument()
     expect(screen.getByText('-1')).toBeInTheDocument()
@@ -96,7 +112,6 @@ describe('tool sentence rows', () => {
           input: { file_path: 'main.ts' },
           state: 'completed'
         }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.queryByText(/^[+-]\d+$/)).toBeNull()
@@ -113,12 +128,7 @@ describe('tool sentence rows', () => {
     ['web_search', { query: 'docs' }, 'Searching the web'],
     ['WebFetch', { url: 'https://example.com/docs' }, 'Fetching']
   ])('uses present tense for a running %s', (name, input, verb) => {
-    render(
-      <NativeChatToolLine
-        block={{ type: 'tool-call', name, input, state: 'running' }}
-        initiallyExpanded={false}
-      />
-    )
+    render(<NativeChatToolLine block={{ type: 'tool-call', name, input, state: 'running' }} />)
     expect(screen.getByText(verb)).toBeInTheDocument()
   })
 
@@ -131,7 +141,6 @@ describe('tool sentence rows', () => {
           input: { file_path: '/repo/a.ts', old_string: 'missing', new_string: 'new' },
           state
         }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.getByRole('button')).toHaveAccessibleName(
@@ -151,7 +160,6 @@ describe('tool sentence rows', () => {
           state: 'completed'
         }}
         result={{ type: 'tool-result', output: 'String to replace not found', isError: true }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.getByRole('button')).toHaveAccessibleName('Edit Tried to edit /repo/a.ts')
@@ -163,7 +171,6 @@ describe('tool sentence rows', () => {
       <NativeChatToolLine
         block={{ type: 'tool-call', name: 'Bash', input: { command: 'pwd' } }}
         result={{ type: 'tool-result', output: '/repo' }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.getByText('Ran')).toBeInTheDocument()
@@ -177,7 +184,6 @@ describe('tool sentence rows', () => {
       render(
         <NativeChatToolLine
           block={{ type: 'tool-call', name: 'WebFetch', input, state: 'completed' }}
-          initiallyExpanded={false}
         />
       )
       expect(screen.getByTitle(url)).toHaveTextContent(url.slice('https://'.length))
@@ -196,7 +202,6 @@ describe('tool sentence rows', () => {
           durationMs: 1200
         }}
         result={{ type: 'tool-result', output: 'command failed', isError: true }}
-        initiallyExpanded={false}
       />
     )
     const button = screen.getByRole('button')
@@ -233,7 +238,6 @@ describe('tool sentence rows', () => {
             exitCode
           }}
           result={result}
-          initiallyExpanded={false}
         />
       )
       expect(screen.getByText('Ran')).toBeInTheDocument()
@@ -252,7 +256,6 @@ describe('tool sentence rows', () => {
       <NativeChatToolLine
         block={{ type: 'tool-call', name, input, state: 'completed' }}
         result={{ type: 'tool-result', output: 'unavailable', isError: true }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.getByText(verb)).toBeInTheDocument()
@@ -262,37 +265,34 @@ describe('tool sentence rows', () => {
     ['Bash', { command: 'pnpm test' }],
     ['exec', JSON.stringify({ cmd: 'pnpm test' })],
     ['Bash', 'pnpm test']
-  ])('omits duplicate input for a complete %s command chip', (name, input) => {
+  ])('omits duplicate input for a complete %s command row', (name, input) => {
     const { container } = render(
       <NativeChatToolLine
         block={{ type: 'tool-call', name, input, state: 'completed' }}
         result={{ type: 'tool-result', output: 'all passed' }}
       />
     )
-    expect(screen.getByTitle('pnpm test')).toHaveClass('font-mono')
+    fireEvent.click(screen.getByRole('button'))
     expect(container.querySelectorAll('pre')).toHaveLength(1)
     expect(container.querySelector('pre')).toHaveTextContent('all passed')
   })
 
   it.each([
-    [{ command: 'pnpm test', description: 'Run the suite' }, '"description": "Run the suite"'],
-    [{ command: ['printf', '%s', 'a b'] }, '"command": [\n    "printf",\n    "%s",\n    "a b"'],
-    [{ command: '/bin/zsh -lc "pnpm test"' }, '/bin/zsh -lc \\"pnpm test\\"']
-  ])(
-    'keeps the original command input accessible when the chip omits structure',
-    (input, detail) => {
-      const { container } = render(
-        <NativeChatToolLine
-          block={{ type: 'tool-call', name: 'Bash', input, state: 'completed' }}
-          initiallyExpanded={false}
-        />
-      )
-      expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
-      expect(container.querySelector('pre')).toBeNull()
-      fireEvent.click(screen.getByRole('button'))
-      expect(container.querySelector('pre')?.textContent).toContain(detail)
-    }
-  )
+    [{ command: 'pnpm test', description: 'Run the suite' }],
+    [{ command: ['printf', '%s', 'a b'] }],
+    [{ command: '/bin/zsh -lc "pnpm test"' }]
+  ])('opens a command to its output alone, never its raw arguments', (input) => {
+    const { container } = render(
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name: 'Bash', input, state: 'completed' }}
+        result={{ type: 'tool-result', output: 'all passed' }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect([...container.querySelectorAll('pre')].map((pre) => pre.textContent)).toEqual([
+      'all passed'
+    ])
+  })
 
   it('does not offer empty detail for a short command without output', () => {
     const { container } = render(
@@ -313,7 +313,6 @@ describe('tool sentence rows', () => {
         <NativeChatToolLine
           block={{ type: 'tool-call', name: 'exec', input, state: 'completed' }}
           result={{ type: 'tool-result', output: 'all passed' }}
-          initiallyExpanded={false}
         />
       )
       expect(screen.getByTitle(command)).toHaveTextContent(/…$/)
@@ -326,24 +325,89 @@ describe('tool sentence rows', () => {
     }
   )
 
+  it.each([
+    ['PowerShell', 'Get-ChildItem', true],
+    ['execute', 'Get-ChildItem', false]
+  ])('colors the full %s command only when its shell is known', async (name, verb, colored) => {
+    const command = `${verb} -Path 'C:\\repo\\src\\renderer' -Recurse -File | Where-Object { $_.Length -gt 10 }`
+    const { container } = render(
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name, input: { command }, state: 'completed' }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button'))
+    const detail = container.querySelector('pre')
+
+    if (colored) {
+      // The first PowerShell block in this file loads the grammar and its regex engine.
+      await waitFor(
+        () => {
+          expect(detail?.querySelector('span[style*="--syntax-dark"]')).not.toBeNull()
+        },
+        { timeout: 10_000 }
+      )
+    } else {
+      expect(detail?.querySelector('span')).toBeNull()
+    }
+    expect(detail?.textContent).toBe(command)
+  })
+
   it('keeps a long plain command with surrounding whitespace complete', () => {
     const command = `  pnpm test ${'src/renderer/tests/long-path/'.repeat(170)}end.test.ts  `
     const { container } = render(
       <NativeChatToolLine
         block={{ type: 'tool-call', name: 'Bash', input: { command }, state: 'completed' }}
-        initiallyExpanded={false}
       />
     )
     fireEvent.click(screen.getByRole('button'))
     expect(container.querySelector('pre')?.textContent).toBe(command)
   })
 
-  it('retains structured input detail for other tools', () => {
-    const input = { file_path: '/repo/a.ts', offset: 10 }
+  it('opens an edit that has not landed to the change it proposes', () => {
     const { container } = render(
-      <NativeChatToolLine block={{ type: 'tool-call', name: 'Read', input }} />
+      <NativeChatToolLine
+        block={{
+          type: 'tool-call',
+          name: 'Edit',
+          state: 'running',
+          input: { file_path: '/repo/a.ts', old_string: 'was', new_string: 'now' }
+        }}
+      />
     )
-    expect(container.querySelector('pre')?.textContent).toBe(JSON.stringify(input, null, 2))
+    expect(container.textContent).not.toContain('now')
+    fireEvent.click(screen.getByRole('button'))
+    expect(container.textContent).toContain('now')
+  })
+
+  it.each(['exec', 'shell', 'Bash'])('offers nothing to open on a running %s command', (name) => {
+    render(
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name, input: { command: 'ls' }, state: 'running' }}
+      />
+    )
+    expect(screen.getByRole('button')).not.toHaveAttribute('aria-expanded')
+  })
+
+  it('offers nothing to open on a call that has produced no output', () => {
+    render(
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name: 'lookup_ticket', input: { ticket: 'ORC-1' } }}
+      />
+    )
+    expect(screen.getByRole('button')).not.toHaveAttribute('aria-expanded')
+  })
+
+  it('shows a read as its output alone, not the arguments its row already names', () => {
+    const { container } = render(
+      <NativeChatToolLine
+        block={{ type: 'tool-call', name: 'Read', input: { file_path: '/repo/a.ts', offset: 10 } }}
+        result={{ type: 'tool-result', output: 'const a = 1' }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button'))
+    expect([...container.querySelectorAll('pre')].map((pre) => pre.textContent)).toEqual([
+      'const a = 1'
+    ])
   })
 
   it.each(['Task', 'Agent'])(
@@ -356,17 +420,13 @@ describe('tool sentence rows', () => {
         query: 'not the description'
       }
       const { rerender } = render(
-        <NativeChatToolLine
-          block={{ type: 'tool-call', name, input, state: 'running' }}
-          initiallyExpanded={false}
-        />
+        <NativeChatToolLine block={{ type: 'tool-call', name, input, state: 'running' }} />
       )
       expect(screen.getByText('Subagent')).toBeInTheDocument()
       expect(screen.getByTitle(description).textContent).toBe(description)
       rerender(
         <NativeChatToolLine
           block={{ type: 'tool-call', name, input: JSON.stringify(input), state: 'completed' }}
-          initiallyExpanded={false}
         />
       )
       expect(screen.getByText('Subagent')).toBeInTheDocument()
@@ -385,7 +445,6 @@ describe('tool sentence rows', () => {
           state: 'completed',
           mcpIdentity: { server: 'my_server', tool: 'Agent' }
         }}
-        initiallyExpanded={false}
       />
     )
     expect(screen.getByText('My server')).toBeInTheDocument()
@@ -393,12 +452,7 @@ describe('tool sentence rows', () => {
   })
 
   it('still renders result-only rows', () => {
-    render(
-      <NativeChatToolLine
-        block={{ type: 'tool-result', output: 'first\nsecond' }}
-        initiallyExpanded={false}
-      />
-    )
+    render(<NativeChatToolLine block={{ type: 'tool-result', output: 'first\nsecond' }} />)
     fireEvent.click(screen.getByRole('button', { name: /Result/ }))
     expect(screen.getByText('first second', { selector: 'pre' })).toHaveClass(
       'text-chat-foreground'

@@ -79,6 +79,40 @@ describe('shared Markdown document list requests', () => {
     await expect(initialRequest).resolves.toBe(staleDocuments)
   })
 
+  it('bypasses a pre-change scan but joins a scan started after the same watcher burst', async () => {
+    const old = deferred<MarkdownDocument[]>()
+    const fresh = deferred<MarkdownDocument[]>()
+    const load = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(fresh.promise)
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000)
+    try {
+      const initial = requestSharedMarkdownDocumentList(context(), '/watch-burst', {}, load)
+      now.mockReturnValue(1_200)
+      const afterChange = { freshAfter: 1_000 }
+      const refreshed = requestSharedMarkdownDocumentList(
+        context(),
+        '/watch-burst',
+        afterChange,
+        load
+      )
+      expect(refreshed).not.toBe(initial)
+      expect(requestSharedMarkdownDocumentList(context(), '/watch-burst', afterChange, load)).toBe(
+        refreshed
+      )
+      old.resolve([])
+      await initial
+      expect(requestSharedMarkdownDocumentList(context(), '/watch-burst', afterChange, load)).toBe(
+        refreshed
+      )
+      expect(load).toHaveBeenCalledTimes(2)
+      fresh.resolve([])
+      await refreshed
+    } finally {
+      old.resolve([])
+      fresh.resolve([])
+      now.mockRestore()
+    }
+  })
+
   it('allows an ordinary retry after an older scan stops settling', async () => {
     const stale = deferred<MarkdownDocument[]>()
     const retry = deferred<MarkdownDocument[]>()

@@ -216,7 +216,7 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/scripts/package-linux-formats.mjs',
       'config/scripts/package-linux-formats-appimage.mjs',
-      'config/scripts/script-child-process.mjs',
+      'config/scripts/process-failure-message.mjs',
       'config/scripts/space-sharing-copy.mjs',
       '.github/actions/prepare-linux-package-fixture/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
@@ -229,8 +229,7 @@ describe('per-job path classification', () => {
       'config/scripts/static-appimage-package-contract.cjs'
     ]) {
       expectClassification([file], {
-        package: true,
-        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+        package: true
       })
     }
   })
@@ -244,8 +243,7 @@ describe('per-job path classification', () => {
       'config/scripts/run-daemon-shutdown-descendants-docker.mjs'
     ]) {
       expectClassification([file], {
-        package: true,
-        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+        package: true
       })
     }
     for (const file of [
@@ -329,13 +327,13 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/scripts/build-mobile-web-app-bundle.mjs',
       'config/scripts/run-mobile-web-app-checks.mjs',
-      'config/scripts/script-child-process.mjs',
-      'src/shared/child-process/run-process.ts',
+      'src/packages/process-host/src/run-process.ts',
       'config/scripts/mobile-web-app-route-manifest.mjs',
       'mobile/web-entry/index.tsx',
       'mobile/app/h/[hostId]/index.tsx',
       'mobile/src/transport/client-context.web.tsx',
       'mobile/modules/orca-mobile-web-shell/ios/MobileWebShellCsp.swift',
+      'src/shared/native-chat-visual-shell.ts',
       // The vendored Expo module the page resolves a .web.ts out of.
       'mobile/packages/expo-two-way-audio/src/ExpoTwoWayAudioModule.web.ts'
     ]) {
@@ -345,8 +343,7 @@ describe('per-job path classification', () => {
 
   it('runs it on a mobile-only diff, which should_run alone would skip', () => {
     const classified = classifyPrJobs(['mobile/app/h/[hostId]/tasks.tsx'])
-    expect(classified.should_run).toBe(false)
-    expect(classified.mobile_web_app).toBe(true)
+    expect([classified.should_run, classified.mobile_web_app]).toEqual([false, true])
   })
 
   it('needs no package.json prefix, because package.json already forces every job', () => {
@@ -378,7 +375,7 @@ describe('per-job path classification', () => {
       'src/main/runtime/agent-session-record-store.ts',
       'src/main/runtime/rpc/dispatcher.ts',
       'src/main/runtime/rpc/methods/ai-vault.ts',
-      'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
+      'src/shared/rpc-contract/browser-tab-create-params.ts',
       'src/main/runtime/rpc/methods/session-tabs.ts',
       'src/main/runtime/rpc/methods/structured-agent-session.ts',
       'src/main/runtime/rpc/methods/structured-agent-session-gate.ts',

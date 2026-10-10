@@ -32,6 +32,19 @@ describe('CI dependency download caches', () => {
     ])
   })
 
+  it('builds internal packages before native preparation after a script-free install', () => {
+    const steps = action.runs.steps
+    const buildIndex = steps.findIndex((step) => step.name === 'Build internal packages')
+    expect(buildIndex).toBeGreaterThan(
+      steps.findIndex((step) => step.name === 'Install dependencies')
+    )
+    expect(buildIndex).toBeLessThan(
+      steps.findIndex((step) => step.name === 'Prepare native runtime')
+    )
+    expect(steps[buildIndex].if).toBeUndefined()
+    expect(steps[buildIndex].run).toBe('pnpm run build:packages')
+  })
+
   it('restores PR stores except measured Windows, Linux and macOS installs, without a post-job save', () => {
     const resolve = action.runs.steps.find((step) => step.id === 'pnpm-store')
     const restore = action.runs.steps.find(

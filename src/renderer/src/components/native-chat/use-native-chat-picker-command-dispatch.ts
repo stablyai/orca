@@ -10,11 +10,7 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import {
-  pushHistory,
-  type HistoryState,
-  type NativeChatPickerItem
-} from './native-chat-composer-state'
+import type { NativeChatPickerItem } from './native-chat-composer-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
 import {
@@ -32,7 +28,6 @@ export function useNativeChatPickerCommandDispatch(args: {
   onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
-  setHistory: Dispatch<SetStateAction<HistoryState>>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
@@ -50,7 +45,6 @@ export function useNativeChatPickerCommandDispatch(args: {
     onSubmitted,
     sessionOptionsSurface,
     trackPendingSend,
-    setHistory,
     setDraft,
     setCaret,
     setActiveSuggestion,
@@ -72,7 +66,6 @@ export function useNativeChatPickerCommandDispatch(args: {
           sessionOptionsSurface,
           onSlashCommand,
           onSubmitted,
-          setHistory,
           setDraft,
           setCaret,
           clearSkillOrigin,
@@ -101,7 +94,6 @@ export function useNativeChatPickerCommandDispatch(args: {
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
       onSubmitted?.()
-      setHistory((previous) => pushHistory(previous, text))
       setDraft('')
       setCaret(0)
       setActiveSuggestion(0)
@@ -123,7 +115,6 @@ export function useNativeChatPickerCommandDispatch(args: {
       setActiveSuggestion,
       setCaret,
       setDraft,
-      setHistory,
       setNotice,
       trackPendingSend
     ]

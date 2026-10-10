@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import type { AgentSessionWriteRefusal } from '../../../shared/agent-session-write-failure'
+import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StructuredLaunchRecoveryState } from './structured-agent-session-launch-recovery'
@@ -31,7 +31,7 @@ export type StructuredLaunchState = StructuredLaunchRecoveryState & {
   callers: StructuredLaunchCallerGroup
   /** The host's refusal behind the last failed attempt, worded beside Retry. Absent when the
    *  failure named none. */
-  failure?: AgentSessionWriteRefusal
+  failure?: StructuredLaunchFailure
   selection: StructuredLaunchSelection
 }
 
@@ -178,7 +178,7 @@ export function getStructuredAgentSessionLaunchResumes(sessionId: string): boole
 export function getStructuredAgentSessionLaunchFailure(
   worktreeId: string,
   sessionId: string
-): AgentSessionWriteRefusal | null {
+): StructuredLaunchFailure | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   return state &&
     matchesLaunchWorktree(state, worktreeId) &&
@@ -190,7 +190,7 @@ export function getStructuredAgentSessionLaunchFailure(
 export function useStructuredAgentSessionLaunchFailure(
   worktreeId: string,
   sessionId: string
-): AgentSessionWriteRefusal | null {
+): StructuredLaunchFailure | null {
   return useSyncExternalStore(
     subscribeStructuredAgentLaunchStatus,
     () => getStructuredAgentSessionLaunchFailure(worktreeId, sessionId),

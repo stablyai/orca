@@ -132,6 +132,23 @@ describe('a desktop launch through the host', () => {
     })
   })
 
+  // Why: a floating launch must leave the main window's selection alone, as main's own tab does.
+  it('keeps a launch that must not take the selection in the background', () => {
+    callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    const before = store.getState().activeTabId
+
+    const { tabId } = launchAgentThroughHost({
+      agent: 'claude',
+      worktreeId: WT,
+      prompt: '',
+      activate: false
+    })
+
+    expect(launchTab(tabId)).toBeDefined()
+    expect(store.getState().activeTabId).toBe(before)
+    expect(lastParams().presentation).toBe('background')
+  })
+
   it('names every click as its own operation', () => {
     callRuntimeRpc.mockReturnValue(new Promise(() => {}))
     launch()
@@ -204,40 +221,5 @@ describe('a desktop launch through the host', () => {
   it('says nothing more when the user closed the tab while it started', async () => {
     callRuntimeRpc.mockRejectedValueOnce(rpcError('agent_launch_tab_closed'))
     await expect(launch().outcome).resolves.toEqual({ kind: 'closed-by-user' })
-  })
-
-  it('still starts the agent in the same tab when the launch record is full', async () => {
-    const unrecorded = deferred<unknown>()
-    callRuntimeRpc
-      .mockRejectedValueOnce(rpcError('agent_session_operation_capacity'))
-      .mockReturnValueOnce(unrecorded.promise)
-    const { tabId, outcome } = launch()
-    const paneKey = lastPaneKey()
-    await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(2))
-
-    const [, method, params] = callRuntimeRpc.mock.calls[1]!
-    expect(method).toBe('agent.launch')
-    expect(params).not.toHaveProperty('operationId')
-    // The same pane, held until the answer.
-    expect(params.paneKey).toBe(paneKey)
-    const leafId = launchTab(tabId)!.agentLaunchPane!.leafId
-    expect(agentLaunchPaneSpawnHold(tabId, leafId)).not.toBeNull()
-
-    unrecorded.resolve(terminalResult(paneKey))
-    await expect(outcome).resolves.toEqual({ kind: 'started' })
-  })
-
-  it('takes its tab back when the unrecorded launch fails before the host revealed it', async () => {
-    callRuntimeRpc
-      .mockRejectedValueOnce(rpcError('agent_session_operation_capacity'))
-      .mockRejectedValueOnce(rpcError('worktree_not_found'))
-    const { tabId, outcome } = launch()
-
-    await expect(outcome).resolves.toEqual({
-      kind: 'not-started',
-      unconfirmed: false,
-      code: 'worktree_not_found'
-    })
-    expect(launchTab(tabId)).toBeUndefined()
   })
 })

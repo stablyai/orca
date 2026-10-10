@@ -18,13 +18,15 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS,
   MAX_CODEX_WORDLESS_ROWS_PER_TURN
 } from './codex-structured-journal-limits'
-import { readCodexTurnId } from './codex-structured-thread-facts'
+import { readCodexTurnId, readCodexErrorWillRetry } from './codex-structured-thread-facts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame
 } from '../../shared/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
+import { codexAuthenticationFailure } from './codex-authentication-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 /** A turn's rows by whether a client draws them; each kind has its own cap. */
@@ -74,7 +76,7 @@ export class CodexJournalGenericFrames {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId'
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account'
     > & {
       attributionFor: CodexRowAttribution
     },
@@ -99,7 +101,25 @@ export class CodexJournalGenericFrames {
     )
     // A frame the classifier declines is deliberately not journaled, which is success.
     // Failing admission here force-closes the provider through the retry queue.
-    return translated ? this.appendFrameRow(threadId, payload, translated) : CODEX_JOURNAL_ADMITTED
+    const auth =
+      kind === 'notification:error' && !readCodexErrorWillRetry(payload)
+        ? codexAuthenticationFailure(payload, this.deps.account?.())
+        : null
+    return translated
+      ? this.appendFrameRow(threadId, payload, {
+          ...translated,
+          body: auth
+            ? {
+                ...translated.body,
+                ...agentSessionFailureWords(auth, {
+                  provider: 'codex',
+                  agentName: 'Codex',
+                  surface: 'row'
+                })
+              }
+            : translated.body
+        })
+      : CODEX_JOURNAL_ADMITTED
   }
 
   /** One frame's own row, under the identity every frame row gets, however it is worded. */

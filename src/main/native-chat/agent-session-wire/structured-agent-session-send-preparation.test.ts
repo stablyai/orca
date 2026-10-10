@@ -187,7 +187,7 @@ describe('a send with no live owner', () => {
     await accept(sendParams('accept first'))
     await eventually(async () => expect(dispatch).toHaveBeenCalledOnce())
 
-    expect(order).toEqual(['admit', 'acquire'])
+    expect(order).toEqual(['acquire'])
   })
 
   it('leaves a live owner alone', async () => {
@@ -199,7 +199,7 @@ describe('a send with no live owner', () => {
     expect(acquire).not.toHaveBeenCalled()
   })
 
-  it('does not restart an owner for a send the session refuses anyway', async () => {
+  it('restarts an independently retained old-build clear source', async () => {
     await loseOwner()
     await store.transitionHandoff(SESSION, (current) => ({
       ...current,
@@ -213,12 +213,10 @@ describe('a send with no live owner', () => {
       }
     }))
 
-    await expect(host.send(CALLER, sendParams('into a cleared chat'))).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
+    await expect(host.send(CALLER, sendParams('into the retained chat'))).resolves.toMatchObject({
+      ok: true
     })
-
-    expect(acquire).not.toHaveBeenCalled()
+    await eventually(() => expect(acquire).toHaveBeenCalledOnce())
   })
 
   it('restarts an owner that exited while the session stayed readable', async () => {
@@ -328,16 +326,16 @@ describe('a send with no live owner', () => {
     expect(acquire).toHaveBeenCalledOnce()
   })
 
-  it("restarts nothing for an older build's unknown row the journal never saw", async () => {
+  it('accepts afresh when only an older ledger row exists without a command receipt', async () => {
     const resent = await admittedThenHostDied(sendParams('marked unknown, then died'), 'unknown')
 
     await expect(host.send(CALLER, resent)).resolves.toMatchObject({
       ok: true,
-      replayed: true,
-      value: { submission: { dispatchState: 'unknown', recovered: true } }
+      replayed: false,
+      value: { submission: { dispatchState: 'pending' } }
     })
-    expect(acquire).not.toHaveBeenCalled()
-    expect(dispatch).not.toHaveBeenCalled()
+    await eventually(async () => expect(dispatch).toHaveBeenCalledOnce())
+    expect(acquire).toHaveBeenCalledOnce()
   })
 
   it('accepts a send that arrives while a restart holds the queue, and hands both over in order', async () => {

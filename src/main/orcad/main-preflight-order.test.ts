@@ -13,12 +13,15 @@ import {
  * catchable, so a preflight that lands after `main()` has already reached
  * `await import('../ipc/pty')` prevents nothing.
  */
-const { order, profileProbe } = vi.hoisted(() => {
+const { order, profileProbe, reserveStdout } = vi.hoisted(() => {
   const order: string[] = []
-  return { order, profileProbe: vi.fn(async () => {}) }
+  return { order, profileProbe: vi.fn(async () => {}), reserveStdout: vi.fn() }
 })
 
-vi.mock('./orcad-bundled-runtime', () => ({ handoffToBundledOrcad: () => false }))
+vi.mock('../server/serve-stdout-boundary', () => ({
+  reserveServeStdoutForReadiness: reserveStdout
+}))
+vi.mock('./orcad-bundled-runtime', () => ({ assertOrcadServerRuntime: () => {} }))
 vi.mock('./orcad-profile-preflight', () => ({
   preflightBundledOrcadStartup: async () => {
     order.push('profile-admission')
@@ -49,12 +52,39 @@ vi.mock('./orcad-managed-stop-command', () => ({
 }))
 
 vi.mock('./orcad-entry', () => ({
-  main: async () => {
+  main: vi.fn(async () => {
     order.push('main')
-  }
+  })
 }))
 
 describe('orcad entry', () => {
+  it.each([['--help'], ['-h'], ['--json', '--help'], ['--bind', '--help', '-h']])(
+    'handles help before startup probes or stdout redirection: %j',
+    async (...argv) => {
+      vi.spyOn(process, 'argv', 'get').mockReturnValue(['runtime', 'orcad.js', ...argv])
+      await import('./main')
+      const { main } = await import('./orcad-entry')
+
+      expect(main).toHaveBeenCalledWith(argv)
+      expect(order).toEqual(['main'])
+      expect(profileProbe).not.toHaveBeenCalled()
+      expect(reserveStdout).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    ['--bind', '--help'],
+    ['--pairing-address', '-h'],
+    ['--project-root', '--help']
+  ])('keeps startup probes when help is consumed as a value: %j', async (...argv) => {
+    vi.spyOn(process, 'argv', 'get').mockReturnValue(['runtime', 'orcad.js', ...argv])
+    await import('./main')
+    await vi.waitFor(() => expect(order).toContain('main'))
+
+    expect(order).toEqual(['profile-admission', 'preflight', 'main'])
+    expect(reserveStdout).toHaveBeenCalledOnce()
+  })
+
   it.each([
     { flag: ORCAD_PROFILE_PREFLIGHT_FLAG, nativeFeatures: true },
     { flag: ORCAD_STARTUP_PREFLIGHT_FLAG, nativeFeatures: false }

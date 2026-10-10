@@ -11,7 +11,7 @@ import {
   SESSION,
   type ProviderTimelineRig
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { acpLaunchSpecFor } from './acp-launch-specs'
+import { acpLaunchSpecFor, type AcpLaunchSpec } from './acp-launch-specs'
 import { AcpScriptedAgent, tick, type FakeFrame } from './acp-scripted-agent.test-support'
 import type { AcpAgentConnectionOptions } from './acp-agent-connection'
 import { AcpConnectionClosedError } from './acp-errors'
@@ -107,8 +107,8 @@ export class FakeAcpChild extends AcpSessionRuntime implements AcpStructuredConn
   override close(error?: Error): Promise<boolean> {
     this.closes += 1
     this.closing ||= !this.gone
-    super.close(error)
-    return this.proveClose()
+    this.drainNotifications(error)
+    return this.proveClose().finally(() => super.close(error))
   }
   /** The agent process ends on its own (or Orca's close landed). */
   exit(): void {
@@ -156,6 +156,8 @@ export type AcpAdapterRig = {
 
 export async function openAcpAdapterRig(
   options: {
+    /** The agent's row; Grok's unless a test drives another agent. */
+    spec?: AcpLaunchSpec
     launch?: Partial<AcpStructuredLaunch>
     initialize?: Record<string, unknown>
     script?: (agent: AcpScriptedAgent) => void
@@ -167,14 +169,16 @@ export async function openAcpAdapterRig(
   const spawned: string[] = []
   const lifecycle: StructuredAgentSessionLifecycleEvent[] = []
   const settled: AcpAdapterRig['settled'] = []
+  const spec = options.spec ?? GROK
   const adapter = new AcpStructuredSessionAdapter({
-    spec: GROK,
+    spec,
     resolveLaunch: async () => ({
-      spec: GROK,
-      command: '/opt/grok/bin/grok',
-      args: GROK.args({ fullAccess: false }),
+      spec,
+      command: `/opt/bin/${spec.command}`,
+      args: spec.args({ fullAccess: false, pluginDir: null }),
       cwd: '/workspace/project',
       env: { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' },
+      envToDelete: [],
       fullAccess: false,
       resume: null,
       ...options.launch
@@ -184,6 +188,9 @@ export async function openAcpAdapterRig(
       const child = new FakeAcpChild(launch, connectionOptions)
       current = child
       const { agent } = child
+      agent.on('_x.ai/subagent/cancel', (frame) =>
+        agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `subagentId`')
+      )
       agent.on('initialize', (frame) => {
         spawned.push('initialize')
         agent.reply(frame, {
@@ -226,7 +233,7 @@ export async function openAcpAdapterRig(
           sessionId: SESSION,
           workspaceId: 'workspace-1',
           hostId: 'local',
-          agent: 'grok',
+          agent: spec.agent,
           providerHandle: null
         },
         fence: acquireOptions.fence ?? 1,

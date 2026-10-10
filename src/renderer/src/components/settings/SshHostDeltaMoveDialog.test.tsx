@@ -57,6 +57,7 @@ function api(next: OrcadDeltaMovePreview, result: OrcadDeltaMoveResult): Managed
     recover: unused,
     stop: unused,
     cancelStop: unused,
+    forget: unused,
     linkSshAccess: unused,
     unlinkSshAccess: unused,
     convertSshHost: unused,

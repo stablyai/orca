@@ -66,7 +66,8 @@ function healthySample(at = startedAt): IncidentSample {
           'director.memory': signal(0.3, at),
           'director.concurrency': signal(5, at),
           'director.errors': signal(0, at),
-          'auth.errors': signal(0, at)
+          'auth.errors': signal(0, at),
+          'auth.requests': signal(58_000, at)
         }
       },
       'relay-logs': {
@@ -287,13 +288,40 @@ describe('incident monitor evaluator', () => {
     expect(evaluateIncidentSample(excess, startedAt).failures).toContainEqual(
       expect.objectContaining({ signal: 'director.errors', observed: 16, threshold: 15 })
     )
-    const auth = healthySample()
-    auth.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
-    expect(evaluateIncidentSample(auth, startedAt).status).toBe('freeze')
     const pressure = healthySample()
     pressure.sources['cloud-monitoring']!.signals['director.errors'] = signal(1)
     pressure.sources['cloud-monitoring']!.signals['cloud_sql.cpu'] = signal(0.81)
     expect(evaluateIncidentSample(pressure, startedAt).status).toBe('freeze')
+  })
+
+  it('tolerates isolated auth errors but freezes on a burst or a high error ratio', () => {
+    const isolated = healthySample()
+    isolated.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
+    expect(evaluateIncidentSample(isolated, startedAt).status).toBe('green')
+    isolated.sources['cloud-monitoring']!.signals['auth.errors'] = signal(2)
+    expect(evaluateIncidentSample(isolated, startedAt).status).toBe('green')
+
+    const burst = healthySample()
+    burst.sources['cloud-monitoring']!.signals['auth.errors'] = signal(3)
+    expect(evaluateIncidentSample(burst, startedAt).failures).toEqual([
+      expect.objectContaining({ signal: 'auth.errors', observed: 3, threshold: 2 })
+    ])
+
+    const ratio = healthySample()
+    ratio.sources['cloud-monitoring']!.signals['auth.errors'] = signal(2)
+    ratio.sources['cloud-monitoring']!.signals['auth.requests'] = signal(1_000)
+    expect(evaluateIncidentSample(ratio, startedAt).failures).toEqual([
+      expect.objectContaining({ signal: 'auth.error_ratio', observed: 0.002, threshold: 0.001 })
+    ])
+    ratio.sources['cloud-monitoring']!.signals['auth.requests'] = signal(0)
+    expect(evaluateIncidentSample(ratio, startedAt).status).toBe('freeze')
+
+    const unmeasured = healthySample()
+    unmeasured.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
+    delete unmeasured.sources['cloud-monitoring']!.signals['auth.requests']
+    expect(evaluateIncidentSample(unmeasured, startedAt).failures).toEqual([
+      expect.objectContaining({ code: 'signal_missing', signal: 'auth.requests' })
+    ])
   })
 
   it('freezes on SQL, director, relay pool, heartbeat, and migration breaches', () => {

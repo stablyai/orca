@@ -8,13 +8,17 @@ import {
   RemoteNodeRuntimeSecurityModifiedError,
   RemoteNodeRuntimeSelfTestError
 } from './orcad-remote-node-runtime'
+import {
+  REMOTE_NODE_RUNTIME_EXIT_PREFIX,
+  REMOTE_NODE_RUNTIME_SELFTEST_FAILED
+} from './orcad-remote-node-runtime-report'
 import { ensurePinnedRelayRuntime, verifyPinnedRelayInstall } from './ssh-relay-pinned-node-install'
 import {
   PinnedRelayFallbackError,
   planPinnedNodeRelay,
-  resetPinnedRuntimeRefusalsForTests,
   type PinnedRelayPlan
 } from './ssh-relay-pinned-node'
+import { resetPinnedRuntimeRefusalsForTests } from './ssh-relay-pinned-refusal-cache'
 import { runPinnedRuntimeSelfTest } from './ssh-relay-runtime-self-test'
 import type { HostNodeAddonRelayPlan } from './ssh-relay-host-node-addons'
 import { RelayRuntimeLadderRun } from './ssh-relay-runtime-resolution'
@@ -73,6 +77,27 @@ describe('ensurePinnedRelayRuntime', () => {
     expect(ensureRemoteOrcadNodeRuntime).not.toHaveBeenCalled()
   })
 
+  it.each([
+    [
+      'a library removed since the install',
+      127,
+      'libatomic.so.1: cannot open shared object file',
+      'missing_lib'
+    ],
+    ['an exec policy that now denies it', 126, 'sh: node: Permission denied', 'noexec']
+  ] as const)(
+    'refuses a cached runtime that no longer runs (%s) before any launch',
+    async (_label, status, output, reason) => {
+      vi.mocked(execCommand).mockResolvedValueOnce(
+        `${REMOTE_NODE_RUNTIME_SELFTEST_FAILED}\n${REMOTE_NODE_RUNTIME_EXIT_PREFIX}${status}\n${output}\n`
+      )
+      const failure = await ensurePinnedRelayRuntime(context, true).catch((e: unknown) => e)
+      expect(failure).toMatchObject({ reason })
+      expect(String(vi.mocked(execCommand).mock.calls[0]?.[1])).toContain('--version')
+      expect(ensureRemoteOrcadNodeRuntime).not.toHaveBeenCalled()
+    }
+  )
+
   it('reinstalls a runtime that disappeared from under an installed relay', async () => {
     vi.mocked(execCommand).mockResolvedValueOnce(REMOTE_NODE_RUNTIME_MISSING)
     await ensurePinnedRelayRuntime(context, true)
@@ -92,7 +117,22 @@ describe('ensurePinnedRelayRuntime', () => {
     vi.mocked(execCommand).mockResolvedValueOnce('ldd (GNU libc) 2.31')
     await expect(
       planPinnedNodeRelay({ conn, host, baseVersion: '0.1.0+abc', targetId: 'target-1' })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'noexec', remembered: true })
+    ).rejects.toMatchObject({ reason: 'noexec', remembered: true })
+  })
+
+  it("steps down when NixOS's stub loader refuses the generic Linux runtime", async () => {
+    vi.mocked(ensureRemoteOrcadNodeRuntime).mockRejectedValueOnce(
+      new RemoteNodeRuntimeSelfTestError(
+        127,
+        'Could not start dynamically linked executable: /home/u/.orca-remote/runtimes/node-x/bin/node\n' +
+          'NixOS cannot run dynamically linked executables intended for generic\n' +
+          'linux environments out of the box. For more information, see:\n' +
+          'https://nix.dev/permalink/stub-ld'
+      )
+    )
+    const failure = await ensurePinnedRelayRuntime(context, false).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(PinnedRelayFallbackError)
+    expect(failure).toMatchObject({ reason: 'wrong_libc' })
   })
 
   it('keeps an unclassified runtime failure as an error, not a step down', async () => {
@@ -152,7 +192,7 @@ describe('verifyPinnedRelayInstall', () => {
   it('self-tests rung C on the host Node without the pinned version check or a cached refusal', async () => {
     vi.mocked(withRuntimeStoreLock).mockClear()
     vi.mocked(execCommand).mockResolvedValue('')
-    const run = new RelayRuntimeLadderRun('target-1', null)
+    const run = new RelayRuntimeLadderRun('target-1', null, true)
     const hostPlan: HostNodeAddonRelayPlan = {
       kind: 'host-node-addons',
       target: 'linux-x64-glibc',
@@ -182,14 +222,15 @@ describe('verifyPinnedRelayInstall', () => {
     expect(withRuntimeStoreLock).not.toHaveBeenCalled()
     // A host Node refusal says nothing about Orca's pinned Node on this host.
     vi.mocked(execCommand).mockResolvedValueOnce('ldd (GNU libc) 2.31')
-    const next = await planPinnedNodeRelay({
-      conn,
-      host,
-      baseVersion: '0.1.0+abcdef012345',
-      targetId: 'target-1',
-      materializeOrcad: () => Promise.reject(new Error('stop here'))
-    })
-    expect(next).toMatchObject({ fallbackReason: 'artifacts_unavailable' })
+    await expect(
+      planPinnedNodeRelay({
+        conn,
+        host,
+        baseVersion: '0.1.0+abcdef012345',
+        targetId: 'target-1',
+        materializeOrcad: () => Promise.reject(new Error('stop here'))
+      })
+    ).rejects.toMatchObject({ reason: 'artifacts_unavailable', remembered: false })
   })
 
   it('falls back on a refusal', async () => {
@@ -274,7 +315,7 @@ describe('pinned relay on a Windows host', () => {
         baseVersion: '0.1.0+abc',
         targetId: 'target-1'
       })
-    ).resolves.toEqual({ kind: 'host-node', fallbackReason: 'security_software', remembered: true })
+    ).rejects.toMatchObject({ reason: 'security_software', remembered: true })
   })
 
   it('classifies application control blocking node.exe as a refusal', async () => {

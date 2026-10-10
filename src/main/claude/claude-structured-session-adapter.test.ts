@@ -130,7 +130,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     ).toEqual([])
     // Left out, not refused: the record takes the provider's own Fast, as before.
     expect(adapter.readOptionRestoreFailures('session-1')).toEqual([])
-    expect(events.find((event) => event.type === 'started')).toMatchObject({
+    expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
       reportedOptions: { fastMode: false }
     })
   })

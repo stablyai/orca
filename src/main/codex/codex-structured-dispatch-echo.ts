@@ -15,7 +15,7 @@ export const MAX_CODEX_RECORDED_TURN_ENDS = 64
 export type CodexTurnEnd =
   | { status: 'completed' }
   | { status: 'interrupted' }
-  | { status: 'failed'; detail?: ProviderDiagnostic }
+  | { status: 'failed'; detail?: ProviderDiagnostic; notSignedIn?: true }
 
 export type CodexDispatchRequestOrigin = {
   requestedAt: number

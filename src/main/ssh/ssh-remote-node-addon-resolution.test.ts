@@ -47,7 +47,9 @@ describe('resolveRemoteHostNodeForAddons (rung C)', () => {
     execCommandMock
       .mockResolvedValueOnce('') // path probe: nothing installed
       .mockResolvedValueOnce('/bin/bash\n') // $SHELL
-      .mockRejectedValueOnce(new Error('Command failed (exit 1): ')) // command -v node
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed (exit 1): '), { exitCode: 1, stdout: '' })
+      ) // command -v node
 
     await expect(resolveRemoteHostNodeForAddons(conn, 8)).resolves.toBeNull()
   })

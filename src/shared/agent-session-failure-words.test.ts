@@ -69,11 +69,11 @@ describe('the words written beside a failure fact', () => {
           [undefined, undefined],
           ['Codex', 'clear']
         ] as const) {
-          const sentence = agentSessionFailureSentence(fact, surface, { agentName, command })
+          const context = { agentName, command, provider: 'claude' } as const
+          const sentence = agentSessionFailureSentence(fact, surface, context)
           expect([fact, sentence]).toEqual([fact, expect.stringMatching(/[^.]\.$/)])
           expect(sentence).not.toMatch(/\.\./)
           expect(sentence).not.toMatch(ORCA_INTERNAL)
-          const context = { agentName, command, provider: 'claude' } as const
           if (surface === 'row') {
             expect(agentSessionFailureWords(fact, { ...context, surface }).text).toBe(sentence)
           } else if (isSubmissionRejectionFact(fact) && !LEGACY_MARKER_KINDS.has(fact.kind)) {
@@ -116,7 +116,15 @@ describe('the words written beside a failure fact', () => {
         command: 'compact'
       })
     expect(compact('notSignedIn')).toBe(
-      'Claude is not signed in for the selected account. Sign in, then run /compact again.'
+      "Claude isn't signed in. Run `claude auth login`, or choose an account in Claude Accounts settings. Run /compact again."
+    )
+    expect(
+      agentSessionFailureSentence({ kind: 'notSignedIn', account: 'managed' }, 'rejection', {
+        agentName: 'Codex',
+        command: 'compact'
+      })
+    ).toBe(
+      "This Codex account isn't signed in. Sign in again in Codex Accounts settings. Run /compact again."
     )
     expect(compact('startFailed')).toBe("Claude couldn't start. Run /compact again.")
     expect(compact('restartFailed')).toBe("Claude couldn't restart. Run /compact again.")

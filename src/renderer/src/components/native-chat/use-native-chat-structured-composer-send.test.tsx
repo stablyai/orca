@@ -48,7 +48,6 @@ function harness(
       structuredTransport,
       isComposing: () => false,
       clearSkillOrigin: vi.fn(),
-      setHistory: vi.fn(),
       setDraft: vi.fn(),
       setCaret: vi.fn()
     })
@@ -100,6 +99,22 @@ describe('attachment guard follows what the host claims', () => {
   })
 })
 
+describe('an attachment still uploading', () => {
+  it('holds a picked command, as Send is held, rather than send the chip without its path', async () => {
+    const { send, structuredTransport } = harness('claude')
+    const pending: NativeChatComposerImageAttachment = {
+      id: 'p1',
+      path: '',
+      pending: true,
+      pendingName: 'notes.pdf'
+    }
+    send('/review', [pending])
+    await Promise.resolve()
+    expect(structuredTransport.send).not.toHaveBeenCalled()
+    expect(structuredTransport.onError).not.toHaveBeenCalled()
+  })
+})
+
 // The pane brings the latest into view on this: a conversation command at the press, a message
 // once admitted, and neither for a refusal or a command the chat does not run.
 describe('reports the sends that bring the latest into view', () => {
@@ -122,7 +137,8 @@ describe('reports the sends that bring the latest into view', () => {
     send('/permissions', [])
     await vi.waitFor(() =>
       expect(structuredTransport.onError).toHaveBeenCalledWith(
-        expect.stringContaining('not available in chat sessions')
+        expect.stringContaining('not available in chat sessions'),
+        undefined
       )
     )
     expect(onSubmitted).not.toHaveBeenCalled()
@@ -139,10 +155,9 @@ describe("says a failed send in Orca's words, with the error it hit apart", () =
     })
     send('hello', [])
     await vi.waitFor(() =>
-      expect(structuredTransport.onError).toHaveBeenCalledWith(
-        'Your message was not sent.',
-        'connect ECONNREFUSED /tmp/a.sock'
-      )
+      expect(structuredTransport.onError).toHaveBeenCalledWith('Your message was not sent.', {
+        errorText: 'connect ECONNREFUSED /tmp/a.sock'
+      })
     )
   })
 })

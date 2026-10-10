@@ -16,7 +16,6 @@ import type {
   AgentSessionMutationResult
 } from '../../../shared/agent-session-wire'
 import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   admitAttachOrRefuse,
@@ -47,8 +46,12 @@ import {
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
+import { readProviderHistoryWindow } from './structured-agent-session-provider-history-window'
+import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
+import type { StructuredAgentSessionStartupProgress } from './structured-agent-session-startup-attempt'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
@@ -63,6 +66,15 @@ export type AttachFlowInput = {
   recordPhase?: AgentSessionCreatePhaseRecorder
   /** Aborted when a close, or a Stop admitted now, must not wait behind this attach's acquire. */
   acquireSignal?: AbortSignal
+  /** The attempt this attach's acquire runs under, minted before the adapter is called; what it
+   *  answers learns of the child's spawn and output. */
+  onStartupAttempt?: (
+    attempt: StructuredAgentSessionStartupAttempt
+  ) => StructuredAgentSessionStartupProgress
+  /** A `ready` child's start listing, handed over once its owner is proven. */
+  onStartCatalogListing?: (listing: AgentModelCatalogLiveListing) => void
+  /** The conversation's option revision, which the child's reports are stamped with. */
+  optionRevision: () => number
   /** Publishes the journal before clients can send against the new owner. `acquiredOwner` is
    *  true only when this attach spawned the provider child, so a re-attach to a live one is not
    *  mistaken for a cold acquire. */
@@ -277,27 +289,6 @@ export async function performAttach(
       ...(tabId ? { tabId } : {})
     }
   }
-}
-
-async function readProviderHistoryWindow(input: {
-  adapter: StructuredAgentSessionAdapter
-  identity: AgentSessionJournalIdentity
-  accountHome: AgentSessionRecord['accountHome']
-  ownerAlreadyAdmitted: boolean
-}): Promise<ProviderHistoryWindow | null> {
-  const read = input.adapter.providerHistoryWindow
-  if (!read) {
-    return null
-  }
-  let history: ProviderHistoryWindow | null
-  try {
-    history = await read({ identity: input.identity, accountHome: input.accountHome })
-  } catch {
-    return null
-  }
-  // A lease that was already live may belong to a provider child this process
-  // has not indexed yet. Preserve the safe unknown outcome in that case.
-  return history && input.ownerAlreadyAdmitted ? { ...history, turnInFlight: true } : history
 }
 
 async function settleUnsupportedReservation(

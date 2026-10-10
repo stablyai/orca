@@ -72,7 +72,7 @@ describe('beginDirectWorkItemStructuredLaunch', () => {
       beginDirectWorkItemStructuredLaunch({
         plan: adoptAgentSessionLaunchVerdict({
           ...structuredPlan,
-          route: 'legacy-native-chat'
+          route: 'terminal-tui'
         }),
         primaryTabId: null,
         beforeOpen: vi.fn()

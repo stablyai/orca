@@ -5,7 +5,7 @@ import {
   shouldBootstrapInitialWebRuntimeTerminal,
   shouldRespawnWebRuntimeTerminalAfterWake,
   shouldSyncRuntimeSessionTabs
-} from './web-session-tabs-sync'
+} from './web-session-tabs-sync/tracking-decisions'
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../shared/runtime-types'
 import {
   ENV,

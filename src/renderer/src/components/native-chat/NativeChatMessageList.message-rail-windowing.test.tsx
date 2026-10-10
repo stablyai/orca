@@ -26,7 +26,7 @@ afterEach(cleanup)
 describe('revealing a diff from a turn rollup', () => {
   let restoreLayout = (): void => {}
   beforeEach(() => {
-    restoreLayout = stubLayout({ scrollGeometry: true })
+    restoreLayout = stubLayout({ scrollGeometry: true, offsetChain: true })
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement
     ) {
@@ -34,7 +34,7 @@ describe('revealing a diff from a turn rollup', () => {
       const scroller = this.closest<HTMLElement>('[data-native-chat-scroll]')
       return new DOMRect(
         0,
-        row ? Number.parseFloat(row.style.top) - (scroller?.scrollTop ?? 0) : 0,
+        row ? row.offsetTop - (scroller?.scrollTop ?? 0) : 0,
         100,
         this.offsetHeight
       )
@@ -100,16 +100,14 @@ describe('revealing a diff from a turn rollup', () => {
       />
     )
     const { container, rerender } = render(transcript())
-    const selectedTop = Number.parseFloat(
-      screen.getByText('Second prompt').closest<HTMLElement>('[data-index]')?.style.top ?? ''
-    )
+    const selectedTop =
+      screen.getByText('Second prompt').closest<HTMLElement>('[data-index]')?.offsetTop ?? 0
     expect(selectedTop).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
     scrollTranscript(container, 6000)
     expect(screen.getByText('Edited')).toBeInTheDocument()
     scrollTo.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
     fireEvent.click(screen.getByRole('button', { name: 'Second prompt' }))
     expect(scrollTo.mock.calls).toEqual([
       [{ top: 6000, behavior: 'auto' }],
@@ -125,9 +123,7 @@ describe('revealing a diff from a turn rollup', () => {
     scrollTo.mockClear()
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     fireEvent.click(screen.getByRole('button', { name: /src\/a.ts/ }))
-    const diffTop = Number.parseFloat(
-      screen.getByText('Edited').closest<HTMLElement>('[data-index]')?.style.top ?? ''
-    )
+    const diffTop = screen.getByText('Edited').closest<HTMLElement>('[data-index]')?.offsetTop ?? 0
     expect(Number.isFinite(diffTop)).toBe(true)
     expect(scrollTo.mock.calls.filter(([options]) => options?.behavior === 'smooth')).toEqual([
       [{ top: diffTop, behavior: 'smooth' }]
@@ -164,12 +160,7 @@ describe('jumping to a message from the rail', () => {
     index % 10 === 0 ? userMarker(index) : marker(index)
   )
 
-  /** Open the hover panel through the trigger and click the first prompt. */
   function jumpToFirstPrompt(): void {
-    fireEvent.click(screen.getByRole('button', { name: 'Your messages' }))
-    act(() => {
-      vi.advanceTimersByTime(300)
-    })
     fireEvent.click(screen.getByRole('button', { name: 'prompt-0' }))
     act(() => {
       vi.advanceTimersByTime(300)

@@ -5,6 +5,7 @@ import {
   serializeOrcadActivationTransaction
 } from './orcad-activation-transaction'
 import {
+  committedOrcadDecommissionRecord,
   createOrcadDecommissionTransaction,
   withOrcadDecommissionProcessExited,
   withOrcadDecommissionStopDispatched
@@ -34,6 +35,44 @@ const exited = withOrcadDecommissionProcessExited(dispatched, T)
 describe('the decommission journal entry', () => {
   it('deactivates the active version and keeps it as previous', () => {
     expect(prepared.recordAfter).toMatchObject({ active: null, previous: NEW, snapshot: null })
+  })
+
+  it('journals a recordAfter released desktops still read, and commits the app version', () => {
+    // Frozen copy of the check released desktops run on every stop journal they recover.
+    const releasedDefect = (journal: typeof prepared): string | null => {
+      const b = journal.recordBefore
+      const deactivated = {
+        schemaVersion: 1,
+        active: null,
+        previous: b.active,
+        activatedAt: null,
+        snapshot: null
+      }
+      return `${JSON.stringify(journal.recordAfter, null, 2)}\n` ===
+        `${JSON.stringify(deactivated, null, 2)}\n`
+        ? null
+        : 'recordAfter is not the deactivated recordBefore'
+    }
+    const versionedBefore = { ...before, activeAppVersion: '1.5.0', rolledBackFrom: '0.9.0+ff01' }
+    const versioned = createOrcadDecommissionTransaction({
+      transactionId: ID,
+      recordBefore: versionedBefore,
+      now: T
+    })
+    const journal = JSON.parse(serializeOrcadActivationTransaction(versioned))
+    expect(releasedDefect(journal)).toBeNull()
+    const interrupted = withOrcadDecommissionProcessExited(
+      withOrcadDecommissionStopDispatched(versioned, request, T),
+      T
+    )
+    expect(planOrcadTransactionRecovery(interrupted, versionedBefore)).toMatchObject({
+      action: 'confirm-decommissioned',
+      record: { active: null, activeAppVersion: '1.5.0', rolledBackFrom: '0.9.0+ff01' }
+    })
+    expect(committedOrcadDecommissionRecord(versioned)).toMatchObject({
+      previous: NEW,
+      activeAppVersion: '1.5.0'
+    })
   })
 
   it('round-trips every phase', () => {

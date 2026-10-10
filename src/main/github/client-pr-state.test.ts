@@ -26,7 +26,9 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { markPRReadyForReview, updatePRState, _resetOwnerRepoCache } from './client'
+import { markPRReadyForReview } from './client/update/pr-ready'
+import { updatePRState } from './client/update/pr-state'
+import { _resetOwnerRepoCache } from './gh-utils'
 import { resetOriginRepositoryCache } from './client-test-harness'
 
 const {

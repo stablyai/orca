@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { ManagedOrcadAutoUpdateOutcome } from './orcad-managed-auto-update'
 import {
+  redeployStoppedManagedOrcad,
   resetManagedOrcadRestoreUpdatesForTests,
   updateManagedOrcadOnRestore,
   type ManagedOrcadRestoreUpdateDeps
@@ -103,5 +104,31 @@ describe('updating a managed server when the launch restores its tunnel', () => 
     const unlinked = deps({ outcome: 'skipped', reason: 'current' }, { target: () => null })
     expect(updateManagedOrcadOnRestore('env-3', () => unlinked)).toBeNull()
     expect(unlinked.autoUpdate).not.toHaveBeenCalled()
+  })
+})
+
+describe('redeploying a server another desktop stopped mid-session', () => {
+  beforeEach(() => resetManagedOrcadRestoreUpdatesForTests())
+
+  it('runs even after this session already checked the server, and reports activation', async () => {
+    await updateManagedOrcadOnRestore('env-1', () =>
+      deps({ outcome: 'skipped', reason: 'current' })
+    )
+    const d = deps({ outcome: 'updated', activeVersion: '0.1.0+b' })
+    await expect(redeployStoppedManagedOrcad('env-1', () => d)).resolves.toBe(true)
+    expect(d.autoUpdate).toHaveBeenCalledWith('env-1', expect.anything())
+    expect(vi.mocked(d.publish).mock.calls.at(-1)).toEqual([target, 'env-1', 'settled', undefined])
+  })
+
+  it('shares one attempt between concurrent calls and retries on the next one', async () => {
+    const d = deps({ outcome: 'failed', reason: 'upload failed' })
+    const [first, second] = await Promise.all([
+      redeployStoppedManagedOrcad('env-1', () => d),
+      redeployStoppedManagedOrcad('env-1', () => d)
+    ])
+    expect([first, second]).toEqual([false, false])
+    expect(d.autoUpdate).toHaveBeenCalledTimes(1)
+    await redeployStoppedManagedOrcad('env-1', () => d)
+    expect(d.autoUpdate).toHaveBeenCalledTimes(2)
   })
 })

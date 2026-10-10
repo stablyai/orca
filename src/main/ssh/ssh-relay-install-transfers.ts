@@ -24,6 +24,7 @@ import {
   isSandboxedSftpNamespaceError,
   latchLateSftpSessionErrors
 } from './sftp-stream-late-error'
+import { isSftpHandshakeCorruption } from './sftp-handshake-corruption'
 
 export type RelayTransferOptions = {
   signal?: AbortSignal
@@ -164,6 +165,10 @@ export function classifySftpFailureForExecFallback(error: unknown): SftpExecFall
   }
   // sshd accepted the subsystem but its sftp-server exited before the handshake.
   if (/^Received exit code \d+ while establishing SFTP session$/.test(error.message)) {
+    return 'sftp-unavailable'
+  }
+  // Startup-file output corrupted the handshake; it recurs on every subsystem start.
+  if (isSftpHandshakeCorruption(error)) {
     return 'sftp-unavailable'
   }
   // A shell-created path the SFTP view cannot see: a chrooted subsystem (#15479).

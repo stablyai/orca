@@ -51,6 +51,8 @@ vi.mock('./NativeChatComposer', async () => {
             return true
           },
           insertTypedText: composer.typed,
+          acceptsText: () => true,
+          appendText: () => {},
           handlePasteEvent: () => {},
           pasteFromClipboard: () => {},
           contains: () => false
@@ -165,14 +167,19 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  cleanup()
-  resetNativeChatPtySendQueuesForTests()
-  restoreViewport()
-  useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  try {
+    cleanup()
+    resetNativeChatPtySendQueuesForTests()
+    restoreViewport()
+    useAppStore.setState({ agentStatusByPaneKey: {}, nativeChatLaunchPromptByTabId: {} })
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 describe('a prompt card hides the composer without unmounting it', () => {
   it('keeps an in-flight message visible and never submits it into the approval', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     setStatus({ state: 'working' })
     renderPane()
     await act(async () => {
@@ -182,11 +189,11 @@ describe('a prompt card hides the composer without unmounting it', () => {
 
     // The approval arrives inside the body-to-Enter gap.
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100))
+      await vi.advanceTimersByTimeAsync(100)
       setStatus({ state: 'waiting', interactivePrompt: approval })
     })
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 900))
+      await vi.advanceTimersByTimeAsync(900)
     })
 
     expect(document.querySelector('[data-native-chat-approval-card="true"]')).not.toBeNull()

@@ -26,7 +26,7 @@ import type {
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../runtime/structured-agent-runtime-registrations'
 import {
-  prefersStructuredNativeChatByDefault,
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -130,14 +130,13 @@ const HOST_SUPPORT_REASON: Record<
 export function decideAgentLaunchMode(args: {
   placement: AgentLaunchModePlacement
   settings: AgentLaunchModeSettings | null | undefined
+  /** Host-internal: the caller's contract is a terminal handle, so the chat default cannot apply. */
+  terminalOnly?: boolean
   vocabulary?: AgentLaunchModeVocabulary
-  /** Registered agents (beyond Claude and Codex) this surface can open as structured; defaults to
-   *  every agent this host registers. */
-  registeredStructuredAgents?: readonly string[]
 }): AgentLaunchModeReceipt {
   const { placement, settings } = args
   const vocabulary = args.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
-  if (!prefersStructuredNativeChatByDefault(settings)) {
+  if (args.terminalOnly || !isNativeChatEnabled(settings)) {
     return {
       mode: 'terminal',
       preferred: 'terminal',
@@ -158,7 +157,7 @@ export function decideAgentLaunchMode(args: {
     reusesTerminal: Boolean(placement.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
     // This host is the one that will run the agent, so its own registrations answer.
-    hostStructuredAgents: args.registeredStructuredAgents ?? REGISTERED_STRUCTURED_AGENTS,
+    hostStructuredAgents: REGISTERED_STRUCTURED_AGENTS,
     // The host resolves the floating workspace to its configured directory; create-support still
     // answers for the resolved workspace, including whether it uses WSL.
     ...(placement.workspaceKind ? { workspaceKind: placement.workspaceKind } : {}),
@@ -253,6 +252,16 @@ function downgraded(
     preferred: 'structured',
     reason,
     detail: `Your default is a structured chat session, but ${why}; started ${vocabulary.terminal} instead.`
+  }
+}
+
+/** One main-log line when a launch the user's default asked to be a chat opened a terminal. */
+export function warnStructuredLaunchDowngrade(
+  agent: string,
+  receipt: AgentLaunchModeReceipt
+): void {
+  if (receipt.mode === 'terminal' && receipt.preferred === 'structured') {
+    console.warn(`[agent-launch] ${agent} opened a terminal: ${receipt.reason}`)
   }
 }
 

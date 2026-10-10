@@ -29,7 +29,7 @@ export function sshHostServerStatusLine(
       tone: 'warning',
       text: translate(
         'auto.components.settings.sshHostServer.notServing',
-        'The managed Orca server isn’t running and couldn’t be started.'
+        'Orca couldn’t confirm that the managed server is answering.'
       ),
       detail: status.serving.detail
     }

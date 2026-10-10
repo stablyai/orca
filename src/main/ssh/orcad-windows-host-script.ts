@@ -13,6 +13,8 @@
  */
 import { createHash } from 'node:crypto'
 import {
+  ORCAD_LAUNCHER_FILENAME,
+  ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_NODE_RUNTIME_DIR_PREFIX,
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE,
@@ -43,6 +45,7 @@ export const ORCAD_RECORD_PRESENT_MARKER = '__ORCAD_RECORD_PRESENT__'
 export const ORCAD_BUILD_HASH_MARKER = '__ORCAD_BUILD_HASH__'
 export const ORCAD_WINDOWS_READINESS_MARKER = '__ORCAD_READINESS__'
 export const ORCAD_WINDOWS_RUNTIME_MARKER = '__ORCAD_RUNTIME__'
+export const ORCAD_WINDOWS_ENTRY_MARKER = '__ORCAD_ENTRY__'
 export const ORCAD_WINDOWS_LIVENESS_MANY_MARKER = '__ORCAD_LIVENESS__'
 export const ORCAD_WINDOWS_LOG_TAIL_MARKER = '__ORCAD_LOG_TAIL__'
 /** A slot whose marker names no usable runtime; the POSIX selector exits the same way. */
@@ -271,7 +274,13 @@ const ops = {
     if (mode === 'clear-stop-request') {
       try { fs.unlinkSync(path.join(slotDir, ${text(ORCAD_STOP_REQUEST_FILENAME)})) } catch (error) { if (error.code !== 'ENOENT') process.exit(1) }
     }
-    encoded(${text(ORCAD_WINDOWS_RUNTIME_MARKER)}, Buffer.from(runtime, 'utf8'))
+    const server = path.join(slotDir, ${text(ORCAD_SERVER_ENTRY_FILENAME)})
+    const entry = fs.existsSync(server) ? server : path.join(slotDir, ${text(ORCAD_LAUNCHER_FILENAME)})
+    answer([
+      [${text(ORCAD_WINDOWS_RUNTIME_MARKER)}, Buffer.from(runtime, 'utf8').toString('base64')].join(' '),
+      [${text(ORCAD_WINDOWS_ENTRY_MARKER)}, Buffer.from(entry, 'utf8').toString('base64')].join(' '),
+      ''
+    ].join('\\n'))
   },
 
   // Never exits on its own: it lives as long as the client's exec channel or orcad's socket.

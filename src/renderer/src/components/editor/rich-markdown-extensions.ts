@@ -24,7 +24,7 @@ import {
   createRawMarkdownHtmlBlock,
   createRawMarkdownHtmlInline,
   createRichMarkdownLiteral
-} from './raw-markdown-html'
+} from './raw-markdown-html-nodes'
 import {
   createOrcaDetailsExtensions,
   getRichMarkdownPlaceholder

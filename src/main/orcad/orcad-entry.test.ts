@@ -2,8 +2,26 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   flushOrcadProfileStoreForShutdown,
   installOrcadShutdownSignals,
-  ORCAD_SHUTDOWN_DEADLINE_MS
+  ORCAD_SHUTDOWN_DEADLINE_MS,
+  startOrcadWithLifecycle
 } from './orcad-lifecycle'
+
+/** Installs the real signal handlers with process.exit captured instead of exiting. */
+function captureShutdown() {
+  vi.useFakeTimers()
+  const signals = new Map<string, () => void>()
+  vi.spyOn(process, 'on').mockImplementation((event, listener) => {
+    signals.set(String(event), listener)
+    return process
+  })
+  const exitCodes: (number | undefined)[] = []
+  vi.spyOn(process, 'exit').mockImplementation((code) => {
+    exitCodes.push(typeof code === 'number' ? code : undefined)
+    throw new Error('process exit')
+  })
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  return { exitCodes, sigterm: () => signals.get('SIGTERM')?.() }
+}
 
 describe('orcad profile-state shutdown', () => {
   it('keeps one bounded shutdown even when stop signals repeat', () => {
@@ -54,6 +72,67 @@ describe('orcad profile-state shutdown', () => {
       expect(notFailed).not.toHaveBeenCalled()
     } finally {
       vi.restoreAllMocks()
+    }
+  })
+
+  it('exits at the deadline while headless startup still waits on the writer', async () => {
+    const { exitCodes, sigterm } = captureShutdown()
+    const releaseAdmission = vi.fn()
+    try {
+      // Writer initialization never acknowledges, so startup never returns a handle.
+      const startup = startOrcadWithLifecycle(
+        () => new Promise<object>(() => {}),
+        async (runtimeCleanupSucceeded) => {
+          if (runtimeCleanupSucceeded) {
+            releaseAdmission()
+          }
+        }
+      )
+      installOrcadShutdownSignals(async () => (await startup).stop())
+      sigterm()
+      await vi.advanceTimersByTimeAsync(ORCAD_SHUTDOWN_DEADLINE_MS - 1)
+      expect(exitCodes).toEqual([])
+      await expect(vi.advanceTimersByTimeAsync(1)).rejects.toThrow('process exit')
+      expect(exitCodes).toEqual([1])
+      expect(releaseAdmission).not.toHaveBeenCalled()
+    } finally {
+      vi.restoreAllMocks()
+      vi.useRealTimers()
+    }
+  })
+
+  it('exits at the deadline without claiming success or releasing admission while a flush is pending', async () => {
+    const { exitCodes, sigterm } = captureShutdown()
+    const releaseAdmission = vi.fn()
+    const store = {
+      flushFinalOrThrowAsync: vi.fn(() => new Promise<void>(() => {})),
+      freezeWritesAsync: vi.fn(async () => {})
+    }
+    try {
+      const startup = startOrcadWithLifecycle(
+        async (registerCleanup) => {
+          registerCleanup(() => flushOrcadProfileStoreForShutdown(store))
+          return {}
+        },
+        async (runtimeCleanupSucceeded) => {
+          if (runtimeCleanupSucceeded) {
+            releaseAdmission()
+          }
+        }
+      )
+      await startup
+      installOrcadShutdownSignals(async () => (await startup).stop())
+      sigterm()
+      await expect(vi.advanceTimersByTimeAsync(ORCAD_SHUTDOWN_DEADLINE_MS)).rejects.toThrow(
+        'process exit'
+      )
+      expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
+      expect(exitCodes).toEqual([1])
+      expect(store.freezeWritesAsync).not.toHaveBeenCalled()
+      expect(releaseAdmission).not.toHaveBeenCalled()
+    } finally {
+      vi.restoreAllMocks()
+      vi.useRealTimers()
     }
   })
 

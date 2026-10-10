@@ -22,6 +22,7 @@ import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directo
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { RuntimeStore } from './runtime-store-contract'
+import { attributedSparsePresetId } from '../ipc/sparse-preset-attribution'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
 
 export async function materializeRuntimeLocalWorktree<T>(args: {
@@ -91,7 +92,12 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         ? {
             sparseDirectories,
             sparseBaseRef: metadataBaseRef,
-            sparsePresetId: request.sparseCheckout?.presetId
+            sparsePresetId: attributedSparsePresetId(
+              () => store.getSparsePresets?.(repo.id) ?? [],
+              repo.id,
+              request.sparseCheckout?.presetId,
+              sparseDirectories
+            )
           }
         : {}),
       ...(request.linkedIssue !== undefined ? { linkedIssue: request.linkedIssue } : {}),
@@ -117,6 +123,7 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
         : {}),
       ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
       ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
+      ...(request.linkedItems !== undefined ? { linkedItems: request.linkedItems } : {}),
       ...(request.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: request.linkedTaskSourceContext }
         : {}),

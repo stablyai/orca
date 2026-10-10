@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { makeTab } from '../../store/slices/store-test-helpers'
+import { makeTab } from '../../store/slices/store-session-test-harness'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'

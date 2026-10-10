@@ -6,6 +6,7 @@ import {
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { StructuredAgentSessionTaskQueue } from '../native-chat/agent-session-wire/structured-agent-session-task-queue'
+import { agentSessionLaunchFolderMissing } from '../runtime/agent-session-launch-directory'
 import { tick } from './acp-scripted-agent.test-support'
 import {
   GROK,
@@ -421,6 +422,7 @@ describe('ACP startup that never answers', () => {
             args: [],
             cwd: '/workspace/project',
             env: {},
+            envToDelete: [],
             fullAccess: false,
             resume: null
           }
@@ -433,6 +435,21 @@ describe('ACP startup that never answers', () => {
     start.abort()
     releaseLaunch()
     expect(await failed).toMatchObject({ name: 'AgentSessionPreSpawnError' })
+    expect(rig.spawned).toEqual([])
+  })
+
+  it('refuses a floating chat whose folder is gone with the reason the person reads', async () => {
+    const rig = await openAcpAdapterRig({
+      deps: {
+        resolveLaunch: async () => {
+          throw agentSessionLaunchFolderMissing('/gone/floating')
+        }
+      }
+    })
+    expect(await rig.acquire().catch((error: unknown) => error)).toMatchObject({
+      name: 'AgentSessionPreSpawnError',
+      reason: 'launchFolderMissing'
+    })
     expect(rig.spawned).toEqual([])
   })
 })

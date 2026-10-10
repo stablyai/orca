@@ -1,6 +1,6 @@
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
-import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
@@ -12,6 +12,7 @@ export type UiWindowApi = {
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
+    agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
     /** A native-chat composer paste, kept where its draft can bring it back. */
     forNativeChatDraft?: boolean
   }) => Promise<string | null>
@@ -37,7 +38,6 @@ export type UiWindowApi = {
         }
       | string
   ) => Promise<{ ok: boolean; reason?: string }>
-  onFileDrop: (callback: (data: NativeFileDropPayload) => void) => () => void
   getZoomLevel: () => number
   setZoomLevel: (level: number) => void
   syncTrafficLights: (zoomFactor: number) => void

@@ -1,6 +1,6 @@
 // A structured chat over the Agent Client Protocol: one adapter per registered ACP agent, which
-// the router drives like the Claude and Codex lanes. Rewind, compaction and goals are absent, so
-// the chat hides them; everything else maps onto ACP methods.
+// the router drives like the Claude and Codex lanes. Rewind and goals are absent, so the chat hides
+// them; compaction is the agent's own `/compact` prompt, for an agent whose launch spec offers it.
 
 import { randomUUID } from 'node:crypto'
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
@@ -27,24 +27,35 @@ import {
   endAcpStructuredSession,
   type AcpStructuredSession
 } from './acp-structured-session'
-import { AcpStructuredStarts, type AcpStartAttempt } from './acp-structured-starts'
-import { waitForAcpExit } from './acp-structured-connection'
+import {
+  ProviderAcquisitionStarts,
+  type ProviderStartAttempt
+} from '../provider-process/provider-acquisition-starts'
+import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-connection'
 import { AcpConnectionClosedError } from './acp-errors'
-import { acpPromptBlocks } from './acp-structured-turns'
 import { awaitAcpTurnEnd, interruptAcpTurn, windDownAcpTurn } from './acp-structured-stop'
+import { acpDispatchPrompt } from './acp-prompt-content'
 import {
   ACP_OPTION_WRITE_TIMEOUT_MS,
   ACP_STOP_GRACE_MS,
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { writeAcpSessionOption } from './acp-structured-options'
+import { readAcpRecoveryHistory } from './acp-recovery-history'
+import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
+import { stopAcpChildren, acpChildStopCapabilities } from './acp-structured-child-stop'
 
 export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   /** Live children, and ones whose exit is not yet proven; a proven exit removes its entry. */
   private readonly sessions = new Map<string, AcpStructuredSession>()
-  private readonly starts = new AcpStructuredStarts()
+  private readonly starts = new ProviderAcquisitionStarts<AcpStructuredConnection>()
 
   constructor(private readonly deps: AcpStructuredSessionAdapterDeps) {}
+
+  /** Restart recovery's evidence; null for an agent whose own store Orca cannot read. */
+  providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = ({
+    identity
+  }) => readAcpRecoveryHistory(this.deps, identity)
 
   // The child runs on this runtime's own machine; Windows needs process start-time proof.
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
@@ -69,7 +80,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   private async start(
     input: StructuredAgentSessionAcquireInput,
-    attempt: AcpStartAttempt
+    attempt: ProviderStartAttempt<AcpStructuredConnection>
   ): Promise<AgentSessionAcquisition> {
     const sessionId = input.identity.sessionId
     const generation = this.deps.mintGeneration?.() ?? randomUUID()
@@ -94,7 +105,8 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
         throw new Error('closed while starting')
       }
       this.sessions.set(sessionId, session)
-      return acquisition
+      // Its saved picks restored: what it runs now is what its start resolved.
+      return { ...acquisition, catalogListing: session.options.startListing() }
     } catch (error) {
       const { connection } = attempt
       if (connection && error instanceof AcpConnectionClosedError) {
@@ -142,9 +154,13 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
       return this.rejected(lost, 'providerExited')
     }
     const session = this.live(input.sessionId)
-    const prompt = acpPromptBlocks(input.body)
-    if (!prompt) {
-      return this.rejected(session, 'attachmentInvalid')
+    const prompt = await acpDispatchPrompt(input.body, session)
+    if (!Array.isArray(prompt)) {
+      return { state: 'rejected', ...prompt }
+    }
+    if (this.sessions.get(input.sessionId) !== session || session.journalClosed !== null) {
+      // The child ended while its attachments were read: nothing left Orca.
+      return this.rejected(session, 'providerExited')
     }
     await input.beforeDispatch?.()
     session.turns.dispatch({
@@ -155,6 +171,9 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     // The write is the admission; the agent's first event for the turn settles it.
     return { state: 'admitted' }
   }
+
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = async (input) =>
+    this.live(input.sessionId).turns.compact(input.command)
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.live(input.sessionId)
@@ -197,6 +216,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     if (!write) {
       throw new Error(`${session.spec.agent} offers no session option named ${input.key}`)
     }
+    session.options.notePick(input.key)
     // Bounded, and abandoned by a close or Stop: the session's queue waits on it.
     await writeAcpSessionOption(session.connection, session.options, write, {
       agent: session.spec.agent,
@@ -206,24 +226,28 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
     return session.options.reported()
   }
 
-  readOptions = async (input: { sessionId: string; fence: number }) =>
-    this.live(input.sessionId).options.read()
+  readOptions = async (input: { sessionId: string; fence: number }) => {
+    const { options } = this.live(input.sessionId)
+    // Only the start says what the config resolved: the session may have moved since.
+    return withLiveCatalogListing(options.read())
+  }
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] =>
     this.sessions.get(sessionId)?.restoreSkipped ?? []
 
   readCommands = (sessionId: string) => this.sessions.get(sessionId)?.options.readCommands()
 
-  // ACP has no way to stop one background task the agent started.
+  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
+    input
+  ) => stopAcpChildren(this.live(input.sessionId), input.fence, input.taskIds, () => this.now())
+
   backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
     sessionId
-  ) =>
-    this.sessions.has(sessionId) ? { supportsTaskStop: false, supportsStopAll: false } : undefined
+  ) => acpChildStopCapabilities(this.sessions.get(sessionId))
 
   closeSession = (sessionId: string): Promise<boolean> => this.close(sessionId)
   disposeSession = (sessionId: string): Promise<boolean> => this.close(sessionId)
-  releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
-    this.close(input.sessionId)
+  releaseAcquisition = (input: { sessionId: string }) => this.close(input.sessionId)
   /** After a sink failure: the exit is recovered as unexpected. */
   forceCloseSession = (sessionId: string): Promise<boolean> => this.stop(sessionId, false)
 
@@ -312,7 +336,7 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   private rejected(
     session: AcpStructuredSession,
-    kind: 'providerExited' | 'attachmentInvalid'
+    kind: 'providerExited'
   ): AgentSessionDispatchOutcome {
     return {
       state: 'rejected',

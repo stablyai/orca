@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
+import type * as SshTargetRegistry from '../ssh/ssh-target-registry'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
 const {
@@ -31,7 +32,10 @@ vi.mock('fs/promises', () => ({
   copyFile: copyFileMock,
   readdir: readdirMock
 }))
-vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
+vi.mock('../ssh/ssh-target-registry', async () => {
+  const actual = await vi.importActual<typeof SshTargetRegistry>('../ssh/ssh-target-registry')
+  return { ...actual, getSshConnectionManager: getConnMgrMock }
+})
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import {

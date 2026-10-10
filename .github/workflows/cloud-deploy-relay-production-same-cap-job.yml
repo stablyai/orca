@@ -30,7 +30,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: blacksmith-2vcpu-ubuntu-2204
     # The pre-drain sample adds 3-8 min (20 at most); a timeout cancels the job and skips the failsafe.
-    timeout-minutes: 90
+    # A 1200000 drain step alone may take 50 min.
+    timeout-minutes: 120
     environment: production
     env:
       GCP_PROJECT_ID: onorca-cloud
@@ -53,8 +54,9 @@ jobs:
       # /v1/assign at hosts / window and is re-placed through the director's drain-return
       # lane. The wave validator admits only its closed set, and anything below the 300000
       # default only on US general cells: Asia drains are bound by their targets' accept
-      # rate. The transition wait below is the 15-min migration lease plus this window. A
-      # cell on an older image drains at once.
+      # rate. The transition wait below is the 15-min migration lease plus this window, plus
+      # its excess over 300000, since restart-safe waits a window of quiet after the drain. A
+      # cell on an older image drains at once, or refuses a window above 300000.
       DRAIN_PACE_WINDOW_MS: ${{ inputs.drain-pace-window-ms }}
     steps:
       - name: Require exact reusable-workflow configuration
@@ -499,8 +501,8 @@ jobs:
         if: ${{ inputs.mode == 'verify' }}
         run: echo 'Exact same-cap rollback point verified.'
 
-      # The sample can age the first one-hour token by up to 20 min; the drain's 20-min
-      # restart-safe wait gets a fresh one.
+      # The sample can age the first one-hour token by up to 20 min; the drain's restart-safe
+      # wait (20 min at the default pace, 50 at the slowest) gets a fresh one.
       - id: drain-auth
         if: ${{ inputs.mode != 'verify' && env.ROLLBACK_RESUME != 'true' }}
         uses: google-github-actions/auth@v2
@@ -517,6 +519,11 @@ jobs:
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.drain-auth.outputs.id_token }}
         run: |
+          # Before any mutation: a cell whose image caps the pace below this one stops untouched.
+          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode pace-check \
+            --pace-window-ms "${DRAIN_PACE_WINDOW_MS}"
           # Opens the window the report-only shadow health gate below judges this cell over.
           echo "drain-started-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
           echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
@@ -555,7 +562,7 @@ jobs:
             --heartbeat either --admission migration-only --draining required \
             --activity restart-safe --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}" \
             --pace-window-ms "${DRAIN_PACE_WINDOW_MS}" \
-            --timeout-ms "$((900000 + DRAIN_PACE_WINDOW_MS))"
+            --timeout-ms "$((900000 + DRAIN_PACE_WINDOW_MS + (DRAIN_PACE_WINDOW_MS > 300000 ? DRAIN_PACE_WINDOW_MS - 300000 : 0)))"
           echo "drain-settled-at=$(date -u +%FT%TZ)" >> "${GITHUB_OUTPUT}"
 
       - id: capacity-auth
@@ -709,19 +716,31 @@ jobs:
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
         run: |
-          # A single transient 5xx (LB warm-up behind a fresh instance) must not
-          # fail a canary; 4xx (auth, generation mismatch) still fails fast.
+          # Rides out one DB stall: 5-7 s, then readiness grace and two 10 s LB
+          # health checks (c18, 10-07 18:49Z: 503 "no healthy upstream", healthy
+          # 16 s later). A cell still down after 60 s fails; other 4xx fail fast.
+          # Retried in this loop: the runner's 7.81 client (Ubuntu 22.04) never
+          # retries under --fail-with-body, so its --retry flags were inert.
           admin_post() {
-            local out="${RUNNER_TEMP}/$1.json"
-            if ! curl --fail-with-body --max-time 30 \
-              --retry 3 --retry-delay 2 --retry-connrefused --output "${out}" \
-              --request POST "$2" \
-              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
-              --header 'Content-Type: application/json' --data "$3"; then
-              cat "${out}" >&2
-              return 1
-            fi
-            cat "${out}"
+            local out="${RUNNER_TEMP}/$1.json" window=60 delay=5 status
+            local deadline=$((SECONDS + window))
+            while true; do
+              # A refused or timed-out attempt writes no body; never report the last one's.
+              rm -f "${out}"
+              status="$(curl --silent --show-error --max-time 30 --output "${out}" \
+                --write-out '%{http_code}' --request POST "$2" \
+                --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+                --header 'Content-Type: application/json' --data "$3")" || status=000
+              case "${status}" in
+                2??) cat "${out}"; return 0 ;;
+                000|408|429|5??) ((SECONDS + delay < deadline)) || break ;;
+                *) break ;;
+              esac
+              sleep "${delay}"
+            done
+            echo "admin_post $1: HTTP ${status}" >&2
+            cat "${out}" >&2 2>/dev/null || true
+            return 1
           }
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
@@ -824,8 +843,8 @@ jobs:
         # read cost its full retry budget and can push the job past timeout-minutes, and a
         # cancelled job takes the whole wave with it. A healthy gate is already minutes of
         # serial reads, so both bounds sit above that: the script settles at seven minutes and
-        # reaching this eight is the pathological case. Eight on top of a ~14-minute cell still
-        # leaves the job's 90 minutes intact.
+        # reaching this eight is the pathological case. Eight on top of a cell of ~14 minutes
+        # (~45 at the slowest pace) still leaves the job's 120 minutes intact.
         timeout-minutes: 8
         env:
           DRAIN_STARTED_AT: ${{ steps.drain.outputs.drain-started-at }}

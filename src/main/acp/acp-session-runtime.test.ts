@@ -42,6 +42,21 @@ afterEach(() => {
 })
 
 describe('ACP session runtime', () => {
+  it('uses raw underscored extension methods and bounds control requests without closing the session', async () => {
+    const { runtime, agent } = fixture()
+    await runtime.initialize()
+    await runtime.start(startOptions)
+    agent.on('_x.ai/subagent/cancel', (frame) => {
+      expect(frame.params).toEqual({ subagentId: 'child' })
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const call = runtime.requestExtension('_x.ai/subagent/cancel', { subagentId: 'child' })
+    const rejected = expect(call).rejects.toThrow(/timed out|timeout/i)
+    await vi.advanceTimersByTimeAsync(30_000)
+    await rejected
+    expect(runtime.closed).toBe(false)
+    expect(() => runtime.requestExtension('x.ai/subagent/cancel', {})).toThrow('underscore')
+  })
   it('initializes once, starts a session, streams typed updates, and completes the turn', async () => {
     const { runtime, agent } = fixture()
     const events: AcpSessionEvent[] = []

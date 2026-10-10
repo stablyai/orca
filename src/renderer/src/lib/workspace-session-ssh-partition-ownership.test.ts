@@ -344,3 +344,29 @@ describe('a bare workspace id two partitions both hold', () => {
     expect(read.contestedPrimaryHostBySessionKey?.[WORKTREE_ID]).toBe(OTHER_SSH_HOST_ID)
   })
 })
+
+describe('a stray local copy beside a leftover in another ssh partition', () => {
+  const REPO_ID = 'repo-remote'
+  const WORKTREE_ID = `${REPO_ID}::/remote/checkout/feature`
+
+  // Both sort orders, since partitions are read in sorted host-id order.
+  it.each([
+    [TARGET_ID, OTHER_SSH_HOST_ID],
+    [OTHER_TARGET_ID, SSH_HOST_ID]
+  ])('keeps the rows of the partition the catalog names (owner %s)', async (owner, leftover) => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi({
+        local: session({ tabsByWorktree: { [WORKTREE_ID]: [tab('tab-local', WORKTREE_ID)] } }),
+        [`ssh:${owner}`]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-live', WORKTREE_ID)] }
+        }),
+        [leftover]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [tab('tab-leftover', WORKTREE_ID)] }
+        })
+      }),
+      [{ id: REPO_ID, connectionId: owner, executionHostId: null }]
+    )
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
+  })
+})

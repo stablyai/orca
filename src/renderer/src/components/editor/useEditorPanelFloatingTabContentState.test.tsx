@@ -144,6 +144,24 @@ describe('restored client-local editor tabs', () => {
     )
   })
 
+  it('keeps an absolute floating file in its panel when a project also owns the path', async () => {
+    const filePath = '/project/readme.md'
+    const activeFile = createFloatingFile(filePath, { relativePath: filePath })
+    mocks.findWorkspaceFileRoute.mockReturnValue({
+      worktreeId: 'folder:project',
+      relativePath: 'readme.md',
+      executionHostId: 'local'
+    })
+
+    await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
+    expect(mocks.findWorkspaceFileRoute).not.toHaveBeenCalled()
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath, access: { kind: 'user-file' } })
+    )
+  })
+
   it('keeps a project tab inside its root', async () => {
     const activeFile = createFloatingFile('/Users/me/project/README.md', {
       relativePath: 'README.md',

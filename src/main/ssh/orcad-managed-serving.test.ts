@@ -84,7 +84,29 @@ describe('ensureManagedOrcadServing', () => {
 
   it('leaves a live process that did not answer alone', async () => {
     vi.mocked(wakeStoppedManagedOrcad).mockResolvedValue({ outcome: 'serving' })
-    expect(await ensureManagedOrcadServing(input(async () => false))).toEqual({ state: 'serving' })
+    const serving = await ensureManagedOrcadServing(input(async () => false))
+    expect(serving).toMatchObject({ state: 'unverifiable' })
+    expect(listener.starting).not.toHaveBeenCalled()
+  })
+
+  it('accepts a live process once a fresh probe answers after the host check', async () => {
+    vi.mocked(wakeStoppedManagedOrcad).mockResolvedValue({ outcome: 'serving' })
+    const probe = vi.fn(async () => true).mockResolvedValueOnce(false)
+    expect(await ensureManagedOrcadServing(input(probe))).toEqual({ state: 'serving' })
+    expect(probe).toHaveBeenCalledTimes(2)
+    expect(listener.starting).not.toHaveBeenCalled()
+  })
+
+  it('keeps a failed fresh probe unverifiable without starting another process', async () => {
+    vi.mocked(wakeStoppedManagedOrcad).mockResolvedValue({ outcome: 'serving' })
+    const probe = vi
+      .fn(async () => false)
+      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(new Error('SSH link was replaced'))
+    expect(await ensureManagedOrcadServing(input(probe))).toEqual({
+      state: 'unverifiable',
+      detail: 'SSH link was replaced'
+    })
     expect(listener.starting).not.toHaveBeenCalled()
   })
 

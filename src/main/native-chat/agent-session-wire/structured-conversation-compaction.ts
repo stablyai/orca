@@ -1,5 +1,6 @@
 // `/compact` sent through the command RPC: accepted into the conversation as the user's message,
-// and answered once the delivery loop hands it over.
+// and answered once the delivery loop hands it over. Asked with `delivery` while the agent works,
+// it waits as a card like a queued send, answered at once.
 
 import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session-conversation-command'
 import {
@@ -9,10 +10,7 @@ import {
 import type { AgentSessionFailureWordsContext } from '../../../shared/agent-session-failure-words'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionMutationResult
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionMutationResult } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   mutateStructuredAgentSession,
@@ -34,6 +32,8 @@ import {
   type ConversationCommandParams
 } from './structured-conversation-command'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
+import { maybeQueueStructuredAgentSessionSend } from './structured-agent-session-queued-messages'
+import { structuredAgentSessionCompactBody } from './structured-agent-session-command-turn'
 
 /**
  * `/compact` from a client that asks through the command RPC: accepted into the conversation like
@@ -44,7 +44,8 @@ export async function runStructuredCompaction(
   context: StructuredAgentSessionMutationContext,
   host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>,
   caller: StructuredAgentSessionCaller,
-  params: ConversationCommandParams
+  params: ConversationCommandParams,
+  arrival: { clearInFlight?: boolean } = {}
 ): Promise<AgentSessionMutationResult<AgentSessionConversationCommandResult>> {
   const { sessionId, clientOperationId } = params.envelope
   // An older build ran this operation id and recorded it on the session: answered, never rerun.
@@ -61,12 +62,25 @@ export async function runStructuredCompaction(
           ...conversationCommandFailure(agentSessionFailureFact('compactionUnconfirmed'))
         }
   }
-  const accepted = await acceptStructuredConversationCommand(context, caller, params, priorRecord)
+  const accepted = await acceptStructuredConversationCommand(
+    context,
+    caller,
+    params,
+    priorRecord,
+    arrival
+  )
   if (!accepted.ok) {
     return accepted
   }
   if ('recorded' in accepted.value) {
     return { ...accepted, value: accepted.value.recorded }
+  }
+  if ('queued' in accepted.value) {
+    // The card is the one surface from here: a refusal in its own turn is said there, once.
+    return {
+      ...accepted,
+      value: { command: 'compact', state: 'completed', queued: accepted.value.queued }
+    }
   }
   const settled = await host.waitForSendSettlement(sessionId, accepted.value.clientMessageId, {
     until: 'handed-over',
@@ -123,10 +137,15 @@ function compactionReply(
 function acceptStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope },
-  priorRecord: () => AgentSessionConversationCommandResult | null
+  params: ConversationCommandParams,
+  priorRecord: () => AgentSessionConversationCommandResult | null,
+  arrival: { clearInFlight?: boolean }
 ): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
-  const plan = conversationCommandPlan({ envelope: params.envelope, priorRecord })
+  const plan = conversationCommandPlan({
+    envelope: params.envelope,
+    ...(params.delivery ? { delivery: params.delivery } : {}),
+    priorRecord
+  })
   return mutateStructuredAgentSession(
     context,
     caller,
@@ -134,6 +153,28 @@ function acceptStructuredConversationCommand(
     {
       ...plan,
       run: async (ctx) => {
+        // The queue's own accept rule decides first: whatever a queued send waits behind, the
+        // command waits behind too, so admission below never sees work in flight for it.
+        const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, {
+          envelope: params.envelope,
+          body: structuredAgentSessionCompactBody(),
+          ...(params.userSend ? { userSend: params.userSend } : {}),
+          ...(params.delivery ? { delivery: params.delivery } : {})
+        })
+        if (queued && !queued.ok) {
+          return queued
+        }
+        if (queued) {
+          // A card already drained answers from the submission it became.
+          const { value } = queued
+          return {
+            ok: true,
+            value:
+              'queued' in value
+                ? { queued: value.queued }
+                : { clientMessageId: value.submission.clientMessageId }
+          }
+        }
         const record = context.deps.store.getRecord(ctx.sessionId)
         const refusal =
           record &&
@@ -149,13 +190,9 @@ function acceptStructuredConversationCommand(
         if (blocked) {
           return blocked
         }
-        const accepted = await plan.run(ctx)
-        if (accepted.ok) {
-          context.wakeDelivery(ctx.sessionId)
-        }
-        return accepted
+        return plan.run(ctx)
       }
     },
-    sendPreparation(context, params.envelope)
+    sendPreparation(context, params.envelope, arrival)
   )
 }

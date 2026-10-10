@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { ReviewDraftContextError } from '../../shared/review-draft-context-error'
 import { RelayContext } from '../../relay/context'
 import { RelayDispatcher } from '../../relay/dispatcher'

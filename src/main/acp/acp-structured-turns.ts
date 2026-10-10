@@ -17,10 +17,12 @@ import {
   agentSessionFailureWords,
   type AgentJournalDispatchRejection
 } from '../../shared/agent-session-failure-words'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type {
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem
-} from '../../shared/agent-session-journal-types'
+  AgentSessionCommandAdmission,
+  StructuredAgentSessionCommandRun
+} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { ACP_COMPACT_PROMPT } from './acp-compaction-turn'
 import { AcpAgentError, AcpConnectionClosedError } from './acp-errors'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
@@ -31,19 +33,6 @@ export type AcpDispatchSettlement = { clientMessageId: string } & (
   | ({ state: 'rejected' } & AgentJournalDispatchRejection)
   | { state: 'unknown'; reason: string }
 )
-
-/** A person's message as an ACP prompt; null when it carries what the agent cannot take. */
-export function acpPromptBlocks(body: AgentJournalMessageItem): ContentBlock[] | null {
-  const blocks: ContentBlock[] = []
-  for (const block of body.blocks) {
-    if (block.type !== 'text') {
-      // Images wait for an ACP image path; the chat offers none while `imagePrompts` is off.
-      return null
-    }
-    blocks.push({ type: 'text', text: block.text })
-  }
-  return blocks
-}
 
 type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
 
@@ -125,6 +114,35 @@ export class AcpStructuredTurns {
     this.start(send)
   }
 
+  /** A `/compact` in the command turn the host opened. The host settles its message, so nothing
+   *  here does; the answer ends the turn, or the child's end does. The prompt's write is the
+   *  receipt. */
+  async compact(command: StructuredAgentSessionCommandRun): Promise<AgentSessionCommandAdmission> {
+    if (this.active || this.ended) {
+      throw new Error(`${this.deps.agentName} is still working`)
+    }
+    const { lane } = this.deps
+    const send: Send = {
+      clientMessageId: command.clientMessageId,
+      prompt: [...ACP_COMPACT_PROMPT],
+      requestedAt: this.deps.now()
+    }
+    lane.beginCommand(command)
+    try {
+      const opened = lane.translator.openPrompt(
+        send.clientMessageId,
+        send.requestedAt,
+        command.turnId
+      )
+      this.active = send
+      this.run(send, opened.promptId)
+    } catch (error) {
+      lane.forgetCommand(command.turnId)
+      throw error
+    }
+    return { state: 'accepted', providerIdentity: null }
+  }
+
   /** The agent took the send: its turn's first event, or its answer, arrived. */
   accept(clientMessageId: string): void {
     if (this.unsettled.delete(clientMessageId)) {
@@ -163,10 +181,15 @@ export class AcpStructuredTurns {
     this.active = send
     const opened = lane.translator.openPrompt(send.clientMessageId, send.requestedAt)
     lane.apply(opened.events)
+    this.run(send, opened.promptId)
+  }
+
+  private run(send: Send, promptId: string): void {
+    const { lane } = this.deps
     // An agent whose dialect echoes this id on every event of the turn gets it, so its rows join the
     // turn Orca opened; no other agent is sent the extension.
     const meta = lane.translator.injectsPromptIdentity
-      ? { promptId: opened.promptId, requestId: opened.promptId }
+      ? { promptId, requestId: promptId }
       : undefined
     const answered = this.deps.connection.prompt(send.prompt, meta)
     if (this.steers.length > 0) {
@@ -205,7 +228,10 @@ export class AcpStructuredTurns {
           const detail = providerDiagnostic(refusal, 'person')
           this.reject(
             send.clientMessageId,
-            agentSessionFailureFact('providerRejected', detail ? { detail } : {})
+            agentSessionFailureFact(
+              lane.translator.authenticationRequired(error) ? 'notSignedIn' : 'providerRejected',
+              detail ? { detail } : {}
+            )
           )
         } else {
           lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))

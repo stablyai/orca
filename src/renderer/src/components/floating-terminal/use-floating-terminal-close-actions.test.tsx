@@ -3,7 +3,11 @@ import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
-import { makeOpenFile, makeTabGroup, makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import {
+  makeOpenFile,
+  makeTabGroup,
+  makeUnifiedTab
+} from '../../store/slices/store-session-test-harness'
 import { useFloatingTerminalCloseActions } from './use-floating-terminal-close-actions'
 
 const requestEditorFileClose = vi.hoisted(() => vi.fn())

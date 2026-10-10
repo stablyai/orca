@@ -14,6 +14,8 @@ export async function runQueueableStructuredAgentSessionSend(
     envelope: { clientOperationId: string }
     body: AgentJournalMessageItem
     delivery?: 'queue-if-active'
+    userSend?: true
+    personsMessage?: true
   },
   immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
@@ -24,9 +26,5 @@ export async function runQueueableStructuredAgentSessionSend(
   if (queued) {
     return queued
   }
-  const accepted = await immediate()
-  if (accepted.ok) {
-    context.wakeDelivery(ctx.sessionId)
-  }
-  return accepted
+  return immediate()
 }

@@ -12,6 +12,10 @@ vi.mock('react-native', () => ({
 
 vi.mock('./MobileNativeChatView', () => ({ MobileNativeChatView: 'ChatView' }))
 vi.mock('./MobileNativeChatQueuedMessages', () => ({ MobileNativeChatQueuedMessages: 'Queued' }))
+vi.mock('./MobileNativeChatBackgroundTasks', () => ({
+  MobileNativeChatBackgroundTasks: 'BackgroundTasks'
+}))
+vi.mock('./MobileNativeChatVisual', () => ({ useMobileNativeChatVisualRenderer: () => null }))
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
   return { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp: 0, source: 'hook' }
@@ -206,7 +210,8 @@ describe("MobileNativeChatOverlay while a person's Stop ends the turn", () => {
       renderer = create(overlayElement(tick))
     })
     const view = renderer!.root.find((node) => node.type === 'ChatView')
-    return view.props.queuedSlot?.cards?.props?.steerHeld
+    // The tray's second child is the queued box; the first is the child-work strip.
+    return view.props.composerTray?.content?.props?.children?.[1]?.props?.steerHeld
   }
 
   it("holds the queued cards' Steer while the agent works and the host says Stopping", async () => {

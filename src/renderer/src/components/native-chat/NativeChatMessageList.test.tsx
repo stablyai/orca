@@ -75,6 +75,47 @@ describe('NativeChatMessageList assistant messages', () => {
     expect(document.querySelector('.text-destructive')).toBeNull()
   })
 
+  it("holds back only the running turn's controls, and shows them once it ends", () => {
+    const text = (
+      id: string,
+      role: 'user' | 'assistant',
+      words: string,
+      timestamp: number
+    ): NativeChatMessage => ({
+      id,
+      role,
+      blocks: [{ type: 'text', text: words }],
+      timestamp,
+      source: 'transcript'
+    })
+    const list = (isWorking: boolean) => (
+      <NativeChatMessageList
+        session={{
+          ...session,
+          status: isWorking ? 'working' : 'ready',
+          messages: [
+            text('user-1', 'user', 'First ask', 1),
+            text('assistant-1', 'assistant', 'Finished reply.', 2),
+            text('user-2', 'user', 'Second ask', 3),
+            text('assistant-2', 'assistant', 'Reply still coming', 4)
+          ]
+        }}
+        isWorking={isWorking}
+        expandSignal={false}
+      />
+    )
+    const copyButtons = () => screen.queryAllByRole('button', { name: 'Copy message' })
+
+    const { rerender } = render(list(true))
+    // The finished turn keeps its controls; user bubbles carry their own copy button.
+    expect(copyButtons()).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: 'Scroll this message to top' })).toHaveLength(1)
+
+    rerender(list(false))
+    expect(copyButtons()).toHaveLength(4)
+    expect(screen.getAllByRole('button', { name: 'Scroll this message to top' })).toHaveLength(2)
+  })
+
   // Only the turn's trailing run is live. Once the agent has said something
   // after it, that run is done whatever its last call still reports; a
   // reasoning aside is not "after it" — the agent is still inside the batch.

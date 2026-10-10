@@ -13,6 +13,8 @@ export type CodexAppServerConnectionHandlers = {
   onExit?: (error: Error, exit?: { expected: boolean }) => void
   /** Awaited once the child has a pid and before the handshake; a rejection reaps the child. */
   onSpawned?: (pid: number) => Promise<void>
+  /** Any stdout or stderr chunk from the child. */
+  onOutput?: () => void
 }
 
 export type CodexAppServerConnection = {

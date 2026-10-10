@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import * as filesystemAuth from './filesystem-auth'
+import * as authorizedRootsCache from './registered-worktree-roots-cache'
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { RedactableSpan } from '../observability/redactor'
+import type { Store } from '../persistence'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 import { agentHookServer } from '../agent-hooks/server'
 import { makePaneKey } from '../../shared/stable-pane-id'
@@ -26,7 +29,13 @@ import {
   getLocalPtyProviderMock,
   getSshPtyProviderMock
 } from './worktrees-test-module-mocks'
-import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import {
+  handlers,
+  harnessRepo,
+  mainWindow,
+  setupWorktreeHandlers,
+  store
+} from './worktrees-test-harness'
 import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
@@ -120,14 +129,46 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
+    vi.spyOn(filesystemAuth, 'invalidateAuthorizedRootsCacheForRepo').mockClear()
+    vi.spyOn(authorizedRootsCache, 'invalidateAuthorizedRootsCache').mockClear()
   })
 
   it('prunes the persisted cleanup and space snapshots on removal', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
     removeWorktreeMock.mockResolvedValue({})
+    const unrelatedRepo = { ...harnessRepo, id: 'repo-2', path: '/unrelated/repo' }
+    store.getRepos.mockReturnValue([harnessRepo, unrelatedRepo])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this existing IPC store fixture supplies the repository, project, folder, and settings methods the root registry reads.
+    const cacheStore = store as unknown as Store
+    authorizedRootsCache.registerWorktreeRootsForRepo(cacheStore, 'repo-1', [
+      '/workspace/feature-wt'
+    ])
+    authorizedRootsCache.registerWorktreeRootsForRepo(cacheStore, 'repo-2', ['/unrelated/worktree'])
+    const removedRevision = authorizedRootsCache.getRegisteredWorktreeRootsRevision('repo-1')
+    const unrelatedRevision = authorizedRootsCache.getRegisteredWorktreeRootsRevision('repo-2')
 
     await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+
+    expect(authorizedRootsCache.getRegisteredWorktreeRootsRevision('repo-1')).toBeGreaterThan(
+      removedRevision
+    )
+    expect(authorizedRootsCache.getRegisteredWorktreeRootsRevision('repo-2')).toBe(
+      unrelatedRevision
+    )
+    expect(authorizedRootsCache.isRegisteredWorktreePath('/workspace/feature-wt', cacheStore)).toBe(
+      false
+    )
+    expect(authorizedRootsCache.isRegisteredWorktreePath('/unrelated/worktree', cacheStore)).toBe(
+      true
+    )
+
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
+      store,
+      'repo-1'
+    )
+    expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
 
     // A removed workspace must never resurrect from the cached scan snapshots.
     expect(pruneCleanupScanSnapshotMock).toHaveBeenCalledWith(
@@ -140,6 +181,22 @@ describe('registerWorktreeHandlers', () => {
       'repo-1::/workspace/feature-wt',
       'local'
     )
+  })
+
+  it('globally invalidates when the removed repo has no registered authorization owner', async () => {
+    mockKnownFeatureWorktree()
+    store.getRepos.mockReturnValue([])
+    getEffectiveHooksMock.mockReturnValue(null)
+    removeWorktreeMock.mockResolvedValue({})
+
+    await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
+      store,
+      'repo-1'
+    )
+    expect(authorizedRootsCache.invalidateAuthorizedRootsCache).toHaveBeenCalledOnce()
   })
 
   it('purges only the selected host when a normal worktree id is owned locally and over SSH', async () => {
@@ -289,6 +346,13 @@ describe('registerWorktreeHandlers', () => {
     await handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt'
     })
+
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledOnce()
+    expect(filesystemAuth.invalidateAuthorizedRootsCacheForRepo).toHaveBeenCalledWith(
+      store,
+      'repo-1'
+    )
+    expect(authorizedRootsCache.invalidateAuthorizedRootsCache).not.toHaveBeenCalled()
 
     // Should have called git worktree prune to clean up stale tracking
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {

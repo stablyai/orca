@@ -4,6 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import {
   HOST_TEST_SESSION,
@@ -20,11 +21,7 @@ import {
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
 import { sameQueuePause } from './structured-agent-session-queued-publication'
-import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
-import {
-  structuredAgentSessionHostInstance,
-  structuredQueuePauses
-} from './structured-agent-session-queued-pause'
+import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 
 let rig: QueuedMessageTestRig
 
@@ -172,18 +169,16 @@ describe("a Stop's queue pause", () => {
     await expectPaused(heldId)
   })
 
-  it('an old send answered again after its ledger row is gone lifts nothing from a later Stop', async () => {
+  it('an old send answered again after its receipt is gone lifts nothing from a later Stop', async () => {
     const working = await rig.workingSend()
     const draftId = await queuedDraft('paused by stop')
     await rig.stop()
     await rig.settleAccepted(working, 'stopped')
-    // The ledger forgot the id, so the send runs again and answers with its accepted submission.
-    const operations = rig.store['transactions'].state.operations
-    for (const [key, row] of operations) {
-      if (row.operationId === working) {
-        operations.delete(key)
-      }
-    }
+    // As an older build accepted it, with no receipt: the send runs again and answers with its
+    // accepted submission.
+    openTestJournalHostDatabase(rig.root)
+      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
+      .run(working)
     const body = hostTestMessage('work on this')
     const replayed = await rig.host.send(QUEUED_RIG_CALLER, {
       envelope: rig.envelope({ body }, 'agentSession.send', working),
@@ -365,7 +360,7 @@ describe('a pause only over cards Resume could send', () => {
 })
 
 describe("a restart's pause", () => {
-  it('once a turn ends it, stays ended when the conversation reopens', async () => {
+  it('a turn ends it; closing again with a card still waiting holds that card again', async () => {
     const working = await rig.workingSend()
     const first = await queuedDraft('first')
     const second = await queuedDraft('second')
@@ -377,16 +372,17 @@ describe("a restart's pause", () => {
     await next.result
     await rig.settleAccepted(next.id, 'b')
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
-    // Reopened, that turn is "before this open", yet the pause it ended stays ended:
-    // the lift adopted the rows into this process.
+    // Closed again with a card still waiting, it waits again for the next turn, unshown.
     await rig.host.close(HOST_TEST_SESSION, 'evict')
     expect(await rig.queuePause()).toBeNull()
     expect(await rig.drafts()).toContainEqual({ messageId: second, state: 'waiting' })
+    expect(derivedPauses()).toEqual(['restarted'])
   })
 })
 
 describe('a card handed off after a restart', () => {
-  it('belongs to the process that sent it: withdrawn back to waiting, it raises no restart pause', async () => {
+  // Returned, not waiting, when Orca restarted: the reopen holds nothing; only the Stop does.
+  it('sent again and withdrawn by a Stop, it waits under that Stop alone, shown; Resume lifts it', async () => {
     const working = await rig.workingSend()
     const draftId = await queuedDraft('refused, then re-sent after a restart')
     await rig.settleAccepted(working, 'a')
@@ -396,7 +392,7 @@ describe('a card handed off after a restart', () => {
       expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'returned' }])
     )
     await rig.restartHostProcess()
-    // Sent again in this process, then withdrawn by a Stop before the agent had it.
+    // Sent again after the restart, then withdrawn by a Stop before the agent had it.
     // Its delivery is held, so the Stop runs ahead of the handover.
     const { held, release } = holdDelivery()
     const handedOver = rig.dispatch.mock.calls.length
@@ -410,18 +406,10 @@ describe('a card handed off after a restart', () => {
     await eventually(async () =>
       expect(await rig.drafts()).toEqual([{ messageId: draftId, state: 'waiting' }])
     )
-    const journal = rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.journal
-    if (!journal) {
-      throw new Error('expected the conversation open')
-    }
-    expect(journal.queuedMessages.get(draftId)?.hostInstance).toBe(
-      structuredAgentSessionHostInstance()
-    )
-    // With the Stop's pause gone, nothing else holds it: no restart happened since it was sent.
-    await journal.appendQueueResume(
-      structuredAgentSessionConversationFence(rig.store, HOST_TEST_SESSION)
-    )
-    expect(structuredQueuePauses(journal)).toEqual([])
+    expect(derivedPauses()).toEqual(['stopped'])
+    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
+    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+    expect(derivedPauses()).toEqual([])
   })
 })
 

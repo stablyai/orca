@@ -82,6 +82,22 @@ describe('active rail item', () => {
     ).toBe('u2')
   })
 
+  // A message jumped to near the end sits at the top edge a few pixels short of
+  // the bottom: it is what is being read, not the newest turn.
+  it('lights the turn at the fold when parked just above the bottom', () => {
+    expect(
+      findActiveNativeChatRailItem({
+        slots: [{ turnKey: 'u1' }, { turnKey: 'u1' }, { turnKey: 'u2' }, { turnKey: 'u2' }],
+        virtualItems: rows(4),
+        // 30px short of the end, with a `u1` row at the top edge.
+        scrollTop: 100,
+        clientHeight: VIEWPORT,
+        scrollHeight: 430,
+        previousActiveId: null
+      })
+    ).toBe('u1')
+  })
+
   it('lights nothing above the first prompt', () => {
     expect(
       findActiveNativeChatRailItem({

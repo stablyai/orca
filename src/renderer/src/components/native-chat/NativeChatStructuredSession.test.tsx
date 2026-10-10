@@ -32,7 +32,6 @@ vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
-import { seededEntry, seedOutbox } from './NativeChatStructuredSession.test-harness'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
@@ -553,7 +552,7 @@ describe('NativeChatStructuredSession', () => {
     expect(screen.getByText('watcher')).toBeTruthy()
   })
 
-  it('tracks concurrent task stops independently and clears each pending result', async () => {
+  it('tracks concurrent task stops independently: a confirmed one holds its row, a failed one clears', async () => {
     mocks.monitoringBackgroundTasks = true
     mocks.supportsBackgroundTaskStop = true
     mocks.backgroundTasks = [
@@ -573,7 +572,7 @@ describe('NativeChatStructuredSession', () => {
         })
     )
 
-    render(
+    const { rerender } = render(
       claudeSessionView('structured-tab-concurrent-background', 'session-concurrent-background')
     )
     fireEvent.click(screen.getByRole('button', { name: '2 shells — 2 working' }))
@@ -585,12 +584,30 @@ describe('NativeChatStructuredSession', () => {
     expect((firstStop as HTMLButtonElement).disabled).toBe(true)
     expect((secondStop as HTMLButtonElement).disabled).toBe(true)
 
+    // Confirmed before its row leaves: the button stays in its stopping state, never Stop again.
     await act(async () => finishFirst({ cancelled: true }))
-    await waitFor(() => expect((firstStop as HTMLButtonElement).disabled).toBe(false))
+    expect((firstStop as HTMLButtonElement).disabled).toBe(true)
     expect((secondStop as HTMLButtonElement).disabled).toBe(true)
 
     await act(async () => finishSecond(null))
     await waitFor(() => expect((secondStop as HTMLButtonElement).disabled).toBe(false))
+    expect((firstStop as HTMLButtonElement).disabled).toBe(true)
+
+    mocks.backgroundTasks = [{ id: 'task-two', kind: 'command', description: 'Second task' }]
+    rerender(
+      claudeSessionView('structured-tab-concurrent-background', 'session-concurrent-background')
+    )
+    expect(screen.queryByRole('button', { name: 'Stop First task' })).toBeNull()
+    // The same task listed again is one the Stop did not end.
+    mocks.backgroundTasks = [
+      { id: 'task-one', kind: 'command', description: 'First task' },
+      { id: 'task-two', kind: 'command', description: 'Second task' }
+    ]
+    rerender(
+      claudeSessionView('structured-tab-concurrent-background', 'session-concurrent-background')
+    )
+    const firstAgain = screen.getByRole('button', { name: 'Stop First task' })
+    expect(firstAgain.hasAttribute('disabled')).toBe(false)
   })
 
   it('keeps a stale session stop result from clearing the current session pending state', async () => {
@@ -623,7 +640,7 @@ describe('NativeChatStructuredSession', () => {
 
     await act(async () => finishOld({ cancelled: true }))
     expect((currentStop as HTMLButtonElement).disabled).toBe(true)
-    await act(async () => finishCurrent({ cancelled: true }))
+    await act(async () => finishCurrent({ cancelled: false }))
     await waitFor(() => expect((currentStop as HTMLButtonElement).disabled).toBe(false))
   })
 
@@ -746,6 +763,34 @@ describe('NativeChatStructuredSession', () => {
     })
   })
 
+  it('gives a question card the keyboard, holds it while its answer is with the host, and frees it on a refusal', async () => {
+    mocks.promptItems = legacySingleQuestionPromptItems
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-tab-hold"
+        sessionId="session-hold"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    let refuse: (result: null) => void = () => {}
+    mocks.respond.mockReturnValueOnce(
+      new Promise<null>((resolve) => {
+        refuse = resolve
+      })
+    )
+
+    // The card owns this pane's keyboard, which is what turns its number keys on.
+    expect(mocks.questionCardProps?.shouldFocus).toBe(true)
+    act(() => mocks.questionCardProps?.onAnswer([{ indices: [1], other: '' }]))
+    expect(mocks.questionCardProps?.isSubmitting).toBe(true)
+    await act(async () => refuse(null))
+
+    expect(mocks.questionCardProps?.isSubmitting).toBe(false)
+  })
+
   // The reader may have scrolled far up; what they just did has to come into view.
   it('brings the latest into view at the press for the submits this pane makes', async () => {
     mocks.promptItems = legacySingleQuestionPromptItems
@@ -793,32 +838,6 @@ describe('NativeChatStructuredSession', () => {
     mocks.queuedSteerNewest.mockReturnValue(true)
     expect(steerQueued()).toBe(true)
     expect(mocks.revealLatest).toHaveBeenCalledTimes(2)
-  })
-
-  it('reveals the latest when a delivery notice retries its message', async () => {
-    mocks.mode = 'outbox'
-    mocks.call.mockResolvedValue({
-      ok: true,
-      value: { submission: { clientMessageId: 'op-head', dispatchState: 'accepted' } }
-    })
-    seedOutbox('session-retry-reveal', [
-      seededEntry('session-retry-reveal', 'op-head', 'first', 'unconfirmed')
-    ])
-    render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-tab-retry-reveal"
-        sessionId="session-retry-reveal"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-
-    fireEvent.click(await screen.findByRole('button', { name: /Retry/ }))
-
-    expect(mocks.revealLatest).toHaveBeenCalledOnce()
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
   })
 
   it("brings the latest into view when a queued card's Steer sends it now", () => {

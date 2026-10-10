@@ -1,4 +1,5 @@
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
@@ -11,7 +12,19 @@ import {
   type AgentSessionHostStatusPresentation
 } from '../../../../shared/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
+import { nativeChatOrcaStopRowText } from './native-chat-orca-stop-words'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../../shared/agent-session-orca-stop'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+import { Button } from '@/components/ui/button'
+import {
+  isClaudeSignInFailureKind,
+  nativeChatClaudeSignInLabel,
+  useNativeChatClaudeSignInView
+} from './native-chat-claude-sign-in'
+import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import { agentSessionFailureSentence } from '../../../../shared/agent-session-failure-words'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -28,15 +41,23 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
 
 export function NativeChatNoticeRow({
   block,
+  agentName,
   onLinkClick,
   allowFileUriLinks = false
 }: {
   block: NativeChatTextBlock
+  agentName?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
 }): React.JSX.Element {
-  if (block.presentation === 'compaction') {
-    const label = translate('components.native-chat.notices.compaction', 'Context compacted')
+  useTranslation()
+  const orcaStopView = useNativeChatOrcaStopView()
+  const claudeSignIn = useNativeChatClaudeSignInView()
+  if (block.presentation === 'compaction' || block.presentation === 'context-cleared') {
+    const label =
+      block.presentation === 'context-cleared'
+        ? translate('components.native-chat.notices.contextCleared', 'Context cleared')
+        : translate('components.native-chat.notices.compaction', 'Context compacted')
     return (
       <div
         role="separator"
@@ -87,7 +108,31 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
-  const tone = block.tone
+  // The host's row about an Orca stop names the cause and the machine, muted: Orca stopped, not the
+  // agent. With no machine to name it keeps the host's own words.
+  const { orcaStop } = block
+  const { hostLabel, remoteHost, continueAvailable } = orcaStopView
+  const named = orcaStop !== undefined && hostLabel !== null
+  const failure = readWholeAgentSessionFailureFact(block.failure)
+  // Only reword auth text fully described by its fact; host text may also carry command advice.
+  const authSurface =
+    failure?.kind === 'notSignedIn'
+      ? (['row', 'rejection'] as const).find(
+          (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
+        )
+      : undefined
+  const text = named
+    ? nativeChatOrcaStopRowText(orcaStop.cause, hostLabel, { continueAvailable, remoteHost })
+    : failure && authSurface
+      ? agentSessionFailureSentence(
+          failure,
+          authSurface,
+          { agentName },
+          sayAgentSessionFailureTranslated
+        )
+      : block.text
+  const tone =
+    named || block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ? 'notice' : block.tone
   const Icon =
     tone === 'warning'
       ? AlertTriangle
@@ -108,8 +153,19 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 whitespace-pre-wrap break-words">{block.text}</p>
+        <p className="min-w-0 whitespace-pre-wrap break-words">{text}</p>
       </div>
+      {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          disabled={claudeSignIn.signingIn}
+          onClick={claudeSignIn.signIn}
+        >
+          {nativeChatClaudeSignInLabel(claudeSignIn)}
+        </Button>
+      ) : null}
       {block.providerFrame ? (
         <ProviderFrameRow
           block={block}

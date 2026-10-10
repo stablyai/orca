@@ -10,7 +10,6 @@ import {
   isSshPtyProvenExitedOnRelayError
 } from '../../../providers/ssh-pty-errors'
 import type { IPtyProvider } from '../../../providers/types'
-import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { getRelayPtyId } from './registry'
 import {
@@ -179,6 +178,5 @@ export function finishPtyShutdown(
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)
-  markClaudePtyExited(id)
   return incarnationId
 }
