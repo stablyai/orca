@@ -116,8 +116,8 @@ it("withdraws every queued send with the queued withdrawal's own rows, then writ
 
   expect(accepted.withdrawn).toEqual(['first', 'second'])
   // The same rows in kind, fact and words, all but where and when they landed.
-  const shape = ({ seq: _seq, ts: _ts, ...row }: { seq: number; ts: number }) => row
-  expect(stopRows.slice(0, -1).map(shape)).toEqual(withdrawalRows.map(shape))
+  const withoutPlacement = ({ seq: _seq, ts: _ts, ...row }: { seq: number; ts: number }) => row
+  expect(stopRows.slice(0, -1).map(withoutPlacement)).toEqual(withdrawalRows.map(withoutPlacement))
   expect(stopRows.at(-1)).toMatchObject({ kind: 'tombstone', stopEvent: { reason: 'user-stop' } })
   expect(accepted.mark.sequence).toBe(stopRows.at(-1)?.seq)
   // One transaction stamps them alike; the withdrawal wrote each on its own.
