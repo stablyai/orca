@@ -16,18 +16,69 @@ export const READ_BACK_TIMEOUT_MS = 15_000
 const READ_BACK_INTERVAL_MS = 1_000
 const STORAGE_ROOT = 'https://storage.googleapis.com'
 
+// Every switch a cell image may know, with what an absent key means on the cell. A cell
+// resets a key missing from its object to this default, so a write must carry every key it
+// does not mean to change: the tool reads the current object and changes only what is named.
+const enumOf = (...options) => (value) => (options.includes(value) ? value : undefined)
+const booleanValue = (value) => (value === 'true' ? true : value === 'false' ? false : undefined)
+const numberIn = (min, max, integer) => (value) => {
+  const number = Number(value)
+  if (value === '' || !Number.isFinite(number) || number < min || number > max) return undefined
+  if (integer && !Number.isInteger(number)) return undefined
+  return number
+}
+export const CELL_FLAG_SPECS = {
+  readinessLocal: { parse: booleanValue, default: false },
+  ticketCheck: { parse: enumOf('off', 'shadow', 'enforce'), default: 'off' },
+  admitMode: { parse: enumOf('db', 'reserve'), default: 'db' },
+  // Absent means the cell's region default.
+  intakePerSec: {
+    parse: (value) => {
+      const rate = numberIn(0, 1_000, false)(value)
+      return rate === 0 ? undefined : rate
+    }
+  },
+  reserveDryRun: { parse: booleanValue, default: false },
+  rejectionFence: { parse: booleanValue, default: true },
+  // Absent keeps the cell's boot value.
+  readTimeoutMarginMs: { parse: numberIn(1_000, 60_000, true) }
+}
+
+// `key=value,key=value`; `key=default` removes the key so the cell uses its default.
+export function parseFlagChanges(text) {
+  const changes = {}
+  for (const part of (text ?? '').split(',').map((entry) => entry.trim()).filter(Boolean)) {
+    const separator = part.indexOf('=')
+    const key = separator < 0 ? part : part.slice(0, separator)
+    const raw = separator < 0 ? '' : part.slice(separator + 1).trim()
+    const spec = CELL_FLAG_SPECS[key]
+    if (!spec) throw new Error(`unknown switch ${key}`)
+    if (key in changes) throw new Error(`switch ${key} named twice`)
+    if (raw === 'default') {
+      changes[key] = null
+      continue
+    }
+    const value = spec.parse(raw)
+    if (value === undefined) throw new Error(`switch ${key} cannot be ${JSON.stringify(raw)}`)
+    changes[key] = value
+  }
+  if (Object.keys(changes).length === 0) throw new Error('set names no switch to change')
+  return changes
+}
+
+// The switches as the cell will apply them: every known key, absent ones at their default.
+function effectiveFlags(flags) {
+  return Object.fromEntries(
+    Object.entries(CELL_FLAG_SPECS).map(([key, spec]) => [key, flags?.[key] ?? spec.default])
+  )
+}
+
 export function parseCellFlagsRequest(values) {
   const mode = values.mode
   if (mode !== 'dry-run' && mode !== 'write') throw new Error('mode must be dry-run or write')
   const cellId = values['cell-id'] ?? ''
   if (!CELL_ID_PATTERN.test(cellId)) throw new Error('cell id is not a relay GCE cell id')
-  if (values['readiness-local'] !== 'true' && values['readiness-local'] !== 'false') {
-    throw new Error('readiness-local must be true or false')
-  }
-  const ticketCheck = values['ticket-check']
-  if (ticketCheck !== 'off' && ticketCheck !== 'shadow') {
-    throw new Error('ticket-check must be off or shadow')
-  }
+  const changes = parseFlagChanges(values.set)
   // 0 means "no object yet": the write then creates it and refuses if one appeared.
   const expectedGeneration = values['expected-generation'] ?? ''
   if (!/^(0|[1-9][0-9]{0,18})$/.test(expectedGeneration)) {
@@ -51,12 +102,21 @@ export function parseCellFlagsRequest(values) {
     cellOrigin,
     projectId,
     expectedGeneration,
-    object: {
-      v: 1,
-      cellId,
-      flags: { readinessLocal: values['readiness-local'] === 'true', ticketCheck }
-    }
+    changes
   }
+}
+
+// Read-modify-write: the current object's switches with only the named ones changed.
+export function desiredObject(request, current) {
+  if (current !== null && (current?.v !== 1 || current?.cellId !== request.cellId)) {
+    throw new Error('the current object is not this cell\'s v1 switch object; fix it by hand')
+  }
+  const flags = { ...(current?.flags ?? {}) }
+  for (const [key, value] of Object.entries(request.changes)) {
+    if (value === null) delete flags[key]
+    else flags[key] = value
+  }
+  return { v: 1, cellId: request.cellId, flags }
 }
 
 function objectUrl(request, suffix = '') {
@@ -101,7 +161,7 @@ async function readCurrentObject(fetchImpl, request, accessToken) {
   return { generation: String(generation), object: await media.json().catch(() => null) }
 }
 
-async function writeObject(fetchImpl, request, accessToken, audit) {
+async function writeObject(fetchImpl, request, object, accessToken, audit) {
   const boundary = `relay-cell-flags-${Date.now()}`
   const metadata = {
     name: `cells/${request.cellId}.json`,
@@ -118,7 +178,7 @@ async function writeObject(fetchImpl, request, accessToken, audit) {
     `--${boundary}`,
     'Content-Type: application/json',
     '',
-    JSON.stringify(request.object),
+    JSON.stringify(object),
     `--${boundary}--`,
     ''
   ].join('\r\n')
@@ -142,8 +202,17 @@ async function writeObject(fetchImpl, request, accessToken, audit) {
   return String((await response.json()).generation)
 }
 
-const sameFlags = (left, right) =>
-  left?.readinessLocal === right.readinessLocal && left?.ticketCheck === right.ticketCheck
+// Every known key, not just the ones this run changed: a cell that kept an old value of any
+// switch has not applied this object. A key with no fixed default (the cell reports its own
+// value) is compared only when the object names it.
+export function sameFlags(applied, desired) {
+  const expected = effectiveFlags(desired)
+  const actual = effectiveFlags(applied)
+  return Object.entries(CELL_FLAG_SPECS).every(
+    ([key, spec]) =>
+      (!('default' in spec) && desired?.[key] === undefined) || actual[key] === expected[key]
+  )
+}
 
 export async function operateCellFlags(request, dependencies) {
   const { fetchImpl = fetch, accessToken, idToken, audit, log = console.log } = dependencies
@@ -156,6 +225,7 @@ export async function operateCellFlags(request, dependencies) {
   }
   if (!runtime.flagsApplied) throw new Error('cell image has no flag channel (no flagsApplied)')
   const current = await readCurrentObject(fetchImpl, request, accessToken)
+  const object = desiredObject(request, current.object)
   const plan = {
     event: 'orca_relay_cell_flags_plan',
     mode: request.mode,
@@ -163,7 +233,8 @@ export async function operateCellFlags(request, dependencies) {
     currentGeneration: current.generation,
     currentObject: current.object,
     appliedBefore: runtime.flagsApplied,
-    desired: request.object
+    changes: request.changes,
+    desired: object
   }
   // Before the generation check, so a dry run always shows the generation to pass next.
   log(JSON.stringify(plan))
@@ -173,7 +244,7 @@ export async function operateCellFlags(request, dependencies) {
     )
   }
   if (request.mode === 'dry-run') return { ...plan, written: false }
-  const generation = await writeObject(fetchImpl, request, accessToken, audit)
+  const generation = await writeObject(fetchImpl, request, object, accessToken, audit)
   log(JSON.stringify({ event: 'orca_relay_cell_flags_written', cellId: request.cellId, generation }))
   const deadline = now() + READ_BACK_TIMEOUT_MS
   let last = runtime.flagsApplied
@@ -185,7 +256,15 @@ export async function operateCellFlags(request, dependencies) {
       // The object is written; a failed poll only delays the read-back until the deadline.
       continue
     }
-    if (String(last?.generation) === generation && sameFlags(last.flags, request.object.flags)) {
+    if (String(last?.generation) !== generation) continue
+    // The image predates a switch this object names: it applied the rest and dropped that one.
+    if (Array.isArray(last.ignoredKeys) && last.ignoredKeys.length > 0) {
+      throw new Error(
+        `cell applied generation ${generation} but ignores ${last.ignoredKeys.join(', ')}; ` +
+          'its image predates them, so flip the object back'
+      )
+    }
+    if (sameFlags(last.flags, object.flags)) {
       const result = { ...plan, written: true, generation, applied: last }
       log(JSON.stringify({ ...result, event: 'orca_relay_cell_flags_applied_read_back' }))
       return result
@@ -205,8 +284,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
         'cell-id',
         'cell-origin',
         'project-id',
-        'readiness-local',
-        'ticket-check',
+        'set',
         'expected-generation',
         'confirmation'
       ].map((name) => [name, { type: 'string' }])

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  desiredObject,
   operateCellFlags,
   parseCellFlagsRequest,
+  parseFlagChanges,
   READ_BACK_TIMEOUT_MS,
   WRITE_CONFIRMATION
 } from './operate-relay-cell-flags.mjs'
@@ -13,8 +15,7 @@ const values = (overrides = {}) => ({
   'cell-id': CELL,
   'cell-origin': 'https://c26.relay.onorca.dev',
   'project-id': 'onorca-cloud',
-  'readiness-local': 'true',
-  'ticket-check': 'off',
+  set: 'readinessLocal=true',
   'expected-generation': '0',
   confirmation: `${WRITE_CONFIRMATION} ${CELL}`,
   ...overrides
@@ -73,7 +74,11 @@ const run = (request, fake, extra = {}) => {
 test('refuses malformed requests before touching anything', () => {
   assert.throws(() => parseCellFlagsRequest(values({ mode: 'apply' })), /mode/)
   assert.throws(() => parseCellFlagsRequest(values({ 'cell-id': 'all' })), /cell id/)
-  assert.throws(() => parseCellFlagsRequest(values({ 'ticket-check': 'enforce' })), /ticket-check/)
+  assert.throws(() => parseCellFlagsRequest(values({ set: 'ticketCheck=always' })), /ticketCheck/)
+  assert.throws(() => parseCellFlagsRequest(values({ set: 'placerMode=on' })), /unknown switch/)
+  assert.throws(() => parseCellFlagsRequest(values({ set: '' })), /names no switch/)
+  assert.throws(() => parseCellFlagsRequest(values({ set: 'admitMode=db,admitMode=reserve' })), /twice/)
+  assert.throws(() => parseCellFlagsRequest(values({ set: 'readTimeoutMarginMs=500' })), /cannot be/)
   assert.throws(() => parseCellFlagsRequest(values({ 'expected-generation': '' })), /expected/)
   assert.throws(() => parseCellFlagsRequest(values({ confirmation: WRITE_CONFIRMATION })), /confirmation/)
   assert.throws(
@@ -92,7 +97,7 @@ test('a dry run reports the change and writes nothing', async () => {
   assert.equal(outcome.written, false)
   assert.equal(fake.state.writes.length, 0)
   assert.equal(lines[0].event, 'orca_relay_cell_flags_plan')
-  assert.deepEqual(lines[0].desired.flags, { readinessLocal: true, ticketCheck: 'off' })
+  assert.deepEqual(lines[0].desired.flags, { readinessLocal: true })
 })
 
 test('writes with compare-and-swap, records who wrote it, and waits for the cell to apply it', async () => {
@@ -101,12 +106,12 @@ test('writes with compare-and-swap, records who wrote it, and waits for the cell
   const outcome = await result
   assert.equal(outcome.written, true)
   assert.equal(outcome.generation, '1001')
-  assert.deepEqual(outcome.applied, { generation: 1001, flags: { readinessLocal: true, ticketCheck: 'off' } })
+  assert.deepEqual(outcome.applied, { generation: 1001, flags: { readinessLocal: true } })
   assert.deepEqual(fake.state.writes[0].metadata.metadata, { writtenBy: 'octocat', runId: '42', runAttempt: '1' })
   assert.deepEqual(fake.state.writes[0].object, {
     v: 1,
     cellId: CELL,
-    flags: { readinessLocal: true, ticketCheck: 'off' }
+    flags: { readinessLocal: true }
   })
   assert.deepEqual(lines.map((line) => line.event), [
     'orca_relay_cell_flags_plan',
@@ -115,7 +120,7 @@ test('writes with compare-and-swap, records who wrote it, and waits for the cell
   ])
   // Flip back: the next write must name the generation just written.
   const back = run(
-    parseCellFlagsRequest(values({ 'readiness-local': 'false', 'expected-generation': '1001' })),
+    parseCellFlagsRequest(values({ set: 'readinessLocal=false', 'expected-generation': '1001' })),
     fake
   )
   assert.equal((await back.result).generation, '1002')
@@ -181,4 +186,80 @@ test('fails loudly when the cell does not apply the write within the read-back w
   const fake = fakeGoogleAndCell({ applyAfterPolls: READ_BACK_TIMEOUT_MS })
   await assert.rejects(run(parseCellFlagsRequest(values()), fake).result, /did not apply generation 1001/)
   assert.equal(fake.state.writes.length, 1)
+})
+
+test('changes only the named switches and keeps every other key the object already has', () => {
+  const current = {
+    v: 1,
+    cellId: CELL,
+    flags: { readinessLocal: true, ticketCheck: 'shadow', readTimeoutMarginMs: 5_000 }
+  }
+  const request = parseCellFlagsRequest(
+    values({ set: 'admitMode=reserve, intakePerSec=40, readTimeoutMarginMs=default' })
+  )
+  assert.deepEqual(desiredObject(request, current), {
+    v: 1,
+    cellId: CELL,
+    flags: { readinessLocal: true, ticketCheck: 'shadow', admitMode: 'reserve', intakePerSec: 40 }
+  })
+  assert.deepEqual(desiredObject(request, null).flags, { admitMode: 'reserve', intakePerSec: 40 })
+  assert.throws(() => desiredObject(request, { v: 1, cellId: 'production-gce-c27', flags: {} }), /by hand/)
+  assert.deepEqual(parseFlagChanges('rejectionFence=false'), { rejectionFence: false })
+})
+
+test('a write keeps the switches it did not name, end to end', async () => {
+  const fake = fakeGoogleAndCell({
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { ticketCheck: 'shadow' } } }
+  })
+  const outcome = await run(parseCellFlagsRequest(values({ 'expected-generation': '7' })), fake).result
+  assert.equal(outcome.written, true)
+  assert.deepEqual(fake.state.writes[0].object.flags, { ticketCheck: 'shadow', readinessLocal: true })
+})
+
+test('the read-back compares every switch, not only the one this run changed', async () => {
+  const fake = fakeGoogleAndCell({
+    stored: { generation: '7', object: { v: 1, cellId: CELL, flags: { ticketCheck: 'shadow' } } }
+  })
+  const inner = fake.fetchImpl
+  fake.fetchImpl = async (url, init) => {
+    const response = await inner(url, init)
+    if (new URL(url).pathname !== '/v1/admin/runtime-status') return response
+    const body = await response.json()
+    // The cell reports the new generation but still runs the old ticketCheck.
+    if (body.flagsApplied.generation === 8) body.flagsApplied.flags = { readinessLocal: true }
+    return Response.json(body)
+  }
+  await assert.rejects(
+    run(parseCellFlagsRequest(values({ 'expected-generation': '7' })), fake).result,
+    /did not apply generation 8/
+  )
+})
+
+test('a switch the cell reports on its own is compared only when the object names it', async () => {
+  const fake = fakeGoogleAndCell()
+  const inner = fake.fetchImpl
+  fake.fetchImpl = async (url, init) => {
+    const response = await inner(url, init)
+    if (new URL(url).pathname !== '/v1/admin/runtime-status') return response
+    const body = await response.json()
+    body.flagsApplied.flags = { ...body.flagsApplied.flags, intakePerSec: 50, readTimeoutMarginMs: 10_000 }
+    return Response.json(body)
+  }
+  assert.equal((await run(parseCellFlagsRequest(values()), fake).result).written, true)
+})
+
+test('fails the read-back when the cell ignores a switch the object names', async () => {
+  const fake = fakeGoogleAndCell()
+  const inner = fake.fetchImpl
+  fake.fetchImpl = async (url, init) => {
+    const response = await inner(url, init)
+    if (new URL(url).pathname !== '/v1/admin/runtime-status') return response
+    const body = await response.json()
+    if (body.flagsApplied.generation === 1001) body.flagsApplied.ignoredKeys = ['admitMode']
+    return Response.json(body)
+  }
+  await assert.rejects(
+    run(parseCellFlagsRequest(values({ set: 'admitMode=reserve' })), fake).result,
+    /ignores admitMode/
+  )
 })
