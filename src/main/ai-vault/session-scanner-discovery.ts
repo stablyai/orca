@@ -6,7 +6,7 @@ import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue } from './session-scan-issues'
-import type { SessionFileDiscovery } from './session-scanner-types'
+import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
 export async function discoverFiles(args: {
@@ -20,7 +20,6 @@ export async function discoverFiles(args: {
   directoryPredicate?: (name: string, depth: number) => boolean
 }): Promise<SessionFileDiscovery> {
   const files = new SessionNewestFiles(args.limit)
-  let refusedSidecar = false
   try {
     await forEachSessionFile(
       args.rootDir,
@@ -34,24 +33,11 @@ export async function discoverFiles(args: {
       async (path) => {
         try {
           const fileStat = await wslGatedStat(path, 'scan')
-          const sidecarPath = await args.contentDependencyPath?.(path)
-          const sidecar = await observeSessionSidecar(sidecarPath)
-          if (sidecar === 'unknown' && !refusedSidecar) {
-            // One issue per root: a refused sibling is a property of the tree,
-            // not of each transcript that happens to point at it.
-            refusedSidecar = true
-            recordSessionScanIssue(args.issues, {
-              agent: args.agent,
-              path: sidecarPath ?? args.rootDir,
-              message: 'Session metadata could not be read this scan.'
-            })
-          }
           files.add({
             path,
             mtimeMs: fileStat.mtimeMs,
             modifiedAt: new Date(fileStat.mtimeMs).toISOString(),
             sizeBytes: fileStat.size,
-            sidecar,
             dev: fileStat.dev,
             ino: fileStat.ino,
             nlink: fileStat.nlink
@@ -79,7 +65,52 @@ export async function discoverFiles(args: {
     })
     return { agent: args.agent, rootDir: args.rootDir, files: [] }
   }
-  return { agent: args.agent, rootDir: args.rootDir, files: files.newest() }
+  return {
+    agent: args.agent,
+    rootDir: args.rootDir,
+    files: await attachKeptSidecars(files.newest(), args)
+  }
+}
+
+// Why: resolving every sidecar before the recency cap walks chats the scan never returns.
+async function attachKeptSidecars(
+  kept: FileWithMtime[],
+  args: {
+    rootDir: string
+    agent: AiVaultAgent
+    issues: AiVaultScanIssue[]
+    contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
+  }
+): Promise<FileWithMtime[]> {
+  if (!args.contentDependencyPath) {
+    return kept
+  }
+  const withSidecars: FileWithMtime[] = []
+  let refusedSidecar = false
+  for (const file of kept) {
+    try {
+      const sidecarPath = await args.contentDependencyPath(file.path)
+      const sidecar = await observeSessionSidecar(sidecarPath)
+      if (sidecar === 'unknown' && !refusedSidecar) {
+        // One issue per root: a refused sibling is a property of the tree,
+        // not of each transcript that happens to point at it.
+        refusedSidecar = true
+        recordSessionScanIssue(args.issues, {
+          agent: args.agent,
+          path: sidecarPath ?? args.rootDir,
+          message: 'Session metadata could not be read this scan.'
+        })
+      }
+      withSidecars.push({ ...file, sidecar })
+    } catch (err) {
+      recordSessionScanIssue(args.issues, {
+        agent: args.agent,
+        path: file.path,
+        message: errorMessage(err)
+      })
+    }
+  }
+  return withSidecars
 }
 
 /**

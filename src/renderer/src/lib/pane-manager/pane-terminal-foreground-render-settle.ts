@@ -1,3 +1,4 @@
+import { synchronizeInPlaceRedrawChunk } from '../../../../shared/terminal-inplace-redraw-sync'
 import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
 import {
   disposeParsedDirtyRows,
@@ -229,7 +230,7 @@ export function writeForegroundTerminalChunk(
     }
   }
   try {
-    terminal.write(data, runParsedSteps)
+    terminal.write(synchronizeInPlaceRedrawChunk(terminal, data), runParsedSteps)
     return true
   } catch {
     // Why separate from parse completion: cleanup/recovery must run, but a

@@ -10,6 +10,7 @@ let failNextChatsRootReaddir = false
 let failMetaJsonReads = false
 let failMetaJsonStats: false | true | 'eacces' = false
 let chatsRootReads = 0
+let workspaceDirReads = 0
 vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
   const actual = await importOriginal<typeof WslTranscriptFsAccess>()
   return {
@@ -17,6 +18,9 @@ vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
     wslGatedReaddir: (
       ...args: Parameters<typeof actual.wslGatedReaddir>
     ): ReturnType<typeof actual.wslGatedReaddir> => {
+      if (/[\\/]chats[\\/]/.test(args[0])) {
+        workspaceDirReads += 1
+      }
       if (args[0].endsWith('chats')) {
         chatsRootReads += 1
         if (failNextChatsRootReaddir) {
@@ -214,6 +218,76 @@ describe('cursor chat meta', () => {
     chatsRootReads = 0
     await Promise.all(transcripts.map((path) => cursorChatMetaPath(path)))
     expect(chatsRootReads).toBe(3)
+  })
+
+  it('stops at the newest workspace bucket that holds the requested chat', async () => {
+    const cursorHome = await createCursorHome()
+    await writeChatMeta(cursorHome, '000-old', 'chat-old')
+    await writeChatMeta(cursorHome, '111-mid', 'chat-mid')
+    await writeChatMeta(cursorHome, '222-new', 'chat-new')
+    await writeChatMeta(cursorHome, '222-new', 'chat-new-sibling')
+    await utimes(
+      join(cursorHome, 'chats', '000-old'),
+      new Date('2020-01-01'),
+      new Date('2020-01-01')
+    )
+    await utimes(
+      join(cursorHome, 'chats', '111-mid'),
+      new Date('2021-01-01'),
+      new Date('2021-01-01')
+    )
+    await utimes(
+      join(cursorHome, 'chats', '222-new'),
+      new Date('2024-01-01'),
+      new Date('2024-01-01')
+    )
+    const newest = await writeTranscript(cursorHome, 'slug', 'chat-new', [])
+    const sibling = await writeTranscript(cursorHome, 'slug', 'chat-new-sibling', [])
+    const oldest = await writeTranscript(cursorHome, 'slug', 'chat-old', [])
+    workspaceDirReads = 0
+
+    expect(await cursorChatMetaPath(newest)).toBe(
+      join(cursorHome, 'chats', '222-new', 'chat-new', 'meta.json')
+    )
+    expect(workspaceDirReads).toBe(1)
+    expect(await cursorChatMetaPath(sibling)).toContain('chat-new-sibling')
+    expect(workspaceDirReads).toBe(1)
+
+    expect(await cursorChatMetaPath(oldest)).toContain('chat-old')
+    expect(workspaceDirReads).toBe(3)
+  })
+
+  it('does not index chats for transcripts the recency cap drops', async () => {
+    const cursorHome = await createCursorHome()
+    const issues: AiVaultScanIssue[] = []
+    for (const [workspace, chatId, mtime] of [
+      ['000-old', 'chat-old', '2020-01-01'],
+      ['111-mid', 'chat-mid', '2021-01-01'],
+      ['222-new', 'chat-new', '2024-01-01']
+    ] as const) {
+      await writeChatMeta(cursorHome, workspace, chatId)
+      await utimes(join(cursorHome, 'chats', workspace), new Date(mtime), new Date(mtime))
+      const transcriptPath = await writeTranscript(cursorHome, 'slug', chatId, [])
+      await utimes(transcriptPath, new Date(mtime), new Date(mtime))
+    }
+    workspaceDirReads = 0
+
+    const discovery = await discoverFiles({
+      rootDir: join(cursorHome, 'projects'),
+      limit: 1,
+      agent: 'cursor',
+      issues,
+      extensions: [...AI_VAULT_AGENT_SOURCES.cursor.extensions],
+      filePredicate: AI_VAULT_AGENT_SOURCES.cursor.filePredicate,
+      contentDependencyPath: AI_VAULT_AGENT_SOURCES.cursor.contentDependencyPath
+    })
+
+    expect(discovery.files).toHaveLength(1)
+    expect(discovery.files[0]?.path).toContain('chat-new')
+    expect(discovery.files[0]?.sidecar).toMatchObject({
+      path: join(cursorHome, 'chats', '222-new', 'chat-new', 'meta.json')
+    })
+    expect(workspaceDirReads).toBe(1)
   })
 
   it('yields nothing and does not throw when there is no chats tree', async () => {

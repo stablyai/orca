@@ -517,6 +517,89 @@ describe('hook-less agent rows identified by the foreground process', () => {
     ).toEqual([['codex', 'idle', 'Codex', 'Idle']])
   })
 
+  // #15335: cursor-agent replaces "Cursor Agent" with an arbitrary conversation name.
+  it('keeps a launched Cursor row after the conversation title replaces the identity title', () => {
+    expect(
+      summarize(rowsFor({ title: 'Fix the sidebar vanish', launchAgent: 'cursor' }))
+    ).toEqual([['cursor', 'idle', 'Cursor', 'Idle']])
+    expect(
+      summarize(
+        rowsFor({
+          title: 'Fix the sidebar vanish',
+          launchAgent: 'cursor',
+          foreground: processRead('cursor')
+        })
+      )
+    ).toEqual([['cursor', 'idle', 'Cursor', 'Idle']])
+  })
+
+  it('drops a launched Cursor row when the title is the shell or the tab default', () => {
+    expect(rowsFor({ title: 'zsh', launchAgent: 'cursor' })).toHaveLength(0)
+    expect(rowsFor({ title: 'Terminal 1', launchAgent: 'cursor' })).toHaveLength(0)
+    expect(
+      rowsFor({
+        title: 'Fix the sidebar vanish',
+        launchAgent: 'cursor',
+        foreground: { agent: null, shellForeground: true }
+      })
+    ).toHaveLength(0)
+    expect(
+      rowsFor({
+        title: 'Fix the sidebar vanish',
+        launchAgent: 'cursor',
+        foreground: { agent: null, shellForeground: false }
+      })
+    ).toHaveLength(0)
+  })
+
+  it('does not treat a conversation title as Cursor unless Orca launched that pane as Cursor', () => {
+    expect(rowsFor({ title: 'Fix the sidebar vanish' })).toHaveLength(0)
+    expect(rowsFor({ title: 'Ask Cursor about this', launchAgent: 'opencode' })).toHaveLength(0)
+  })
+
+  it('lets a title or a live process that names someone else win over the Cursor latch', () => {
+    expect(summarize(rowsFor({ title: '⠋ Claude Code', launchAgent: 'cursor' }))).toEqual([
+      ['claude', 'working', 'Claude Code', 'Running']
+    ])
+    expect(
+      summarize(
+        rowsFor({
+          title: 'Fix the sidebar vanish',
+          launchAgent: 'cursor',
+          foreground: processRead('codex')
+        })
+      )
+    ).toEqual([['codex', 'idle', 'Codex', 'Idle']])
+  })
+
+  it('keeps the Cursor row when the only foreground fact is a reattach launch record', () => {
+    const launchSeed: TitleDerivedPaneForeground = {
+      agent: 'cursor',
+      agentEvidence: 'launch-record',
+      shellForeground: false
+    }
+    expect(
+      summarize(
+        rowsFor({
+          title: 'Fix the sidebar vanish',
+          launchAgent: 'cursor',
+          foreground: launchSeed
+        })
+      )
+    ).toEqual([['cursor', 'idle', 'Cursor', 'Idle']])
+  })
+
+  it('does not brand a split sibling with the Cursor launch latch', () => {
+    expect(
+      rowsFor({
+        title: 'Fix the sidebar vanish',
+        launchAgent: 'cursor',
+        ptyIds: ['pty-a', 'pty-b'],
+        layout: makeSplitLayout()
+      })
+    ).toHaveLength(0)
+  })
+
   it('rows a hand-typed agent from its foreground process, whatever its title says', () => {
     for (const agent of ['codex', 'claude', 'gemini', 'opencode', 'grok'] as const) {
       const rows = rowsFor({ title: 'demo-repo', foreground: processRead(agent) })

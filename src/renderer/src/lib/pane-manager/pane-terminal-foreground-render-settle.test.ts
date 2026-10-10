@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import {
+  SYNCHRONIZED_OUTPUT_END_SEQUENCE,
+  SYNCHRONIZED_OUTPUT_START_SEQUENCE
+} from '../../../../shared/terminal-synchronized-output-scan'
 import { writeForegroundTerminalChunk } from './pane-terminal-foreground-render-settle'
 
 type RefreshFn = (start: number, end: number, sync?: boolean) => void
@@ -79,5 +83,20 @@ describe('writeForegroundTerminalChunk render-pause ownership', () => {
 
     expect(renderServiceRead).not.toHaveBeenCalled()
     expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
+  })
+
+  it('writes an in-place redraw as one synchronized frame', () => {
+    const { terminal } = createTerminal(false)
+    const written: string[] = []
+    terminal.write = (data: string) => {
+      written.push(data)
+    }
+    const redraw = `${'\x1b[2K\x1b[1A'.repeat(9)}status\r\n`
+
+    writeForegroundTerminalChunk(terminal, redraw)
+
+    expect(written).toEqual([
+      `${SYNCHRONIZED_OUTPUT_START_SEQUENCE}${redraw}${SYNCHRONIZED_OUTPUT_END_SEQUENCE}`
+    ])
   })
 })

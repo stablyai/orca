@@ -71,6 +71,10 @@ function titleRetiresProcessRead(args: { title: string; defaultTitle?: string })
  * which a pane without shell command marks never emits, so exit titles must still retire it. The
  * launch record is a tab-scoped latch with no run id, so it stays a fallback for titles that show
  * activity, and ranks below a title that names a different agent (pane reuse).
+ *
+ * Cursor is the exception (#15335): cursor-agent replaces its identity title with an arbitrary
+ * conversation name, so a pane Orca launched as Cursor keeps its row until the title is a shell
+ * or the tab default, or a read finds no agent. A title that names someone else still wins.
  */
 export function resolveTitleDerivedPaneAgent(args: {
   title: string
@@ -93,6 +97,24 @@ export function resolveTitleDerivedPaneAgent(args: {
   return (
     ownedProcessAgent ??
     args.titleAgentType ??
-    (args.titleShowsActivity ? args.launchAgentType : null)
+    (args.titleShowsActivity ? args.launchAgentType : null) ??
+    (launchedCursorKeepsConversationTitle(args) ? 'cursor' : null)
   )
+}
+
+function launchedCursorKeepsConversationTitle(args: {
+  title: string
+  defaultTitle?: string
+  titleAgentType: AgentType | null
+  launchAgentType: AgentType | null
+  foreground: TitleDerivedPaneForeground | undefined
+}): boolean {
+  if (args.launchAgentType !== 'cursor' || args.titleAgentType) {
+    return false
+  }
+  if (titleRetiresProcessRead(args)) {
+    return false
+  }
+  // A published read with no agent is an exit. No read yet is not.
+  return !args.foreground || Boolean(args.foreground.agent)
 }
