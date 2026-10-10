@@ -1037,8 +1037,6 @@
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
         "2f6637fe6c": "浏览器选项卡 {{value0}} 已固定",
         "a8d2bf8e9e": "没有可关闭的活动浏览器选项卡",
-        "291c8ed902": "当远程运行时处于活动状态时，浏览器选项卡不可用",
-        "f45fa2b03c": "当远程运行时处于活动状态时，浏览器配置文件不可用",
         "f000b2ff76": "没有活动的工作树",
         "56d3ec4203": "无法创建无标题 Markdown 文件。",
         "f6300deb8b": "新浏览器选项卡",
@@ -2931,7 +2929,6 @@
             "efb3843e75": "筛选并排序工作区",
             "93b7381d50": "筛选",
             "a615e24679": "排序",
-            "4cc5b73efe": "正在查找非活动工作区...",
             "5bf2e88480": "已扫描 {{value0}}/{{value1}} 个{{value2}}",
             "searchPlaceholder": "搜索工作区",
             "ageFilter": "时间",
@@ -2943,7 +2940,6 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来。",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "7b7bde5181": "到目前为止已检查工作区：{{value0}}",
             "deletingCount": "正在删除工作区：{{value0}}",
             "deleteCount": "删除工作区：{{value0}}？",
             "selectedForDeletionCount": "已选择删除：{{value0}}",
@@ -5299,7 +5295,9 @@
           "b79b39d865": "删除项目",
           "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复。",
           "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除。文件仍保留在您的磁盘上。",
-          "removeDescriptionVmRecipe": "这会从 Orca 中删除 {{name}}。其VM配方决定是否永久删除环境及其文件。"
+          "removeDescriptionVmRecipe": "这会从 Orca 中删除 {{name}}。其VM配方决定是否永久删除环境及其文件。",
+          "openTerminalWarningOne": "此项目中 1 个打开的终端将被关闭。",
+          "openTerminalWarningMany": "此项目中 {{count}} 个打开的终端将被关闭。"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "显示活动工作区"
@@ -11968,7 +11966,6 @@
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "终端 URL 点击次数",
-          "description": "单击终端或聊天记录中的链接时显示可用的操作。关闭此功能需要在终端中单击 {{modifier}}。",
           "descriptionV2": "控制点击终端窗格和聊天记录中打印的已检测的 URL。",
           "plainClickLabel": "简单的点击",
           "plainClickDescription": "选择左键单击是显示操作、打开 URL 还是将其留给终端。 Cmd/Ctrl-单击始终直接打开。",

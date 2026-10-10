@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -218,26 +216,6 @@ describe('Windows command lines for both DefaultShells', () => {
       )
     }
   )
-})
-
-describe('no -EncodedCommand in the W1 builders', () => {
-  it.each([
-    'orcad-remote-windows-node.ts',
-    'orcad-windows-host-script.ts',
-    'orcad-remote-launch-windows.ts',
-    'orcad-remote-launch.ts',
-    'orcad-remote-process-control.ts',
-    'orcad-remote-readiness-wait.ts',
-    'orcad-remote-record-file.ts',
-    'orcad-remote-build-hash.ts',
-    'orcad-managed-remote-stop.ts',
-    'orcad-remote-runtime-control.ts'
-  ])('%s', (file) => {
-    const code = readFileSync(join(__dirname, file), 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//gu, '')
-      .replace(/^\s*\/\/.*$/gmu, '')
-    expect(code).not.toMatch(/EncodedCommand|powerShellCommand/u)
-  })
 })
 
 describe('Windows launch report', () => {

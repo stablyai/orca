@@ -2,8 +2,12 @@ import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CryptoModule from 'node:crypto'
 import type * as SnapshotModule from '../shared/process-table-snapshot-reader'
-import { RelayDispatcher } from './dispatcher'
-import { encodeJsonRpcFrame, parseJsonRpcMessage, type JsonRpcResponse } from './protocol'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
+import {
+  encodeJsonRpcFrame,
+  parseJsonRpcMessage,
+  type JsonRpcResponse
+} from '../wsl-guest/protocol'
 import { PtyHandler } from './pty-handler'
 import { ClaimedAgentPtyOwnerRegistry } from '../shared/claimed-agent-pty-owner'
 import {

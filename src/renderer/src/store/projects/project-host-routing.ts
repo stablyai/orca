@@ -10,7 +10,6 @@ import {
   type ProjectHostSetupProjection
 } from '../../../../shared/project-host-setup-projection'
 import {
-  normalizeProjectHostSetupRow,
   normalizeProjectHostSetupRows,
   normalizeProjectRows
 } from '../../../../shared/project-catalog-row-normalization'
@@ -18,7 +17,7 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
@@ -26,6 +25,7 @@ import {
   type RuntimeClientTarget
 } from '../../runtime/runtime-rpc-client'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 
 export function getProjectSetupRuntimeTarget(
   hostId: ProjectHostSetupExistingFolderArgs['hostId']
@@ -50,28 +50,6 @@ export function getProjectUpdateRuntimeTarget(
   )
     ? target
     : { kind: 'local' }
-}
-
-export function setupWithFetchedOwner(
-  setup: ProjectHostSetup,
-  target: RuntimeClientTarget
-): ProjectHostSetup {
-  // Why here: every setup row crossing IPC or RPC into the renderer passes through this
-  // adoption step, so it is where the declared field types stop being aspirational.
-  const adopted = normalizeProjectHostSetupRow(setup)
-  const hostId = getRuntimeTargetHostId(target)
-  if (target.kind !== 'environment') {
-    return adopted
-  }
-  const executionHostId = adopted.executionHostId ?? adopted.hostId
-  return {
-    ...adopted,
-    hostId,
-    executionHostId: executionHostId === LOCAL_EXECUTION_HOST_ID ? hostId : executionHostId,
-    runtimeOwnerEnvironmentId: target.environmentId,
-    // Why: paired clients route through the HUB and must not treat its private SSH target as client-local configuration.
-    connectionId: null
-  }
 }
 
 function normalizeProjectCatalogProjection(
@@ -130,7 +108,9 @@ export async function fetchProjectHostSetupCompatibility(
       // Why projects too: the same wire response carries them, and a remote host on another
       // Orca version can publish a row whose declared field types do not hold.
       projects: normalizeProjectRows([...projectResponse.projects]),
-      setups: setupResponse.setups.map((setup) => setupWithFetchedOwner(setup, target))
+      setups: setupResponse.setups.map((setup) =>
+        adoptFromEndpoint(target, { kind: 'projectHostSetup', row: setup })
+      )
     }
   } catch {
     // Why: newer clients must hydrate against older runtimes that only know repo.list; derive the transitional model locally.

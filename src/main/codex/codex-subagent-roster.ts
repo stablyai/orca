@@ -5,15 +5,11 @@
 // child turn events supply execution state.
 //
 // KNOWN LIMITATION: `groups` is process-local and is never seeded from the
-// journal, while the row's identity is keyed on the group id alone. So once a
-// group leaves the map its row stays, and the next activity item rebuilds that
-// row from one child — rewriting N down to one. Two ways in: eviction past
-// MAX_CODEX_SUBAGENT_GROUPS, which drops the oldest-inserted group in-process
-// even while it is live, and skips the sweep so its children never latch
-// `unverifiable`; and a restart on `threadId:outside-turn`, the one group id
-// that outlives the process — `thread/resume` is verified to return the same
-// thread, and a real turn id is assumed freshly minted per turn. Seeding from
-// the journal is the fix.
+// journal, while the row's identity is keyed on the group id alone. After a
+// restart loses membership for `threadId:outside-turn`, the next activity
+// rebuilds that row from one child — rewriting N down to one. This group id
+// outlives the process: `thread/resume` returns the same thread, while real turn
+// ids are assumed freshly minted per turn. Seeding from the journal is the fix.
 
 import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
 import { isTerminalSubagentState } from '../../shared/native-chat-subagent-summary'
@@ -43,13 +39,13 @@ export { codexSubagentGroupId, codexSubagentGroupIdentity } from './codex-subage
 import {
   codexSubagentGroupId,
   codexSubagentGroupIdentity,
+  codexSubagentExecutionIdentity as executionIdentity,
+  createCodexSubagentRosterRetention,
+  retainSupersededCodexExecution,
   type RosterGroup
 } from './codex-subagent-roster-state'
 import type { CodexThreadItem } from './codex-structured-item-translation'
-import {
-  MAX_CODEX_SUBAGENT_GROUPS,
-  MAX_CODEX_SUBAGENTS_PER_GROUP
-} from './codex-structured-journal-limits'
+import { MAX_CODEX_SUBAGENTS_PER_GROUP } from './codex-structured-journal-limits'
 import { CodexThreadTokenTotals } from './codex-thread-token-totals'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
@@ -66,6 +62,7 @@ export type CodexSubagentRosterDeps = {
 
 export class CodexSubagentRoster {
   private readonly groups = new Map<string, RosterGroup>()
+  private readonly retention = createCodexSubagentRosterRetention(this.groups)
   /** Every thread's total, members or not; children are selected at write time. */
   private readonly tokensByThread = new CodexThreadTokenTotals()
   private readonly now: () => number
@@ -115,7 +112,10 @@ export class CodexSubagentRoster {
       // Only a spawn names the spawner: other announcements ride whichever agent acted.
       announcement.spawned ? input.threadId : undefined
     )
-    if (!child?.execution) {
+    if (
+      !child?.execution ||
+      this.retention.hasSettled(executionIdentity(child.agentThreadId, child.execution.turnId))
+    ) {
       return ADMITTED
     }
     const group =
@@ -150,7 +150,10 @@ export class CodexSubagentRoster {
     turnId: string
     state: NativeChatSubagentState
   }): StructuredAgentSessionSinkAdmission {
-    if (input.threadId === this.deps.primaryThreadId()) {
+    if (
+      input.threadId === this.deps.primaryThreadId() ||
+      this.retention.hasSettled(executionIdentity(input.threadId, input.turnId))
+    ) {
       return ADMITTED
     }
     const observed = this.executions.observeTurn(input.threadId, input.turnId, input.state)
@@ -162,7 +165,10 @@ export class CodexSubagentRoster {
     child: Readonly<CodexExecutionChild>,
     execution: CodexChildExecution
   ): StructuredAgentSessionSinkAdmission {
-    if (!child.registered) {
+    if (
+      !child.registered ||
+      this.retention.hasSettled(executionIdentity(child.agentThreadId, execution.turnId))
+    ) {
       return ADMITTED
     }
     if (execution.state === 'working') {
@@ -227,13 +233,15 @@ export class CodexSubagentRoster {
   dispose(): void {
     this.unfollow()
     this.groups.clear()
+    this.retention.clear()
     this.tokensByThread.clear()
   }
 
-  private sweep(group: RosterGroup | undefined): StructuredAgentSessionSinkAdmission {
-    if (!group) {
-      return ADMITTED
-    }
+  retentionSizes(): { groups: number; settledIdentities: number } {
+    return this.retention.sizes()
+  }
+
+  private sweep(group: RosterGroup): StructuredAgentSessionSinkAdmission {
     let changed = false
     for (const [id, entry] of group.entries) {
       if (isTerminalSubagentState(entry.state)) {
@@ -268,13 +276,6 @@ export class CodexSubagentRoster {
       lastSerialized: null
     }
     this.groups.set(groupId, group)
-    while (this.groups.size > MAX_CODEX_SUBAGENT_GROUPS) {
-      const oldest = this.groups.keys().next().value
-      if (typeof oldest !== 'string' || oldest === groupId) {
-        break
-      }
-      this.groups.delete(oldest)
-    }
     return group
   }
 
@@ -307,6 +308,7 @@ export class CodexSubagentRoster {
       return
     }
     const now = this.now()
+    retainSupersededCodexExecution(group, child.agentThreadId, turnId, this.retention)
     group.executionTurns.set(child.agentThreadId, turnId)
     group.entries.set(child.agentThreadId, {
       id: child.agentThreadId,
@@ -345,6 +347,7 @@ export class CodexSubagentRoster {
       : (this.deps.sink.appendItem(group.identity, body, options), ADMITTED)
     if (!admission.accepted) {
       group.lastSerialized = null
+      this.retention.trim([group])
       return admission
     }
     const published = this.deps.sink.tryPublish
@@ -357,6 +360,7 @@ export class CodexSubagentRoster {
       // roster stays queued but never reaches the renderer.
       group.lastSerialized = null
     }
+    this.retention.trim([group])
     return published
   }
 }

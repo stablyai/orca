@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  getGitHubMutationRoutingSettings,
+  getGitHubRepoRoutingSettings,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
@@ -236,7 +236,7 @@ export async function runPullRequestStateUpdate(args: {
   }
   // Why: close/reopen must route by the repo owner host like merge (#6957).
   const target = getActiveRuntimeTarget(
-    getGitHubMutationRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)
+    getGitHubRepoRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)
   )
   if (!args.repoPath && target.kind !== 'environment') {
     throw new Error('No repo context available for this pull request.')

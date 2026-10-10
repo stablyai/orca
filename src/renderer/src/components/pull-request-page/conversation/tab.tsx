@@ -4,8 +4,10 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { useRepoAssignees } from '@/hooks/useIssueMetadata'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import {
+  canUseGitHubRepoContext,
+  getGitHubRepoRoutingSettings
+} from '@/lib/github-source-runtime-context'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   filterPRCommentsByAudience,
@@ -23,7 +25,6 @@ import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
 } from '@/components/github-body-draft-state'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type {
   GitHubAssignableUser,
@@ -102,18 +103,8 @@ export function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext))
   )
   const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const botAuthorOverrides = usePRBotAuthorOverrides()

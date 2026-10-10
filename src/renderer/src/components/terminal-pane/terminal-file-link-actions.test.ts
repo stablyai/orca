@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => {
   }
   return {
     canOpenWithSystemDefault: true,
-    downloadAndOpen: vi.fn(),
     openDetectedFilePath: vi.fn(),
     settings,
     worktreeRoot: false
@@ -28,10 +27,6 @@ vi.mock('./terminal-file-open-routing', () => ({
 
 vi.mock('./terminal-worktree-path-link', () => ({
   resolveKnownWorktreeRootPathLink: () => (mocks.worktreeRoot ? { id: 'wt-2' } : null)
-}))
-
-vi.mock('./terminal-remote-file-download-open', () => ({
-  downloadAndOpenRemoteTerminalFile: mocks.downloadAndOpen
 }))
 
 import { handleTerminalFileLink } from './terminal-file-link-actions'
@@ -140,11 +135,11 @@ describe('terminal file link actions', () => {
     expect(actionRequest.alternate.label).toBe('Download & open with default app')
 
     actionRequest.alternate.run()
-    expect(mocks.downloadAndOpen).toHaveBeenCalledWith(
-      { sourceHostResolved: true },
-      '/repo/docs/report.html'
-    )
-    expect(mocks.openDetectedFilePath).not.toHaveBeenCalled()
+    // The open flow downloads a host file and opens a path the host disowns on this computer.
+    expect(mocks.openDetectedFilePath).toHaveBeenCalledWith('/repo/docs/report.html', null, null, {
+      ...deps,
+      openWithSystemDefault: true
+    })
   })
 
   it('keeps row parity between local and remote previewable files', () => {

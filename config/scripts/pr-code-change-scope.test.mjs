@@ -625,7 +625,7 @@ describe('PR Checks skip wiring', () => {
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
     for (const jobName of expensiveJobs.filter(
-      (jobName) => !['test', 'static_analysis', 'typecheck'].includes(jobName)
+      (jobName) => !['test', 'static_analysis', 'typecheck', 'orcad_browser'].includes(jobName)
     )) {
       expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths', 'preflight'])
       expect(prWorkflow.jobs[jobName].if, jobName).toContain(

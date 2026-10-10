@@ -4,7 +4,6 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import { getDefaultSettings } from '../../../../../shared/constants'
 import type * as GitLabReviewClient from './gitlab-review-client'
 
 const poller = vi.hoisted<{
@@ -129,11 +128,7 @@ describe('useChecksPanelPolling live behavior', () => {
     expect(model.fetchPRChecks).not.toHaveBeenCalled()
   })
 
-  it('uses an explicit owner and missing head override for a replacement MR', async () => {
-    const ownerSettings = {
-      ...getDefaultSettings('/tmp'),
-      activeRuntimeEnvironmentId: 'owner-runtime'
-    }
+  it('uses the workspace owner and missing head override for a replacement MR', async () => {
     const model = createModel({
       activeGitLabReview: {
         provider: 'gitlab',
@@ -150,8 +145,7 @@ describe('useChecksPanelPolling live behavior', () => {
         id: 'worktree-1',
         repoId: 'repo-1',
         hostId: 'runtime:owner-runtime'
-      }),
-      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'focused-runtime' }
+      })
     })
     const { result } = renderHook(() => useChecksPanelPolling(model))
 
@@ -159,20 +153,46 @@ describe('useChecksPanelPolling live behavior', () => {
       result.current.fetchGitLabDetails({
         mrNumberOverride: 18,
         headShaOverride: null,
-        commitAsCurrent: true,
-        settingsOverride: ownerSettings
+        commitAsCurrent: true
       })
     )
 
     expect(gitlab.fetchDetails).toHaveBeenCalledWith(
-      expect.objectContaining({
-        iid: 18,
-        settings: ownerSettings,
-        repoOwnerExecutionHostId: 'runtime:owner-runtime'
-      })
+      expect.objectContaining({ iid: 18, repoOwnerExecutionHostId: 'runtime:owner-runtime' })
     )
     expect(model.asyncResultKeyRef.current).toContain('::18::none')
     expect(model.asyncResultKeyRef.current).not.toContain('old-head')
+  })
+
+  it('reports a failed MR read as an error naming the machine, not as no checks (#24264)', async () => {
+    gitlab.fetchDetails.mockRejectedValue(new Error('glab: not logged in'))
+    const model = createModel({
+      activeGitLabReview: {
+        provider: 'gitlab',
+        number: 17,
+        headSha: 'head',
+        title: 'MR',
+        state: 'open',
+        url: '',
+        status: 'pending',
+        updatedAt: '',
+        mergeable: 'UNKNOWN'
+      },
+      activeWorktree: makeWorktree({ id: 'worktree-1', repoId: 'repo-1', hostId: 'ssh:devbox' })
+    })
+    renderHook(() => useChecksPanelPolling(model))
+
+    await act(async () => poller.run?.())
+
+    const message = 'Could not load from this computer: glab: not logged in'
+    expect(model.setChecksError).toHaveBeenCalledWith(message)
+    expect(model.setCommentsError).toHaveBeenCalledWith(message)
+    // Why: a later reset would clear the error; only the scope reset may precede it.
+    const setChecks = vi.mocked(model.setChecks).mock
+    const setChecksError = vi.mocked(model.setChecksError).mock
+    expect(Math.max(0, ...setChecks.invocationCallOrder)).toBeLessThan(
+      setChecksError.invocationCallOrder[0]
+    )
   })
 
   it('drops replacement MR details when the relink scope changes in flight', async () => {

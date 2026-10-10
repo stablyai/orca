@@ -38,9 +38,6 @@ vi.mock('@/store', () => ({
     { getState: () => ({ recordFeatureInteraction: vi.fn() }) }
   )
 }))
-vi.mock('@/lib/repo-runtime-owner', () => ({
-  getSettingsForRepoRuntimeOwner: () => ({ activeRuntimeEnvironmentId: null })
-}))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('@/components/github/github-duplicate-issue-candidates', () => ({
   useGitHubDuplicateIssueCandidates: () => []

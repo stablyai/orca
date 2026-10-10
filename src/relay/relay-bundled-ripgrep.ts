@@ -10,7 +10,7 @@ import {
   isTransientRipgrepSpawnError
 } from '../shared/ripgrep-process-availability'
 import { relayLogLine } from './relay-diagnostic-log'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayCommandEnv } from '../wsl-guest/relay-command-env'
 
 export const PATH_RIPGREP_COMMAND = 'rg'
 

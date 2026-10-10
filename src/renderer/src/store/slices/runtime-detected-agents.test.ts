@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
+import { makeWorktree, TEST_REPO } from './worktrees-slice-test-fixtures'
 import { getRuntimeAgentInventoryKey } from './runtime-agent-inventory-key'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -133,6 +134,35 @@ describe('workspace agent detection on a host without workspace-scoped detection
     expect(store.getState().runtimeDetectedAgentIds[KEY]).toEqual(['codex'])
     expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[KEY]).toBeUndefined()
   })
+
+  // Why (#25804): the host's own SSH workspace runs on that target, not on the host machine.
+  it.each([
+    ['detect', 'ensureRuntimeDetectedAgents'],
+    ['refresh', 'refreshRuntimeDetectedAgents']
+  ] as const)(
+    'asks an old host to %s on its SSH target for a workspace that lives there',
+    async (_label, action) => {
+      serveHost({ hostPlatform: 'win32', scoped: false })
+      const store = createTestStore()
+      store.setState({
+        repos: [
+          { ...TEST_REPO, connectionId: 'server-ssh-target', executionHostId: 'runtime:env-1' }
+        ],
+        worktreesByRepo: { [TEST_REPO.id]: [makeWorktree({ id: 'wt-1', repoId: TEST_REPO.id })] }
+      })
+
+      await expect(store.getState()[action]('env-1', 'wt-1')).resolves.toEqual(['codex'])
+
+      expect(agentCalls()).toEqual([
+        expect.objectContaining({
+          method: 'preflight.detectRemoteAgents',
+          params: { connectionId: 'server-ssh-target' }
+        })
+      ])
+      expect(store.getState().runtimeDetectedAgentIds[KEY]).toEqual(['codex'])
+      expect(store.getState().runtimeAgentDetectionNeedsServerUpdate[KEY]).toBeUndefined()
+    }
+  )
 
   it('drops the notice with its environment', async () => {
     serveHost({ hostPlatform: 'win32', scoped: false })

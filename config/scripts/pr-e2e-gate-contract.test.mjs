@@ -86,6 +86,7 @@ describe('PR E2E gate contract', () => {
       'src/main/providers/ssh-',
       'src/main/ipc/pty',
       'src/relay/',
+      'src/wsl-guest/',
       'src/shared/ssh-',
       'src/renderer/src/store/slices/direct-ssh-',
       'src/renderer/src/components/terminal-pane/remote-runtime-'

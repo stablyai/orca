@@ -158,10 +158,8 @@ export function createFilePathLinkProvider(
                   hover: () => {
                     // Why: only local paths can offer the Shift+modifier system
                     // default escape hatch; remote paths may not exist locally.
-                    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
-                      fileContext,
-                      mappedPath
-                    )
+                    const canOpenWithSystemDefault =
+                      shouldOpenTerminalFileWithSystemDefault(fileContext)
                     const showActions = deps.getLinkActionContext
                       ? deps.getLinkActionContext(paneId) !== null
                       : true

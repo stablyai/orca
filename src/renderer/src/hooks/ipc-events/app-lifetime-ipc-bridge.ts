@@ -126,7 +126,7 @@ export function installAppLifetimeIpcEvents(
   registerUpdaterStatusIpcBridge(unsubs)
   registerBrowserStateIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerContentCreationIpcBridge(unsubs, isRuntimeEnvironmentActive)
-  registerBrowserRequestIpcBridge(unsubs, isRuntimeEnvironmentActive)
+  registerBrowserRequestIpcBridge(unsubs)
   registerTabLifecycleIpcBridge(unsubs)
   registerRateLimitIpcBridge(unsubs)
   registerDirectSshStateIpcBridge(unsubs, directSshRuntime)

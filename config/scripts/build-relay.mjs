@@ -289,8 +289,8 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
 // so a single platform-independent bundle suffices; it ships inside the
 // Windows app via the same out/relay extraResources mapping.
 {
-  const wslHookEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
-  const wslBrowserNetworkEntry = join(ROOT, 'src', 'relay', 'wsl-browser-network-relay.ts')
+  const wslHookEntry = join(ROOT, 'src', 'wsl-guest', 'wsl-agent-hook-relay.ts')
+  const wslBrowserNetworkEntry = join(ROOT, 'src', 'wsl-guest', 'wsl-browser-network-relay.ts')
   const outDir = join(OUT_ROOT, 'wsl')
   mkdirSync(outDir, { recursive: true })
   await build({

@@ -46,7 +46,7 @@ import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { RelayContext } from './context'
 import { FsHandler } from './fs-handler'
 import { runListFilesScan } from './fs-list-files-fallback-chain'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayCommandEnv } from '../wsl-guest/relay-command-env'
 
 type FsHandlerInternals = {
   search(params: Record<string, unknown>): Promise<unknown>

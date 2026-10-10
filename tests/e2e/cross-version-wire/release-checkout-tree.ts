@@ -25,6 +25,8 @@ const ARCHIVE_PATHS = [
   'src/types',
   'mobile/src/worktree/agent-row-display.ts'
 ]
+// Why optional: only releases from the move onward have it, and `git archive` refuses a missing pathspec.
+const OPTIONAL_ARCHIVE_PATHS = ['src/wsl-guest']
 
 const WORKSPACE_POLICY = 'pnpm-workspace.yaml'
 
@@ -187,23 +189,32 @@ function workspacePatternRoot(pattern: string): string {
   return segments.join('/')
 }
 
+async function listReleasePaths(
+  repoRoot: string,
+  commit: string,
+  paths: string[],
+  deadline: number
+): Promise<string[]> {
+  return (
+    await runCheckoutProcess(
+      repoRoot,
+      'git',
+      ['ls-tree', '-z', '--name-only', commit, '--', ...paths],
+      deadline
+    )
+  )
+    .split('\0')
+    .filter(Boolean)
+}
+
 /** The release's workspace policy and declared package directories; none before workspaces. */
 async function releaseWorkspaceArchivePaths(
   repoRoot: string,
   commit: string,
   deadline: number
 ): Promise<string[]> {
-  const listed = async (paths: string[]): Promise<string[]> =>
-    (
-      await runCheckoutProcess(
-        repoRoot,
-        'git',
-        ['ls-tree', '-z', '--name-only', commit, '--', ...paths],
-        deadline
-      )
-    )
-      .split('\0')
-      .filter(Boolean)
+  const listed = (paths: string[]): Promise<string[]> =>
+    listReleasePaths(repoRoot, commit, paths, deadline)
   if ((await listed([WORKSPACE_POLICY])).length === 0) {
     return []
   }
@@ -235,6 +246,7 @@ export async function extractReleaseCheckoutTree(
   const archive = join(staging, '.release-checkout.tar')
   const deadline = Date.now() + CHECKOUT_PROCESS_TIMEOUT_MS
   const workspacePaths = await releaseWorkspaceArchivePaths(repoRoot, commit, deadline)
+  const optionalPaths = await listReleasePaths(repoRoot, commit, OPTIONAL_ARCHIVE_PATHS, deadline)
   try {
     await runCheckoutProcess(
       repoRoot,
@@ -246,6 +258,7 @@ export async function extractReleaseCheckoutTree(
         commit,
         '--',
         ...ARCHIVE_PATHS,
+        ...optionalPaths,
         ...workspacePaths
       ],
       deadline

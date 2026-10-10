@@ -37,6 +37,7 @@ import {
   changedAiVaultSearchSettings,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
+import { stampRuntimeSourceEnv } from '../../shared/runtime-source-env'
 
 export { parseArgs }
 
@@ -133,6 +134,8 @@ export type OrcadHandle = {
  */
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
   installOrcadHostAdapters()
+  // Why: an orcad started from an Orca terminal must not fence its own CLI children to that Orca.
+  stampRuntimeSourceEnv(process.env, null)
   const { readiness, instance, stop } = await startOrcadWithHost(
     resolveUserDataPath(),
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),

@@ -1,5 +1,5 @@
 import type { Socket } from 'node:net'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { setupDaemonHandshake } from './relay-handshake'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelaySocketOwnership } from './relay-socket-ownership'

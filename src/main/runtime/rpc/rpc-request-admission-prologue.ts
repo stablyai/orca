@@ -9,6 +9,7 @@ import type {
 import { errorResponse } from './errors'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { orchestrationMigrationFence } from './orchestration-contract-fence'
+import { runtimeSourceFence } from './runtime-source-admission'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
@@ -50,6 +51,10 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     return reject(
       errorResponse(rawRequest.id, meta, 'method_not_found', `Unknown method: ${rawRequest.method}`)
     )
+  }
+  const sourceFence = runtimeSourceFence(rawRequest, meta)
+  if (sourceFence) {
+    return reject(sourceFence)
   }
   const migrationFence = orchestrationMigrationFence(rawRequest, meta)
   if (migrationFence) {

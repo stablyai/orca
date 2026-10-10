@@ -53,6 +53,7 @@ function renderDropState(setAttachmentPaths: Dispatch<SetStateAction<string[]>>)
       promptTextareaRef: createRef<HTMLTextAreaElement>(),
       selectedRepoPath: '/repo',
       selectedRepoSettings: null,
+      selectedWorktreeId: null,
       setAgentPrompt: () => {},
       setAttachmentPaths
     })
@@ -172,6 +173,7 @@ describe('composer upload failures', () => {
         RUNTIME_SETTINGS,
         null,
         '/repo',
+        null,
         () => false
       )
     })

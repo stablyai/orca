@@ -5,6 +5,10 @@ import { parse } from 'yaml'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
+const unit = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
+const relaySteps = unit.jobs.relay_integration.steps
+const chrome = relaySteps.find((step) => step.name === 'Resolve Chrome for the browser provider')
+const browser = relaySteps.find((step) => step.name === 'Test external Chromium browser provider')
 const routes = [
   ['git_compatibility', 'src/shared/git-capability-cache.ts'],
   ['codex_index_heal_contract', 'src/main/codex/codex-session-index-heal.ts'],
@@ -45,7 +49,9 @@ function routedOutputs(files, reused) {
 }
 
 describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
-  const job = workflow.jobs[jobName]
+  const job = workflow.jobs[jobName === 'orcad_browser' ? 'test' : jobName]
+  const condition =
+    jobName === 'orcad_browser' ? `(${job.if}) && (${chrome.if}) && (${browser.if})` : job.if
 
   it('waits for the detector and physical preflight job', () => {
     expect(job.needs).toEqual(['code_paths', 'preflight'])
@@ -71,12 +77,15 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
     { name: 'route is unknown', selected: 'unknown', admitted: false },
     { name: 'workflow is cancelled', cancelled: true, admitted: false }
   ])('evaluates the actual workflow condition: $name', (scenario) => {
-    const admitted = evaluate(job.if, {
+    const context = {
       cancelled: () => scenario.cancelled ?? false,
+      success: () => true,
+      inputs: {},
       needs: {
         code_paths: {
           result: scenario.detector === undefined ? 'success' : (scenario.detector ?? undefined),
           outputs: {
+            test: 'true',
             [jobName]: scenario.selected === undefined ? 'true' : (scenario.selected ?? undefined)
           }
         },
@@ -84,8 +93,11 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
           result: scenario.preflight === undefined ? 'success' : (scenario.preflight ?? undefined)
         }
       }
-    })
-    expect(admitted).toBe(scenario.admitted)
+    }
+    if (jobName === 'orcad_browser') {
+      context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
+    }
+    expect(evaluate(condition, context)).toBe(scenario.admitted)
   })
 
   it.each([
@@ -110,11 +122,16 @@ describe.each(routes)('%s preflight admission', (jobName, changedFile) => {
       const outputs = routedOutputs([changedFile], reused)
       expect(outputs[jobName]).toBe(String(reused !== 'true'))
       expect(outputs.test).toBe(String(reused !== 'true'))
-      const admitted = evaluate(job.if, {
+      const context = {
         cancelled: () => false,
+        success: () => true,
+        inputs: {},
         needs: { code_paths: { result: 'success', outputs }, preflight: { result: 'success' } }
-      })
-      expect(admitted).toBe(reused !== 'true')
+      }
+      if (jobName === 'orcad_browser') {
+        context.inputs.browser_contract = evaluate(job.with.browser_contract, context)
+      }
+      expect(evaluate(condition, context)).toBe(reused !== 'true')
     }
   )
 })
@@ -140,4 +157,53 @@ it('keeps the mobile-only bundle job in the first wave', () => {
     test: false,
     mobile_web_app: true
   })
+})
+
+it('preserves relay continuation, setup guards and cancellation', () => {
+  const steps = relaySteps
+  const install = steps.find((step) => step.id === 'relay_dependencies')
+  const test = steps.find((step) => step.name === 'Test relay integration contracts')
+  const context = {
+    cancelled: () => false,
+    success: () => false,
+    steps: {
+      root_dependencies: { outcome: 'success' },
+      relay_dependencies: { outcome: 'success' }
+    }
+  }
+  expect(evaluate(install.if, context)).toBe(true)
+  expect(evaluate(test.if, context)).toBe(true)
+  context.steps.root_dependencies.outcome = 'failure'
+  expect(evaluate(install.if, context)).toBe(false)
+  context.steps.relay_dependencies.outcome = 'failure'
+  expect(evaluate(test.if, context)).toBe(false)
+  context.steps.root_dependencies.outcome = 'success'
+  context.steps.relay_dependencies.outcome = 'success'
+  context.cancelled = () => true
+  expect(evaluate(install.if, context)).toBe(false)
+  expect(evaluate(test.if, context)).toBe(false)
+  expect(
+    steps.findIndex((step) => step.name === 'Test external Chromium browser provider')
+  ).toBeLessThan(steps.indexOf(install))
+  expect(test['continue-on-error']).toBeUndefined()
+  expect(unit.jobs.relay_integration['continue-on-error']).toBeUndefined()
+  expect(chrome['continue-on-error']).toBeUndefined()
+  expect(browser['continue-on-error']).toBeUndefined()
+  expect(workflow.jobs.verify.needs).toContain('test')
+})
+
+it('guards both browser steps after setup or discovery failure and for default callers', () => {
+  const context = {
+    inputs: { browser_contract: true },
+    success: () => true
+  }
+  expect(evaluate(chrome.if, context)).toBe(true)
+  expect(evaluate(browser.if, context)).toBe(true)
+  context.success = () => false
+  expect(evaluate(chrome.if, context)).toBe(false)
+  expect(evaluate(browser.if, context)).toBe(false)
+  context.success = () => true
+  context.inputs.browser_contract = unit.on.workflow_call.inputs.browser_contract.default
+  expect(evaluate(chrome.if, context)).toBe(false)
+  expect(evaluate(browser.if, context)).toBe(false)
 })

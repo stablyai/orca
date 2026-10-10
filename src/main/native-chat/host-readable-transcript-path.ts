@@ -6,7 +6,7 @@ import {
   wslHomeSessionDirs,
   type SessionHomeAgent
 } from '../ai-vault/session-scanner-roots'
-import { getWslHomeAsync, listRunningWslDistrosAsync, listRunningWslHomeDirsAsync } from '../wsl'
+import { getWslHomeAsync, listRunningWslHomeDirsAsync } from '../wsl'
 import {
   filterPathsToRunningWslDistrosAsync,
   filterPathsToWslDistros
@@ -48,20 +48,6 @@ export function needsWslHostResolution(
 export type WslTranscriptResolutionSnapshot = {
   runningDistros: string[]
   homeDirs?: string[]
-}
-
-/** One running-distro view shared by every WSL lookup in a resolve attempt. */
-export async function createWslTranscriptResolutionSnapshot(
-  options: {
-    includeHomes?: boolean
-  } = {}
-): Promise<WslTranscriptResolutionSnapshot> {
-  const runningDistros = await listRunningWslDistrosAsync()
-  if (options.includeHomes === false) {
-    return { runningDistros }
-  }
-  const homes = await Promise.all(runningDistros.map((distro) => getWslHomeAsync(distro)))
-  return { runningDistros, homeDirs: homes.filter((home): home is string => home !== null) }
 }
 
 async function snapshotHomeDirs(snapshot: WslTranscriptResolutionSnapshot): Promise<string[]> {

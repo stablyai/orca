@@ -6,7 +6,7 @@ import {
   createPluginPanelCallAdmission
 } from '../../shared/plugins/plugin-panel-call-admission'
 import type { PluginPanelActionOutcome } from '../../shared/plugins/plugin-panel-bridge'
-import type { MethodHandler } from '../../relay/dispatcher'
+import type { MethodHandler } from '../../wsl-guest/dispatcher'
 import {
   RELAY_PLUGIN_PANEL_HOST_CALL_METHOD,
   RELAY_PLUGIN_WORKER_HOST_CALL_METHOD,

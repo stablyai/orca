@@ -16,6 +16,7 @@ import {
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../shared/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import { ORCA_SSH_BRIDGE_CREDENTIAL_ENV } from '../../shared/ssh-bridge-credential-env'
+import { stampRuntimeSourceEnv, type RuntimeSourceStamp } from '../../shared/runtime-source-env'
 import {
   sshBridgeCredentials,
   type SshBridgeCallerScope,
@@ -75,6 +76,8 @@ export type HostCliPassthroughOptions = {
   entryExists?: (path: string) => boolean
   killTimeoutMs?: number
   credentials?: SshBridgeCredentialRegistry
+  /** The runtime this bridge belongs to; the host CLI must reach exactly that one. */
+  runtimeSource?: RuntimeSourceStamp | null
 }
 
 /** Thrown when the host CLI entry cannot be launched at all; callers fall back
@@ -115,6 +118,7 @@ export function buildHostCliEnv(args: {
   bridgeCredential: string
   runtimeAuthority?: SshCliRuntimeAuthority
   artifactInput?: RemoteArtifactInput
+  runtimeSource?: RuntimeSourceStamp | null
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...args.hostEnv }
   for (const key of REMOTE_CONTEXT_ENV_VARS) {
@@ -152,6 +156,12 @@ export function buildHostCliEnv(args: {
   delete env.ORCA_REMOTE_PAIRING
   delete env.ORCA_ENVIRONMENT
   env[ORCA_SSH_BRIDGE_CREDENTIAL_ENV] = args.bridgeCredential
+  // Why: stamped from this process, never from the remote env, so remote input cannot pick the runtime.
+  // The host CLI dials exactly this profile, so the stamp names the same one.
+  stampRuntimeSourceEnv(
+    env,
+    args.runtimeSource ? { ...args.runtimeSource, profilePath: args.userDataPath } : null
+  )
   if (args.runtimeAuthority) {
     env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
     env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
@@ -219,7 +229,8 @@ export async function runHostOrcaCliPassthrough(
     remoteCwd: request.cwd,
     bridgeCredential: credential.token,
     runtimeAuthority: request.runtimeAuthority,
-    artifactInput: request.artifactInput
+    artifactInput: request.artifactInput,
+    runtimeSource: options.runtimeSource
   })
 
   try {

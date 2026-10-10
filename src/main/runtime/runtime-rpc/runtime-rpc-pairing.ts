@@ -182,13 +182,16 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
     }
+    const hostDescriptor = this.hostDescriptor
     const pairingUrl = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint,
       deviceToken: device.token,
       publicKeyB64,
       pairedDeviceId: device.deviceId,
-      scope
+      scope,
+      // Why runtime scope only: mobile never pins it, and every byte densifies the phone's QR.
+      ...(hostDescriptor && scope === 'runtime' ? { hostDescriptor } : {})
     })
     return {
       available: true,

@@ -41,7 +41,7 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
 }))
 
 import { MAX_RELAY_PTY_SESSIONS, PtyHandler } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import {
   beginPtyHandlerTest,
   createMockDispatcher,

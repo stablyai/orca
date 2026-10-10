@@ -337,7 +337,7 @@
       "invariant": "An ended tracked task stays pending until its wake-up and finishing turn end; missing wake-ups expire only after 60 idle seconds. Cancellation remains owned by the executing host, duplicate delivery cannot create a fresh completion veto, and fresh native rest can recover a lost finishing Stop.",
       "oracle": "Replay captured hook ordering through production HTTP entry points and native ready bytes through the actual automation observer. Check local/relay state, cancellation/new-turn fencing, fresh versus retained rest, bounded task/timer ownership, and zero global status reads during indexed runtime waits.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/relay/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/wsl-guest/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts"
       ],
       "testFiles": [
         "src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts",
@@ -346,7 +346,7 @@
         "src/shared/claude-owed-notification-resource-contract.test.ts",
         "src/shared/agent-hook-listener-claude-task-notification.test.ts",
         "src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts",
-        "src/relay/agent-hook-interrupt-reconciliation.test.ts",
+        "src/wsl-guest/agent-hook-interrupt-reconciliation.test.ts",
         "src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts"
       ],
       "assertionRefs": [
@@ -376,7 +376,7 @@
           "date": "2026-10-06",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/relay/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-claude-task-wakeup-lifecycle.test.ts src/main/runtime/tui-idle-claude-task-wakeup.test.ts src/main/runtime/claude-task-wakeup-indexed-read.test.ts src/shared/claude-owed-notification-resource-contract.test.ts src/shared/agent-hook-listener-claude-task-notification.test.ts src/shared/agent-hook-listener-claude-reordered-task-notification.test.ts src/wsl-guest/agent-hook-interrupt-reconciliation.test.ts src/main/ssh/ssh-agent-hook-interrupt-reconciliation.test.ts",
           "result": "passed",
           "durationSeconds": 8.62,
           "summary": "Exact stored command with repository Vitest configuration passes 148 tests across eight files including out-of-order launch/end/delivery controls. Includes real HTTP/relay ingress, 12 blank/padded Agent/Bash/Monitor IDs, captured-native-rest automation completion, duplicate/cancellation controls, owner/phase gates, timer/task bounds and indexed reads. Three upstream interrupt suites pass 28 more tests separately."
@@ -9838,7 +9838,7 @@
       "invariant": "PreCompact is never registered and may never move a pane, because it fires before the compact is validated and an aborted compact emits it alone. Only a manual PostCompact may mark done, and it does so as a session boundary so completion-reactive consumers stay out of it; an automatic PostCompact claims nothing and writes no compact-scoped state, since its turn resumes and emits its own Stop. A completion either CLEARS a row or publishes nothing at all: it never creates a row, so a retired pane cannot be resurrected, and it never restates one it cannot clear, because a restated row loses restoredUnconfirmed and restarts the staleness clock. A manual /compact only completes at an idle prompt, so it retires a subagent that exists ONLY as a disk snapshot; live evidence -- a child observed in this runtime, an unclassifiable running background task, a registered session cron -- still holds the pane at working. A completion requires a valid provider prompt UUID, matches the pane owner by connection and provider session -- except on a restored row, which carries the previous connection and may carry no session at all -- and is applied at most once per compact. Ownership is enforced by the client that owns pane identity; a relay forwards and defers, so a cold relay cache cannot swallow the clearing event. A relay predating this contract forwards its own mapping, so ingest drops automatic envelopes, stamps the boundary on manual ones, carries the summarized turn label onto a promptless completion with or without a trigger, and classifies a trigger-stripped replay by payload state while still enforcing ownership. Kimi and other Claude-compatible vendors remain fail-closed.",
       "oracle": "Replay the measured Claude compact streams through a harness gated on the real CLAUDE_EVENTS, plus local HTTP, relay, SSH, and persisted-restore transports. Require the successful manual stream to end done with sessionBoundary set, and require the aborted stream (PreCompact alone) to leave both an idle and a working pane exactly as it found them. Drive the restart shape end to end over loopback HTTP from a hydrated row: a pane held only by a snapshot child must reach done with an empty roster, while a pane a runtime child still owns must emit NOTHING and keep its row object identical, so receivedAt and restoredUnconfirmed both survive. Deliver the restored-row cases with the hydrated row still cached at completion time and assert the summarizer published nothing, so the restored-row branch is the branch under test. Require rejection of an automatic completion, a completion with absent prompt UUID, a foreign provider session, a duplicate, and a completion for a pane with no cached row; require an automatic completion to leave the consumed-compact map untouched. Require a relay with a COLD cache to forward the completion while the client still refuses to mint a row it never had. Require ingest to drop legacy automatic envelopes, stamp the boundary on legacy manual ones, carry the summarized turn label onto a promptless completion with and without a trigger, and leave a FINISHED pane finished when a trigger-stripped working replay arrives. Require the consumed-compact map to be empty after each pane-scoped teardown route and to follow a pane move. Assert registration membership, emitted event order, and the authoritative lastStatusByPaneKey snapshot.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
         "Manual Claude Code interactive compact under a PTY: register every hook to a logging script, run one turn then /compact to observe the abort stream, then seven turns and /compact to observe the success stream; compare source, trigger, session_id, and prompt_id across both"
       ],
       "testFiles": [
@@ -9848,7 +9848,7 @@
         "src/shared/agent-hook-listener-claude-turn-state.test.ts",
         "src/shared/agent-hook-listener-claude-compatible-vendors.test.ts",
         "src/shared/agent-hook-relay.test.ts",
-        "src/relay/agent-hook-server.test.ts",
+        "src/wsl-guest/agent-hook-server.test.ts",
         "src/main/agent-hooks/server-claude-normalization.test.ts",
         "src/main/agent-hooks/server-last-status-write.test.ts",
         "src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts"
@@ -9896,7 +9896,7 @@
           "date": "2026-08-18",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/relay/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/claude/compact-status-registration.test.ts src/main/agent-hooks/manual-compact-hook-stream.test.ts src/main/agent-hooks/manual-compact-status-cleanup.test.ts src/shared/agent-hook-listener-claude-turn-state.test.ts src/shared/agent-hook-listener-claude-compatible-vendors.test.ts src/shared/agent-hook-relay.test.ts src/wsl-guest/agent-hook-server.test.ts src/main/agent-hooks/server-claude-normalization.test.ts src/main/agent-hooks/server-last-status-write.test.ts src/main/ssh/ssh-relay-session-agent-hooks.integration.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 3.28,
           "summary": "Ten files and 116 tests passed across registration, listener, local HTTP, relay, SSH, persistence, and cleanup. Reverting only the four source files to the merge base first turned 12 of 21 registration-gated tests and 8 of 12 relay/ingest tests red, so the suite observes its own failure rather than passing over unreachable code. Every assertion was additionally mutation-tested: 18 of 18 targeted mutations -- including reaping runtime children as well as snapshot ones, restating a pane live evidence still holds, re-enforcing compact ownership on the relay, and dropping the consumed-compact map from any one teardown route -- are caught."
@@ -12799,17 +12799,17 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-pending-projection-admissions.test.ts src/main/ipc/ssh-pty-legacy-projection.test.ts src/main/ipc/ssh-pty-model-admission.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-terminal-error.test.ts src/main/ssh/ssh-pty-recovery-retention-budget.test.ts src/relay/protocol-backpressure.test.ts src/relay/pty-source-credit-ledger.test.ts src/relay/pty-source-credit-scheduler.test.ts src/relay/relay-pty-source-publication.test.ts src/relay/ssh-pty-source-credit-adapter.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-terminal-error.test.ts src/main/ssh/ssh-pty-recovery-retention-budget.test.ts src/wsl-guest/protocol-backpressure.test.ts src/relay/pty-source-credit-ledger.test.ts src/relay/pty-source-credit-scheduler.test.ts src/relay/relay-pty-source-publication.test.ts src/relay/ssh-pty-source-credit-adapter.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-model-admission.test.ts src/main/ipc/ssh-pty-output-model-migration.test.ts src/main/ssh/ssh-relay-session-model-migration.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/git-response-stream-ownership.test.ts src/relay/pty-handler-output-streaming.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/relay/relay-pty-source-recovery-completion.test.ts src/relay/relay-pty-source-restore-retry.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/dispatcher.test.ts src/relay/pty-handler-source-publication.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/wsl-guest/dispatcher.test.ts src/relay/pty-handler-source-publication.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-legacy-projection.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/relay/dispatcher-client-writer.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-generation-guard.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/relay/dispatcher-client-writer.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-generation-guard.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/wsl-guest/dispatcher-client-writer.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-restore-retry.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts --reporter=dot",
         "pnpm exec vitest run src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/relay/ssh-pty-consumer-session-adapter.test.ts src/main/persistence-ssh-targets-and-pane-keys.test.ts --reporter=dot",
@@ -12846,7 +12846,7 @@
         "src/main/ssh/ssh-relay-session-terminal-error.test.ts",
         "src/main/ssh/ssh-pty-recovery-retention-budget.test.ts",
         "src/main/ssh/ssh-pty-retired-source-deliveries.test.ts",
-        "src/relay/protocol-backpressure.test.ts",
+        "src/wsl-guest/protocol-backpressure.test.ts",
         "src/relay/git-response-stream-ownership.test.ts",
         "src/relay/pty-handler-output-streaming.test.ts",
         "src/relay/pty-source-credit-ledger.test.ts",
@@ -12855,7 +12855,7 @@
         "src/relay/relay-pty-source-recovery-interleavings.test.ts",
         "src/relay/relay-pty-source-recovery-completion.test.ts",
         "src/relay/relay-pty-source-restore-retry.test.ts",
-        "src/relay/dispatcher.test.ts",
+        "src/wsl-guest/dispatcher.test.ts",
         "src/relay/pty-handler-source-publication.test.ts",
         "src/relay/ssh-pty-source-credit-adapter.test.ts",
         "src/shared/pty-consumer-session.test.ts",
@@ -12872,7 +12872,7 @@
         "src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts",
         "src/main/ssh/ssh-relay-deploy.test.ts",
         "src/main/persistence-ssh-targets-and-pane-keys.test.ts",
-        "src/relay/dispatcher-client-writer.test.ts",
+        "src/wsl-guest/dispatcher-client-writer.test.ts",
         "src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts",
         "tests/e2e/ssh-docker-relay-perf.spec.ts"
       ],
@@ -13029,7 +13029,7 @@
           ]
         },
         {
-          "file": "src/relay/dispatcher.test.ts",
+          "file": "src/wsl-guest/dispatcher.test.ts",
           "assertions": [
             "a saturated legacy primary remains required backpressure and is never detached as an additional subscriber"
           ]
@@ -13063,7 +13063,7 @@
           ]
         },
         {
-          "file": "src/relay/protocol-backpressure.test.ts",
+          "file": "src/wsl-guest/protocol-backpressure.test.ts",
           "assertions": [
             "relay decoder accepts one maximum frame plus 1 MiB partial input and rejects one extra byte",
             "a throwing continuation clears retained input, releases one pause epoch, and publishes one typed ownership error"
@@ -13196,7 +13196,7 @@
           ]
         },
         {
-          "file": "src/relay/dispatcher-client-writer.test.ts",
+          "file": "src/wsl-guest/dispatcher-client-writer.test.ts",
           "assertions": [
             "encoded producer frames stay below high-water-minus-reserve capacity",
             "one fixed-size filesystem compatibility frame is admitted only on an empty sink",
@@ -13250,7 +13250,7 @@
           "date": "2026-07-29",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-terminal-error.test.ts src/main/ssh/ssh-pty-recovery-retention-budget.test.ts src/relay/protocol-backpressure.test.ts src/relay/pty-source-credit-ledger.test.ts src/relay/pty-source-credit-scheduler.test.ts src/relay/relay-pty-source-publication.test.ts src/relay/ssh-pty-source-credit-adapter.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-terminal-error.test.ts src/main/ssh/ssh-pty-recovery-retention-budget.test.ts src/wsl-guest/protocol-backpressure.test.ts src/relay/pty-source-credit-ledger.test.ts src/relay/pty-source-credit-scheduler.test.ts src/relay/relay-pty-source-publication.test.ts src/relay/ssh-pty-source-credit-adapter.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 2.24,
           "summary": "Sixteen deterministic SSH relay/session/source/decoder files passed 192 tests, including exit-sealed private recovery, retained stale-transfer cancellation authority, exact private-frame proof watermarks, one retirement record across 10,000 same-PTY token rotations, stale-owner fallback, and scheduler rejection isolation; no live topology was exercised."

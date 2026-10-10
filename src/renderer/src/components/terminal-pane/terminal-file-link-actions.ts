@@ -14,7 +14,6 @@ import {
   type TerminalLinkActionContext
 } from './terminal-link-action-request'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
-import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { translate } from '@/i18n/i18n'
 import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
 import { useAppStore } from '@/store'
@@ -80,7 +79,7 @@ export function buildFileLinkActions(
     useAppStore.getState(),
     fileContext
   )
-  const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext, mappedPath)
+  const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
   const isMac = navigator.userAgent.includes('Mac')
 
   // Why: the OS can only launch a local file, so remote links keep the same row by
@@ -122,7 +121,12 @@ export function buildFileLinkActions(
                 'auto.components.terminal.pane.TerminalLinkActionPopover.downloadOpenWithDefaultApp',
                 'Download & open with default app'
               ),
-              run: () => downloadAndOpenRemoteTerminalFile(fileContext, mappedPath)
+              // Why the open flow, not a direct download: a path the host disowns may be on this computer.
+              run: () =>
+                openDetectedFilePath(filePath, line, column, {
+                  ...deps,
+                  openWithSystemDefault: true
+                })
             }
   // Why omit, not disable: the popover has no disabled rows. The OS file manager can only show a
   // file on this machine.

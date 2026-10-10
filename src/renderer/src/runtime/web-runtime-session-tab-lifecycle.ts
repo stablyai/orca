@@ -28,6 +28,10 @@ export async function activateWebRuntimeSessionTab(args: {
   worktreeId: string
   tabId: string
   environmentId?: string | null
+  /** The split pane the user picked; without it the host and focus intent pick the first. */
+  leafId?: string | null
+  /** The local tab visible at the gesture; later navigation away cancels the deferred focus. */
+  expectedCurrentLocalTabId?: string | null
 }): Promise<boolean> {
   return (await callWebRuntimeSessionTabMethod('session.tabs.activate', args)) === 'applied'
 }
@@ -60,6 +64,8 @@ async function callWebRuntimeSessionTabMethod(
     reason?: RuntimeSessionTabCloseReason
     publicationEpoch?: string | null
     terminalHandle?: string | null
+    leafId?: string | null
+    expectedCurrentLocalTabId?: string | null
   }
 ): Promise<WebRuntimeSessionTabCloseOutcome> {
   const environmentId =
@@ -110,7 +116,13 @@ async function callWebRuntimeSessionTabMethod(
       recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
     } else {
       activationHostTabId = hostTabId
-      recordWebSessionFocusIntent(intentOwner, args.worktreeId, hostTabId)
+      recordWebSessionFocusIntent(
+        intentOwner,
+        args.worktreeId,
+        hostTabId,
+        args.leafId ?? undefined,
+        args.expectedCurrentLocalTabId
+      )
     }
     const response = await callEnvironment({
       // Why: old hosts cannot route this additive method, so a generation
@@ -121,6 +133,7 @@ async function callWebRuntimeSessionTabMethod(
         tabId: hostTabId,
         ...(method === 'session.tabs.activate'
           ? {
+              ...(args.leafId ? { leafId: args.leafId } : {}),
               // Why: the additive navigation target protects new hosts while notifyClients:false protects old hosts.
               notifyClients: false,
               navigation: 'caller' as const,

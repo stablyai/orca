@@ -9,7 +9,7 @@ import { isFolderRepo } from '../../shared/repo-kind'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { getGitRepoRootAsync, isGitRepoAsync } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos/repos-changed-notification'
@@ -101,13 +101,13 @@ function resolveRealPath(pathValue: string): string {
  *   the path the user picked; when a symlinked parent makes those differ, the root reads
  *   as an *external* worktree, and hiding those would hide the project's only workspace.
  */
-function resolveUpgrade(
+async function resolveUpgrade(
   repoPath: string
-): { folderUpgradeGitRootPath: string; externalWorktreeVisibility?: 'hide' } | null {
-  if (!isGitRepo(repoPath)) {
+): Promise<{ folderUpgradeGitRootPath: string; externalWorktreeVisibility?: 'hide' } | null> {
+  if (!(await isGitRepoAsync(repoPath))) {
     return null
   }
-  const gitRoot = getGitRepoRoot(repoPath)
+  const gitRoot = await getGitRepoRootAsync(repoPath)
   if (resolveRealPath(gitRoot) !== resolveRealPath(repoPath)) {
     return null
   }
@@ -127,7 +127,18 @@ async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<U
   if (hasExtraFolderWorkspaces(watch.store, current)) {
     return 'blocked'
   }
-  const updates = resolveUpgrade(current.path)
+  const inspectedPath = current.path
+  const updates = await resolveUpgrade(inspectedPath)
+  const latest = watch.store.getRepo(repoId)
+  if (
+    watch.disposed ||
+    !latest ||
+    !isUpgradeCandidate(latest) ||
+    latest.path !== inspectedPath ||
+    hasExtraFolderWorkspaces(watch.store, latest)
+  ) {
+    return 'blocked'
+  }
   if (!updates) {
     return 'rejected'
   }

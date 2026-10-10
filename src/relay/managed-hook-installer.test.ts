@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD } from '../shared/agent-hook-relay'
-import type { MethodHandler, RequestContext } from './dispatcher'
+import type { MethodHandler, RequestContext } from '../wsl-guest/dispatcher'
 import { registerManagedHookInstaller, type ManagedHookRuntime } from './managed-hook-installer'
 
 function captureHandler(loadRuntime: () => ManagedHookRuntime): MethodHandler {

@@ -1,9 +1,24 @@
 import {
   callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability,
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
-import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import { callHostRoute } from '@/runtime/host-route-call'
+import type { HostRoute } from '@/runtime/runtime-client-target'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import type {
+  WorkspacePort,
+  WorkspacePortHostScanResult,
+  WorkspacePortKillResult,
+  WorkspacePortScanResult
+} from '../../../shared/workspace-ports'
+import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+
+export const WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON =
+  'Update the server to see ports on its SSH hosts.'
+const WORKSPACE_PORT_RPC_TIMEOUT_MS = 15_000
 
 const WORKSPACE_PORT_PLATFORMS = new Set<NodeJS.Platform | 'unknown'>([
   'aix',
@@ -96,9 +111,7 @@ export async function runWorkspacePortScanForTarget(
       target,
       'workspacePorts.scan',
       params,
-      {
-        timeoutMs: 15_000
-      }
+      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS }
     )
     return requireWorkspacePortScanResult(result)
   } catch (error) {
@@ -109,6 +122,96 @@ export async function runWorkspacePortScanForTarget(
         ports: [],
         unavailableReason: 'The connected runtime does not support workspace port management yet.'
       }
+    }
+    throw error
+  }
+}
+
+/** An SSH host scanned by the endpoint that owns it, addressed as the panel resolved it. */
+export type HostScopedPortHost = {
+  route: HostRoute
+  executionHostId: string
+  worktreeId: string
+}
+
+function unavailableHostScan(executionHostId: string, reason: string): WorkspacePortHostScanResult {
+  return {
+    executionHostId,
+    platform: 'unknown',
+    scannedAt: Date.now(),
+    ports: [],
+    unavailableReason: reason
+  }
+}
+
+function isMethodNotFound(error: unknown): boolean {
+  return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
+}
+
+/**
+ * Asks the owning endpoint to scan the host the workspace runs on. An older server only knows how to
+ * scan itself, so it is never asked: its answer would show the server's ports for the SSH workspace.
+ */
+export async function scanWorkspacePortsOnExecutionHost(
+  host: HostScopedPortHost
+): Promise<WorkspacePortHostScanResult> {
+  const { target } = host.route
+  if (
+    target.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY
+    ))
+  ) {
+    return unavailableHostScan(host.executionHostId, WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON)
+  }
+  let response: unknown
+  try {
+    response = await callHostRoute(
+      host.route,
+      'workspacePorts.scanHost',
+      { worktree: toRuntimeWorktreeSelector(host.worktreeId) },
+      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS }
+    )
+  } catch (error) {
+    if (isMethodNotFound(error)) {
+      return unavailableHostScan(host.executionHostId, WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON)
+    }
+    throw error
+  }
+  const scan = requireWorkspacePortScanResult(response)
+  const scannedHostId = isRecord(response) ? response.executionHostId : undefined
+  const expected = normalizeExecutionHostId(host.executionHostId)
+  // Why: rows belong to one host; a server that resolved the workspace elsewhere must not fill them.
+  if (typeof scannedHostId !== 'string' || normalizeExecutionHostId(scannedHostId) !== expected) {
+    return unavailableHostScan(
+      host.executionHostId,
+      'The server scanned a different host than this workspace runs on.'
+    )
+  }
+  return { ...scan, executionHostId: scannedHostId }
+}
+
+/** Stops a row on the host it was scanned on; the server refuses when the workspace moved. */
+export async function killWorkspacePortOnExecutionHost(
+  host: HostScopedPortHost,
+  row: { scannedHostId: string; pid: number; port: number }
+): Promise<WorkspacePortKillResult> {
+  try {
+    return await callHostRoute<WorkspacePortKillResult>(
+      host.route,
+      'workspacePorts.killHost',
+      {
+        worktree: toRuntimeWorktreeSelector(host.worktreeId),
+        executionHostId: row.scannedHostId,
+        pid: row.pid,
+        port: row.port
+      },
+      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS }
+    )
+  } catch (error) {
+    if (isMethodNotFound(error)) {
+      return { ok: false, reason: WORKSPACE_PORTS_SERVER_SSH_UPDATE_REASON }
     }
     throw error
   }

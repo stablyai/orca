@@ -1,9 +1,7 @@
 import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
-import {
-  isUnresolvedOwnerHostId,
-  toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { isUnresolvedOwnerHostId } from '../../../../../../shared/execution-host'
+import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -183,11 +181,11 @@ export function createCreateWorktree(
       const target = options?.executionHostId
         ? (runtimeTargetForExecutionHostId(options.executionHostId) ?? { kind: 'local' as const })
         : getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
-      const creationHostId =
-        options?.executionHostId ??
-        (target.kind === 'environment'
-          ? toRuntimeExecutionHostId(target.environmentId)
-          : repoHostId(get(), repoId))
+      const creationHostId = adoptFromEndpoint(target, {
+        kind: 'createdWorktree',
+        requestedHostId: options?.executionHostId,
+        resolveOwnHostId: () => repoHostId(get(), repoId)
+      })
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||

@@ -1,7 +1,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { NestedRepoCandidate, NestedRepoScanResult } from '../../shared/project-group-types'
-import { isGitRepo } from '../git/repo'
+import { isGitRepoAsync } from '../git/repo'
 import {
   isIgnoredNestedRepoDirectory,
   normalizeNestedRepoScanOptions,
@@ -58,7 +58,8 @@ export async function scanNestedRepos(args: {
     joinPath: join,
     basename,
     hasGitMarker,
-    isSelectedPathGitRepo: async (path: string) => isGitRepo(path) || (await hasGitMarker(path))
+    isSelectedPathGitRepo: async (path: string) =>
+      (await isGitRepoAsync(path)) || (await hasGitMarker(path))
   }
   const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
     selectedPath: args.path,

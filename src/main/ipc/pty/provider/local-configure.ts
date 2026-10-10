@@ -11,6 +11,8 @@ import {
 } from '../../../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import { buildPtyHostEnv } from '../host-env/assembly'
+import { stampRuntimeSourceEnv } from '../../../../shared/runtime-source-env'
+import { getRuntimeSourceStamp } from '../../../runtime/host-descriptor'
 import {
   getCompatibleSelectedCodexHomePath,
   shouldStripInheritedOrcaCodexHome
@@ -112,6 +114,10 @@ export function configureLocalPtyProvider(args: {
         env,
         runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx?.isWsl === true ? ctx.wslDistro : null
+      )
+      stampRuntimeSourceEnv(
+        env,
+        getRuntimeSourceStamp(runtime, getAppEnvironment().getPath('userData'))
       )
       if (ctx?.isWsl === true) {
         addOrcaWslInteropEnv(env)

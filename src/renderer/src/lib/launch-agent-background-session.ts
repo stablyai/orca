@@ -55,7 +55,7 @@ export async function launchAgentBackgroundSession(
     worktreePath: worktree.path,
     repo
   })
-  const { platform: launchPlatform, isRemote } = launchHost
+  const { platform: launchPlatform, isRemote, isLocalHost } = launchHost
   // Route by the worktree's owner host, not the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, worktreeId)
@@ -67,7 +67,10 @@ export async function launchAgentBackgroundSession(
   // Why before any tab or PTY: an invalid launch must fail the run without creating a terminal.
   const planInputs = resolveAgentStartupPlanInputs({
     agent,
-    settings: store.settings ?? {},
+    // Why: the client's Windows shell setting describes this machine, not a remote host.
+    settings: isLocalHost
+      ? (store.settings ?? {})
+      : { ...store.settings, terminalWindowsShell: undefined },
     platform: launchPlatform,
     isRemote,
     extraAgentArgs: args.extraAgentArgs

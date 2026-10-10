@@ -2,7 +2,7 @@
  * Registers the plain SSH providers for a target whose runtime ladder ended at rung D, feeds
  * their output through the same SSH output intake the relay uses, and removes them again.
  */
-import type { SshPlainSshMode } from '../../shared/ssh-types'
+import type { SshPlainSshMode, SshRemotePlatform } from '../../shared/ssh-types'
 import { isCurrentPtyExit } from '../ipc/pty'
 import {
   acceptSshPtyOutputData,
@@ -31,7 +31,9 @@ export class SshPlainSshModeSession {
     readonly targetId: string,
     readonly mode: SshPlainSshMode,
     private readonly ptyProvider: SshPlainShellPtyProvider,
-    private readonly fsProvider: SshSftpFilesystemProvider
+    private readonly fsProvider: SshSftpFilesystemProvider,
+    /** OS the runtime ladder detected before it gave up; agent launches quote for it. */
+    readonly remotePlatform: SshRemotePlatform | undefined
   ) {}
 
   static enter(args: {
@@ -57,7 +59,14 @@ export class SshPlainSshModeSession {
       mode,
       windowsHost
     )
-    const session = new SshPlainSshModeSession(targetId, mode, ptyProvider, fsProvider)
+    const detected = args.error.data.host.platform
+    const session = new SshPlainSshModeSession(
+      targetId,
+      mode,
+      ptyProvider,
+      fsProvider,
+      detected === 'linux' || detected === 'darwin' || detected === 'win32' ? detected : undefined
+    )
     ptyProvider.onData((payload) => {
       if (session.left) {
         return

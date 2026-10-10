@@ -3,7 +3,6 @@ import type { AutomationRun } from '../../../../shared/automations-types'
 import {
   automationRunMatchesPaneKey,
   buildAutomationRunOpenLayout,
-  canOpenAutomationRunOpenTarget,
   resolveAutomationRunOpenTarget
 } from './automation-run-open-target'
 
@@ -17,6 +16,8 @@ const runLeafLayout = {
   expandedLeafId: null
 }
 const livePtyIds = ['pty-run']
+const canOpen = (args: Parameters<typeof resolveAutomationRunOpenTarget>[0]): boolean =>
+  resolveAutomationRunOpenTarget(args) !== null
 
 function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
   return {
@@ -55,7 +56,7 @@ describe('automation run open target', () => {
 
   it('requires exact pane identity before treating a run terminal as openable', () => {
     expect(
-      canOpenAutomationRunOpenTarget({
+      canOpen({
         run: run({ terminalPaneKey: null, terminalPtyId: null }),
         terminalTabExists: true,
         currentLayout: runLeafLayout,
@@ -63,7 +64,7 @@ describe('automation run open target', () => {
       })
     ).toBe(false)
     expect(
-      canOpenAutomationRunOpenTarget({
+      canOpen({
         run: run({ terminalPaneKey: `other-tab:${leafId}` }),
         terminalTabExists: true,
         currentLayout: runLeafLayout,
@@ -71,7 +72,7 @@ describe('automation run open target', () => {
       })
     ).toBe(true)
     expect(
-      canOpenAutomationRunOpenTarget({
+      canOpen({
         run: run(),
         terminalTabExists: true,
         currentLayout: runLeafLayout,
@@ -82,7 +83,7 @@ describe('automation run open target', () => {
 
   it('requires the run PTY to be live for View run', () => {
     expect(
-      canOpenAutomationRunOpenTarget({
+      canOpen({
         run: run(),
         terminalTabExists: true,
         currentLayout: runLeafLayout,
@@ -90,7 +91,7 @@ describe('automation run open target', () => {
       })
     ).toBe(true)
     expect(
-      canOpenAutomationRunOpenTarget({
+      canOpen({
         run: run(),
         terminalTabExists: true,
         currentLayout: runLeafLayout,
@@ -115,7 +116,7 @@ describe('automation run open target', () => {
 
   it('rejects a run without an exact PTY identity', () => {
     expect(
-      canOpenAutomationRunOpenTarget({
+      canOpen({
         run: run({ terminalPtyId: null }),
         terminalTabExists: true,
         currentLayout: runLeafLayout,

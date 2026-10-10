@@ -11,9 +11,13 @@ import type { AcpTimelineEvent } from './acp-timeline-event'
 import { createLegacyProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { AcpDialect } from './acp-dialects/acp-dialect'
+import type { AcpChildStops, AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
 import { acpSubagentChildWork, isAcpSubagentChildWorkEvent } from './acp-subagent-child-work'
+import {
+  acpBackgroundTaskChildWork,
+  isAcpBackgroundTaskChildWorkEvent
+} from './acp-background-task-child-work'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import {
@@ -42,7 +46,7 @@ export type AcpStructuredLaneDeps = {
   onChildWorkEvidence?: (evidence: AgentChildWorkEvidence[]) => void
   onChildWorkFailure?: (error: unknown) => void
   now?: () => number
-  canStopSubagents?: () => boolean
+  childStops?: () => AcpChildStops
 }
 
 export class AcpStructuredLane {
@@ -163,7 +167,9 @@ export class AcpStructuredLane {
       const event = this.backlog[0]
       const { admission, dropped } = this.assembler.apply(
         event,
-        isAcpSubagentChildWorkEvent(event) ? () => this.publishChildWork(event) : undefined
+        isAcpSubagentChildWorkEvent(event) || isAcpBackgroundTaskChildWorkEvent(event)
+          ? () => this.publishChildWork(event)
+          : undefined
       )
       if (dropped === 'stream-mismatch' && event.type === 'text.delta') {
         this.reportTextDrop({
@@ -195,11 +201,12 @@ export class AcpStructuredLane {
   }
 
   private publishChildWork(event: AcpTimelineEvent): void {
-    const evidence = acpSubagentChildWork(
-      event,
-      this.deps.now?.() ?? Date.now(),
-      this.deps.canStopSubagents?.() === true
-    )
+    const observedAt = this.deps.now?.() ?? Date.now()
+    const stops = this.deps.childStops?.()
+    const evidence = [
+      ...acpSubagentChildWork(event, observedAt, stops?.subagents === true),
+      ...acpBackgroundTaskChildWork(event, observedAt, stops?.backgroundTasks === true)
+    ]
     if (!evidence.length) {
       return
     }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher } from '../wsl-guest/dispatcher'
 import { AiVaultHandler } from './ai-vault-handler'
 import { SshChannelMultiplexer } from '../main/ssh/ssh-channel-multiplexer'
 import { createSessionSearchClient } from '../shared/ai-vault-search-client'

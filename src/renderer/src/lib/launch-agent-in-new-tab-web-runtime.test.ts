@@ -36,6 +36,8 @@ const store = {
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
   sshConnectionStates: new Map(),
+  sshStateByEnvironment: new Map(),
+  runtimeStatusByEnvironmentId: new Map([['web-runtime', { status: { hostPlatform: 'linux' } }]]),
   transientClearedAgentStatusConnectionIds: {},
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
   createTab: mocks.createTab,

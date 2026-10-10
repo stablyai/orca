@@ -8,7 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useImmediateMutation, useRepoAssignees } from '@/hooks/useIssueMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
 import {
   parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo,
@@ -16,10 +16,7 @@ import {
 } from '@/components/github/github-work-item-identity'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
-import {
-  getTaskSourceRuntimeSettings,
-  type TaskSourceContext
-} from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
@@ -47,18 +44,8 @@ export function PRAssigneesPanel({
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
 

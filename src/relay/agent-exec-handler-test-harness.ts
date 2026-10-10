@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
-import type { MethodHandler, RequestContext } from './dispatcher'
+import type { MethodHandler, RequestContext } from '../wsl-guest/dispatcher'
 import { AgentExecHandler } from './agent-exec-handler'
 
 export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {

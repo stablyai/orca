@@ -10,7 +10,7 @@ import {
   encodeHandshakeFrame,
   parseHandshakeMessage,
   type DecodedFrame
-} from './protocol'
+} from '../wsl-guest/protocol'
 import { relayLogLine } from './relay-diagnostic-log'
 import { describeRelayRuntime } from './relay-runtime-identity'
 

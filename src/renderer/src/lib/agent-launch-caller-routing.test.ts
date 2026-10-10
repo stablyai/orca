@@ -72,7 +72,7 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
 function serverReports(capabilities: readonly string[] | null): void {
   Object.assign(store, {
     runtimeStatusByEnvironmentId: new Map(
-      capabilities ? [['web-runtime', { status: { capabilities } }]] : []
+      capabilities ? [['web-runtime', { status: { capabilities, hostPlatform: 'linux' } }]] : []
     )
   })
 }

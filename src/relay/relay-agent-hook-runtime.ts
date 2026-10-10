@@ -1,22 +1,22 @@
 import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
 import { homedir } from 'node:os'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher } from '../wsl-guest/dispatcher'
 import type { PtyEnvAugmenter, PtyHandler } from './pty-handler'
-import { RelayAgentHookServer } from './agent-hook-server'
-import { endpointDirForRelaySocket } from './agent-hook-endpoint-coordinates'
-import { PluginOverlayManager } from './plugin-overlay'
-import { installOpenCodePluginInCanonicalConfig } from './opencode-canonical-config'
+import { RelayAgentHookServer } from '../wsl-guest/agent-hook-server'
+import { endpointDirForRelaySocket } from '../wsl-guest/agent-hook-endpoint-coordinates'
+import { PluginOverlayManager } from '../wsl-guest/plugin-overlay'
+import { installOpenCodePluginInCanonicalConfig } from '../wsl-guest/opencode-canonical-config'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
-import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
-import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
+import { publishAgentHookEnvelope } from '../wsl-guest/agent-hook-envelope-publication'
+import { assertPluginSourceUnderByteCap } from '../wsl-guest/plugin-source-limit'
 import {
   resolveOpenCodeSourceConfigDir,
   resolvePiSourceAgentDir,
   resolveOmpConfigDirName
-} from './plugin-overlay-env'
+} from '../wsl-guest/plugin-overlay-env'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType

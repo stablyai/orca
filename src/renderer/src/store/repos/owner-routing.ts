@@ -1,6 +1,5 @@
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
 import { FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
 import { findRepoForHost } from '../slices/repo-host-identity'
@@ -10,27 +9,9 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import type { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AddRepoPathOptions } from './repo-state'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
-
-export function repoWithFetchedOwner(
-  repo: Repo,
-  target: ReturnType<typeof getActiveRuntimeTarget>
-): Repo {
-  if (target.kind === 'environment') {
-    return { ...repo, executionHostId: getRuntimeTargetHostId(target) }
-  }
-  if (repo.connectionId) {
-    return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
-  }
-  return repo.executionHostId ? repo : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
-}
 
 export function settingsForRepoOwner(
   state: Pick<AppState, 'repos' | 'settings'>,

@@ -71,6 +71,15 @@ export type AcpDialect = {
     request(sessionId: string, id: string): { method: string; params: unknown }
     response(value: unknown, id: string): { cancelled: boolean; state?: NativeChatSubagentState }
   }
+  backgroundTaskStop?: {
+    /** Missing required target: proves the route exists without addressing any task. */
+    probe: { method: string; params: unknown }
+    /** The agent refusing the route by name: the only answer that hides Stop. */
+    lacksRoute(error: AcpAgentError): boolean
+    request(sessionId: string, taskId: string): { method: string; params: unknown }
+    /** `gone`: the agent no longer runs a task by that id; its own ending may still follow. */
+    response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
+  }
   injectedPromptIdentity?: true
   /** A tool update in the shared shape (`rawOutput.stdout`, `rawOutput.exitCode`), read first. */
   normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
@@ -97,5 +106,8 @@ export type AcpDialect = {
   /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
   compactionReply?(text: string): AcpCompactionReply | undefined
 }
+
+/** Which of the dialect's stop routes this agent process proved it answers. */
+export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
 
 export const GENERIC_ACP_DIALECT: AcpDialect = {}

@@ -22,6 +22,11 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import {
+  CLIENT_LOCAL_FILE_SETTINGS,
+  resolveHostWorkspaceFile,
+  type HostWorkspaceFile
+} from './terminal-host-workspace-file'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 
 export {
@@ -52,7 +57,7 @@ export function isHtmlFilePath(filePath: string): boolean {
   return /\.html?$/i.test(filePath)
 }
 
-function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
+function openHtmlFileInBrowser(filePath: string, worktreeId: string, clientLocal: boolean): void {
   const store = useAppStore.getState()
   if (worktreeId) {
     // Why: following an HTML file link changes which worktree is foregrounded,
@@ -62,15 +67,17 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   }
   const fileUrl = absolutePathToFileUri(filePath)
   const title = filePath.split(/[/\\]/).pop() ?? filePath
-  store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
+  store.createBrowserTab(worktreeId, fileUrl, {
+    title,
+    activate: true,
+    // Why: the file is on this computer, so the workspace's paired-server runtime must not adopt the page.
+    ...(clientLocal ? { browserRuntimeEnvironmentId: null } : {})
+  })
 }
 
-export function shouldOpenTerminalFileWithSystemDefault(
-  fileContext: TerminalFileContext,
-  filePath: string
-): boolean {
+export function shouldOpenTerminalFileWithSystemDefault(fileContext: TerminalFileContext): boolean {
   // Why: an unresolved owner has no connectionId either, which would otherwise read as local.
-  return fileContext.sourceHostResolved && canClientOsOpenWorkspaceFile(fileContext, filePath)
+  return fileContext.sourceHostResolved && canClientOsOpenWorkspaceFile(fileContext)
 }
 
 let latestOpenDetectedFilePathRequestId = 0
@@ -108,8 +115,9 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
-  const mappedFilePath = mapTerminalFilePath(
+  const { openWithSystemDefault = false, runtimeEnvironmentId } = deps
+  let { worktreeId, worktreePath } = deps
+  let mappedFilePath = mapTerminalFilePath(
     filePath,
     worktreePath,
     terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
@@ -119,7 +127,9 @@ export function openDetectedFilePath(
 
   void (async () => {
     let statResult
-    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    let fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    let hostWorkspaceFile: HostWorkspaceFile | null = null
+    let clientLocal = false
     if (!fileContext.sourceHostResolved) {
       // Why: with no owner the host is unknown — refuse rather than touch this machine's files.
       deps.onOpenFailure?.({
@@ -128,11 +138,6 @@ export function openDetectedFilePath(
       })
       return
     }
-    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
-      fileContext,
-      mappedFilePath
-    )
-
     if (!openWithSystemDefault) {
       const worktreeRootLink = resolveKnownWorktreeRootPathLink(
         mappedFilePath,
@@ -154,7 +159,24 @@ export function openDetectedFilePath(
     }
 
     try {
-      statResult = await statUserOpenedPath(fileContext, mappedFilePath)
+      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath)
+      if (linkOwner?.kind === 'client') {
+        clientLocal = true
+        fileContext = {
+          ...fileContext,
+          settings: CLIENT_LOCAL_FILE_SETTINGS,
+          connectionId: undefined
+        }
+        statResult = { isDirectory: linkOwner.isDirectory, escapesWorktree: false }
+      } else if (linkOwner) {
+        hostWorkspaceFile = linkOwner
+        // Why: the host already stat'ed the path inside the workspace that holds it; open it there.
+        ;({ worktreeId, worktreePath, absolutePath: mappedFilePath } = hostWorkspaceFile)
+        fileContext = { ...fileContext, worktreeId, worktreePath }
+        statResult = { isDirectory: hostWorkspaceFile.isDirectory, escapesWorktree: false }
+      } else {
+        statResult = await statUserOpenedPath(fileContext, mappedFilePath)
+      }
     } catch (error) {
       if (requestId === latestOpenDetectedFilePathRequestId && deps.onOpenFailure) {
         // Why: loss of contact with the host is not evidence the file is gone.
@@ -170,6 +192,7 @@ export function openDetectedFilePath(
       return
     }
 
+    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(fileContext)
     if (openWithSystemDefault && canOpenWithSystemDefault) {
       // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
       // user's OS file associations without adding editor-specific settings.
@@ -199,8 +222,8 @@ export function openDetectedFilePath(
     // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
     // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
     if (isHtmlFilePath(mappedFilePath)) {
-      if (shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)) {
-        openHtmlFileInBrowser(mappedFilePath, worktreeId)
+      if (canOpenWithSystemDefault) {
+        openHtmlFileInBrowser(mappedFilePath, worktreeId, clientLocal)
         return
       }
       // Why: the same gesture renders remote HTML too, through the doc preview; only an
@@ -215,7 +238,7 @@ export function openDetectedFilePath(
 
     const store = useAppStore.getState()
     let targetWorktreeId = worktreeId
-    let targetExecutionHostId: ExecutionHostId | undefined
+    let targetExecutionHostId: ExecutionHostId | undefined = hostWorkspaceFile?.executionHostId
     let relativePath = mappedFilePath
     if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
       const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
@@ -260,7 +283,9 @@ export function openDetectedFilePath(
         worktreeId: targetWorktreeId || '',
         language,
         mode: 'edit',
-        runtimeEnvironmentId,
+        runtimeEnvironmentId: clientLocal ? null : runtimeEnvironmentId,
+        // Why: a tab's owner must match its workspace's to be editable; this one is this computer's.
+        ...(clientLocal && targetWorktreeId === worktreeId ? { readOnly: true } : {}),
         // Why: absolute SSH paths outside the worktree otherwise look identical
         // to client-local external files when the editor reloads or restores.
         ...(relativePath === filePath &&

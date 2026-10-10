@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
@@ -69,6 +69,8 @@ function props(context?: TaskSourceContext): NormalizedWorkItemSourceSearchProps
 }
 
 describe('smart workspace explicit source connection', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.linearStatus = {

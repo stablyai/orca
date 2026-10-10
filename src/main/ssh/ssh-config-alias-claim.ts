@@ -66,10 +66,6 @@ const CLAIM_CACHE_TTL_MS = 5_000
 
 let cachedClaims: { key: string; readAt: number; claims: SshConfigAliasClaims } | null = null
 
-export function invalidateSshConfigAliasClaimCache(): void {
-  cachedClaims = null
-}
-
 /**
  * Parse of `~/.ssh/config` (Includes expanded), or null when it cannot be read.
  *

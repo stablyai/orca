@@ -324,6 +324,19 @@ export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
 // must not read that answer as the workspace's (a WSL project on a Windows host differs).
 export const PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY =
   'preflight.workspace-scoped.v1' as const
+// Why: an older host answers its own agents for a workspace another runtime owns; one with this
+// refuses with WORKSPACE_ON_OTHER_RUNTIME, so a client may let it decide for a shared repo id.
+export const PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY =
+  'preflight.other-runtime-refusal.v1' as const
+/** What such a host answers, instead of probing itself, for another runtime's workspace. */
+export const WORKSPACE_ON_OTHER_RUNTIME = 'workspace_on_other_runtime'
+// Hosts without this capability have no workspacePorts.scanHost/killHost; their scan and Stop act
+// only on the endpoint itself, never on a workspace's SSH host.
+export const WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY =
+  'workspace-ports.host-scoped.v1' as const
+// Hosts without this capability ignore a request's expectedRuntimeSource; the CLI's pre-send probe
+// is then the only fence.
+export const RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY = 'runtime-source-fence.v1' as const
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const
 
@@ -350,6 +363,7 @@ export const RUNTIME_CAPABILITIES = [
   ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
+  'files.resolve-terminal-path.cross-workspace.v1',
   'runtime.status.compat.v1',
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
@@ -430,6 +444,9 @@ export const RUNTIME_CAPABILITIES = [
   ...AUTOMATION_RUNTIME_CAPABILITIES,
   NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
+  PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
+  WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY,
+  RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
   ...AGENT_LAUNCH_RUNTIME_CAPABILITIES
 ] as const
 

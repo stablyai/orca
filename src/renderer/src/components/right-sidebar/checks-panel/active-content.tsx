@@ -51,11 +51,13 @@ export function ChecksPanelActiveContent({
     aiActionDisabledReason,
     canTargetPRComments,
     checks,
+    checksError,
     checksLoading,
     claimedCommentResolutionRef,
     commentResolutionLaunchAcceptedRef,
     comments,
     commentsDisabledReason,
+    commentsError,
     commentsLoading,
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
@@ -242,6 +244,7 @@ export function ChecksPanelActiveContent({
       {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
         <ChecksList
           checks={checks}
+          checksError={checksError}
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
@@ -251,6 +254,7 @@ export function ChecksPanelActiveContent({
       )}
       <PRCommentsList
         comments={comments}
+        commentsError={commentsError}
         commentsLoading={commentsLoading}
         reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}

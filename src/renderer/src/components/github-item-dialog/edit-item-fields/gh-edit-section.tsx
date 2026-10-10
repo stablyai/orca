@@ -3,9 +3,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
 import {
   getTaskPageGitHubDuplicateCandidates,
   getTaskPageGitHubDuplicateTargetErrorMessage,
@@ -64,18 +63,8 @@ function GHEditSectionItem({
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingSettings(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
   // Why: from a Project view, keep projectViewCache in sync too — patchWorkItem only walks workItemsCache, so the table would render stale without this. See docs/design/github-project-view-tasks.md §Dialog editing from Project rows.

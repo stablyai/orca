@@ -1,8 +1,8 @@
 import { open, readFile, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { RelayDispatcher, RequestContext } from './dispatcher'
-import { STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } from './protocol'
+import type { RelayDispatcher, RequestContext } from '../wsl-guest/dispatcher'
+import { STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } from '../wsl-guest/protocol'
 import type { RelayStreamRegistry } from './fs-stream-registry'
 import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../shared/binary-buffer'
 import {

@@ -25,7 +25,7 @@ function getLocalAgentDetectionTargetKey(worktreeId: string): string {
     : AGENT_DETECTION_LOCAL_TARGET_KEY
 }
 
-type AgentDetectionOwnerState = Parameters<typeof getConnectionIdFromState>[0] &
+export type AgentDetectionOwnerState = Parameters<typeof getConnectionIdFromState>[0] &
   WorktreeRuntimeOwnerState
 
 /**

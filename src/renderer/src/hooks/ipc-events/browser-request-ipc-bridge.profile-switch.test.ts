@@ -75,7 +75,7 @@ describe('browser profile request teardown', () => {
   })
 
   it('keeps document-preview guests while rebuilding URL siblings for a profile change', () => {
-    registerBrowserRequestIpcBridge([], () => false)
+    registerBrowserRequestIpcBridge([])
 
     mocks.profileListener?.({
       requestId: 'request-1',

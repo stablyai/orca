@@ -140,7 +140,36 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
+type RemotePreviewSubscription = {
+  terminal: string
+  callbacks: {
+    onSnapshot: (data: string, meta?: { cols?: number; rows?: number; seq?: number }) => void
+    onData: (data: string, meta?: { seq?: number }) => void
+  }
+}
+const multiplexerHarness = vi.hoisted(() => {
+  const environments: string[] = []
+  const subscriptions: RemotePreviewSubscription[] = []
+  return { environments, subscriptions, sendInput: vi.fn(() => true), close: vi.fn() }
+})
+vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
+  getRemoteRuntimeTerminalMultiplexer: (environmentId: string) => {
+    multiplexerHarness.environments.push(environmentId)
+    return {
+      subscribeTerminal: async (args: RemotePreviewSubscription) => {
+        multiplexerHarness.subscriptions.push(args)
+        return {
+          sendInput: multiplexerHarness.sendInput,
+          claimViewport: vi.fn(() => true),
+          close: multiplexerHarness.close
+        }
+      }
+    }
+  }
+}))
+
 import { AgentTerminalPreview } from './AgentTerminalPreview'
+import { resetRemoteRuntimeTerminalPreviewSessionsForTests } from './remote-runtime-terminal-preview-api'
 
 describe('AgentTerminalPreview', () => {
   const input = vi.fn(async (_ptyId: string, _data: string) => true)
@@ -192,6 +221,10 @@ describe('AgentTerminalPreview', () => {
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
+    resetRemoteRuntimeTerminalPreviewSessionsForTests()
+    multiplexerHarness.environments.length = 0
+    multiplexerHarness.subscriptions.length = 0
     vi.clearAllMocks()
   })
 
@@ -722,5 +755,41 @@ describe('AgentTerminalPreview', () => {
     view.unmount()
     await vi.advanceTimersByTimeAsync(150)
     expect(connect).toHaveBeenCalledTimes(2)
+  })
+
+  it("previews a paired host's pane from that host, not this app's main process", async () => {
+    render(<AgentTerminalPreview ptyId="remote:env-1@@term-7" />)
+
+    await waitFor(() => expect(multiplexerHarness.subscriptions).toHaveLength(1))
+    expect(multiplexerHarness.environments).toEqual(['env-1'])
+    expect(multiplexerHarness.subscriptions[0]!.terminal).toBe('term-7')
+    expect(connect).not.toHaveBeenCalled()
+
+    act(() =>
+      multiplexerHarness.subscriptions[0]!.callbacks.onSnapshot('agent screen', {
+        cols: 100,
+        rows: 30,
+        seq: 5
+      })
+    )
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    expect(terminal.write).toHaveBeenCalledWith('agent screen', expect.any(Function))
+
+    act(() => multiplexerHarness.subscriptions[0]!.callbacks.onData('live', { seq: 9 }))
+    expect(terminal.write).toHaveBeenCalledWith('live', expect.any(Function))
+    act(() => {
+      terminalHarness.userInputListener?.()
+      terminal.onDataListener?.('y')
+    })
+    expect(multiplexerHarness.sendInput).toHaveBeenCalledWith('y')
+  })
+
+  it('shows the unavailable message instead of a blank dialog when the bridge is missing', async () => {
+    // The web client's fallback proxy resolves every missing bridge call to undefined.
+    Object.assign(window.api.terminalPreview, { connect: async () => undefined })
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+
+    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
   })
 })

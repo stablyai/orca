@@ -2,8 +2,7 @@ import type { TaskPageGitHubCacheReconciliationModel } from './use-task-page-git
 import { useState, useMemo, useEffect } from 'react'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import { useAppStore } from '@/store'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
+import { getGitHubRepoRoutingSettings } from '@/lib/github-source-runtime-context'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees } from '@/hooks/useIssueMetadata'
 import {
@@ -37,21 +36,13 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     if (!newIssueTargetRepo?.id) {
       return null
     }
-    const repoOwnerSettings = getSettingsForRepoRuntimeOwner(
-      {
-        repos: [newIssueTargetRepo],
-        settings
-      },
-      newIssueTargetRepo.id
+    const target = getActiveRuntimeTarget(
+      getGitHubRepoRoutingSettings(
+        { repos: [newIssueTargetRepo], settings },
+        newIssueTargetRepo.id,
+        newIssueSourceContext
+      )
     )
-    const targetSettings =
-      newIssueSourceContext?.provider === 'github'
-        ? {
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(newIssueSourceContext)
-          }
-        : repoOwnerSettings
-    const target = getActiveRuntimeTarget(targetSettings)
     if (target.kind !== 'environment') {
       return null
     }

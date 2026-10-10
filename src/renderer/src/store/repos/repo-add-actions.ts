@@ -17,9 +17,9 @@ import { ERROR_TOAST_DURATION } from './repo-state'
 import {
   fetchRuntimeAddProjectPathStatus,
   getAddRepoPathRouteSettings,
-  getRuntimeEnvironmentDisplayName,
-  repoWithFetchedOwner
+  getRuntimeEnvironmentDisplayName
 } from './owner-routing'
+import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
@@ -90,7 +90,7 @@ export function createRepoAddActions(
           })
           return null
         }
-        repo = repoWithFetchedOwner(repo, target)
+        repo = adoptFromEndpoint(target, { kind: 'repo', row: repo })
         const repoIdentity = getRepoHostIdentity(repo)
         const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
         if (alreadyAdded) {

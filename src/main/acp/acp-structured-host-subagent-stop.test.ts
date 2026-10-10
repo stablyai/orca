@@ -58,6 +58,9 @@ async function stoppingChild(reportsOutcome: boolean) {
   agent.on('_x.ai/subagent/cancel', (frame) =>
     agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `subagentId`')
   )
+  agent.on('_x.ai/task/kill', (frame) =>
+    agent.fail(frame, -32602, 'Invalid params', 'invalid params: missing field `sessionId`')
+  )
   agent.on('session/new', (frame) =>
     agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: GROK_CONFIG_OPTIONS })
   )

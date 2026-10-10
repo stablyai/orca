@@ -52,7 +52,7 @@ describe('a Grok chat Stop', () => {
     await send(host, 'again')
     await waitFor(() => expect(rig.child()).not.toBe(first))
     const second = rig.child()
-    await rig.frame('session/prompt')
+    const secondPrompt = await rig.frame('session/prompt')
     expect(count.loads).toBe(1)
     expect(framesOf(second, 'session/new')).toHaveLength(0)
     expect(await messages()).toEqual(['hello', 'partial', 'again'])
@@ -61,6 +61,9 @@ describe('a Grok chat Stop', () => {
     expect(
       transcript.flatMap((row) => (row.body.kind === 'status' ? [row.body.text] : []))
     ).toEqual(['Cancellation requested.'])
+    second.agent.on('session/cancel', () =>
+      second.agent.reply(secondPrompt, { stopReason: 'cancelled' })
+    )
     await host.close(SESSION, 'user-close')
   })
 
@@ -160,6 +163,7 @@ describe('a Grok chat Stop naming a turn that has ended', () => {
     expect(framesOf(rig.child(), 'session/cancel')).toHaveLength(0)
     expect(rig.child().exited).toBe(false)
     expect((await turns()).at(-1)).toMatchObject({ state: 'running' })
+    agent.on('session/cancel', () => agent.reply(current, { stopReason: 'cancelled' }))
     await host.close(SESSION, 'user-close')
   })
 

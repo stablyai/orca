@@ -213,6 +213,7 @@ describe('startFixChecksAgent', () => {
   })
 
   it('rejects without launching when remote agent detection fails', async () => {
+    mocks.store.repos = [{ ...mocks.store.repos[0], connectionId: 'conn-1' }]
     mocks.getConnectionId.mockReturnValue('conn-1')
     mocks.store.ensureRemoteDetectedAgents.mockRejectedValue(new Error('detection failed'))
     const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
