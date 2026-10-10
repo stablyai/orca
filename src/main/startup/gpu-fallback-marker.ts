@@ -13,13 +13,26 @@ import { join } from 'node:path'
 export const GPU_FALLBACK_MARKER_FILE = 'gpu-fallback.json'
 export const GPU_FALLBACK_SCHEME_VERSION = 3
 
+// Why not darwin: enableMainProcessGpuFeatures() carries the macOS
+// disable-skia-graphite fix; skipping it under fallback would silently
+// strip the fix from Macs.
+export type GpuFallbackPlatform = 'win32' | 'linux'
+
+const GPU_FALLBACK_PLATFORMS: ReadonlySet<string> = new Set<GpuFallbackPlatform>(['win32', 'linux'])
+
+export function isGpuFallbackPlatform(value: unknown): value is GpuFallbackPlatform {
+  return typeof value === 'string' && GPU_FALLBACK_PLATFORMS.has(value)
+}
+
 export type GpuFallbackEnvironment = {
   appVersion: string
   electronVersion: string
   platform: NodeJS.Platform
 }
 
-export type WindowsGpuFallbackEnvironment = GpuFallbackEnvironment & { platform: 'win32' }
+export type SupportedGpuFallbackEnvironment = GpuFallbackEnvironment & {
+  platform: GpuFallbackPlatform
+}
 
 export type GpuFallbackMarker = {
   schemeVersion: number
@@ -28,7 +41,7 @@ export type GpuFallbackMarker = {
   userConfirmed: boolean
   appVersion: string
   electronVersion: string
-  platform: 'win32'
+  platform: GpuFallbackPlatform
 }
 
 function markerPath(userDataPath: string): string {
@@ -51,7 +64,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       typeof parsed.userConfirmed !== 'boolean' ||
       typeof parsed.appVersion !== 'string' ||
       typeof parsed.electronVersion !== 'string' ||
-      parsed.platform !== 'win32'
+      !isGpuFallbackPlatform(parsed.platform)
     ) {
       return null
     }
@@ -73,7 +86,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
 export function writeGpuFallbackMarker(
   userDataPath: string,
   info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean },
-  environment: WindowsGpuFallbackEnvironment
+  environment: SupportedGpuFallbackEnvironment
 ): void {
   const marker: GpuFallbackMarker = {
     schemeVersion: GPU_FALLBACK_SCHEME_VERSION,
@@ -82,7 +95,7 @@ export function writeGpuFallbackMarker(
     userConfirmed: info.userConfirmed,
     appVersion: environment.appVersion,
     electronVersion: environment.electronVersion,
-    platform: 'win32'
+    platform: environment.platform
   }
   writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
 }
@@ -107,7 +120,7 @@ export function readActiveGpuFallbackMarker(
     return null
   }
   if (
-    environment.platform !== 'win32' ||
+    !isGpuFallbackPlatform(environment.platform) ||
     marker.platform !== environment.platform ||
     marker.appVersion !== environment.appVersion ||
     marker.electronVersion !== environment.electronVersion
