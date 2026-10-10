@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { EMPTY_FORM, applyParsedSshHostInput, getEditingTargetForSshTarget, getEditingTargetFromSshConfigHost, getSshTargetDraftConnectionFields, hasAdvancedConnectionValues, isSshTargetFormDirty, parseSshHostInput, type EditingTarget } from './ssh-target-draft'
+import {
+  EMPTY_FORM,
+  applyParsedSshHostInput,
+  getEditingTargetForSshTarget,
+  getEditingTargetFromSshConfigHost,
+  getSshTargetDraftConnectionFields,
+  hasAdvancedConnectionValues,
+  isSshTargetFormDirty,
+  parseSshHostInput,
+  type EditingTarget
+} from './ssh-target-draft'
 
 describe('parseSshHostInput', () => {
   it('parses scp-style user, host, and port input', () => {
@@ -148,7 +158,6 @@ describe('getSshTargetDraftConnectionFields', () => {
 })
 
 describe('getEditingTargetForSshTarget', () => {
-
   it('recomputes implicit configHost when a manual target host is edited', () => {
     const draft = getEditingTargetForSshTarget({
       id: 'ssh-1',
@@ -203,7 +212,6 @@ describe('getEditingTargetForSshTarget', () => {
 
     expect(draft.systemSshConnectionReuse).toBe(false)
   })
-
 })
 
 describe('getEditingTargetFromSshConfigHost', () => {

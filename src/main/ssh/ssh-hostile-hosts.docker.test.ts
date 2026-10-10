@@ -16,7 +16,12 @@ vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
 import { HOSTILE_HOST_CELLS, selectHostileHostCells } from './ssh-hostile-host-cells'
 import { proveManagedOrcadCell } from './ssh-hostile-host-managed-orcad'
 import { installHostileHostAppEnvironment } from './ssh-hostile-host-test-harness'
-import { hostileHostSshTarget, startHostileHostTarget, stopHostileHostTarget, type HostileHostTarget } from './ssh-hostile-host-test-fixture'
+import {
+  hostileHostSshTarget,
+  startHostileHostTarget,
+  stopHostileHostTarget,
+  type HostileHostTarget
+} from './ssh-hostile-host-test-fixture'
 
 const RUN = process.env.ORCA_RUN_SSH_HOSTILE_HOSTS === '1'
 const SELECTED = new Set(

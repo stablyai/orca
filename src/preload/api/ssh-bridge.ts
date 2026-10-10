@@ -1,5 +1,17 @@
 import { ipcRenderer } from 'electron'
-import type { SshConnectionState, SshConfigHostListArgs, SshConfigHostListResult, SshConfigHostResolution, SshConfigImportResult, SshTargetAddResult, SshTargetCreateInput, SshTarget, SshTargetUpdateInput, PortForwardEntry, EnrichedDetectedPort } from '../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshConfigHostListArgs,
+  SshConfigHostListResult,
+  SshConfigHostResolution,
+  SshConfigImportResult,
+  SshTargetAddResult,
+  SshTargetCreateInput,
+  SshTarget,
+  SshTargetUpdateInput,
+  PortForwardEntry,
+  EnrichedDetectedPort
+} from '../../shared/ssh-types'
 import {
   admitSshConnectionStateForAuthorityReconciliation,
   admitSshDetectedPorts

@@ -63,10 +63,15 @@ describe('SSH IPC handlers', () => {
   it('publishes a managed connect without opening a relay', async () => {
     mockSshStore.getTarget.mockReturnValue(target)
 
-    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toMatchObject(
-      { status: 'connected' }
+    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toMatchObject({
+      status: 'connected'
+    })
+    expect(publishManagedServerConnect).toHaveBeenCalledWith(
+      'ssh-1',
+      'env-test',
+      undefined,
+      undefined
     )
-    expect(publishManagedServerConnect).toHaveBeenCalledWith('ssh-1', 'env-test', undefined, undefined)
     expect(mockConnectionManager.connect).not.toHaveBeenCalled()
   })
 

@@ -6,7 +6,6 @@ import {
 import { powerShellCommand } from './ssh-remote-powershell'
 
 describe('Windows session command audit', () => {
-
   it('decodes the gzip self-extracting form of a long script', () => {
     const long = `${'Write-Output "padding"\n'.repeat(400)}Add-Type -TypeDefinition 'x'`
     const command = powerShellCommand(long)

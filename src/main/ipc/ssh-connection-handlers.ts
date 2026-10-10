@@ -1,6 +1,10 @@
 import { ipcMain } from 'electron'
 import { setSshTargetRegistryHandlers, getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
-import { assertSshConnectsNotFenced, connectInFlight, runSshTestConnectionProbe } from './ssh-connect-attempt-registry'
+import {
+  assertSshConnectsNotFenced,
+  connectInFlight,
+  runSshTestConnectionProbe
+} from './ssh-connect-attempt-registry'
 import { connectTarget } from './ssh-connect-flow'
 import { connectionManager } from './ssh-ipc-context'
 import { getPublicSshState } from './ssh-renderer-broadcast'

@@ -25,10 +25,7 @@ import { registerSshHandlers } from './ssh'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
-const {
-  mockSshStore,
-  mockConnectionManager
-} = mocks
+const { mockSshStore, mockConnectionManager } = mocks
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)

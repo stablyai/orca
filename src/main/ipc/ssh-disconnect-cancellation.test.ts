@@ -24,10 +24,7 @@ vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
-const {
-  mockSshStore,
-  mockConnectionManager
-} = mocks
+const { mockSshStore, mockConnectionManager } = mocks
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)
@@ -66,5 +63,4 @@ describe('SSH IPC handlers', () => {
     await expect(connect).rejects.toThrow('SSH connection attempt was cancelled')
     expect(mockConnectionManager.connect).not.toHaveBeenCalled()
   })
-
 })

@@ -1,7 +1,11 @@
 import type { SshConnectionCallbacks } from '../ssh/ssh-connection'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { isSshHostCensusInFlight } from '../ssh/ssh-connection-attribution'
-import { connectInFlight, credentialRequestedForTarget, testingTargets } from './ssh-connect-attempt-registry'
+import {
+  connectInFlight,
+  credentialRequestedForTarget,
+  testingTargets
+} from './ssh-connect-attempt-registry'
 import { getCurrentMainWindow } from './ssh-ipc-context'
 import { requestCredential } from './ssh-passphrase'
 import { broadcastSshState } from './ssh-renderer-broadcast'

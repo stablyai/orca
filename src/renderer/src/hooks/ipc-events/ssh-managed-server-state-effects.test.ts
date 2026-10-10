@@ -45,7 +45,6 @@ afterEach(() => {
 })
 
 describe('a host the managed server does not serve', () => {
-
   it('shows only for a newly marked offer, never for a plain live-terminals status', () => {
     applySshManagedServerTransition('ssh-1', offer, offer)
     applySshManagedServerTransition('ssh-1', undefined, {
@@ -61,5 +60,4 @@ describe('a host the managed server does not serve', () => {
     applySshManagedServerTransition('ssh-1', undefined, offer)
     expect(mocks.toast).not.toHaveBeenCalled()
   })
-
 })

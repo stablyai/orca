@@ -1,4 +1,3 @@
-
 import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -148,7 +147,6 @@ describe('listAiVaultSessions host routing', () => {
       {}
     )
   })
-
 })
 
 describe('resolveAiVaultSessionTitles host routing', () => {
@@ -487,7 +485,6 @@ describe('deleteAiVaultSession', () => {
 
     expect(mocks.ipcHandle).toHaveBeenCalledWith('aiVault:deleteSession', expect.any(Function))
   })
-
 })
 
 function hostInfo(targetId: string) {

@@ -182,5 +182,4 @@ describe.each(['whole', 'first', 'append'] as const)('runtime %s base64 write', 
       }
     }
   )
-
 })

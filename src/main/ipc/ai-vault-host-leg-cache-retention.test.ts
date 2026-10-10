@@ -100,7 +100,6 @@ afterEach(() => {
 })
 
 describe('host session result cache lifetime', () => {
-
   it('keeps the refreshed deadline and cached scoped depth when the old timer fires', async () => {
     const scan = vi.fn().mockResolvedValue(result('old'))
     const owner = await cacheOwner(() => scanHostLegWithCache(args(scan)))

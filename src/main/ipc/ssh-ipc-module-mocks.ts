@@ -143,12 +143,10 @@ export function createSshIpcMocks(): SshIpcMocks {
     },
     // A managed host by default; the real decision is covered by its own tests.
     hostServerConnect: {
-      decideHostServer: vi.fn(
-        async (): Promise<{ route: 'managed'; environmentId: string }> => ({
-          route: 'managed',
-          environmentId: 'env-test'
-        })
-      ),
+      decideHostServer: vi.fn(async (): Promise<{ route: 'managed'; environmentId: string }> => ({
+        route: 'managed',
+        environmentId: 'env-test'
+      })),
       recheckWhenManagedFenceClears: vi.fn(),
       publishHostServerDecisionFailure: vi.fn(),
       publishManagedServerConnect: vi.fn((targetId: string) => ({

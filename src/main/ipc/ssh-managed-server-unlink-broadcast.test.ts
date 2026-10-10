@@ -18,8 +18,7 @@ vi.mock('../ssh/ssh-target-registry', async (importOriginal) => ({
   getSshTargetRegistryStore: () => null
 }))
 
-const { clearPublishedManagedServer } =
-  await import('./ssh-renderer-broadcast')
+const { clearPublishedManagedServer } = await import('./ssh-renderer-broadcast')
 const { getSshHostServerStatus, setSshHostServerStatus } =
   await import('../ssh/ssh-host-server-status')
 

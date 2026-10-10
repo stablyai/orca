@@ -111,7 +111,6 @@ describe('Agent Session History scan coalescing', () => {
     })
     expect(result).not.toHaveProperty('cancelled')
   })
-
 })
 
 function registerRuntimeHost(): void {

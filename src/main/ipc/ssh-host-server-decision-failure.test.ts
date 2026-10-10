@@ -37,7 +37,6 @@ const fenced: SshTarget = {
 beforeEach(() => vi.clearAllMocks())
 
 describe('a managed-server decision that fails', () => {
-
   it('surfaces the real error on a host only its managed server can reach', async () => {
     mocks.getTarget.mockReturnValue(fenced)
     const auth = new Error('All configured authentication methods failed')

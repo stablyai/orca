@@ -19,7 +19,12 @@ import type {
   AiVaultSearchResponse,
   AiVaultSearchStatus
 } from '../../shared/ai-vault-search-types'
-import { ALL_EXECUTION_HOSTS_SCOPE, LOCAL_EXECUTION_HOST_ID, parseRoutableExecutionHostId, type ParsedExecutionHost } from '../../shared/execution-host'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  LOCAL_EXECUTION_HOST_ID,
+  parseRoutableExecutionHostId,
+  type ParsedExecutionHost
+} from '../../shared/execution-host'
 import { redactStatusForTransport } from '../../shared/ai-vault-search-transport'
 import { clearSessionSearchInService } from '../ai-vault/session-scanner-service-spawn'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'

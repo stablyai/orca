@@ -15,7 +15,11 @@ import {
   publishManagedServerConnect,
   publishUnservedHostServer
 } from './ssh-host-server-connect'
-import { assertSshConnectsNotFenced, connectInFlight, isCurrentConnectAttempt } from './ssh-connect-attempt-registry'
+import {
+  assertSshConnectsNotFenced,
+  connectInFlight,
+  isCurrentConnectAttempt
+} from './ssh-connect-attempt-registry'
 import { connectionManager } from './ssh-ipc-context'
 import { abandonDecisionTransport } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'

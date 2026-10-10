@@ -69,7 +69,12 @@ vi.mock('./ssh-connection-utils', () => ({
     Object.assign(new Error('SSH operation was cancelled'), { name: 'AbortError' })
 }))
 
-import { parseShortRelaySocketDir, remoteSocketPathFitsLimit, remoteUnixSocketPathByteLimit, shortRelayVersionSegment } from './relay-socket-path-limit'
+import {
+  parseShortRelaySocketDir,
+  remoteSocketPathFitsLimit,
+  remoteUnixSocketPathByteLimit,
+  shortRelayVersionSegment
+} from './relay-socket-path-limit'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const LINUX = getRemoteHostPlatform('linux-x64')

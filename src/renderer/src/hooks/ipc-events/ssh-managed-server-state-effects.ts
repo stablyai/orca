@@ -144,4 +144,3 @@ function rehomeActiveWorkspace(targetId: string, environmentId: string): void {
     state.setActiveWorktree(state.activeWorktreeId, runtimeHostId)
   }
 }
-

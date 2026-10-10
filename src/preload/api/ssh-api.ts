@@ -1,4 +1,16 @@
-import type { EnrichedDetectedPort, PortForwardEntry, SshConfigHostListArgs, SshConfigHostListResult, SshConfigHostResolution, SshConfigImportResult, SshConnectionState, SshTarget, SshTargetAddResult, SshTargetCreateInput, SshTargetUpdateInput } from '../../shared/ssh-types'
+import type {
+  EnrichedDetectedPort,
+  PortForwardEntry,
+  SshConfigHostListArgs,
+  SshConfigHostListResult,
+  SshConfigHostResolution,
+  SshConfigImportResult,
+  SshConnectionState,
+  SshTarget,
+  SshTargetAddResult,
+  SshTargetCreateInput,
+  SshTargetUpdateInput
+} from '../../shared/ssh-types'
 import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 
 export type SshApi = {

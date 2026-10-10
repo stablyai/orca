@@ -26,7 +26,13 @@ import {
 } from '../../shared/ai-vault-types'
 import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-handler'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
-import { LOCAL_EXECUTION_HOST_ID, parseRoutableExecutionHostId, requestedExecutionHostScope, toRuntimeExecutionHostId, type ExecutionHostScope } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseRoutableExecutionHostId,
+  requestedExecutionHostScope,
+  toRuntimeExecutionHostId,
+  type ExecutionHostScope
+} from '../../shared/execution-host'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { discoverAiVaultHosts, type AiVaultHostDiscoveryResult } from './ai-vault-host-discovery'
 import {

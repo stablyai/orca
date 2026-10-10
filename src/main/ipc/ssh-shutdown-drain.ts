@@ -1,5 +1,8 @@
-
-import { connectInFlight, invalidateConnectAttempt, testConnectionProbes } from './ssh-connect-attempt-registry'
+import {
+  connectInFlight,
+  invalidateConnectAttempt,
+  testConnectionProbes
+} from './ssh-connect-attempt-registry'
 import { connectionManager } from './ssh-ipc-context'
 
 // Why one budget for the whole sequence rather than one per phase: an invalidated connect only

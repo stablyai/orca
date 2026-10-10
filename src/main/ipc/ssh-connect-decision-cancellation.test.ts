@@ -24,10 +24,7 @@ vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshConnection } from '../ssh/ssh-connection'
 import { recordSshConnectionOpened } from '../ssh/ssh-connection-attribution'
-import {
-  decideHostServer,
-  publishHostServerDecisionFailure
-} from './ssh-host-server-connect'
+import { decideHostServer, publishHostServerDecisionFailure } from './ssh-host-server-connect'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
 const { mockSshStore, mockConnectionManager } = mocks
@@ -104,7 +101,6 @@ describe('a connect cancelled during its server decision', () => {
     ).rejects.toBe(failure)
     expect(mockConnectionManager.disconnectConnection).toHaveBeenCalledWith('ssh-1', opened)
   })
-
 })
 
 /** The stand-in transports these tests hand the mocked pool. */

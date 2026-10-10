@@ -1,4 +1,3 @@
-
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { SshConnectionStore } from '../ssh/ssh-connection-store'
@@ -32,7 +31,12 @@ import {
 } from '../ssh/ssh-connection-generation'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { installManagedOrcadStartStatus } from './runtime-environment-managed-tunnel'
-import { connectInFlight, credentialRequestedForTarget, testConnectionProbes, testingTargets } from './ssh-connect-attempt-registry'
+import {
+  connectInFlight,
+  credentialRequestedForTarget,
+  testConnectionProbes,
+  testingTargets
+} from './ssh-connect-attempt-registry'
 import { createSshConnectionCallbacks } from './ssh-connection-state-callbacks'
 import { registerSshConnectionHandlers } from './ssh-connection-handlers'
 import {

@@ -24,12 +24,7 @@ vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 import type { SshTarget } from '../../shared/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
-const {
-  mockSshStore,
-  mockConnectionManager,
-  mockListConfigHosts,
-  mockResolveConfigHost
-} = mocks
+const { mockSshStore, mockConnectionManager, mockListConfigHosts, mockResolveConfigHost } = mocks
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)

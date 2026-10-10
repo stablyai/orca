@@ -1,6 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { Loader2, MonitorSmartphone, Pencil, Server, ServerOff, Trash2 } from 'lucide-react'
-import type { SshConnectionState, SshConnectionStatus, SshTarget } from '../../../../shared/ssh-types'
+import type {
+  SshConnectionState,
+  SshConnectionStatus,
+  SshTarget
+} from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
