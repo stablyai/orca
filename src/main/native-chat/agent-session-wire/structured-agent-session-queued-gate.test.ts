@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { structuredQueueHold } from './structured-agent-session-queued-messages'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -230,7 +231,7 @@ describe('the hand-off link on answers', () => {
     expect(await submission(working)).not.toHaveProperty('queuedMessageId')
   })
 
-  it('a queued send asked again after its ledger row is gone answers with its hand-off, never sending twice', async () => {
+  it('a queued send asked again after its receipt is gone answers with its hand-off, never sending twice', async () => {
     const working = await workingSend()
     const body = hostTestMessage('asked again')
     const clientOperationId = hostTestOperationId()
@@ -247,13 +248,10 @@ describe('the hand-off link on answers', () => {
     await settleAccepted(working, 'a')
     await eventually(async () => expect(await rig.handoff(clientOperationId)).toBeDefined())
     const handedOffAs = await rig.handoffId(clientOperationId)
-    // The ledger forgot the id, so the send runs again rather than replaying.
-    const operations = store['transactions'].state.operations
-    for (const [key, row] of operations) {
-      if (row.operationId === clientOperationId) {
-        operations.delete(key)
-      }
-    }
+    // As an older build accepted it, with no receipt: the send runs again rather than replaying.
+    openTestJournalHostDatabase(rig.root)
+      .db.prepare('DELETE FROM agent_session_command_receipts WHERE operation_id = ?')
+      .run(clientOperationId)
     const count = (await host.journalSnapshot(SESSION)).submissions.length
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: true,

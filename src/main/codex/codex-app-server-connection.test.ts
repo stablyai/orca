@@ -1,11 +1,12 @@
-import { EventEmitter } from 'node:events'
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
+import type { EventEmitter } from 'node:events'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessSpec } from '../../shared/child-process/process-spec'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { ProcessSpec, PipedProcessSpawner } from '@orca/process-host/process-spec'
+
 import {
   isCodexAppServerRequestError,
   openCodexAppServerConnection,
@@ -89,11 +90,11 @@ type StubChild = EventEmitter & {
 
 /** Full control over framing and death, which a real child cannot give. */
 function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
-  child: StubChild
-  spawnImpl: typeof spawnProcess
+  child: ReturnType<typeof createFakePipedChild>
+  spawnImpl: PipedProcessSpawner
   written: Record<string, unknown>[]
 } {
-  const child = new EventEmitter() as StubChild
+  const child = createFakePipedChild(9_999_999)
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
   child.stdin = new PassThrough()
@@ -112,7 +113,7 @@ function stubChild(options: { exitOnStdinEnd?: boolean } = {}): {
   if (options.exitOnStdinEnd !== false) {
     child.stdin.on('finish', () => child.emit('exit', 0, null))
   }
-  return { child, spawnImpl: (() => child) as unknown as typeof spawnProcess, written }
+  return { child, spawnImpl: () => child, written }
 }
 
 /** Answers the handshake so `openCodexAppServerConnection` can resolve. */
@@ -196,7 +197,7 @@ describe('openCodexAppServerConnection', () => {
       const connection = await openCodexAppServerConnection(
         { command: 'codex', args: ['app-server'] },
         {},
-        (spec: ProcessSpec) => {
+        (spec) => {
           specs.push(spec)
           return spawnImpl(spec)
         }

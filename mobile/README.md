@@ -9,6 +9,8 @@ Local development uses two processes:
 
 Unless a command says otherwise, run mobile app commands from the `mobile/` directory.
 
+The Node commands `pnpm rpc:diff` and `pnpm rpc:record` use a development dependency linked to `../src/packages/process-host`. Mobile's install supplies the link, and `tsx` runs its source with the `orca-source` condition, so these command wrappers do not require a desktop install or package build. Keep that source directory in sparse checkouts. The recording suites still need root dependencies when they exercise desktop modules. The React Native app does not import this host package.
+
 ## Prerequisites
 
 - Node.js 24+

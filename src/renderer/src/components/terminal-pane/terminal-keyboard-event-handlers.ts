@@ -223,11 +223,13 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     if (!action) {
       return
     }
-    // The chat covering this pane owns find, on whatever chord it is bound to; the hidden
-    // terminal buffer is not what the user sees.
+    // The chat covering this pane owns find, on whatever chord it is bound to, and its own
+    // selection; the hidden terminal buffer is not what the user sees.
     if (
       isInsideNativeChatCover(e.target) &&
       (action.type === 'toggleSearch' ||
+        action.type === 'selectAll' ||
+        action.type === 'copySelection' ||
         keybindingMatchesAction('chat.find', e, shortcutPlatform, keybindings))
     ) {
       return

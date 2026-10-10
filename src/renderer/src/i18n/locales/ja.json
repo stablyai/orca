@@ -3426,7 +3426,8 @@
             "ec2adf093e": "新規ターミナルで {{value0}} を起動",
             "465e432ef1": "{{value0}} の起動コマンドを作成できませんでした。",
             "e518f544b1": "Agent が検出されませんでした",
-            "8dea9b5cdf": "有効な Agent がありません"
+            "8dea9b5cdf": "有効な Agent がありません",
+            "needsServerUpdate": "このワークスペースの Agent を表示するには、このサーバーの Orca を更新してください"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "タブの切り替え",
@@ -3981,6 +3982,10 @@
           "StatusBarUsageChangeNotices": {
             "compactTitle": "使用量がコンパクト表示になりました",
             "compactBody": "プロバイダーごとに主要な指標を1つ表示します。より多くの上限を表示するには、使用量メニューで「<detailed>詳細</detailed>」を選択してください。"
+          },
+          "usageUnitLabel": {
+            "used": "使用済み",
+            "remaining": "残り"
           },
           "UsagePercentageDisplayChangeNotice": {
             "title": "使用状況に、使用済みの割合を表示するようになりました",
@@ -11454,7 +11459,6 @@
           "pathGroup": "スマートフォンがこのコンピュータに到達する方法",
           "anywhereTitle": "Orca Relay",
           "anywhereDescription": "スマートフォンはモバイル回線または任意の Wi‑Fi から接続できます。サインインが必要なのは Relay のみです。",
-          "signInRequired": "Relay のみ — LAN にはアカウントは不要です。",
           "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
           "signInAgain": "Relay に再サインイン",
           "localTitle": "LAN",
@@ -18009,6 +18013,7 @@
         "model": "モデル",
         "effort": "推論レベル",
         "fastMode": "高速モード",
+        "speed": "速度",
         "thinking": "思考",
         "options": "オプション",
         "sessionOptions": "セッションオプション",
@@ -18029,7 +18034,8 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
-          "ultra": "ウルトラ"
+          "ultra": "ウルトラ",
+          "standard": "標準"
         },
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
@@ -18282,6 +18288,7 @@
         "orcaStopUpdate": "この応答の途中で、{{machine}} の Orca がアップデートのため再起動しました。",
         "orcaStopQuit": "この応答の途中で、{{machine}} の Orca が終了しました。",
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
+        "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
         "orcaStopCanContinue": "この会話で続行できます。"
       },
       "providerFrame": {
@@ -18418,10 +18425,8 @@
       },
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
-        "editAlreadySent": "すでに送信されています — テキストは入力欄に残っています。",
         "listLabel": "キュー内のメッセージ",
         "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
-        "awaitingAnswerHold": "回答を待っています",
         "steer": "今すぐ送信",
         "send": "送信",
         "steerHint": "モデルを中断せずに送信します",
@@ -18445,7 +18450,15 @@
         "sendConfirmClear": "キューを消去",
         "sendConfirmSend": "メッセージを送信",
         "fromSender": "送信元:",
-        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。"
+        "pausedSendFailedWaiting": "送信できませんでした。Agent の処理が終わったら「送信」を押して再試行してください。",
+        "save": "保存",
+        "editingMessage": "メッセージを編集中",
+        "cancelEditing": "編集をキャンセル",
+        "editChanged": "編集中にこのメッセージが変更されました。編集したテキストはチャット入力欄にあります。",
+        "editChangedPrompt": "編集中にこのメッセージが変更されました。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。",
+        "editFailed": "このメッセージは編集できません。",
+        "editGone": "このメッセージはすでに送信または削除されています。編集したテキストはチャット入力欄にあります。",
+        "editGonePrompt": "このメッセージはすでに送信または削除されています。Agent に回答すると、編集したテキストがチャット入力欄に表示されます。"
       },
       "thought": "考えました",
       "thoughtForDuration": "{{duration}} 考えました",
@@ -19236,6 +19249,7 @@
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
       "consent": "全文検索を有効にしますか? Orca は、完全な会話とツール出力ごとに最大 3,072 文字を含む、ローカル Agent のトランスクリプトからこのコンピュータ上にインデックスを作成します。内容は編集されていません。認証されたペアリングされたクライアントは検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
+      "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
       "noService": "このコンピュータでは検索を利用できません。 Orca アップデートまたは検索サポートを備えたランタイムが必要な場合があります。",
       "failed": "このコンピュータを検索できませんでした。接続を確認して、再試行してください。",

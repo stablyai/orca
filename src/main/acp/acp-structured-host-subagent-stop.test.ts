@@ -1,8 +1,8 @@
+import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createFakeSpawnedChild } from '../../shared/child-process/__fixtures__/fake-spawned-child'
-import type { spawnProcess } from '../../shared/child-process/run-process'
+import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { isSubagentGroupBlock } from '../../shared/native-chat-types'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
@@ -40,15 +40,13 @@ const timestamp = z.object({ _meta: z.object({ agentTimestampMs: z.number() }) }
 async function stoppingChild(reportsOutcome: boolean) {
   const agent = new AcpScriptedAgent()
   const stderr = new PassThrough()
-  const child = Object.assign(createFakeSpawnedChild(9_999_999), {
+  const child = Object.assign(createFakePipedChild(9_999_999), {
     stdin: agent.stdin,
     stdout: agent.stdout,
     stderr,
-    stdio: [agent.stdin, agent.stdout, stderr, null, null] satisfies ReturnType<
-      typeof spawnProcess
-    >['stdio']
+    stdio: [agent.stdin, agent.stdout, stderr, null, null] satisfies PipedChildProcess['stdio']
   })
-  const spawn = vi.fn<typeof spawnProcess>(() => child)
+  const spawn = vi.fn<PipedProcessSpawner>(() => child)
   // Teardown is simulated: no signal or process-table operation can reach the machine.
   teardown.mockImplementation(async () => {
     child.emit('exit', 0, null)

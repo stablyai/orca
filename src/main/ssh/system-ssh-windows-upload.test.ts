@@ -31,7 +31,7 @@ vi.mock('./system-ssh-command', () => ({
   spawnSystemSshCommand: spawnSystemSshCommandMock
 }))
 
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('@orca/process-host', () => ({
   runProcess: runProcessMock
 }))
 

@@ -2,7 +2,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
 import {
   buildInstallDirAclRepairCommands,

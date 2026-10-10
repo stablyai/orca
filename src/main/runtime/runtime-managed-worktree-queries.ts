@@ -28,6 +28,7 @@ import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from '../ipc/worktrees/listing/authoritative-local-worktree-metadata-pruning'
 import type { Store } from '../persistence'
 import type { RuntimeStore } from './runtime-store-contract'
+import { getWorkspaceAttachments } from '../../shared/workspace-attachments'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanRuntimeWorktreesUntilNotOvertaken } from './runtime-witnessed-worktree-scan'
 import { listRuntimeFolderWorkspaces } from './runtime-worktree-filesystem'
@@ -82,7 +83,14 @@ export class RuntimeManagedWorktreeQueries {
     )
     // See `listingKnownHostIds`: a scoped listing must still name the host it was asked about.
     const knownHostIds = listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds())
-    return buildWorktreeListingPage(worktrees, limit, knownHostIds)
+    const page = buildWorktreeListingPage(worktrees, limit, knownHostIds)
+    return {
+      ...page,
+      worktrees: page.worktrees.map((worktree) => ({
+        ...worktree,
+        linkedItems: getWorkspaceAttachments(worktree)
+      }))
+    }
   }
 
   resolveRepoForConnection(selector: string, connectionId?: string | null): Promise<Repo> {

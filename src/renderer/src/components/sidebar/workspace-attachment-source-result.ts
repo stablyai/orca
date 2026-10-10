@@ -1,3 +1,4 @@
+import { getWorkspaceReferenceIdentity } from '../../../../shared/workspace-reference-identity'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import {
@@ -64,8 +65,10 @@ export function isWorkspaceAttachmentLinked(
   items: readonly WorkspaceAttachment[],
   candidate: WorkspaceAttachment
 ): boolean {
+  const identity = getWorkspaceReferenceIdentity(candidate)
   return items.some((item) => {
     if (
+      getWorkspaceReferenceIdentity(item) === identity ||
       matchesWorkspaceAttachmentIdentity(candidate, item) ||
       matchesWorkspaceAttachmentIdentity(item, candidate)
     ) {

@@ -1,4 +1,4 @@
-import { isWorkspaceKey } from '../../shared/workspace-scope'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { getOptionalWorktreeSelector } from '../selectors'
@@ -60,4 +60,16 @@ export async function resolveCreateParentSelector(
   return {
     parentWorktree
   }
+}
+
+export function getEnvParentWorkspace(): string | undefined {
+  const workspaceId = process.env.ORCA_WORKSPACE_ID
+  if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
+    return workspaceId
+  }
+  const worktreeId = process.env.ORCA_WORKTREE_ID
+  if (typeof worktreeId === 'string' && worktreeId.length > 0) {
+    return isWorkspaceKey(worktreeId) ? worktreeId : worktreeWorkspaceKey(worktreeId)
+  }
+  return undefined
 }

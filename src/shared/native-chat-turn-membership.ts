@@ -25,12 +25,13 @@ import {
   nativeChatUserRowOpensTurn,
   type NativeChatOpensTurn
 } from './native-chat-turn-grouping'
-import type { NativeChatRole } from './native-chat-types'
+import type { NativeChatMessage, NativeChatRole } from './native-chat-types'
 import { dispatchWasWithdrawn } from './structured-agent-session-dispatch-rejection'
 import { inSendOrder } from './native-chat-send-order'
 import { runningStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
 import { nativeChatOpeningTurnKey } from './native-chat-messages-waiting-behind-live-turn'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
+import { nativeChatTurnRowAttribution } from './native-chat-turn-row-attribution'
 
 /** Whether the host writing this journal states each row's turn. Only a host that runs `/compact`
  *  as a turn of the send path does, so this is also how a client tells that host from an older one. */
@@ -248,7 +249,7 @@ export type NativeChatTurnMembership = {
   partialTurnKey?: string
 }
 
-type NativeChatTurnMember = { id: string; role: NativeChatRole; unsent?: true }
+type NativeChatTurnMember = Pick<NativeChatMessage, 'id' | 'role' | 'unsent' | 'journalPosition'>
 
 /**
  * Places each row in its turn. A user entry that anchors a turn, or is scoped to none, keys
@@ -271,14 +272,9 @@ export function nativeChatTurnMembership(
   const running = runningStructuredAgentSessionTurnScope(journal)
   if (!hostStatesTurnScopes(journal.items)) {
     const recordKeys = namedRecordKeys(journal.items, anchors)
-    const turnKeys = withoutUnsent(
-      messages,
-      nativeChatRowTurnKeys(
-        messages,
-        nativeChatJournalOrderTurnKeys(journal.items, recordKeys),
-        opens
-      )
-    )
+    const journalKeys = nativeChatJournalOrderTurnKeys(journal.items, recordKeys)
+    const rowKeys = nativeChatTurnRowAttribution(messages, journal.items, journalKeys)
+    const turnKeys = withoutUnsent(messages, nativeChatRowTurnKeys(messages, rowKeys, opens))
     const runningNamed = running.kind === 'turn' ? recordKeys.get(running.turnItemId) : null
     return {
       turnKeys,
@@ -291,7 +287,11 @@ export function nativeChatTurnMembership(
   }
   const runningKey = running.kind === 'turn' ? anchors.get(running.turnItemId) : undefined
   const anchoring = new Set(anchors.values())
-  const scopes = new Map(journal.items.map((item) => [item.itemId, item.turnScope]))
+  const scopes = nativeChatTurnRowAttribution(
+    messages,
+    journal.items,
+    new Map(journal.items.map((item) => [item.itemId, item.turnScope]))
+  )
   const runningRecordLoaded = running.kind === 'turn' && scopes.has(running.turnItemId)
   const turnKeys = messages.map((message) => {
     if (message.unsent === true) {

@@ -50,7 +50,8 @@ function launchWith(settings: Settings) {
         provider: 'omp',
         providerHandleChain: [],
         accountHome: { variable: 'PI_CODING_AGENT_DIR', path: join(root, '.omp', 'agent') }
-      })
+      }),
+      pinLaunchDirectory: vi.fn()
     },
     readJournal: () => null,
     resolveWorkspacePath: async () => root,

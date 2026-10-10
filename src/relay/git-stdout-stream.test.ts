@@ -1,5 +1,5 @@
-import type * as ProcessRunner from '../shared/child-process/run-process'
-import type * as ProcessTreeTermination from '../shared/child-process/process-tree-termination'
+import type * as ProcessRunner from '@orca/process-host'
+import type * as ProcessTreeTermination from '@orca/process-host/process-tree-termination'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,11 +8,11 @@ const { spawnMock, terminateMock } = vi.hoisted(() => ({
   terminateMock: vi.fn()
 }))
 
-vi.mock('../shared/child-process/run-process', async (importActual) => ({
+vi.mock('@orca/process-host', async (importActual) => ({
   ...(await importActual<typeof ProcessRunner>()),
   spawnProcess: spawnMock
 }))
-vi.mock('../shared/child-process/process-tree-termination', async (importActual) => ({
+vi.mock('@orca/process-host/process-tree-termination', async (importActual) => ({
   ...(await importActual<typeof ProcessTreeTermination>()),
   forceTerminateProcessTree: terminateMock
 }))

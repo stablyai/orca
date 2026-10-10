@@ -170,7 +170,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(statMock).toHaveBeenCalledWith(expect.objectContaining({ filePath: '/tmp/test.txt' }))
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt', 'local')
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
   })

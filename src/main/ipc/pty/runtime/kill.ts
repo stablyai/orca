@@ -1,7 +1,11 @@
 import type { IPtyProvider } from '../../../providers/types'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
 import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
-import { getProviderForPty, getPtySshConnectionId } from '../provider/registry'
+import {
+  getProviderForPty,
+  getPtySshConnectionId,
+  resolvePtyExecutionHost
+} from '../provider/registry'
 import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from './undelivered-ssh-kill'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
@@ -100,7 +104,7 @@ export function killPtyFromRuntimeController(
       })
     return true
   }
-  const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+  const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
   if (startupPromise) {
     // Why: select the provider after the daemon swap; the fallback first can report success while orphaning a daemon PTY.
     void startupPromise.then(killWithCurrentProvider).catch((err) => {
@@ -167,7 +171,7 @@ export async function stopAndWaitPtyFromRuntimeController(
   // below; each RPC leaf converts it to the remaining time when it issues, so
   // sequential RPCs share the budget and cannot overrun the sweep deadline.
   const deadlineMs = opts?.deadlineMs
-  const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+  const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
   if (startupPromise) {
     // Why: exact-stop must resolve the provider after daemon startup just
     // like renderer kills, or the fallback can falsely confirm teardown.

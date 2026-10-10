@@ -3,7 +3,7 @@ import {
   getKnownExecutionHostIdForWorktree,
   getExplicitRuntimeEnvironmentIdForWorktree
 } from './worktree-runtime-owner'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { writeWorkspaceFileDragSourceIfResolved } from './workspace-file-drag'
 
 /** Source-control rows list the live workspace, so the owner is resolved now
@@ -14,12 +14,15 @@ export function writeWorkspaceFileDragSourceForWorkspace(
 ): void {
   const state = useAppStore.getState()
   const executionHostId = getKnownExecutionHostIdForWorktree(state, workspaceId)
+  const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, workspaceId)
+  const sourceExecutionHostId =
+    executionHostId === 'local' && runtimeEnvironmentId
+      ? toRuntimeExecutionHostId(runtimeEnvironmentId)
+      : executionHostId
   writeWorkspaceFileDragSourceIfResolved(
     dataTransfer,
     workspaceId,
-    executionHostId,
-    parseExecutionHostId(executionHostId)?.kind === 'ssh'
-      ? getExplicitRuntimeEnvironmentIdForWorktree(state, workspaceId)
-      : undefined
+    sourceExecutionHostId,
+    parseExecutionHostId(executionHostId)?.kind === 'ssh' ? runtimeEnvironmentId : undefined
   )
 }

@@ -324,6 +324,32 @@ describe('MobileNativeChatBackgroundTasks', () => {
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
   })
 
+  it("offers Stop again on a helper's next run, which reuses the stopped run's row id", async () => {
+    let finish: (result: StopResult) => void = () => {}
+    const stop = vi.fn(() => new Promise<StopResult>((resolve) => (finish = resolve)))
+    const running = { state: 'monitoring' as const, supportsTaskStop: true }
+    const mounted = mount(tasksFor({ ...running, children: [view('a')] }, { stop }))
+    expand(mounted)
+    act(() => stopButtons(mounted)[0]!.props.onPress())
+    await act(async () => finish(STOPPED))
+    expect(stopButtons(mounted)[0]!.props.disabled).toBe(true)
+    // The helper's next run, with no render between: same provider id, a new invocation.
+    act(() => {
+      mounted.update(
+        createElement(MobileNativeChatBackgroundTasks, {
+          tasks: tasksFor(
+            {
+              ...running,
+              children: [view('a', { invocation: { invocationId: 'turn-2', generation: 2 } })]
+            },
+            { stop }
+          )
+        })
+      )
+    })
+    expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
+  })
+
   it('stops a backgrounded Codex command by its own id, and offers none on the subagent beside it', () => {
     const stop = vi.fn(async () => REJECTED)
     const mounted = mount(

@@ -18,6 +18,7 @@ import {
   type RelayAuthorization,
   type RelayAssignment
 } from './relay-http-client'
+import { relayIdentityKey } from './relay-auth-identity'
 import { RelayOriginPool } from './relay-origin-pool'
 import { RelayRegionRefresh } from './relay-region-refresh'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
@@ -90,8 +91,7 @@ export class RelaySessionBroker {
   }
 
   get ownerIdentityKey(): string {
-    const identity = this.options.identity
-    return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
+    return relayIdentityKey(this.options.identity)
   }
 
   isLive(): boolean {

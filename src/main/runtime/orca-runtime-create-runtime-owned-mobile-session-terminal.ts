@@ -59,6 +59,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
+      refuseSleptWorktree?: boolean
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.pruneOwnedMobileDispatchRecipes()
@@ -124,7 +125,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
         persistHostSessionBinding: true,
         // Why: this method publishes the authoritative snapshot below; skip the intermediate publish to avoid a wrong-group flash.
         deferMobileSessionPublish: true,
-        signal: opts.signal
+        signal: opts.signal,
+        ...(opts.refuseSleptWorktree ? { refuseSleptWorktree: true } : {})
       })
     const terminal = opts.createMutation
       ? await this.dedupeTerminalCreate(

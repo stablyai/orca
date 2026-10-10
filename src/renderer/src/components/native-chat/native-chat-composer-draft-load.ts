@@ -31,7 +31,6 @@ import {
 const RETRY_DELAYS_MS = [1_000, 5_000, 30_000]
 
 let hydration: Promise<void> | null = null
-let started = false
 let failedLoads = 0
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -118,7 +117,6 @@ function retryLater(error: unknown): void {
 
 /** Loads every saved draft into memory, once; a failed load is retried a few times, then left. */
 export function hydrateNativeChatComposerDrafts(): Promise<void> {
-  started = true
   hydration ??= (async () => {
     removeLegacyLocalStorageNativeChatComposerDrafts()
     installNativeChatComposerDraftBroadcast()
@@ -142,14 +140,7 @@ export async function waitForNativeChatComposerDrafts(timeoutMs: number): Promis
   clearTimeout(timer)
 }
 
-/** The load of saved drafts has started and not landed (nor been given up): a draft may exist that
- *  memory doesn't hold yet. */
-export function isNativeChatComposerDraftLoadPending(): boolean {
-  return started && !load.hydrated
-}
-
 export function resetNativeChatComposerDraftLoadForTests(): void {
-  started = false
   if (retryTimer !== null) {
     clearTimeout(retryTimer)
     retryTimer = null

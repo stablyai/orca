@@ -10,7 +10,7 @@ import {
   captureDescendantSnapshot,
   readProcessTable
 } from '../../src/main/pty-descendant-termination.ts'
-import { runProcess } from '../../src/shared/child-process/run-process.ts'
+import { runProcess } from '@orca/process-host'
 
 const binary = process.env.ORCA_OMP_PROBE_BINARY
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))

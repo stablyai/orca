@@ -109,18 +109,26 @@ describe('foreground commands in the background-task channel', () => {
           status: method === 'item/completed' ? 'completed' : 'inProgress'
         }
       })
-    return { host, rosters, turn, command, fence: attached.ok ? attached.value.fence : null }
+    return {
+      host,
+      rosters,
+      notify,
+      turn,
+      command,
+      fence: attached.ok ? attached.value.fence : null
+    }
   }
 
   type StripHost = Awaited<ReturnType<typeof rig>>['host']
 
-  /** The strip's Stop on the `server` command, as a client sends it. */
-  function stopFromStrip(host: StripHost, fence: number | null, operation: string) {
-    const fields = {
-      turnId: 'background-tasks',
-      scope: 'background-tasks' as const,
-      taskId: 'codex-command:primary:server'
-    }
+  /** The strip's Stop on a row (the `server` command by default), as a client sends it. */
+  function stopFromStrip(
+    host: StripHost,
+    fence: number | null,
+    operation: string,
+    taskId = 'codex-command:primary:server'
+  ) {
+    const fields = { turnId: 'background-tasks', scope: 'background-tasks' as const, taskId }
     return host.cancel(
       { callerKey: 'strip-test' },
       {
@@ -245,5 +253,110 @@ describe('foreground commands in the background-task channel', () => {
     expect(rosters.at(-1)).toMatchObject({
       children: [{ providerId: 'codex-command:primary:server', stoppable: true }]
     })
+  })
+
+  it('stops a sub-agent from the strip by interrupting its own turn', async () => {
+    const helper = 'thread-helper'
+    const interrupts: unknown[] = []
+    const { host, rosters, notify, turn, fence } = await rig({
+      'turn/interrupt': (params) => {
+        interrupts.push(params)
+        return {}
+      }
+    })
+    await turn('turn/started', 'turn-1')
+    await notify('item/started', {
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-helper',
+        kind: 'started',
+        agentThreadId: helper,
+        agentPath: '/root/helper'
+      }
+    })
+    await notify('turn/started', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'inProgress' }
+    })
+    await turn('turn/completed', 'turn-1')
+    expect(rosters.at(-1)).toMatchObject({
+      supportsTaskStop: true,
+      children: [{ providerId: helper, kind: 'agent', stoppable: true }],
+      // An older client's row names `codex-agent:<thread>`, which no record carries.
+      tasks: [{ id: `codex-agent:${helper}`, stoppable: false }]
+    })
+
+    await expect(stopFromStrip(host, fence, '5', helper)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    expect(interrupts).toEqual([{ threadId: helper, turnId: 'helper-turn' }])
+    // The child's own interrupted turn is what takes its row off the strip.
+    await notify('turn/completed', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'interrupted' }
+    })
+    expect(rosters.at(-1)).toBeNull()
+  })
+
+  it("stops a sub-agent's running command with it, and the row leaves", async () => {
+    const helper = 'thread-helper'
+    let running = ['5151']
+    const { host, rosters, notify, turn, fence } = await rig({
+      'turn/interrupt': () => ({}),
+      'thread/backgroundTerminals/list': () => ({
+        data: running.map((processId) => ({ processId })),
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': (params) => {
+        running = running.filter((processId) => processId !== params?.processId)
+        return { terminated: true }
+      }
+    })
+    const helperCommand = (status: 'inProgress' | 'completed') =>
+      notify(status === 'completed' ? 'item/completed' : 'item/started', {
+        threadId: helper,
+        turnId: 'helper-turn',
+        item: {
+          type: 'commandExecution',
+          id: 'helper-exec',
+          processId: '5151',
+          command: 'sleep 90',
+          source: 'unifiedExecStartup',
+          status
+        }
+      })
+    await turn('turn/started', 'turn-1')
+    await notify('item/started', {
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      item: {
+        type: 'subAgentActivity',
+        id: 'spawn-helper',
+        kind: 'started',
+        agentThreadId: helper,
+        agentPath: '/root/helper'
+      }
+    })
+    await notify('turn/started', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'inProgress' }
+    })
+    await helperCommand('inProgress')
+    await turn('turn/completed', 'turn-1')
+
+    await expect(stopFromStrip(host, fence, '6', helper)).resolves.toMatchObject({
+      ok: true,
+      value: { cancelled: true }
+    })
+    expect(running).toEqual([])
+    await notify('turn/completed', {
+      threadId: helper,
+      turn: { id: 'helper-turn', status: 'interrupted' }
+    })
+    await helperCommand('completed')
+    expect(rosters.at(-1)).toBeNull()
   })
 })

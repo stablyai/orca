@@ -5,9 +5,9 @@ import { spawn, ChildProcess } from 'node:child_process'
 import { subscribe, unsubscribe } from 'node:diagnostics_channel'
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setAppEnvironment, type AppEnvironment } from '../shared/app-environment'
-import { setProcessTreeKillGate } from '../shared/child-process/process-tree-kill-gate'
-import { signalProcessTree } from '../shared/child-process/process-tree-termination'
-import { windowsSystem32Binary } from '../shared/child-process/windows-system-binary'
+import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { removeTreeSync } from '../shared/windows-transient-lock-removal'
 import {
   findSelfInitiatedTreeKills,

@@ -102,7 +102,8 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       return {
         process,
         acquisitionGeneration: session.generation,
-        link: piRpcProviderLink(launch, file, input.fence, randomUUID(), Date.now())
+        link: piRpcProviderLink(launch, file, input.fence, randomUUID(), Date.now()),
+        ...(session.startListing ? { catalogListing: session.startListing } : {})
       }
     } catch (error) {
       if (!session) {

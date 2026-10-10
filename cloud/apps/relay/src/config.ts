@@ -99,6 +99,9 @@ const EnvSchema = z.object({
   ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  // Step 5 on directors: `off` (default) is today's path; `dry-run` asks the picked cell to
+  // check a booking without making it, and logs the answer; `on` places on switched-on cells.
+  ORCA_RELAY_RESERVE_PLACEMENT: z.enum(['off', 'dry-run', 'on']).default('off'),
   // Step 3 shadow directory: unset or empty polls no cell; `all` or a comma list of cell ids.
   ORCA_RELAY_SHADOW_SEAT_FEED_CELLS: z
     .string()
@@ -218,6 +221,7 @@ export type RelayConfig = {
   rehomeDirectorServiceAccount?: string
   rehomeAudience?: string
   shadowSeatFeedCells?: 'all' | string[]
+  reservePlacement?: 'off' | 'dry-run' | 'on'
   runtimeServiceAccount: string
   directorUrl?: string
   heartbeatAudience?: string
@@ -368,6 +372,7 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     rehomeDirectorServiceAccount: parsed.ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT,
     rehomeAudience: parsed.ORCA_RELAY_REHOME_AUDIENCE,
     shadowSeatFeedCells: parsed.ORCA_RELAY_SHADOW_SEAT_FEED_CELLS,
+    reservePlacement: parsed.ORCA_RELAY_RESERVE_PLACEMENT,
     runtimeServiceAccount:
       parsed.ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT ?? parsed.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
     directorUrl,

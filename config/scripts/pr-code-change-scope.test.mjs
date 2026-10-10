@@ -216,7 +216,7 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/scripts/package-linux-formats.mjs',
       'config/scripts/package-linux-formats-appimage.mjs',
-      'config/scripts/script-child-process.mjs',
+      'config/scripts/process-failure-message.mjs',
       'config/scripts/space-sharing-copy.mjs',
       '.github/actions/prepare-linux-package-fixture/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
@@ -229,8 +229,7 @@ describe('per-job path classification', () => {
       'config/scripts/static-appimage-package-contract.cjs'
     ]) {
       expectClassification([file], {
-        package: true,
-        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+        package: true
       })
     }
   })
@@ -244,8 +243,7 @@ describe('per-job path classification', () => {
       'config/scripts/run-daemon-shutdown-descendants-docker.mjs'
     ]) {
       expectClassification([file], {
-        package: true,
-        mobile_web_app: file === 'config/scripts/script-child-process.mjs'
+        package: true
       })
     }
     for (const file of [
@@ -329,8 +327,7 @@ describe('per-job path classification', () => {
     for (const file of [
       'config/scripts/build-mobile-web-app-bundle.mjs',
       'config/scripts/run-mobile-web-app-checks.mjs',
-      'config/scripts/script-child-process.mjs',
-      'src/shared/child-process/run-process.ts',
+      'src/packages/process-host/src/run-process.ts',
       'config/scripts/mobile-web-app-route-manifest.mjs',
       'mobile/web-entry/index.tsx',
       'mobile/app/h/[hostId]/index.tsx',

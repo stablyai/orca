@@ -11,12 +11,10 @@ import {
 } from './codex-app-server-session'
 import type { CodexTerminalStopSupport } from './codex-background-task-tracker'
 import { readRecord } from './codex-item-field-readers'
-import {
-  requireLiveCodexSession,
-  type CodexSession,
-  type CodexStructuredSessionAdapterDeps
+import type {
+  CodexSession,
+  CodexStructuredSessionAdapterDeps
 } from './codex-structured-session-state'
-import type { AgentSessionBackgroundTaskStops } from '../../shared/agent-child-work-stop-targets'
 
 type CodexTerminalRpc = Pick<CodexAppServerConnection, 'request'>
 
@@ -27,7 +25,7 @@ export type CodexBackgroundTerminal = { threadId: string; processId: string }
 const CODEX_BACKGROUND_TERMINAL_TIMEOUT_MS = 10_000
 const MAX_LIST_PAGES = 32
 
-function boundedTimeout(timeoutMs: number | undefined): number {
+export function boundedTimeout(timeoutMs: number | undefined): number {
   return Math.min(
     timeoutMs ?? CODEX_BACKGROUND_TERMINAL_TIMEOUT_MS,
     CODEX_BACKGROUND_TERMINAL_TIMEOUT_MS
@@ -171,15 +169,6 @@ export async function terminateCodexBackgroundTerminals(
   return { stopped, survived }
 }
 
-/** A backgrounded command stops through its app-server's background terminals, once that
- *  app-server proved it has them; a child thread has no stop here. */
-export function codexBackgroundTaskStops(
-  session: CodexSession | undefined
-): AgentSessionBackgroundTaskStops | undefined {
-  const stops = session?.backgroundTasks.stopsTerminals
-  return stops === undefined ? undefined : { supportsTaskStop: stops, supportsStopAll: stops }
-}
-
 /** Probes the session's app-server off the frame path when a running command has a process a stop
  *  could name, until it answers; a yes restates the running commands as stoppable. */
 export function startCodexTerminalStopProbe(
@@ -210,28 +199,4 @@ export function startCodexTerminalStopProbe(
       })
     }
   })
-}
-
-/** Stops the backgrounded commands the named tasks run, while `session` is still the one the host
- *  asked about. Cancelled when at least one is gone. */
-export async function stopCodexBackgroundCommands(
-  sessions: Map<string, CodexSession>,
-  input: { sessionId: string; fence: number; taskIds: readonly string[] },
-  timeoutMs: number | undefined
-): Promise<{ cancelled: boolean; stillRunning?: true }> {
-  const session = requireLiveCodexSession(sessions, input.sessionId)
-  const terminals = session.backgroundTasks.backgroundProcesses(input.taskIds)
-  if (terminals.length === 0) {
-    return { cancelled: false }
-  }
-  const { acquisitionGeneration } = session
-  const { stopped, survived } = await terminateCodexBackgroundTerminals(session.connection, terminals, {
-    timeoutMs,
-    isCurrent: () =>
-      sessions.get(input.sessionId) === session &&
-      !session.ended &&
-      session.fence === input.fence &&
-      session.acquisitionGeneration === acquisitionGeneration
-  })
-  return { cancelled: stopped > 0, ...(survived ? { stillRunning: true as const } : {}) }
 }

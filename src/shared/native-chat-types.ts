@@ -260,6 +260,8 @@ export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Set only by the tool fold, on a row that absorbed later tool rows: the newest
    *  absorbed row's journal position. The row still sorts by its own. */
   foldedJournalPosition?: AgentJournalPosition
+  /** Private presentation row; raw host messages never publish this fold-only marker. */
+  unpairedToolResults?: true
 }
 
 /** Split reasoning and its answer share the provider's row identity. */

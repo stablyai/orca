@@ -4,7 +4,7 @@ import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 
 const { afterStat } = vi.hoisted(() => {
   const afterStat: { run: null | (() => Promise<void>) } = { run: null }

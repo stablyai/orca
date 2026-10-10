@@ -16,6 +16,7 @@ import {
   type TerminalFileContext
 } from './terminal-file-path-mapping'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
@@ -172,7 +173,10 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && canOpenWithSystemDefault) {
       // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
       // user's OS file associations without adding editor-specific settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(mappedFilePath)
+      const openedWithSystemDefault = await window.api.shell.openFilePath(
+        mappedFilePath,
+        LOCAL_EXECUTION_HOST_ID
+      )
       if (openedWithSystemDefault || statResult.isDirectory) {
         return
       }
@@ -180,7 +184,7 @@ export function openDetectedFilePath(
 
     if (statResult.isDirectory) {
       if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(mappedFilePath)
+        await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
       }
       return
     }

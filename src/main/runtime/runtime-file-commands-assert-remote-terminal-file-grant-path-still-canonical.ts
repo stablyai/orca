@@ -30,6 +30,8 @@ import {
   watchFileExplorerInWatcherProcess
 } from './file-watcher-host'
 import { registerRuntimeFileWatcherRelease } from './runtime-file-watcher-leases'
+import { requireFilesystemProviderForHost } from '../providers/execution-host-provider-dispatch'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 
 export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanonical extends RuntimeFileCommandsWithWriteTerminalArtifactFile {
   protected async assertRemoteTerminalFileGrantPathStillCanonical(
@@ -38,10 +40,7 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     if (!grant.connectionId) {
       throw new Error('terminal_file_grant_mismatch')
     }
-    const provider = getSshFilesystemProvider(grant.connectionId)
-    if (!provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
+    const provider = requireFilesystemProviderForHost(toSshExecutionHostId(grant.connectionId))
     const canonicalPath =
       grant.provenance === 'native-chat'
         ? await provider.realpath(grant.absolutePath)

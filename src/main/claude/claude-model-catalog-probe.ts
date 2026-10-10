@@ -74,7 +74,6 @@ export function createClaudeModelCatalogProbe(
           ? { supportsFastMode: model.supportsFastMode }
           : {})
       })),
-      fastModeTierByModel: new Map(),
       origin: 'probe'
     }
   }

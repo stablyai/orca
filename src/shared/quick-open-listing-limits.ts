@@ -1,4 +1,4 @@
-import { GrowingByteBuffer } from './growing-byte-buffer'
+import { GrowingByteBuffer } from '@orca/process-host/growing-byte-buffer'
 
 export const QUICK_OPEN_LISTING_MAX_RESULTS = 20_001
 const QUICK_OPEN_LISTING_MAX_PATH_BYTES = 64 * 1024

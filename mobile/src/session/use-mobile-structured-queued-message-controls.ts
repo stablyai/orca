@@ -55,7 +55,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
   queuedMessages: MobileQueuedMessageFeed
   queuePause: MobileQueuePause
   submissions: readonly AgentJournalSubmission[]
-  pendingPrompt: boolean
   /** The chat shows the agent working: a command card offers no send then. */
   agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
@@ -71,7 +70,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
     mutate,
     onActionResolved,
     onSendError,
-    pendingPrompt,
     queuedMessages,
     queuePause,
     sessionKey,
@@ -81,23 +79,13 @@ export function useMobileStructuredQueuedMessageControls(args: {
   const cards = useMemo(
     () =>
       mobileQueuedMessageCards(queuedMessages, submissions, {
-        pendingPrompt,
         agentWorking,
         agentName: args.agentName,
         statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
           ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
-          : [],
-        queuePaused: queuePause !== null
+          : []
       }),
-    [
-      agentWorking,
-      args.agentName,
-      args.journalItems,
-      pendingPrompt,
-      queuePause,
-      queuedMessages,
-      submissions
-    ]
+    [agentWorking, args.agentName, args.journalItems, queuedMessages, submissions]
   )
   const resolved = useCallback(
     (accepted: boolean): boolean => {

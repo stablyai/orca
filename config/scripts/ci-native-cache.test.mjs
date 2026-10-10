@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import { classifyPrJobs } from './pr-code-change-scope.mjs'
-import { runProcessSync } from './script-child-process.mjs'
+import { runProcessSync } from '@orca/process-host'
 
 const installerPath = '.github/actions/install-node-dependencies/action.yml'
 const nativePath = '.github/actions/prepare-native-runtime/action.yml'

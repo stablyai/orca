@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import type { ManagedDataAccountsState } from '../../shared/managed-account-types'
@@ -65,7 +65,7 @@ function resolver(
   } = {}
 ) {
   return createAcpStructuredLaunchResolver(OPENCODE, {
-    store: { getRecord: () => record },
+    store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     readJournal: () => null,
     resolveWorkspacePath: async () => '/repo/worktree',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user', ...options.base }),
