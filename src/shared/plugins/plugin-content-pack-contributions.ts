@@ -7,13 +7,30 @@ export const PLUGIN_KEYBINDING_LIMIT = 256
 export const PLUGIN_VM_RECIPE_LIMIT = 64
 export const PLUGIN_AGENT_PROFILE_LIMIT = 64
 
+/** True when Intl can parse the tag's grammar, not just its shape. */
+function isWellFormedLocaleId(value: string): boolean {
+  try {
+    Intl.getCanonicalLocales(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // Why: locale ids become i18next bundle keys and filenames. This bounded BCP
 // 47 subset covers current community packs without accepting path syntax.
+// The shape check alone is looser than BCP 47 in one direction: tags like
+// `en-US-US` or `en-aaa` match it but are not well-formed, so Intl throws on
+// them. That throw surfaces nowhere — the pack installs, every string
+// translates, and only dates and relative times quietly fall back to English.
+// Delegating the grammar to Intl rejects the tag at install instead, where the
+// pack author can still fix it.
 export const pluginLocaleIdSchema = z
   .string()
   .min(2)
   .max(35)
   .regex(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/, 'must be a portable locale identifier')
+  .refine(isWellFormedLocaleId, 'must be a well-formed locale identifier')
 
 export const pluginLanguagePackContributionSchema = z
   .object({
