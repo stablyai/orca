@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  assertSupportedChanges,
   desiredObject,
   operateCellFlags,
   parseCellFlagsRequest,
@@ -22,7 +23,23 @@ const values = (overrides = {}) => ({
 })
 
 // A cell whose runtime status applies whatever was written, after `applyAfterPolls` polls.
-function fakeGoogleAndCell({ stored = null, applyAfterPolls = 2, role = 'cell', cellId = CELL } = {}) {
+const SUPPORTED = {
+  readinessLocal: { type: 'boolean' },
+  ticketCheck: { type: 'enum', values: ['off', 'shadow', 'enforce'] },
+  admitMode: { type: 'enum', values: ['db', 'reserve'] },
+  intakePerSec: { type: 'number', min: 0, max: 1_000 },
+  reserveDryRun: { type: 'boolean' },
+  rejectionFence: { type: 'boolean' },
+  readTimeoutMarginMs: { type: 'number', min: 1_000, max: 60_000, integer: true }
+}
+
+function fakeGoogleAndCell({
+  stored = null,
+  applyAfterPolls = 2,
+  role = 'cell',
+  cellId = CELL,
+  supportedFlags = SUPPORTED
+} = {}) {
   const state = { stored, writes: [], polls: 0, applied: { generation: 0, flags: { readinessLocal: false, ticketCheck: 'off' } } }
   const fetchImpl = async (url, init = {}) => {
     const target = new URL(url)
@@ -31,7 +48,13 @@ function fakeGoogleAndCell({ stored = null, applyAfterPolls = 2, role = 'cell', 
       if (state.stored && state.polls > applyAfterPolls) {
         state.applied = { generation: Number(state.stored.generation), flags: state.stored.object.flags }
       }
-      return Response.json({ v: 1, role, cellId, flagsApplied: state.applied })
+      return Response.json({
+        v: 1,
+        role,
+        cellId,
+        flagsApplied: state.applied,
+        ...(supportedFlags ? { supportedFlags } : {})
+      })
     }
     if (target.pathname.startsWith('/upload/')) {
       const expected = target.searchParams.get('ifGenerationMatch')
@@ -263,3 +286,24 @@ test('fails the read-back when the cell ignores a switch the object names', asyn
     /ignores admitMode/
   )
 })
+
+test('refuses a switch the cell image does not support, before writing anything', async () => {
+  const old = fakeGoogleAndCell({ supportedFlags: null })
+  await assert.rejects(
+    run(parseCellFlagsRequest(values({ set: 'ticketCheck=enforce' })), old).result,
+    /does not support ticketCheck="enforce"/
+  )
+  await assert.rejects(
+    run(parseCellFlagsRequest(values({ set: 'admitMode=reserve' })), old).result,
+    /does not support admitMode/
+  )
+  assert.equal(old.state.writes.length, 0)
+  // An image from before supportedFlags still takes the two switches it always had.
+  assert.equal((await run(parseCellFlagsRequest(values()), old).result).written, true)
+  assert.throws(
+    () => assertSupportedChanges({ readTimeoutMarginMs: 1_500.5 }, SUPPORTED),
+    /readTimeoutMarginMs/
+  )
+  assertSupportedChanges({ admitMode: null, ticketCheck: 'enforce' }, SUPPORTED)
+})
+

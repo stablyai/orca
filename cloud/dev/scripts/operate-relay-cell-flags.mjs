@@ -44,6 +44,38 @@ export const CELL_FLAG_SPECS = {
   readTimeoutMarginMs: { parse: numberIn(1_000, 60_000, true) }
 }
 
+// What images from before `supportedFlags` accept; anything else voids or is dropped there.
+const LEGACY_SUPPORTED_FLAGS = {
+  readinessLocal: { type: 'boolean' },
+  ticketCheck: { type: 'enum', values: ['off', 'shadow'] }
+}
+
+// Refuses a change the cell's image would drop (unknown key) or void the whole object over
+// (a value outside what it accepts). Removing a key is always safe.
+export function assertSupportedChanges(changes, supportedFlags) {
+  const supported = supportedFlags ?? LEGACY_SUPPORTED_FLAGS
+  for (const [key, value] of Object.entries(changes)) {
+    if (value === null) continue
+    const spec = supported[key]
+    const accepted =
+      spec?.type === 'boolean'
+        ? typeof value === 'boolean'
+        : spec?.type === 'enum'
+          ? spec.values.includes(value)
+          : spec?.type === 'number'
+            ? typeof value === 'number' &&
+              (spec.min === undefined || value >= spec.min) &&
+              (spec.max === undefined || value <= spec.max) &&
+              (!spec.integer || Number.isInteger(value))
+            : false
+    if (!accepted) {
+      throw new Error(
+        `the cell's image does not support ${key}=${JSON.stringify(value)}; roll the image first`
+      )
+    }
+  }
+}
+
 // `key=value,key=value`; `key=default` removes the key so the cell uses its default.
 export function parseFlagChanges(text) {
   const changes = {}
@@ -224,6 +256,7 @@ export async function operateCellFlags(request, dependencies) {
     throw new Error(`origin answers as ${runtime.role}/${runtime.cellId}, not ${request.cellId}`)
   }
   if (!runtime.flagsApplied) throw new Error('cell image has no flag channel (no flagsApplied)')
+  assertSupportedChanges(request.changes, runtime.supportedFlags)
   const current = await readCurrentObject(fetchImpl, request, accessToken)
   const object = desiredObject(request, current.object)
   const plan = {
