@@ -19,8 +19,8 @@ const MESSAGE = 'please also run lint'
 const retained = vi.hoisted((): { session: NativeChatLiveSession | null } => ({ session: null }))
 const composer = vi.hoisted(() => ({ mounts: 0, typed: vi.fn<(text: string) => boolean>() }))
 const pty = vi.hoisted(() => ({
-  verified: vi.fn<(settings: unknown, id: string, data: string) => Promise<boolean>>(),
-  raw: vi.fn<(settings: unknown, id: string, data: string) => boolean>()
+  verified: vi.fn<(id: string, data: string) => Promise<boolean>>(),
+  raw: vi.fn<(id: string, data: string) => boolean>()
 }))
 vi.mock('./use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
@@ -68,7 +68,7 @@ vi.mock('./NativeChatComposer', async () => {
         )
         const send = (): void => {
           let pendingId: string | undefined
-          const handle = sendNativeChatMessage(null, props.targetPtyId ?? '', MESSAGE, {
+          const handle = sendNativeChatMessage(props.targetPtyId ?? '', MESSAGE, {
             onWriteRejected: () => {
               if (pendingId) {
                 props.optimisticSendOutcome?.reject(pendingId)
@@ -185,7 +185,7 @@ describe('a prompt card hides the composer without unmounting it', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('composer-send'))
     })
-    expect(pty.verified.mock.calls.map((call) => call[2]).join('')).toContain(MESSAGE)
+    expect(pty.verified.mock.calls.map((call) => call[1]).join('')).toContain(MESSAGE)
 
     // The approval arrives inside the body-to-Enter gap.
     await act(async () => {
@@ -197,9 +197,9 @@ describe('a prompt card hides the composer without unmounting it', () => {
     })
 
     expect(document.querySelector('[data-native-chat-approval-card="true"]')).not.toBeNull()
-    expect(pty.verified.mock.calls.map((call) => call[2])).not.toContain('\r')
+    expect(pty.verified.mock.calls.map((call) => call[1])).not.toContain('\r')
     // Only the pre-body clear: retiring the send types nothing under the card.
-    expect(pty.raw.mock.calls.map((call) => call[2])).toEqual(['\x15'])
+    expect(pty.raw.mock.calls.map((call) => call[1])).toEqual(['\x15'])
     expect(screen.getByTestId('composer-send').closest('[hidden]')).not.toBeNull()
     expect(screen.getAllByText(MESSAGE).length).toBeGreaterThan(0)
     expect(screen.getByText('Message not sent')).toBeInTheDocument()

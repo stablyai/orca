@@ -57,7 +57,7 @@ export async function assessWindowCloseRunningWork(params: {
     return { kind: 'none' }
   }
 
-  const probes = await probePtyRunningWork(state.settings, candidatePtyIds, {
+  const probes = await probePtyRunningWork(candidatePtyIds, {
     timeoutMs: WINDOW_CLOSE_PROBE_TIMEOUT_MS
   })
   if (probes.some((probe) => probe.verdict === 'live')) {

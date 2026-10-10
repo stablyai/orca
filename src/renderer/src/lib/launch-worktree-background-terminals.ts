@@ -1,6 +1,6 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { registerBackgroundPaneBuffer } from '@/lib/background-pane-exit-output'
@@ -252,8 +252,8 @@ export async function launchWorktreeBackgroundTerminals(
     return
   }
   const store = useAppStore.getState()
-  const runtimeTarget = getActiveRuntimeTarget(
-    getSettingsForWorktreeRuntimeOwner(store, args.worktreeId)
+  const runtimeTarget = runtimeTargetForOwnerEnvironment(
+    getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
   )
   if (runtimeTarget.kind === 'environment') {
     // Runtime-owned worktrees materialize setup/defaultTabs inside createManagedWorktree.

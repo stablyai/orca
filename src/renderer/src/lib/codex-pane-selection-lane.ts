@@ -1,5 +1,5 @@
 import type { AppState } from '@/store'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '@/runtime/runtime-client-target'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import {
   getCodexSelectionLaneKey,
@@ -174,12 +174,8 @@ export function resolveCodexPaneSelectionLaneKey(args: {
 }): string {
   const remoteParts = parseRemoteRuntimePtyId(args.ptyId)
   if (remoteParts !== null) {
-    const runtimeTarget = getActiveRuntimeTarget(args.state.settings)
-    // Why: mirror inspectRuntimeTerminalProcess — an owner-less remote id is
-    // routed to whichever environment is active, so that is its lane too.
-    const environmentId =
-      remoteParts.environmentId?.trim() ||
-      (runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null)
+    // Why: mirror inspectRuntimeTerminalProcess — an owner-less remote id reaches no server.
+    const environmentId = remoteParts.environmentId?.trim()
     return environmentId
       ? `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${environmentId}`
       : UNATTRIBUTED_REMOTE_LANE_KEY

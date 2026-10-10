@@ -55,7 +55,6 @@ describe('terminal paste operation ordering', () => {
       writePty,
       yieldToEventLoop: async () => {
         startupDraft ??= sendAgentDraftPasteContent(
-          null,
           'pty-1',
           'GENERATED_CONTEXT',
           'launch',
@@ -83,7 +82,6 @@ describe('terminal paste operation ordering', () => {
       startupOpened = resolve
     })
     const startup = sendAgentDraftPasteContent(
-      null,
       'pty-1',
       'G'.repeat(64 * 1024 + 1),
       'launch',

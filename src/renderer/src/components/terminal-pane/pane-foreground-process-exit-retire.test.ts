@@ -36,7 +36,6 @@ function createUnmarkedPane(args: { visible: boolean }) {
     paneKey: 'tab-1:leaf-1',
     statusLane: 'pty',
     getPtyId: () => 'pty-1',
-    getSettings: () => null,
     inspectProcess: vi.fn(async () => processResult(foreground, hasChildren)),
     dispatchCompletion: vi.fn(),
     isLive: () => true,

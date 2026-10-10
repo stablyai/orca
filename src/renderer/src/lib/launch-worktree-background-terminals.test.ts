@@ -10,7 +10,7 @@ const mockUpdateTabPtyId = vi.fn()
 const mockClearTabPtyId = vi.fn()
 const mockCloseTab = vi.fn()
 const mockRegisterEagerPtyBuffer = vi.fn()
-const mockGetActiveRuntimeTarget = vi.fn()
+const mockOwnerEnvironmentId = vi.fn()
 
 let uuidIndex = 0
 
@@ -58,11 +58,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getSettingsForWorktreeRuntimeOwner: () => state.settings
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: mockGetActiveRuntimeTarget
+  getRuntimeEnvironmentIdForWorktree: () => mockOwnerEnvironmentId()
 }))
 
 describe('launchWorktreeBackgroundTerminals', () => {
@@ -102,7 +98,7 @@ describe('launchWorktreeBackgroundTerminals', () => {
     })
     let ptyIndex = 0
     mockSpawn.mockImplementation(async () => ({ id: `pty-${++ptyIndex}` }))
-    mockGetActiveRuntimeTarget.mockReturnValue({ kind: 'local' })
+    mockOwnerEnvironmentId.mockReturnValue(null)
     vi.stubGlobal('window', {
       api: {
         pty: {
@@ -347,7 +343,7 @@ describe('launchWorktreeBackgroundTerminals', () => {
   })
 
   it('does not duplicate runtime-owned setup/defaultTabs handled by runtime create', async () => {
-    mockGetActiveRuntimeTarget.mockReturnValue({ kind: 'environment', environmentId: 'env-1' })
+    mockOwnerEnvironmentId.mockReturnValue('env-1')
     const { launchWorktreeBackgroundTerminals } =
       await import('./launch-worktree-background-terminals')
 

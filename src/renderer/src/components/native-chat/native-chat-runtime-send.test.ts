@@ -28,11 +28,10 @@ import {
 } from './native-chat-runtime-image-send'
 import { buildNativeChatPasteBytes, NATIVE_CHAT_SUBMIT } from './native-chat-send'
 
-const SETTINGS = {} as Parameters<typeof sendNativeChatMessage>[0]
 const PTY = 'pty-1'
 
 function expectWriteOrder(calls: unknown[][], expected: string[]): void {
-  expect(calls.map((call) => call[2])).toEqual(expected)
+  expect(calls.map((call) => call[1])).toEqual(expected)
 }
 
 describe('sendNativeChatMessage', () => {
@@ -48,7 +47,7 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('clears the TUI line, then writes the framed body, before the Enter', () => {
-    const handle = sendNativeChatMessage(SETTINGS, PTY, 'hello world')
+    const handle = sendNativeChatMessage(PTY, 'hello world')
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('hello world')
@@ -57,7 +56,7 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('does not fire Enter before the proven 500ms gap (busy-agent safety)', () => {
-    sendNativeChatMessage(SETTINGS, PTY, 'hi')
+    sendNativeChatMessage(PTY, 'hi')
     // A short gap would fire Enter while a busy Codex has not yet landed the
     // paste, submitting an empty box — so nothing must happen before 500ms.
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS - 1)
@@ -65,7 +64,7 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('writes the bare carriage-return Enter as a separate delayed write', () => {
-    sendNativeChatMessage(SETTINGS, PTY, 'hi')
+    sendNativeChatMessage(PTY, 'hi')
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
@@ -75,7 +74,7 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('cancels the delayed Enter and re-clears an unsubmitted body', () => {
-    const handle = sendNativeChatMessage(SETTINGS, PTY, 'hi')
+    const handle = sendNativeChatMessage(PTY, 'hi')
     handle.cancel()
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
 
@@ -88,15 +87,15 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('clears leftover unsubmitted body on cancel so the next send cannot glue', async () => {
-    const handle = sendNativeChatMessage(SETTINGS, PTY, 'tell me a joke')
+    const handle = sendNativeChatMessage(PTY, 'tell me a joke')
     handle.cancel()
 
-    sendNativeChatMessage(SETTINGS, PTY, 'continue')
+    sendNativeChatMessage(PTY, 'continue')
     // Queue release after cancel is promise-chained; flush so the next body runs.
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(sendRuntimePtyInput.mock.calls.map((call) => call[2])).toEqual([
+    expect(sendRuntimePtyInput.mock.calls.map((call) => call[1])).toEqual([
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('tell me a joke'),
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT, // cancel cleanup
@@ -106,7 +105,7 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('does not clear the TUI input when cancel runs after Enter already fired', () => {
-    const handle = sendNativeChatMessage(SETTINGS, PTY, 'already submitted')
+    const handle = sendNativeChatMessage(PTY, 'already submitted')
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
     sendRuntimePtyInput.mockClear()
     handle.cancel()
@@ -115,8 +114,8 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('serializes rapid sends on the same PTY so bodies cannot glue before Enter', async () => {
-    sendNativeChatMessage(SETTINGS, PTY, 'tell me a joke')
-    sendNativeChatMessage(SETTINGS, PTY, 'continue')
+    sendNativeChatMessage(PTY, 'tell me a joke')
+    sendNativeChatMessage(PTY, 'continue')
 
     // First clear+body are immediate; second sequence waits for the first Enter.
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
@@ -134,19 +133,14 @@ describe('sendNativeChatMessage', () => {
     ])
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      NATIVE_CHAT_SUBMIT,
-      'driving'
-    )
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(6)
   })
 
   it('does not let a canceled queued send stall the sends behind it', async () => {
-    sendNativeChatMessage(SETTINGS, PTY, 'first')
-    const canceled = sendNativeChatMessage(SETTINGS, PTY, 'canceled')
-    sendNativeChatMessage(SETTINGS, PTY, 'third')
+    sendNativeChatMessage(PTY, 'first')
+    const canceled = sendNativeChatMessage(PTY, 'canceled')
+    sendNativeChatMessage(PTY, 'third')
     canceled.cancel()
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
@@ -161,16 +155,16 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('does not serialize sends across different PTYs', () => {
-    sendNativeChatMessage(SETTINGS, 'pty-a', 'one')
-    sendNativeChatMessage(SETTINGS, 'pty-b', 'two')
+    sendNativeChatMessage('pty-a', 'one')
+    sendNativeChatMessage('pty-b', 'two')
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('one'),
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       buildNativeChatPasteBytes('two')
     ])
-    expect(sendRuntimePtyInput.mock.calls[1]?.[1]).toBe('pty-a')
-    expect(sendRuntimePtyInput.mock.calls[3]?.[1]).toBe('pty-b')
+    expect(sendRuntimePtyInput.mock.calls[1]?.[0]).toBe('pty-a')
+    expect(sendRuntimePtyInput.mock.calls[3]?.[0]).toBe('pty-b')
   })
 })
 
@@ -188,12 +182,11 @@ describe('sendNativeChatMessageVerified', () => {
   it('awaits body acceptance before the delayed Enter write (no pre-clear)', async () => {
     // Why: model-switch confirmation watches the PTY while this send runs;
     // verified option commands must not inject Ctrl+U noise.
-    const result = sendNativeChatMessageVerified(SETTINGS, PTY, '/model sonnet')
+    const result = sendNativeChatMessageVerified(PTY, '/model sonnet')
     await vi.waitFor(() => {
       expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     })
     expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      SETTINGS,
       PTY,
       buildNativeChatPasteBytes('/model sonnet'),
       'driving'
@@ -202,15 +195,10 @@ describe('sendNativeChatMessageVerified', () => {
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
 
     expect(await result).toBe(true)
-    expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      NATIVE_CHAT_SUBMIT,
-      'driving'
-    )
+    expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
     expect(
       sendRuntimePtyInputVerified.mock.calls.some(
-        (call) => call[2] === NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
+        (call) => call[1] === NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
       )
     ).toBe(false)
   })
@@ -218,40 +206,35 @@ describe('sendNativeChatMessageVerified', () => {
   it('does not send Enter when the body is rejected', async () => {
     sendRuntimePtyInputVerified.mockResolvedValueOnce(false)
 
-    await expect(sendNativeChatMessageVerified(SETTINGS, PTY, '/model sonnet')).resolves.toBe(false)
+    await expect(sendNativeChatMessageVerified(PTY, '/model sonnet')).resolves.toBe(false)
     await vi.runAllTimersAsync()
 
     expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     expect(
-      sendRuntimePtyInputVerified.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)
+      sendRuntimePtyInputVerified.mock.calls.some((call) => call[1] === NATIVE_CHAT_SUBMIT)
     ).toBe(false)
   })
 
   it('cancels an in-flight chat Enter before delivering a verified option command', async () => {
-    sendNativeChatMessage(SETTINGS, PTY, 'hello')
+    sendNativeChatMessage(PTY, 'hello')
     expect(sendRuntimePtyInput).toHaveBeenCalled()
 
-    const result = sendNativeChatMessageVerified(SETTINGS, PTY, '/model haiku')
+    const result = sendNativeChatMessageVerified(PTY, '/model haiku')
     // Chat cancel may Ctrl+U the unsubmitted body; Enter from chat must not fire.
     await Promise.resolve()
     await Promise.resolve()
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
 
     expect(await result).toBe(true)
-    const submits = sendRuntimePtyInput.mock.calls.filter((call) => call[2] === NATIVE_CHAT_SUBMIT)
+    const submits = sendRuntimePtyInput.mock.calls.filter((call) => call[1] === NATIVE_CHAT_SUBMIT)
     // Only the verified path's Enter — chat's delayed Enter was cancelled.
     expect(submits).toHaveLength(0)
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      SETTINGS,
-      PTY,
-      NATIVE_CHAT_SUBMIT,
-      'driving'
-    )
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
   })
 
   it('returns false when the delayed Enter wait is aborted', async () => {
     const controller = new AbortController()
-    const result = sendNativeChatMessageVerified(SETTINGS, PTY, '/model sonnet', controller.signal)
+    const result = sendNativeChatMessageVerified(PTY, '/model sonnet', controller.signal)
     await vi.waitFor(() => {
       expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     })
@@ -259,7 +242,7 @@ describe('sendNativeChatMessageVerified', () => {
 
     expect(await result).toBe(false)
     expect(
-      sendRuntimePtyInputVerified.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)
+      sendRuntimePtyInputVerified.mock.calls.some((call) => call[1] === NATIVE_CHAT_SUBMIT)
     ).toBe(false)
   })
 })
@@ -277,7 +260,7 @@ describe('typeNativeChatCommand', () => {
   })
 
   it('writes the Codex picker command as keys instead of one pasted text write', async () => {
-    const result = typeNativeChatCommand(SETTINGS, PTY, '/model')
+    const result = typeNativeChatCommand(PTY, '/model')
     await vi.runAllTimersAsync()
 
     await expect(result).resolves.toBe(true)
@@ -294,7 +277,7 @@ describe('typeNativeChatCommand', () => {
   })
 
   it('queues composer commands as the same paced key sequence', async () => {
-    const handle = sendNativeChatTypedCommand(SETTINGS, PTY, '/status')
+    const handle = sendNativeChatTypedCommand(PTY, '/status')
     await vi.runAllTimersAsync()
     await handle.settled
 
@@ -312,9 +295,9 @@ describe('typeNativeChatCommand', () => {
   })
 
   it('does not clear into the next queued send after cancellation', async () => {
-    const command = sendNativeChatTypedCommand(SETTINGS, PTY, '/status')
+    const command = sendNativeChatTypedCommand(PTY, '/status')
     command.cancel()
-    const next = sendNativeChatMessage(SETTINGS, PTY, 'next')
+    const next = sendNativeChatMessage(PTY, 'next')
     await vi.runAllTimersAsync()
     await Promise.all([command.settled, next.settled])
 
@@ -339,7 +322,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('escapes a pasted image path with spaces, so an attachment agent sees one path', () => {
-    sendNativeChatMessageWithImageAttachments('codex', SETTINGS, PTY, '', [
+    sendNativeChatMessageWithImageAttachments('codex', PTY, '', [
       '/Users/me/Library/Application Support/orca/native-chat-pastes/orca-paste-1-ab.png'
     ])
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
@@ -349,10 +332,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it.each(['', 'describe'])('separates every OMP image reference before %j', (text) => {
-    sendNativeChatMessageWithImageAttachments('omp', SETTINGS, PTY, text, [
-      '/tmp/a.png',
-      '/tmp/b.png'
-    ])
+    sendNativeChatMessageWithImageAttachments('omp', PTY, text, ['/tmp/a.png', '/tmp/b.png'])
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
       '\x1b[200~@/tmp/a.png\x1b[201~ ',
@@ -361,7 +341,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('sends OMP image paths as framed references, preserving spaces and delayed submit', () => {
-    sendNativeChatMessageWithImageAttachments('omp', SETTINGS, PTY, 'describe', [
+    sendNativeChatMessageWithImageAttachments('omp', PTY, 'describe', [
       'C:\\Images\\screen shot.png'
     ])
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
@@ -369,24 +349,15 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
       '\x1b[200~@"C:\\Images\\screen shot.png"\x1b[201~ '
     ])
     vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, 'describe', 'driving')
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, 'describe', 'driving')
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      NATIVE_CHAT_SUBMIT,
-      'driving'
-    )
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
   })
 
   it('clears the line, then bracket-pastes image paths before prompt text', () => {
-    const handle = sendNativeChatMessageWithImageAttachments(
-      'claude',
-      SETTINGS,
-      PTY,
-      'what do you see?',
-      ['/tmp/orca-paste-image.png']
-    )
+    const handle = sendNativeChatMessageWithImageAttachments('claude', PTY, 'what do you see?', [
+      '/tmp/orca-paste-image.png'
+    ])
 
     expect(handle.settleAfterMs).toBe(
       NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
@@ -399,25 +370,15 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
     ])
 
     vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      'what do you see?',
-      'driving'
-    )
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, 'what do you see?', 'driving')
 
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      NATIVE_CHAT_SUBMIT,
-      'driving'
-    )
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(4)
   })
 
   it('does not append a trailing separator on an attachment-only send', () => {
-    const handle = sendNativeChatMessageWithImageAttachments('claude', SETTINGS, PTY, '', [
+    const handle = sendNativeChatMessageWithImageAttachments('claude', PTY, '', [
       '/tmp/orca-paste-image.png'
     ])
 
@@ -433,18 +394,11 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
 
     vi.advanceTimersByTime(1)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(3)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      NATIVE_CHAT_SUBMIT,
-      'driving'
-    )
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
   })
 
   it('treats whitespace-only prompt input as attachment-only', () => {
-    sendNativeChatMessageWithImageAttachments('claude', SETTINGS, PTY, '   ', [
-      '/tmp/orca-paste-image.png'
-    ])
+    sendNativeChatMessageWithImageAttachments('claude', PTY, '   ', ['/tmp/orca-paste-image.png'])
 
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
@@ -453,10 +407,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('keeps multiple image frames bare and separates only the final frame from prompt text', () => {
-    sendNativeChatMessageWithImageAttachments('claude', SETTINGS, PTY, 'hello', [
-      '/tmp/a.png',
-      '/tmp/b.png'
-    ])
+    sendNativeChatMessageWithImageAttachments('claude', PTY, 'hello', ['/tmp/a.png', '/tmp/b.png'])
 
     expectWriteOrder(sendRuntimePtyInput.mock.calls, [
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
@@ -466,7 +417,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('cancels deferred prompt and Enter writes after the attachment path', () => {
-    const handle = sendNativeChatMessageWithImageAttachments('claude', SETTINGS, PTY, 'describe', [
+    const handle = sendNativeChatMessageWithImageAttachments('claude', PTY, 'describe', [
       '/tmp/orca-paste-image.png'
     ])
     handle.cancel()
@@ -478,7 +429,7 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
       '\x1b[200~/tmp/orca-paste-image.png\x1b[201~ ',
       NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
     ])
-    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[1] === NATIVE_CHAT_SUBMIT)).toBe(
       false
     )
   })
@@ -490,9 +441,9 @@ describe('empty prompt submit', () => {
   })
 
   it('submits an empty prompt with a bare Enter', () => {
-    submitNativeChatPrompt(SETTINGS, PTY)
+    submitNativeChatPrompt(PTY)
     expect(sendRuntimePtyInput).toHaveBeenCalledOnce()
-    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT, 'driving')
+    expect(sendRuntimePtyInput).toHaveBeenCalledWith(PTY, NATIVE_CHAT_SUBMIT, 'driving')
   })
 })
 
@@ -510,14 +461,14 @@ describe('sendNativeChatAskAnswer', () => {
   })
 
   it('returns a no-op handle for an empty key group list', () => {
-    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [])
+    const handle = sendNativeChatAskAnswer(PTY, [])
     expect(handle.settleAfterMs).toBe(0)
     handle.cancel()
     expect(sendRuntimePtyInput).not.toHaveBeenCalled()
   })
 
   it('paces key groups so selector steps render before the next write', async () => {
-    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [
+    const handle = sendNativeChatAskAnswer(PTY, [
       { raw: '1' },
       { raw: '2' },
       { text: 'custom answer' }
@@ -527,26 +478,13 @@ describe('sendNativeChatAskAnswer', () => {
     )
 
     await vi.advanceTimersByTimeAsync(0)
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      SETTINGS,
-      PTY,
-      '1',
-      'driving',
-      undefined
-    )
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(PTY, '1', 'driving', undefined)
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_QUESTION_STEP_MS)
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
-      SETTINGS,
-      PTY,
-      '2',
-      'driving',
-      undefined
-    )
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(PTY, '2', 'driving', undefined)
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_QUESTION_STEP_MS)
     expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
-      SETTINGS,
       PTY,
       buildNativeChatPasteBytes('custom answer'),
       'driving',
@@ -555,7 +493,7 @@ describe('sendNativeChatAskAnswer', () => {
   })
 
   it('cancels remaining key group timers', async () => {
-    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '1' }, { raw: '2' }])
+    const handle = sendNativeChatAskAnswer(PTY, [{ raw: '1' }, { raw: '2' }])
     await vi.advanceTimersByTimeAsync(0)
     expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
     handle.cancel()
@@ -566,14 +504,14 @@ describe('sendNativeChatAskAnswer', () => {
   it('reports verified delivery only after settling and suppresses it after cancellation', async () => {
     const onSettled = vi.fn()
     sendRuntimePtyInputVerified.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
-    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '1' }, { raw: '\r' }], onSettled)
+    const handle = sendNativeChatAskAnswer(PTY, [{ raw: '1' }, { raw: '\r' }], onSettled)
 
     await vi.advanceTimersByTimeAsync(handle.settleAfterMs)
     expect(onSettled).toHaveBeenCalledExactlyOnceWith(false)
     expect(sendRuntimePtyInput).not.toHaveBeenCalled()
 
     const canceledSettled = vi.fn()
-    const canceled = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '1' }], canceledSettled)
+    const canceled = sendNativeChatAskAnswer(PTY, [{ raw: '1' }], canceledSettled)
     canceled.cancel()
     await vi.runAllTimersAsync()
     expect(canceledSettled).not.toHaveBeenCalled()
@@ -588,10 +526,10 @@ describe('sendNativeChatAskAnswer', () => {
       })
     )
 
-    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '2' }], onSettled)
+    const handle = sendNativeChatAskAnswer(PTY, [{ raw: '2' }], onSettled)
     await vi.advanceTimersByTimeAsync(handle.settleAfterMs)
 
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(SETTINGS, PTY, '2', 'driving', {
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(PTY, '2', 'driving', {
       requireWriteSettlement: true
     })
     expect(onSettled).not.toHaveBeenCalled()

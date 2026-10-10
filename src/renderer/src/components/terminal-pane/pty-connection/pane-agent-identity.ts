@@ -182,11 +182,11 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     isTrackablePtyId: session.isForegroundTrackingAllowed,
     readForegroundProcess: (id, options) =>
       isRemotePtyId(id)
-        ? inspectRuntimeTerminalProcess(useAppStore.getState().settings, id, options)
+        ? inspectRuntimeTerminalProcess(id, options)
         : window.api.pty.getForegroundProcess(id),
     confirmForegroundProcess: (id, options) =>
       isRemotePtyId(id)
-        ? inspectRuntimeTerminalProcess(useAppStore.getState().settings, id, options)
+        ? inspectRuntimeTerminalProcess(id, options)
         : window.api.pty.confirmForegroundProcess(id),
     isRemotePtyId,
     getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,

@@ -7,7 +7,6 @@ import {
   sendRuntimePtyInput,
   sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
-import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
   clearConfirmDurationMs,
@@ -45,8 +44,6 @@ export type NativeChatSendHandle = {
   settled?: Promise<void>
 }
 
-type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
-
 /**
  * Chat message path:
  *   1. clear any unsubmitted TUI line
@@ -56,14 +53,12 @@ type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>
  * Serialized per PTY so rapid sends cannot glue before Enter.
  */
 export function sendNativeChatMessage(
-  settings: RuntimeSettings,
   ptyId: string,
   text: string,
   options?: NativeChatSendOptions
 ): NativeChatSendHandle {
   if (options?.onWriteRejected || options?.onDeliverySettled) {
     return sendNativeChatObservedWrites(
-      settings,
       ptyId,
       [
         { data: buildNativeChatPasteBytes(text), delayBeforeMs: 0 },
@@ -79,21 +74,21 @@ export function sendNativeChatMessage(
       if (isCancelled()) {
         return
       }
-      clearThenWrite(settings, ptyId, options, delay, () => {
+      clearThenWrite(ptyId, options, delay, () => {
         if (isCancelled()) {
           return
         }
-        sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text), 'driving')
+        sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+          sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
           markSubmitted()
         })
       })
     },
     {
-      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(settings, ptyId, options)
+      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)
     }
   )
 }
@@ -127,7 +122,6 @@ function waitForNativeChatSubmit(signal?: AbortSignal): Promise<boolean> {
  * chat Enter cannot dismiss Claude's "Switch model?" dialog.
  */
 export async function sendNativeChatMessageVerified(
-  settings: RuntimeSettings,
   ptyId: string,
   text: string,
   signal?: AbortSignal
@@ -144,7 +138,6 @@ export async function sendNativeChatMessageVerified(
   // Why: option commands await remote/SSH acceptance so the Enter cannot race
   // ahead of the body while a model-change observer is already armed.
   const bodyAccepted = await sendRuntimePtyInputVerified(
-    settings,
     ptyId,
     buildNativeChatPasteBytes(text),
     'driving'
@@ -152,12 +145,11 @@ export async function sendNativeChatMessageVerified(
   if (!bodyAccepted || signal?.aborted || !(await waitForNativeChatSubmit(signal))) {
     return false
   }
-  return sendRuntimePtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+  return sendRuntimePtyInputVerified(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
 }
 
 /** Types a slash command as individual keys so Codex opens its command palette. */
 export async function typeNativeChatCommand(
-  settings: RuntimeSettings,
   ptyId: string,
   command: string,
   signal?: AbortSignal
@@ -168,17 +160,13 @@ export async function typeNativeChatCommand(
     command,
     signal,
     write: async (key) =>
-      (await sendRuntimePtyInputVerified(settings, ptyId, key, 'driving')) ? 'accepted' : 'rejected'
+      (await sendRuntimePtyInputVerified(ptyId, key, 'driving')) ? 'accepted' : 'rejected'
   })
   return outcome === 'accepted'
 }
 
 /** Queues a typed slash command with composer sends on the same PTY. */
-export function sendNativeChatTypedCommand(
-  settings: RuntimeSettings,
-  ptyId: string,
-  command: string
-): NativeChatSendHandle {
+export function sendNativeChatTypedCommand(ptyId: string, command: string): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
     ptyId,
@@ -186,7 +174,7 @@ export function sendNativeChatTypedCommand(
     ({ isCancelled, markSubmitted }) => {
       const finish = (outcome: 'accepted' | 'rejected' | 'unknown'): void => {
         if (!isCancelled() && outcome !== 'accepted') {
-          clearUnsubmittedAgentInput(settings, ptyId)
+          clearUnsubmittedAgentInput(ptyId)
         }
         markSubmitted()
       }
@@ -197,7 +185,7 @@ export function sendNativeChatTypedCommand(
           if (isCancelled()) {
             return 'rejected'
           }
-          return (await sendRuntimePtyInputVerified(settings, ptyId, key, 'driving'))
+          return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
             ? 'accepted'
             : 'rejected'
         }
@@ -206,7 +194,7 @@ export function sendNativeChatTypedCommand(
     {
       onCancelUnsubmitted: () => {
         controller.abort()
-        clearUnsubmittedAgentInput(settings, ptyId)
+        clearUnsubmittedAgentInput(ptyId)
       }
     }
   )
@@ -214,8 +202,8 @@ export function sendNativeChatTypedCommand(
 
 /** Submit a TUI prompt with no body (Enter only) — e.g. a plain submit when the
  *  composer is empty. */
-export function submitNativeChatPrompt(settings: RuntimeSettings, ptyId: string): void {
-  sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+export function submitNativeChatPrompt(ptyId: string): void {
+  sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
 }
 
 /**
@@ -224,7 +212,6 @@ export function submitNativeChatPrompt(settings: RuntimeSettings, ptyId: string)
  * step so the arrow-navigate selector applies each before the next.
  */
 export function sendNativeChatAskAnswer(
-  settings: RuntimeSettings,
   ptyId: string,
   groups: AskAnswerKeyGroup[],
   onSettled?: (delivered: boolean) => void
@@ -233,7 +220,6 @@ export function sendNativeChatAskAnswer(
     return { cancel: () => {}, settleAfterMs: 0 }
   }
   return sendNativeChatObservedWrites(
-    settings,
     ptyId,
     groups.map((group, index) => ({
       data: 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text),

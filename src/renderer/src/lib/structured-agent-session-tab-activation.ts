@@ -1,10 +1,7 @@
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { useAppStore } from '@/store'
-import {
-  callRuntimeRpc,
-  getActiveRuntimeTarget,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import {
   executionHostIdForStructuredTarget,
   structuredAgentSessionOwnerForTab
@@ -51,7 +48,7 @@ export function activateStructuredAgentSessionTab(args: {
   state.setActiveTabType('agent-session', args.worktreeId)
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
   void callRuntimeRpc(
-    args.target ?? getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
+    args.target ?? runtimeTargetForOwnerEnvironment(environmentId),
     'session.tabs.activate',
     {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),

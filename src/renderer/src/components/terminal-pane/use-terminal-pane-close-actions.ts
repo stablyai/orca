@@ -147,7 +147,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       )
       // Why the shared probe rather than a direct inspect: this is the same question the tab-close
       // guard asks, and the two must not drift on what an unanswered host means.
-      void probePtyRunningWork(settings, [ptyId], { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
+      void probePtyRunningWork([ptyId], { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
         .then((probes) => {
           clearTimeout(probeTimeout)
           decide(() => {
