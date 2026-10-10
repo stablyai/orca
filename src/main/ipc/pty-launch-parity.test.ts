@@ -352,24 +352,20 @@ describe('launch facts outside the tables', () => {
     expect(trackMock.mock.calls.filter(([event]) => event === 'agent_error')).toEqual(c.calls)
   })
 
-  // main today: neither lane falls back to the workspace root for a gone folder; a window pane's
-  // fallback (it sends cwdFallback) is pinned in pty-spawn-cwd-fallback.test.ts.
-  it.each([
-    { lane: 'row 3 host lane', cwd: `${POSIX_PATH}/gone` },
-    { lane: 'row 5 automation (no cwdFallback)', cwd: POSIX_PATH }
-  ])('a missing $lane folder reaches the provider unchanged', async ({ lane, cwd }) => {
+  // main today: the host lane hands the provider a gone subfolder; the window pane's root fallback
+  // is pinned in pty-spawn-cwd-fallback.test.ts. An automation sends no cwdFallback, but it always
+  // starts at the root the fallback would pick, so that is not a provider-visible fact.
+  it('a missing host-lane cwd reaches the provider unchanged', async () => {
     setMainPlatform('darwin')
     statSyncMock.mockImplementation(() => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
-    await (lane.startsWith('row 3')
-      ? runHostCall(lanes, {
-          ...AI_BUTTON,
-          call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
-        })
-      : lanes.spawnWindow(automationSpawnRequest(AUTOMATION_LAUNCH_CASES[0])))
-    expect((await providerFacts(lanes.provider)).cwd).toBe(cwd)
+    await runHostCall(lanes, {
+      ...AI_BUTTON,
+      call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
+    })
+    expect((await providerFacts(lanes.provider)).cwd).toBe(`${POSIX_PATH}/gone`)
   })
 
   it.each([
