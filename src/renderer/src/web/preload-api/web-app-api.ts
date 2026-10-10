@@ -8,6 +8,8 @@ import { UI_STORAGE_KEY, writeJson } from './web-storage'
 export function createWebAppApi(): Partial<PreloadApi> {
   return {
     app: {
+      setDockAgentMenu: () => Promise.resolve(),
+      onOpenDockAgent: () => () => undefined,
       // Browser preferences do not use the desktop profile writer.
       isProfileStateSaveDelayed: () => Promise.resolve(false),
       onProfileStateSaveDelayChanged: () => () => undefined,

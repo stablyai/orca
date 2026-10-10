@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
@@ -84,6 +85,8 @@ export function buildDashboardSnapshot(
   options: {
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
+    /** Navigation-only consumers need host identity without terminal/review/map details. */
+    includeExecutionHostId?: boolean
     /** Optional per-worktree row-pipeline reuse; card assembly always runs fresh
      *  because cards also read review/host/status slices the cache does not key. */
     rowsCache?: WorktreeAgentRowsCache
@@ -115,6 +118,9 @@ export function buildDashboardSnapshot(
   for (const workspace of activeWorktrees) {
     const { repo, worktree } = workspace
     const worktreeId = worktree.id
+    const executionHostId = options.includeExecutionHostId
+      ? getWorktreeExecutionHostId(worktree, repo ?? undefined)
+      : undefined
     const parentWorktreeId = worktree.parentWorktreeId
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
     const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
@@ -209,7 +215,9 @@ export function buildDashboardSnapshot(
           )
         : undefined
       // Only repos that actually contribute a card ship their icon.
-      repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
+      if (includeCardDetails) {
+        repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
+      }
 
       cards.push({
         paneKey: row.paneKey,
@@ -223,6 +231,7 @@ export function buildDashboardSnapshot(
         worktreeId,
         tabId,
         leafId,
+        ...(executionHostId ? { executionHostId } : {}),
         repoName: boundedLabel(workspace.projectName),
         worktreeName: boundedLabel(worktree.displayName),
         ...(includeCardDetails
