@@ -11,6 +11,8 @@ export const NODE_RUNTIME_INCLUDE = [
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'src/main/ai-vault-search/session-search-index-writer.test.ts',
   'src/main/ai-vault/session-scanner-unlimited-dedup.test.ts',
+  // Electron's Request attributes and stream bridges follow Node's implementation.
+  'src/main/host/electron-http-client.test.ts',
   'src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts',
   'src/renderer/src/lib/react-commit-cascade-observer.test.ts',
   'src/renderer/src/lib/react-commit-cascade-telemetry.test.ts',
