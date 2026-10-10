@@ -352,38 +352,20 @@ describe('launch facts outside the tables', () => {
     expect(trackMock.mock.calls.filter(([event]) => event === 'agent_error')).toEqual(c.calls)
   })
 
-  it.each([
-    // main today: the host lane hands the provider the gone path; the window lane falls back to
-    // the root only when the pane asked for it.
-    { lane: 'host', fallback: undefined, cwd: '/home/alice/repo/gone' },
-    { lane: 'window', fallback: undefined, cwd: '/home/alice/repo/gone' },
-    { lane: 'window', fallback: 'worktree', cwd: '/home/alice/repo' }
-  ] as const)(
-    'a missing $lane cwd (fallback $fallback) reaches the provider as $cwd',
-    async (c) => {
-      setMainPlatform('darwin')
-      statSyncMock.mockImplementation((target: string) => {
-        if (target.endsWith('/gone')) {
-          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-        }
-        return { isDirectory: () => true, mode: 0o755, size: 1 }
-      })
-      const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
-      await (c.lane === 'host'
-        ? runHostCall(lanes, {
-            ...AI_BUTTON,
-            call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
-          })
-        : lanes.spawnWindow({
-            cols: 80,
-            rows: 24,
-            cwd: `${POSIX_PATH}/gone`,
-            worktreeId: launchWorkspaceId(POSIX_REPO),
-            ...(c.fallback ? { cwdFallback: c.fallback } : {})
-          }))
-      expect(providerFacts(lanes.provider).cwd).toBe(c.cwd)
-    }
-  )
+  // main today: the host lane hands the provider a gone subfolder; the window lane's root fallback
+  // is pinned in pty-spawn-cwd-fallback.test.ts.
+  it('a missing host-lane cwd reaches the provider unchanged', async () => {
+    setMainPlatform('darwin')
+    statSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
+    const lanes = startParityLanes(suite, { workspace: POSIX_REPO })
+    await runHostCall(lanes, {
+      ...AI_BUTTON,
+      call: { kind: 'create', options: { ...AI_BUTTON_OPTIONS, cwd: 'gone' } }
+    })
+    expect(providerFacts(lanes.provider).cwd).toBe(`${POSIX_PATH}/gone`)
+  })
 
   it.each([
     { c: AI_BUTTON, reveal: { title: null, activate: false, surfaceOwner: false } },

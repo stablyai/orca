@@ -6,6 +6,7 @@ import {
 } from './web-runtime-session'
 import { peekWebSessionFocusIntent } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
+import { PAIRED_TAB_CASES, type PairedTabCase } from '@/lib/launch-parity-paired-tab-cases'
 import {
   ENVIRONMENT_ID,
   FOCUS_LEAF_ID,
@@ -642,4 +643,143 @@ describe('createWebRuntimeSessionTerminal', () => {
       text: 'https://github.com/o/r/issues/12'
     })
   })
+})
+
+type RuntimeRequest = { method: string; params?: Record<string, unknown> }
+
+type RuntimeCall = ReturnType<typeof vi.fn<(request: RuntimeRequest) => Promise<unknown>>>
+
+function stubRuntime(capabilities: string[]): RuntimeCall {
+  const runtimeCall = vi.fn<(request: RuntimeRequest) => Promise<unknown>>(async (request) => {
+    if (request.method === 'status.get') {
+      return {
+        id: 'status',
+        ok: true,
+        result: {
+          runtimeId: 'runtime-1',
+          graphStatus: 'ready',
+          runtimeProtocolVersion: 3,
+          minCompatibleRuntimeClientVersion: 2,
+          capabilities
+        }
+      }
+    }
+    if (request.method === 'terminal.createAgentSession') {
+      return {
+        id: 'create',
+        ok: true,
+        result: {
+          terminal: {
+            handle: 'term-created',
+            worktreeId: WORKTREE_ID,
+            tabId: 'host-tab-2',
+            paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
+          },
+          disposition: 'created'
+        }
+      }
+    }
+    if (request.method === 'session.tabs.createTerminal') {
+      return {
+        id: 'legacy-create',
+        ok: true,
+        result: { tab: { id: 'host-tab-2', leafId: FOCUS_LEAF_ID } }
+      }
+    }
+    return { id: 'list', ok: true, result: makeSnapshot() }
+  })
+  vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+  return runtimeCall
+}
+
+const HOST_AUTHORITY = ['agent-session.host-authority.v1']
+
+function expectedWire(c: PairedTabCase, modern: boolean): RuntimeRequest[] {
+  const launch = c.launch
+  const launchConfig = recordOf(launch.launchConfig)
+  const worktree = `id:${String(launch.worktreeId)}`
+  const cwd = typeof launch.cwd === 'string' ? launch.cwd : undefined
+  if (modern) {
+    // main today: command, env, launchConfig and startupCommandDelivery never reach the host;
+    // agentArgs is the caller's override, else the window's default args.
+    return [
+      {
+        method: 'terminal.createAgentSession',
+        params: {
+          worktree,
+          agent: launch.launchAgent,
+          prompt: launch.prompt,
+          promptDelivery: launch.promptDelivery,
+          agentArgs: launch.agentArgs ?? launchConfig.agentArgs,
+          ...(cwd ? { startupCwd: cwd } : {}),
+          viewMode: 'terminal',
+          presentation: 'background',
+          clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/)
+        }
+      },
+      {
+        method: 'session.tabs.move',
+        params: { worktree, tabId: 'host-tab-2', targetGroupId: 'group-1', kind: 'move-to-group' }
+      }
+    ]
+  }
+  // main today: prompt and promptDelivery are dropped (the prompt rides inside command), and only
+  // the draft creator names `agent`.
+  return [
+    {
+      method: 'session.tabs.createTerminal',
+      params: {
+        worktree,
+        targetGroupId: 'group-1',
+        command: launch.command,
+        cwd,
+        env: launch.env,
+        startupCommandDelivery: launch.startupCommandDelivery,
+        launchConfig,
+        agent: launch.agent,
+        launchAgent: launch.launchAgent,
+        viewMode: 'terminal',
+        activate: false,
+        select: true,
+        navigation: 'caller'
+      }
+    }
+  ]
+}
+
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? { ...value } : {}
+}
+
+// Pins main's current launch behaviour as the convergence parity baseline (row 7, wire half):
+// the launch object the real producer builds (launch-parity-paired-tab-cases.ts), sent by the
+// real creator to a host with and without agent-session host authority.
+describe('row 7: prompted paired launch wire shape on main', () => {
+  beforeEach(() => stubTerminalCreateEnvironment(mocks))
+  afterEach(() => resetTerminalCreateEnvironment())
+
+  it.each(PAIRED_TAB_CASES.flatMap((c) => [true, false].map((modern) => ({ ...c, modern }))))(
+    '$name, host authority $modern',
+    async (c) => {
+      const runtimeCall = stubRuntime(c.modern ? HOST_AUTHORITY : [])
+      const create =
+        c.creator === 'session'
+          ? createWebRuntimeSessionTerminal
+          : createWebRuntimeAgentSessionTerminalWithLaunchDraft
+
+      await expect(create(c.launch)).resolves.toEqual({ status: 'created' })
+
+      const sent = runtimeCall.mock.calls
+        .map(([request]) => request)
+        .filter((r) => r.method !== 'status.get' && r.method !== 'session.tabs.list')
+        .map(({ method, params }) => ({ method, params }))
+      expect(sent).toEqual(expectedWire(c, c.modern))
+      // A draft's chat-composer copy is seeded only after the host answers with its tab.
+      expect(mocks.seedNativeChatLaunchDraftForAgentTab.mock.calls).toEqual(
+        c.creator === 'launch-draft'
+          ? [[{ tabId: 'web-terminal-host-tab-2', agent: 'claude', text: c.launch.launchDraft }]]
+          : []
+      )
+    }
+  )
 })

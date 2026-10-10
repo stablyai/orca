@@ -81,7 +81,11 @@ describe('local OpenCode model launch authority', () => {
 
   it.each([
     { connectionId: 'ssh_private' },
-    { resumeProviderSession: { key: 'session_id' as const, id: 'old' } }
+    { resumeProviderSession: { key: 'session_id' as const, id: 'old' } },
+    // Row 4 parity: a pane missing any id it would place the session at.
+    { worktreeId: undefined },
+    { tabId: undefined },
+    { leafId: undefined }
   ])('refuses unsupported placement before host or raw spawn', async (extra) => {
     await expect(spawnIpcPty({ ...options(), ...extra }, connect)).rejects.toThrow(
       'capability_unsupported'
@@ -97,5 +101,120 @@ describe('local OpenCode model launch authority', () => {
     await spawnIpcPty(options(), connect, 'pty_existing')
     expect(callRuntimeRpc).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'pty_existing' }))
+  })
+})
+
+const WSL_RUNTIME = {
+  status: 'resolved',
+  runtime: {
+    kind: 'wsl',
+    hostPlatform: 'wsl',
+    projectId: 'repo-1',
+    distro: 'Ubuntu',
+    reason: 'project-override',
+    cacheKey: 'repo-1:wsl:Ubuntu'
+  }
+} as const
+const PANE_ENV = { ORCA_PANE_KEY: 'tab-1:leaf-1', ORCA_AGENT_LAUNCH_TOKEN: 'tok-1' }
+const TELEMETRY = { agent_kind: 'opencode', launch_source: 'quick_command', request_kind: 'new' }
+
+/** What a local OpenCode pane with a model pick builds (row 4, window half). */
+const modelPane = (kitty: boolean): IpcPtyTransportOptions => ({
+  ...options(),
+  worktreeId: 'repo-1::/r/wt',
+  tabId: 'tab-1',
+  leafId: 'leaf-1',
+  cwd: '/r/wt/packages/app',
+  cwdFallback: 'worktree',
+  env: PANE_ENV,
+  launchConfig: { agentCommand: 'opencode', agentArgs: '--pure', agentEnv: {} },
+  launchToken: 'tok-1',
+  agentPromptDelivery: 'draft',
+  agentArgsOverride: '--pure',
+  placement: { kind: 'new-tab' },
+  shellOverride: 'wsl.exe',
+  projectRuntime: WSL_RUNTIME,
+  terminalKittyKeyboardProtocol: kitty,
+  telemetry: TELEMETRY
+})
+
+// Pins main's current launch behaviour as the convergence parity baseline (row 4, window half):
+// the exact host request and reattach an OpenCode pane with a model pick sends.
+describe('row 4: OpenCode model pane requests on main', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    vi.stubGlobal('window', { api: { pty: { spawn } } })
+    spawn.mockResolvedValue({ id: 'pty_host', isReattach: true })
+    vi.mocked(callRuntimeRpc).mockResolvedValue({ terminal: { ptyId: 'pty_host' } })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each([true, false])(
+    'kitty %s: one exact createAgentSession, then a reattach',
+    async (kitty) => {
+      await spawnIpcPty(modelPane(kitty), { ...connect, initiallyHidden: true })
+
+      // The host gets prompt, args and cwd but none of the pane's command, env, shell or telemetry.
+      expect(vi.mocked(callRuntimeRpc).mock.calls).toEqual([
+        [
+          { kind: 'local' },
+          'terminal.createAgentSession',
+          {
+            clientOperationId: expect.stringMatching(/^\d{13}-[0-9a-f]{32}$/),
+            worktree: 'id:repo-1::/r/wt',
+            agent: 'opencode',
+            prompt: 'Read only',
+            promptDelivery: 'draft',
+            agentArgs: '--pure',
+            launchPreferences: { model: 'private-proof/model-b' },
+            startupCwd: '/r/wt/packages/app',
+            placement: { tabId: 'tab-1', leafId: 'leaf-1' },
+            presentation: 'background',
+            ...(kitty ? { terminalKittyKeyboardProtocol: true } : {})
+          }
+        ]
+      ])
+      // main today: the reattach keeps telemetry, shell, runtime and the hidden flag, and drops
+      // command, launchConfig, cwdFallback and placement.
+      expect(spawn.mock.calls).toEqual([
+        [
+          {
+            cols: 80,
+            rows: 24,
+            cwd: '/r/wt/packages/app',
+            env: PANE_ENV,
+            command: undefined,
+            launchToken: 'tok-1',
+            launchAgent: 'opencode',
+            sessionId: 'pty_host',
+            worktreeId: 'repo-1::/r/wt',
+            tabId: 'tab-1',
+            leafId: 'leaf-1',
+            initiallyHidden: true,
+            shellOverride: 'wsl.exe',
+            projectRuntime: WSL_RUNTIME,
+            ...(kitty ? { terminalKittyKeyboardProtocol: true } : {}),
+            telemetry: TELEMETRY
+          }
+        ]
+      ])
+    }
+  )
+
+  it('takes the raw window lane when every preference value is undefined', async () => {
+    // No measured size: the request falls back to 80x24.
+    await spawnIpcPty(
+      { ...modelPane(true), agentLaunchPreferences: { model: undefined } },
+      { url: 'ipc://private', callbacks: {} }
+    )
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        cols: 80,
+        rows: 24,
+        command: options().command,
+        placement: { kind: 'new-tab' }
+      })
+    )
   })
 })

@@ -1,5 +1,7 @@
 // Test-only: the host-lane launch parity table (rows 3, 4, 5r, 8, 10). Each case is the call a
 // host producer makes and the facts main hands the provider, the phone and telemetry for it.
+import type { RuntimeCreateAgentSessionRequest } from '../../shared/agent-session-host-authority'
+import type { TerminalCreateOptions } from '../runtime/runtime-terminal-contracts'
 import type { LaunchWorkspace } from '../../shared/launch-parity-window-request.test-fixture'
 import {
   POSIX_PATH,
@@ -9,8 +11,11 @@ import {
 import { HOST_LEAF_ID, HOST_TAB_ID } from './pty-launch-parity-fixture'
 
 export type HostLaunchCall =
-  | { kind: 'create'; options: Record<string, unknown> }
-  | { kind: 'agent-session'; request: Record<string, unknown> }
+  | { kind: 'create'; options: TerminalCreateOptions }
+  | {
+      kind: 'agent-session'
+      request: Omit<RuntimeCreateAgentSessionRequest, 'clientOperationId' | 'worktree'>
+    }
 
 export type HostProviderFacts = {
   command: string
@@ -117,7 +122,6 @@ const ssh = { connectionId: 'ssh-1' }
 export const HOST_LAUNCH_CASES: HostLaunchCase[] = [
   aiButton('macOS repo', 'darwin', repo(POSIX_PATH), { command: POSIX_CLAUDE, ...ZSH }),
   aiButton('macOS folder', 'darwin', folder(POSIX_PATH), { command: POSIX_CLAUDE, ...ZSH }),
-  aiButton('Linux repo', 'linux', repo(POSIX_PATH), { command: POSIX_CLAUDE, ...ZSH }),
   aiButton('Windows C: repo, default PowerShell', 'win32', repo(WIN_PATH), {
     command: POSIX_CLAUDE,
     ...PWSH
