@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  installCursorPositionResponder,
   installDeviceAttributesResponder,
+  STARTUP_CURSOR_POSITION_RESPONSE,
   STARTUP_DA1_RESPONSE,
   StartupDeviceAttributesQueryFilter
 } from './startup-device-attributes-responder'
@@ -103,6 +105,36 @@ describe('startup device attributes responder', () => {
     expect(replies).toEqual([])
   })
 
+  it('answers the cursor position report pwsh blocks on during startup', () => {
+    const { parser, registered } = createFakeParser()
+    const replies: string[] = []
+
+    installCursorPositionResponder({ parser, reply: (d) => replies.push(d) })
+
+    // The DA1 handler stays untouched: only the new `n`-final handler exists.
+    expect(registered[0]?.([6])).toBe(true)
+    expect(replies).toEqual([STARTUP_CURSOR_POSITION_RESPONSE])
+  })
+
+  it('declines DEC-prefixed and other DSR forms so they fall through to the renderer', () => {
+    const { parser, registered } = createFakeParser()
+    const replies: string[] = []
+
+    installCursorPositionResponder({ parser, reply: (d) => replies.push(d) })
+
+    // Why: `CSI ? 6 n` is a DEC-specific report and `CSI 5 n` a status report;
+    // neither is the query pwsh's startup read waits on.
+    expect(registered[0]?.([])).toBe(false)
+    expect(registered[0]?.([5])).toBe(false)
+    expect(replies).toEqual([])
+  })
+
+  it('pins the cursor position reply the live suites already answer fish with', () => {
+    // Why pinned: the zsh/fish live suites reply `1;1R` to the same query, so a
+    // diverging constant would make pwsh startups behave differently from fish's.
+    expect(STARTUP_CURSOR_POSITION_RESPONSE).toBe('\x1b[1;1R')
+  })
+
   it('reports the same primary attributes the renderer would, so consuming the query is transparent', () => {
     expect(STARTUP_DA1_RESPONSE).toBe('\x1b[?1;2c')
   })
@@ -113,6 +145,21 @@ describe('startup device attributes query filter', () => {
     const filter = new StartupDeviceAttributesQueryFilter()
 
     expect(filter.accept(`before\x1b[c middle\x1b[0c after`)).toBe('before middle after')
+  })
+
+  it('removes the cursor position report query so the renderer cannot double-reply', () => {
+    const filter = new StartupDeviceAttributesQueryFilter()
+
+    expect(filter.accept(`before\x1b[6n after`)).toBe('before after')
+  })
+
+  it('removes a cursor position query split at every chunk boundary', () => {
+    for (let split = 1; split < 4; split++) {
+      const filter = new StartupDeviceAttributesQueryFilter()
+      expect(filter.accept(`before\x1b[6n`.slice(0, 6 + split))).toBe('before')
+      expect(filter.accept(`\x1b[6n`.slice(split) + 'after')).toBe('after')
+      expect(filter.release()).toBe('')
+    }
   })
 
   it('removes a DA1 query split at every chunk boundary', () => {
