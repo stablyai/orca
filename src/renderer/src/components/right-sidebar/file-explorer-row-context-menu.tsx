@@ -44,7 +44,11 @@ import {
   shouldShowRemoteDownloadAction,
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
-import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
+import {
+  copyFileToOsClipboard,
+  downloadRemoteFile,
+  pickRemoteDownloadTarget
+} from './file-explorer-row-file-transfer'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -137,7 +141,7 @@ export function FileExplorerRowContextMenu({
     }
   }, [activeWorktreeId, node.path])
   const handleDownload = useCallback(() => {
-    const downloadTarget = connectionId || runtimeDownloadContext
+    const downloadTarget = pickRemoteDownloadTarget(node, connectionId, runtimeDownloadContext)
     if (!downloadTarget) {
       return
     }

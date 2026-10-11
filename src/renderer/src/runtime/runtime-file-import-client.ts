@@ -1,3 +1,4 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { joinPath } from '@/lib/path'
 import type { ImportItemResult } from '../../../shared/filesystem-import-result-types'
 import { deconflictCopyName } from '../../../shared/import-copy-name'
@@ -23,6 +24,15 @@ import {
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import { localAccess } from './runtime-file-read-client'
+import {
+  createRuntimeUploadProgressTracker,
+  sumSourceUploadBytes,
+  type RuntimeImportProgressHandlers,
+  type RuntimeImportProgressRow,
+  type RuntimeUploadProgressTracker,
+  stopIfCancelled,
+  wasStoppedByCancel
+} from './runtime-upload-progress-tracker'
 
 export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,
@@ -33,6 +43,7 @@ export async function importExternalPathsToRuntime(
     assertCurrent?: () => void
     /** Local imports only; remote destinations stay root-relative. */
     access?: LocalFileAccess
+    progress?: RuntimeImportProgressHandlers
   }
 ): Promise<{ results: ImportItemResult[] }> {
   const target = context.target
@@ -79,99 +90,172 @@ export async function importExternalPathsToRuntime(
   importSession.assertCurrent()
   const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({ sourcePaths })
   importSession.assertCurrent()
+  const handlers = options?.progress
+  // One id per dropped source: it is both the progress key and the cancel handle,
+  // so cancelling a row stops that source and leaves the rest of the drop running.
+  // Why: keyed by position, not path — the same path dropped twice stages twice
+  // and each copy needs its own bar and cancel.
+  const uploadIdsBySourceIndex = new Map<number, string>()
+  const trackers = new Map<string, RuntimeUploadProgressTracker>()
+  if (handlers) {
+    const rows: RuntimeImportProgressRow[] = []
+    for (const [sourceIndex, source] of staged.sources.entries()) {
+      if (source.status !== 'staged') {
+        continue
+      }
+      const rowUploadId = createBrowserUuid()
+      uploadIdsBySourceIndex.set(sourceIndex, rowUploadId)
+      const totalBytes = sumSourceUploadBytes(source)
+      trackers.set(
+        rowUploadId,
+        createRuntimeUploadProgressTracker(totalBytes, ({ sentBytes }) =>
+          handlers.onRowProgress(rowUploadId, sentBytes)
+        )
+      )
+      rows.push({
+        uploadId: rowUploadId,
+        name: source.name,
+        totalBytes,
+        sourcePath: source.sourcePath,
+        kind: source.kind
+      })
+    }
+    handlers.onStart(rows)
+  }
+  const unsubscribeProgress = handlers
+    ? window.api.fs.onUploadProgress((event) => {
+        // Why: a concurrent drop in another pane shares this channel.
+        trackers.get(event.uploadId)?.reportFileProgress(event.sentBytes, event.fileSequence)
+      })
+    : null
   const results: ImportItemResult[] = []
   const reservedNames = new Set<string>()
+  let nextFileSequence = 0
 
-  await ensureRuntimeDirectory(context, destinationDir, importSession)
+  try {
+    await ensureRuntimeDirectory(context, destinationDir, importSession)
 
-  for (const source of staged.sources) {
-    if (source.status !== 'staged') {
-      results.push(source)
-      continue
-    }
-    let createdDirectoryImportRoot: string | null = null
-    try {
-      const finalName = await deconflictCopyName(source.name, async (n) => {
-        importSession.assertCurrent()
-        return (
-          (await runtimePathExists(
-            context,
-            joinPath(destinationDir, n),
-            importSession.expectedEnvironmentPairingRevision
-          )) || reservedNames.has(n)
-        )
-      })
-      const destPath = joinPath(destinationDir, finalName)
-      const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
-      for (const entry of source.entries) {
-        const entryRelativePath = joinRuntimeRelativePath(destRelativePath, entry.relativePath)
-        if (entry.kind === 'directory') {
+    for (const [sourceIndex, source] of staged.sources.entries()) {
+      if (source.status !== 'staged') {
+        results.push(source)
+        continue
+      }
+      let createdDirectoryImportRoot: string | null = null
+      const sourceUploadId = uploadIdsBySourceIndex.get(sourceIndex)
+      try {
+        const finalName = await deconflictCopyName(source.name, async (n) => {
+          importSession.assertCurrent()
+          return (
+            (await runtimePathExists(
+              context,
+              joinPath(destinationDir, n),
+              importSession.expectedEnvironmentPairingRevision
+            )) || reservedNames.has(n)
+          )
+        })
+        const destPath = joinPath(destinationDir, finalName)
+        const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
+        for (const entry of source.entries) {
+          const entryRelativePath = joinRuntimeRelativePath(destRelativePath, entry.relativePath)
+          if (entry.kind === 'directory') {
+            // Why: only file streams reach main's cancel registry, so directories check here:
+            // before a create, so nothing new appears after a cancel, and after it, for one
+            // cancelled mid-request.
+            stopIfCancelled(handlers, sourceUploadId)
+            await callRuntimeFileImportMutation(
+              importSession,
+              'files.createDirNoClobber',
+              withSshMutationExpectation(context, {
+                worktree: toRuntimeWorktreeSelector(context.worktreeId),
+                relativePath: entryRelativePath
+              }),
+              15_000
+            )
+            if (source.kind === 'directory' && entry.relativePath === '') {
+              createdDirectoryImportRoot = entryRelativePath
+            }
+            stopIfCancelled(handlers, sourceUploadId)
+            continue
+          }
+          const fileSequence = sourceUploadId ? nextFileSequence++ : undefined
+          if (sourceUploadId && fileSequence !== undefined) {
+            trackers.get(sourceUploadId)?.beginFile(fileSequence)
+          }
+          await uploadRuntimeFileWithoutClobber(
+            importSession,
+            context.worktreeId,
+            entryRelativePath,
+            {
+              sourceRootPath: source.sourcePath,
+              entryRelativePath: entry.relativePath,
+              expected: {
+                byteLength: entry.byteLength,
+                inode: entry.inode,
+                deviceId: entry.deviceId,
+                modifiedAtMs: entry.modifiedAtMs
+              }
+            },
+            context.expectedSshConnectionGeneration,
+            context.expectedSshTargetId,
+            context.expectedExecutionHostId ??
+              (context.expectedSshTargetId
+                ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
+                : 'local'),
+            sourceUploadId,
+            fileSequence
+          )
+          if (sourceUploadId) {
+            trackers.get(sourceUploadId)?.completeFile(entry.byteLength)
+          }
+        }
+        reservedNames.add(finalName)
+        results.push({
+          sourcePath: source.sourcePath,
+          status: 'imported',
+          destPath,
+          kind: source.kind,
+          renamed: finalName !== source.name
+        })
+        if (sourceUploadId) {
+          handlers?.onRowSettled(sourceUploadId, 'done')
+        }
+      } catch (error) {
+        if (createdDirectoryImportRoot) {
+          // Why: match local directory imports by removing the no-clobber root
+          // Orca created when a nested runtime upload fails halfway through.
           await callRuntimeFileImportMutation(
             importSession,
-            'files.createDirNoClobber',
+            'files.delete',
             withSshMutationExpectation(context, {
               worktree: toRuntimeWorktreeSelector(context.worktreeId),
-              relativePath: entryRelativePath
+              relativePath: createdDirectoryImportRoot,
+              recursive: true
             }),
             15_000
-          )
-          if (source.kind === 'directory' && entry.relativePath === '') {
-            createdDirectoryImportRoot = entryRelativePath
-          }
-          continue
+          ).catch(() => {})
         }
-        await uploadRuntimeFileWithoutClobber(
-          importSession,
-          context.worktreeId,
-          entryRelativePath,
-          {
-            sourceRootPath: source.sourcePath,
-            entryRelativePath: entry.relativePath,
-            expected: {
-              byteLength: entry.byteLength,
-              inode: entry.inode,
-              deviceId: entry.deviceId,
-              modifiedAtMs: entry.modifiedAtMs
-            }
-          },
-          context.expectedSshConnectionGeneration,
-          context.expectedSshTargetId,
-          context.expectedExecutionHostId ??
-            (context.expectedSshTargetId
-              ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
-              : 'local')
-        )
+        const reason = error instanceof Error ? error.message : String(error)
+        results.push({
+          sourcePath: source.sourcePath,
+          status: 'failed',
+          reason,
+          // Why: per source, since a path dropped twice can be cancelled once.
+          ...(wasStoppedByCancel(handlers, sourceUploadId, reason) ? { cancelled: true } : {})
+        })
+        // Why: reported as failed even for a cancel; the upload panel maps a failed source the
+        // user cancelled to 'cancelled', so the user's own action is not relabelled.
+        if (sourceUploadId) {
+          handlers?.onRowSettled(sourceUploadId, 'failed')
+        }
       }
-      reservedNames.add(finalName)
-      results.push({
-        sourcePath: source.sourcePath,
-        status: 'imported',
-        destPath,
-        kind: source.kind,
-        renamed: finalName !== source.name
-      })
-    } catch (error) {
-      if (createdDirectoryImportRoot) {
-        // Why: match local directory imports by removing the no-clobber root
-        // Orca created when a nested runtime upload fails halfway through.
-        await callRuntimeFileImportMutation(
-          importSession,
-          'files.delete',
-          withSshMutationExpectation(context, {
-            worktree: toRuntimeWorktreeSelector(context.worktreeId),
-            relativePath: createdDirectoryImportRoot,
-            recursive: true
-          }),
-          15_000
-        ).catch(() => {})
-      }
-      results.push({
-        sourcePath: source.sourcePath,
-        status: 'failed',
-        reason: error instanceof Error ? error.message : String(error)
-      })
     }
-  }
 
-  return { results }
+    return { results }
+  } finally {
+    unsubscribeProgress?.()
+    for (const releasedId of uploadIdsBySourceIndex.values()) {
+      void window.api.fs.releaseRuntimeUpload({ uploadId: releasedId }).catch(() => {})
+    }
+    handlers?.onFinish()
+  }
 }

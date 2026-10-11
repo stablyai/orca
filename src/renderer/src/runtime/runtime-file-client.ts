@@ -1,5 +1,6 @@
 export type {
   RuntimeFileDownloadResult,
+  RuntimeFileDownloadTransfer,
   RuntimeFileOperationArgs,
   RuntimeFileReadArgs,
   RuntimeReadableFileContent

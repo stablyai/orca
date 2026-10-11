@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { createUploadProgressPanel } from '@/components/transfer-progress/upload-progress-panel'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { useAppStore } from '@/store'
@@ -149,6 +150,7 @@ async function openEditorFileDropPaths(
       )
       return
     }
+    const panel = createUploadProgressPanel()
     try {
       // Why: OS file drops provide client-local paths. Remote runtime and
       // SSH editors must upload into the server worktree before opening.
@@ -157,7 +159,7 @@ async function openEditorFileDropPaths(
         fileContext,
         [...paths],
         destinationDir,
-        { ensureDestinationDir: true }
+        { ensureDestinationDir: true, progress: panel.progress }
       )
       if (!editorGroupStillExists(destination)) {
         return
@@ -183,7 +185,12 @@ async function openEditorFileDropPaths(
           { suppressActiveRuntimeFallback: runtimeEnvironmentId === null, ...groupOptions }
         )
       }
-      if (results.some((result) => result.status !== 'imported')) {
+      if (
+        results.some(
+          (result) =>
+            result.status === 'skipped' || (result.status === 'failed' && result.cancelled !== true)
+        )
+      ) {
         toast.error(
           translate(
             'auto.hooks.useGlobalFileDrop.d720e2f855',
@@ -192,6 +199,7 @@ async function openEditorFileDropPaths(
         )
       }
     } catch {
+      panel.close()
       toast.error(
         translate('auto.hooks.useGlobalFileDrop.38c9f034ff', 'Failed to upload dropped files.')
       )

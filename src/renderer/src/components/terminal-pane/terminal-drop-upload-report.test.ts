@@ -47,7 +47,8 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
       { value0: 1, value1: 'file' }
     )
     expect(toast.error).toHaveBeenCalledWith(
-      expect.not.stringContaining('/secret/project/file.txt')
+      expect.not.stringContaining('/secret/project/file.txt'),
+      { description: undefined }
     )
   })
 
@@ -73,6 +74,14 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
       { description: undefined },
       { description: undefined }
     ])
+  })
+
+  it('names the workspace on a failure raised while the user is elsewhere', () => {
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }], 'Dropped into ux-polish')
+
+    expect(toast.error).toHaveBeenCalledWith(expect.any(String), {
+      description: 'Dropped into ux-polish'
+    })
   })
 
   it('keeps upload wording for failures', () => {
