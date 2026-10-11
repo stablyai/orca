@@ -4,9 +4,9 @@ import type { TerminalFileContentBlocks, TerminalFileGrant } from './file-grants
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES,
-  RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES,
-  previewableBinaryByteLimit
+  RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES
 } from '../../files/file-preview-budget'
+import { buildRuntimeImagePreview, imagePreviewReadLimit } from '../../runtime-image-preview'
 import {
   assertTerminalArtifactContentUnchanged,
   assertTerminalFileGrantFresh,
@@ -65,10 +65,8 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
   const fontMimeType = FONT_FILE_MIME_TYPES[extension]
   const mimeType = fontMimeType ?? RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extension]
   if (mimeType) {
-    const binaryMaxBytes =
-      maxContentBytes === undefined
-        ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
-        : previewableBinaryByteLimit(maxContentBytes)
+    const binaryMaxBytes = imagePreviewReadLimit(mimeType, maxContentBytes)
+
     if (fileStats.size > binaryMaxBytes) {
       throw new Error('file_too_large')
     }
@@ -77,12 +75,10 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
       throw new Error('file_too_large')
     }
     assertTerminalArtifactContentUnchanged(grant, buffer)
-    return {
-      content: buffer.toString('base64'),
-      isBinary: true,
-      isImage: !fontMimeType,
-      mimeType
+    if (fontMimeType) {
+      return { content: buffer.toString('base64'), isBinary: true, isImage: false, mimeType }
     }
+    return buildRuntimeImagePreview(buffer, mimeType, maxContentBytes)
   }
 
   const content = await readLocalTerminalArtifactFileFromHandle(handle, grant)
