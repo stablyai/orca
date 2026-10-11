@@ -172,10 +172,11 @@ export function VoiceControlController() {
         window.api.voiceControl.sendScreenSnapshot(requestId, collectVoiceScreenSnapshot())
       }) ?? (() => {})
     const cleanupResume = window.api.voiceControl.onSystemResume(() => {
-      // Main already stopped the dead session; restart the WebRTC side from scratch.
-      if (sessionRef.current || getVoiceControlUiState().state !== 'idle') {
-        void stopControl().then(() => startControl())
-      }
+      // Main sends this only after stopping a live session for a system sleep, and its
+      // stop's state events land first (tearing down sessionRef and the store) — so the
+      // event itself IS the restart intent. Gating on current state here would always
+      // read the already-idle store and skip the restart.
+      void stopControl().then(() => startControl())
     })
     return () => {
       cleanupState()

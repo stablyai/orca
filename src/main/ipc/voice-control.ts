@@ -105,8 +105,15 @@ export function registerVoiceControlHandlers(store: Store, runtime: OrcaRuntimeS
   const transcriptLog = new VoiceControlTranscriptLog(
     voiceControlTranscriptLogPath(app.getPath('userData'))
   )
-  const recordTranscript = (entry: Parameters<VoiceControlTranscriptLog['append']>[0]) => {
-    transcriptLog.append(entry)
+  const recordTranscript = (
+    entry: Parameters<VoiceControlTranscriptLog['append']>[0],
+    options?: { durableText?: string }
+  ): void => {
+    transcriptLog.append(
+      options?.durableText !== undefined && (entry.kind === 'user' || entry.kind === 'assistant')
+        ? { ...entry, text: options.durableText }
+        : entry
+    )
     sendToOwner('voice-control:transcriptEntry', entry)
   }
 
@@ -233,12 +240,16 @@ export function registerVoiceControlHandlers(store: Store, runtime: OrcaRuntimeS
 
   // Sleep suspends the OS network stack; the sideband and the peer connection are dead on
   // resume even before the OS notices. End the session and tell the renderer to re-start
-  // fresh (ephemeral credentials are cheap; a zombie live state is not).
+  // fresh (ephemeral credentials are cheap; a zombie live state is not). The event is only
+  // ever sent in this flow, so the renderer treats it as the restart intent itself.
   powerMonitor.on('resume', () => {
     const { state } = service.getState()
     if (state === 'live' || state === 'minting' || state === 'awaiting-sdp') {
       void service.stop('power-resume').then(() => {
+        // Send before releasing ownership so the restart intent still lands; the
+        // renderer's fresh start re-claims the owner slot.
         sendToOwner('voice-control:systemResume', {})
+        releaseOwner()
       })
     }
   })

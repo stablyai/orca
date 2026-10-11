@@ -145,6 +145,42 @@ describe('VoiceControlSessionBackendImpl', () => {
     expect(sent.some((e) => e.type === 'response.create')).toBe(false)
   })
 
+  // The roster projection includes idle resumable worktrees (paneKey ''); they are
+  // start_agent candidates, not broadcast targets — there is no pane to write to.
+  it('broadcast skips idle worktrees instead of reporting them unreachable', async () => {
+    const { deps, sent, terminalPrompts } = harness({ idleWorktree: true })
+    const backend = new VoiceControlSessionBackendImpl(deps)
+    backend.start()
+    await backend.dispatchToolCall('broadcast', JSON.stringify({ message: 'status?' }), 'c1')
+    expect(terminalPrompts).toHaveLength(1)
+    expect(lastToolOutput(sent)).not.toContain('Could not reach')
+    expect(sent.some((e) => e.type === 'response.create')).toBe(false)
+  })
+
+  // A bare shell behind a roster row receives nothing; counting it as sent would light
+  // a thinking chip and a watchdog entry for a message that went into the void.
+  it('broadcast to a bare shell counts as failed, not sent', async () => {
+    const { deps, sent, terminalPrompts, agentActivity } = harness({ agentRunning: false })
+    const backend = new VoiceControlSessionBackendImpl(deps)
+    backend.start()
+    await backend.dispatchToolCall('broadcast', JSON.stringify({ message: 'status?' }), 'c1')
+    expect(terminalPrompts).toHaveLength(0)
+    expect(lastToolOutput(sent)).toContain('reached no one')
+    expect(agentActivity.some((e) => e.activity === 'thinking')).toBe(false)
+    expect(sent.some((e) => e.type === 'response.create')).toBe(true)
+  })
+
+  // One dispatch throwing (a stale row raced a hook-server state flip) must not mask
+  // the other agents' outcomes — or leave the model's turn hanging on an unanswered call.
+  it('a broadcast dispatch that throws reports the failure instead of hanging', async () => {
+    const { deps, sent } = harness({ dispatchError: 'stale dispatch row' })
+    const backend = new VoiceControlSessionBackendImpl(deps)
+    backend.start()
+    await backend.dispatchToolCall('broadcast', JSON.stringify({ message: 'status?' }), 'c1')
+    expect(lastToolOutput(sent)).toContain('reached no one')
+    expect(sent.some((e) => e.type === 'response.create')).toBe(true)
+  })
+
   it('navigate_ui focus-agent sends the activate + focus messages for the resolved pane', async () => {
     const { deps, focused } = harness()
     const backend = new VoiceControlSessionBackendImpl(deps)
