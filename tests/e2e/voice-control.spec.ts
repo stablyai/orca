@@ -1,7 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { getDefaultVoiceControlSettings, getDefaultVoiceSettings } from '../../src/shared/constants'
 import type { VoiceSettings } from '../../src/shared/speech-types'
-import type { VoiceControlToolActivityEvent } from '../../src/shared/voice-control-types'
 import { expect, test } from './helpers/orca-app'
 
 // Live layer opt-in, same gating idiom as staging-skill-sharing.spec.ts.
@@ -101,7 +100,6 @@ test.describe('voice control (live OpenAI realtime)', () => {
 
     // Same IPC the Voice settings pane uses to persist the OpenAI speech key.
     await orcaPage.evaluate((apiKey) => window.api.speech.saveOpenAiApiKey(apiKey), OPENAI_API_KEY)
-    await subscribeToolActivity(orcaPage)
 
     await enableVoiceControl(orcaPage)
     const indicator = orcaPage.getByTestId(INDICATOR_TESTID)
@@ -130,35 +128,9 @@ test.describe('voice control (live OpenAI realtime)', () => {
       window.__voiceControlE2E?.sendClientEvent({ type: 'response.create' })
     })
 
-    await expect
-      .poll(
-        async () =>
-          (await readToolActivity(orcaPage)).some((event) => event.tool === 'list_agents'),
-        { timeout: 120_000, message: 'list_agents tool activity never arrived' }
-      )
-      .toBe(true)
+    // The final assertion is what the user sees: the pill narrates the tool dispatch.
+    // (Waiting via IPC above is fine; asserting on IPC would pass even if the pill
+    // never rendered the activity.)
+    await expect(indicator.getByText('Checking the roster…')).toBeVisible({ timeout: 120_000 })
   })
 })
-
-async function subscribeToolActivity(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spec-local window scratch space; installed here and read back only by readToolActivity below.
-    const scratch = window as unknown as {
-      __voiceControlToolEvents?: VoiceControlToolActivityEvent[]
-    }
-    scratch.__voiceControlToolEvents = []
-    window.api.voiceControl.onToolActivity((event) => {
-      scratch.__voiceControlToolEvents?.push(event)
-    })
-  })
-}
-
-async function readToolActivity(page: Page): Promise<VoiceControlToolActivityEvent[]> {
-  return page.evaluate(() => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the scratch array installed by subscribeToolActivity above.
-    const scratch = window as unknown as {
-      __voiceControlToolEvents?: VoiceControlToolActivityEvent[]
-    }
-    return scratch.__voiceControlToolEvents ?? []
-  })
-}

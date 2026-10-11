@@ -8,9 +8,8 @@ import zh from '@/i18n/locales/zh.json'
 
 const COMPONENT = 'AgentSpeakingChips'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveJsonModule types each locale by its own literal keys; the control subtree is homogeneous by construction and this test asserts that.
-const control = en.auto.components.voice.control as Record<string, Record<string, string>>
-const labels = control[COMPONENT]
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveJsonModule types each locale by its own literal keys; the chips leaf is a flat label map by construction and this test asserts that.
+const labels = en.auto.components.voice.control[COMPONENT] as Record<string, string>
 const translatedLabels = { es, fr, ja, ko, zh }
 
 describe('agent speaking chips localization', () => {
@@ -19,14 +18,11 @@ describe('agent speaking chips localization', () => {
   })
 
   it.each(Object.entries(translatedLabels))('translates every label in %s', (_locale, catalog) => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveJsonModule types each locale by its own literal keys; the control subtree is homogeneous by construction and this test asserts that.
-    const localized = catalog.auto.components.voice.control as Record<
-      string,
-      Record<string, string>
-    >
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same leaf shape as en's, asserted entry by entry below.
+    const localized = catalog.auto.components.voice.control[COMPONENT] as Record<string, string>
     for (const [key, englishLabel] of Object.entries(labels)) {
-      expect(localized[COMPONENT]?.[key]).toBeTruthy()
-      expect(localized[COMPONENT]?.[key]).not.toBe(englishLabel)
+      expect(localized[key]).toBeTruthy()
+      expect(localized[key]).not.toBe(englishLabel)
     }
   })
 })

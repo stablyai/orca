@@ -13,15 +13,14 @@ import {
   type MintedRealtimeClientSecret
 } from './openai-realtime-client-secret-mint'
 import { exchangeRealtimeSdpOffer } from './openai-realtime-sdp-exchange'
-import { classifyRealtimeEvent, MalformedToolCallError } from './realtime-event-classification'
 import { RealtimeResponseGate, type ResponseGateObserver } from './realtime-response-gate'
 import { RealtimeSidebandSocket } from './realtime-sideband-socket'
 import { VoiceControlRealtimeError } from './voice-control-realtime-error'
 import { buildCoordinatorInstructions } from './voice-control-coordinator-prompt'
 import { formatVoiceRosterForInstructions, projectVoiceRoster } from './voice-control-roster'
+import { routeVoiceControlSidebandEvent } from './voice-control-sideband-event-routing'
 import { COORDINATOR_TOOLS } from './voice-control-tool-schemas'
 import {
-  traceVoiceSidebandEvent,
   traceVoiceStateTransition,
   traceVoiceTranscript,
   voiceControlGateObserver
@@ -54,8 +53,10 @@ export type VoiceControlServiceDeps = {
   cliCommand: string
   /** Tail of the durable transcript — baked into the session as the coordinator's memory. */
   readRecentTranscript: () => VoiceTranscriptEntry[]
-  /** Durable transcript sink — user/assistant lines are written here from the sideband. */
-  recordTranscript: (entry: VoiceTranscriptEntry) => void
+  /** Durable transcript sink — user/assistant lines are written here from the sideband.
+   *  `durableText` replaces `text` in the persisted copy only; the live feed keeps the
+   *  real text. Used so pasted secrets never reach disk or a later session's memory. */
+  recordTranscript: (entry: VoiceTranscriptEntry, options?: { durableText?: string }) => void
   gateObserver?: ResponseGateObserver
   createSideband?: (
     apiKey: string,
@@ -85,6 +86,8 @@ export class VoiceControlService {
   private sessionId: string | null = null
   private pending: PendingSession | null = null
   private live: LiveSession | null = null
+  /** Bumped by stop(); an async step that wakes up behind a stop must not touch state. */
+  private generation = 0
 
   constructor(private readonly deps: VoiceControlServiceDeps) {}
 
@@ -108,6 +111,7 @@ export class VoiceControlService {
       return { kind: 'key-unreadable', error: 'OpenAI API key could not be decrypted' }
     }
     this.sessionId = sessionId
+    const generation = this.generation
     const failure = await this.guard(async () => {
       this.transition('minting')
       const roster = projectVoiceRoster(await this.deps.getRoster())
@@ -123,6 +127,10 @@ export class VoiceControlService {
         tools: COORDINATOR_TOOLS,
         voice: settings.coordinatorVoice
       })
+      if (generation !== this.generation) {
+        // Stopped mid-mint; the stop already published idle. Drop the late mint.
+        return
+      }
       this.pending = { sessionId, clientSecret }
       this.transition('awaiting-sdp')
       this.deps.emitToolActivity({
@@ -142,6 +150,7 @@ export class VoiceControlService {
       return { kind: 'unknown', error: 'voice_control_no_pending_session' }
     }
     const pending = this.pending
+    const generation = this.generation
     let failure: { kind: VoiceControlErrorKind; error: string } | null = null
     let answerSdp = ''
     failure = await this.guard(async () => {
@@ -150,12 +159,23 @@ export class VoiceControlService {
         pending.clientSecret.value,
         offerSdp
       )
+      if (generation !== this.generation) {
+        // Stopped mid-exchange; the stop already published idle. Drop the late answer.
+        return
+      }
       answerSdp = exchange.answerSdp
-      await this.openSideband(sessionId, exchange.callId)
+      await this.openSideband(sessionId, exchange.callId, generation)
+      if (generation !== this.generation) {
+        return
+      }
       this.transition('live')
     })
     if (failure) {
       return failure
+    }
+    if (generation !== this.generation) {
+      // Stopped while the exchange was in flight — the caller's session is gone.
+      return { kind: 'unknown', error: 'voice_control_session_superseded' }
     }
     return { answerSdp }
   }
@@ -171,8 +191,15 @@ export class VoiceControlService {
     if (!live || this.sessionId !== sessionId || this.state !== 'live') {
       return false
     }
-    traceVoiceTranscript('user', text)
-    this.deps.recordTranscript({ ts: Date.now(), kind: 'user', text })
+    // Why the placeholder everywhere durable: the composer is where users paste login
+    // codes and tokens (the prompt says so). The live panel shows the real text, but
+    // neither the trace file nor the durable log may keep it — a paste can't sit on
+    // disk or be replayed into a later session.
+    traceVoiceTranscript('user', '(typed message)')
+    this.deps.recordTranscript(
+      { ts: Date.now(), kind: 'user', text },
+      { durableText: '(typed message)' }
+    )
     live.gate.sendEvent({
       type: 'conversation.item.create',
       item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] }
@@ -185,6 +212,7 @@ export class VoiceControlService {
     if (this.state === 'idle') {
       return
     }
+    this.generation += 1
     // Synchronous, so nothing interleaves between the teardown and the transition.
     this.teardownLive()
     this.transition('stopping')
@@ -197,7 +225,7 @@ export class VoiceControlService {
     this.transition('idle')
   }
 
-  private async openSideband(sessionId: string, callId: string): Promise<void> {
+  private async openSideband(sessionId: string, callId: string, generation: number): Promise<void> {
     const createSideband =
       this.deps.createSideband ??
       ((
@@ -211,7 +239,15 @@ export class VoiceControlService {
       this.deps.gateObserver ?? voiceControlGateObserver
     )
     const sideband = createSideband(this.deps.readApiKey(), callId, {
-      onEvent: (event) => this.handleSidebandEvent(sessionId, gate, event),
+      onEvent: (event) =>
+        routeVoiceControlSidebandEvent({
+          sessionId,
+          gate,
+          backend: this.live?.backend ?? null,
+          emitToolActivity: this.deps.emitToolActivity,
+          recordTranscript: this.deps.recordTranscript,
+          event
+        }),
       onMalformedFrame: () => {
         this.deps.emitToolActivity({
           sessionId,
@@ -227,6 +263,12 @@ export class VoiceControlService {
     })
     sidebandRef = sideband
     await sideband.connect()
+    if (generation !== this.generation) {
+      // Stopped while the socket was connecting — close it and leave state alone;
+      // creating the backend and timers now would resurrect a dead session.
+      sideband.close()
+      return
+    }
     const maxMinutes = this.deps.getSettings().maxSessionMinutes
     const hangupTimer =
       maxMinutes > 0
@@ -243,47 +285,6 @@ export class VoiceControlService {
     backend.start()
   }
 
-  private handleSidebandEvent(
-    sessionId: string,
-    gate: RealtimeResponseGate,
-    event: Record<string, unknown>
-  ): void {
-    gate.observe(event)
-    // Provider-side records: rejections of non-create events (a refused injection reads
-    // as a silent model otherwise), note-injection acks, and response end states.
-    traceVoiceSidebandEvent(event)
-    let classified
-    try {
-      classified = classifyRealtimeEvent(event)
-    } catch (error) {
-      if (error instanceof MalformedToolCallError) {
-        // Why surfaced, not skipped: one bad frame on a healthy connection must be
-        // visible; the session continues (otto-voice posture).
-        this.deps.emitToolActivity({
-          sessionId,
-          tool: 'sideband',
-          detail: `malformed tool call frame (${error.toolCallId ?? 'no call id'})`
-        })
-        return
-      }
-      throw error
-    }
-    this.live?.backend.observeEvent(event)
-    if (classified.kind === 'tool-call') {
-      void this.live?.backend.dispatchToolCall(
-        classified.name,
-        classified.argumentsJson,
-        classified.toolCallId
-      )
-    } else if (classified.kind === 'user-transcript') {
-      traceVoiceTranscript('user', classified.text)
-      this.deps.recordTranscript({ ts: Date.now(), kind: 'user', text: classified.text })
-    } else if (classified.kind === 'agent-transcript') {
-      traceVoiceTranscript('assistant', classified.text)
-      this.deps.recordTranscript({ ts: Date.now(), kind: 'assistant', text: classified.text })
-    }
-  }
-
   private transition(state: VoiceControlState): void {
     this.state = state
     traceVoiceStateTransition(state)
@@ -294,10 +295,16 @@ export class VoiceControlService {
   private async guard(
     body: () => Promise<void>
   ): Promise<{ kind: VoiceControlErrorKind; error: string } | null> {
+    const generation = this.generation
     try {
       await body()
       return null
     } catch (error) {
+      if (generation !== this.generation) {
+        // A stop superseded this step while it was in flight; the stop published idle
+        // deliberately, and the late failure must not resurrect an error state.
+        return null
+      }
       const kind = error instanceof VoiceControlRealtimeError ? error.kind : 'unknown'
       const message = error instanceof Error ? error.message : String(error)
       await this.fail(kind, message)
