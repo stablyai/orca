@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
 import type {
   VoiceControlSettings,
@@ -9,6 +9,15 @@ import type { SidebandEventHandler } from './realtime-sideband-socket'
 import type { VoiceControlSessionBackend } from './voice-control-session-backend'
 import { VoiceControlService, type VoiceControlServiceDeps } from './voice-control-service'
 import type { VoiceTranscriptEntry } from './voice-control-transcript-log'
+import { traceVoiceTranscript } from './voice-control-tracing'
+import type * as VoiceControlTracing from './voice-control-tracing'
+
+// The tracer writes to a durable file — pinned as a mock so the typed-input test can
+// assert the placeholder reaches it instead of the real (possibly pasted) text.
+vi.mock('./voice-control-tracing', async (importOriginal) => ({
+  ...(await importOriginal<typeof VoiceControlTracing>()),
+  traceVoiceTranscript: vi.fn()
+}))
 
 const SETTINGS: VoiceControlSettings = {
   enabled: true,
@@ -214,9 +223,10 @@ describe('VoiceControlService', () => {
   // Live failure this guards: the coordinator needed a pasted OAuth code and told the
   // user "paste it right here in chat" — but a voice session had no text input at all.
   it('sendUserText injects the typed line as a user message and asks for a response', async () => {
-    const transcript: VoiceTranscriptEntry[] = []
+    const recordCalls: { entry: VoiceTranscriptEntry; durableText?: string }[] = []
     const { service, sideband } = createHarness({
-      recordTranscript: (entry) => transcript.push(entry)
+      recordTranscript: (entry, options) =>
+        recordCalls.push({ entry, durableText: options?.durableText })
     })
     await service.start('s1')
     await service.exchangeSdp('s1', 'v=0 offer')
@@ -230,8 +240,17 @@ describe('VoiceControlService', () => {
       }
     })
     expect(sideband.sentEvents.some((e) => e.type === 'response.create')).toBe(true)
-    // The typed line lands on the same transcript feed as speech.
-    expect(transcript.some((e) => e.kind === 'user' && e.text === 'the code is abc-123')).toBe(true)
+    // The typed line lands on the same transcript feed as speech — but the composer is
+    // the paste-a-secret path, so the durable copy is a placeholder, never the real text.
+    expect(recordCalls).toEqual([
+      {
+        entry: { ts: expect.any(Number), kind: 'user', text: 'the code is abc-123' },
+        durableText: '(typed message)'
+      }
+    ])
+    // The trace file is durable too — it gets the placeholder, not the paste.
+    expect(vi.mocked(traceVoiceTranscript)).toHaveBeenCalledWith('user', '(typed message)')
+    expect(vi.mocked(traceVoiceTranscript)).not.toHaveBeenCalledWith('user', 'the code is abc-123')
   })
 
   it('sendUserText refuses when there is no live session or the id is not ours', async () => {
@@ -360,5 +379,119 @@ describe('VoiceControlService', () => {
     sideband.state.handler?.onEnded('liveness', 'pong timeout')
     await flushMicrotasks()
     expect(backend.state.disposed).toBe(true)
+  })
+
+  // The toggle-off-mid-mint race: without a generation check the late mint parks the
+  // service in 'awaiting-sdp' with a null sessionId and every later start is refused.
+  it('a stop during the mint drops the late mint and keeps the next start possible', async () => {
+    let releaseMint: (response: Response) => void = () => {}
+    let mintDeferred = true
+    const { service, states } = createHarness({
+      http: {
+        fetch: (url: string) => {
+          if (url.includes('client_secrets')) {
+            if (mintDeferred) {
+              mintDeferred = false
+              return new Promise<Response>((resolve) => {
+                releaseMint = resolve
+              })
+            }
+            return Promise.resolve(mintResponse())
+          }
+          return Promise.resolve(sdpResponse('call_1'))
+        }
+      }
+    })
+    const started = service.start('s1')
+    await flushMicrotasks()
+    await service.stop()
+    releaseMint(mintResponse())
+    expect(await started).toBeNull()
+    expect(service.getState()).toEqual({ state: 'idle', sessionId: null })
+    expect(states.at(-1)?.state).toBe('idle')
+
+    await service.start('s2')
+    expect(service.getState().state).toBe('awaiting-sdp')
+  })
+
+  it('a mint failure after a stop does not overwrite idle with an error', async () => {
+    let rejectMint: (error: Error) => void = () => {}
+    const { service, states } = createHarness({
+      http: {
+        fetch: (url: string) => {
+          if (url.includes('client_secrets')) {
+            return new Promise<Response>((_resolve, reject) => {
+              rejectMint = reject
+            })
+          }
+          return Promise.resolve(sdpResponse('call_1'))
+        }
+      }
+    })
+    const started = service.start('s1')
+    await flushMicrotasks()
+    await service.stop()
+    rejectMint(new Error('boom'))
+    expect(await started).toBeNull()
+    expect(service.getState()).toEqual({ state: 'idle', sessionId: null })
+    expect(states.at(-1)?.state).toBe('idle')
+  })
+
+  it('a stop during the SDP exchange never opens the sideband or goes live', async () => {
+    let releaseExchange: (response: Response) => void = () => {}
+    const { service, sideband, states } = createHarness({
+      http: {
+        fetch: (url: string) => {
+          if (url.includes('client_secrets')) {
+            return Promise.resolve(mintResponse())
+          }
+          return new Promise<Response>((resolve) => {
+            releaseExchange = resolve
+          })
+        }
+      }
+    })
+    await service.start('s1')
+    const exchanged = service.exchangeSdp('s1', 'v=0 offer')
+    await flushMicrotasks()
+    await service.stop()
+    releaseExchange(sdpResponse('call_1'))
+    await expect(exchanged).resolves.toEqual({
+      kind: 'unknown',
+      error: 'voice_control_session_superseded'
+    })
+    expect(service.getState()).toEqual({ state: 'idle', sessionId: null })
+    // The sideband was never even created.
+    expect(sideband.state.handler).toBeNull()
+    expect(states.some((s) => s.state === 'live')).toBe(false)
+  })
+
+  it('a stop while the sideband connects closes it instead of going live', async () => {
+    let releaseConnect: () => void = () => {}
+    const connectDeferred: { closed: boolean } = { closed: false }
+    const { service, states } = createHarness({
+      createSideband: () => ({
+        connect: () =>
+          new Promise<void>((resolve) => {
+            releaseConnect = resolve
+          }),
+        close: () => {
+          connectDeferred.closed = true
+        },
+        send: () => {}
+      })
+    })
+    await service.start('s1')
+    const exchanged = service.exchangeSdp('s1', 'v=0 offer')
+    await flushMicrotasks()
+    await service.stop()
+    releaseConnect()
+    await expect(exchanged).resolves.toEqual({
+      kind: 'unknown',
+      error: 'voice_control_session_superseded'
+    })
+    expect(connectDeferred.closed).toBe(true)
+    expect(service.getState()).toEqual({ state: 'idle', sessionId: null })
+    expect(states.some((s) => s.state === 'live')).toBe(false)
   })
 })

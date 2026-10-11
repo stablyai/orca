@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getWindowShortcutActionId, resolveWindowShortcutAction } from './window-shortcut-policy'
 
 describe('resolveWindowShortcutAction voice.control', () => {
-  it('resolves the voice control toggle on Mod+Shift+V across platforms', () => {
+  it('resolves the voice control toggle on Mod+Shift+V on macOS only', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyV', key: 'v', meta: true, control: false, alt: false, shift: true },
@@ -11,19 +11,20 @@ describe('resolveWindowShortcutAction voice.control', () => {
       )
     ).toEqual({ type: 'voiceControlToggle' })
 
+    // Ctrl+Shift+V is terminal paste off macOS; the default leaves the chord to it.
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyV', key: 'v', meta: false, control: true, alt: false, shift: true },
         'linux'
       )
-    ).toEqual({ type: 'voiceControlToggle' })
+    ).toBeNull()
 
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyV', key: 'v', meta: false, control: true, alt: false, shift: true },
         'win32'
       )
-    ).toEqual({ type: 'voiceControlToggle' })
+    ).toBeNull()
 
     // Missing shift is not the control chord.
     expect(

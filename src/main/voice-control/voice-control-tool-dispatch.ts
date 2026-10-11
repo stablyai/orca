@@ -220,13 +220,16 @@ async function runCommand(
 }
 
 async function broadcast(ctx: VoiceToolDispatchContext, message: string): Promise<VoiceToolResult> {
-  const roster = await ctx.refreshRoster()
+  // Idle worktrees (paneKey '') have no pane to write to — they are start_agent
+  // candidates, not broadcast targets; dispatching to one reads as a spurious failure.
+  const roster = (await ctx.refreshRoster()).filter((entry) => entry.paneKey !== '')
   if (roster.length === 0) {
     return { output: 'No agents are running, so the broadcast went nowhere.' }
   }
   // Each dispatch is independent (distinct handles and rows) — run them together; the
   // model's turn hangs on this tool's output, so N agents must not cost N × one dispatch.
-  const results = await Promise.all(
+  // allSettled: one throw (e.g. a stale dispatch row) must not hide the others' outcomes.
+  const results = await Promise.allSettled(
     roster.map((entry) =>
       dispatchVoiceMessageToAgent({ ...ctx.dispatch, runId: ctx.runId() }, entry, message)
     )
@@ -234,7 +237,11 @@ async function broadcast(ctx: VoiceToolDispatchContext, message: string): Promis
   const sentTo: string[] = []
   const failed: string[] = []
   roster.forEach((entry, index) => {
-    if (results[index]?.kind === 'unreachable') {
+    const settled = results[index]
+    const kind = settled?.status === 'fulfilled' ? settled.value.kind : null
+    // Only a real write counts: 'no-agent-detected' (a bare shell) must not get a
+    // ledger entry and a thinking chip for a message nobody received.
+    if (kind !== 'dispatched' && kind !== 'dispatched-unobserved') {
       failed.push(entry.spokenName)
       return
     }
@@ -247,6 +254,11 @@ async function broadcast(ctx: VoiceToolDispatchContext, message: string): Promis
       spokenName: entry.spokenName
     })
   })
+  if (sentTo.length === 0) {
+    return {
+      output: `The broadcast reached no one — ${failed.join(' and ')} all failed. Try message_agent on one of them to see why.`
+    }
+  }
   const failedPart = failed.length > 0 ? ` Could not reach ${failed.join(' or ')}.` : ''
   return {
     output: `Broadcast sent to ${sentTo.join(', ')}.${failedPart} Reports reach you as system notes.`,
