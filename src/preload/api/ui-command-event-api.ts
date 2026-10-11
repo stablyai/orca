@@ -125,6 +125,8 @@ export type UiCommandEventApi = {
       sessionPartition?: string
       activate?: boolean
       fallbackWorktreeId?: string
+      split?: 'right' | 'left' | 'down' | 'up'
+      splitFromTabId?: string
     }) => void
   ) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void

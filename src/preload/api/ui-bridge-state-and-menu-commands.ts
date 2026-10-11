@@ -164,6 +164,8 @@ export const uiStateAndMenuCommandsApi = {
       sessionPartition?: string
       activate?: boolean
       fallbackWorktreeId?: string
+      split?: 'right' | 'left' | 'down' | 'up'
+      splitFromTabId?: string
     }) => void
   ): (() => void) => {
     const listener = (

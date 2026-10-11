@@ -7,6 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { createBrowserTabSplitGroup } from './browser-tab-split-placement'
 import {
   findBrowserTabWorktreeId,
   isBrowserWorkspaceOwnedByPairedServer,
@@ -86,16 +87,29 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           : undefined
 
         // Foreground explicit user opens; agent/automation/paired-device background opens stay in the browser group without moving this host’s view.
-        const workspace = store.createBrowserTab(worktreeId, data.url, {
-          title: data.url,
-          browserPageId: data.browserPageId,
-          targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
-          sessionProfileId: data.sessionProfileId,
-          sessionPartition: data.sessionPartition,
-          // This runtime asks for desktop-rendered pages, including managed-SSH workspaces; explicit null prevents streaming another host’s page.
-          browserRuntimeEnvironmentId: null,
-          activate: data.activate === true
-        })
+        const splitGroupId = data.split
+          ? createBrowserTabSplitGroup(store, worktreeId, data.split, data.splitFromTabId)
+          : null
+        let workspace: ReturnType<typeof store.createBrowserTab>
+        try {
+          workspace = store.createBrowserTab(worktreeId, data.url, {
+            title: data.url,
+            browserPageId: data.browserPageId,
+            targetGroupId:
+              splitGroupId ?? (data.activate ? undefined : activeBrowserUnifiedTab?.groupId),
+            sessionProfileId: data.sessionProfileId,
+            sessionPartition: data.sessionPartition,
+            // This runtime asks for desktop-rendered pages, including managed-SSH workspaces; explicit null prevents streaming another host’s page.
+            browserRuntimeEnvironmentId: null,
+            activate: data.activate === true
+          })
+        } catch (err) {
+          // Why: a failed create must not leave the empty split pane behind.
+          if (splitGroupId) {
+            useAppStore.getState().closeEmptyGroup(worktreeId, splitGroupId)
+          }
+          throw err
+        }
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
         // A layout-owner build draws the page once main's frame lands: answer the id it was opened under.

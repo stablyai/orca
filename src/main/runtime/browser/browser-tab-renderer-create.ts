@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
+import type { BrowserTabSplitDirection } from '../../../shared/browser-tab-split-direction'
 
 export async function createBrowserTabInRenderer(
   host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
@@ -11,7 +12,8 @@ export async function createBrowserTabInRenderer(
   activate?: boolean,
   requestedPageId?: string,
   /** Used only when `worktreeId` is unset and no workspace is active in the renderer. */
-  fallbackWorktreeId?: string
+  fallbackWorktreeId?: string,
+  split?: { direction: BrowserTabSplitDirection; fromTabId?: string }
 ): Promise<{ browserPageId: string }> {
   const rendererWebContents = host.getAuthoritativeWindow().webContents
   const requestId = randomUUID()
@@ -47,7 +49,8 @@ export async function createBrowserTabInRenderer(
       sessionProfileId: profileId,
       sessionPartition,
       activate,
-      ...(fallbackWorktreeId ? { fallbackWorktreeId } : {})
+      ...(fallbackWorktreeId ? { fallbackWorktreeId } : {}),
+      ...(split ? { split: split.direction, splitFromTabId: split.fromTabId } : {})
     })
   })
 
