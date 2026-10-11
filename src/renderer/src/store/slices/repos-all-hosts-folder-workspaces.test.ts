@@ -164,6 +164,23 @@ beforeEach(() => {
 })
 
 describe('all-host folder workspace startup catalogs', () => {
+  it('records a folder host only after that host catalog fetch settles', async () => {
+    const store = createTestStore()
+    folderWorkspacesList.mockRejectedValueOnce(new Error('offline'))
+
+    await store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+    expect(store.getState().hydratedFolderCatalogHostIds).toEqual([])
+
+    await store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+    expect(store.getState().hydratedFolderCatalogHostIds).toEqual(['local'])
+    expect(store.getState().folderWorkspaces.map((workspace) => workspace.id)).toEqual([
+      'local-folder'
+    ])
+
+    await store.getState().fetchFolderWorkspacesForAllHosts()
+    expect(store.getState().hydratedFolderCatalogHostIds).toEqual(['local', 'runtime:env-1'])
+  })
+
   it('loads project groups and folder workspaces for every host', async () => {
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
@@ -281,6 +298,7 @@ describe('all-host folder workspace startup catalogs', () => {
     expect(store.getState().folderWorkspaces).toEqual([
       { ...localFolderWorkspace, executionHostId: 'local' }
     ])
+    expect(store.getState().hydratedFolderCatalogHostIds).toEqual(['local'])
   })
 
   it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {

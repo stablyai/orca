@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   registerPersistentWebview,
   unregisterPersistentWebview
 } from '../../components/browser-pane/host-guest/webview-registry'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getWorktreeVisitKey } from '../../lib/worktree-visit-recency'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import {
   createWebview,
@@ -201,6 +203,107 @@ describe('markWorktreeVisited', () => {
       'repo1::/a': 100,
       'ssh-repo::/b': 200
     })
+  })
+
+  it('pruneLastVisitedTimestamps drops entries and stale active pointer for repos removed from catalog', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    const repo1: Repo = {
+      id: 'repo1',
+      path: '/a',
+      displayName: 'Repo 1',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.setState({
+      repos: [repo1],
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: 'deleted-repo::/b',
+      activeWorkspaceKey: worktreeWorkspaceKey('deleted-repo::/b'),
+      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'deleted-repo::/b': 200 }
+    })
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      'repo1::/a': 100
+    })
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeWorkspaceKey).toBeNull()
+  })
+
+  it('pruneLastVisitedTimestamps preserves not-yet-hydrated catalog repos while dropping removed repos', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a' })
+    const repo1: Repo = {
+      id: 'repo1',
+      path: '/a',
+      displayName: 'Repo 1',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo: Repo = {
+      id: 'ssh-repo',
+      path: '/b',
+      displayName: 'SSH Repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.setState({
+      repos: [repo1, sshRepo],
+      worktreesByRepo: { repo1: [wt] },
+      lastVisitedAtByWorktreeId: { 'repo1::/a': 100, 'ssh-repo::/b': 200, 'deleted-repo::/c': 300 }
+    })
+    store.getState().pruneLastVisitedTimestamps()
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      'repo1::/a': 100,
+      'ssh-repo::/b': 200
+    })
+  })
+
+  it('pruneLastVisitedTimestamps keeps a runtime folder through the startup prune and drops a removed folder', () => {
+    const store = createTestStore()
+    const localFolder = makeFolderWorkspace({ id: 'local-folder', executionHostId: 'local' })
+    const runtimeKey = folderWorkspaceKey('runtime-folder')
+    const removedKey = folderWorkspaceKey('removed-folder')
+    const localKey = folderWorkspaceKey('local-folder')
+    const runtimeVisitKey = getWorktreeVisitKey(runtimeKey, 'runtime:env-1')
+    const removedVisitKey = getWorktreeVisitKey(removedKey, 'local')
+    const localVisitKey = getWorktreeVisitKey(localKey, 'local')
+    // Startup has fetched local/direct-SSH folders only. The runtime host is not settled.
+    store.setState({
+      folderWorkspaces: [localFolder],
+      hydratedFolderCatalogHostIds: ['local'],
+      activeWorktreeId: runtimeKey,
+      activeWorkspaceKey: runtimeKey,
+      activeWorkspaceExecutionHostId: 'runtime:env-1',
+      lastVisitedAtByWorktreeId: {
+        [runtimeVisitKey]: 100,
+        [removedVisitKey]: 200,
+        [localVisitKey]: 300
+      }
+    })
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      [runtimeVisitKey]: 100,
+      [localVisitKey]: 300
+    })
+    expect(store.getState().activeWorktreeId).toBe(runtimeKey)
+    expect(store.getState().activeWorkspaceKey).toBe(runtimeKey)
+    expect(store.getState().activeWorkspaceExecutionHostId).toBe('runtime:env-1')
+
+    // The runtime catalog has now settled and does not contain that folder.
+    store.setState({
+      hydratedFolderCatalogHostIds: ['local', 'runtime:env-1']
+    })
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      [localVisitKey]: 300
+    })
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(store.getState().activeWorkspaceKey).toBeNull()
+    expect(store.getState().activeWorkspaceExecutionHostId).toBeNull()
   })
 
   it('pruneLastVisitedTimestamps clears a stale activeWorktreeId gone from a hydrated repo', () => {
