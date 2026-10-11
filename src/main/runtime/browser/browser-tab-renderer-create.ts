@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { BrowserTabSplitDirection } from '../../../shared/browser-tab-split-direction'
+import type { BrowserTabCreateRequest } from '../../../shared/browser-tab-create-request'
 
 export async function createBrowserTabInRenderer(
   host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
@@ -40,7 +41,7 @@ export async function createBrowserTabInRenderer(
       }
     }
     ipcMain.on('browser:tabCreateReply', handler)
-    rendererWebContents.send('browser:requestTabCreate', {
+    const request: BrowserTabCreateRequest = {
       requestId,
       url,
       worktreeId,
@@ -51,7 +52,8 @@ export async function createBrowserTabInRenderer(
       activate,
       ...(fallbackWorktreeId ? { fallbackWorktreeId } : {}),
       ...(split ? { split: split.direction, splitFromTabId: split.fromTabId } : {})
-    })
+    }
+    rendererWebContents.send('browser:requestTabCreate', request)
   })
 
   return { browserPageId }
