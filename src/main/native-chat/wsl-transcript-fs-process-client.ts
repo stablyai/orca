@@ -1,4 +1,5 @@
 import type {
+  TranscriptBigIntStat,
   WslTranscriptFsProcessResponse,
   WslTranscriptFsReusableProcessCall
 } from './wsl-transcript-fs-process-protocol'
@@ -93,6 +94,30 @@ export class WslTranscriptFsProcessClient {
     return this.send<Buffer>(
       slot,
       { operation: 'read', handleId: state.handleId, position, length },
+      signal,
+      'pinned'
+    )
+  }
+
+  async stat(
+    handle: WslTranscriptFsProcessHandle,
+    signal: AbortSignal
+  ): Promise<TranscriptBigIntStat> {
+    signal.throwIfAborted()
+    const state = this.handles.get(handle)
+    if (!state) {
+      throw processHandleUnavailableError(handle, this.faultedHandles)
+    }
+    const acquired = this.takeSlotOrThrow(signal)
+    const slot = acquired instanceof Promise ? await acquired : acquired
+    this.pool.claim(slot, signal)
+    if (this.handles.get(handle) !== state || state.slot !== slot) {
+      this.pool.park(slot)
+      throw processHandleUnavailableError(handle, this.faultedHandles)
+    }
+    return this.send<TranscriptBigIntStat>(
+      slot,
+      { operation: 'fstatBigInt', handleId: state.handleId },
       signal,
       'pinned'
     )

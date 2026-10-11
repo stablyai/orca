@@ -98,6 +98,22 @@ export function initializeMainProcessAccountServices(): void {
   )
   store.onSettingsChanged((updates, settings) => {
     expireModelCatalogs(updates, settings)
+    if (
+      [
+        'localAccountRuntime',
+        'localAccountWslDistro',
+        'localWindowsRuntimeDefault',
+        'activeClaudeManagedAccountId',
+        'activeClaudeManagedAccountIdsByRuntime',
+        'claudeManagedAccounts'
+      ].some((key) => key in updates)
+    ) {
+      void state.claudeUsage
+        ?.refresh(true, { rerunIfScanning: true })
+        .catch((error: unknown) =>
+          console.warn('[claude-usage] Failed to refresh after account runtime change:', error)
+        )
+    }
     // Why: auto is a live policy; retarget only providers whose settings-derived runtime changed.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)

@@ -83,7 +83,10 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   ClaudeUsagePersistedState,
   'hasAnyClaudeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+  constructor(
+    store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
+    resolveProfileDirs?: () => Promise<string[]>
+  ) {
     super(store, {
       tokenUsage: {
         provider: 'claude',
@@ -98,7 +101,10 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
       providerId: 'claude',
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
-      scan: scanClaudeUsageFilesViaWorker,
+      scan: resolveProfileDirs
+        ? async (worktrees, sourceCache) =>
+            scanClaudeUsageFilesViaWorker(worktrees, sourceCache, await resolveProfileDirs())
+        : scanClaudeUsageFilesViaWorker,
       splitCacheFile: splitUsageCacheFileViaWorker
     })
   }

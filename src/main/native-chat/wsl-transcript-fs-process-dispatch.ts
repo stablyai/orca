@@ -1,6 +1,7 @@
 import { open, type FileHandle } from 'node:fs/promises'
 import {
   invalidTranscriptHandleError,
+  type TranscriptBigIntStat,
   type WslTranscriptFsReusableProcessCall
 } from './wsl-transcript-fs-process-protocol'
 import { decodeWslTranscriptFsProcessValue } from './wsl-transcript-fs-process-decode'
@@ -79,6 +80,14 @@ export function readWslTranscriptFsProcess(
   return owner
     ? owner.read(handle, position, length, signal)
     : Promise.reject(invalidTranscriptHandleError())
+}
+
+export function statWslTranscriptFsProcess(
+  handle: WslTranscriptFsProcessHandle,
+  signal: AbortSignal
+): Promise<TranscriptBigIntStat> {
+  const owner = wslTranscriptFsHandleOwners.get(handle)
+  return owner ? owner.stat(handle, signal) : Promise.reject(invalidTranscriptHandleError())
 }
 
 export function closeWslTranscriptFsProcess(handle: WslTranscriptFsProcessHandle): Promise<void> {

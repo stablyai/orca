@@ -36,3 +36,5 @@ On the companion app, open the host **Accounts** screen for the same switcher/us
 ## Estimated cost (Stats)
 
 The Stats breakdown may show **estimated cost** for known model families (including Claude 5-class and Codex GPT-5.6 rows). Rows marked **• inferred pricing** use Orca’s local price table, not a live bill from the provider. Prefer the provider console for authoritative spend.
+
+Claude transcript history follows the selected host or WSL runtime and its routed account folder. For the WSL system-default account, Orca honors the guest login shell's `CLAUDE_CONFIG_DIR`. It does not combine history from every installed WSL distro. Changing the account or runtime requests a fresh scan, including when a previous scan is still running. If the selected runtime becomes unavailable, Orca retains the last successful report and records the scan error.
