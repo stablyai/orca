@@ -21,6 +21,7 @@ const ORCAD_COMPAT_BUILD_TARGET = 'node18'
 export const ORCAD_CHILD_ENTRY_POINTS = {
   environmentStore:
     'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts',
+  imagePreview: 'src/main/runtime/runtime-image-preview-worker-entry.ts',
   watcher: 'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts',
