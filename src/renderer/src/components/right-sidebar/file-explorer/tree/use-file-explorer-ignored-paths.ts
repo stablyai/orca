@@ -52,6 +52,7 @@ type IgnoredPathsQueryContextIdentity = {
 }
 
 type IgnoredPathsQueryWaiter = {
+  context: IgnoredPathsQueryContext
   onSettled: (paths: string[]) => void
   paths: readonly string[]
 }
@@ -63,7 +64,6 @@ type IgnoredPathsQueryFlight = {
 }
 
 type IgnoredPathsQueryLane = {
-  context: IgnoredPathsQueryContext
   inFlight: IgnoredPathsQueryFlight | null
   pendingWaiters: Set<IgnoredPathsQueryWaiter>
 }
@@ -94,25 +94,50 @@ function pumpIgnoredPathsQueryLane(key: string, lane: IgnoredPathsQueryLane): vo
   if (lane.inFlight !== null || lane.pendingWaiters.size === 0) {
     return
   }
-  const pathSet = new Set<string>()
+  // Why: pending waiters may carry different owner targets or connections, and a
+  // later caller joining the in-flight flight must not re-anchor them. Seed each
+  // trailing flight from the first pending waiter and merge only waiters sharing
+  // its context identity; the rest stay pending for the next pump round.
+  let seed: IgnoredPathsQueryWaiter | null = null
+  const merged: IgnoredPathsQueryWaiter[] = []
   for (const waiter of lane.pendingWaiters) {
+    if (seed === null) {
+      seed = waiter
+    } else if (
+      !isSameIgnoredPathsQueryContextIdentity(
+        ignoredPathsQueryContextIdentity(seed.context),
+        ignoredPathsQueryContextIdentity(waiter.context)
+      )
+    ) {
+      continue
+    }
+    merged.push(waiter)
+  }
+  if (seed === null) {
+    return
+  }
+  const seedContext = seed.context
+  const pathSet = new Set<string>()
+  for (const waiter of merged) {
     for (const path of waiter.paths) {
       pathSet.add(path)
     }
   }
   const flight: IgnoredPathsQueryFlight = {
-    contextIdentity: ignoredPathsQueryContextIdentity(lane.context),
+    contextIdentity: ignoredPathsQueryContextIdentity(seedContext),
     pathSet,
-    waiters: lane.pendingWaiters
+    waiters: new Set(merged)
   }
-  lane.pendingWaiters = new Set()
+  for (const waiter of merged) {
+    lane.pendingWaiters.delete(waiter)
+  }
   lane.inFlight = flight
   getRuntimeGitIgnoredPaths(
     {
-      target: lane.context.target,
-      worktreeId: lane.context.activeWorktreeId,
-      worktreePath: lane.context.worktreePath,
-      connectionId: lane.context.connectionId
+      target: seedContext.target,
+      worktreeId: seedContext.activeWorktreeId,
+      worktreePath: seedContext.worktreePath,
+      connectionId: seedContext.connectionId
     },
     [...flight.pathSet]
   )
@@ -132,7 +157,10 @@ function settleIgnoredPathsQueryLane(
 ): void {
   lane.inFlight = null
   for (const waiter of flight.waiters) {
-    waiter.onSettled(paths)
+    // Why: the flight's verdicts cover every merged caller's paths; each caller
+    // must only see the verdicts for the paths it actually requested.
+    const requested = new Set(waiter.paths)
+    waiter.onSettled(paths.filter((path) => requested.has(path)))
   }
   if (lane.pendingWaiters.size === 0) {
     ignoredPathsQueryLanes.delete(key)
@@ -149,16 +177,14 @@ function requestFileExplorerIgnoredPaths(
   const key = `${context.activeWorktreeId}\u0000${context.worktreePath}`
   const existingLane = ignoredPathsQueryLanes.get(key)
   const lane: IgnoredPathsQueryLane = existingLane ?? {
-    context,
     inFlight: null,
     pendingWaiters: new Set()
   }
   if (existingLane === undefined) {
     ignoredPathsQueryLanes.set(key, lane)
   }
-  lane.context = context
 
-  const waiter: IgnoredPathsQueryWaiter = { onSettled, paths }
+  const waiter: IgnoredPathsQueryWaiter = { context, onSettled, paths }
   const inFlight = lane.inFlight
   if (
     inFlight !== null &&

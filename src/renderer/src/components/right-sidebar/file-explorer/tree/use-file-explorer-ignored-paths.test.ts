@@ -186,6 +186,63 @@ describe('useFileExplorerIgnoredPaths', () => {
     })
   })
 
+  it('gives each joined caller only the verdicts for its own requested paths', async () => {
+    const first = renderIgnoredPathsHook('wt-subset-verdicts', ['a.ts', 'b.ts'])
+    const second = renderIgnoredPathsHook('wt-subset-verdicts', ['b.ts'])
+    const third = renderIgnoredPathsHook('wt-subset-verdicts', [])
+
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      deferreds[0]?.resolve(['a.ts'])
+    })
+
+    expect(first.result.current).toEqual(['a.ts'])
+    expect(second.result.current).toEqual([])
+    expect(third.result.current).toEqual([])
+  })
+
+  it('keeps a pending waiter on its own owner target when a later caller joins the in-flight query', async () => {
+    getWorktreeGitOwnerTargetMock.mockReturnValue({
+      kind: 'environment',
+      environmentId: 'env-1'
+    })
+    const env1 = renderIgnoredPathsHook('wt-pending-identity', ['a.ts'])
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+
+    getWorktreeGitOwnerTargetMock.mockReturnValue({
+      kind: 'environment',
+      environmentId: 'env-2'
+    })
+    const env2 = renderIgnoredPathsHook('wt-pending-identity', ['b.ts'])
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+
+    getWorktreeGitOwnerTargetMock.mockReturnValue({
+      kind: 'environment',
+      environmentId: 'env-1'
+    })
+    renderIgnoredPathsHook('wt-pending-identity', ['a.ts'])
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      deferreds[0]?.resolve([])
+    })
+
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(2)
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[0]?.target).toEqual({
+      kind: 'environment',
+      environmentId: 'env-2'
+    })
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[1]).toEqual(['b.ts'])
+
+    await act(async () => {
+      deferreds[1]?.resolve(['b.ts'])
+    })
+
+    expect(env1.result.current).toEqual([])
+    expect(env2.result.current).toEqual(['b.ts'])
+  })
+
   it('re-queries instead of riding along an in-flight query from another owner target', async () => {
     getWorktreeGitOwnerTargetMock.mockReturnValue({
       kind: 'environment',
@@ -209,7 +266,7 @@ describe('useFileExplorerIgnoredPaths', () => {
     expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
 
     await act(async () => {
-      deferreds[0]?.resolve(['env-1-verdict'])
+      deferreds[0]?.resolve(['a.ts'])
     })
 
     expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(2)
@@ -220,10 +277,10 @@ describe('useFileExplorerIgnoredPaths', () => {
     expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[1]).toEqual(['a.ts'])
 
     await act(async () => {
-      deferreds[1]?.resolve(['env-2-verdict'])
+      deferreds[1]?.resolve(['a.ts'])
     })
 
-    expect(result.current).toEqual(['env-2-verdict'])
+    expect(result.current).toEqual(['a.ts'])
   })
 
   it('skips querying while the worktree git owner target is unresolved', () => {
