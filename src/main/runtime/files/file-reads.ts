@@ -23,6 +23,7 @@ import {
   assertPreviewWithinTransportBudget,
   previewableBinaryByteLimit
 } from './file-preview-budget'
+import { buildRuntimeImagePreview, imagePreviewReadLimit } from '../runtime-image-preview'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
 import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
@@ -88,13 +89,10 @@ export class RuntimeFileReads {
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
     const buffer = await readPreviewBytes(
       filePath,
-      mimeType ? binaryPreviewMaxBytes(maxContentBytes) : MOBILE_FILE_READ_MAX_BYTES
+      mimeType ? imagePreviewReadLimit(mimeType, maxContentBytes) : MOBILE_FILE_READ_MAX_BYTES
     )
     if (mimeType) {
-      return assertPreviewWithinTransportBudget(
-        { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType },
-        maxContentBytes
-      )
+      return buildRuntimeImagePreview(buffer, mimeType, maxContentBytes)
     }
 
     if (isBinaryBuffer(buffer)) {
