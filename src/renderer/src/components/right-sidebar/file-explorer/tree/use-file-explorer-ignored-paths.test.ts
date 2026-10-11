@@ -4,7 +4,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getRuntimeGitIgnoredPathsMock = vi.hoisted(() => vi.fn())
-const getRightSidebarWorktreeRuntimeSettingsMock = vi.hoisted(() => vi.fn())
+const getWorktreeGitOwnerTargetMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/runtime-git-status-client', () => ({
   getRuntimeGitIgnoredPaths: getRuntimeGitIgnoredPathsMock
@@ -14,8 +14,8 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: () => null
 }))
 
-vi.mock('./file-explorer-runtime-owner', () => ({
-  getRightSidebarWorktreeRuntimeSettings: getRightSidebarWorktreeRuntimeSettingsMock
+vi.mock('../../source-control/sync/worktree-git-owner-target', () => ({
+  getWorktreeGitOwnerTarget: getWorktreeGitOwnerTargetMock
 }))
 
 import {
@@ -62,8 +62,8 @@ describe('useFileExplorerIgnoredPaths', () => {
       deferreds.push(deferred)
       return deferred.promise
     })
-    getRightSidebarWorktreeRuntimeSettingsMock.mockReset()
-    getRightSidebarWorktreeRuntimeSettingsMock.mockReturnValue({ activeRuntimeEnvironmentId: null })
+    getWorktreeGitOwnerTargetMock.mockReset()
+    getWorktreeGitOwnerTargetMock.mockReturnValue({ kind: 'local' })
   })
 
   afterEach(() => {
@@ -186,19 +186,22 @@ describe('useFileExplorerIgnoredPaths', () => {
     })
   })
 
-  it('re-queries instead of riding along an in-flight query from another runtime environment', async () => {
-    getRightSidebarWorktreeRuntimeSettingsMock.mockReturnValue({
-      activeRuntimeEnvironmentId: 'env-1'
+  it('re-queries instead of riding along an in-flight query from another owner target', async () => {
+    getWorktreeGitOwnerTargetMock.mockReturnValue({
+      kind: 'environment',
+      environmentId: 'env-1'
     })
     const { result, rerender } = renderIgnoredPathsHook('wt-runtime-env', ['a.ts'])
 
     expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
-    expect(getRuntimeGitIgnoredPathsMock.mock.calls[0]?.[0]?.settings).toEqual({
-      activeRuntimeEnvironmentId: 'env-1'
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[0]?.[0]?.target).toEqual({
+      kind: 'environment',
+      environmentId: 'env-1'
     })
 
-    getRightSidebarWorktreeRuntimeSettingsMock.mockReturnValue({
-      activeRuntimeEnvironmentId: 'env-2'
+    getWorktreeGitOwnerTargetMock.mockReturnValue({
+      kind: 'environment',
+      environmentId: 'env-2'
     })
     rerender({ paths: ['a.ts'] })
 
@@ -210,8 +213,9 @@ describe('useFileExplorerIgnoredPaths', () => {
     })
 
     expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(2)
-    expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[0]?.settings).toEqual({
-      activeRuntimeEnvironmentId: 'env-2'
+    expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[0]?.target).toEqual({
+      kind: 'environment',
+      environmentId: 'env-2'
     })
     expect(getRuntimeGitIgnoredPathsMock.mock.calls[1]?.[1]).toEqual(['a.ts'])
 
@@ -220,5 +224,12 @@ describe('useFileExplorerIgnoredPaths', () => {
     })
 
     expect(result.current).toEqual(['env-2-verdict'])
+  })
+
+  it('skips querying while the worktree git owner target is unresolved', () => {
+    getWorktreeGitOwnerTargetMock.mockReturnValue(null)
+    renderIgnoredPathsHook('wt-unresolved-owner', ['a.ts'])
+
+    expect(getRuntimeGitIgnoredPathsMock).not.toHaveBeenCalled()
   })
 })
