@@ -100,7 +100,8 @@ export function formatTabListWithProfiles(
       const marker = t.active ? '* ' : '  '
       const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
       const popup = t.openerBrowserPageId ? `  (popup opened by ${t.openerBrowserPageId})` : ''
-      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}${popup}`
+      const unloaded = t.loaded === false ? '  (not loaded)' : ''
+      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}${popup}${unloaded}`
     })
     .join('\n')
 }

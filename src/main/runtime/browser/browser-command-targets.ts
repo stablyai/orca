@@ -4,6 +4,7 @@ import { BrowserError } from '../../browser/browser-error'
 import { browserPopupPageWebContentsId } from '../../browser/browser-popup-page-id'
 import { webContents } from 'electron'
 import {
+  waitForTabFirstLoad,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
 } from '../../ipc/browser-tab-registration-wait'
@@ -179,6 +180,8 @@ export class RuntimeBrowserCommandTargets {
     }
     await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
     await waitForTabRegistration(browserPageId)
+    // Why: a woken tab should behave like one that was open all along, not a blank page mid-load.
+    await waitForTabFirstLoad(browserPageId)
   }
 
   // A reloaded renderer drops activateView until it has restored the tab to mount.

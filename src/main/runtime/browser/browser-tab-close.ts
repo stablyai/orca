@@ -71,12 +71,12 @@ export class RuntimeBrowserTabClose {
     if (namedPageId !== null) {
       tabId = namedPageId
     } else if (params.index !== undefined) {
-      const tabs = bridge.getRegisteredTabs(worktreeId)
-      const entries = [...tabs.entries()]
-      if (params.index < 0 || params.index >= entries.length) {
-        throw new Error(`Tab index ${params.index} out of range (0-${entries.length - 1})`)
+      // Why the listing: indexes must match `tab list`, which includes restored tabs not yet loaded.
+      const tabs = (await this.queries.browserTabList({ worktree: params.worktree })).tabs
+      if (params.index < 0 || params.index >= tabs.length) {
+        throw new Error(`Tab index ${params.index} out of range (0-${tabs.length - 1})`)
       }
-      tabId = entries[params.index][0]
+      tabId = tabs[params.index].browserPageId
     } else {
       // Unmounted tabs need renderer fallback when the bridge has not registered them.
       const tabs = bridge.getRegisteredTabs(worktreeId)

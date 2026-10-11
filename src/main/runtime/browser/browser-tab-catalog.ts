@@ -1,6 +1,7 @@
 import type { RuntimeBrowserClientPage } from '../runtime-browser-page-registry'
 import type { BrowserTabListResult } from '../../../shared/runtime-types'
 import { browserSessionRegistry } from '../../browser/browser-session-registry'
+import { mergeBrowserTabListing } from '../browser-tab-listing'
 import { BrowserError } from '../../browser/browser-error'
 import { browserManager } from '../../browser/browser-manager'
 import type {
@@ -13,7 +14,11 @@ export class RuntimeBrowserTabCatalog {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getAgentBrowserBridge' | 'resolveBrowserWorkspace' | 'getRuntimeBrowserPageRegistry'
+      | 'getAgentBrowserBridge'
+      | 'resolveBrowserWorkspace'
+      | 'getRuntimeBrowserPageRegistry'
+      | 'getAvailableAuthoritativeWindow'
+      | 'readBrowserTabBar'
     >,
     private readonly targets: Pick<RuntimeBrowserCommandTargets, 'requireAgentBrowserBridge'>
   ) {}
@@ -24,20 +29,20 @@ export class RuntimeBrowserTabCatalog {
   ): BrowserTabListResult['tabs'] {
     const clientPageActive = clientPages.some((page) => page.active)
     const bridge = this.host.getAgentBrowserBridge()
-    const serverTabs =
+    const liveTabs =
       bridge && typeof bridge.tabList === 'function'
         ? bridge.tabList(worktreeId).tabs.map((tab) => ({
             ...this.enrichBrowserTabInfo(tab),
             active: clientPageActive ? false : tab.active
           }))
         : []
-    const clientTabs = clientPages.map((page, offset) => {
+    const clientTabs = clientPages.map((page) => {
       const profile =
         browserSessionRegistry.getProfile(page.browserProfileId) ??
         browserSessionRegistry.getDefaultProfile()
       return {
         browserPageId: page.browserPageId,
-        index: serverTabs.length + offset,
+        index: 0,
         url: page.url,
         title: page.title,
         active: page.active,
@@ -48,11 +53,12 @@ export class RuntimeBrowserTabCatalog {
         profileLabel: profile.label
       }
     })
-    const tabs = [...serverTabs, ...clientTabs]
-    if (tabs.length > 0 && !tabs.some((tab) => tab.active)) {
-      tabs[0] = { ...tabs[0]!, active: true }
-    }
-    return tabs.map((tab, index) => ({ ...tab, index }))
+    // Why only with a window: headless serve keeps every page live, so its tab bar adds nothing.
+    const tabBar =
+      bridge && this.host.getAvailableAuthoritativeWindow()
+        ? (this.host.readBrowserTabBar?.(worktreeId) ?? [])
+        : []
+    return mergeBrowserTabListing({ tabBar, liveTabs, clientTabs })
   }
 
   async assertClientPageWorkspace(
