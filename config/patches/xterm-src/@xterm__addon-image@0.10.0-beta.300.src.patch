@@ -526,10 +526,76 @@ index de889dfff75d9ecc8ab47a025e6989ffe75bb202..cf66e5b75c78645b1641e53d1425d882
      let offset = 0;
      for (const chunk of chunks) {
 diff --git a/src/kitty/KittyImageStorage.ts b/src/kitty/KittyImageStorage.ts
-index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..016943a77c7e8e27da5899d54cd48d82761a87c8 100644
+index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..e2a94e99c5f72d4f6c764da5b45fad913ba63641 100644
 --- a/src/kitty/KittyImageStorage.ts
 +++ b/src/kitty/KittyImageStorage.ts
-@@ -83,6 +83,25 @@ export class KittyImageStorage implements IDisposable {
+@@ -8,6 +8,11 @@ import { ImageStorage } from '../ImageStorage';
+ import { ImageLayer, IAddImageOpts } from '../Types';
+ import { IKittyImageData } from './KittyGraphicsTypes';
+ 
++interface IPhysicalImageOwner {
++  kittyId: number;
++  storageIds: Set<number>;
++}
++
+ // Kitty-specific image storage controller.
+ //
+ // Wraps shared ImageStorage with kitty protocol semantics:
+@@ -19,27 +24,26 @@ export class KittyImageStorage implements IDisposable {
+   private static readonly _maxStoredImages = 256;
+ 
+   private _nextImageId = 1;
++  private _placingImageId: number | undefined;
+   private readonly _images: Map<number, IKittyImageData> = new Map();
+-  // TODO: Support multiple placements per image. The kitty spec identifies
+-  // placements by an (image id, placement id) pair — same i + different p
+-  // values should coexist, and same i + same p should replace the prior
+-  // placement. Currently we track only one storage entry per kitty image id,
+-  // so multiple placements of the same image overwrite each other. Fixing
+-  // this requires changing these maps to Map<number, Map<number, number>>
+-  // (kittyId → placementId → storageId) and updating addImage/deleteById
+-  // accordingly. The underlying shared ImageStorage would also need to
+-  // support multiple entries per logical image.
++  // TODO: Track physical placement IDs so named replacement removes only that pair.
+   private readonly _kittyIdToStorageId: Map<number, number> = new Map();
+-  private readonly _storageIdToKittyId: Map<number, number> = new Map();
++  private readonly _storageIdToKittyId: Map<number, IPhysicalImageOwner> = new Map();
+ 
+   private readonly _previousOnImageDeleted: ((storageId: number) => void) | undefined;
+   private readonly _wrappedOnImageDeleted: (storageId: number) => void;
+   private readonly _handleStorageImageDeleted = (storageId: number): void => {
+-    const kittyId = this._storageIdToKittyId.get(storageId);
+-    if (kittyId !== undefined) {
+-      this._kittyIdToStorageId.delete(kittyId);
++    const owner = this._storageIdToKittyId.get(storageId);
++    if (owner !== undefined) {
++      const { kittyId, storageIds } = owner;
+       this._storageIdToKittyId.delete(storageId);
+-      this._images.delete(kittyId);
++      storageIds.delete(storageId);
++      if (this._kittyIdToStorageId.get(kittyId) === storageId) {
++        this._kittyIdToStorageId.delete(kittyId);
++        const remainingId: number | undefined = storageIds.values().next().value;
++        if (remainingId !== undefined) this._kittyIdToStorageId.set(kittyId, remainingId);
++        if (!this._kittyIdToStorageId.has(kittyId) && this._placingImageId !== kittyId) this._images.delete(kittyId);
++      }
+     }
+   };
+   private _addImageOpts: IAddImageOpts = { scrolling: true, layer: 'top', zIndex: 0, cursorPos: 'iip' };
+@@ -72,17 +76,32 @@ export class KittyImageStorage implements IDisposable {
+   public storeImage(id: number | undefined, imageData: Omit<IKittyImageData, 'id'>): number {
+     const imageId = id ?? this._nextImageId++;
+ 
+-    const oldStorageId = this._kittyIdToStorageId.get(imageId);
+-    if (oldStorageId !== undefined) {
+-      this._storage.deleteImage(oldStorageId);
+-      this._kittyIdToStorageId.delete(imageId);
+-      this._storageIdToKittyId.delete(oldStorageId);
+-    }
++    if (this._kittyIdToStorageId.has(imageId)) this._images.delete(imageId);
++    this._deletePhysicalPlacements(imageId);
+ 
+     if (!this._images.has(imageId) && this._images.size >= KittyImageStorage._maxStoredImages) {
        this._evictUndisplayedImages();
      }
  
@@ -555,3 +621,77 @@ index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..016943a77c7e8e27da5899d54cd48d82
      this._images.set(imageId, {
        ...imageData,
        id: imageId
+@@ -91,20 +110,23 @@ export class KittyImageStorage implements IDisposable {
+   }
+ 
+   public addImage(kittyId: number, image: HTMLCanvasElement | ImageBitmap, scrolling: boolean, layer: ImageLayer, zIndex: number): void {
+-    // Clean up stale reverse-mapping from a previous placement of the same
+-    // kitty image.  The old shared-storage entry is kept (it may still be
+-    // visible on screen) but its reverse mapping is removed so that eviction
+-    // of the old entry won't incorrectly delete the kitty image data.
+-    const oldStorageId = this._kittyIdToStorageId.get(kittyId);
+-    if (oldStorageId !== undefined) {
+-      this._storageIdToKittyId.delete(oldStorageId);
+-    }
++    // Every physical placement retains its owner; the forward map names a live placement.
+     this._addImageOpts.scrolling = scrolling;
+     this._addImageOpts.layer = layer;
+     this._addImageOpts.zIndex = zIndex;
+-    const storageId = this._storage.addImage(image, this._addImageOpts);
+-    this._kittyIdToStorageId.set(kittyId, storageId);
+-    this._storageIdToKittyId.set(storageId, kittyId);
++    const previousStorageId = this._kittyIdToStorageId.get(kittyId);
++    const previousOwner = previousStorageId === undefined ? undefined : this._storageIdToKittyId.get(previousStorageId);
++    const storageIds = previousOwner?.storageIds ?? new Set<number>();
++    const previousPlacingId = this._placingImageId;
++    this._placingImageId = kittyId;
++    try {
++      const storageId = this._storage.addImage(image, this._addImageOpts);
++      storageIds.add(storageId);
++      this._kittyIdToStorageId.set(kittyId, storageId);
++      this._storageIdToKittyId.set(storageId, { kittyId, storageIds });
++    } finally {
++      this._placingImageId = previousPlacingId;
++    }
+   }
+ 
+   public getImage(kittyId: number): IKittyImageData | undefined {
+@@ -113,23 +135,29 @@ export class KittyImageStorage implements IDisposable {
+ 
+   public deleteById(kittyId: number): void {
+     this._images.delete(kittyId);
+-    const storageId = this._kittyIdToStorageId.get(kittyId);
+-    if (storageId !== undefined) {
+-      this._storage.deleteImage(storageId);
+-      this._kittyIdToStorageId.delete(kittyId);
+-      this._storageIdToKittyId.delete(storageId);
+-    }
++    this._deletePhysicalPlacements(kittyId);
+   }
+ 
+   public deleteAll(): void {
+     this._images.clear();
+-    for (const storageId of this._kittyIdToStorageId.values()) {
+-      this._storage.deleteImage(storageId);
+-    }
++    this._deletePhysicalPlacements();
+     this._kittyIdToStorageId.clear();
+     this._storageIdToKittyId.clear();
+   }
+ 
++  private _deletePhysicalPlacements(imageId?: number): void {
++    const latestId = imageId === undefined ? undefined : this._kittyIdToStorageId.get(imageId);
++    const owner = latestId === undefined ? undefined : this._storageIdToKittyId.get(latestId);
++    const storageIds = imageId === undefined ? [...this._storageIdToKittyId.keys()] : [...(owner?.storageIds ?? [])];
++    if (imageId === undefined) this._kittyIdToStorageId.clear();
++    else this._kittyIdToStorageId.delete(imageId);
++    for (const storageId of storageIds) {
++      this._storageIdToKittyId.get(storageId)?.storageIds.delete(storageId);
++      this._storageIdToKittyId.delete(storageId);
++      this._storage.deleteImage(storageId);
++    }
++  }
++
+   public get images(): ReadonlyMap<number, IKittyImageData> {
+     return this._images;
+   }
