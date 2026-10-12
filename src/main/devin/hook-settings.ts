@@ -6,7 +6,8 @@ import {
   getSharedManagedScriptPath,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
+  wrapWindowsHookCommand,
+  WINDOWS_CMD_SAFE_PATH,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
@@ -52,10 +53,12 @@ export function getDevinRemoteConfigPath(remoteHome: string): string {
 
 export function getDevinManagedCommand(scriptPath: string): string {
   if (process.platform === 'win32') {
-    // Why: Devin spawns this command as argv[0], so the safe path stays a bare
-    // directly-spawnable .cmd; the encoded fallback protects spaced paths and
-    // drains stdin for a stale missing-script entry.
-    return wrapWindowsCmdHookCommand(scriptPath)
+    // Why: Devin runs hooks through Git Bash `sh -c`, which strips backslashes (#20855);
+    // a forward-slash bare .cmd survives sh and still spawns directly as argv[0].
+    // The encoded fallback protects spaced paths and drains stdin for a stale entry.
+    return WINDOWS_CMD_SAFE_PATH.test(scriptPath)
+      ? scriptPath.replaceAll('\\', '/')
+      : wrapWindowsHookCommand(scriptPath)
   }
   return wrapPosixHookCommand(scriptPath)
 }
