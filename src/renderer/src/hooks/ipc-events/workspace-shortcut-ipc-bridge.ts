@@ -4,7 +4,7 @@ import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { deleteHoveredWorkspaceImmediately } from '@/components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
+import { requestActiveWorkspaceDelete } from '@/components/sidebar/workspace-actions/deletion/active-workspace-delete'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
@@ -41,7 +41,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         if (isFloatingWorkspacePanelFocused()) {
           return
         }
-        deleteHoveredWorkspaceImmediately(useAppStore.getState())
+        requestActiveWorkspaceDelete(useAppStore.getState())
       })
     )
   }
