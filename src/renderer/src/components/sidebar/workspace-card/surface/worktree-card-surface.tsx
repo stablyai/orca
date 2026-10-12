@@ -2,6 +2,8 @@ import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { AutoRenameFailedDialog } from '../identity/AutoRenameFailedDialog'
 import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
@@ -9,6 +11,8 @@ import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
+import { useWorkspaceDeleteConfirmationArmed } from '../../workspace-actions/deletion/workspace-delete-confirmation'
+import { WorkspaceDeleteConfirmNotice } from '../../workspace-actions/deletion/WorkspaceDeleteConfirmNotice'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -16,6 +20,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     selectedWorktrees,
     onAssignWorkspaceStatus,
     affiliateListMode,
+    isActive,
     isActiveSurface,
     activeSurfaceVariant,
     isMultiSelected,
@@ -59,6 +64,11 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   )
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
+  // Why: only the active row arms; isActive is host-exact, unlike the inherited isActiveSurface.
+  const deleteArmed =
+    useWorkspaceDeleteConfirmationArmed(getWorktreeHostIdentity(worktree)) &&
+    isActive &&
+    !affiliateListMode
 
   const cardBody = (
     <div
@@ -118,6 +128,11 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       ) : (
         parentCardContent
       )}
+      {deleteArmed && !isDeleting ? (
+        <WorkspaceDeleteConfirmNotice
+          isFolder={parseWorkspaceKey(worktree.id)?.type === 'folder'}
+        />
+      ) : null}
 
       {lineageChildren ? (
         <div
@@ -138,6 +153,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       ) : (
         <WorktreeContextMenu
           worktree={worktree}
+          isActive={isActive}
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
           onAssignWorkspaceStatus={onAssignWorkspaceStatus}

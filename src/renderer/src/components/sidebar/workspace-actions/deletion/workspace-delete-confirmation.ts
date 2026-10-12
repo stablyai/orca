@@ -85,5 +85,11 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function useWorkspaceDeleteConfirmationArmed(identity: string): boolean {
-  return useSyncExternalStore(subscribe, getArmedWorkspaceDeleteIdentity) === identity
+  return (
+    useSyncExternalStore(
+      subscribe,
+      getArmedWorkspaceDeleteIdentity,
+      getArmedWorkspaceDeleteIdentity
+    ) === identity
+  )
 }
