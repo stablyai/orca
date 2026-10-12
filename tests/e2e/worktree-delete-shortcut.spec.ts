@@ -1,5 +1,12 @@
 import { test, expect } from './helpers/orca-app'
-import { getAllWorktreeIds, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import {
+  ensureTerminalVisible,
+  getActiveWorktreeId,
+  getAllWorktreeIds,
+  switchToWorktree,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
 import { worktreeRow } from './worktree-row-locators'
 
@@ -50,27 +57,49 @@ test.describe('Worktree Delete Shortcut', () => {
       .catch(() => undefined)
   })
 
-  test('deletes the hovered worktree after Mod+Shift+Backspace confirmation', async ({
+  test('deletes the active worktree on a second Mod+Shift+Backspace, ignoring the hovered row', async ({
     orcaPage
   }) => {
+    const hoveredId = await getActiveWorktreeId(orcaPage)
     createdWorktreeId = await createIsolatedWorktree(orcaPage)
     const worktreeId = createdWorktreeId
+    await switchToWorktree(orcaPage, worktreeId)
+    await ensureTerminalVisible(orcaPage)
     const row = worktreeRow(orcaPage, worktreeId)
     await expect(row).toBeVisible()
+    await worktreeRow(orcaPage, hoveredId!).hover()
 
-    await row.hover()
     await pressShortcut(orcaPage, 'Backspace', { shift: true })
+    await expect(row.locator('[data-workspace-delete-confirm]')).toBeVisible()
+    await expect(
+      worktreeRow(orcaPage, hoveredId!).locator('[data-workspace-delete-confirm]')
+    ).toHaveCount(0)
+    await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
 
-    const dialog = orcaPage.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: 'Delete Workspace', exact: true }).click()
-
+    await pressShortcut(orcaPage, 'Backspace', { shift: true })
     await expect
       .poll(async () => getAllWorktreeIds(orcaPage), {
         timeout: 15_000,
-        message: 'hovered worktree was not removed by the delete shortcut'
+        message: 'active worktree was not removed by the second press'
       })
       .not.toContain(worktreeId)
+    expect(await getAllWorktreeIds(orcaPage)).toContain(hoveredId)
+    await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
     createdWorktreeId = null
+  })
+
+  test('Escape cancels an armed delete', async ({ orcaPage }) => {
+    createdWorktreeId = await createIsolatedWorktree(orcaPage)
+    const worktreeId = createdWorktreeId
+    await switchToWorktree(orcaPage, worktreeId)
+    await ensureTerminalVisible(orcaPage)
+    const row = worktreeRow(orcaPage, worktreeId)
+    await expect(row).toBeVisible()
+
+    await pressShortcut(orcaPage, 'Backspace', { shift: true })
+    await expect(row.locator('[data-workspace-delete-confirm]')).toBeVisible()
+    await orcaPage.keyboard.press('Escape')
+    await expect(row.locator('[data-workspace-delete-confirm]')).toHaveCount(0)
+    expect(await getAllWorktreeIds(orcaPage)).toContain(worktreeId)
   })
 })
