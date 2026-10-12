@@ -103,7 +103,7 @@ export function requestActiveWorkspaceDelete(
   if (!target) {
     return false
   }
-  if (confirmWorkspaceDeleteConfirmation(target.identity)) {
+  if (isDeleteConfirmationOnScreen() && confirmWorkspaceDeleteConfirmation(target.identity)) {
     return deleteWorkspaceTarget(target, dependencies)
   }
   armWorkspaceDeleteConfirmation(target.identity, dependencies.confirmationDependencies)
@@ -111,6 +111,12 @@ export function requestActiveWorkspaceDelete(
   state.setSidebarOpen(true)
   requestScrollToCurrentWorkspaceReveal()
   return true
+}
+
+// Why: a filtered-out row never draws the prompt, and a modal hides it; never delete unseen.
+function isDeleteConfirmationOnScreen(): boolean {
+  const notice = document.querySelector('[data-workspace-delete-confirm]')
+  return notice !== null && !notice.closest('[aria-hidden="true"]')
 }
 
 export function deleteWorkspaceTarget(
