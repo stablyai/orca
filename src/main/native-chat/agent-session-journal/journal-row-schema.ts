@@ -80,12 +80,18 @@ export const AGENT_JOURNAL_EPOCH_REASONS = [
 ] as const
 export type AgentJournalEpochReason = (typeof AGENT_JOURNAL_EPOCH_REASONS)[number]
 
-export type JournalItemRow = JournalRowBase & {
-  kind: 'item'
-  itemId: string
-  revision: number
-  body: AgentJournalItemBody
-}
+/** The generation whose execution produced an item: execution provenance, distinct from the
+ *  row's `fence`, which is writer authority. Rides the row like linkage, with no `v` bump: an older
+ *  host ignores it. Absent on rows from before it: the item's creating fence stands in. */
+type JournalItemProvenance = { ownerFence?: number }
+
+export type JournalItemRow = JournalRowBase &
+  JournalItemProvenance & {
+    kind: 'item'
+    itemId: string
+    revision: number
+    body: AgentJournalItemBody
+  }
 
 export type JournalTombstoneRow = JournalRowBase & {
   kind: 'tombstone'
@@ -196,13 +202,14 @@ export type JournalDispatchRow = JournalRowBase & {
  *  Inline like the row base, and for the same reason no `v` bump: an older host
  *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
-  | (AgentJournalProducerLinkage & {
-      kind: 'item'
-      itemId: string
-      revision: number
-      body: AgentJournalItemBody
-      turnScope?: AgentJournalTurnScope
-    })
+  | (AgentJournalProducerLinkage &
+      JournalItemProvenance & {
+        kind: 'item'
+        itemId: string
+        revision: number
+        body: AgentJournalItemBody
+        turnScope?: AgentJournalTurnScope
+      })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
 /** One durable append whose nested mutations share the outer ordering facts. */

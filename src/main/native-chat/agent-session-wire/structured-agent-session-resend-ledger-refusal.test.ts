@@ -18,6 +18,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 let root: string
 let store: AgentSessionRecordStore
@@ -67,6 +68,9 @@ describe('send without ledger policy', () => {
   it('accepts an id older than 24 hours while its chat is closed', async () => {
     await attach()
     await host.close(SESSION, 'evict')
+    // The stop's release wakes the host's retry, which opens it, finds nothing owed, and closes it.
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
+    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
 
     await expect(host.send(CALLER, expiredParams('long gone'))).resolves.toMatchObject({
       ok: true,

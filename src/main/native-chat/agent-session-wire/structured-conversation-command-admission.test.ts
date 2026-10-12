@@ -27,7 +27,14 @@ function contextWith(
   return {
     sessionId: 'session-1',
     fence: 1,
-    journal: { snapshot: () => ({ items: [] }), submissions: () => [] },
+    journal: {
+      snapshot: () => ({ items: [] }),
+      submissions: () => [],
+      runningTurn: () => null,
+      itemFence: () => undefined,
+      visitItems: () => undefined,
+      wroteBeforeOpen: () => false
+    },
     adapter
   }
 }
@@ -59,6 +66,8 @@ const SETTLED = child({
   settledAt: 300
 })
 const RECORD = { lease: {} } as unknown as AgentSessionRecord
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only the running turn's id and item id.
+const RUNNING_TURN = { turnId: 'turn-1', item: { itemId: 'turn-1' } } as never
 const STOP = 'Stop background tasks before using this command.'
 const WAIT = 'Wait for background tasks to finish before using this command.'
 
@@ -120,6 +129,7 @@ describe('conversationCommandBlocked background work', () => {
           }
         ]
       }) as unknown as ReturnType<typeof ctx.journal.snapshot>
+    ctx.journal.runningTurn = () => RUNNING_TURN
     expect(conversationCommandBlocked(ctx, RECORD, [child()])?.message).toBe(
       'Wait for the current turn to finish before using this command.'
     )
@@ -135,6 +145,7 @@ describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () =>
     const ctx = contextWith(undefined)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only each item's body.
     ctx.journal.snapshot = () => staleTurn as never
+    ctx.journal.runningTurn = () => RUNNING_TURN
     expect(conversationCommandBlocked(ctx, RECORD, [], 'at-rest')).toBeNull()
     expect(conversationCommandBlocked(ctx, RECORD, [])).toMatchObject({
       details: { reason: 'turnActive' },

@@ -45,7 +45,7 @@ async function runningTurn(): Promise<AgentSessionJournal> {
     throw new Error('no open journal')
   }
   // The turn row landed when the provider's event was handed over.
-  expect(journal.activeTurnId()).toBe('turn-1')
+  expect(journal.runningTurn()?.turnId ?? null).toBe('turn-1')
   return journal
 }
 

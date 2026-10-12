@@ -40,6 +40,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { runSettledAgentSessionMutation } from './structured-agent-session-operation-settlement'
 import {
   agentSessionOperationOutcomeUnknown,
@@ -74,6 +75,8 @@ export type AgentSessionMutationRequest<TValue> = {
   plan: MutationPlan<TValue>
   /** Journal of the attached session, read after `prepareSession`; absent when this host holds none. */
   journal: () => AgentSessionJournal | undefined
+  /** The host's projection of the chat's current work (`hostStructuredAgentSessionCurrentWork`). */
+  currentWork?: () => StructuredAgentSessionCurrentWork | null
   /** Between the ledger's answer and the lease check, for a call that may first have to make the
    *  session ready for itself. Answers with the refusal that ends the call, if any. */
   prepareSession?: (

@@ -86,17 +86,38 @@ export function endProviderChild(
     endedAt?: AgentJournalCursor
   }
 ): boolean {
+  if (!recordProviderChildEnd(session, ended)) {
+    return false
+  }
+  session.child = null
+  return true
+}
+
+/** Records how the child on record ended, leaving it on record for its own teardown: every reader
+ *  projects its generation as ended from now on (`StructuredAgentSessionCurrentWork`). */
+export function recordProviderChildEnd(
+  session: ChildBearer,
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'> & {
+    endedAt?: AgentJournalCursor
+  }
+): boolean {
   const child = matchingChild(session, ended)
   if (!child) {
     return false
   }
-  session.child = null
   session.lastEndedChild = {
     ...ended,
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
     endedAt: ended.endedAt ?? session.journal.cursor()
   }
   return true
+}
+
+/** The child's exit is still settling: it ended, and its exit has not let it go (`endChild`). */
+export function providerChildExitSettling(
+  session: Pick<ChildBearer, 'child' | 'lastEndedChild'> | undefined
+): boolean {
+  return session?.child != null && session.lastEndedChild?.fence === session.child.fence
 }
 
 /** The conversation's last start died before it proved itself, and nothing started since. Only a

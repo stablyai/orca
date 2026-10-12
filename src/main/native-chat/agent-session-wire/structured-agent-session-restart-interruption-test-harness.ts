@@ -181,6 +181,9 @@ export async function interruptedRestart(
     now: () => clock.now
   })
   replaceHostTestState({ store, host })
+  // As the runtime starts it, before any client reaches it.
+  await host.reconcileRestartLeases()
+  await host.startupSettled()
   previous.acquire.mockClear()
   previous.releaseAcquisition.mockClear()
   previous.dispatch.mockClear()

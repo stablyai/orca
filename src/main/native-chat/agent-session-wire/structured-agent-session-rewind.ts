@@ -2,7 +2,6 @@ import { agentSessionProviderHandleChainHead } from '../../../shared/agent-sessi
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import {
-  agentJournalItemKey,
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
@@ -19,11 +18,15 @@ import { openWithAgent } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import { rewindRefusal } from './structured-rewind-refusal'
 import { renameRewindTurnOpener } from './structured-rewind-journal-body'
 import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
-import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
+import {
+  mergeRetainedHostLifecycleRows,
+  rewindProviderRows
+} from './structured-rewind-retained-host-rows'
 
 export async function rewindStructuredAgentSession(
   context: StructuredAgentSessionMutationContext,
@@ -58,6 +61,8 @@ export async function rewindStructuredAgentSession(
           : { ok: true }
       }),
       journal: () => context.sessions.get(sessionId)?.journal,
+      currentWork: () =>
+        hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,
       plan: {
@@ -165,11 +170,13 @@ export async function rewindStructuredAgentSession(
               if (!body) {
                 throw new Error('agent_session_rewind:missing-retained-item')
               }
+              const ownerFence = ctx.journal.itemFence(itemId)
               return {
                 itemId: providerKey(itemId),
                 body: renameRewindTurnOpener(body, providerKey),
                 observedAt,
                 ...(turnScope ? { turnScope } : {}),
+                ...(ownerFence === undefined ? {} : { ownerFence }),
                 ...agentJournalLinkageFields(linkage)
               }
             })
@@ -204,11 +211,7 @@ export async function rewindStructuredAgentSession(
             onPrepared: async (items) => {
               const retained = mergeRetainedHostLifecycleRows(
                 prepared.retained,
-                items.map(({ identity, body }) => ({
-                  itemId: agentJournalItemKey(identity),
-                  body,
-                  observedAt: ctx.now()
-                }))
+                rewindProviderRows(items, ctx.now(), ctx.fence)
               )
               if (
                 retained.length > 10_000 ||
@@ -241,11 +244,7 @@ export async function rewindStructuredAgentSession(
           const confirmed = provider.items
             ? mergeRetainedHostLifecycleRows(
                 prepared.retained,
-                provider.items.map(({ identity, body }) => ({
-                  itemId: agentJournalItemKey(identity),
-                  body,
-                  observedAt: ctx.now()
-                }))
+                rewindProviderRows(provider.items, ctx.now(), ctx.fence)
               )
             : prepared.retained
           if (

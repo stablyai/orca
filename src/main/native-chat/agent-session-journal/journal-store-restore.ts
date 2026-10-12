@@ -1,13 +1,8 @@
-// Bringing a store's in-memory state up from disk.
-//
-// Split out of the store for the same reason its collaborators were: this is the
-// ORDERING between replay and the notices an open owes, and none of it belongs
-// to the store's public surface. Every step here reads or writes through the
-// same host the collaborators use, so the store keeps the state and this owns
-// the sequence.
+// Bringing a store's in-memory state up from disk. It reads and never writes: a chat with no
+// journal yet gets an empty one held in memory (`journal-epoch-founding.ts`), and what a gone
+// writer left live is settled by the ownership event that ended it, never by this open.
 
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import type { JournalEpochController } from './journal-epoch-controller'
+import type { JournalEpochFounding } from './journal-epoch-founding'
 import { replayJournal } from './journal-open'
 import { journalOpenRefusalError } from './journal-open-failure'
 import type { JournalStoreHost } from './journal-store-collaborators'
@@ -16,7 +11,7 @@ import { AgentSessionJournalError } from './journal-write-guards'
 
 export async function restoreJournalStore(
   host: JournalStoreHost,
-  collaborators: { epochController: JournalEpochController }
+  founding: Pick<JournalEpochFounding, 'hold'>
 ): Promise<void> {
   const database = host.database()
   if (database.readOnly) {
@@ -28,18 +23,10 @@ export async function restoreJournalStore(
       )
     )
   }
-  return openJournalStoreState({
+  openJournalStoreState({
     sessionId: host.identity.sessionId,
     replay: () => replayJournal(database.db, host.identity.sessionId),
-    start: () => collaborators.epochController.start('session_created', 0),
-    adopt: host.adopt,
-    // Journal-open revisions are host recovery, not new provider output.
-    appendItem: (identity, body, fence) =>
-      host.journal().appendItem(identity, body, {
-        fence,
-        turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-        recovered: true
-      }),
-    highestFence: () => host.state().highestFence
+    start: () => host.adopt(founding.hold(host.mintEpoch(), host.now())),
+    adopt: host.adopt
   })
 }

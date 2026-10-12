@@ -74,6 +74,13 @@ async function open(): Promise<AgentSessionJournal> {
   return journal
 }
 
+/** An open as startup makes it: then the cards' repair and prune (`settleOneAtStartup`). */
+async function openAtStartup(): Promise<AgentSessionJournal> {
+  const journal = await open()
+  await journal.queuedMessages.repairAndPrune()
+  return journal
+}
+
 async function queueDraft(journal: AgentSessionJournal, messageId: string, text = 'queued text') {
   return journal.queuedMessages.insert({
     messageId,
@@ -595,23 +602,31 @@ describe('withdraw', () => {
   })
 })
 
-describe('open-time repair and retention', () => {
-  it('a failed repair is reported and skipped, never failing the open', async () => {
+describe('startup repair and retention', () => {
+  it('an open repairs nothing; a failed startup repair leaves the journal usable', async () => {
+    let journal = await open()
+    await queueDraft(journal, 'draft-1')
+    await consumeDraft(journal, 'draft-1')
+    await journal.rejectQueuedSubmissions(0, HOST_RESTARTED)
+    await journal.close()
+    const db = new Database(journalDatabasePath(root))
+    db.prepare(
+      "UPDATE queued_messages SET state = 'dispatched', hold_reason = NULL, consumed_as = 'sub-draft-1' WHERE message_id = ?"
+    ).run('draft-1')
+    db.close()
+    journal = await open()
+    // Opening only reads: the cut-short hand-off waits for startup's repair.
+    expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
     const repair = vi
       .spyOn(JournalQueuedMessages.prototype, 'repairAndPrune')
       .mockRejectedValueOnce(new Error('SQLITE_FULL'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
-      const journal = await open()
-      expect(warn).toHaveBeenCalledWith(
-        '[journal-open] queued-message repair skipped:',
-        expect.objectContaining({ error: 'SQLITE_FULL' })
-      )
-      await queueDraft(journal, 'draft-1')
-      expect(journal.queuedMessages.list()).toHaveLength(1)
+      // Startup reports it (`structured-agent-session-startup-settlement.ts`) and goes on.
+      await expect(journal.queuedMessages.repairAndPrune()).rejects.toThrow('SQLITE_FULL')
+      await queueDraft(journal, 'draft-2')
+      expect(journal.queuedMessages.list()).toHaveLength(2)
     } finally {
       repair.mockRestore()
-      warn.mockRestore()
     }
   })
 
@@ -622,7 +637,7 @@ describe('open-time repair and retention', () => {
     { origin: 'client' as const, cause: 'chatClosed' as const },
     { origin: 'host' as const, cause: 'chatClosed' as const }
   ])(
-    'a skipped hook for a $origin hand-off cut short ($cause) is repaired at open, back to waiting',
+    'a skipped hook for a $origin hand-off cut short ($cause) is repaired at startup, back to waiting',
     async ({ origin, cause }) => {
       let journal = await open()
       await queueDraft(journal, 'draft-1')
@@ -638,7 +653,7 @@ describe('open-time repair and retention', () => {
         "UPDATE queued_messages SET state = 'dispatched', hold_reason = NULL, consumed_as = 'sub-draft-1' WHERE message_id = ?"
       ).run('draft-1')
       db.close()
-      journal = await open()
+      journal = await openAtStartup()
       expect(journal.queuedMessages.get('draft-1')).toMatchObject({
         state: 'waiting',
         holdReason: null,
@@ -666,7 +681,7 @@ describe('open-time repair and retention', () => {
       "UPDATE queued_messages SET state = 'dispatched', returned_reason = NULL, returned_rejection = NULL WHERE message_id = ?"
     ).run('draft-1')
     db.close()
-    journal = await open()
+    journal = await openAtStartup()
     const row = journal.queuedMessages.get('draft-1')
     expect(row?.state).toBe('returned')
     expect(row?.returnedReason).toBe(refusal('refused while downgraded').reason)
@@ -685,7 +700,7 @@ describe('open-time repair and retention', () => {
     ).run('draft-1')
     db.close()
     clock += QUEUED_MESSAGE_REPLAY_WINDOW_MS + 1_000
-    journal = await open()
+    journal = await openAtStartup()
     // The same settlement the live hook applies.
     expect(journal.queuedMessages.get('draft-1')).toMatchObject({
       state: 'waiting',
@@ -702,7 +717,7 @@ describe('open-time repair and retention', () => {
     await journal.close()
     // Reopen "25 hours" later: the submission is still queued/pending.
     clock += QUEUED_MESSAGE_REPLAY_WINDOW_MS + 60 * 60 * 1000
-    journal = await open()
+    journal = await openAtStartup()
     expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
     // The delivery loop's leftover rejection now sends it back to waiting.
     await journal.rejectQueuedSubmissions(0, HOST_RESTARTED)
@@ -738,7 +753,7 @@ describe('open-time repair and retention', () => {
     })
     await journal.close()
     clock += QUEUED_MESSAGE_REPLAY_WINDOW_MS + 1_000
-    journal = await open()
+    journal = await openAtStartup()
     expect(journal.queuedMessages.list().map((row) => [row.messageId, row.state])).toEqual([
       ['waiting-1', 'waiting'],
       ['returned-1', 'returned']
@@ -754,7 +769,7 @@ describe('open-time repair and retention', () => {
     })
     await journal.close()
     clock += 1_000
-    journal = await open()
+    journal = await openAtStartup()
     expect(journal.queuedMessages.get('withdrawn-1')?.state).toBe('withdrawn')
   })
 })

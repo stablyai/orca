@@ -73,7 +73,10 @@ describe('structured mailbox pointer host', () => {
     // far from the tail, so any page-sized read reports a busy worker as idle — and `@idle` then
     // wakes it mid-turn.
     const items = [runningTurn(), ...transcript(500)]
-    hostRef.current = { journalSnapshot: () => ({ items, submissions: [] }) }
+    hostRef.current = {
+      journalSnapshot: () => ({ items, submissions: [] }),
+      currentWork: () => null
+    }
     expect(await readStructuredSessionGateFacts('s1')).toEqual({
       turnRunning: true,
       awaitingHuman: false

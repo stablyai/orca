@@ -248,15 +248,16 @@ it('hands over a message held behind the command when the command ends just as t
   await state.host.conversationCommand(CALLER, compactParams())
   await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce(), { interval: 1 })
   const { journal: live } = state.host['sessions'].get(SESSION)!
-  const activeTurnId = live.activeTurnId
+  const runningTurn = live.runningTurn
   let ended = false
-  vi.spyOn(live, 'activeTurnId').mockImplementation(() => {
-    const read = activeTurnId()
+  // The loop reads the command through the host's current-work projection, which asks this.
+  vi.spyOn(live, 'runningTurn').mockImplementation(() => {
+    const read = runningTurn()
     // The provider's end lands the moment the loop's own step reads the command as running and
     // stops; no other reader's view of it matters here.
     if (
       !ended &&
-      read?.startsWith('compact:') &&
+      read?.turnId.startsWith('compact:') &&
       /at (?:StructuredAgentSessionDeliveryLoop\.)?prepare \(.*structured-agent-session-delivery-loop/.test(
         new Error('who reads').stack ?? ''
       )

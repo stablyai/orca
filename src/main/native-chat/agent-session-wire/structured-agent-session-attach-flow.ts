@@ -36,6 +36,7 @@ import type { StructuredAgentRegistry } from './structured-agent-registry'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
+import { heldStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
 import { acquireOwner } from './structured-agent-session-acquisition'
 import {
   importAdoptedTranscript,
@@ -284,7 +285,12 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      page: readAgentSessionHydrationPage(attached.journal, fence),
+      // The lease this attach just took is the live generation.
+      page: readAgentSessionHydrationPage(
+        attached.journal,
+        fence,
+        heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
+      ),
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

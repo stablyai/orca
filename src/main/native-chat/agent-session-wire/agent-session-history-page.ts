@@ -36,6 +36,15 @@ import {
   submissionBytesByItemId
 } from './agent-session-history-page-bounds'
 import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
+import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+
+/** What a page publishes of the host's current-work projection (`structuredAgentSessionCurrentWork`):
+ *  the newest turn record as clients are told it, and the prompts still waiting on the person.
+ *  Absent, a page states the raw record and no prompt ids, as an older host did. */
+export type AgentSessionPublishedWork = Pick<
+  StructuredAgentSessionCurrentWork,
+  'publishedLatestTurn' | 'actionablePromptIds' | 'working'
+>
 
 export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 
@@ -80,19 +89,20 @@ export function readAgentSessionHistory(
   /** Reduced state to read against. A synchronous multi-page catch-up passes one
    *  snapshot for the whole run so each page costs its own rows, not the timeline. */
   snapshot: AgentJournalSnapshot = journal.snapshot(),
-  scope: AgentSessionHistoryScope = 'every-agent'
+  scope: AgentSessionHistoryScope = 'every-agent',
+  work?: AgentSessionPublishedWork
 ): AgentSessionHistoryResult {
   const limit = resolveHistoryLimit(request.limit)
   if (request.direction === 'after') {
-    return readForward(journal, snapshot, request.cursor, limit)
+    return readForward(journal, snapshot, request.cursor, limit, work)
   }
   const cursor = request.direction === 'before' ? request.cursor : undefined
   if (cursor) {
     if (cursor.epoch !== snapshot.cursor.epoch) {
-      return historyReset(snapshot, 'epoch_changed')
+      return historyReset(snapshot, 'epoch_changed', work)
     }
     if (cursor.sequence > snapshot.cursor.sequence) {
-      return historyReset(snapshot, 'cursor_ahead')
+      return historyReset(snapshot, 'cursor_ahead', work)
     }
   }
   const scoped =
@@ -117,7 +127,8 @@ export function readAgentSessionHistory(
       nextCursor: items[0]
         ? { epoch: snapshot.cursor.epoch, sequence: items[0].sequence }
         : undefined,
-      subagentRoster: offPageSubagentRoster(scoped, items)
+      subagentRoster: offPageSubagentRoster(scoped, items),
+      work
     })
   }
 }
@@ -128,7 +139,8 @@ export function readAgentSessionHistory(
  * check re-reduces if anything did advance the journal between pages.
  */
 export function createAgentSessionCatchUpReader(
-  journal: AgentSessionJournal
+  journal: AgentSessionJournal,
+  work?: AgentSessionPublishedWork
 ): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
   let snapshot = journal.snapshot()
   return (request) => {
@@ -136,20 +148,34 @@ export function createAgentSessionCatchUpReader(
     if (live.epoch !== snapshot.cursor.epoch || live.sequence !== snapshot.cursor.sequence) {
       snapshot = journal.snapshot()
     }
-    return readAgentSessionHistory(journal, request, snapshot)
+    return readAgentSessionHistory(journal, request, snapshot, 'every-agent', work)
   }
 }
 
 export function readAgentSessionHydrationPage(
   journal: AgentSessionJournal,
-  fence?: number
+  fence?: number,
+  work?: AgentSessionPublishedWork
 ): AgentSessionHistoryPage {
-  return buildHydrationPage(journal.snapshot(), fence)
+  return buildHydrationPage(journal.snapshot(), fence, work)
+}
+
+/** The current-work fields a page carries, for a frame that carries no page. */
+export function agentSessionPublishedWorkFields(
+  journal: AgentSessionJournal,
+  work: AgentSessionPublishedWork
+): Pick<AgentSessionHistoryPage, 'latestTurn' | 'actionablePromptIds' | 'working'> {
+  return {
+    latestTurn: work.publishedLatestTurn(snapshotLatestTurn(journal.snapshot())),
+    actionablePromptIds: work.actionablePromptIds(),
+    working: work.working()
+  }
 }
 
 function buildHydrationPage(
   snapshot: AgentJournalSnapshot,
-  fence?: number
+  fence?: number,
+  work?: AgentSessionPublishedWork
 ): AgentSessionHistoryPage {
   const items = conversationWindow(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
   const bounded = boundHistoryItemsByBytes(
@@ -169,18 +195,20 @@ function buildHydrationPage(
       ? { epoch: snapshot.cursor.epoch, sequence: bounded.items[0].sequence }
       : undefined,
     fence,
-    subagentRoster: offPageSubagentRoster(snapshot.items, bounded.items)
+    subagentRoster: offPageSubagentRoster(snapshot.items, bounded.items),
+    work
   })
 }
 
 function historyReset(
   snapshot: AgentJournalSnapshot,
-  reset: Extract<AgentSessionHistoryResult, { ok: false }>['reset']
+  reset: Extract<AgentSessionHistoryResult, { ok: false }>['reset'],
+  work: AgentSessionPublishedWork | undefined
 ): AgentSessionHistoryResult {
   return {
     ok: false,
     reset,
-    page: buildHydrationPage(snapshot)
+    page: buildHydrationPage(snapshot, undefined, work)
   }
 }
 
@@ -188,18 +216,19 @@ function readForward(
   journal: AgentSessionJournal,
   snapshot: AgentJournalSnapshot,
   cursor: AgentJournalCursor | undefined,
-  limit: number
+  limit: number,
+  work: AgentSessionPublishedWork | undefined
 ): AgentSessionHistoryResult {
   if (!cursor) {
     // Why: forward paging replays rows after a position; without one there is
     // nothing to be after, and silently serving the tail would hand the client
     // a page it cannot place.
-    return historyReset(snapshot, 'cursor_ahead')
+    return historyReset(snapshot, 'cursor_ahead', work)
   }
   // One lookahead preserves hasNewer without rereading the entire remaining journal per page.
   const since = journal.readSince(cursor, limit + 1)
   if (!since.ok) {
-    return historyReset(snapshot, since.reset)
+    return historyReset(snapshot, since.reset, work)
   }
   const submissionBytes = submissionBytesByItemId(snapshot.submissions)
   // The page cost is EVERYTHING variable it carries: items with their
@@ -225,7 +254,7 @@ function readForward(
     canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
   })
   if (!projected.ok) {
-    return historyReset(snapshot, projected.reset)
+    return historyReset(snapshot, projected.reset, work)
   }
   let contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
   while (rows.length > 1 && contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
@@ -237,7 +266,7 @@ function readForward(
       canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
     })
     if (!shrunk.ok) {
-      return historyReset(snapshot, shrunk.reset)
+      return historyReset(snapshot, shrunk.reset, work)
     }
     projected = shrunk
     contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
@@ -257,7 +286,7 @@ function readForward(
     // break the client's keying. A bounded tail replaces the client's state
     // wholesale, which applies the removal without carrying the id, and the
     // client resumes from the live cursor past this row.
-    return historyReset(snapshot, 'cursor_compacted')
+    return historyReset(snapshot, 'cursor_compacted', work)
   }
   const lastSequence = rows.at(-1)?.seq ?? cursor.sequence
   return {
@@ -271,7 +300,8 @@ function readForward(
       hasOlder: cursor.sequence > 0,
       hasNewer: since.rows.length > rows.length,
       fallbackCursor: cursor,
-      nextCursor: { epoch: cursor.epoch, sequence: lastSequence }
+      nextCursor: { epoch: cursor.epoch, sequence: lastSequence },
+      work
     })
   }
 }
@@ -287,6 +317,7 @@ function buildPage(input: {
   nextCursor: AgentJournalCursor | undefined
   fence?: number
   subagentRoster?: AgentSessionSubagentRosterEntry[]
+  work?: AgentSessionPublishedWork
 }): AgentSessionHistoryPage {
   const epoch = input.snapshot.cursor.epoch
   const pageItemIds = new Set(input.items.map((item) => item.itemId))
@@ -311,8 +342,15 @@ function buildPage(input: {
     hasOlder: input.hasOlder,
     hasNewer: input.hasNewer,
     ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
-    // From the whole timeline, never the page: a long turn's record sits below any window.
-    latestTurn: snapshotLatestTurn(input.snapshot)
+    // From the whole timeline, never the page: a long turn's record sits below any window. Scoped
+    // by the host's projection where the reader has one: an ended generation's turn runs nowhere.
+    ...(input.work
+      ? {
+          latestTurn: input.work.publishedLatestTurn(snapshotLatestTurn(input.snapshot)),
+          actionablePromptIds: input.work.actionablePromptIds(),
+          working: input.work.working()
+        }
+      : { latestTurn: snapshotLatestTurn(input.snapshot) })
   }
 }
 

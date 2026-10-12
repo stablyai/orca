@@ -13,6 +13,7 @@ import { agentSessionJournalProviderHandle } from '../../../shared/agent-session
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { journalItemOwnerFence, journalObservedBody } from './journal-item-provenance'
 import type { JournalReducerState } from './journal-reducer'
 import type {
   JournalDispatchRow,
@@ -51,7 +52,12 @@ export function journalItemRowBuilder(
   state: () => JournalReducerState,
   address: AgentJournalItemIdentity | string,
   body: AgentJournalItemBody,
-  options: AgentJournalRowAttribution & { fence: number; observedAt?: number; recovered?: true },
+  options: AgentJournalRowAttribution & {
+    fence: number
+    ownerFence?: number
+    observedAt?: number
+    recovered?: true
+  },
   revisions?: Map<string, number>
 ): RowBuilder<JournalItemRow> {
   return (seq, ts) =>
@@ -61,6 +67,7 @@ export function journalItemRowBuilder(
       body,
       seq,
       fence: options.fence,
+      ownerFence: options.ownerFence,
       ts: options.observedAt ?? ts,
       recovered: options.recovered,
       linkage: options,
@@ -183,10 +190,22 @@ export function journalLifecycleBatchRowBuilder(
       const revision = nextJournalItemRevision(current, itemId, runningRevisions)
       return journalLifecycleMutationRow(
         mutation.kind === 'item'
-          ? { ...mutation, body: turnEndAfterStop(current, resolved, mutation.body) }
+          ? {
+              ...mutation,
+              body: journalObservedBody(
+                current,
+                resolved,
+                turnEndAfterStop(current, resolved, mutation.body),
+                mutation.ownerFence
+              )
+            }
           : mutation,
         itemId,
-        revision
+        revision,
+        journalItemOwnerFence(current, resolved, {
+          fence: options.fence,
+          ownerFence: mutation.kind === 'item' ? mutation.ownerFence : undefined
+        })
       )
     })
     const row: JournalLifecycleBatchRow = {
@@ -225,6 +244,8 @@ export function buildJournalItemRow(
     body: AgentJournalItemBody
     seq: number
     fence: number
+    /** The writer's provenance claim (`journalItemOwnerFence`); absent for host bookkeeping. */
+    ownerFence?: number
     ts: number
     recovered?: true
     linkage?: AgentJournalProducerLinkage
@@ -237,13 +258,19 @@ export function buildJournalItemRow(
   // A tombstoned row keeps its revision in `tombstones`, and the reducer drops
   // any item at or below it — so a re-add has to outrank the tombstone too.
   const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
-  const body = turnEndAfterStop(input.state, resolved, input.body)
+  const body = journalObservedBody(
+    input.state,
+    resolved,
+    turnEndAfterStop(input.state, resolved, input.body),
+    input.ownerFence
+  )
   return {
     kind: 'item',
     itemId,
     revision,
     body,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [body]),
+    ownerFence: journalItemOwnerFence(input.state, resolved, input),
     ...(input.recovered ? { recovered: input.recovered } : {}),
     turnScope: input.turnScope,
     ...agentJournalLinkageFields(input.linkage)

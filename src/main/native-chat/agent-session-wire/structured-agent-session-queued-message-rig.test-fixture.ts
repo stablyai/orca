@@ -11,11 +11,15 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../shared/agent-session-wire'
+import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
 import { agentSessionMessagePayload } from '../../../shared/structured-agent-session-send-mutation'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
-import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import {
+  StructuredAgentSessionHost,
+  type StructuredAgentSessionHostDeps
+} from './structured-agent-session-host'
 import { rotateStructuredAgentSessionHostInstanceForTests } from './structured-agent-session-queued-pause'
 import {
   HOST_TEST_NOW as NOW,
@@ -26,13 +30,17 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
   createQueuedRigProvider,
   type QueuedRigProviderOptions
 } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
 type RigSendOptions = { internal?: true; from?: AgentMessageSource }
@@ -49,12 +57,16 @@ export async function createQueuedMessageTestRig(
     idleSweep?: { idleMs: number; intervalMs: number }
     /** Teardown records its restart offers, which `restartOffers` lists. */
     recoveryCapsule?: true
+    /** Where the chat runs, when not the default worktree. */
+    location?: AgentSessionExecutionLocation
+    /** How the host probes a recorded owner; absent answers indeterminate. */
+    probeOwner?: StructuredAgentSessionHostDeps['probeOwner']
   } = {}
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-queued-messages-'))
   resetHostTestOperationIds()
-  const store = await openTestAgentSessionRecordStore(root)
-  const provider = createQueuedRigProvider(store, options)
+  let store = await openTestAgentSessionRecordStore(root)
+  const provider = createQueuedRigProvider({ getRecord: (id) => store.getRecord(id) }, options)
   const { dispatch, compact, cancelTurn, closeSession } = provider
   const makeHost = () =>
     new StructuredAgentSessionHost({
@@ -66,13 +78,17 @@ export async function createQueuedMessageTestRig(
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-1',
       now: () => NOW,
+      ...(options.probeOwner ? { probeOwner: options.probeOwner } : {}),
       ...(options.idleSweep ? { idleSweep: options.idleSweep } : {}),
       ...(options.recoveryCapsule ? { recoveryCapsule: new AgentSessionRecoveryCapsule(root) } : {})
     })
   let host = makeHost()
-  expect(await host.attach(QUEUED_RIG_CALLER, hostTestAttachParams(null))).toMatchObject({
-    ok: true
-  })
+  // Kept, so a test can re-attach under the same operation: a reconnect to the live child.
+  const firstAttach = hostTestAttachParams(
+    null,
+    options.location ? { location: options.location } : {}
+  )
+  expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
 
   function envelope(
     fields: Record<string, unknown>,
@@ -212,20 +228,38 @@ export async function createQueuedMessageTestRig(
 
   /** A host-process restart: the app quits (its own teardown runs) and a new host opens the same
    *  state. A quit writes no close's Stop event, so a person's Stop pause survives it. */
-  async function restartHostProcess(): Promise<void> {
-    await quitRestartHostProcess()
+  async function restartHostProcess(beforeStartup?: () => unknown): Promise<void> {
+    await quitRestartHostProcess(beforeStartup)
   }
 
-  /** A host process that dies with no close: a new host opens the same state directory. */
-  function crashRestartHostProcess(): void {
+  /** A host process that dies with no close: a new process loads the same state directory, its
+   *  records with it, and runs its startup as the runtime does before any client reaches it: the
+   *  restart reconcile and its settlement, then the restore of the chat's tab, which decides a
+   *  lease latched in recovery; that decision's release wakes the retry once more. */
+  async function crashRestartHostProcess(beforeStartup?: () => unknown): Promise<void> {
+    await crashReloadHostProcess(beforeStartup)
+    await host.restoreReadableSessions([SESSION])
+    await host.startupSettled()
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
+  }
+
+  /** The same crash, with only the restart reconcile and its settlement: no tab is restored.
+   *  `beforeStartup` sees the state directory between the two processes. */
+  async function crashReloadHostProcess(beforeStartup?: () => unknown): Promise<void> {
+    // Its connection closes with it, and every temporary trigger a test added with it.
+    closeTestJournalHostDatabase(root)
+    await beforeStartup?.()
+    store = await openTestAgentSessionRecordStore(root)
     rotateStructuredAgentSessionHostInstanceForTests()
     host = makeHost()
+    await host.reconcileRestartLeases()
+    await host.startupSettled()
   }
 
   /** The app quits — the host's own teardown runs — and a new host opens the same state. */
-  async function quitRestartHostProcess(): Promise<void> {
+  async function quitRestartHostProcess(beforeStartup?: () => unknown): Promise<void> {
     await host.flushAllStreamedEvents()
-    crashRestartHostProcess()
+    await crashRestartHostProcess(beforeStartup)
   }
 
   /** The queue's published pause: null when it sends on its own. */
@@ -276,7 +310,10 @@ export async function createQueuedMessageTestRig(
 
   return {
     root,
-    store,
+    firstAttach,
+    get store() {
+      return store
+    },
     get host() {
       return host
     },
@@ -285,6 +322,7 @@ export async function createQueuedMessageTestRig(
     closeSession,
     compact,
     starts: provider.starts,
+    answerPrompt: provider.adapter.answerPrompt,
     holdNextStart: provider.holdNextStart,
     failNextStart: provider.failNextStart,
     finishCompact: provider.finishCompact,
@@ -303,6 +341,7 @@ export async function createQueuedMessageTestRig(
     settleRejected,
     restartHostProcess,
     crashRestartHostProcess,
+    crashReloadHostProcess,
     quitRestartHostProcess,
     queuePause,
     restartOffers,

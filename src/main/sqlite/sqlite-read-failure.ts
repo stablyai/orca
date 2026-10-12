@@ -53,6 +53,19 @@ export function isTransientSqliteContention(error: unknown): boolean {
   return CONTENTION_MESSAGE.test(errorText(error))
 }
 
+/** `isTransientSqliteContention` for a failure that wraps others (`cause`, `AggregateError`). */
+export function isSqliteContentionFailure(error: unknown, depth = 0): boolean {
+  if (depth > 4 || error === undefined || error === null) {
+    return false
+  }
+  if (isTransientSqliteContention(error)) {
+    return true
+  }
+  const wrapped = error instanceof AggregateError ? error.errors : []
+  const cause = error instanceof Error ? error.cause : undefined
+  return [cause, ...wrapped].some((inner) => isSqliteContentionFailure(inner, depth + 1))
+}
+
 export type SqliteReadFailureKind =
   /** Another connection holds the lock; the same read can succeed later. */
   | 'contended'

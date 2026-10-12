@@ -164,6 +164,13 @@ describe('queued message cards', () => {
     expect(cards.map((card) => queuedMessageCardSteers(card))).toEqual([true, true])
   })
 
+  it('a waiting card still offers Steer while nothing runs, as when its agent died and its cleanup waits', () => {
+    const cards = projectQueuedMessageCards([draft('waiting', 1)], [], { agentWorking: false })
+    expect(cards.map((card) => [card.hold, queuedMessageCardSteers(card)])).toEqual([
+      ['turn', true]
+    ])
+  })
+
   it("the header names the queue's pause while it holds a card, and none over cards Resume would not send", () => {
     const stopped = { reason: 'stopped' } as const
     const project = (messages: AgentSessionQueuedMessage[], queuePaused = true) =>

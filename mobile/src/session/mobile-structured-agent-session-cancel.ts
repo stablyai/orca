@@ -1,7 +1,9 @@
 import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
-import { runningStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-live-turn'
+import {
+  isActionableStructuredAgentSessionPrompt,
+  runningStructuredAgentSessionTurnId
+} from '../../../src/shared/structured-agent-session-live-turn'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   requestStructuredAgentSessionMutation,
@@ -10,12 +12,14 @@ import {
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 
+/** The prompt a Stop cancels: one the host says still waits on the person, when it says. */
 export function pendingStructuredPromptIdentity(
-  items: readonly AgentJournalRenderItem[]
+  state: Pick<StructuredAgentSessionState, 'items' | 'actionablePromptIds'>
 ): PromptIdentity | undefined {
-  const prompt = items.find((item) =>
+  const prompt = state.items.find((item) =>
     item.body.kind === 'approval' || item.body.kind === 'question'
-      ? item.body.resolution.state === 'pending'
+      ? item.body.resolution.state === 'pending' &&
+        isActionableStructuredAgentSessionPrompt(item.itemId, state.actionablePromptIds)
       : false
   )
   return prompt ? { itemId: prompt.itemId, expectedRevision: prompt.revision } : undefined

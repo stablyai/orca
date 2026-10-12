@@ -153,12 +153,20 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
         {
           id: 'old',
           label: 'Original label',
+          ownerFence: 1,
           startedAt: 2,
           settledAt: 301,
           state: 'completed',
           tokens: 12
         },
-        { id: 'sibling', label: 'Original label 2', startedAt: 3, settledAt: 4, state: 'completed' }
+        {
+          id: 'sibling',
+          label: 'Original label 2',
+          ownerFence: 1,
+          startedAt: 3,
+          settledAt: 4,
+          state: 'completed'
+        }
       ])
       expect(
         (await roster(fixture)).flatMap(({ group }) =>
@@ -192,6 +200,7 @@ describe('Grok roster ownership after more than 32 spawning groups', () => {
         {
           id: 'old',
           label: 'Original label',
+          ownerFence: 1,
           startedAt: 2,
           settledAt: 301,
           state: kind === 'output' ? 'completed' : 'stopped'

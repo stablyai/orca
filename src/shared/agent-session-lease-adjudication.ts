@@ -83,7 +83,8 @@ export function isProvenAliveProbe(probe: AgentSessionOwnerProbe): boolean {
   return probe.outcome === 'identity-matched' && probe.matchedOn.length > 0
 }
 
-function deathEvidenceFor(
+/** The proof a probe gives that the lease's owner is gone, or null when it proves nothing. */
+export function agentSessionDeathEvidenceFromProbe(
   probe: AgentSessionOwnerProbe,
   observedAt: number,
   lease: AgentSessionLease
@@ -270,7 +271,7 @@ export function adjudicateAgentSessionRestart(args: {
       reason: 'owner outlived the runtime that held its transport'
     }
   }
-  const evidence = deathEvidenceFor(probe, observedAt, lease)
+  const evidence = agentSessionDeathEvidenceFromProbe(probe, observedAt, lease)
   if (evidence) {
     return { disposition: 'evicted', nextFence: nextAgentSessionFence(lease), evidence }
   }

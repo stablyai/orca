@@ -74,7 +74,7 @@ async function runningTurn(
 async function restartAndSettle(
   proof: 'pid-absent' | 'exit-observed' | 'unproven' = 'pid-absent'
 ): Promise<void> {
-  rig.crashRestartHostProcess()
+  await rig.crashRestartHostProcess()
   await rig.host.journalSnapshot(HOST_TEST_SESSION)
   const now = Date.now()
   const deathEvidence: AgentSessionDeathEvidence | null =
@@ -364,7 +364,7 @@ describe('a restart between a Stop and its turn end', () => {
       return new Promise<never>(() => undefined)
     })
     void rig.stop()
-    await expect.poll(() => journal().activeTurnId()).toBe(TURN)
+    await expect.poll(() => journal().runningTurn()?.turnId ?? null).toBe(TURN)
     expect(journal().stopMarks.latest()?.event.turnId).toBeUndefined()
 
     await restartAndSettle('exit-observed')

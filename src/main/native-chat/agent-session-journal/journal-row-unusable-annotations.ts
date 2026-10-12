@@ -6,11 +6,13 @@ import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-sess
 export function dropUnusableRowAnnotations(record: Record<string, unknown>): void {
   dropUnusableProducerLinkage(record)
   dropUnusableTurnScope(record)
+  dropUnusableOwnerFence(record)
   if (record.kind === 'lifecycle-batch' && Array.isArray(record.mutations)) {
     for (const mutation of record.mutations) {
       if (isPlainObject(mutation)) {
         dropUnusableProducerLinkage(mutation)
         dropUnusableTurnScope(mutation)
+        dropUnusableOwnerFence(mutation)
       }
     }
   }
@@ -53,6 +55,14 @@ function dropUnusableTurnScope(record: Record<string, unknown>): void {
     )
   ) {
     delete record.turnScope
+  }
+}
+
+/** Provenance this build cannot read, removed like linkage: the item's creating fence stands in. */
+function dropUnusableOwnerFence(record: Record<string, unknown>): void {
+  const value = record.ownerFence
+  if (value !== undefined && !(Number.isSafeInteger(value) && Number(value) >= 0)) {
+    delete record.ownerFence
   }
 }
 

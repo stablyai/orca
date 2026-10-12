@@ -75,11 +75,16 @@ describe('restart offers after context clear', () => {
       ...value(),
       providerHandleChain: [proved]
     }
+    // Teardown runs while the child at fence 2 still holds the lease; the restart finds it released.
+    const heldRecord = {
+      ...currentRecord,
+      lease: { ...currentRecord.lease, claimStatus: 'live' as const, runtimeFence: 2 }
+    }
     const turn = { ...turnItem('new-turn', 'running'), sequence: 6 }
     const offer = structuredAgentSessionWorkingAtStop({
       sessionId: SESSION,
       session: { journal: journal([clear, turn]), child: { fence: 2 } },
-      getRecord: () => currentRecord,
+      getRecord: () => heldRecord,
       childWork: () => undefined,
       trigger: 'quit',
       teardownId: TEARDOWN_CURRENT,

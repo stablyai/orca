@@ -38,11 +38,16 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** The chat reopens on a database a newer Orca stamped. The host's database object is the one
- *  the rig built, so its open-time verdict is set in place; every store write checks that. */
+/** The database a newer Orca stamped. The host's database object is the one the rig built, so
+ *  its open-time verdict is set in place; every store write checks that. */
+function stampNewerOrca(): void {
+  Object.defineProperty(openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
+}
+
+/** The chat reopens on a database a newer Orca stamped. */
 async function reopenOnNewerOrcaDatabase(close: () => Promise<unknown>): Promise<void> {
   await close()
-  Object.defineProperty(openTestJournalHostDatabase(rig.root), 'readOnly', { value: true })
+  stampNewerOrca()
 }
 
 /** The history read a newer Orca's chat gets: refused, as every reader's is. */
@@ -80,7 +85,8 @@ describe("a newer Orca's journal", () => {
 
   it('refuses Resume of the queue a restart paused with the update words', async () => {
     await twoCardsBehindWork()
-    await reopenOnNewerOrcaDatabase(() => rig.restartHostProcess())
+    // Stamped before the new process starts, as a newer Orca's run leaves it.
+    await rig.restartHostProcess(stampNewerOrca)
     await expectHistoryRefused()
 
     expect(await rig.resume()).toMatchObject(REFUSED_BY_NEWER_ORCA)

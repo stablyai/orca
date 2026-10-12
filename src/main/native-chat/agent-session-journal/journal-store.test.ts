@@ -141,7 +141,7 @@ describe('sequences', () => {
     const rendered = (): string | null =>
       activeStructuredAgentSessionTurnId(journal.snapshot().items)
     const bothAgreeOn = async (turnId: string | null): Promise<void> => {
-      expect(journal.activeTurnId()).toBe(turnId)
+      expect(journal.runningTurn()?.turnId ?? null).toBe(turnId)
       expect(rendered()).toBe(turnId)
     }
 

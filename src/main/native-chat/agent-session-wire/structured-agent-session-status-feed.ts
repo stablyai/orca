@@ -19,7 +19,10 @@ import type {
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
+import type {
+  StructuredAgentSessionEndedChild,
+  StructuredAgentSessionProviderChild
+} from './structured-agent-session-host-types'
 import { structuredAgentSessionStatusSummary } from './structured-agent-session-status-summary'
 import { structuredStatusChildWork } from './structured-agent-session-status-child-work'
 import {
@@ -46,12 +49,17 @@ type StatusFeedSession = {
   journal: AgentSessionJournal
   params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
   child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
+  /** What the current-work projection reads of the last child this host saw end. */
+  lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
+  operationalRevision?: number
   restartResume?: AgentSessionStatusSummary['restartResume']
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
+  /** `AgentSessionRecordStore.replacedRuntime`; absent where no runtime was replaced. */
+  replacedRuntime?: (sessionId: string) => { fence: number } | undefined
   now: () => number
   /** Where a failing sink or observer is reported; neither may cost subscribers their event. */
   logger: StructuredAgentSessionLogger
@@ -86,7 +94,10 @@ export class StructuredAgentSessionStatusFeed {
   /** The user's newest accepted send each session was last projected with; a new one retires
    *  settled children. */
   private readonly acceptedSends = new Map<string, string>()
-  private readonly projections = new StructuredAgentSessionJournalProjections()
+  // Read per call: field initializers run before the constructor assigns `deps`.
+  private readonly projections = new StructuredAgentSessionJournalProjections((sessionId) =>
+    this.deps.replacedRuntime?.(sessionId)
+  )
 
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
 
@@ -208,8 +219,9 @@ export class StructuredAgentSessionStatusFeed {
     sessionId: string,
     journal?: AgentSessionJournal
   ): StructuredAgentSessionJournalProjection | null {
-    const source = journal ?? this.deps.sessions.get(sessionId)?.journal
-    return source ? this.projections.read(source, this.deps.getRecord(sessionId)) : null
+    const session = this.deps.sessions.get(sessionId)
+    const source = journal ?? session?.journal
+    return source ? this.projections.read(source, this.deps.getRecord(sessionId), session) : null
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
@@ -220,7 +232,7 @@ export class StructuredAgentSessionStatusFeed {
     }
     const source = journal ?? session.journal
     const record = this.deps.getRecord(sessionId)
-    const projection = this.projections.read(source, record)
+    const projection = this.projections.read(source, record, session)
     this.retireSettledChildrenOnNewTurn(sessionId, session, projection.acceptedSendKey)
     const summary = structuredAgentSessionStatusSummary({
       sessionId,

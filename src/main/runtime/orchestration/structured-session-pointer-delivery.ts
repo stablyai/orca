@@ -8,6 +8,7 @@
  */
 
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 import {
   activeStructuredAgentSessionTurnId,
   projectStructuredAgentSessionStatus
@@ -46,11 +47,17 @@ export type StructuredSessionGateFacts = {
  * and idle-with-history is the normal steady state of a working agent.
  */
 export function structuredSessionGateFacts(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  /** The host's projection of current work (`structuredAgentSessionCurrentWork`). */
+  scope?: StructuredAgentSessionWorkScope
 ): StructuredSessionGateFacts {
   return {
-    turnRunning: activeStructuredAgentSessionTurnId(items) !== null,
-    awaitingHuman: projectStructuredAgentSessionStatus(items) === 'attention'
+    turnRunning:
+      activeStructuredAgentSessionTurnId(
+        items,
+        scope && ((item) => scope.isCurrentItem(item.itemId))
+      ) !== null,
+    awaitingHuman: projectStructuredAgentSessionStatus(items, [], undefined, scope) === 'attention'
   }
 }
 

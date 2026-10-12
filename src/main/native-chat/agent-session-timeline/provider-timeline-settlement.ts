@@ -97,7 +97,7 @@ export function providerTimelineSettlement(
     const settled = !covered
       ? null
       : (terminalAgentJournalBody(body, end) ??
-        (scope === 'session' ? lostLiveWorkJournalBody(body, ending?.lostAt) : null))
+        (scope === 'session' ? lostLiveWorkJournalBody(body, { lostAt: ending?.lostAt }) : null))
     const identity = settled ? parseAgentJournalItemKey(itemId) : null
     if (settled && identity) {
       // No linkage: a revision keeps the row's own producer.

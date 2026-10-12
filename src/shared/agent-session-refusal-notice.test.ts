@@ -451,6 +451,12 @@ describe('the notice for every reason a host names', () => {
       }
       const notDone = parts.filter((part) => typeof part === 'string' && part.startsWith('notDone'))
       const answeredAway = write === 'answer' && parts.includes('questionChanged')
+      // "...so your answer was not sent" is that sentence's own.
+      const ownerStopped =
+        write === 'answer' &&
+        parts.some(
+          (part) => typeof part === 'object' && 'surface' in part && part.surface === 'answer'
+        )
       const unsupported =
         failure.code === 'structured_agent_session_unsupported' &&
         failure.details?.reason !== 'hostUnsupported' &&
@@ -467,7 +473,9 @@ describe('the notice for every reason a host names', () => {
         ] as const
       ).some((sentence) => parts.includes(sentence))
       expect(notDone, cell).toEqual(
-        answeredAway || unsupported || saysNotDone || clearWhileWorking ? [] : [NOT_DONE[write]]
+        answeredAway || ownerStopped || unsupported || saysNotDone || clearWhileWorking
+          ? []
+          : [NOT_DONE[write]]
       )
     }
   })
@@ -527,6 +535,12 @@ describe('the notice for every reason a host names', () => {
       'This question was already answered or has changed.'
     ],
     [
+      'agent_session_operation_invalid',
+      'promptOwnerEnded',
+      'answer',
+      'The agent has stopped, so your answer was not sent. Send a message to continue.'
+    ],
+    [
       'agent_session_checkpoint_stale',
       'fenceStale',
       'composer-send',
@@ -537,6 +551,33 @@ describe('the notice for every reason a host names', () => {
       agentSessionRefusalNotice({ code, message: HOST_TEXT, details: { reason } }, write)
     ).toBe(expected)
   })
+})
+
+describe('an answer to a prompt whose agent stopped', () => {
+  it('names the agent the client knows, on the phone and on desktop alike', () => {
+    const refusal = {
+      code: 'agent_session_operation_invalid' as const,
+      message: HOST_TEXT,
+      details: { reason: 'promptOwnerEnded' as const }
+    }
+    expect(agentSessionRefusalNotice(refusal, 'answer', { agentName: 'Codex' })).toBe(
+      'Codex has stopped, so your answer was not sent. Send a message to continue.'
+    )
+  })
+
+  it.each(['providerStartFailed', 'notSignedIn', 'cliMissing', 'historyTooLarge'] as const)(
+    'keeps that sentence its own: %s still reads "Your answer was not sent."',
+    (reason) => {
+      const refusal = {
+        code: 'agent_session_operation_invalid' as const,
+        message: HOST_TEXT,
+        details: { reason }
+      }
+      expect(agentSessionRefusalNotice(refusal, 'answer', { agentName: 'Codex' })).toBe(
+        'Your answer was not sent.'
+      )
+    }
+  )
 })
 
 describe('a refusal from a host that names no reason this build knows', () => {

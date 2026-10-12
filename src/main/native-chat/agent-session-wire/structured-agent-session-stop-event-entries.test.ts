@@ -269,7 +269,7 @@ describe('every Stop entry writes its event, with its reason, before it ends the
       { kind: 'turn', turnId: 'turn-1', state: 'interrupted', completedAt: Date.now() },
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     const sink = rig.host['runtimeState'].eventSinkFor(HOST_TEST_SESSION)
     const drained = sink.drained.bind(sink)
     vi.spyOn(sink, 'drained')

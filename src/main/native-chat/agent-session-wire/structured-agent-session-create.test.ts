@@ -381,7 +381,8 @@ it.each(['journal_rows', 'agent_session_operations'])(
     expect(rig.store.getSessionTabId(SESSION)).toBeNull()
     expect(rig.store.listOperationRows()).toEqual([])
     expect((await readPersistedTestAgentSessionStore(rig.root)).records).toEqual({})
-    expect(loadTestJournal(rig.root, SESSION)?.state.submissions.size).toBe(0)
+    // The chat's first epoch is written with its first row, so a refused create leaves no journal.
+    expect(loadTestJournal(rig.root, SESSION)).toBeNull()
     expect(rig.host.hasSession(SESSION)).toBe(false)
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
     expect(publishTab).not.toHaveBeenCalled()

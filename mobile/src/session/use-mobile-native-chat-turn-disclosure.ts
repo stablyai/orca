@@ -145,7 +145,8 @@ export function useMobileNativeChatTurnDisclosure({
           rows,
           turnJournal?.items,
           stopping,
-          turnJournal?.submissions
+          turnJournal?.submissions,
+          turnJournal ?? {}
         )
       : null
     if (!ids?.size) {

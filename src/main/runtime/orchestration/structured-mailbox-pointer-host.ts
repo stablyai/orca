@@ -47,7 +47,12 @@ export async function readStructuredSessionGateFacts(
   sessionId: string
 ): Promise<StructuredSessionGateFacts | null> {
   const snapshot = await readSessionJournal(sessionId)
-  return snapshot ? structuredSessionGateFacts(snapshot.items) : null
+  if (!snapshot) {
+    return null
+  }
+  // The host's projection of current work: an agent that ended is idle, whatever its rows say.
+  const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
+  return structuredSessionGateFacts(snapshot.items, work?.scope)
 }
 
 /** What each recorded send settled as. */

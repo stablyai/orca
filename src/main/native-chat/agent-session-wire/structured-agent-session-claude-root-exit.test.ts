@@ -145,7 +145,7 @@ describe('Claude root-exit stop', () => {
                 store,
                 sessions,
                 flushLifecycle: (id) => runtimeState.lifecycleBarrier(id),
-                publishFence: () => undefined,
+                generationEnded: () => undefined,
                 publishStatus,
                 serialize: (_sessionId, task) => task(),
                 now: () => NOW + 30 * 60_000,

@@ -18,6 +18,14 @@ import { ensureCommandReceiptsTable } from './command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
+
+/** `background`: bookkeeping no person waits on. It never waits for another connection's lock:
+ *  SQLITE_BUSY at once, and its caller retries on its own schedule. */
+export type JournalWriteOptions = { background?: true }
+
+export function backgroundWrite(background: true | undefined): JournalWriteOptions | undefined {
+  return background ? { background } : undefined
+}
 /** Bounds the WAL a checkpoint leaves behind; SQLite truncates it back to this after a reset. */
 export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
 /** Every commit is fsynced before its caller continues. */
@@ -139,7 +147,26 @@ function migrateJournalSchema(db: Database.Database, stored: number): void {
 export function runJournalTransaction<T>(
   db: Database.Database,
   run: (db: Database.Database) => T,
-  onStranded: () => void = () => undefined
+  onStranded: () => void = () => undefined,
+  options: JournalWriteOptions = {}
+): T {
+  if (!options.background) {
+    return runImmediateTransaction(db, run, onStranded)
+  }
+  // Set and restored around this one synchronous transaction: no other statement runs between.
+  const busyTimeout = journalPragmaNumber(db, 'busy_timeout')
+  db.pragma('busy_timeout = 0')
+  try {
+    return runImmediateTransaction(db, run, onStranded)
+  } finally {
+    db.pragma(`busy_timeout = ${busyTimeout}`)
+  }
+}
+
+function runImmediateTransaction<T>(
+  db: Database.Database,
+  run: (db: Database.Database) => T,
+  onStranded: () => void
 ): T {
   db.exec('BEGIN IMMEDIATE')
   try {

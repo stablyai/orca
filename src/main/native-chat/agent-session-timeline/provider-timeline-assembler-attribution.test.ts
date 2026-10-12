@@ -215,9 +215,14 @@ describe('a background task', () => {
     rig.assembler.apply({ type: 'item.open', item: 'ran', body: backgroundTask('ran', 'working') })
     rig.assembler.apply({ type: 'item.close', item: 'ran', body: backgroundTask('ran', 'done') })
     rig.assembler.apply({ type: 'session.ended', verdict: { state: 'unverifiable' } })
-    expect((await rig.row(providerItemId('item', 'bg')))?.body).toEqual(
-      backgroundTask('bg', 'unverifiable')
-    )
+    // The entry keeps the generation that ran it (`ownerFence`), stamped when it was observed.
+    const unverifiable = backgroundTask('bg', 'unverifiable')
+    expect((await rig.row(providerItemId('item', 'bg')))?.body).toEqual({
+      ...unverifiable,
+      blocks: unverifiable.blocks.map((block) =>
+        block.type === 'background-task' ? { ...block, ownerFence: 1 } : block
+      )
+    })
     expect(await backgroundTaskState(rig, 'ran')).toBe('done')
   })
 })

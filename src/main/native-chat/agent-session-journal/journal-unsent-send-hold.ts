@@ -18,13 +18,15 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
 import type { AgentSessionJournal } from './journal-store'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
 import type { JournalRowTransactionHook } from './journal-row-writer'
 import type { QueuedMessagePositionMove } from './queued-message-positions'
 
 /** Why the host can no longer hand a send over, which also says which sends it is. */
 export type UnsentSendHold =
-  /** At open, and the delivery loop's first step: what an earlier host process accepted. */
-  | { cause: 'hostRestarted' }
+  /** What an earlier host process accepted: by default, what was on disk when this handle opened;
+   *  `which` names it for a handle opened after this process accepted sends of its own. */
+  | { cause: 'hostRestarted'; which?: (submission: AgentJournalSubmission) => boolean }
   /** A close of the chat; `which` narrows it to what a close that did not complete closed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
@@ -87,8 +89,11 @@ export async function holdUnsentSends(
     /** In place of the queued sends: those a child that ended before it answered its start was
      *  handed and never echoed. It ran none, so each is unsent as surely as a queued one. */
     unrun?: true
+    /** What the rows are written through: the journal, or bookkeeping's background handle. */
+    writes?: Pick<AgentSessionJournal, 'resolveDispatch'>
   }
 ): Promise<number | null> {
+  const writes = input.writes ?? journal
   const { hold } = input
   const unsent = journal
     .submissions()
@@ -96,9 +101,10 @@ export async function holdUnsentSends(
       input.unrun
         ? isUnansweredHandedOverSubmission(entry)
         : isQueuedAgentJournalSubmission(entry) &&
-          (hold.cause === 'hostRestarted'
-            ? journal.wroteBeforeOpen(entry.acceptedSequence)
-            : (hold.which?.(entry) ?? true))
+          (hold.which?.(entry) ??
+            (hold.cause === 'hostRestarted'
+              ? journal.wroteBeforeOpen(entry.acceptedSequence)
+              : true))
     )
     .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
   if (unsent.length === 0) {
@@ -162,11 +168,16 @@ export async function holdUnsentSends(
     }
     try {
       // The send names its card in the same row, so no surface draws it once the card is gone.
-      await journal.resolveDispatch(
+      await writes.resolveDispatch(
         card ? { ...reject, keptAsQueuedMessageId: clientMessageId } : reject,
         keep
       )
     } catch (error) {
+      // Another connection holds the database: nothing was written, and the fallback would meet
+      // the same lock, so the caller tries again.
+      if (isSqliteContentionFailure(error)) {
+        throw error
+      }
       if (!keep) {
         failures.push(error)
         continue
@@ -179,7 +190,7 @@ export async function holdUnsentSends(
         cause: hold.cause,
         error: error instanceof Error ? error.message : String(error)
       })
-      await journal.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
+      await writes.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
     }
   }
   if (failures.length > 0) {

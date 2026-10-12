@@ -266,6 +266,22 @@ describe('mobile structured prompt cancellation', () => {
     expect(hook.turnId).toBeNull()
   })
 
+  it("reads Working from the host's answer, and from its rows only when an older host gives none", () => {
+    // A turn row an agent that has since ended left running: the host says it is not working.
+    state = { ...state, items: [runningTurn()], working: false }
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(false)
+    act(() => renderer?.unmount())
+    const { working: _answered, ...olderHost } = state
+    state = olderHost
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    expect(hook.isWorking).toBe(true)
+  })
+
   it('uses the rendered prompt identity when the journal changes before tap', async () => {
     act(() => {
       renderer = create(createElement(Harness, { promptCancelSupported: true }))

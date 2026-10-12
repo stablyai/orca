@@ -115,7 +115,13 @@ async function reviseFromProvider(itemId: string): Promise<void> {
 async function rewindKeepingPrompt(itemId: string): Promise<void> {
   const fence = store.getRecord(SESSION)!.lease.runtimeFence
   await journal().replaceEpochItems('handle_forked', fence, [
-    { identity: PROMPT, body: promptBody(itemId), turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    // The prompt keeps the generation that raised it (this one), as a rewind carries it.
+    {
+      identity: PROMPT,
+      body: promptBody(itemId),
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+      ownerFence: fence
+    }
   ])
 }
 

@@ -13,6 +13,7 @@ import {
   type AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionCancelOutcome } from './structured-agent-session-adapter'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -98,7 +99,12 @@ function stopAnswers(): (string | undefined)[] {
 }
 
 /** A send whose turn `turn-1` is running, and the session's status. */
-async function runningTurn(options: { stopEndsSession?: true } = {}) {
+async function runningTurn(
+  options: Pick<
+    NonNullable<Parameters<typeof createQueuedMessageTestRig>[0]>,
+    'stopEndsSession' | 'probeOwner'
+  > = {}
+) {
   rig = await createQueuedMessageTestRig(options)
   const sent = await rig.workingSend()
   await rig.settleAccepted(sent, 'sent')
@@ -268,7 +274,7 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
     expect(await rig.stop()).toMatchObject({ ok: true })
     // A Stop that ends its session ends the child on the session's next step.
     await rig.host['tasks'].serialize(HOST_TEST_SESSION, async () => {})
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     return { sent, status }
   }
 
@@ -283,7 +289,7 @@ describe('a Stop that failed before the turn it meant to stop opened', () => {
 
       await rig.settleAccepted(sent, 'sent')
       await turn('turn-1', sent, 'running')
-      await eventually(() => expect(journal().activeTurnId()).toBe('turn-1'))
+      await eventually(() => expect(journal().runningTurn()?.turnId ?? null).toBe('turn-1'))
       expect(status()).toMatchObject({ status: 'working', stopping: true })
       await turn('turn-1', sent, 'interrupted')
       await eventually(() => expect(status()?.status).toBe('idle'))
@@ -351,7 +357,7 @@ describe('a Stop pressed before its send opened a turn', () => {
   it('ends the turn its interrupt took at the settle, and Stopping with it', async () => {
     const { status } = await stopAsTheTurnOpens({ cancelled: true, turnId: 'turn-1' })
 
-    expect(journal().activeTurnId()).toBeNull()
+    expect(journal().runningTurn()?.turnId ?? null).toBeNull()
     await eventually(() => expect(status()?.status).toBe('idle'))
     expect(status()).not.toHaveProperty('stopping')
   })
@@ -390,7 +396,7 @@ describe('a Stop pressed before its send opened a turn', () => {
     expect(status()).not.toHaveProperty('stopping')
     await rig.settleAccepted(sent, 'sent')
     await turn('turn-1', sent, 'running')
-    await eventually(() => expect(journal().activeTurnId()).toBe('turn-1'))
+    await eventually(() => expect(journal().runningTurn()?.turnId ?? null).toBe('turn-1'))
     expect(status()).not.toHaveProperty('stopping')
   })
 
@@ -468,12 +474,12 @@ describe('a Stop whose provider ends its session', () => {
 
   // The close lives on the child, in memory, and dies with the host. The new host's settlement,
   // which ends the turn on a proof of the old owner's death, is what says the Stop took.
-  async function crashAfterUnconfirmedStop(): Promise<void> {
-    await runningTurn({ stopEndsSession: true })
+  async function crashAfterUnconfirmedStop(proof: AgentSessionOwnerProbe): Promise<void> {
+    await runningTurn({ stopEndsSession: true, probeOwner: async () => proof })
     rig.closeSession.mockRejectedValueOnce(new Error('the kill timed out'))
     expect(await rig.stop()).toMatchObject({ ok: true })
     await eventually(() => expect(stopAnswers()).toEqual(['cancelUnconfirmed']))
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
   }
 
   function turnOneState(): string | undefined {
@@ -483,21 +489,9 @@ describe('a Stop whose provider ends its session', () => {
       .find((turn) => turn?.turnId === 'turn-1')?.state
   }
 
-  /** What the host's restart reconciliation or recovery writes once a probe finds the old pid gone. */
-  async function proveOldOwnerGone(): Promise<void> {
-    const record = rig.store.getRecord(HOST_TEST_SESSION)!
-    await rig.store.evictProvenDeadOwner({
-      sessionId: HOST_TEST_SESSION,
-      expectedFence: record.lease.runtimeFence,
-      probe: { outcome: 'pid-absent' },
-      now: Date.now()
-    })
-  }
-
   it("says the Stop took once the new host proves the old child's exit after a crash", async () => {
-    await crashAfterUnconfirmedStop()
-    // Proven before the chat opens, as the restart's reconciliation does on most machines.
-    await proveOldOwnerGone()
+    // Proven by the restart's reconciliation, as on most machines; its startup settles the chat.
+    await crashAfterUnconfirmedStop({ outcome: 'pid-absent' })
     await rig.queuePause()
 
     expect({ turn: turnOneState(), notes: stopAnswers() }).toEqual({
@@ -506,22 +500,22 @@ describe('a Stop whose provider ends its session', () => {
     })
   })
 
-  it('keeps the note unconfirmed while the old exit stays unverifiable, then says it took once proven', async () => {
-    await crashAfterUnconfirmedStop()
+  it('keeps the note unconfirmed while the old exit stays unverifiable, until a later restart replaces its runtime', async () => {
+    // The restart cannot prove the old owner gone: it releases it unproven, and startup settles.
+    await crashAfterUnconfirmedStop({ outcome: 'indeterminate', reason: 'no answer' })
     await rig.queuePause()
     expect({ turn: turnOneState(), notes: stopAnswers() }).toEqual({
       turn: 'unverifiable',
       notes: ['cancelUnconfirmed']
     })
 
-    // A later proof naming the old owner, as recovery writes it, revises the open chat.
-    await proveOldOwnerGone()
-    await eventually(() =>
-      expect({ turn: turnOneState(), notes: stopAnswers() }).toEqual({
-        turn: 'interrupted',
-        notes: ['took']
-      })
-    )
+    // A later restart replaced the runtime that held the old owner, which ends its turn: the Stop took.
+    await rig.crashRestartHostProcess()
+    await rig.queuePause()
+    expect({ turn: turnOneState(), notes: stopAnswers() }).toEqual({
+      turn: 'interrupted',
+      notes: ['took']
+    })
   })
 
   // A Stop pressed before its turn showed keys its note by itself, with no turn to sit on; once it is

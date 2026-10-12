@@ -25,6 +25,7 @@ import {
   REST_TEST_THREAD as THREAD,
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 const LAST_CHUNK_AT = HOST_TEST_NOW + 5_500
 const SAVED_AT = HOST_TEST_NOW + 60_000
@@ -351,10 +352,16 @@ describe('provider output survives host restart', () => {
     const stopOwnerProcess = vi.fn()
     rig.host.deps.stopOwnerProcess = stopOwnerProcess
     await rig.host.reconcileRestartLeases()
-    const snapshot = await rig.host.journalSnapshot(SESSION)
-    const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
+    await rig.host.startupSettled()
+    await retryIdle(rig.host.collaboratorsForTests().reconciliation, SESSION)
+    const read = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    // No runtime was replaced and no child here holds it: the turn reads unverifiable and not
+    // working, derived, while its recovery is undecided; nothing is written.
+    expect(rig.store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
+    const turn = read.page.latestTurn?.turn
     expect(turn?.state).toBe('unverifiable')
     expect(turn?.completedAt).toBeUndefined()
+    expect(read.page.working).toBe(false)
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(rig.store.getRecord(SESSION)?.lease.deathEvidence).toBeFalsy()
   })

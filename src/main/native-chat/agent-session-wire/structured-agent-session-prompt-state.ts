@@ -7,7 +7,9 @@ import {
   type AgentSessionCancelResult,
   type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 type PendingPromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
 
@@ -90,4 +92,46 @@ export function validatePendingPrompt(
     }
   }
   return { ok: true, item, prompt }
+}
+
+/** A pending prompt an ended generation raised (`StructuredAgentSessionCurrentWork.isCurrentItem`):
+ *  no live provider holds it, so a Cancel of it reaches no provider. */
+export function isEndedGenerationPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+  pending: Extract<PendingPromptValidation, { ok: true }>
+): boolean {
+  return !contextStructuredAgentSessionCurrentWork(ctx).isCurrentItem(pending.item.itemId)
+}
+
+/** Records an ended generation's prompt as cancelled by the caller, in the journal only. */
+export async function dismissEndedGenerationPrompt(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork' | 'resolvedBy' | 'now'>,
+  pending: Extract<PendingPromptValidation, { ok: true }>
+): Promise<TurnOutcome<null>> {
+  const identity = parseAgentJournalItemKey(pending.item.itemId)
+  if (!identity) {
+    return {
+      ok: false,
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        { reason: 'requestMalformed' },
+        `Item id ${pending.item.itemId} is not a well-formed item key.`
+      )
+    }
+  }
+  await ctx.journal.appendItem(
+    identity,
+    {
+      ...pending.prompt,
+      resolution: {
+        state: 'cancelled',
+        selectedOptionId: null,
+        resolvedBy: ctx.resolvedBy,
+        resolvedAt: ctx.now()
+      }
+    },
+    // A revision: the prompt keeps the turn it was raised in.
+    { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
+  )
+  return { ok: true, value: null }
 }

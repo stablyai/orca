@@ -1,8 +1,9 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A send can be what opens a conversation this process has not read yet: a chat nobody has on
 // screen after the app died, sent to from a phone or the CLI. Whatever that journal shows running
-// belongs to a generation that is gone, so it is settled when the journal opens, not only when a
-// new child starts: a start that then fails would leave the turn running for every reader.
+// belongs to a generation that is gone, so the send's acquisition settles it before it reserves:
+// a start that then fails leaves no turn running for any reader. A reader's open writes nothing;
+// startup settles what it reads.
 
 import { cp, rm } from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -27,6 +28,7 @@ import {
 import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 
 /** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
 function eventually(assertion: () => unknown): Promise<unknown> {
@@ -111,7 +113,10 @@ it.each(PROBES)(
   'settles a turn a dead generation left running when a send opens the chat and its start fails, when %s',
   async (_when, probe, settled) => {
     const { host, acquire } = await relaunchAfterCrashMidTurn(probe)
-    expect(host.hasSession(SESSION)).toBe(false)
+    // The startup retry opens the chat in the background and closes it again once done.
+    await host.startupSettled()
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
+    await eventually(() => expect(host.hasSession(SESSION)).toBe(false))
 
     const body = hostTestMessage('sent to a chat nobody has open')
     const sendEnvelope = envelope('agentSession.send', { body })
@@ -133,26 +138,31 @@ it.each(PROBES)(
 )
 
 it.each(PROBES)(
-  'settles the same turn when a reader opens the chat, when %s',
+  'settles the same turn at startup, not when a reader opens the chat, when %s',
   async (_when, probe, settled) => {
-    const { host } = await relaunchAfterCrashMidTurn(probe)
+    const { host } = await relaunchAfterCrashMidTurn(probe, { reconcile: false })
 
     await host.revealSession(SESSION)
+    expect(await turnStates(host)).toEqual(['running'])
 
+    await host.reconcileRestartLeases()
+    await host.startupSettled()
+    await host.restoreReadableSessions([SESSION])
     expect(await turnStates(host)).toEqual([settled])
     await host.flushAllStreamedEvents()
   }
 )
 
-// On desktop the chat on screen at relaunch reads before startup reconciles the leases: nothing
-// has proved its owner gone yet, and the reconcile's proof then revises what the open settled.
-it('settles it when a read reaches the chat before the startup reconcile, then revises it', async () => {
+// On desktop the chat on screen at relaunch reads before startup reconciles the leases: that read
+// writes nothing, and the startup that follows settles the turn by the reconcile's proof.
+it('settles it at startup when a read reaches the chat before the startup reconcile', async () => {
   const { host } = await relaunchAfterCrashMidTurn({ outcome: 'pid-absent' }, { reconcile: false })
   expect(hostTestState().store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
 
   await host.history({ sessionId: SESSION, direction: 'tail' })
-  expect(await turnStates(host)).toEqual(['unverifiable'])
+  expect(await turnStates(host)).toEqual(['running'])
   await host.reconcileRestartLeases()
+  await host.startupSettled()
   await host.restoreReadableSessions([SESSION])
 
   expect(await turnStates(host)).toEqual(['interrupted'])

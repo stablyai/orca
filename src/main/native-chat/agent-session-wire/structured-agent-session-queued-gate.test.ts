@@ -18,6 +18,7 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 let rig: QueuedMessageTestRig
 let host: QueuedMessageTestRig['host']
@@ -87,9 +88,12 @@ describe('the one queue gate', () => {
     })
     // Read in place: the gate runs on every admission and drain step.
     const snapshot = vi.spyOn(journal, 'snapshot')
-    expect(structuredQueueHold({ journal, record: store.getRecord(SESSION), fence: 1 })).toBe(
-      'prompt'
-    )
+    expect(
+      structuredQueueHold({
+        record: store.getRecord(SESSION),
+        work: new StructuredAgentSessionCurrentWork(journal, 1)
+      })
+    ).toBe('prompt')
     expect(snapshot).not.toHaveBeenCalled()
     snapshot.mockRestore()
     await journal.appendItem(

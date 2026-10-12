@@ -156,8 +156,8 @@ export function NativeChatSubagentEntries({
  *  reporting into this group long after a newer turn opened, so a turn boundary
  *  is a fact about the turn and never evidence that contact with a child was
  *  lost. Only a host can say that, and one does: `CodexSubagentRoster.settleSession`
- *  when the provider goes away, and `staleSubagentRosterRevisions` on the next
- *  journal open when the host itself died mid-flight. */
+ *  when the provider goes away, and the leftover settlement at the next ownership
+ *  event when the host itself died mid-flight. */
 export function NativeChatSubagentRun({
   block,
   open: heldOpen,

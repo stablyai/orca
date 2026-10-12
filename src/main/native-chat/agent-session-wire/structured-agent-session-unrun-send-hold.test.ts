@@ -106,7 +106,7 @@ describe('a message held behind a start that never answered, then the chat ends'
     async (cause) => {
       const id = await heldBehindHungStart('kept at close')
       await rig.host.close(SESSION, cause)
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
 
       expect(await rig.submission(id)).toMatchObject({
         dispatchState: 'rejected',

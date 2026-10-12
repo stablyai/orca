@@ -246,7 +246,9 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
             settlementId,
             mutations,
             // No row-level linkage: each mutation names its own (see the batch row builder).
-            fence: bound.fence
+            fence: bound.fence,
+            // The provider's own observation: its child's generation produced every item.
+            ownerFence: bound.fence
           })
       },
       { ...options, lifecycle: true }

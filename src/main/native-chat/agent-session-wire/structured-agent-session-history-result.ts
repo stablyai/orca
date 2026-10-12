@@ -8,7 +8,8 @@ import type {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   readAgentSessionHistory,
-  type AgentSessionHistoryScope
+  type AgentSessionHistoryScope,
+  type AgentSessionPublishedWork
 } from './agent-session-history-page'
 
 export function structuredAgentSessionProviderSessionMetadata(
@@ -23,8 +24,16 @@ export function readStructuredAgentSessionHistoryResult(input: {
   record: AgentSessionRecord | null
   request: AgentSessionHistoryRequest
   scope?: AgentSessionHistoryScope
+  /** The host's current-work projection, which the page's turn and prompt fields state. */
+  work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult {
-  const result = readAgentSessionHistory(input.journal, input.request, undefined, input.scope)
+  const result = readAgentSessionHistory(
+    input.journal,
+    input.request,
+    undefined,
+    input.scope,
+    input.work
+  )
   const fence = input.record?.lease.runtimeFence
   const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
   if (fence === undefined) {

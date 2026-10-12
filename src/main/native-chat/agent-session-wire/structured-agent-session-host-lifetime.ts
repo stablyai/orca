@@ -49,6 +49,8 @@ export type StructuredAgentSessionLifetimeContext = {
   now: () => number
   /** Re-projects the session's status after its agent stopped and the chat stays. */
   publishStatus?: (sessionId: string) => void
+  /** A generation ended (`StructuredAgentSessionClientDelivery.publishGenerationEnded`). */
+  generationEnded?: (sessionId: string) => void
   /** Hands the delivery loop what is queued; for a caller inside the session's serialize. */
   wakeDelivery?: (sessionId: string) => void
   /** The one exit handler (`structured-agent-session-child-exit`), for a caller inside the
@@ -71,11 +73,11 @@ type ConversationCloseDeps = Pick<StructuredAgentSessionHostDeps, 'logger'> & {
 
 /** What is still queued when the chat closes will not be handed over: a person's message is kept
  *  as a card that waits for the chat's next turn, the rest rejected (`journal-unsent-send-hold.ts`).
- *  A quit is not a close: the next open settles what it left. The chat stops running, so the
- *  reopen mark follows (`markStructuredQueueReopen`): on every `close`, or only once it settled a
- *  send, for a later re-check of the same close, which must never mark past a new send. `which` narrows it to the messages a close that did not complete
- *  closed. Best effort, so a close never waits on it: resolves false when it failed, reported and
- *  never thrown. */
+ *  A quit is not a close: what it left, the next process's reconciliation pass keeps as cards. The chat
+ *  stops running, so the reopen mark follows (`markStructuredQueueReopen`): on every `close`, or
+ *  only once it settled a send, for a later re-check of the same close, which must never mark past
+ *  a new send. `which` narrows it to the messages a close that did not complete closed. Best
+ *  effort, so a close never waits on it: resolves false when it failed, reported and never thrown. */
 export async function holdClosedStructuredAgentSessionSends(
   deps: ConversationCloseDeps,
   sessionId: string,
@@ -106,26 +108,6 @@ export async function holdClosedStructuredAgentSessionSends(
     await markStructuredQueueReopen(sessionId, journal, fence, deps.logger, settled.newest + 1)
   }
   return settled.ok
-}
-
-/** What an earlier host process left queued and the open could not settle (its write failed):
- *  kept or rejected now, never handed over. A failure throws. A send that woke this came after the
- *  ones it settled, so the reopen mark starts where they did. */
-export async function holdRestartedStructuredAgentSessionSends(
-  logger: StructuredAgentSessionHostDeps['logger'],
-  sessionId: string,
-  journal: StructuredAgentSessionHostSession['journal'],
-  fence: number
-): Promise<void> {
-  const hostInstance = structuredAgentSessionHostInstance()
-  const settled = await holdUnsentSends(journal, {
-    fence,
-    hostInstance,
-    hold: { cause: 'hostRestarted' }
-  })
-  if (settled !== null) {
-    await markStructuredQueueReopen(sessionId, journal, fence, logger, settled + 1)
-  }
 }
 
 /**
@@ -195,6 +177,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         journal: session.journal,
         sessionId,
         fence: child.fence,
+        rowFence: Math.max(child.fence, record?.lease.runtimeFence ?? child.fence),
         generation: child.generation ?? 'unknown',
         turnItemId: quitCuts,
         trigger: ending.quit,

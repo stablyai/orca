@@ -245,6 +245,10 @@ describe('claude import', () => {
         uuid: 'e3a5b7c9-2d13-4f88-94ce-6b0d8f2a4e31'
       })
     ])
+    // Imported at fence 1, yet no generation's work: provenance 0, so nothing in it is current.
+    expect(journal.snapshot().items.map((entry) => journal.itemFence(entry.itemId))).toEqual([
+      0, 0, 0, 0
+    ])
   })
 
   it('stays aligned when the decoder drops lines the tracker still walks', async () => {

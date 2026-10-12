@@ -9,8 +9,10 @@ export function useStructuredAgentSessionTransport(args: {
   target: RuntimeClientTarget
   isVisible: boolean
   enabled: boolean
+  /** The chat's agent, which a refused write about it names. */
+  agentName?: string
 }) {
-  const { enabled, isVisible, sessionId, target } = args
+  const { agentName, enabled, isVisible, sessionId, target } = args
   const providerVisible = isVisible && enabled
   useStructuredAgentSessionHold({
     sessionId,
@@ -25,7 +27,8 @@ export function useStructuredAgentSessionTransport(args: {
     sessionId,
     target,
     stateRef,
-    enabled
+    enabled,
+    ...(agentName ? { agentName } : {})
   })
   useEffect(() => {
     stateRef.current = read.state
