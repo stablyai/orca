@@ -41,7 +41,7 @@ describe('OrcaRuntimeRpcServer', () => {
         method: 'orchestration.workerStart',
         params: { task: 'task_1', timeoutMs: 60_000 }
       })
-    ).toBe('wait')
+    ).toBe('mutation')
   })
 
   it.each(['agent.launch', 'agent.launchReplay'])(
@@ -55,7 +55,7 @@ describe('OrcaRuntimeRpcServer', () => {
           method,
           params: { prompt }
         })
-      ).toBe('wait')
+      ).toBe('mutation')
       // Without a prompt nothing waits on the agent, so the launch stays a short call.
       expect(
         classifyRuntimeLongPoll({ id: 'req_launch', authToken: 'token', method, params: {} })
@@ -71,7 +71,7 @@ describe('OrcaRuntimeRpcServer', () => {
         method: 'terminal.send',
         params: { agentPrompt: true }
       })
-    ).toBe('wait')
+    ).toBe('mutation')
     expect(
       classifyRuntimeLongPoll({
         id: 'req_direct',
