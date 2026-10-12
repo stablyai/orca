@@ -26,4 +26,41 @@ describe('useResetCountdownClock', () => {
     })
     expect(result.current).toBe(START + 30_000 + 1)
   })
+
+  it('wakes on a planned instant that arrives before the label boundary', () => {
+    const resetAt = START + 26 * 60 * MIN + 40 * MIN
+    const { result } = renderHook(() => useResetCountdownClock([resetAt], () => [START + 5 * MIN]))
+
+    act(() => {
+      vi.advanceTimersByTime(5 * MIN)
+    })
+    expect(result.current).toBe(START + 5 * MIN)
+  })
+
+  it('reschedules when the planner names a new instant without the reset moving', () => {
+    const resetAt = START + 26 * 60 * MIN + 40 * MIN
+    let plannedAt = START + 50 * MIN
+    const { result, rerender } = renderHook(() =>
+      useResetCountdownClock([resetAt], () => [plannedAt])
+    )
+
+    plannedAt = START + 5 * MIN
+    rerender()
+
+    act(() => {
+      vi.advanceTimersByTime(5 * MIN)
+    })
+    expect(result.current).toBe(START + 5 * MIN)
+  })
+
+  it('ignores planned instants that have already passed', () => {
+    const { result } = renderHook(() =>
+      useResetCountdownClock([START - 1000], () => [START - 5 * MIN, null])
+    )
+
+    act(() => {
+      vi.advanceTimersByTime(10 * MIN)
+    })
+    expect(result.current).toBe(START)
+  })
 })
