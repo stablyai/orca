@@ -100,9 +100,9 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     state.worktreeLineageById
   )
   const hasLineageChildren = deleteLineage.descendants.length > 0
-  // Why: "Don't ask again" never covers discarding unsaved editor text.
+  // Why: neither "Don't ask again" nor the press-again confirm covers discarding unsaved editor text.
   const skipConfirm =
-    (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
+    (options.confirmed || (state.settings?.skipDeleteWorktreeConfirm ?? false)) &&
     collectRemovalUnsavedFiles(useAppStore.getState, [target]).length === 0
   if (skipConfirm && !hasLineageChildren) {
     void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
