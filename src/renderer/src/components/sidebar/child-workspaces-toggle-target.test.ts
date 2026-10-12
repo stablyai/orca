@@ -3,7 +3,10 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { resolveChildWorkspacesToggleGroupKey } from './child-workspaces-toggle-target'
+import {
+  getHoveredWorkspaceIdentity,
+  resolveChildWorkspacesToggleGroupKey
+} from './child-workspaces-toggle-target'
 import { worktree as baseWorktree } from './worktree-list-groups-test-fixtures'
 
 type ToggleState = Parameters<typeof resolveChildWorkspacesToggleGroupKey>[0]
@@ -152,5 +155,14 @@ describe('resolveChildWorkspacesToggleGroupKey', () => {
     expect(resolve(state, hoveredDocument(), new Set([remoteKey]))).toBe(remoteKey)
     expect(resolve(state, hoveredDocument(), new Set(['lineage:parent']))).toBeNull()
     expect(resolve(state, hoveredDocument(remoteParent), new Set([remoteKey]))).toBe(remoteKey)
+  })
+})
+
+describe('getHoveredWorkspaceIdentity', () => {
+  it('uses the deepest hovered worktree row', () => {
+    expect(getHoveredWorkspaceIdentity(hoveredDocument(parent, child))).toEqual({
+      workspaceId: child.id,
+      hostIdentity: getWorktreeHostIdentity(child)
+    })
   })
 })
