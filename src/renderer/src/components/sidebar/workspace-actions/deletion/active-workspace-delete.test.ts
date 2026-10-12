@@ -52,7 +52,17 @@ function state(worktrees: Worktree[] = [], overrides: Partial<TestState> = {}): 
 const noFocus = { activeElement: null }
 const confirmationDependencies = { timeoutMs: 4000, watchActiveWorkspace: () => () => {} }
 
-afterEach(() => cancelWorkspaceDeleteConfirmation())
+afterEach(() => {
+  cancelWorkspaceDeleteConfirmation()
+  document.body.innerHTML = ''
+})
+
+function showConfirmNotice(): HTMLElement {
+  const notice = document.createElement('div')
+  notice.setAttribute('data-workspace-delete-confirm', '')
+  document.body.append(notice)
+  return notice
+}
 
 describe('resolveActiveWorkspaceDeleteTarget', () => {
   it('targets the active worktree on its exact host, not another at the same path', () => {
@@ -163,6 +173,7 @@ describe('requestActiveWorkspaceDelete', () => {
     expect(current.setSidebarOpen).toHaveBeenCalledWith(true)
     expect(getArmedWorkspaceDeleteIdentity()).toBe('ssh:build|repo::/feature')
 
+    showConfirmNotice()
     expect(requestActiveWorkspaceDelete(current, undefined, dependencies)).toBe(true)
     expect(getArmedWorkspaceDeleteIdentity()).toBeNull()
     expect(deleteWorktree).toHaveBeenCalledWith(target.id, {
@@ -170,6 +181,26 @@ describe('requestActiveWorkspaceDelete', () => {
       expectedHostId: 'ssh:build',
       expectedInstanceId: 'i-2'
     })
+  })
+
+  it('does not delete on the second press when the prompt was never on screen', () => {
+    const current = state([worktree({ hostId: 'local' })])
+    const deleteWorktree = vi.fn()
+    const dependencies = {
+      deleteWorktree,
+      getCurrentState: () => current,
+      confirmationDependencies
+    }
+
+    requestActiveWorkspaceDelete(current, undefined, dependencies)
+    requestActiveWorkspaceDelete(current, undefined, dependencies)
+    const hidden = document.createElement('div')
+    hidden.setAttribute('aria-hidden', 'true')
+    hidden.append(showConfirmNotice())
+    document.body.append(hidden)
+    requestActiveWorkspaceDelete(current, undefined, dependencies)
+    expect(deleteWorktree).not.toHaveBeenCalled()
+    expect(getArmedWorkspaceDeleteIdentity()).toBe('local|repo::/feature')
   })
 
   it('re-arms the new target instead of deleting when the active workspace changed', () => {
