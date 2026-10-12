@@ -63,7 +63,8 @@ const AGENT_HOOK_SOURCES = [
   'zcode',
   'dsh',
   'jcode',
-  'kiro'
+  'kiro',
+  'junie'
 ] as const
 
 export type AgentHookSource = (typeof AGENT_HOOK_SOURCES)[number]

@@ -16,6 +16,7 @@ import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
+import { junieHookService } from '../junie/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { kiroHookService } from '../kiro/hook-service'
 import { dshHookService } from '../dsh/hook-service'
@@ -32,6 +33,8 @@ export type RemoteManagedHookInstallOptions = {
   grokHomeDir?: string
   /** Login-shell KIRO_HOME on the execution host; it replaces ~/.kiro outright. */
   kiroHomeDir?: string
+  /** Explicit JUNIE_HOME for remote runtimes that redirect Junie's config. */
+  junieHomeDir?: string
   /** Version reported by Claude on this execution host. */
   claudeVersion?: string
   /** Stops before starting the next installer when the owning relay request
@@ -95,6 +98,13 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
     'kiro',
     (sftp, remoteHome, options) =>
       kiroHookService.installRemote(sftp, remoteHome, options?.kiroHomeDir)
+  ],
+  [
+    'junie',
+    (sftp, remoteHome, options) =>
+      junieHookService.installRemote(sftp, remoteHome, {
+        junieHomeDir: options?.junieHomeDir
+      })
   ]
 ]
 

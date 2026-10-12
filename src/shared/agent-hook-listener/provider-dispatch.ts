@@ -24,6 +24,7 @@ import { normalizeGrokEvent } from './providers/grok-events'
 import { normalizeCopilotEvent } from './providers/copilot-events'
 import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
+import { normalizeJunieEvent } from './providers/junie-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
 import { normalizeDshEvent } from './providers/dsh-events'
@@ -211,6 +212,10 @@ export function normalizeProviderEvent(input: {
     }
     case 'kiro':
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'junie':
+      payload = normalizeJunieEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
   }
 
   return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }

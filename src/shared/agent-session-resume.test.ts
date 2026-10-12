@@ -16,6 +16,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('jcode')).toBe(true)
   })
 
+  it('treats junie as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('junie')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
@@ -53,7 +57,12 @@ describe('agent session resume metadata', () => {
       { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
     ],
     ['jcode', { session_id: 'session_jc_1' }, { key: 'session_id', id: 'session_jc_1' }],
-    ['jcode', { sessionId: 'session_jc_2' }, { key: 'session_id', id: 'session_jc_2' }]
+    ['jcode', { sessionId: 'session_jc_2' }, { key: 'session_id', id: 'session_jc_2' }],
+    [
+      'junie',
+      { session_id: 'session-260501-101200-abcd' },
+      { key: 'session_id', id: 'session-260501-101200-abcd' }
+    ]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })
@@ -86,7 +95,13 @@ describe('agent session resume metadata', () => {
       { key: 'session_id', id: 'session_431324d7' },
       ['kimi', '--session', 'session_431324d7']
     ],
-    ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']]
+    ['jcode', { key: 'session_id', id: 'session_jc_1' }, ['jcode', '--resume', 'session_jc_1']],
+    // Why pinned by id: bare `--resume` reopens the globally most-recent session.
+    [
+      'junie',
+      { key: 'session_id', id: 'session-260501-101200-abcd' },
+      ['junie', '--resume', '--session-id', 'session-260501-101200-abcd']
+    ]
   ] as const)('builds %s resume argv', (agent, providerSession, expected) => {
     expect(getAgentResumeArgv(agent, providerSession)).toEqual(expected)
   })

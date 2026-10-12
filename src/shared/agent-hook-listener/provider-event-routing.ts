@@ -91,6 +91,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'kiro':
       // Why: agentSpawn opens a fresh session in the pane, so stale tool/prompt caches go too.
       return eventName === 'agentSpawn' || eventName === 'userPromptSubmit'
+    case 'junie':
+      // Why: same shape as Devin — SessionStart early-returns in normalizeJunieEvent, so UserPromptSubmit is the new-turn boundary.
+      return eventName === 'UserPromptSubmit'
   }
 }
 
@@ -216,5 +219,8 @@ export function extractToolFields(
       return extractJcodeToolFields(eventName, hookPayload)
     case 'kiro':
       return extractKiroToolFields(eventName, hookPayload)
+    case 'junie':
+      // Why: Junie's PreToolUse/PermissionRequest carry Claude-compatible tool_name/tool_input fields.
+      return extractClaudeToolFields(eventName, hookPayload)
   }
 }
