@@ -3,9 +3,13 @@ import type { AppState } from '@/store/types'
 import type { ActiveWorkspaceDeleteTarget } from '../components/sidebar/active-workspace-delete'
 import type { AppShortcutState, ShortcutDispatchInput } from './app-command-handlers'
 
-const mocks = vi.hoisted(() => ({
+const mocks: {
+  requestActiveWorkspaceDelete: ReturnType<typeof vi.fn>
+  activeTarget: ActiveWorkspaceDeleteTarget | null
+  store: AppState
+} = vi.hoisted(() => ({
   requestActiveWorkspaceDelete: vi.fn(),
-  activeTarget: null as ActiveWorkspaceDeleteTarget | null,
+  activeTarget: null,
   store: {} as AppState
 }))
 
@@ -60,9 +64,11 @@ describe('workspace delete app command', () => {
     vi.clearAllMocks()
     mocks.store = { activeWorktreeId: 'repo::/feature' } as AppState
     mocks.activeTarget = {
-      kind: 'worktree',
-      worktree: {} as never,
-      identity: 'local|repo::/feature'
+      kind: 'folder',
+      executionHostId: 'local',
+      folderWorkspaceId: 'folder-1',
+      workspaceKey: 'folder:folder-1',
+      identity: 'local|folder:folder-1'
     }
   })
 

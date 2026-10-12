@@ -7232,6 +7232,11 @@
           "unverifiable": "Unknown",
           "unverifiableHint": "WSL didn’t say whether {{value0}} is running. Adding it starts it if needed."
         },
+        "WorkspaceDeleteConfirmNotice": {
+          "press": "Press",
+          "again": "again to delete",
+          "againFolder": "again to remove from Orca"
+        },
         "wslHostRowStatus": {
           "connecting": "Starting",
           "reconnecting": "Reconnecting",

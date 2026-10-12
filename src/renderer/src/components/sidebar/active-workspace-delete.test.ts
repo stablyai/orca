@@ -76,10 +76,19 @@ describe('resolveActiveWorkspaceDeleteTarget', () => {
           name: 'Notes',
           folderPath: '/notes',
           projectGroupId: 'group-1',
-          executionHostId: 'runtime:remote-1'
+          executionHostId: 'runtime:remote-1',
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 0,
+          createdAt: 0,
+          updatedAt: 0
         }
       ]
-    } as unknown as Partial<TestState>)
+    })
     expect(resolveActiveWorkspaceDeleteTarget(current, noFocus)).toEqual({
       kind: 'folder',
       executionHostId: 'runtime:remote-1',

@@ -100,7 +100,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     suppressOpeningPointerEvent,
     validParentWorktreeId,
     worktree,
-    workspaceStatuses
+    workspaceStatuses,
+    isActive
   } = model
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
   return (
@@ -379,7 +380,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                           'auto.components.sidebar.WorktreeContextMenu.f4475537d8',
                           'Delete'
                         )}
-            {!isMultiContext && !removesProject && deleteShortcut ? (
+            {isActive && !isMultiContext && !removesProject && deleteShortcut ? (
               <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
             ) : null}
           </DropdownMenuItem>

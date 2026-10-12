@@ -46,7 +46,7 @@ describe('workspace delete confirmation', () => {
   })
 
   it('disarms when the active workspace changes and stops watching', () => {
-    const watch = { onChange: null as (() => void) | null }
+    const watch: { onChange: (() => void) | null } = { onChange: null }
     armWorkspaceDeleteConfirmation('local|repo::/a', deps(watch))
     watch.onChange?.()
     expect(getArmedWorkspaceDeleteIdentity()).toBeNull()
