@@ -48,6 +48,9 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
     sanitized.worktreeBasePath = sanitized.worktreeBasePath.trim() || undefined
   }
+  if ('sidebarHighlight' in sanitized && typeof sanitized.sidebarHighlight !== 'boolean') {
+    delete sanitized.sidebarHighlight
+  }
   if (
     'forkSyncMode' in sanitized &&
     sanitized.forkSyncMode !== undefined &&

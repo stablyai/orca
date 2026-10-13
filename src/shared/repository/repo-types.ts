@@ -47,6 +47,8 @@ export type Repo = {
   displayName: string
   badgeColor: string
   repoIcon?: RepoIcon | null
+  /** Tints the project's whole sidebar section with its badge color. */
+  sidebarHighlight?: boolean
   /** Fork parent; same-name forks use its avatar, renamed forks keep their own. Absent means non-fork or unresolved. */
   upstream?: GitHubRepositoryIdentity | null
   addedAt: number

@@ -52,6 +52,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .unknown()
         .transform((value) => sanitizeRepoIcon(value))
         .optional(),
+      sidebarHighlight: z.boolean().optional(),
       upstream: RepoUpstream,
       hookSettings: z.unknown().optional(),
       editorFormatter: editorFormatterSchema.optional(),
