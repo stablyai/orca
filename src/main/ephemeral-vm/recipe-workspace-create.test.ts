@@ -57,6 +57,7 @@ const ports = {
                   id: 'remote-repo::/checkout',
                   repoId: 'remote-repo',
                   path: '/checkout',
+                  branch: 'refs/heads/user/task',
                   instanceId: 'instance'
                 }
               }

@@ -27,6 +27,7 @@ const WorkspaceResult = z
         id: z.string().min(1),
         repoId: z.string().min(1),
         path: z.string().min(1),
+        branch: z.string(),
         instanceId: z.string().optional()
       })
       .passthrough()
