@@ -1,3 +1,9 @@
+import { splitWorktreeId } from './worktree/id'
+import { normalizeRuntimePathForComparison } from './cross-platform-path'
+import {
+  getEphemeralVmRecipeResultCheckoutMode,
+  getEphemeralVmRecipeResultProjectRoot
+} from './ephemeral-vm-recipes'
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from './execution-host'
 
@@ -9,7 +15,7 @@ export function findEphemeralVmWorkspaceOwner(
 ): EphemeralVmRuntimeRecord | undefined {
   const matches = runtimes.filter(
     (runtime) =>
-      runtime.workspaceId === workspaceId &&
+      runtimeOwnsWorkspace(runtime, workspaceId) &&
       ((runtime.runtimeEnvironmentId !== undefined &&
         hostId === toRuntimeExecutionHostId(runtime.runtimeEnvironmentId)) ||
         (runtime.sshTargetId !== undefined && hostId === toSshExecutionHostId(runtime.sshTargetId)))
@@ -20,4 +26,18 @@ export function findEphemeralVmWorkspaceOwner(
     )
   }
   return matches[0]
+}
+
+function runtimeOwnsWorkspace(runtime: EphemeralVmRuntimeRecord, workspaceId: string): boolean {
+  if (runtime.workspaceId !== undefined) {
+    return runtime.workspaceId === workspaceId
+  }
+  // Older desktop root adoptions did not persist a workspace attachment.
+  const path = splitWorktreeId(workspaceId)?.worktreePath
+  return Boolean(
+    path &&
+    getEphemeralVmRecipeResultCheckoutMode(runtime.recipeResult) === 'provisioned-root' &&
+    normalizeRuntimePathForComparison(path) ===
+      normalizeRuntimePathForComparison(getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult))
+  )
 }

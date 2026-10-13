@@ -31,13 +31,14 @@ const ports = {
 function seed(
   mode: 'provisioned-root' | 'orca-worktree' = 'orca-worktree',
   environmentId = 'env-a',
-  id = 'vm-a'
+  id = 'vm-a',
+  attached = true
 ) {
   upsertEphemeralVmRuntime(root, {
     id,
     recipeId: 'sandbox',
     repoId: 'source',
-    workspaceId,
+    ...(attached ? { workspaceId } : {}),
     runtimeEnvironmentId: environmentId,
     status: 'running',
     cleanupStatus: 'not_started',
@@ -80,6 +81,18 @@ describe('recipe workspace removal on the provisioning host', () => {
     expect(ports.cleanup.mock.invocationCallOrder[0]).toBeGreaterThan(
       ports.call.mock.invocationCallOrder[0]
     )
+  })
+  it('matches legacy desktop roots by their exact path and host without a workspace attachment', async () => {
+    seed('provisioned-root', 'env-a', 'vm-a', false)
+    expect(listEphemeralVmRuntimes(root)[0].workspaceId).toBeUndefined()
+    expect(ownsRecipeWorkspaceRemoval(root, params)).toBe(true)
+    expect(
+      ownsRecipeWorkspaceRemoval(root, { ...params, worktree: 'id:repo::/checkout/child' })
+    ).toBe(false)
+    expect(ownsRecipeWorkspaceRemoval(root, { ...params, hostId: 'runtime:env-b' })).toBe(false)
+    await removeRecipeWorkspace(root, params, ports)
+    expect(ports.cleanup).toHaveBeenCalledWith('vm-a')
+    expect(ports.call).not.toHaveBeenCalled()
   })
   it('destroys an adopted root without attempting protected main-checkout deletion', async () => {
     seed('provisioned-root')
