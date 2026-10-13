@@ -1,7 +1,17 @@
-import { installBrowserWindowCloseGuard } from './browser-window-close-installation'
-import type { ContextBridge } from 'electron'
+import {
+  createBrowserWindowCloseRequest,
+  installBrowserWindowCloseGuard
+} from './browser-window-close-installation'
+import type { ContextBridge, IpcRenderer } from 'electron'
 
 // Why: raw require keeps the sandboxed preload standalone in the main-process CJS build.
-const { contextBridge } = require('electron') as { contextBridge: ContextBridge }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a sandboxed preload's require('electron') exposes contextBridge and ipcRenderer.
+const { contextBridge, ipcRenderer } = require('electron') as {
+  contextBridge: ContextBridge
+  ipcRenderer: IpcRenderer
+}
 
-contextBridge.executeInMainWorld({ func: installBrowserWindowCloseGuard })
+contextBridge.executeInMainWorld({
+  func: installBrowserWindowCloseGuard,
+  args: [createBrowserWindowCloseRequest((channel) => ipcRenderer.sendToHost(channel))]
+})
