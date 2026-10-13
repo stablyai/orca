@@ -241,6 +241,8 @@ export function useWorkItemSourcePresentation(
     : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
+  // Why: retained rows dim from the first keystroke so typing ahead of a search shows feedback.
+  const refreshingResults = (isQueryStale || loading) && searchResultRows.length > 0
   const ActiveInputIcon =
     mode === 'text' ? CaseSensitive : showSearchSpinner ? LoaderCircle : Search
 
@@ -252,6 +254,7 @@ export function useWorkItemSourcePresentation(
     resolvedCommandValue,
     loading,
     showSearchSpinner,
+    refreshingResults,
     linearUrlIntent,
     linearUrlIntentOwnsInput,
     linearQuery,
