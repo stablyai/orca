@@ -6,10 +6,10 @@ import {
   getSharedManagedScriptPath,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 
 const BOB_SCRIPT_BASE = 'bob-hook'
 
@@ -49,7 +49,7 @@ export function getBobManagedCommand(scriptPath: string): string {
   // cmd-safe path needs no interpreter hop at all, and the encoded launcher survives only for a
   // path cmd.exe would mangle. Bob ignores empty stdout, so no neutral-JSON `|| echo {}` tail.
   return process.platform === 'win32'
-    ? wrapWindowsCmdHookCommand(scriptPath)
+    ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 
