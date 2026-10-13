@@ -24,6 +24,7 @@ import {
   nextPluginWorkerGeneration
 } from './plugin-worker-generation-retention'
 import { finishPluginWorkerActivation, pluginWorkerErrorText } from './plugin-worker-lifecycle'
+import { PluginWorkerIdleClock } from './plugin-worker-idle-clock'
 
 export type { PluginWorkerFactory, PluginWorkerSpawnSpec } from './plugin-worker-startup'
 
@@ -59,6 +60,7 @@ export class PluginWorkerManager {
   private readonly stoppingWorkers = new Set<Promise<void>>()
   private readonly slots: PluginWorkerSlots
   private readonly idleReapMs: number
+  private readonly idleClock = new PluginWorkerIdleClock()
   private disposed = false
 
   constructor(private readonly options: PluginWorkerManagerOptions) {
@@ -246,11 +248,13 @@ export class PluginWorkerManager {
   }
 
   reapIdle(now = Date.now()): void {
+    const idleWindowStartAt = this.idleClock.sweep(now)
     for (const [pluginKey, record] of this.workers) {
+      const lastActiveAt = Math.max(record.handle.lastActivityAt(), idleWindowStartAt)
       if (
         record.spec.keepWarm ||
         record.handle.inFlightCount() !== 0 ||
-        now - record.handle.lastActivityAt() <= this.idleReapMs
+        now - lastActiveAt <= this.idleReapMs
       ) {
         continue
       }
