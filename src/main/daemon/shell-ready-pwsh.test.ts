@@ -74,6 +74,20 @@ describe('daemon shell-ready launch config for pwsh', () => {
     expect(shellReadyMarkerComesFromLineEditor('/usr/bin/zsh')).toBe(true)
   })
 
+  it('arms the barrier and the line-editor flush for the same PowerShell set', async () => {
+    vi.resetModules()
+    const { shellPathSupportsPtyStartupBarrier } = await import('./shell-ready')
+
+    // Why: the barrier arms for every isPowerShellExecutableName match, so the
+    // timing predicate must cover exactly that set — a name in one but not the
+    // other holds stdin yet drops the prompt-owns-input delivery semantics.
+    for (const name of ['pwsh', 'pwsh.exe', 'powershell', 'powershell.exe']) {
+      const shellPath = `/opt/shells/${name}`
+      expect(shellPathSupportsPtyStartupBarrier(shellPath)).toBe(process.platform !== 'win32')
+      expect(shellReadyMarkerComesFromLineEditor(shellPath)).toBe(process.platform !== 'win32')
+    }
+  })
+
   itWithPwsh(
     'emits the marker at the first real pwsh prompt and executes a post-marker command',
     async () => {

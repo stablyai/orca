@@ -8,6 +8,9 @@ export function shellReadyMarkerComesFromLineEditor(shellPath: string): boolean 
   }
   return (
     process.platform !== 'win32' &&
-    (shellName === 'pwsh' || shellName === 'pwsh.exe' || shellName === 'powershell')
+    (shellName === 'pwsh' ||
+      shellName === 'pwsh.exe' ||
+      shellName === 'powershell' ||
+      shellName === 'powershell.exe')
   )
 }
