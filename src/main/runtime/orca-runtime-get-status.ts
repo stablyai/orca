@@ -1,3 +1,4 @@
+import { WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY } from '../../shared/worktree-recipe-create-capability'
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
@@ -61,6 +62,7 @@ import { supportsDurableTerminalPromptDelivery } from './durable-terminal-prompt
 import { RuntimeWorkspaceChangeEvents } from './workspaces/catalog/runtime-workspace-change-events'
 
 type RuntimeStatusHost = {
+  supportsRecipeWorkspaceCreation?(): boolean
   getAvailableAuthoritativeWindow(): unknown
   getUsageRateLimits(): unknown
   getRecordedTerminalSleepHandles(
@@ -108,6 +110,9 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY ||
           statusHost.getUsageRateLimits() !== null)
     )
+    if (statusHost.supportsRecipeWorkspaceCreation?.()) {
+      capabilities.push(WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY)
+    }
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }

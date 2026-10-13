@@ -145,6 +145,14 @@ Lineage rules:
 - To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 
+Per-workspace environment recipes: `ORCA worktree create --name task --recipe <id> --no-parent --json`
+provisions a `provisioned-root` SSH recipe from the repository's `orca.yaml` and adopts its checkout
+on the managed Orca server. Run this on the provisioning host; omit `--environment` and `--pairing-code`.
+The recipe's create script owns setup, so `--setup run` and `--run-hooks` are refused. Add `--agent`,
+`--prompt`, `--model`, or `--effort` to launch on the new server. The result includes
+`recipeEnvironmentId`; use it with `--environment id:<id>` for follow-up commands. After a failed
+agent launch, use the returned `agent launch` recovery command against the existing remote workspace.
+
 Agent/setup flags:
 
 ```text

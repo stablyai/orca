@@ -1,3 +1,4 @@
+import { createCliRecipeWorkspace } from '../ephemeral-vm/cli-workspace-create'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -145,6 +146,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Desktop and headless hosts each evaluate their own panes' rules.
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
+  )
+  runtime.setRecipeWorkspaceCreator((params, repo) =>
+    createCliRecipeWorkspace({
+      store,
+      userDataPath: app.getPath('userData'),
+      repo,
+      params,
+      pluginService: state.pluginService
+    })
   )
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
