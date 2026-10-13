@@ -18,6 +18,7 @@ function makeSettings(overrides: Partial<NotificationSettings> = {}): Notificati
     agentTaskComplete: true,
     terminalBell: true,
     suppressWhenFocused: false,
+    bringToFrontOnAgentTaskComplete: false,
     customSoundId: 'system',
     customSoundPath: null,
     customSoundVolume: 1,
@@ -43,6 +44,7 @@ type Harness = {
   setTrayAttention: ReturnType<typeof vi.fn>
   dispatchMobileNotification: ReturnType<typeof vi.fn>
   deliverNative: ReturnType<typeof vi.fn>
+  bringSubjectToFront: ReturnType<typeof vi.fn>
 }
 
 let now = 1_000
@@ -61,11 +63,13 @@ function makeHarness(settings: NotificationSettings, windowVisible = false): Har
     order.push('native')
     return { delivered: true } as const
   })
+  const bringSubjectToFront = vi.fn(() => order.push('front'))
   return {
     order,
     setTrayAttention,
     dispatchMobileNotification,
     deliverNative,
+    bringSubjectToFront,
     deps: {
       readNotificationSettings: () => settings,
       findActiveWindow: () => null,
@@ -76,6 +80,9 @@ function makeHarness(settings: NotificationSettings, windowVisible = false): Har
       readAuthorizationStatus: () => Promise.resolve('authorized'),
       recordDeliveryOutcome: vi.fn(),
       deliverNative,
+      bringSubjectToFront,
+      isAgentOpenedPane: () => false,
+      isTurnOpenedByUserPrompt: () => true,
       platform: 'linux',
       now: () => now
     }
@@ -212,6 +219,100 @@ describe('createNotificationDeliveryService', () => {
       delivered: true
     })
     expect(harness.dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
+  it('brings the finished agent forward on macOS when opted in and Orca is in the background', async () => {
+    const harness = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    harness.deps.platform = 'darwin'
+    const request = makeRequest({ paneKey: 'tab-1:leaf-1' })
+    await createNotificationDeliveryService(harness.deps).dispatch(request)
+
+    expect(harness.bringSubjectToFront).toHaveBeenCalledExactlyOnceWith(request)
+    expect(harness.deliverNative).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves a pane an agent opened in the background but still notifies', async () => {
+    const harness = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    harness.deps.platform = 'darwin'
+    harness.deps.isAgentOpenedPane = (paneKey) => paneKey === 'tab-2:worker'
+    const service = createNotificationDeliveryService(harness.deps)
+    await service.dispatch(makeRequest({ paneKey: 'tab-2:worker' }))
+
+    expect(harness.bringSubjectToFront).not.toHaveBeenCalled()
+    expect(harness.deliverNative).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves a turn the agent woke itself for in the background but still notifies', async () => {
+    const harness = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    harness.deps.platform = 'darwin'
+    harness.deps.isTurnOpenedByUserPrompt = () => false
+    const service = createNotificationDeliveryService(harness.deps)
+    await service.dispatch(makeRequest({ paneKey: 'tab-1:leaf-1' }))
+
+    expect(harness.bringSubjectToFront).not.toHaveBeenCalled()
+    expect(harness.deliverNative).toHaveBeenCalledTimes(1)
+  })
+
+  it('still brings a chat forward, whose journal records no turn opener', async () => {
+    const harness = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    harness.deps.platform = 'darwin'
+    harness.deps.isTurnOpenedByUserPrompt = () => false
+    const request = makeRequest({ paneKey: 'chat-tab:session-1', surface: 'agent-session' })
+    await createNotificationDeliveryService(harness.deps).dispatch(request)
+
+    expect(harness.bringSubjectToFront).toHaveBeenCalledExactlyOnceWith(request)
+  })
+
+  it('never switches panes under a user who is already in Orca', async () => {
+    const harness = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    harness.deps.platform = 'darwin'
+    const focusedWindow = makeFocusedWindowStub()
+    harness.deps.findActiveWindow = () => focusedWindow
+    await createNotificationDeliveryService(harness.deps).dispatch(
+      makeRequest({ paneKey: 'tab-1:leaf-1' })
+    )
+
+    expect(harness.bringSubjectToFront).not.toHaveBeenCalled()
+  })
+
+  it('keeps bring-to-front opt-in, macOS only, and limited to agent completions', async () => {
+    const off = makeHarness(makeSettings())
+    off.deps.platform = 'darwin'
+    await createNotificationDeliveryService(off.deps).dispatch(
+      makeRequest({ paneKey: 'tab-1:leaf-1' })
+    )
+    expect(off.bringSubjectToFront).not.toHaveBeenCalled()
+
+    const linux = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    await createNotificationDeliveryService(linux.deps).dispatch(
+      makeRequest({ paneKey: 'tab-1:leaf-1' })
+    )
+    expect(linux.bringSubjectToFront).not.toHaveBeenCalled()
+
+    const bell = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    bell.deps.platform = 'darwin'
+    await createNotificationDeliveryService(bell.deps).dispatch(
+      makeRequest({ source: 'terminal-bell', paneKey: 'tab-1:leaf-1' })
+    )
+    expect(bell.bringSubjectToFront).not.toHaveBeenCalled()
+  })
+
+  it('does not bring Orca forward for a disabled source or a burst repeat', async () => {
+    const disabled = makeHarness(
+      makeSettings({ bringToFrontOnAgentTaskComplete: true, agentTaskComplete: false })
+    )
+    disabled.deps.platform = 'darwin'
+    await createNotificationDeliveryService(disabled.deps).dispatch(
+      makeRequest({ paneKey: 'tab-1:leaf-1' })
+    )
+    expect(disabled.bringSubjectToFront).not.toHaveBeenCalled()
+
+    const burst = makeHarness(makeSettings({ bringToFrontOnAgentTaskComplete: true }))
+    burst.deps.platform = 'darwin'
+    const service = createNotificationDeliveryService(burst.deps)
+    await service.dispatch(makeRequest({ paneKey: 'tab-1:leaf-1' }))
+    await service.dispatch(makeRequest({ paneKey: 'tab-1:leaf-1' }))
+    expect(burst.bringSubjectToFront).toHaveBeenCalledTimes(1)
   })
 
   it('reports blocked-by-system on macOS when permission is undecided', async () => {

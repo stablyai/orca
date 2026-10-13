@@ -36,6 +36,12 @@ export type NotificationDeliveryDependencies = {
   ) => NotificationDispatchResult | Promise<NotificationDispatchResult>
   platform: NodeJS.Platform
   now: () => number
+  /** Raises Orca and reveals the pane the request is about, as a click on its banner would. */
+  bringSubjectToFront: (request: NotificationDispatchRequest) => void
+  /** True when an agent opened the pane through orchestration and the user has not taken it over. */
+  isAgentOpenedPane: (paneKey: string) => boolean
+  /** True when the user's own prompt opened the turn the pane's agent just finished. */
+  isTurnOpenedByUserPrompt: (paneKey: string) => boolean
   /** Told once per path that actually announced the request: a desktop banner shown, or a mobile alert sent. */
   recordAnnounced?: (request: NotificationDispatchRequest) => void
 }
@@ -160,6 +166,22 @@ export function createNotificationDeliveryService(
         ) {
           return { delivered: false, reason: 'cooldown' }
         }
+      }
+
+      // Why: opt-in and macOS only. A focused Orca means the user is typing in it, so never switch panes under them.
+      // A pane an agent opened reports to that agent, so only panes the user opened or took over come forward.
+      // A turn the agent woke itself for (a worker's result) answers nobody waiting, so only the reply to the user's own prompt does.
+      // A chat session's journal records no turn opener, so chats keep coming forward on every finish.
+      if (
+        deps.platform === 'darwin' &&
+        settings.bringToFrontOnAgentTaskComplete &&
+        request.source === 'agent-task-complete' &&
+        !browserWindow?.isFocused() &&
+        request.paneKey !== undefined &&
+        !deps.isAgentOpenedPane(request.paneKey) &&
+        (request.surface === 'agent-session' || deps.isTurnOpenedByUserPrompt(request.paneKey))
+      ) {
+        deps.bringSubjectToFront(request)
       }
 
       if (!deps.isNotificationSupported()) {

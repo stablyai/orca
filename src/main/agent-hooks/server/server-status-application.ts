@@ -23,35 +23,63 @@ function mainAgentState(payload: ParsedAgentStatusPayload): AgentStatusState {
   return payload.mainAgent?.state ?? payload.state
 }
 
+/** The main agent's own turn-opening event. Replays, child events and identity-only rows restate a turn rather than open one. */
+function opensMainAgentTurn(payload: AgentHookEventPayload): boolean {
+  return (
+    payload.source !== undefined &&
+    payload.toolAgentId === undefined &&
+    payload.isReplay !== true &&
+    payload.providerSessionOnly !== true &&
+    isNewTurnEvent(payload.source, payload.hookEventName)
+  )
+}
+
+// Why: a settled main agent running again with no opening event (an OSC repaint racing the
+// prompt hook) is a turn edge nothing dated; carrying the old turn's facts would misattribute them.
+function resumedWithoutTurnOpening(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: AgentHookEventPayload
+): boolean {
+  return (
+    previous !== undefined &&
+    mainAgentState(previous.payload) === 'done' &&
+    mainAgentState(payload.payload) !== 'done'
+  )
+}
+
 /**
  * When the main agent's current turn began. Its own turn-opening event stamps it (the same
  * classifier the observation boundary uses), except a session boundary, which lands idle with no
- * turn open. Replays, child events and identity-only rows restate a turn rather than open one.
+ * turn open.
  */
 function resolveTurnStartedAt(
   previous: EnrichedAgentHookEventPayload | undefined,
   payload: AgentHookEventPayload,
   at: number
 ): number | undefined {
-  if (
-    payload.source !== undefined &&
-    payload.toolAgentId === undefined &&
-    payload.isReplay !== true &&
-    payload.providerSessionOnly !== true &&
-    isNewTurnEvent(payload.source, payload.hookEventName)
-  ) {
+  if (opensMainAgentTurn(payload)) {
     return payload.payload.sessionBoundary === true ? undefined : at
   }
-  // Why: a settled main agent running again with no opening event (an OSC repaint racing the
-  // prompt hook) is a turn edge nothing dated; carrying the old stamp would count from that turn.
-  if (
-    previous &&
-    mainAgentState(previous.payload) === 'done' &&
-    mainAgentState(payload.payload) !== 'done'
-  ) {
+  if (resumedWithoutTurnOpening(previous, payload)) {
     return undefined
   }
   return previous?.turnStartedAt
+}
+
+/** Whether the user's own prompt opened the main agent's current turn, rather than a harness wake-up. */
+function resolveTurnOpenedByUserPrompt(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: AgentHookEventPayload
+): true | undefined {
+  if (opensMainAgentTurn(payload)) {
+    return payload.hasExplicitPrompt === true && payload.payload.sessionBoundary !== true
+      ? true
+      : undefined
+  }
+  if (resumedWithoutTurnOpening(previous, payload)) {
+    return undefined
+  }
+  return previous?.turnOpenedByUserPrompt
 }
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
@@ -156,9 +184,19 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt,
-      // Always written here, so a producer can never declare it.
-      turnStartedAt
+      // Always written here, so a producer can never declare them.
+      turnStartedAt,
+      turnOpenedByUserPrompt: resolveTurnOpenedByUserPrompt(previous, payload)
     }
+  }
+
+  /** Whether the user's own prompt opened this pane's current main-agent turn; false when no hook reported one. */
+  isTurnOpenedByUserPrompt(paneKey: string): boolean {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const row = this.state.lastStatusByPaneKey.get(this.resolvePaneKeyAlias(paneKey)) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    return row?.turnOpenedByUserPrompt === true
   }
 
   /**

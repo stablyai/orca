@@ -141,6 +141,9 @@ describe('structured host notification localization', () => {
         native.push(options)
         return { delivered: true }
       },
+      bringSubjectToFront: () => {},
+      isAgentOpenedPane: () => false,
+      isTurnOpenedByUserPrompt: () => true,
       platform: 'linux',
       now: () => 60_000
     })

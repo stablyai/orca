@@ -8026,7 +8026,9 @@
           "274af61bc0": "system",
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
-          "d3756cf5bc": "disabled"
+          "d3756cf5bc": "disabled",
+          "a5e9bc227c": "Bring Orca to Front",
+          "0472617283": "When an agent finishes replying to your prompt while you are in another app, bring Orca forward and switch to its tab."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",

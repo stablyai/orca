@@ -32,6 +32,7 @@ function createSettings(): GlobalSettings {
       agentTaskComplete: true,
       terminalBell: true,
       suppressWhenFocused: true,
+      bringToFrontOnAgentTaskComplete: false,
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 50,
@@ -60,6 +61,21 @@ describe('NotificationsPane', () => {
     expect(getNotificationSoundOptions(null).map((option) => option.title)).toEqual(
       expect.arrayContaining(['System Default', 'Two Tone', 'Bong', 'Ding'])
     )
+  })
+
+  it('offers bring-to-front only on macOS', () => {
+    const render = (userAgent: string): string => {
+      vi.stubGlobal('navigator', { userAgent })
+      return renderToStaticMarkup(
+        <NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />
+      )
+    }
+
+    expect(render('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')).toContain(
+      'Bring Orca to Front'
+    )
+    expect(render('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).not.toContain('Bring Orca to Front')
+    expect(render('Mozilla/5.0 (X11; Linux x86_64)')).not.toContain('Bring Orca to Front')
   })
 
   it('resets the volume draft only when the persisted volume changes', () => {

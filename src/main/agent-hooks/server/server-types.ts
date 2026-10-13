@@ -22,6 +22,9 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   /** When the main agent's current turn began, on this server's clock. Stamped only here, from the
    *  main agent's own turn-opening event; absent when no such event was seen. */
   turnStartedAt?: number
+  /** The user's own prompt opened the main agent's current turn. Stamped only here; absent for a
+   *  harness wake-up (a task notification, an agent message) or when no opening event was seen. */
+  turnOpenedByUserPrompt?: true
   /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
   observation?: AgentStatusObservation
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */

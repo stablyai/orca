@@ -176,7 +176,8 @@ export function sanitizeHydratedEntry(
     stateStartedAt,
     ...(typeof turnStartedAt === 'number' && Number.isFinite(turnStartedAt) && turnStartedAt > 0
       ? { turnStartedAt }
-      : {})
+      : {}),
+    ...(record.turnOpenedByUserPrompt === true ? { turnOpenedByUserPrompt: true } : {})
   }
 }
 
