@@ -1,4 +1,3 @@
-import { createCliRecipeWorkspace } from '../ephemeral-vm/cli-workspace-create'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -55,6 +54,7 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-b
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 import { openOffscreenBrowserPageLink } from '../runtime/browser/commands/offscreen-browser-page-link'
+import { createCliRecipeWorkspace } from '../ephemeral-vm/cli-workspace-create'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -135,6 +135,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
   })
+  runtime.setRecipeWorkspaceCreator((params, repo) =>
+    createCliRecipeWorkspace({
+      store,
+      userDataPath: app.getPath('userData'),
+      repo,
+      params,
+      pluginService: state.pluginService
+    })
+  )
   // Both desktop and headless serve own a host-local search service.
   const sessionSearch = installChildSessionSearchService({
     dataRoot: getCanonicalUserDataPath(),
@@ -146,15 +155,6 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Desktop and headless hosts each evaluate their own panes' rules.
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
-  )
-  runtime.setRecipeWorkspaceCreator((params, repo) =>
-    createCliRecipeWorkspace({
-      store,
-      userDataPath: app.getPath('userData'),
-      repo,
-      params,
-      pluginService: state.pluginService
-    })
   )
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
