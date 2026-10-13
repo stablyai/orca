@@ -126,6 +126,13 @@ export function AiVaultSessionVirtualList({
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(() => new Set())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
+  const [expandedGroupsLimit, setExpandedGroupsLimit] = useState(groupSessionLimit)
+  // Why: "Show more" expansions belong to the limit they were made under; a new
+  // limit should cap every group again instead of leaving earlier ones fully open.
+  if (expandedGroupsLimit !== groupSessionLimit) {
+    setExpandedGroupsLimit(groupSessionLimit)
+    setExpandedGroups(new Set())
+  }
 
   const vaultRows = useMemo(
     () => buildAiVaultListRows({ groups, collapsedGroups, groupSessionLimit, expandedGroups }),
