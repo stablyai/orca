@@ -169,7 +169,7 @@ function settleIgnoredPathsQueryLane(
   pumpIgnoredPathsQueryLane(key, lane)
 }
 
-function requestFileExplorerIgnoredPaths(
+export function requestFileExplorerIgnoredPaths(
   context: IgnoredPathsQueryContext,
   paths: readonly string[],
   onSettled: (paths: string[]) => void
@@ -202,9 +202,11 @@ function requestFileExplorerIgnoredPaths(
 
   // Why: watcher-driven relativePaths changes used to relaunch a full uncancellable
   // check-ignore query per change; coalesce them into one in-flight query plus one
-  // trailing merge per worktree, and drop a caller's pending paths on unmount.
+  // trailing merge per worktree, and drop a caller's paths on unmount whether it was
+  // still pending or already riding the in-flight query.
   return () => {
     lane.pendingWaiters.delete(waiter)
+    lane.inFlight?.waiters.delete(waiter)
   }
 }
 

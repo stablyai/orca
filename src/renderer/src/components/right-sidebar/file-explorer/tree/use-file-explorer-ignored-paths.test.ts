@@ -20,6 +20,7 @@ vi.mock('../../source-control/sync/worktree-git-owner-target', () => ({
 
 import {
   FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS,
+  requestFileExplorerIgnoredPaths,
   useFileExplorerIgnoredPaths
 } from './use-file-explorer-ignored-paths'
 
@@ -184,6 +185,32 @@ describe('useFileExplorerIgnoredPaths', () => {
     await act(async () => {
       deferreds[1]?.resolve(['b.ts'])
     })
+  })
+
+  it('does not settle a cancelled caller that joined the in-flight query', async () => {
+    const context = {
+      activeWorktreeId: 'wt-cancelled-inflight',
+      connectionId: undefined,
+      target: { kind: 'local' } as const,
+      worktreePath: '/repo/wt-cancelled-inflight'
+    }
+    const firstOnSettled = vi.fn()
+    const secondOnSettled = vi.fn()
+    const cancelFirst = requestFileExplorerIgnoredPaths(context, ['a.ts'], firstOnSettled)
+    const cancelSecond = requestFileExplorerIgnoredPaths(context, ['a.ts'], secondOnSettled)
+
+    expect(getRuntimeGitIgnoredPathsMock).toHaveBeenCalledTimes(1)
+
+    cancelSecond()
+
+    await act(async () => {
+      deferreds[0]?.resolve(['a.ts'])
+    })
+
+    expect(firstOnSettled).toHaveBeenCalledWith(['a.ts'])
+    expect(secondOnSettled).not.toHaveBeenCalled()
+
+    cancelFirst()
   })
 
   it('gives each joined caller only the verdicts for its own requested paths', async () => {
