@@ -9,9 +9,12 @@ const { activation, disposeSpy } = vi.hoisted(() => ({
 vi.mock('@xterm/addon-image', () => ({
   ImageAddon: class {
     options: unknown
+    storageLimit = 0
     disposed = false
     constructor(options?: unknown) {
       this.options = options
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: mirrors the real addon, which seeds storageLimit from its options.
+      this.storageLimit = (options as { storageLimit: number }).storageLimit
     }
     activate(): void {
       if (activation.fail) {
@@ -59,7 +62,7 @@ describe('pane inline images', () => {
     const images = await import('./pane-inline-images')
     const loader = await import('./terminal-image-addon-loader')
     const pane = makePane(1)
-    images.attachInlineImages(pane)
+    images.attachInlineImages(pane, 32)
 
     expect(pane.imageAddon).toBeNull()
     expect(pane.imageAttachmentDeferred).toBe(true)
@@ -75,21 +78,21 @@ describe('pane inline images', () => {
 
   it('attaches synchronously once the addon is loaded', () => {
     const pane = makePane(2)
-    attachInlineImages(pane)
+    attachInlineImages(pane, 32)
     expect(pane.imageAddon).not.toBeNull()
   })
 
   it('is idempotent — a second attach reuses the same addon', () => {
     const pane = makePane(3)
-    attachInlineImages(pane)
+    attachInlineImages(pane, 32)
     const first = pane.imageAddon
-    attachInlineImages(pane)
+    attachInlineImages(pane, 32)
     expect(pane.imageAddon).toBe(first)
   })
 
   it('disposes the addon on detach', () => {
     const pane = makePane(4)
-    attachInlineImages(pane)
+    attachInlineImages(pane, 32)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked addon exposes this disposal marker.
     const addon = pane.imageAddon as unknown as { disposed: boolean }
     detachInlineImages(pane)
@@ -99,9 +102,9 @@ describe('pane inline images', () => {
 
   it('toggles attach and detach through setInlineImagesEnabled', () => {
     const pane = makePane(5)
-    setInlineImagesEnabled(pane, true)
+    setInlineImagesEnabled(pane, true, 32)
     expect(pane.imageAddon).not.toBeNull()
-    setInlineImagesEnabled(pane, false)
+    setInlineImagesEnabled(pane, false, 32)
     expect(pane.imageAddon).toBeNull()
   })
 
@@ -110,13 +113,13 @@ describe('pane inline images', () => {
     const before = disposeSpy.mock.calls.length
     activation.fail = true
     try {
-      attachInlineImages(pane)
+      attachInlineImages(pane, 32)
       expect(pane.imageAddon).toBeNull()
       expect(disposeSpy).toHaveBeenCalledTimes(before + 1)
     } finally {
       activation.fail = false
     }
-    attachInlineImages(pane)
+    attachInlineImages(pane, 32)
     expect(pane.imageAddon).not.toBeNull()
     detachInlineImages(pane)
     pane.terminal.dispose()
@@ -125,7 +128,7 @@ describe('pane inline images', () => {
   it('reports inline-image rendering only while the addon is really attached', () => {
     const pane = makePane(8)
     expect(terminalRendersInlineImages(pane.terminal)).toBe(false)
-    attachInlineImages(pane)
+    attachInlineImages(pane, 32)
     expect(terminalRendersInlineImages(pane.terminal)).toBe(true)
     detachInlineImages(pane)
     expect(terminalRendersInlineImages(pane.terminal)).toBe(false)
@@ -136,7 +139,7 @@ describe('pane inline images', () => {
     const pane = makePane(9)
     activation.fail = true
     try {
-      attachInlineImages(pane)
+      attachInlineImages(pane, 32)
     } finally {
       activation.fail = false
     }
@@ -147,7 +150,7 @@ describe('pane inline images', () => {
 
   it('passes the perf-tuned options to the addon', () => {
     const pane = makePane(6)
-    attachInlineImages(pane)
+    attachInlineImages(pane, 32)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the installed addon exposes constructor options for this contract test.
     const options = (pane.imageAddon as unknown as { options: Record<string, unknown> }).options
     expect(options.enableSizeReports).toBe(false)
@@ -160,5 +163,27 @@ describe('pane inline images', () => {
     expect(options.kittySizeLimit).toBe(8 * 1024 * 1024)
     // Pin the value, not the formula the source already states.
     expect(options.pixelLimit).toBe(8_000_000)
+  })
+
+  it('derives the addon limits from the configured cache size', () => {
+    const pane = makePane(10)
+    attachInlineImages(pane, 128)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock addon exposes constructor options for this contract test.
+    const options = (pane.imageAddon as unknown as { options: Record<string, unknown> }).options
+    expect(options.storageLimit).toBe(128)
+    expect(options.pixelLimit).toBe(32_000_000)
+    detachInlineImages(pane)
+    pane.terminal.dispose()
+  })
+
+  it('resizes the cache of an already-attached addon in place', () => {
+    const pane = makePane(11)
+    setInlineImagesEnabled(pane, true, 32)
+    const addon = pane.imageAddon
+    setInlineImagesEnabled(pane, true, 256)
+    expect(pane.imageAddon).toBe(addon)
+    expect(pane.imageAddon?.storageLimit).toBe(256)
+    detachInlineImages(pane)
+    pane.terminal.dispose()
   })
 })

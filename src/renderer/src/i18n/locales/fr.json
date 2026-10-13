@@ -12269,7 +12269,10 @@
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Images en ligne",
-          "fffab5890b": "Affichez les images directement dans le terminal à l'aide des protocoles graphiques SIXEL, iTerm2 (IIP) et Kitty."
+          "fffab5890b": "Affichez les images directement dans le terminal à l'aide des protocoles graphiques SIXEL, iTerm2 (IIP) et Kitty.",
+          "0121d245a6": "Cache des images en ligne",
+          "2b7791ac60": "Mémoire d'images décodées conservée par panneau. Quand elle est pleine, les images les plus anciennes de l'historique sont remplacées par un espace réservé. Des valeurs plus élevées utilisent plus de mémoire lorsque beaucoup de grandes images sont affichées.",
+          "a8a3f239c1": "Taille du cache des images en ligne"
         },
         "CursorAccountsSection": {
           "dashboardLink": "Tableau de bord Cursor",

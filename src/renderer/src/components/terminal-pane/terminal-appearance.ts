@@ -30,6 +30,7 @@ import { publishTerminalViewAttributes } from './terminal-view-attributes-publis
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { normalizeTerminalInlineImageCacheMb } from '../../../../shared/terminal-inline-image-cache-policy'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
 export function hexToRgba(hex: string, alpha: number): string {
@@ -213,10 +214,12 @@ export function applyTerminalAppearance(
     // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     // Why unconditional: setInlineImagesEnabled is idempotent (attach no-ops when
-    // already loaded, detach no-ops when absent), so this keeps live toggles in sync.
+    // already loaded, detach no-ops when absent, cache size only written on change),
+    // so this keeps live toggles and cache-size changes in sync.
     manager.setPaneInlineImagesEnabled(
       pane.id,
-      resolveTerminalInlineImagesEnabled(settings.terminalInlineImages)
+      resolveTerminalInlineImagesEnabled(settings.terminalInlineImages),
+      normalizeTerminalInlineImageCacheMb(settings.terminalInlineImageCacheMb)
     )
     const transport = paneTransports.get(pane.id)
     // Why: PTY is already at phone dimensions under a mobile-fit override — don't resize it back to desktop.

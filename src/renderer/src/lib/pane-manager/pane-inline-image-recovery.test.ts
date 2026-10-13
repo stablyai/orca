@@ -26,7 +26,7 @@ it('recovers capped imports after disabling and enabling images', async () => {
   const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
   try {
     for (let attempt = 0; attempt < 4; attempt++) {
-      images.setInlineImagesEnabled(pane, true)
+      images.setInlineImagesEnabled(pane, true, 32)
       await loader.prime()
     }
     expect(load).toHaveBeenCalledTimes(3)
@@ -37,8 +37,8 @@ it('recovers capped imports after disabling and enabling images', async () => {
         dispose(): void {}
       }
     )
-    images.setInlineImagesEnabled(pane, false)
-    images.setInlineImagesEnabled(pane, true)
+    images.setInlineImagesEnabled(pane, false, 32)
+    images.setInlineImagesEnabled(pane, true, 32)
     await loader.prime()
     expect(load).toHaveBeenCalledTimes(4)
     expect(pane.imageAddon).not.toBeNull()

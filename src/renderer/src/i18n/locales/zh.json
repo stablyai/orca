@@ -12163,7 +12163,10 @@
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "内嵌图像",
-          "fffab5890b": "使用 SIXEL、iTerm2 (IIP) 和 Kitty 图形协议直接在终端中显示图像。"
+          "fffab5890b": "使用 SIXEL、iTerm2 (IIP) 和 Kitty 图形协议直接在终端中显示图像。",
+          "0121d245a6": "内嵌图像缓存",
+          "2b7791ac60": "每个窗格保留的已解码图像内存。缓存已满时，回滚缓冲区中较早的图像会被占位符替换。数值越大，显示大量大图时占用的内存越多。",
+          "a8a3f239c1": "内嵌图像缓存大小"
         },
         "CursorAccountsSection": {
           "dashboardLink": "Cursor 仪表盘",

@@ -12235,7 +12235,10 @@
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Imágenes en línea",
-          "fffab5890b": "Muestre imágenes directamente en el terminal utilizando los protocolos gráficos SIXEL, iTerm2 (IIP) y Kitty."
+          "fffab5890b": "Muestre imágenes directamente en el terminal utilizando los protocolos gráficos SIXEL, iTerm2 (IIP) y Kitty.",
+          "0121d245a6": "Caché de imágenes en línea",
+          "2b7791ac60": "Memoria de imágenes decodificadas que se conserva por panel. Cuando se llena, las imágenes más antiguas del historial se sustituyen por un marcador. Los valores mayores usan más memoria cuando se muestran muchas imágenes grandes.",
+          "a8a3f239c1": "Tamaño de la caché de imágenes en línea"
         },
         "UnsealedCredentialNotice": {
           "body": "{{credential}} se almacena sin cifrar: este sistema no tiene ningún conjunto de claves del sistema operativo que Orca pueda usar. Cualquiera que pueda leer su disco o una copia de seguridad del mismo puede leer la credencial. Instale y desbloquee gnome-keyring o kwallet, luego guárdelo nuevamente para sellarlo."
