@@ -27,15 +27,16 @@ export function useSingleTabStripAutoHide({
   stripAutoHidden: boolean
   stripRevealed: boolean
   panelRef: React.RefObject<HTMLDivElement | null>
+  /** Callback ref for the strip row, which the rename hold watches. */
+  stripRowRef: (node: HTMLElement | null) => void
 } {
   const autoHideSingleTabStrip = useAppStore((state) =>
     isAutoHideSingleTabStripEnabled(state.settings)
   )
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [stripHovered, setStripHovered] = useState(false)
-  const tabRenameActive = useTabStripRenameHold({
+  const { renameActive: tabRenameActive, setStripRowNode: stripRowRef } = useTabStripRenameHold({
     enabled: autoHideSingleTabStrip && stripAttached,
-    panelRef,
     ownsTab
   })
   const { autoHidden: stripAutoHidden, revealed: stripRevealed } = resolveSingleTabStripVisibility({
@@ -66,5 +67,5 @@ export function useSingleTabStripAutoHide({
     }
     queueSyncFitPanes()
   }, [stripAutoHidden])
-  return { stripAutoHidden, stripRevealed, panelRef }
+  return { stripAutoHidden, stripRevealed, panelRef, stripRowRef }
 }

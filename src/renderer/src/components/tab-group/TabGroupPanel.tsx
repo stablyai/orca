@@ -91,7 +91,7 @@ export default function TabGroupPanel({
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
-  const { stripAutoHidden, stripRevealed, panelRef } = useSingleTabStripAutoHide({
+  const { stripAutoHidden, stripRevealed, panelRef, stripRowRef } = useSingleTabStripAutoHide({
     stripAttached: tabStrip === 'attached',
     groupTabCount: model.groupTabs.length,
     clientHostedRowCount: clientHostedRows.length,
@@ -259,6 +259,7 @@ export default function TabGroupPanel({
   const unfocusedDimClassName = hasSplitGroups && !isFocused ? ' opacity-95' : ''
   const stripRow = (
     <div
+      ref={stripRowRef}
       className={`${
         stripAutoHidden
           ? // Why: no slide during a tab drag — dnd-kit measures droppable rects once at drag start and would record the strip mid-animation.
