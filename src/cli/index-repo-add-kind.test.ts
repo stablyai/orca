@@ -203,6 +203,46 @@ describe('orca repo add project kind', () => {
     process.exitCode = priorExitCode
   })
 
+  // The runtime dedups by path and answers with the existing row whatever kind was requested.
+  it('fails --kind git at a path already registered as a folder project', async () => {
+    queueFixtures(callMock, folderRepoFixture())
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['repo', 'add', '--path', FOLDER_PATH, '--kind', 'git', '--json'], '/tmp')
+
+    expect(callMock.mock.calls).toEqual([['repo.add', { path: FOLDER_PATH, kind: 'git' }]])
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'already registered as a folder project'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('fails --kind folder at a path already registered as a git project', async () => {
+    queueFixtures(
+      callMock,
+      pathStatusFixture({ path: FOLDER_PATH, exists: true }),
+      // A row predating project kinds carries none and is a git project.
+      okFixture('req_repo_add', { repo: { id: 'repo-1', path: FOLDER_PATH, displayName: 'notes' } })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['repo', 'add', '--path', FOLDER_PATH, '--kind', 'folder', '--json'], '/tmp')
+
+    expect(callMock).toHaveBeenLastCalledWith('repo.add', { path: FOLDER_PATH, kind: 'folder' })
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'already registered as a git project'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('retries nothing when the add fails for a reason other than the path not being git', async () => {
     await rejectNextCallWith('runtime_error', 'Project path must be an absolute path')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
