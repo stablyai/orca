@@ -15,6 +15,7 @@ import {
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 import {
   getLayoutEntries,
+  getFileExplorerCompactFoldersEntry,
   getFollowSymlinkedDirectoriesEntry,
   getSidebarEntries,
   getStatusBarToggles,
@@ -81,6 +82,7 @@ export function AppearanceWindowSidebarSection({
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
   const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry()
+  const compactFoldersEntry = getFileExplorerCompactFoldersEntry()
   const statusBarTitle = translate(
     'auto.components.settings.AppearancePane.3e4175e5c6',
     'Status Bar'
@@ -389,6 +391,18 @@ export function AppearanceWindowSidebarSection({
                       onChange={() =>
                         updateSettings({
                           followSymlinkedDirectories: !settings.followSymlinkedDirectories
+                        })
+                      }
+                    />
+                  </SearchableSetting>
+                  <SearchableSetting {...compactFoldersEntry}>
+                    <SettingsSwitchRow
+                      label={compactFoldersEntry.title}
+                      description={compactFoldersEntry.description}
+                      checked={settings.fileExplorerCompactFolders === true}
+                      onChange={() =>
+                        updateSettings({
+                          fileExplorerCompactFolders: settings.fileExplorerCompactFolders !== true
                         })
                       }
                     />

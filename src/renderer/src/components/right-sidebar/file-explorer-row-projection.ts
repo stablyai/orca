@@ -1,9 +1,13 @@
 import type { TreeNode } from './file-explorer-types'
+import type { FileExplorerCompactRowLayout } from './file-explorer-compact-folders'
+
+const NO_COMPACTED_ANCESTORS: readonly TreeNode[] = []
 
 export type FileExplorerRowProjection = {
   getVisibleCount: () => number
   getVisibleSlice: (startIndex: number, endIndex: number) => TreeNode[]
   getRowAtIndex: (index: number) => TreeNode | null
+  /** A folder folded into a compact row resolves to that row, here and in the other path lookups. */
   getRowByPath: (path: string) => TreeNode | null
   getIndexByPath: (path: string) => number | null
   hasPath: (path: string) => boolean
@@ -13,6 +17,10 @@ export type FileExplorerRowProjection = {
   getInsertIndexAfterSubtree: (parentPath: string, worktreePath: string | null) => number
   getParentIndex: (index: number) => number | null
   getFirstChildIndex: (index: number) => number | null
+  /** Indentation of the row at `index`; differs from `node.depth` below compacted folders. */
+  getRowDepth: (index: number) => number
+  /** Folders folded into the row at `index` by compact folders, outermost first. */
+  getCompactedAncestors: (index: number) => readonly TreeNode[]
 }
 
 export function createFileExplorerRowProjection(
@@ -29,8 +37,11 @@ export function createFileExplorerRowProjection(
 
 export function createFileExplorerRowProjectionFromParts(
   visibleFlatRows: TreeNode[],
-  rowsByPath: ReadonlyMap<string, TreeNode>
+  rowsByPath: ReadonlyMap<string, TreeNode>,
+  compactLayout?: FileExplorerCompactRowLayout
 ): FileExplorerRowProjection {
+  const getRowDepth = (index: number): number =>
+    compactLayout?.depths[index] ?? visibleFlatRows[index]?.depth ?? 0
   let indexByPath: Map<string, number> | null = null
   const getIndexByPathMap = (): Map<string, number> => {
     if (indexByPath !== null) {
@@ -42,6 +53,11 @@ export function createFileExplorerRowProjectionFromParts(
     const nextIndexByPath = new Map<string, number>()
     for (let index = 0; index < visibleFlatRows.length; index += 1) {
       nextIndexByPath.set(visibleFlatRows[index].path, index)
+    }
+    for (const [index, ancestors] of compactLayout?.compactedAncestorsByIndex ?? []) {
+      for (const ancestor of ancestors) {
+        nextIndexByPath.set(ancestor.path, index)
+      }
     }
     indexByPath = nextIndexByPath
     return nextIndexByPath
@@ -61,38 +77,54 @@ export function createFileExplorerRowProjectionFromParts(
     getOrderedPaths: () => visibleFlatRows.map((row) => row.path),
     getRowsByPaths: (paths) =>
       getRowsByPathsInProjectionOrder(visibleFlatRows, rowsByPath, getIndexByPathMap, paths),
-    countVisiblePaths: (paths) => countVisiblePaths(rowsByPath, paths),
+    countVisiblePaths: (paths) =>
+      compactLayout ? countVisibleRows(rowsByPath, paths) : countVisiblePaths(rowsByPath, paths),
     getInsertIndexAfterSubtree: (parentPath, worktreePath) =>
-      getInsertIndexAfterSubtree(visibleFlatRows, getIndexByPathMap, parentPath, worktreePath),
-    getParentIndex: (index) => getParentIndex(visibleFlatRows, index),
-    getFirstChildIndex: (index) => getFirstChildIndex(visibleFlatRows, index)
+      getInsertIndexAfterSubtree(
+        visibleFlatRows.length,
+        getRowDepth,
+        getIndexByPathMap,
+        parentPath,
+        worktreePath
+      ),
+    getParentIndex: (index) => getParentIndex(visibleFlatRows, getRowDepth, index),
+    getFirstChildIndex: (index) => getFirstChildIndex(visibleFlatRows, getRowDepth, index),
+    getRowDepth,
+    getCompactedAncestors: (index) =>
+      compactLayout?.compactedAncestorsByIndex.get(index) ?? NO_COMPACTED_ANCESTORS
   }
 }
 
-function getParentIndex(visibleFlatRows: readonly TreeNode[], index: number): number | null {
-  const current = visibleFlatRows[index]
-  if (!current) {
+function getParentIndex(
+  visibleFlatRows: readonly TreeNode[],
+  getRowDepth: (index: number) => number,
+  index: number
+): number | null {
+  if (!visibleFlatRows[index]) {
     return null
   }
-  if (current.depth <= 0) {
+  const depth = getRowDepth(index)
+  if (depth <= 0) {
     return null
   }
   for (let i = index - 1; i >= 0; i -= 1) {
-    const node = visibleFlatRows[i]
-    if (node && node.depth < current.depth) {
+    if (getRowDepth(i) < depth) {
       return i
     }
   }
   return null
 }
 
-function getFirstChildIndex(visibleFlatRows: readonly TreeNode[], index: number): number | null {
+function getFirstChildIndex(
+  visibleFlatRows: readonly TreeNode[],
+  getRowDepth: (index: number) => number,
+  index: number
+): number | null {
   const current = visibleFlatRows[index]
   if (!current || !current.isDirectory) {
     return null
   }
-  const next = visibleFlatRows[index + 1]
-  if (next && next.depth === current.depth + 1) {
+  if (visibleFlatRows[index + 1] && getRowDepth(index + 1) === getRowDepth(index) + 1) {
     return index + 1
   }
   return null
@@ -113,17 +145,17 @@ function getRowsByPathsInProjectionOrder(
     return row ? [row] : []
   }
 
-  const visibleIndexes: number[] = []
+  // Why a set: a compact row's own path and a folder folded into it share one index.
+  const visibleIndexes = new Set<number>()
   const indexByPath = getIndexByPathMap()
   for (const path of paths) {
     const index = indexByPath.get(path)
     if (index !== undefined) {
-      visibleIndexes.push(index)
+      visibleIndexes.add(index)
     }
   }
 
-  visibleIndexes.sort((a, b) => a - b)
-  return visibleIndexes.map((index) => visibleFlatRows[index])
+  return [...visibleIndexes].sort((a, b) => a - b).map((index) => visibleFlatRows[index])
 }
 
 function countVisiblePaths(rowsByPath: ReadonlyMap<string, TreeNode>, paths: Set<string>): number {
@@ -140,14 +172,30 @@ function countVisiblePaths(rowsByPath: ReadonlyMap<string, TreeNode>, paths: Set
   return count
 }
 
+function countVisibleRows(rowsByPath: ReadonlyMap<string, TreeNode>, paths: Set<string>): number {
+  if (paths.size <= 1) {
+    return paths.size
+  }
+
+  const rows = new Set<TreeNode>()
+  for (const path of paths) {
+    const row = rowsByPath.get(path)
+    if (row) {
+      rows.add(row)
+    }
+  }
+  return rows.size
+}
+
 function getInsertIndexAfterSubtree(
-  visibleFlatRows: readonly TreeNode[],
+  rowCount: number,
+  getRowDepth: (index: number) => number,
   getIndexByPathMap: () => ReadonlyMap<string, number>,
   parentPath: string,
   worktreePath: string | null
 ): number {
   if (parentPath === worktreePath) {
-    return visibleFlatRows.length
+    return rowCount
   }
 
   const parentIndex = getIndexByPathMap().get(parentPath)
@@ -155,9 +203,9 @@ function getInsertIndexAfterSubtree(
     return 0
   }
 
-  const parentDepth = visibleFlatRows[parentIndex].depth
+  const parentDepth = getRowDepth(parentIndex)
   let insertIndex = parentIndex + 1
-  while (insertIndex < visibleFlatRows.length && visibleFlatRows[insertIndex].depth > parentDepth) {
+  while (insertIndex < rowCount && getRowDepth(insertIndex) > parentDepth) {
     insertIndex += 1
   }
   return insertIndex

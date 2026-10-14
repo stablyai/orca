@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
-import { getFollowSymlinkedDirectoriesEntry, getLanguageEntries } from './appearance-search'
+import {
+  getFileExplorerCompactFoldersEntry,
+  getFollowSymlinkedDirectoriesEntry,
+  getLanguageEntries,
+  getLayoutEntries
+} from './appearance-search'
 import { matchesSettingsSearch } from './settings-search'
 
 // Native word for "language" in each supported UI language. These must be
@@ -30,6 +35,16 @@ describe('getLanguageEntries', () => {
     const entry = getFollowSymlinkedDirectoriesEntry()
     for (const keyword of ['symlink', 'linked folder', 'quick open', 'file explorer']) {
       expect(entry.keywords).toContain(keyword)
+      expect(matchesSettingsSearch(keyword, entry)).toBe(true)
+    }
+  })
+
+  it('lists Compact Folders with the File Explorer settings and finds it by its aliases', async () => {
+    await i18n.changeLanguage('en')
+    const entry = getFileExplorerCompactFoldersEntry()
+
+    expect(getLayoutEntries().map((layoutEntry) => layoutEntry.title)).toContain('Compact Folders')
+    for (const keyword of ['compact', 'nested folders', 'packages', 'file explorer']) {
       expect(matchesSettingsSearch(keyword, entry)).toBe(true)
     }
   })

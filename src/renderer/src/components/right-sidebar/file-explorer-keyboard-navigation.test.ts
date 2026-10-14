@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TreeNode } from './file-explorer-types'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
+import { createCompactFileExplorerRowProjection } from './file-explorer-compact-folders'
 import {
   applyFileExplorerNavigation,
   resolveFileExplorerNavigationTarget
@@ -242,6 +243,55 @@ describe('resolveFileExplorerNavigationTarget', () => {
           isExpanded: isCollapsed
         })
       ).toEqual({ type: 'no-op' })
+    })
+  })
+
+  describe('compact folders', () => {
+    // Drawn as: `src/main` (expanded), `  App.java`, `build.gradle`.
+    const compactRows = (): TreeNode[] => [
+      row('/repo/src', 0, true),
+      row('/repo/src/main', 1, true),
+      row('/repo/src/main/App.java', 2),
+      row('/repo/build.gradle', 0)
+    ]
+
+    it('moves from a file to the compact row that holds it on ArrowLeft', () => {
+      const projection = createCompactFileExplorerRowProjection(compactRows(), () => false)
+      expect(
+        resolveFileExplorerNavigationTarget({
+          key: 'ArrowLeft',
+          currentIndex: 1,
+          rowProjection: projection,
+          total: 3,
+          isExpanded: isExpandedSet(['/repo/src', '/repo/src/main'])
+        })
+      ).toEqual({ type: 'move', targetIndex: 0 })
+    })
+
+    it('collapses the deepest folder of an expanded compact row on ArrowLeft', () => {
+      const projection = createCompactFileExplorerRowProjection(compactRows(), () => false)
+      expect(
+        resolveFileExplorerNavigationTarget({
+          key: 'ArrowLeft',
+          currentIndex: 0,
+          rowProjection: projection,
+          total: 3,
+          isExpanded: isExpandedSet(['/repo/src', '/repo/src/main'])
+        })
+      ).toEqual({ type: 'toggle-collapse', currentIndex: 0, dirPath: '/repo/src/main' })
+    })
+
+    it('enters the first child of an expanded compact row on ArrowRight', () => {
+      const projection = createCompactFileExplorerRowProjection(compactRows(), () => false)
+      expect(
+        resolveFileExplorerNavigationTarget({
+          key: 'ArrowRight',
+          currentIndex: 0,
+          rowProjection: projection,
+          total: 3,
+          isExpanded: isExpandedSet(['/repo/src', '/repo/src/main'])
+        })
+      ).toEqual({ type: 'move', targetIndex: 1 })
     })
   })
 

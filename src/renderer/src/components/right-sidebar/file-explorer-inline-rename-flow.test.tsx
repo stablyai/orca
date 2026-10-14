@@ -2,8 +2,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { useRef } from 'react'
-import { InlineInputRow } from './file-explorer-inline-input-row'
+import { useRef, useState } from 'react'
+import {
+  InlineInputRow,
+  type InlineInput as InlineInputState
+} from './file-explorer-inline-input-row'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
@@ -36,6 +39,7 @@ const rowProjection = createFileExplorerRowProjection([node])
 
 function RenameHarness(): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const [inlineInputState, setInlineInputState] = useState<InlineInputState | null>(null)
   const { inlineInput, startRename, dismissInlineInput, handleInlineSubmit } =
     useFileExplorerInlineInput({
       activeWorktreeId: 'wt-1',
@@ -43,7 +47,9 @@ function RenameHarness(): React.JSX.Element {
       expanded: new Set(),
       rowProjection,
       scrollRef,
-      refreshDir: mocks.refreshDir
+      refreshDir: mocks.refreshDir,
+      inlineInput: inlineInputState,
+      setInlineInput: setInlineInputState
     })
 
   return (

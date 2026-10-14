@@ -416,6 +416,14 @@
     },
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
+    "fileExplorerCompactFolders": "Compact Folders",
+    "fileExplorerCompactFoldersDescription": "Show nested folders that each contain only one folder on a single row, like com/example/app.",
+    "fileExplorerCompactFoldersKeywords": {
+      "compact": "compact",
+      "nestedFolders": "nested folders",
+      "packages": "packages",
+      "fileExplorer": "file explorer"
+    },
     "accounts": {
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
     }

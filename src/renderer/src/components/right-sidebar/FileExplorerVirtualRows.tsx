@@ -179,7 +179,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const showInline =
           isInlineRow ||
           (inlineInput?.type === 'rename' && node && inlineInput.existingPath === node.path)
-        const inlineDepth = isInlineRow ? inlineInput!.depth : (node?.depth ?? 0)
+        const rowDepth = isInlineRow ? 0 : rowProjection.getRowDepth(rowIndex)
+        const inlineDepth = isInlineRow ? inlineInput!.depth : rowDepth
 
         if (showInline) {
           return (
@@ -201,10 +202,14 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         }
 
         const n = node!
+        const compactedAncestors = rowProjection.getCompactedAncestors(rowIndex)
         // Why: relativePath is normalized at construction (fileExplorerEntriesToTreeNodes), so re-normalizing per row per render only paid 2 regexes for a byte-identical string.
         const normalizedRelativePath = n.relativePath
+        // Why: a folded row stands for its whole chain, so it shows the outermost folder's status.
         const nodeStatus = n.isDirectory
-          ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
+          ? (folderStatusByRelativePath.get(
+              compactedAncestors[0]?.relativePath ?? normalizedRelativePath
+            ) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
         const isIgnored = shouldShowIgnoredDecoration(
           nodeStatus,
@@ -230,6 +235,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             <FileExplorerRow
               displayDepthOffset={displayDepthOffset}
               node={n}
+              depth={rowDepth}
+              compactedAncestors={compactedAncestors}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && loadingDirPaths.has(n.path)}
               loadError={n.isDirectory ? (dirCache?.[n.path]?.error ?? null) : null}
@@ -248,7 +255,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               canOpenInOrcaBrowser={canOpenInOrcaBrowser(n.path)}
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
-              targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
+              targetDepth={n.isDirectory ? rowDepth + 1 : rowDepth}
               selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}
               onClick={(event) => onClick(n, event)}
               onDoubleClick={() => onDoubleClick(n)}
