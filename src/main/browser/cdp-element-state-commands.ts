@@ -31,17 +31,11 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
 
       const node = await this.resolveRef(guest, sender, element)
       const refSender = this.senderForRef(guest, node)
-      const { nodeId } = (await refSender('DOM.requestNode', {
-        backendNodeId: node.backendDOMNodeId
-      })) as { nodeId: number }
-
-      const { object } = (await refSender('DOM.resolveNode', { nodeId })) as {
-        object: { objectId: string }
-      }
+      const objectId = await this.resolveNodeObjectId(refSender, node.backendDOMNodeId)
 
       // Why: match on label (textContent) and value so opaque option IDs still select; also handles combobox via click.
       await refSender('Runtime.callFunctionOn', {
-        objectId: object.objectId,
+        objectId,
         functionDeclaration: `function(val) {
           if (this.options) {
             for (const opt of this.options) {
@@ -83,15 +77,11 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
       const node = await this.resolveRef(guest, sender, element)
       const refSender = this.senderForRef(guest, node)
 
-      const { nodeId } = (await refSender('DOM.requestNode', {
-        backendNodeId: node.backendDOMNodeId
-      })) as { nodeId: number }
-      const { object } = (await refSender('DOM.resolveNode', { nodeId })) as {
-        object: { objectId: string }
-      }
+      const objectId = await this.resolveNodeObjectId(refSender, node.backendDOMNodeId)
 
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callFunctionOn with returnByValue echoes the function's boolean return as result.value.
       const { result: currentState } = (await refSender('Runtime.callFunctionOn', {
-        objectId: object.objectId,
+        objectId,
         functionDeclaration: 'function() { return this.checked; }',
         returnByValue: true
       })) as { result: { value: boolean } }
@@ -123,15 +113,16 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
 
         // Why: custom checkboxes may not toggle from a coordinate click; verify state and fall back to programmatic .click().
         try {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callFunctionOn with returnByValue echoes the function's boolean return as result.value.
           const { result: afterState } = (await refSender('Runtime.callFunctionOn', {
-            objectId: object.objectId,
+            objectId,
             functionDeclaration: 'function() { return this.checked; }',
             returnByValue: true
           })) as { result: { value: boolean } }
 
           if (afterState.value !== checked) {
             await refSender('Runtime.callFunctionOn', {
-              objectId: object.objectId,
+              objectId,
               functionDeclaration: 'function() { this.click(); }'
             })
           }

@@ -19,6 +19,30 @@ describe('keybindings', () => {
     expect(formatKeybindingList(['Mod+Shift+O'], 'darwin')).toBe('⌘⇧O')
   })
 
+  it('binds the voice control toggle to Mod+Shift+V on macOS only', () => {
+    const definition = getKeybindingDefinition('voice.control')
+    expect(definition?.group).toBe('Global')
+    expect(definition?.scope).toBe('global')
+    expect(getEffectiveKeybindingsForAction('voice.control', 'darwin')).toEqual(['Mod+Shift+V'])
+    // Ctrl+Shift+V is terminal paste off macOS — the toggle ships unbound there.
+    expect(getEffectiveKeybindingsForAction('voice.control', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('voice.control', 'win32')).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'voice.control',
+        { key: 'v', code: 'KeyV', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'voice.control',
+        { key: 'v', code: 'KeyV', meta: false, control: true, alt: false, shift: true },
+        'linux'
+      )
+    ).toBe(false)
+  })
+
   it.each(['darwin', 'linux', 'win32'] as const)(
     'binds editor word wrap to Alt+Z on %s',
     (platform) => {

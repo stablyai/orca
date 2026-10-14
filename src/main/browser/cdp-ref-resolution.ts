@@ -68,13 +68,24 @@ export class CdpRefResolution {
     }
   }
 
-  async scrollIntoView(sender: CdpCommandSender, backendNodeId: number): Promise<void> {
-    const { nodeId } = (await sender('DOM.requestNode', { backendNodeId })) as { nodeId: number }
-    const { object } = (await sender('DOM.resolveNode', { nodeId })) as {
+  /**
+   * backendNodeId → Runtime objectId in ONE hop: DOM.resolveNode takes a backendNodeId
+   * directly. DOM.requestNode does not — it wants a Runtime objectId, so the old two-hop
+   * form (requestNode then resolveNode by nodeId) dies with "Invalid parameters" on
+   * current Chromium. Proven by CDP probe against a live page (voice click loop).
+   */
+  async resolveNodeObjectId(sender: CdpCommandSender, backendNodeId: number): Promise<string> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: DOM.resolveNode's wire shape is fixed; object.objectId is present on success.
+    const { object } = (await sender('DOM.resolveNode', { backendNodeId })) as {
       object: { objectId: string }
     }
+    return object.objectId
+  }
+
+  async scrollIntoView(sender: CdpCommandSender, backendNodeId: number): Promise<void> {
+    const objectId = await this.resolveNodeObjectId(sender, backendNodeId)
     await sender('Runtime.callFunctionOn', {
-      objectId: object.objectId,
+      objectId,
       functionDeclaration: `function() { this.scrollIntoView({ block: 'center', inline: 'center' }); }`
     })
   }

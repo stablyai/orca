@@ -92,6 +92,18 @@ export function installMainWindowShortcutRouting(args: {
       return true
     }
 
+    // Why: the control toggle is renderer-owned (the control bus decides start vs stop);
+    // main only gates on the feature flag and swallows auto-repeat so a held chord fires once.
+    if (action.type === 'voiceControlToggle') {
+      if (store?.getSettings().voice?.control?.enabled !== true) {
+        return false
+      }
+      if (isAutoRepeat) {
+        event.preventDefault()
+        return true
+      }
+    }
+
     if (
       (action.type === 'toggleQuickCommandsMenu' || action.type === 'deleteCurrentWorkspace') &&
       isAutoRepeat

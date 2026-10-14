@@ -7,6 +7,7 @@ import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
+import type { VoiceControlSettings } from './voice-control-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
@@ -124,6 +125,16 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
   })
 }
 
+export function getDefaultVoiceControlSettings(): VoiceControlSettings {
+  return {
+    enabled: false,
+    coordinatorVoice: 'marin',
+    agentVoiceMode: 'coordinator',
+    maxSessionMinutes: 30,
+    customInstructions: ''
+  }
+}
+
 export function getDefaultVoiceSettings(): VoiceSettings {
   return {
     enabled: false,
@@ -135,7 +146,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     userModels: [],
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
-    microphoneDeviceLabel: null
+    microphoneDeviceLabel: null,
+    control: getDefaultVoiceControlSettings()
   }
 }
 

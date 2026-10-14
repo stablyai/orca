@@ -27,7 +27,10 @@ export type SnapshotResult = {
 export async function buildSnapshot(
   sendCommand: CdpCommandSender,
   iframeSessions?: Map<string, string>,
-  makeIframeSender?: (sessionId: string) => CdpCommandSender
+  makeIframeSender?: (sessionId: string) => CdpCommandSender,
+  /** AX subtrees (by backendDOMNodeId) omitted from the walk — e.g. xterm panes when
+   *  snapshotting the main Orca window, whose scrollback would flood the tree. */
+  excludeBackendNodeIds?: ReadonlySet<number>
 ): Promise<SnapshotResult> {
   await sendCommand('Accessibility.enable')
   const { nodes } = (await sendCommand('Accessibility.getFullAXTree')) as { nodes: AXNode[] }
@@ -45,7 +48,7 @@ export async function buildSnapshot(
     return { snapshot: '', refs: [], refMap: new Map() }
   }
 
-  walkTree(root, nodeById, 0, entries, () => refCounter++)
+  walkTree(root, nodeById, 0, entries, () => refCounter++, excludeBackendNodeIds)
 
   // Why: many modern SPAs use styled <div>s, <span>s, and custom elements as
   // interactive controls without proper ARIA roles. These elements are invisible
@@ -80,7 +83,14 @@ export async function buildSnapshot(
         const iframeRoot = iframeNodes[0]
         if (iframeRoot) {
           const startRef = refCounter
-          walkTree(iframeRoot, iframeNodeById, 1, entries, () => refCounter++)
+          walkTree(
+            iframeRoot,
+            iframeNodeById,
+            1,
+            entries,
+            () => refCounter++,
+            excludeBackendNodeIds
+          )
           for (let i = startRef; i < refCounter; i++) {
             iframeRefSessions.set(`@e${i}`, sessionId)
           }
