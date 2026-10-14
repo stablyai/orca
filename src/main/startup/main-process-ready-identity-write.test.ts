@@ -157,6 +157,10 @@ vi.mock('../browser/browser-session-proxy', () => ({
 }))
 vi.mock('../browser/doc-preview-protocol', () => ({ installDocPreviewProtocolHandler: vi.fn() }))
 vi.mock('../media/media-preview-protocol', () => ({ installMediaPreviewProtocolHandler: vi.fn() }))
+vi.mock('../media/chat-address-preview-protocol', () => ({
+  installChatAddressPreviewProtocolHandler: vi.fn()
+}))
+vi.mock('../media/chat-address-preview', () => ({ registerChatAddressPreviewHandlers: vi.fn() }))
 vi.mock('../ipc/doc-preview-grant-ipc', () => ({ registerDocPreviewGrantHandlers: vi.fn() }))
 
 // browser-session-startup and browser-session-registry are deliberately NOT mocked: they are the

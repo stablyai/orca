@@ -25,9 +25,17 @@ import type {
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
 import type { PreloadApi } from '../api-types'
+import type {
+  ChatAddressPreviewRequest,
+  ChatAddressPreviewResult
+} from '../../shared/chat-address-preview'
 
 export const fsApi = {
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+  previewAddress: (args: ChatAddressPreviewRequest): Promise<ChatAddressPreviewResult> =>
+    ipcRenderer.invoke('fs:previewAddress', args),
+  releaseAddressPreview: (args: { id: string }): Promise<void> =>
+    ipcRenderer.invoke('fs:releaseAddressPreview', args),
   prepareDroppedPaths: (args: PrepareDroppedPathsRequest): Promise<PreparedDroppedPaths> =>
     ipcRenderer.invoke('fs:prepareDroppedPaths', args),
   readFileChunk: (args: {

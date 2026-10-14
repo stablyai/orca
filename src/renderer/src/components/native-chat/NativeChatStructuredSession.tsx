@@ -377,6 +377,7 @@ export function NativeChatStructuredSession(
           {composerShown ? (
             <NativeChatComposer
               ref={composerRef}
+              isVisible={props.isVisible}
               terminalTabId={props.tabId}
               paneKey={paneKey}
               draftScopeKey={structuredAgentSessionDraftScopeKey(props.sessionId)}
