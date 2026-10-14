@@ -22,6 +22,10 @@ import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
 
 export type FileExplorerRowProps = {
   node: TreeNode
+  /** Drawn depth from the row projection; below compacted folders it is less than `node.depth`. */
+  depth?: number
+  /** Folders folded into this row by compact folders, outermost first. */
+  compactedAncestors?: readonly TreeNode[]
   displayDepthOffset?: number
   isExpanded: boolean
   isLoading: boolean
@@ -72,6 +76,8 @@ export type FileExplorerRowProps = {
 /** Offsets visual indentation for a scoped tree without changing the node paths passed to file actions. */
 export function FileExplorerRow({
   node,
+  depth = node.depth,
+  compactedAncestors,
   displayDepthOffset = 0,
   isExpanded,
   isLoading,
@@ -150,7 +156,7 @@ export function FileExplorerRow({
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${(node.depth - displayDepthOffset) * 16 + 8}px` }}
+          style={{ paddingLeft: `${(depth - displayDepthOffset) * 16 + 8}px` }}
           ref={setRowDragNode}
           // The OS-drop owner reads the target folder here at drop time.
           data-file-explorer-drop-dir={rowDropDir}
@@ -229,7 +235,7 @@ export function FileExplorerRow({
           )}
           <span
             className={cn(
-              'truncate',
+              compactedAncestors?.length ? 'flex min-w-0 overflow-hidden' : 'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
               // Reserve space for italic overhang so truncation does not clip the final letter.
               isIgnored && 'italic pr-0.5'
@@ -241,8 +247,23 @@ export function FileExplorerRow({
                   ? { color: 'var(--git-decoration-ignored)' }
                   : undefined
             }
+            title={
+              compactedAncestors?.length
+                ? [...compactedAncestors, node].map((folder) => folder.name).join('/')
+                : undefined
+            }
           >
-            {node.name}
+            {compactedAncestors?.length ? (
+              <>
+                {/* Folded folders truncate first so the target folder stays readable. */}
+                <span className="truncate">
+                  {compactedAncestors.map((folder) => `${folder.name}/`).join('')}
+                </span>
+                <span className="max-w-full shrink-0 truncate">{node.name}</span>
+              </>
+            ) : (
+              node.name
+            )}
           </span>
           {showLoadError ? (
             <span className="w-0 flex-1 truncate text-destructive" title={loadError}>

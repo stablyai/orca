@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -27,6 +27,9 @@ type UseFileExplorerInlineInputParams = {
   rowProjection: FileExplorerRowProjection
   scrollRef: React.RefObject<HTMLDivElement | null>
   refreshDir: (dirPath: string) => Promise<void>
+  /** Owned by the caller because the row projection reads the create input's parent folder. */
+  inlineInput: InlineInput | null
+  setInlineInput: React.Dispatch<React.SetStateAction<InlineInput | null>>
 }
 
 type UseFileExplorerInlineInputResult = {
@@ -46,11 +49,12 @@ export function useFileExplorerInlineInput({
   expanded,
   rowProjection,
   scrollRef,
-  refreshDir
+  refreshDir,
+  inlineInput,
+  setInlineInput
 }: UseFileExplorerInlineInputParams): UseFileExplorerInlineInputResult {
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
-  const [inlineInput, setInlineInput] = useState<InlineInput | null>(null)
   const scrollFocusFrameRef = useRef<number | null>(null)
 
   const cancelScrollFocusFrame = useCallback((): void => {
@@ -90,7 +94,7 @@ export function useFileExplorerInlineInput({
         operationOwner: getFileExplorerOperationOwner(activeWorktreeId)
       })
     },
-    [activeWorktreeId, displayRootPath, expanded, toggleDir]
+    [activeWorktreeId, displayRootPath, expanded, setInlineInput, toggleDir]
   )
 
   const startRename = useCallback(
@@ -103,13 +107,13 @@ export function useFileExplorerInlineInput({
         existingPath: node.path,
         operationOwner: node.operationOwner
       }),
-    []
+    [setInlineInput]
   )
 
   const dismissInlineInput = useCallback(() => {
     setInlineInput(null)
     scheduleScrollFocus()
-  }, [scheduleScrollFocus])
+  }, [scheduleScrollFocus, setInlineInput])
 
   const handleInlineSubmit = useCallback(
     (value: string) => {
@@ -239,7 +243,15 @@ export function useFileExplorerInlineInput({
       setInlineInput(null)
       scheduleScrollFocus()
     },
-    [inlineInput, activeWorktreeId, worktreePath, refreshDir, openFile, scheduleScrollFocus]
+    [
+      inlineInput,
+      activeWorktreeId,
+      worktreePath,
+      refreshDir,
+      openFile,
+      scheduleScrollFocus,
+      setInlineInput
+    ]
   )
 
   return {

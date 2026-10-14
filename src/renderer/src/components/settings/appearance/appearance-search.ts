@@ -11,6 +11,7 @@ import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-se
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
+import { getFileExplorerCompactFoldersEntry } from './appearance-compact-folders-search'
 
 export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -207,7 +208,8 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
   },
-  getFollowSymlinkedDirectoriesEntry()
+  getFollowSymlinkedDirectoriesEntry(),
+  getFileExplorerCompactFoldersEntry()
 ])
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [

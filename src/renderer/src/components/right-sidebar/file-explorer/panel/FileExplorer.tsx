@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
@@ -40,10 +40,12 @@ import { useFileExplorerVisibleRowProjection } from '../tree/useFileExplorerVisi
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
+import { useFileExplorerCompactFolderExpansion } from '../tree/use-file-explorer-compact-folder-expansion'
 import { useWslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
 import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import type { InlineInput } from '../mutations/file-explorer-inline-input-row'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
@@ -108,6 +110,7 @@ function FileExplorerFiles(): React.JSX.Element {
     [expanded, visibleFilesWorktreePath, displayRootPath, worktreePath]
   )
   const tree = useFileExplorerTree(worktreePath, effectiveExpanded, activeWorktreeId)
+  const [inlineInput, setInlineInput] = useState<InlineInput | null>(null)
   const {
     nameFilterQuery,
     setNameFilterQuery,
@@ -134,7 +137,8 @@ function FileExplorerFiles(): React.JSX.Element {
     showDotfiles,
     nameFilterSource,
     hasNameFilter ? nameFilterCollapsedPaths : null,
-    visibleFilesWorktreePath ? displayRootPath : null
+    visibleFilesWorktreePath ? displayRootPath : null,
+    inlineInput && inlineInput.type !== 'rename' ? inlineInput.parentPath : null
   )
   const rowExpandedPaths = useMemo(
     () =>
@@ -180,6 +184,17 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [setNameFilterCollapsedPaths]
   )
+  const toggleDir = useAppStore((s) => s.toggleDir)
+  const compactFolders = useAppStore((s) => s.settings?.fileExplorerCompactFolders === true)
+  const toggleDirOpeningChain = useFileExplorerCompactFolderExpansion({
+    enabled: compactFolders && !hasNameFilter,
+    activeWorktreeId,
+    toggleDir,
+    rowProjection,
+    expanded,
+    loadingDirPaths: tree.loadingDirPaths,
+    dirCache: tree.dirCache
+  })
   // Keep effects above the null-path return so transient missing ownership cannot reset cache guards or SSH generations.
   const paneState = useFileExplorerTreePaneState({
     onRevealOutsideRoot: rootNavigation.revealOutsideRoot,
@@ -201,7 +216,10 @@ function FileExplorerFiles(): React.JSX.Element {
     rowProjection,
     rowExpandedPaths,
     visibleRowCount,
-    pathOwner: openInOwner
+    pathOwner: openInOwner,
+    toggleDir: toggleDirOpeningChain,
+    inlineInput,
+    setInlineInput
   })
   const { inlineInputState, rowScrolling } = paneState
   const {
