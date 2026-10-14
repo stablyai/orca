@@ -19,6 +19,7 @@ import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
+import { WORKSPACE_PIN_ACTION_IDS } from './workspace-pin-command-handlers'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -221,6 +222,11 @@ export function useGlobalKeybindings(args: {
       }
       if (matchShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
+      }
+      for (const actionId of WORKSPACE_PIN_ACTION_IDS) {
+        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
+          return
+        }
       }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
         if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
