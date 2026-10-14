@@ -22,6 +22,14 @@ describe('isAutoHideSingleTabStripEnabled', () => {
     expect(getSync).not.toHaveBeenCalled()
   })
 
+  it('lets hydrated settings refresh what a later null window falls back to', async () => {
+    const getSync = vi.fn(() => ({ autoHideSingleTabStrip: true }))
+    const { isAutoHideSingleTabStripEnabled } = await loadModule(getSync)
+    expect(isAutoHideSingleTabStripEnabled({ autoHideSingleTabStrip: false })).toBe(false)
+    expect(isAutoHideSingleTabStripEnabled(null)).toBe(false)
+    expect(getSync).not.toHaveBeenCalled()
+  })
+
   it('falls back to the persisted flag before settings hydrate', async () => {
     const { isAutoHideSingleTabStripEnabled } = await loadModule(() => ({
       autoHideSingleTabStrip: true
