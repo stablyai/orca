@@ -181,7 +181,8 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle'],
     // Why: the widespread "switch tab" chord (Mod+Shift+Bracket) now drives all-types cycling; same-type moved to Mod+Alt for new installs.
-    defaultBindings: platformBindings(['Mod+Alt+BracketRight'])
+    defaultBindings: platformBindings(['Mod+Alt+BracketRight']),
+    allowInTerminal: true
   },
   {
     id: 'tab.previousSameType',
@@ -189,7 +190,8 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     group: 'Tab Navigation',
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle'],
-    defaultBindings: platformBindings(['Mod+Alt+BracketLeft'])
+    defaultBindings: platformBindings(['Mod+Alt+BracketLeft']),
+    allowInTerminal: true
   },
   {
     id: 'tab.nextAllTypes',
