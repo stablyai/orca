@@ -152,6 +152,8 @@ describe('client-hosted page annotations', () => {
     renderPane()
     expect(toolButton('Grab page element').disabled).toBe(false)
     expect(annotateButton().disabled).toBe(false)
+    // Why: narrow panes fold these tools into the ⋯ menu, so the surface must provide one.
+    expect(toolButton('Browser menu')).toBeTruthy()
   })
 
   it.each(['pending', 'inactive'])('disables the element tools for a %s pane', (state) => {
@@ -193,8 +195,8 @@ describe('client-hosted page annotations', () => {
     )
   })
 
-  it('clears annotations when the guest starts a new load', async () => {
-    const { webview } = renderPane()
+  // Why kept: a local tab keeps saved notes across navigation and reload; only their badges retire.
+  function seedLiveNote(): void {
     act(() => {
       useAppStore.setState({
         browserAnnotationsByPageId: {
@@ -202,22 +204,54 @@ describe('client-hosted page annotations', () => {
             {
               id: 'annotation-1',
               browserPageId: 'page-a',
-              comment: 'stale',
+              comment: 'kept',
               intent: 'change',
               priority: 'suggestion',
               createdAt: '2026-09-25T00:00:00.000Z',
               payload: { ...payload, screenshot: null }
             }
           ]
-        }
+        },
+        browserAnnotationMarkerIdsByPageId: { 'page-a': ['annotation-1'] }
       })
     })
+  }
+  const liveMarkers = () => useAppStore.getState().browserAnnotationMarkerIdsByPageId['page-a']
+  const savedNotes = () => useAppStore.getState().browserAnnotationsByPageId['page-a']
+
+  it('keeps notes but retires their badges when the guest starts a new load', async () => {
+    const { webview } = renderPane()
+    seedLiveNote()
 
     fireEvent(webview, new Event('did-start-loading'))
 
-    await waitFor(() =>
-      expect(useAppStore.getState().browserAnnotationsByPageId['page-a']).toBeUndefined()
+    await waitFor(() => expect(liveMarkers()).toBeUndefined())
+    expect(savedNotes()).toHaveLength(1)
+  })
+
+  it('retires badges on a main-frame in-place navigation but not on a subframe one', async () => {
+    const { webview } = renderPane()
+    seedLiveNote()
+
+    fireEvent(
+      webview,
+      Object.assign(new Event('did-start-navigation'), {
+        isMainFrame: false,
+        url: 'https://ads.example/frame'
+      })
     )
+    expect(liveMarkers()).toEqual(['annotation-1'])
+
+    fireEvent(
+      webview,
+      Object.assign(new Event('did-start-navigation'), {
+        isMainFrame: true,
+        isInPlace: true,
+        url: 'https://example.internal/app#pricing'
+      })
+    )
+    await waitFor(() => expect(liveMarkers()).toBeUndefined())
+    expect(savedNotes()).toHaveLength(1)
   })
 })
 

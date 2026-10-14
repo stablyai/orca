@@ -21,7 +21,8 @@ export function useBrowserGuestElementTools({
   worktreeId,
   webviewRef,
   containerRef,
-  toolsReady
+  toolsReady,
+  currentDocument
 }: {
   /** Scopes the stored annotations. Stable for the life of the surface. */
   browserPageId: string
@@ -31,6 +32,11 @@ export function useBrowserGuestElementTools({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   containerRef: MutableRefObject<HTMLDivElement | null>
   toolsReady: boolean
+  /**
+   * Set by a surface that navigates: badges then show only notes captured on the live document,
+   * as on a local tab. A single-document preview leaves it unset.
+   */
+  currentDocument?: { markerIds: readonly string[]; url: string }
 }): {
   grab: ReturnType<typeof useGrabMode>
   markup: ReturnType<typeof useBrowserPageMarkupCapture>
@@ -87,11 +93,12 @@ export function useBrowserGuestElementTools({
     syncGuestAnnotationViewportBridge({
       toolTargetId,
       annotations: browserAnnotations,
+      currentDocument,
       pendingPayload: pendingAnnotationPayload,
       surfaceActive: toolsReady,
       token: annotationViewportBridgeTokenRef.current
     })
-  }, [browserAnnotations, pendingAnnotationPayload, toolTargetId, toolsReady])
+  }, [browserAnnotations, currentDocument, pendingAnnotationPayload, toolTargetId, toolsReady])
 
   const elementTools = useMemo<BrowserChromeElementTools>(
     () => ({

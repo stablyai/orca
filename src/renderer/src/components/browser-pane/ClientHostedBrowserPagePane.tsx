@@ -90,9 +90,10 @@ export function ClientHostedBrowserPagePane({
       placement,
       isActive,
       unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
-      showFailureOverlay
+      showFailureOverlay,
+      documentUrl: browserTab.url
     })
-  const clearAnnotationsOnLoad = useEffectEvent(tools.clearAnnotationsOnLoad)
+  const bindAnnotationDocument = useEffectEvent(tools.bindAnnotationDocument)
   // Main owns this guest; guest loss requires reopening on the server rather than local recreation.
   const retryGuestRecoveryRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
@@ -255,7 +256,6 @@ export function ClientHostedBrowserPagePane({
         return
       }
       // Why: a standing failure (and its auto-retry) stays up until a load commits or fails anew.
-      clearAnnotationsOnLoad()
       updatePageStateFromGuest(browserTab.id, { loading: true })
       const startMetadata = readBrowserClientPageGuestMetadataIfLive(webview, undefined, true)
       if (!startMetadata) {
@@ -273,7 +273,9 @@ export function ClientHostedBrowserPagePane({
       }
     )
     const unbind = bindBrowserClientPageGuestEvents(webview, onStart, syncNavigation, onFailLoad)
+    const unbindAnnotationDocument = bindAnnotationDocument(webview)
     const cleanupGuest = (): void => {
+      unbindAnnotationDocument()
       unbind()
       guestLoss.dispose()
       publisher.dispose()
