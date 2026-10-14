@@ -22,7 +22,9 @@ export function isAutoHideSingleTabStripEnabled(
   settings: Pick<GlobalSettings, 'autoHideSingleTabStrip'> | null | undefined
 ): boolean {
   if (settings) {
-    return settings.autoHideSingleTabStrip === true
+    // Why: a later null window (a runtime switch re-hydrating) must not revive the session-start read.
+    persistedAutoHideFlagCache = settings.autoHideSingleTabStrip === true
+    return persistedAutoHideFlagCache
   }
   // Why: settings hydrate asynchronously, and a group rendered before that would show the strip and
   // then collapse it — a 32px jump plus a pane refit on every launch.

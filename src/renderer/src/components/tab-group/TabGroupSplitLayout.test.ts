@@ -145,6 +145,31 @@ describe('TabGroupSplitLayout', () => {
     )
   })
 
+  it('drops the 4px drag band once every strip in the worktree is auto-hidden', () => {
+    useAppStoreMock.mockImplementationOnce((selector) =>
+      selector({
+        recordFeatureInteraction: recordFeatureInteractionMock,
+        setTabGroupSplitRatio: setTabGroupSplitRatioMock,
+        groupsByWorktree: { 'wt-1': [{ id: 'group-1' }] },
+        unifiedTabsByWorktree: { 'wt-1': [{ groupId: 'group-1' }] },
+        settings: { autoHideSingleTabStrip: true }
+      })
+    )
+    const element = TabGroupSplitLayout({
+      layout: { type: 'leaf', groupId: 'group-1' },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'group-1',
+      isWorktreeActive: true
+    })
+
+    const wrapperChildren = React.Children.toArray(
+      asElement(getLayoutWrapper(element)).props.children as React.ReactNode
+    )
+
+    // Only the split body remains; with the band present there are two children.
+    expect(wrapperChildren).toHaveLength(1)
+  })
+
   it('wires the split layout root to drag cleanup ownership', () => {
     const element = TabGroupSplitLayout({
       layout: { type: 'leaf', groupId: 'group-1' },

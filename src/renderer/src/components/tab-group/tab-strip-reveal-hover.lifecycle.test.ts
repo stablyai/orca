@@ -19,6 +19,13 @@ function movePointer(clientX: number, clientY: number): void {
   window.dispatchEvent(event)
 }
 
+/** `relatedTarget: null` is how the browser reports a pointer leaving the window itself. */
+function pointerOut(relatedTarget: Element | null): void {
+  const event = new Event('pointerout', { bubbles: true })
+  Object.defineProperty(event, 'relatedTarget', { value: relatedTarget })
+  window.dispatchEvent(event)
+}
+
 function renderHover(enabled: boolean, onHoverChange: (hovered: boolean) => void) {
   const panelRef = { current: panelAt({ left: 0, right: 400, top: 100 }) }
   return renderHook(
@@ -72,6 +79,45 @@ describe('useTabStripRevealHover', () => {
     rerender({ enabled: false })
 
     expect(onHoverChange).not.toHaveBeenCalled()
+  })
+
+  it('judges the newest position when several moves share a frame', async () => {
+    const onHoverChange = vi.fn()
+    renderHover(true, onHoverChange)
+
+    act(() => {
+      movePointer(200, 300)
+      movePointer(200, 105)
+    })
+    await flushFrame()
+
+    expect(onHoverChange).toHaveBeenCalledWith(true)
+  })
+
+  it('clears the reveal when the pointer leaves the window, not when it crosses elements', async () => {
+    const onHoverChange = vi.fn()
+    renderHover(true, onHoverChange)
+    act(() => movePointer(200, 105))
+    await flushFrame()
+    onHoverChange.mockClear()
+
+    act(() => pointerOut(document.body))
+    expect(onHoverChange).not.toHaveBeenCalled()
+
+    act(() => pointerOut(null))
+    expect(onHoverChange).toHaveBeenCalledWith(false)
+  })
+
+  it('clears the reveal when the window loses focus', async () => {
+    const onHoverChange = vi.fn()
+    renderHover(true, onHoverChange)
+    act(() => movePointer(200, 105))
+    await flushFrame()
+    onHoverChange.mockClear()
+
+    act(() => window.dispatchEvent(new Event('blur')))
+
+    expect(onHoverChange).toHaveBeenCalledWith(false)
   })
 
   it('stops watching the pointer while disabled', async () => {
