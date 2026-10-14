@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { useAppStore } from '../store'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { listBoundAgentTabActions, resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
+import { withManagedRuntimeChatAgents } from '@/lib/managed-runtime-chat-agents'
 
 export type TerminalAgentTabShortcut = {
   actionId: KeybindingActionId | null
@@ -24,7 +25,12 @@ export function resolveTerminalAgentTabShortcut({
       actionId: 'tab.newAgent',
       agent: resolveDefaultAgentForNewTab({
         defaultTuiAgent: state.settings?.defaultTuiAgent,
-        detectedAgentIds: readDetectedAgentsForWorktree(state, activeWorktreeId),
+        // The picker lists these beside the detected ones, so the chord it labels reaches them too.
+        detectedAgentIds: withManagedRuntimeChatAgents(
+          state,
+          activeWorktreeId,
+          readDetectedAgentsForWorktree(state, activeWorktreeId) ?? []
+        ),
         disabledTuiAgents: state.settings?.disabledTuiAgents
       })
     }

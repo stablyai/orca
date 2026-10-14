@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_REGISTRATIONS } from '../../structured-agent-runtime-registrations'
+import { decodeAgentSessionAgentsResult } from '../../../../shared/agent-session-registered-agents'
 import type { RpcContext } from '../core'
 import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-agent-session-agents'
 
@@ -41,5 +42,21 @@ describe('agentSession.agents', () => {
         })
       )
     ).resolves.toMatchObject({ agents: expect.any(Array) })
+  })
+
+  it('marks a chat Orca provides the program for only on a host with its build', async () => {
+    const platform = process.platform
+    const managed = async () =>
+      decodeAgentSessionAgentsResult(await method.handler({}, context({})))
+        ?.filter((row) => row.managedRuntime)
+        .map(({ agent }) => agent)
+    try {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+      expect(await managed()).toEqual(['antigravity'])
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      expect(await managed()).toEqual([])
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    }
   })
 })

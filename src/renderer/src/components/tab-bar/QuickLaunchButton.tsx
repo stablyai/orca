@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useSyncExternalStore } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
@@ -18,6 +19,16 @@ import {
 import { translate } from '@/i18n/i18n'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
+import {
+  hostStructuredAgentsVersion,
+  subscribeHostStructuredAgents
+} from '@/runtime/host-structured-agents'
+import { withManagedRuntimeChatAgents } from '@/lib/managed-runtime-chat-agents'
+import type { AgentLaunchRouteStore } from '@/lib/agent-launch-route-input'
+import {
+  readLocalRuntimeCapabilitiesOrUnknown,
+  subscribeLocalRuntimeCapabilitiesKnown
+} from '@/runtime/local-runtime-capabilities'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -220,8 +231,41 @@ function QuickLaunchAgentMenuItemsInner({
     ]
   )
 
-  const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
-  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
+  // Re-renders when a host lists its agents, which can add a chat the host provides.
+  useSyncExternalStore(
+    subscribeHostStructuredAgents,
+    hostStructuredAgentsVersion,
+    hostStructuredAgentsVersion
+  )
+  useSyncExternalStore(
+    subscribeLocalRuntimeCapabilitiesKnown,
+    readLocalRuntimeCapabilitiesOrUnknown,
+    readLocalRuntimeCapabilitiesOrUnknown
+  )
+  const routeStore = useAppStore(
+    useShallow((state): AgentLaunchRouteStore => ({
+      settings: state.settings,
+      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      worktreesByRepo: state.worktreesByRepo,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      repos: state.repos,
+      projects: state.projects,
+      activeRepoId: state.activeRepoId,
+      activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
+    }))
+  )
+  const offeredIds = detectedIds
+    ? withManagedRuntimeChatAgents(routeStore, worktreeId, detectedIds)
+    : null
+  const enabledDetectedIds = offeredIds ? filterEnabledTuiAgents(offeredIds, disabledAgents) : []
+  const agents = offeredIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
 
   return (
     <>
@@ -240,7 +284,7 @@ function QuickLaunchAgentMenuItemsInner({
                   'auto.components.tab.bar.QuickLaunchButton.hostUnreachable',
                   'Can’t reach this workspace’s host to list its agents'
                 )
-              : detectedIds && detectedIds.length > 0
+              : offeredIds && offeredIds.length > 0
                 ? translate(
                     'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
                     'No enabled agents'

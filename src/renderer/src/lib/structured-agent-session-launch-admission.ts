@@ -197,11 +197,33 @@ export function beginHostAdmittedStructuredLaunch(args: {
             )
           }
         }
-        // The notice explains a server's refusal; on this machine the terminal opening is the answer.
-        if (paired) {
+        let terminal: StructuredLaunchTerminal
+        try {
+          terminal = await args.onHostDeclined(args.target)
+        } catch (error) {
+          if (!(error instanceof StructuredAgentSessionCreateRefusalError)) {
+            throw error
+          }
+          const failure = new StructuredAgentSessionCreateRefusalError(
+            admission.reason ?? error.message,
+            error.code,
+            error.refusal
+          )
+          toast.error(
+            translate(
+              'components.agentSessionContinuation.launchFailed',
+              'Could not start a new {{agent}} session.',
+              { agent: structuredAgentLabel(plan.agent) }
+            ),
+            admission.reason ? { description: admission.reason } : undefined
+          )
+          resolveDelivery({ delivered: false, failureNotified: true })
+          return { kind: 'failed', error: failure, notified: true }
+        }
+        // The notice describes a terminal that actually opened.
+        if (paired && terminal.opened) {
           notifyHostDeclined(plan.agent)
         }
-        const terminal = await args.onHostDeclined(args.target)
         void (
           terminal.promptDeliveryResult ??
           Promise.resolve(terminal.opened ? DELIVERED : NOT_DELIVERED)

@@ -7,6 +7,9 @@ import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-lau
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredLaunchTerminal } from '@/lib/structured-agent-session-launch-admission'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+import { useAppStore } from '@/store'
 
 type StructuredFromNewTab = {
   surface: AgentLaunchSurface
@@ -42,6 +45,13 @@ export function launchStructuredAgentFromNewTab(args: {
     onHostDeclined: () => {
       if (args.onHostDeclined) {
         return args.onHostDeclined()
+      }
+      if (
+        !readDetectedAgentsForWorktree(useAppStore.getState(), args.worktreeId)?.includes(
+          plan.agent
+        )
+      ) {
+        throw new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
       }
       const terminal = args.openTerminal(
         adoptAgentSessionLaunchVerdict({

@@ -34,6 +34,9 @@ import { getStructuredAgentSessionLaunchSelection } from './structured-agent-ses
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from './structured-agent-session-host-admission'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import type * as NewTabLaunchModule from './launch-agent-in-new-tab'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 
 const WORKTREE = 'repo-1::/srv/app'
 const INITIAL_SETTINGS = useAppStore.getState().settings
@@ -78,6 +81,63 @@ beforeEach(() => {
 })
 
 describe('a structured chat launch on a paired server', () => {
+  it('fails a real new-tab launch without opening a terminal for an undetected CLI', async () => {
+    const { launchAgentInNewTab } = await vi.importActual<typeof NewTabLaunchModule>(
+      './launch-agent-in-new-tab'
+    )
+    mocks.createSupport.mockResolvedValue({ supported: false, reason: 'host refused chat' })
+    useAppStore.setState({
+      activeWorkspaceExecutionHostId: 'runtime:server-1',
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ id: WORKTREE, repoId: 'repo-1', hostId: 'runtime:server-1' })]
+      },
+      detectedAgentIds: ['claude'],
+      runtimeDetectedAgentIds: { [getRuntimeAgentInventoryKey('server-1', WORKTREE)]: [] },
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'server-1',
+          {
+            checkedAt: 1,
+            status: {
+              hostPlatform: 'linux',
+              runtimeId: 'runtime-1',
+              capabilities: [],
+              rendererGraphEpoch: 0,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0
+            }
+          }
+        ]
+      ])
+    })
+    const createTab = vi.spyOn(useAppStore.getState(), 'createTab')
+    const queueStartup = vi.spyOn(useAppStore.getState(), 'queueTabStartupCommand')
+    const launch = launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: WORKTREE,
+      agentSessionLaunchPlan: pairedPlan()
+    })
+
+    await expect(launch?.structuredSettlement).resolves.toMatchObject({
+      kind: 'failed',
+      error: { message: 'host refused chat' },
+      notified: true
+    })
+    await expect(launch?.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: true
+    })
+    expect(createTab).not.toHaveBeenCalled()
+    expect(queueStartup).not.toHaveBeenCalled()
+    expect(mocks.toastInfo).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(expect.any(String), {
+      description: 'host refused chat'
+    })
+    expectNoChatCommitted()
+  })
+
   it('opens only the terminal when the server declines, keeping the workspace selected', async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const onHostDeclined = vi.fn(() => ({

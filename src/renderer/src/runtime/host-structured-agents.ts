@@ -31,9 +31,16 @@ export type HostStructuredAgentsStatuses = ReadonlyMap<string, RuntimeEnvironmen
 const entries = new Map<string, HostAgentsEntry>()
 const inflight = new Map<string, Promise<void>>()
 const listeners = new Set<() => void>()
+let version = 0
 
 function publish(): void {
+  version += 1
   listeners.forEach((listener) => listener())
+}
+
+/** Changes whenever any host's list does, for a reader that derives from several of them. */
+export function hostStructuredAgentsVersion(): number {
+  return version
 }
 
 /** The runtime instance a host's list must come from: null locally, undefined when unknown. */
