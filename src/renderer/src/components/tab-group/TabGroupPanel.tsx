@@ -1,7 +1,6 @@
-import { Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
 
@@ -14,9 +13,7 @@ import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDra
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
-import { isAutoHideSingleTabStripEnabled } from './auto-hide-single-tab-strip-preference'
-import { resolveSingleTabStripVisibility } from './single-tab-strip-visibility'
-import { useTabStripRevealHover } from './tab-strip-reveal-hover'
+import { useSingleTabStripAutoHide } from './useSingleTabStripAutoHide'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
@@ -94,39 +91,13 @@ export default function TabGroupPanel({
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
-  const autoHideSingleTabStrip = useAppStore((state) =>
-    isAutoHideSingleTabStripEnabled(state.settings)
-  )
-  const [stripHovered, setStripHovered] = useState(false)
-  const { autoHidden: stripAutoHidden, revealed: stripRevealed } = resolveSingleTabStripVisibility({
-    // Why: an 'external' host renders the strip itself, so there is nothing here to collapse.
-    autoHideEnabled: autoHideSingleTabStrip && tabStrip === 'attached',
+  const { stripAutoHidden, stripRevealed, panelRef } = useSingleTabStripAutoHide({
+    stripAttached: tabStrip === 'attached',
     groupTabCount: model.groupTabs.length,
     clientHostedRowCount: clientHostedRows.length,
-    stripHovered,
-    tabDragActive: isTabDragActive
+    tabDragActive: isTabDragActive,
+    isVisible
   })
-  // Why: the watcher stops with the collapsed strip, so a reveal that ends by gaining a tab never
-  // sees the pointer leave and would come back already revealed once the group drops to one tab again.
-  if (!stripAutoHidden && stripHovered) {
-    setStripHovered(false)
-  }
-  const panelRef = useRef<HTMLDivElement | null>(null)
-  useTabStripRevealHover({
-    enabled: stripAutoHidden && isVisible,
-    panelRef,
-    onHoverChange: setStripHovered
-  })
-  // Why: this transition moves the pane body by 32px and xterm only reflows on this event; skipping
-  // the mount run matters because every worktree's groups stay mounted and each would refit them all.
-  const didSyncStripHeightRef = useRef(false)
-  useLayoutEffect(() => {
-    if (!didSyncStripHeightRef.current) {
-      didSyncStripHeightRef.current = true
-      return
-    }
-    window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
-  }, [stripAutoHidden])
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
