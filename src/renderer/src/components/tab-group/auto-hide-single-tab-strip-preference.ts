@@ -7,7 +7,8 @@ let persistedAutoHideFlagCache: boolean | undefined
 function readPersistedAutoHideFlagSync(): boolean {
   if (persistedAutoHideFlagCache === undefined) {
     try {
-      const getSync = (globalThis as { window?: Window }).window?.api?.settings?.getSync
+      // Why: `typeof` guard — unit tests run without a window, where a bare reference throws.
+      const getSync = typeof window === 'undefined' ? undefined : window.api?.settings?.getSync
       persistedAutoHideFlagCache =
         typeof getSync === 'function' ? getSync()?.autoHideSingleTabStrip === true : false
     } catch {
