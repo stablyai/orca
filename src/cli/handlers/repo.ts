@@ -68,6 +68,23 @@ async function addRepoOfDetectedKind(
   }
 }
 
+// Why: the runtime answers an add at an already-registered path with that row, whatever kind was
+// asked for, so an explicit --kind only holds when the row agrees. Rows without a kind are git.
+function assertRegisteredKind(
+  added: RuntimeRpcSuccess<AddedRepo>,
+  path: string,
+  kind: RepoKind
+): RuntimeRpcSuccess<AddedRepo> {
+  const registeredKind: RepoKind = added.result.repo.kind === 'folder' ? 'folder' : 'git'
+  if (registeredKind !== kind) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Cannot add ${path} as a ${kind} project: it is already registered as a ${registeredKind} project.`
+    )
+  }
+  return added
+}
+
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
   'repo list': async ({ client, json }) => {
     const result = await client.call<RuntimeRepoList>('repo.list')
@@ -75,12 +92,10 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   },
   'repo add': async ({ flags, client, cwd, json }) => {
     const repoPath = getRequiredStringFlag(flags, 'path')
-    const result = await addRepoOfDetectedKind(
-      client,
-      resolveRepoPathArgument(repoPath, cwd, client.isRemote, 'Remote repo add'),
-      getOptionalRepoKind(flags)
-    )
-    printResult(result, json, formatRepoShow)
+    const path = resolveRepoPathArgument(repoPath, cwd, client.isRemote, 'Remote repo add')
+    const kind = getOptionalRepoKind(flags)
+    const added = await addRepoOfDetectedKind(client, path, kind)
+    printResult(kind ? assertRegisteredKind(added, path, kind) : added, json, formatRepoShow)
   },
   'repo show': async ({ flags, client, json }) => {
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.show', {
