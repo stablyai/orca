@@ -9,6 +9,7 @@ import type { PluginAppearanceSettings } from './plugin-appearance-settings-type
 import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
 import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
+import type { TabStripGlobalSettings } from './tab-strip-global-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
 import type { TerminalColorOverrideGlobalSettings } from './terminal-color-overrides'
@@ -27,4 +28,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &
-  TerminalColorOverrideGlobalSettings
+  TerminalColorOverrideGlobalSettings &
+  TabStripGlobalSettings
