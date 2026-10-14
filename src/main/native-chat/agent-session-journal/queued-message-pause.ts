@@ -10,8 +10,9 @@
 //     queued after it is never mistaken for one from before. Never published: nothing sends by
 //     itself, and the next turn (the carry-on or the person's own message) runs first.
 // Any accepted turn lifts them, whoever sent it: a person, Orca's own messages, or the queue.
-// A card held on its own (`hold_reason`, a failed conversion) is outside every pause: only an
-// action on it releases it.
+// The queue passes over held cards, never sends them: a later card no pause holds goes first, and
+// its accepted turn releases them in order. A card held on its own (`hold_reason`, a failed
+// conversion) is outside every pause: only an action on it releases it.
 
 import type {
   AgentJournalCursor,
@@ -251,37 +252,47 @@ export function queuePauseHolding(
   if (card.state !== 'waiting' || card.holdReason !== null) {
     return undefined
   }
-  // A card queued AFTER a Stop is a new instruction and is not held; it still waits behind a held one.
+  // A card queued AFTER a Stop is a new instruction and is not held.
   return pauses.find((pause) => queuedBefore(pause, card))
 }
 
-/** The card the queue sends next: the oldest waiting one with no hold of its own, unless a
- *  returned card, one a pause holds, or one being edited (`editHeld`) comes first. The queue never
- *  reorders, so a newer card never overtakes either; a card held on its own is passed over. The
- *  drain's pick and its consume both read this. */
+/** The card the queue sends next: the oldest waiting one with no hold of its own and no pause
+ *  holding it. A returned card, or one being edited (`editHeld`), stops the scan first; held cards
+ *  are passed over, and only an accepted turn or a Resume releases them. The drain's pick, its
+ *  consume and admission all read this. */
 export function nextSendableQueuedCard<T extends QueueCard & { messageId: string }>(
   pauses: readonly DerivedQueuePause[],
   cards: readonly T[],
   editHeld: ReadonlySet<string> = new Set()
 ): T | null {
   for (const card of cards) {
-    if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
+    if (card.state === 'returned') {
       return null
     }
-    if (card.state === 'waiting' && card.holdReason === null) {
-      return editHeld.has(card.messageId) ? null : card
+    if (card.state !== 'waiting' || card.holdReason !== null) {
+      continue
+    }
+    if (editHeld.has(card.messageId)) {
+      return null
+    }
+    if (!queuePauseHolding(pauses, card)) {
+      return card
     }
   }
   return null
 }
 
 /** The pause to PUBLISH: the one holding the first card Resume would send, not behind a returned
- *  card, which blocks everything after it until the user acts. None otherwise, so its header
- *  never offers a Resume that sends nothing. */
+ *  card, which blocks everything after it until the user acts. None while the queue would send a
+ *  card past the held ones, whose turn lifts it, or otherwise, so its header never offers a Resume
+ *  that sends nothing and every waiting card waits while it shows. */
 export function resumableQueuePause(
   pauses: readonly DerivedQueuePause[],
-  cards: readonly QueueCard[]
+  cards: readonly (QueueCard & { messageId: string })[]
 ): DerivedQueuePause | null {
+  if (nextSendableQueuedCard(pauses, cards)) {
+    return null
+  }
   for (const card of cards) {
     if (card.state === 'returned') {
       return null

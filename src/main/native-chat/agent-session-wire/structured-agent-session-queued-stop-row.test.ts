@@ -1,6 +1,6 @@
 // Stop writes one event row before it interrupts, and the queue's pause is derived from it:
 // through the real host, the cards queued before a Stop wait, a card queued after it sends
-// normally but never ahead of them, a withdrawn card comes back under it, a crash keeps it, any
+// normally, a withdrawn card comes back under it, a crash keeps it, any
 // turn sent after it ends it, and no stored pause is ever written.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -111,26 +111,6 @@ describe("Stop's event", () => {
     expect(await rig.queuePause()).toBeNull()
     await rig.settleAccepted(mail, 'mail')
     await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
-  })
-
-  it('a card queued after the Stop waits behind the cards it holds, then all send in order', async () => {
-    const working = await rig.workingSend()
-    const held = await queuedDraft('queued before the stop')
-    await rig.stop()
-    const later = await queuedDraft('typed while the stopped turn winds down')
-    await rig.settleAccepted(working, 'stopped')
-    // The queue never reorders: the newer card waits behind the held one, with no caption of its own.
-    await expectHeld('stopped', held, later)
-    expect(await rig.drafts()).toEqual([
-      { messageId: held, state: 'waiting' },
-      { messageId: later, state: 'waiting' }
-    ])
-    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-    await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
-    expect(await rig.handoff(later)).toBeUndefined()
-    await eventually(async () => expect((await rig.handoff(held))?.handedOverAt).toBeDefined())
-    await rig.settleAccepted(await rig.handoffId(held), 'held')
-    await eventually(async () => expect(await rig.handoff(later)).toBeDefined())
   })
 
   it("any accepted turn sent after it lifts it, Orca's own mail included; a later Stop supersedes", async () => {

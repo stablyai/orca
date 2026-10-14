@@ -1,4 +1,4 @@
-// The queue sends its cards strictly in order. The host publishes the queue's pause and the card it
+// The queue sends its cards in order, passing over cards a pause holds. The host publishes the queue's pause and the card it
 // sends next. A client reading its updates one at a time, as the chat does, reads one working state
 // across a turn's end or a Resume and the queue's send of the next card: the working status and
 // row, the pickers, the composer button and the card labels never flip in between. After a restart
@@ -191,26 +191,24 @@ function expectOneWorkingRun(views: readonly ClientView[]): void {
 }
 
 describe('a Stop holds the queue, in order', () => {
-  it('a card typed while the Stop lands waits behind the held one; Resume sends both in order, with no Resume or Send between them', async () => {
+  it('a card typed while the Stop lands runs once it lands; its turn releases the held cards, in order', async () => {
     const working = await rig.workingSend()
-    const held = await queuedDraft('held by the stop')
+    const first = await queuedDraft('A')
+    const second = await queuedDraft('B')
     await rig.stop()
     const typed = await queuedDraft('typed while the stop lands')
     const views = await watchClient()
-    // Still winding down: the paused row shows, but neither Resume nor "Send message?" while it runs.
-    expect(views.at(-1)).toMatchObject({ working: true, header: true, dialog: false })
     await rig.settleAccepted(working, 'stopped')
-    await eventually(() => expect(views.at(-1)).toMatchObject({ header: true, dialog: true }))
-    expect(views.at(-1)?.button).toBe('resume')
-    await expectNothingSent(held, typed)
-    expect((await published()).queuePause).toEqual({ reason: 'stopped' })
-    const resumedAt = views.length
-    expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
-    await eventually(async () => expect(await rig.handoff(held)).toBeDefined())
-    expect(await rig.handoff(typed)).toBeUndefined()
-    await rig.settleAccepted(await rig.handoffId(held), 'held')
     await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
-    expectOneWorkingRun(views.slice(resumedAt))
+    await expectNothingSent(first, second)
+    await rig.settleAccepted(await rig.handoffId(typed), 'typed')
+    await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
+    expect(await rig.handoff(second)).toBeUndefined()
+    await rig.settleAccepted(await rig.handoffId(first), 'A')
+    await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
+    // The card going past the held ones lifts the pause, so no paused row ever shows.
+    expect(views.filter((view) => view.header || view.dialog)).toEqual([])
+    expectOneWorkingRun(views)
   })
 
   it('after Resume over held cards the chat goes from idle with Resume straight to working with Stop', async () => {
@@ -358,7 +356,7 @@ describe('after a restart, nothing sends by itself', () => {
     expect(views.filter((view) => view.header || view.dialog)).toEqual([])
   })
 
-  it('a card written after the restart waits while any card from before it waits; then it is an ordinary queue', async () => {
+  it('a card written after the restart runs even when the message before it is refused; then the old cards follow', async () => {
     const { first, second } = await restartedIdleWithCards()
     // Your message goes straight to the agent; while it waits, the next one queues.
     const message = rig.send('a new instruction')
@@ -367,16 +365,16 @@ describe('after a restart, nothing sends by itself', () => {
       expect((await rig.submission(message.id))?.handedOverAt).toBeDefined()
     )
     const typed = await queuedDraft('typed while it waits')
-    // The agent refuses it: no turn started, so every card waits, the new one included.
+    // The agent refuses it: no turn started, so the cards from before the restart stay held.
     await rig.settleRejected(message.id, 'turn/start refused')
-    await expectNothingSent(first, second, typed)
-    expect(derivedPauses()).toEqual(['restarted'])
-    expect(await published()).toEqual({ queuePause: null, nextQueuedMessageId: null })
-    expect(await rig.deleteQueued(first)).toMatchObject({ ok: true, value: { deleted: true } })
-    await expectNothingSent(second, typed)
-    // With nothing from before the restart left, the card sends like any queued card.
-    expect(await rig.deleteQueued(second)).toMatchObject({ ok: true, value: { deleted: true } })
     await eventually(async () => expect(await rig.handoff(typed)).toBeDefined())
+    await expectNothingSent(first, second)
+    expect(derivedPauses()).toEqual(['restarted'])
+    await rig.settleAccepted(await rig.handoffId(typed), 'typed')
+    await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
+    expect(await rig.handoff(second)).toBeUndefined()
+    await rig.settleAccepted(await rig.handoffId(first), 'A')
+    await eventually(async () => expect(await rig.handoff(second)).toBeDefined())
   })
 
   it('a hand-off the quit cut short goes back to waiting first, and nothing sends', async () => {

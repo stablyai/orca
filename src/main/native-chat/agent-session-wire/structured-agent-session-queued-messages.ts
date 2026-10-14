@@ -55,10 +55,10 @@ export function pendingPromptExists(journal: Pick<AgentSessionJournal, 'visitIte
   return pending
 }
 
-/** Waiting, not held on its own, and not positioned behind a returned card or a
- *  card the queue's pause holds: the queue never reorders. The admission rule
- *  (§accept) and the drain's selection both read it; only the drain's (`automatic`) stops at a
- *  card being edited, so an edited card still counts as backlog a new send queues behind. */
+/** Waiting, not held on its own or by a pause, and not positioned behind a returned card: held
+ *  cards are passed over. The admission rule (§accept) and the drain's selection both read it;
+ *  only the drain's (`automatic`) stops at a card being edited, so an edited card still counts as
+ *  backlog a new send queues behind. */
 function oldestActionableQueuedMessage(
   journal: Pick<AgentSessionJournal, 'queuedMessages'>,
   automatic: boolean
