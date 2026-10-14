@@ -168,6 +168,7 @@ export class PluginWorkerManager {
           onExit: (record, code) => this.handleUnexpectedExit(spec.pluginKey, record, code)
         })
         this.workers.set(spec.pluginKey, worker)
+        this.idleClock.watchFrom(Date.now())
         const earlyExit = worker.completeStart()
         if (earlyExit.exited) {
           this.detachWorker(spec.pluginKey, worker)

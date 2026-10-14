@@ -142,6 +142,24 @@ describe('PluginWorkerManager idle reap', () => {
     await subject.disposeAll()
   })
 
+  it('does not count a sleep before the first sweep as idle time', async () => {
+    const minute = 60_000
+    vi.useFakeTimers({ now: 0 })
+    const busy = worker(0)
+    const subject = manager(vi.fn<PluginWorkerFactory>().mockResolvedValue(busy), {
+      idleReapMs: 5 * minute
+    })
+    await subject.ensureActive(spec('demo'))
+
+    // Lid closed before the reaper's first sweep, opened an hour later.
+    subject.reapIdle(60 * minute)
+    await flush()
+
+    expect(busy.dispose).not.toHaveBeenCalled()
+    expect(subject.runState('demo')).toBe('running')
+    await subject.disposeAll()
+  })
+
   it('still reaps a worker that stays idle for a full window after waking', async () => {
     const minute = 60_000
     const idle = worker(2 * minute)

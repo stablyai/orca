@@ -5,6 +5,11 @@ export class PluginWorkerIdleClock {
   private lastSweepAt: number | null = null
   private windowStartAt = Number.NEGATIVE_INFINITY
 
+  /** Starts the clock at `now` when no sweep has run, so a sleep before the first sweep is still seen. */
+  watchFrom(now: number): void {
+    this.lastSweepAt ??= now
+  }
+
   /** Records a sweep at `now` and returns when the current idle window began. */
   sweep(now: number): number {
     // Why: a sweep gap well past the interval means the machine slept, and
