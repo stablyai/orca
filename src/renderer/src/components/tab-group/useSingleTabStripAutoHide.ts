@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../../store'
 import { isAutoHideSingleTabStripEnabled } from './auto-hide-single-tab-strip-preference'
 import { resolveSingleTabStripVisibility } from './single-tab-strip-visibility'
+import { queueSyncFitPanes } from './sync-fit-panes-request'
+import { useTabStripRenameHold } from './tab-strip-rename-hold'
 import { useTabStripRevealHover } from './tab-strip-reveal-hover'
 
 /** One group's strip auto-hide state: collapsed while the group holds a single tab, revealed on hover. */
@@ -11,7 +12,8 @@ export function useSingleTabStripAutoHide({
   groupTabCount,
   clientHostedRowCount,
   tabDragActive,
-  isVisible
+  isVisible,
+  ownsTab
 }: {
   /** False for an 'external' host: it renders the strip itself, so there is nothing here to collapse. */
   stripAttached: boolean
@@ -19,6 +21,8 @@ export function useSingleTabStripAutoHide({
   clientHostedRowCount: number
   tabDragActive: boolean
   isVisible: boolean
+  /** Whether a rename request's tab id belongs to this group's strip. */
+  ownsTab: (tabId: string) => boolean
 }): {
   stripAutoHidden: boolean
   stripRevealed: boolean
@@ -27,20 +31,26 @@ export function useSingleTabStripAutoHide({
   const autoHideSingleTabStrip = useAppStore((state) =>
     isAutoHideSingleTabStripEnabled(state.settings)
   )
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const [stripHovered, setStripHovered] = useState(false)
+  const tabRenameActive = useTabStripRenameHold({
+    enabled: autoHideSingleTabStrip && stripAttached,
+    panelRef,
+    ownsTab
+  })
   const { autoHidden: stripAutoHidden, revealed: stripRevealed } = resolveSingleTabStripVisibility({
     autoHideEnabled: autoHideSingleTabStrip && stripAttached,
     groupTabCount,
     clientHostedRowCount,
     stripHovered,
-    tabDragActive
+    tabDragActive,
+    tabRenameActive
   })
   // Why: the watcher stops with the collapsed strip, so a reveal that ends by gaining a tab never
   // sees the pointer leave and would come back already revealed once the group drops to one tab again.
   if (!stripAutoHidden && stripHovered) {
     setStripHovered(false)
   }
-  const panelRef = useRef<HTMLDivElement | null>(null)
   useTabStripRevealHover({
     enabled: stripAutoHidden && isVisible,
     panelRef,
@@ -54,7 +64,7 @@ export function useSingleTabStripAutoHide({
       didSyncStripHeightRef.current = true
       return
     }
-    window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
+    queueSyncFitPanes()
   }, [stripAutoHidden])
   return { stripAutoHidden, stripRevealed, panelRef }
 }

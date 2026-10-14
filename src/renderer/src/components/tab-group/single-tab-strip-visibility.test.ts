@@ -9,7 +9,8 @@ const base = {
   groupTabCount: 1,
   clientHostedRowCount: 0,
   stripHovered: false,
-  tabDragActive: false
+  tabDragActive: false,
+  tabRenameActive: false
 }
 
 describe('resolveSingleTabStripVisibility', () => {
@@ -41,6 +42,10 @@ describe('resolveSingleTabStripVisibility', () => {
   it('reveals a collapsed strip on hover and for the duration of a tab drag', () => {
     expect(resolveSingleTabStripVisibility({ ...base, stripHovered: true }).revealed).toBe(true)
     expect(resolveSingleTabStripVisibility({ ...base, tabDragActive: true }).revealed).toBe(true)
+  })
+
+  it('reveals a collapsed strip while one of its tabs is being renamed', () => {
+    expect(resolveSingleTabStripVisibility({ ...base, tabRenameActive: true }).revealed).toBe(true)
   })
 
   it('never reports a reveal for a strip that was never collapsed', () => {
