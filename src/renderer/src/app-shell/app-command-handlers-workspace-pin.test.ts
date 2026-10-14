@@ -5,6 +5,7 @@ import type { AppShortcutState, ShortcutDispatchInput } from './app-command-hand
 
 const mocks = vi.hoisted(() => ({
   applyWorkspacePinIntent: vi.fn(),
+  floatingWorkspaceFocused: false,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hoisted slot starts empty and each test assigns the row it needs.
   pinTarget: null as Worktree | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: beforeEach replaces this with the fields the handlers read; the empty seed is never exercised.
@@ -26,7 +27,7 @@ vi.mock('../components/sidebar/hovered-workspace-delete', () => ({
 }))
 
 vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
-  isFloatingWorkspacePanelFocused: () => false
+  isFloatingWorkspacePanelFocused: () => mocks.floatingWorkspaceFocused
 }))
 
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
@@ -34,7 +35,8 @@ vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
 }))
 
 import { createAppCommandHandlers } from './app-command-handlers'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
+import { WORKSPACE_PIN_ACTION_IDS } from './workspace-pin-command-handlers'
+import { isPluginCommandAliasActionId } from '../../../shared/plugins/plugin-command-actions'
 
 function shortcutState(): AppShortcutState {
   return {
@@ -62,6 +64,7 @@ function shortcutInput(): ShortcutDispatchInput {
 describe('workspace pin app commands', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.floatingWorkspaceFocused = false
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pin handlers read only the active workspace id off the store.
     mocks.store = { activeWorktreeId: 'repo::/feature' } as AppState
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the target is forwarded untouched to a mocked apply, which only needs these two fields.
@@ -81,14 +84,26 @@ describe('workspace pin app commands', () => {
     expect(mocks.applyWorkspacePinIntent).toHaveBeenCalledWith(mocks.store, mocks.pinTarget, intent)
   })
 
-  // useGlobalKeybindings dispatches key events by iterating this list, so an action
-  // missing from it has a handler that no chord can ever reach.
-  it.each(['workspace.pin', 'workspace.unpin', 'workspace.togglePin'])(
-    'keeps %s reachable from the window key dispatcher',
+  // useGlobalKeybindings dispatches these explicitly from WORKSPACE_PIN_ACTION_IDS, so every
+  // id there must have a handler; they stay out of the plugin alias list because a palette-run
+  // alias would trip the hover/focus-aware resolver while the search box still has focus.
+  it.each(WORKSPACE_PIN_ACTION_IDS)(
+    'registers %s as an explicit handler rather than a plugin alias',
     (actionId) => {
-      expect(PLUGIN_COMMAND_ALIAS_ACTION_IDS).toContain(actionId)
+      expect(createAppCommandHandlers(shortcutState()).has(actionId)).toBe(true)
+      expect(isPluginCommandAliasActionId(actionId)).toBe(false)
     }
   )
+
+  it('falls through while the floating workspace panel has focus', () => {
+    mocks.floatingWorkspaceFocused = true
+    const input = shortcutInput()
+    const handler = createAppCommandHandlers(shortcutState(), input).get('workspace.togglePin')
+
+    expect(handler?.()).toBe(false)
+    expect(input.preventDefault).not.toHaveBeenCalled()
+    expect(mocks.applyWorkspacePinIntent).not.toHaveBeenCalled()
+  })
 
   it('falls through when no workspace resolves', () => {
     const input = shortcutInput()

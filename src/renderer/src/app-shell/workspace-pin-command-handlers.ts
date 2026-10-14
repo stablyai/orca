@@ -8,6 +8,14 @@ import type { KeybindingActionId } from '../../../shared/keybindings'
 
 export type ClaimShortcut = (actionId: KeybindingActionId, run: () => void) => boolean
 
+/** Dispatched explicitly like `workspace.delete`: the resolver reads hover and focus, which a
+ *  palette-run plugin alias would trip while the search box still holds focus. */
+export const WORKSPACE_PIN_ACTION_IDS = [
+  'workspace.pin',
+  'workspace.unpin',
+  'workspace.togglePin'
+] as const satisfies readonly KeybindingActionId[]
+
 /** Pin, unpin and toggle-pin share one target resolver and fall through when nothing is targetable. */
 export function createWorkspacePinCommandHandlers(deps: {
   floatingWorkspaceFocused: boolean
