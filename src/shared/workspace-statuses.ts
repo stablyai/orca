@@ -15,6 +15,11 @@ type WorkspaceStatusNormalizationOptions = {
 }
 
 export const DEFAULT_WORKSPACE_STATUS_ID: WorkspaceStatus = 'in-progress'
+/** Well-known default column ids. Renaming a column keeps its id, so these stay addressable;
+ *  a user who removed the column makes them absent from `workspaceStatuses`, which is why every
+ *  reader must still validate with `isWorkspaceStatusId` before writing one. */
+export const WORKSPACE_STATUS_TODO_ID: WorkspaceStatus = 'todo'
+export const WORKSPACE_STATUS_IN_REVIEW_ID: WorkspaceStatus = 'in-review'
 export const DEFAULT_WORKSPACE_STATUS_COLOR_ID = 'neutral'
 export const DEFAULT_WORKSPACE_STATUS_ICON_ID = 'circle-dot'
 export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308

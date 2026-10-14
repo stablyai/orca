@@ -16,6 +16,7 @@ import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-sessio
 import { prepareCodexPinnedLaunchHome } from './codex-session-resume-launch'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { subscribeWorkspaceStatusToAgentTurns } from '../agent-hooks/agent-turn-workspace-status-subscription'
 import { getDaemonProvider } from '../daemon/daemon-init'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { OrchestrationEnvironmentTransport } from '../runtime/orchestration/environment-transport'
@@ -185,6 +186,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )
+  subscribeWorkspaceStatusToAgentTurns(store, runtime)
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()
