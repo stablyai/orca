@@ -234,8 +234,11 @@ export function useFileExplorerReveal({
       return
     }
 
-    const fallbackPath = rowProjection.hasPath(parentDirPath) ? parentDirPath : null
-    const revealPath = rowProjection.hasPath(targetPath) ? targetPath : fallbackPath
+    // A folder folded into a compact row is revealed as that row.
+    const revealPath =
+      rowProjection.getRowByPath(targetPath)?.path ??
+      rowProjection.getRowByPath(parentDirPath)?.path ??
+      null
     if (!revealPath) {
       clearPendingExplorerReveal()
       return

@@ -64,6 +64,11 @@ export function useFileExplorerRowScrolling({
   const flashTimeoutRef = useRef<number | null>(null)
 
   const totalCount = visibleRowCount + (inlineInputIndex >= 0 ? 1 : 0)
+  // Keyed by the outermost folder so a focused row is not remounted as its chain grows.
+  const getRowKey = (rowIndex: number, index: number): string =>
+    rowProjection.getCompactedAncestors(rowIndex)[0]?.path ??
+    rowProjection.getRowAtIndex(rowIndex)?.path ??
+    `__fallback_${index}`
 
   const virtualizer = useVirtualizer({
     count: totalCount,
@@ -75,10 +80,9 @@ export function useFileExplorerRowScrolling({
         if (index === inlineInputIndex) {
           return '__inline_input__'
         }
-        const rowIndex = index > inlineInputIndex ? index - 1 : index
-        return rowProjection.getRowAtIndex(rowIndex)?.path ?? `__fallback_${index}`
+        return getRowKey(index > inlineInputIndex ? index - 1 : index, index)
       }
-      return rowProjection.getRowAtIndex(index)?.path ?? `__fallback_${index}`
+      return getRowKey(index, index)
     }
   })
 

@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
@@ -8,9 +8,11 @@ import {
   createSingleFileExplorerSelection,
   formatFileExplorerPathsForClipboard,
   getFileExplorerSelectionMode,
+  resolveFileExplorerSelectionRows,
   updateFileExplorerSelection,
   updateFileExplorerSelectionPaths,
-  type FileExplorerSelectionMode
+  type FileExplorerSelectionMode,
+  type FileExplorerSelectionState
 } from './file-explorer-selection'
 
 type UseFileExplorerSelectionResult = {
@@ -35,14 +37,30 @@ export function useFileExplorerSelection(
   pathOwner: LocalPathOpenOwner
 ): UseFileExplorerSelectionResult {
   const [selectionState, setSelectionState] = useState(createEmptyFileExplorerSelection)
-  const selectionStateRef = useRef(selectionState)
+  const visibleSelection = useMemo(
+    () =>
+      resolveFileExplorerSelectionRows(
+        selectionState,
+        (path) => rowProjection.getRowByPath(path)?.path
+      ),
+    [rowProjection, selectionState]
+  )
+  const selectionStateRef = useRef(visibleSelection)
   const rowProjectionRef = useRef(rowProjection)
   const pathOwnerRef = useRef(pathOwner)
-  selectionStateRef.current = selectionState
+  selectionStateRef.current = visibleSelection
   rowProjectionRef.current = rowProjection
   useLayoutEffect(() => {
     pathOwnerRef.current = pathOwner
   }, [pathOwner])
+  const toVisibleRows = useCallback(
+    (state: FileExplorerSelectionState) =>
+      resolveFileExplorerSelectionRows(
+        state,
+        (path) => rowProjectionRef.current.getRowByPath(path)?.path
+      ),
+    []
+  )
 
   const setSingleSelectedPath = useCallback((value: React.SetStateAction<string | null>) => {
     setSelectionState((prev) => {
@@ -70,10 +88,15 @@ export function useFileExplorerSelection(
     })
   }, [])
 
-  const moveSelection = useCallback((targetPath: string, mode: FileExplorerSelectionMode) => {
-    const orderedPaths = mode === 'replace' ? [] : rowProjectionRef.current.getOrderedPaths()
-    setSelectionState((prev) => updateFileExplorerSelection(prev, orderedPaths, targetPath, mode))
-  }, [])
+  const moveSelection = useCallback(
+    (targetPath: string, mode: FileExplorerSelectionMode) => {
+      const orderedPaths = mode === 'replace' ? [] : rowProjectionRef.current.getOrderedPaths()
+      setSelectionState((prev) =>
+        updateFileExplorerSelection(toVisibleRows(prev), orderedPaths, targetPath, mode)
+      )
+    },
+    [toVisibleRows]
+  )
 
   const selectRowWithModifiers = useCallback(
     (
@@ -98,18 +121,23 @@ export function useFileExplorerSelection(
       // Build order only for modifier selection; frequent large-repo refreshes do not need it.
       const orderedPaths = rowProjectionRef.current.getOrderedPaths()
       setSelectionState((prev) =>
-        updateFileExplorerSelection(prev, orderedPaths, node.path, selectionMode)
+        updateFileExplorerSelection(toVisibleRows(prev), orderedPaths, node.path, selectionMode)
       )
     },
-    [isMac]
+    [isMac, toVisibleRows]
   )
 
-  const preserveSelectionForContextMenu = useCallback((node: TreeNode) => {
-    // Preserve right-clicked multi-selections; outside targets become a single-item selection.
-    setSelectionState((prev) =>
-      prev.selectedPaths.has(node.path) ? prev : createSingleFileExplorerSelection(node.path)
-    )
-  }, [])
+  const preserveSelectionForContextMenu = useCallback(
+    (node: TreeNode) => {
+      // Preserve right-clicked multi-selections; outside targets become a single-item selection.
+      setSelectionState((prev) =>
+        toVisibleRows(prev).selectedPaths.has(node.path)
+          ? prev
+          : createSingleFileExplorerSelection(node.path)
+      )
+    },
+    [toVisibleRows]
+  )
 
   const copyPathsForNode = useCallback((node: TreeNode, pathKind: 'absolute' | 'relative') => {
     const { selectedPaths } = selectionStateRef.current
@@ -123,8 +151,8 @@ export function useFileExplorerSelection(
   }, [])
 
   return {
-    selectedPath: selectionState.activePath,
-    selectedPaths: selectionState.selectedPaths,
+    selectedPath: visibleSelection.activePath,
+    selectedPaths: visibleSelection.selectedPaths,
     setSingleSelectedPath,
     setSelectedPaths,
     resetSelection,
