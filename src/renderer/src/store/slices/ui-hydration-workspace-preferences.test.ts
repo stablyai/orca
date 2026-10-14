@@ -354,6 +354,26 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ syncTaskStatusFromWorkspaceBoard: false })
   })
 
+  it('defaults workspace board agent turn sync off and persists changes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    expect(store.getState().syncWorkspaceStatusFromAgentTurns).toBe(false)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        syncWorkspaceStatusFromAgentTurns: true
+      })
+    )
+    expect(store.getState().syncWorkspaceStatusFromAgentTurns).toBe(true)
+
+    store.getState().setSyncWorkspaceStatusFromAgentTurns(false)
+
+    expect(store.getState().syncWorkspaceStatusFromAgentTurns).toBe(false)
+    expect(setUI).toHaveBeenCalledWith({ syncWorkspaceStatusFromAgentTurns: false })
+  })
+
   it('hydrates a valid Kagi session link', () => {
     const store = createUIStore()
 

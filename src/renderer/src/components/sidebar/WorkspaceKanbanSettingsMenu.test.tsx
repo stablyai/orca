@@ -27,11 +27,17 @@ let container: HTMLDivElement | null = null
 
 function renderMenu({
   workspaceStatuses = statuses,
+  syncTaskStatusFromWorkspaceBoard = false,
   onSyncTaskStatusFromWorkspaceBoardChange = vi.fn<(enabled: boolean) => void>(),
+  syncWorkspaceStatusFromAgentTurns = false,
+  onSyncWorkspaceStatusFromAgentTurnsChange = vi.fn<(enabled: boolean) => void>(),
   onAddStatus = vi.fn<() => void>()
 }: {
   workspaceStatuses?: WorkspaceStatusDefinition[]
+  syncTaskStatusFromWorkspaceBoard?: boolean
   onSyncTaskStatusFromWorkspaceBoardChange?: (enabled: boolean) => void
+  syncWorkspaceStatusFromAgentTurns?: boolean
+  onSyncWorkspaceStatusFromAgentTurnsChange?: (enabled: boolean) => void
   onAddStatus?: () => void
 } = {}): void {
   container = document.createElement('div')
@@ -41,8 +47,10 @@ function renderMenu({
     root?.render(
       <WorkspaceKanbanSettingsMenu
         workspaceStatuses={workspaceStatuses}
-        syncTaskStatusFromWorkspaceBoard={false}
+        syncTaskStatusFromWorkspaceBoard={syncTaskStatusFromWorkspaceBoard}
         onSyncTaskStatusFromWorkspaceBoardChange={onSyncTaskStatusFromWorkspaceBoardChange}
+        syncWorkspaceStatusFromAgentTurns={syncWorkspaceStatusFromAgentTurns}
+        onSyncWorkspaceStatusFromAgentTurnsChange={onSyncWorkspaceStatusFromAgentTurnsChange}
         onRenameStatus={vi.fn()}
         onChangeStatusColor={vi.fn()}
         onChangeStatusIcon={vi.fn()}
@@ -71,6 +79,24 @@ describe('WorkspaceKanbanSettingsMenu', () => {
 
     const toggle = document.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Sync board and issue status"]'
+    )
+    expect(toggle).not.toBeNull()
+    expect(toggle?.getAttribute('aria-checked')).toBe('false')
+
+    await act(async () => {
+      toggle?.click()
+      await Promise.resolve()
+    })
+
+    expect(onChange).toHaveBeenCalledWith(true)
+  })
+
+  it('renders the agent turn board sync switch off by default and forwards changes', async () => {
+    const onChange = vi.fn()
+    renderMenu({ onSyncWorkspaceStatusFromAgentTurnsChange: onChange })
+
+    const toggle = document.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Sync board status with agent turns"]'
     )
     expect(toggle).not.toBeNull()
     expect(toggle?.getAttribute('aria-checked')).toBe('false')

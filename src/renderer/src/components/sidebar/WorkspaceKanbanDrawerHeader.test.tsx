@@ -66,6 +66,8 @@ function renderHeader(
     workspaceStatuses: statuses,
     syncTaskStatusFromWorkspaceBoard: false,
     onSyncTaskStatusFromWorkspaceBoardChange: vi.fn(),
+    syncWorkspaceStatusFromAgentTurns: false,
+    onSyncWorkspaceStatusFromAgentTurnsChange: vi.fn(),
     onRenameStatus: vi.fn(),
     onChangeStatusColor: vi.fn(),
     onChangeStatusIcon: vi.fn(),

@@ -111,6 +111,8 @@ export type PersistedUIState = {
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number
   syncTaskStatusFromWorkspaceBoard?: boolean
+  /** Move a workspace card to In review when its agent's turn ends, and back to In progress when a new turn starts. Absent means off. */
+  syncWorkspaceStatusFromAgentTurns?: boolean
   /** One-shot migration flag for a short-lived build that persisted default statuses in reverse order; once stamped, ordering is never re-inferred from IDs/labels. */
   _workspaceStatusesDefaultOrderMigrated?: boolean
   /** One-shot repair flag for the exact default payload a short-lived build persisted in reverse workflow order. */
