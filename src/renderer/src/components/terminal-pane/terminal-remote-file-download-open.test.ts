@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/runtime-file-client', () => ({ downloadRuntimeFile: vi.fn() }))
+vi.mock('@/runtime/runtime-file-read-client', () => ({ downloadRuntimeFile: vi.fn() }))
 
 const downloadFileMock = vi.fn()
 const openFilePathMock = vi.fn()
@@ -21,7 +21,7 @@ afterEach(() => {
 
 describe('downloadAndOpenRemoteTerminalFile', () => {
   const fileContext = {
-    settings: null,
+    target: { kind: 'local' as const },
     worktreeId: 'wt-1',
     worktreePath: '/home/me',
     connectionId: 'ssh-1'
@@ -30,7 +30,7 @@ describe('downloadAndOpenRemoteTerminalFile', () => {
   it('opens the downloaded copy while the request is current', async () => {
     await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4', () => true)
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/local/clip.mp4')
+    expect(openFilePathMock).toHaveBeenCalledWith('/local/clip.mp4', 'local')
   })
 
   it('does not open the downloaded copy once a newer request superseded it', async () => {
@@ -43,6 +43,6 @@ describe('downloadAndOpenRemoteTerminalFile', () => {
   it('opens the downloaded copy when the caller does not track freshness', async () => {
     await downloadAndOpenRemoteTerminalFile(fileContext, '/home/me/clip.mp4')
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/local/clip.mp4')
+    expect(openFilePathMock).toHaveBeenCalledWith('/local/clip.mp4', 'local')
   })
 })

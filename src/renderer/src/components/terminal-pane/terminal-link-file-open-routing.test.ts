@@ -211,7 +211,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
 
     expect(openFilePathMock).toHaveBeenCalledTimes(1)
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/media/clip.mp4')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/media/clip.mp4', 'local')
     expect(openFileMock).not.toHaveBeenCalled()
     expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
   })
@@ -223,7 +223,7 @@ describe('handleOscLink', () => {
     openDetectedFilePath('/tmp/dist/assets.7z', null, null, deps)
     await flushAsyncWork()
 
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/dist/assets.7z')
+    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/dist/assets.7z', 'local')
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/dist/assets.7z' }),
       { forceContentReload: true }
