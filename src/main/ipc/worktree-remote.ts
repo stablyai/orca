@@ -410,7 +410,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         await runtime.createTerminal(
           `id:${worktree.id}`,
           {
-            title: 'Setup',
+            title: runtime.getSetupTerminalTitle(),
             command: setupCommand,
             env: setup.envVars,
             activate: false,

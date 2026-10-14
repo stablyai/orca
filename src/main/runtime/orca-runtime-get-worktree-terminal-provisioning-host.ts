@@ -41,6 +41,7 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
+      getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
       getSettings: () => this.requireStore().getSettings(),
       getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
       recordSetupCompletionToken: (ptyId, token) =>

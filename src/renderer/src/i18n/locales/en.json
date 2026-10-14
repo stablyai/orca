@@ -10950,7 +10950,7 @@
             "7a48c7715b": "workspace",
             "6b659fff2a": "script",
             "4529806908": "setup",
-            "2610ee3b56": "Where the repository setup script runs when a new workspace is created: a vertical split (default), a horizontal split, or a background tab titled 'Setup'.",
+            "2610ee3b56": "Where the repository setup script runs when a new workspace is created: a vertical split, a horizontal split, or a background tab titled 'Setup' (default).",
             "5be2d67678": "Setup Script Location",
             "0ce176909a": "theme",
             "4ba8623632": "palette",
@@ -19898,7 +19898,8 @@
       "deleting": "Deleting…",
       "confirm": "Delete all listed worktrees",
       "preservedBranches": "Some nested worktree branches were kept"
-    }
+    },
+    "setupTerminalTitle": "Setup"
   },
   "projectBoard": {
     "noColumnField": "This board view has no single-select or iteration field to group by, so Orca is listing items instead.",

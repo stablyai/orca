@@ -19813,7 +19813,8 @@
       "deleting": "正在删除…",
       "confirm": "删除所有列出的工作树",
       "preservedBranches": "部分嵌套工作树分支已保留"
-    }
+    },
+    "setupTerminalTitle": "Setup"
   },
   "mediaPreview": {
     "unavailable": "无法播放此媒体文件。文件可能不可用或使用了不支持的编解码器。",

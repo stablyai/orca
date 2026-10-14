@@ -3774,7 +3774,7 @@
     "ko": "깜박임"
   },
   "auto.components.settings.terminal.search.2610ee3b56": {
-    "ko": "새 워크스페이스를 만들 때 저장소 설정 스크립트를 실행할 위치: 세로 분할(기본값), 가로 분할 또는 'Setup'이라는 제목의 백그라운드 탭."
+    "ko": "새 워크스페이스를 생성할 때 저장소 초기 설정 스크립트를 실행할 위치입니다. 세로 분할, 가로 분할, 또는 “초기 설정” 제목의 백그라운드 탭(기본값) 중에서 선택합니다."
   },
   "auto.components.settings.terminal.search.2d5ab88b7c": {
     "ko": "구분선 두께"
@@ -5244,7 +5244,7 @@
     "ko": "세로로 분할"
   },
   "auto.components.settings.TerminalPane.a9d47451d1": {
-    "ko": "\"새 탭\"은 현재 포커스를 가져가지 않고 \"Setup\"이라는 제목의 백그라운드 탭에서 설정 명령을 엽니다."
+    "ko": "“새 탭”을 선택하면 현재 포커스를 유지한 채 “초기 설정” 제목의 백그라운드 탭에서 초기 설정 명령을 실행합니다."
   },
   "auto.components.settings.TerminalPane.4729c645fc": {
     "ko": "터미널에서 선택한 내용을 클립보드에 자동으로 복사합니다."
@@ -6526,5 +6526,8 @@
   },
   "auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural": {
     "ko": "워크스페이스 {{count}}개 연결됨"
+  },
+  "worktree.setupTerminalTitle": {
+    "ko": "초기 설정"
   }
 }

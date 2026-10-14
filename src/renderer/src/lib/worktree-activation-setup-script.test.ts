@@ -6,10 +6,46 @@ import {
   registerWorktreeActivationReset,
   setSetupScriptLaunchMode
 } from './worktree-activation-test-harness'
+import { i18n } from '@/i18n/i18n'
 
 registerWorktreeActivationReset()
 
 describe('ensureWorktreeHasInitialTerminal', () => {
+  it('localizes newly created setup tabs using the current language without retitling other tabs', async () => {
+    const previousLanguage = i18n.language
+    try {
+      for (const [language, title] of [
+        ['ko', '초기 설정'],
+        ['en', 'Setup'],
+        ['ko', '초기 설정']
+      ] as const) {
+        await i18n.changeLanguage(language)
+        const store = createMockStore({
+          tabsByWorktree: { 'wt-1': [{ id: 'user-named-primary' }] },
+          createTab: vi.fn(() => ({ id: 'setup-tab' })),
+          reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 }))
+        })
+
+        ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, {
+          runnerScriptPath: '/tmp/setup-runner.sh',
+          envVars: {}
+        })
+
+        expect(store.setTabCustomTitle).toHaveBeenCalledExactlyOnceWith('setup-tab', title, {
+          recordInteraction: false
+        })
+        expect(store.setActiveTab).toHaveBeenCalledWith('user-named-primary')
+        expect(store.queueTabStartupCommand).toHaveBeenCalledWith('setup-tab', {
+          command: 'bash /tmp/setup-runner.sh',
+          env: {}
+        })
+        expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
+      }
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+
   it('creates a background Setup tab for newly created worktrees by default', () => {
     let createdIndex = 0
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))

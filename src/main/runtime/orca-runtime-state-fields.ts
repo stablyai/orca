@@ -45,6 +45,8 @@ import { registerTerminalViewAttributesApplier } from './terminal-view-attribute
 import { RuntimeMachineName } from './runtime-machine-name'
 
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+  readonly getSetupTerminalTitle: () => string
+
   protected readonly prepareClaudeAuth?: PrepareClaudeAuth
 
   protected readonly getAgentStatusSnapshotForPaneFn:
@@ -59,6 +61,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     store: RuntimeStore | null = null,
     stats?: StatsCollector,
     deps?: {
+      getSetupTerminalTitle?: () => string
       getLocalProvider?: () => IPtyProvider
       prepareClaudeAuth?: PrepareClaudeAuth
       onPtyStopped?: (ptyId: string) => void
@@ -131,6 +134,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     super()
     this.store = store
     this.machineName.start()
+    this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')
     this.prepareClaudeAuth = deps?.prepareClaudeAuth
     const runtime = this as RuntimeCommandSurfaceHost<this>
     installRuntimeFileCommandSurface(runtime, this.fileCommands)

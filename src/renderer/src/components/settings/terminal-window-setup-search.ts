@@ -140,7 +140,7 @@ export const getTerminalSetupScriptSearchEntries = createLocalizedCatalog(() => 
     ),
     description: translate(
       'auto.components.settings.terminal.search.2610ee3b56',
-      "Where the repository setup script runs when a new workspace is created: a vertical split (default), a horizontal split, or a background tab titled 'Setup'."
+      "Where the repository setup script runs when a new workspace is created: a vertical split, a horizontal split, or a background tab titled 'Setup' (default)."
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.terminal.search.4529806908', 'setup'),

@@ -620,7 +620,8 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('spawns a startup terminal and setup terminal after local worktree registration', async () => {
+  it('localizes the setup terminal without changing startup provisioning', async () => {
+    runtimeStub.getSetupTerminalTitle.mockReturnValue('초기 설정')
     addWorktreeMock.mockResolvedValue({})
     listWorktreesMock.mockResolvedValueOnce([
       {
@@ -694,7 +695,7 @@ describe('registerWorktreeHandlers', () => {
       2,
       'id:repo-1::/workspace/improve-dashboard',
       {
-        title: 'Setup',
+        title: '초기 설정',
         command: expect.stringContaining('bash /workspace/repo/.git/orca/setup-runner.sh'),
         env: {
           ORCA_ROOT_PATH: '/workspace/repo',

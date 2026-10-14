@@ -246,8 +246,10 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('follows normal setup policy for CLI-created worktrees without activating them', async () => {
-    const runtime = new OrcaRuntimeService(store)
+  it('localizes CLI-created setup tabs without activating them', async () => {
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getSetupTerminalTitle: () => '초기 설정'
+    })
     const activateWorktree = vi.fn()
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-created-worktree' })
     const spawn = vi
@@ -357,7 +359,7 @@ describe('OrcaRuntimeService', () => {
     // keeps the sidebar from scrolling to a workspace the user never asked for.
     expect(revealTerminalSession).toHaveBeenLastCalledWith(result.worktree.id, {
       ptyId: 'pty-setup',
-      title: 'Setup',
+      title: '초기 설정',
       activate: false,
       surfaceOwner: false,
       tabId: setupSpawnEnv.ORCA_TAB_ID,

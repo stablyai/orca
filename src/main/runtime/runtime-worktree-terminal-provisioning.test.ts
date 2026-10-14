@@ -141,6 +141,32 @@ function provisionWithSetup(
 describe('provisionWorktreeTerminals with a cleared creation choice', () => {
   const none = { defaultTuiAgent: 'blank', newWorkspaceSetupOnly: true }
 
+  it('uses the injected setup title without changing user default titles', async () => {
+    const { host, titles } = createHost(none)
+    host.getSetupTerminalTitle = () => '초기 설정'
+    await provisionWithSetup(host)
+    expect(titles()).toEqual(['초기 설정'])
+    await provisionWorktreeTerminals(host, {
+      worktreeSelector: 'id:wt-1',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo/wt-1',
+      hasStartupTerminal: false,
+      setupCommandPlatform: 'posix',
+      defaultTabs: DEFAULT_TABS
+    })
+    expect(titles()).toEqual(['초기 설정', 'Dev', 'Tests'])
+  })
+
+  it('reads the current setup title on each provision', async () => {
+    const { host, titles } = createHost(none)
+    let title = '초기 설정'
+    host.getSetupTerminalTitle = () => title
+    await provisionWithSetup(host)
+    title = 'Setup'
+    await provisionWithSetup(host)
+    expect(titles()).toEqual(['초기 설정', 'Setup'])
+  })
+
   it('honours a one-off None choice over the host blank default', async () => {
     const { host, titles } = createHost({ defaultTuiAgent: 'blank' })
     await provisionWithSetup(host, true, true)

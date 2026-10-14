@@ -1,5 +1,6 @@
 import type { WorktreeSetupLaunch } from '../../../shared/worktree/launch-types'
 import { buildSetupRunnerCommand } from './setup-runner'
+import { getWorktreeSetupTerminalTitle } from './worktree-setup-terminal-title'
 import { useAppStore } from '@/store'
 import type {
   InitialTerminalOptions,
@@ -41,7 +42,9 @@ export function queueSetupAndIssueCommands(
         store.setActiveTab(terminalTabId)
       }
       // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
-      store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
+      store.setTabCustomTitle(setupTab.id, getWorktreeSetupTerminalTitle(), {
+        recordInteraction: false
+      })
       store.queueTabStartupCommand(setupTab.id, setupCommand)
     } else if (terminalTabId) {
       store.queueTabSetupSplit(terminalTabId, {
