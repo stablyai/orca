@@ -8,8 +8,7 @@ import { useTabStripRevealHover, TAB_STRIP_REVEAL_HOVER_ZONE_PX } from './tab-st
 
 function panelAt(rect: { left: number; right: number; top: number }): HTMLElement {
   const panel = document.createElement('div')
-  panel.getBoundingClientRect = () =>
-    ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.top + 600 }) as DOMRect
+  panel.getBoundingClientRect = () => new DOMRect(rect.left, rect.top, rect.right - rect.left, 600)
   return panel
 }
 
