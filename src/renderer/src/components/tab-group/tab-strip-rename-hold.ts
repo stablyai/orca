@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { RENAME_TERMINAL_TAB_EVENT } from '../tab-bar/terminal-tab-rename-request'
 
 const TAB_RENAME_INPUT_SELECTOR = '[data-tab-rename-input="true"]'
@@ -14,18 +15,22 @@ function readRenameRequestTabId(event: Event): string | null {
 }
 
 /**
- * Whether a tab rename addressed to this group is open. The strip mounts the rename input, and a
- * collapsed strip is inert, so the input could neither take focus nor ever close.
+ * Whether a tab rename in this group's strip is open. A collapsed strip is inert, so a rename
+ * input mounted in it could neither take focus nor ever close; the strip must stay open for it.
  */
 export function useTabStripRenameHold({
   enabled,
-  panelRef,
   ownsTab
 }: {
   enabled: boolean
-  panelRef: React.RefObject<HTMLElement | null>
+  /** Whether a rename request's tab id belongs to this group's strip. */
   ownsTab: (tabId: string) => boolean
-}): boolean {
+}): {
+  renameActive: boolean
+  /** Attach to the strip row; the hold watches it for the rename input. */
+  setStripRowNode: (node: HTMLElement | null) => void
+} {
+  const [stripRowNode, setStripRowNode] = useState<HTMLElement | null>(null)
   const [renameOpen, setRenameOpen] = useState(false)
   const ownsTabRef = useRef(ownsTab)
   useEffect(() => {
@@ -33,9 +38,20 @@ export function useTabStripRenameHold({
   }, [ownsTab])
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !stripRowNode) {
       return
     }
+    // Why: a double-click or the context menu opens the editor without any event, so the input's
+    // presence is the one signal every path shares — and its removal is how the rename ends.
+    const readRenameOpen = (): boolean =>
+      stripRowNode.querySelector(TAB_RENAME_INPUT_SELECTOR) !== null
+    const observer = new MutationObserver(() => {
+      // Why: synchronous — the tab focuses its input on the next frame, and the strip must be open by then.
+      flushSync(() => setRenameOpen(readRenameOpen()))
+    })
+    observer.observe(stripRowNode, { childList: true, subtree: true })
+    // Why: the shortcut's request is answered in the same commit, so holding on the event opens the
+    // strip together with the input rather than a mutation callback later.
     const onRenameRequest = (event: Event): void => {
       const tabId = readRenameRequestTabId(event)
       if (tabId !== null && ownsTabRef.current(tabId)) {
@@ -43,29 +59,19 @@ export function useTabStripRenameHold({
       }
     }
     window.addEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
-    return () => window.removeEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
-  }, [enabled])
+    setRenameOpen(readRenameOpen())
+    return () => {
+      observer.disconnect()
+      window.removeEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
+    }
+  }, [enabled, stripRowNode])
 
+  // Why: a request no tab answered would otherwise hold the strip open with nothing to edit.
   useEffect(() => {
-    if (!renameOpen) {
-      return
-    }
-    const panel = panelRef.current
-    if (!panel) {
+    if (renameOpen && !stripRowNode?.querySelector(TAB_RENAME_INPUT_SELECTOR)) {
       setRenameOpen(false)
-      return
     }
-    // Why: the rename ends by unmounting its input; that removal is the only signal the tab gives.
-    const releaseOnceInputIsGone = (): void => {
-      if (!panel.querySelector(TAB_RENAME_INPUT_SELECTOR)) {
-        setRenameOpen(false)
-      }
-    }
-    const observer = new MutationObserver(releaseOnceInputIsGone)
-    observer.observe(panel, { childList: true, subtree: true })
-    releaseOnceInputIsGone()
-    return () => observer.disconnect()
-  }, [renameOpen, panelRef])
+  }, [renameOpen, stripRowNode])
 
-  return enabled && renameOpen
+  return { renameActive: enabled && renameOpen, setStripRowNode }
 }
