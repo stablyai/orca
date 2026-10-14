@@ -107,6 +107,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
     # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
 
     env:
       # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
@@ -315,6 +316,7 @@ jobs:
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
 
     defaults:
       run:

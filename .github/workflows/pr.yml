@@ -176,6 +176,7 @@ jobs:
     if: needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true'
     # Free hosted ARM: no job on the gate's critical path waits for preflight.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
     outputs:
       managed_hook_node18: ${{ steps.managed_hook_node18.outcome }}
 
@@ -582,6 +583,7 @@ jobs:
           - git: '2.49.1'
             image: alpine/git:v2.49.1
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -624,6 +626,7 @@ jobs:
       needs.preflight.result == 'success'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
     env:
       CODEX_CLI_VERSION: '0.150.1'
       # Why a second pin: --no-daemon only exists from 0.156, and Orca's codex wrapper relies on it.
@@ -719,6 +722,7 @@ jobs:
       needs.preflight.result == 'success'
     # Use ARM for four-package pristine/patched rebuild byte comparison: output generated on Linux x64 reproduces on darwin-arm64.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -891,6 +895,7 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.mobile_web_app == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -959,6 +964,7 @@ jobs:
       needs.preflight.result == 'success'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
 
     steps:
       # Fetch tags/full history for newest-release skew; shallow unit shards cannot supply it.
