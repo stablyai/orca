@@ -96,7 +96,9 @@ export default function TabGroupPanel({
     groupTabCount: model.groupTabs.length,
     clientHostedRowCount: clientHostedRows.length,
     tabDragActive: isTabDragActive,
-    isVisible
+    isVisible,
+    // Why: the rename shortcut addresses terminals by entity id and agent sessions by tab id.
+    ownsTab: (tabId) => model.groupTabs.some((tab) => tab.id === tabId || tab.entityId === tabId)
   })
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),

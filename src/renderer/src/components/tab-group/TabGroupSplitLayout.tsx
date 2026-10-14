@@ -24,10 +24,14 @@ export default function TabGroupSplitLayout({
 }): React.JSX.Element {
   const clientHostedRowCount = useClientHostedBrowserRows(worktreeId).length
   const allStripsAutoHidden = useAppStore((state) => {
+    // Why: off is the default and this runs on every store update, so skip the tab scan entirely.
+    if (!isAutoHideSingleTabStripEnabled(state.settings)) {
+      return false
+    }
     const groups = state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
     const tabs = state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
     return areAllTabStripsAutoHidden({
-      autoHideEnabled: isAutoHideSingleTabStripEnabled(state.settings),
+      autoHideEnabled: true,
       groupTabCounts: groups.map((group) => tabs.filter((tab) => tab.groupId === group.id).length),
       clientHostedRowCount
     })

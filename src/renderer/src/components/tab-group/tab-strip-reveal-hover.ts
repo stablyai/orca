@@ -52,44 +52,68 @@ export function useTabStripRevealHover({
     }
     let frame = 0
     let hovered = false
-    const evaluate = (clientX: number, clientY: number): void => {
-      const panel = panelRef.current
-      if (!panel) {
-        return
-      }
-      const next = resolveTabStripRevealHover({
-        panelRect: panel.getBoundingClientRect(),
-        clientX,
-        clientY,
-        currentlyHovered: hovered
-      })
+    let pointer: { clientX: number; clientY: number } | null = null
+    const setHovered = (next: boolean): void => {
       if (next !== hovered) {
         hovered = next
         onHoverChangeRef.current(next)
       }
     }
-    const onPointerMove = (event: PointerEvent): void => {
+    const cancelFrame = (): void => {
       if (frame !== 0) {
+        cancelAnimationFrame(frame)
+        frame = 0
+      }
+    }
+    const evaluate = (): void => {
+      const panel = panelRef.current
+      if (!panel || !pointer) {
         return
       }
-      const { clientX, clientY } = event
-      frame = requestAnimationFrame(() => {
-        frame = 0
-        evaluate(clientX, clientY)
-      })
+      setHovered(
+        resolveTabStripRevealHover({
+          panelRect: panel.getBoundingClientRect(),
+          clientX: pointer.clientX,
+          clientY: pointer.clientY,
+          currentlyHovered: hovered
+        })
+      )
+    }
+    const onPointerMove = (event: PointerEvent): void => {
+      // Why: keep the newest position — a high-rate mouse delivers several moves per frame, and
+      // judging the first would leave the strip wherever the pointer merely passed through.
+      pointer = { clientX: event.clientX, clientY: event.clientY }
+      if (frame === 0) {
+        frame = requestAnimationFrame(() => {
+          frame = 0
+          evaluate()
+        })
+      }
+    }
+    // Why: no pointermove reaches the window once the pointer has left it or the window lost
+    // focus, so a strip revealed on the way out would stay open until the pointer came back.
+    const onPointerLeftWindow = (event: PointerEvent): void => {
+      if (event.relatedTarget === null) {
+        cancelFrame()
+        setHovered(false)
+      }
+    }
+    const onWindowBlur = (): void => {
+      cancelFrame()
+      setHovered(false)
     }
     // Capture: a pane-detach drag stops propagation, and that drag is exactly when the strip is needed.
     window.addEventListener('pointermove', onPointerMove, true)
+    window.addEventListener('pointerout', onPointerLeftWindow, true)
+    window.addEventListener('blur', onWindowBlur)
     return () => {
       window.removeEventListener('pointermove', onPointerMove, true)
-      if (frame !== 0) {
-        cancelAnimationFrame(frame)
-      }
+      window.removeEventListener('pointerout', onPointerLeftWindow, true)
+      window.removeEventListener('blur', onWindowBlur)
+      cancelFrame()
       // Why: the next enabled run restarts from `hovered = false`, so a reveal left latched here —
       // a worktree switched away mid-hover — would survive until the pointer re-crossed the zone.
-      if (hovered) {
-        onHoverChangeRef.current(false)
-      }
+      setHovered(false)
     }
   }, [enabled, panelRef])
 }
