@@ -169,6 +169,18 @@ describe('run facts: the controller write funnel', () => {
     expect(run.firstUserInputAt()).not.toBeNull()
   })
 
+  it("keeps Orca's own mailbox pointer out of the composer draft", async () => {
+    const run = await createFreshRun()
+    const pointer = '\nYou have 1 orchestration message.\n'
+
+    await run.runtime['writeOrchestrationPointerPty'](PTY_ID, pointer)
+    expect(run.runtime.terminalRunFacts.hasUnsubmittedInput(PTY_ID)).toBe(false)
+
+    await run.runtime.sendTerminal(run.handle, { text: 'half a reply' }, { inputKind: 'driving' })
+    await run.runtime['writeOrchestrationPointerPty'](PTY_ID, pointer)
+    expect(run.runtime.terminalRunFacts.hasUnsubmittedInput(PTY_ID)).toBe(true)
+  })
+
   it('records nothing for a client query reply', async () => {
     const run = await createFreshRun()
 

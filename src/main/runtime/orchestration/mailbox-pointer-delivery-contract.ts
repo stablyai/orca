@@ -24,6 +24,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getLiveLeafForHandle: (handle: string) => OrchestrationMailboxLeaf
   /** Whether the pane is settled enough to type the pointer plus Enter into it. */
   isAgentSettledForDelivery: (leaf: OrchestrationMailboxLeaf) => boolean
+  /** Whether the pane's composer holds text that no Enter has sent yet. */
+  hasUnsubmittedInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getTabTitle: (tabId: string) => string | null | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
