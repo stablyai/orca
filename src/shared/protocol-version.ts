@@ -1,3 +1,4 @@
+import { TERMINAL_MAILBOX_SUBSCRIPTION_CAPABILITY } from './terminal-mailbox-subscription'
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachment-capabilities'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from './ssh-target-management'
 import {
@@ -353,6 +354,7 @@ export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  TERMINAL_MAILBOX_SUBSCRIPTION_CAPABILITY,
   ...ORCAD_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,
   QODER_OWNED_TERMINAL_CREATE_CAPABILITY,

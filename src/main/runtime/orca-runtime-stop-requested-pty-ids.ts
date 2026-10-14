@@ -1,4 +1,10 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import {
+  TerminalMailboxSubscriptions,
+  type CurrentTerminalMailboxAuthority
+} from './orchestration/terminal-mailbox-subscriptions'
+import { resolveTerminalMailboxSubscriptionLeaf } from './orchestration/terminal-mailbox-subscription-target'
+import type { OrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
 import { OrchestrationStructuredMailboxPointerDelivery } from './orchestration/structured-mailbox-pointer-delivery'
 import { createStructuredMailboxPointerHost } from './orchestration/structured-mailbox-pointer-host'
 import { localOrchestrationCliCommand } from './orchestration/cli-command'
@@ -232,7 +238,105 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
   })
 
+  protected readonly terminalMailboxSubscriptions = new TerminalMailboxSubscriptions((handle) => {
+    const current = this.getOrchestrationDispatchAuthority(handle)
+    return current?.paneKey && current.processIncarnation
+      ? {
+          hostScope: current.hostScope,
+          terminalHandle: current.terminalHandle,
+          paneKey: current.paneKey,
+          ptyId: current.ptyId,
+          processIncarnation: current.processIncarnation
+        }
+      : null
+  })
+
+  getTerminalMailboxSubscriptionBinding(
+    evidence: OrchestrationCompatibilityEvidence | undefined
+  ): CurrentTerminalMailboxAuthority {
+    const authority = this.verifyOrchestrationCompatibilityCaller(evidence, {
+      currentRuntimeLaunchSufficient: true
+    })
+    if (!authority) {
+      throw new Error('A verified current terminal launch is required for mailbox subscription.')
+    }
+    const current = this.getOrchestrationDispatchAuthority(authority.terminalHandle)
+    if (
+      !current?.paneKey ||
+      !current.processIncarnation ||
+      current.paneKey !== authority.paneKey ||
+      current.processIncarnation !== authority.processIncarnation ||
+      !this.orchestrationCompatibilityHostScopesEqual(current.hostScope, authority.hostScope)
+    ) {
+      throw new Error('The attested terminal identity changed before mailbox subscription access.')
+    }
+    return {
+      hostScope: current.hostScope,
+      terminalHandle: authority.terminalHandle,
+      paneKey: current.paneKey,
+      ptyId: current.ptyId,
+      processIncarnation: current.processIncarnation
+    }
+  }
+
+  protected resolveTerminalMailboxSubscriptionTarget(
+    handle: string,
+    binding = this.terminalMailboxSubscriptions.binding(handle)
+  ) {
+    if (!binding) {
+      return null
+    }
+    const leaf = resolveTerminalMailboxSubscriptionLeaf({
+      binding,
+      current: this.getOrchestrationDispatchAuthority(handle),
+      ptys: this.ptysById.values(),
+      leaves: this.leaves.values(),
+      handleForPty: (ptyId) => this.handleByPtyId.get(ptyId),
+      handleForLeaf: (tabId, leafId) => this.handleByLeafKey.get(this.getLeafKey(tabId, leafId))
+    })
+    return leaf?.ptyId ? this.resolveOrchestrationPointerSubmitTarget(leaf, leaf.ptyId) : null
+  }
+
+  terminalMailboxSubscription(
+    action: 'subscribe' | 'unsubscribe' | 'status',
+    evidence: OrchestrationCompatibilityEvidence | undefined
+  ) {
+    const currentBinding = this.getTerminalMailboxSubscriptionBinding(evidence)
+    const handle = currentBinding.terminalHandle
+    if (
+      action !== 'subscribe' &&
+      !this.terminalMailboxSubscriptions.canManage(handle, currentBinding)
+    ) {
+      throw new Error('Mailbox subscription state belongs to a different terminal identity.')
+    }
+    if (action === 'unsubscribe') {
+      this.terminalMailboxSubscriptions.remove(handle)
+    }
+    if (action === 'subscribe') {
+      const target = this.resolveTerminalMailboxSubscriptionTarget(handle, currentBinding)
+      if (target && target.leaf.ptyId !== currentBinding.ptyId) {
+        throw new Error('The attested terminal identity changed before subscription registration.')
+      }
+      if (
+        !target ||
+        this.orchestrationMailboxOwner.resolve(target.leaf, undefined, {
+          terminalHandle: handle
+        }) !== handle
+      ) {
+        throw new Error('Mailbox subscriptions require a live bare terminal mailbox.')
+      }
+      this.terminalMailboxSubscriptions.register(target, {
+        ...currentBinding,
+        createdAt: new Date().toISOString()
+      })
+      this.deliverPendingMessagesForHandle(handle)
+    }
+    return this.terminalMailboxSubscriptions.status(handle)
+  }
+
   protected readonly orchestrationMailboxPointerDelivery = new OrchestrationMailboxPointerDelivery({
+    terminalSubscriptions: this.terminalMailboxSubscriptions,
+    resolveSubscriptionTarget: (handle) => this.resolveTerminalMailboxSubscriptionTarget(handle),
     mailboxOwner: this.orchestrationMailboxOwner,
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
@@ -244,7 +348,12 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title,
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
-    resolveSubmitTarget: (leaf, ptyId) => this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId),
+    resolveSubmitTarget: (leaf, ptyId, mailboxHandle) => {
+      const handle = this.terminalMailboxSubscriptions.handleForPane(`${leaf.tabId}:${leaf.leafId}`)
+      return handle && mailboxHandle === handle
+        ? this.resolveTerminalMailboxSubscriptionTarget(handle)
+        : this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId)
+    },
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),

@@ -154,7 +154,16 @@ export function releaseMailboxPointerEnter(
   }))
 }
 
-export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
+export function releasePendingMailboxPointerForPty(
+  this: OrchestrationDb,
+  ptyId: string,
+  options: { preserveBareTerminalAttempts?: boolean } = {}
+): void {
+  const preservedAttempts = options.preserveBareTerminalAttempts
+    ? ` AND NOT (read = 0 AND pointer_enter_pending IN (2, 3)
+         AND substr(to_handle, 1, 5) = 'term_' AND length(to_handle) > 5
+         AND substr(to_handle, 6) NOT GLOB '*[^a-zA-Z0-9_-]*')`
+    : ''
   this.db
     .prepare(
       `UPDATE messages
@@ -165,7 +174,7 @@ export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId:
            END,
            pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
+       WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?${preservedAttempts}`
     )
     .run(MAILBOX_POINTER_RESERVED, ptyId)
 }

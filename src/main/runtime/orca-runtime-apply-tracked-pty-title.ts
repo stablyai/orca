@@ -165,6 +165,11 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         this.deliverPendingMessagesForLeaf(leaf)
       }
     }
+    if (agentStatus === 'idle') {
+      for (const handle of this.terminalMailboxSubscriptions.handlesForPty(ptyId)) {
+        this.deliverPendingMessagesForHandle(handle)
+      }
+    }
     return ptyRecordChanged
   }
 

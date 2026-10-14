@@ -1,3 +1,4 @@
+import type { TerminalMailboxSubscriptions } from './terminal-mailbox-subscriptions'
 import type { OrchestrationDb } from './db'
 import type { OrchestrationMailboxDeliveryTarget } from './mailbox-delivery-target'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
@@ -16,8 +17,13 @@ export type OrchestrationMailboxPointerMessage = {
 }
 
 export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
-  mailboxOwner: OrchestrationMailboxOwner
-  deliveryTarget: OrchestrationMailboxDeliveryTarget
+  terminalSubscriptions?: TerminalMailboxSubscriptions
+  resolveSubscriptionTarget?: (handle: string) => OrchestrationMailboxPointerSubmitTarget | null
+  mailboxOwner: Pick<OrchestrationMailboxOwner, 'resolve'>
+  deliveryTarget: Pick<
+    OrchestrationMailboxDeliveryTarget,
+    'resolveTerminalHandle' | 'deferForAbsenceProbe'
+  >
   getDb: () => OrchestrationDb | null
   getLeaf: (leafKey: string) => OrchestrationMailboxLeaf | undefined
   getLeafKey: (tabId: string, leafId: string) => string
@@ -30,7 +36,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getTerminalHandleForLeafKey: (leafKey: string) => string | undefined
   resolveSubmitTarget: (
     leaf: OrchestrationMailboxLeaf,
-    ptyId: string
+    ptyId: string,
+    mailboxHandle?: string
   ) => OrchestrationMailboxPointerSubmitTarget | null
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   redriveMailbox: (mailboxHandle: string, reservedTypes?: ReadonlySet<string>) => void

@@ -34,15 +34,26 @@ export const CURSOR_IDLE_TITLE = 'Cursor Ready'
 export type AgentLedgerEntry = {
   pid: number
   at: number
-  event: 'start' | 'stdin' | 'title'
+  event: 'start' | 'stdin' | 'title' | 'cli-start' | 'cli'
   data?: string
   title?: string
+  requestId?: string
+  status?: number | null
+  stdout?: string
+  stderr?: string
+  error?: string
+  cliEntry?: string
+  cliCommand?: string
+  terminalHandle?: string
+  paneKey?: string
+  hasLaunchToken?: boolean
 }
 
-const AGENT_SOURCE = `
+export const MAIL_PANE_AGENT_SOURCE = `
 const { appendFileSync, existsSync, readFileSync, statSync } = require('node:fs')
+const { spawnSync } = require('node:child_process')
 
-const [ledgerPath, controlPath, encodedReaction] = process.argv.slice(2)
+const [ledgerPath, controlPath, encodedReaction, cliControlPath, cliEntry, cliCommand] = process.argv.slice(2)
 const reaction = encodedReaction
   ? JSON.parse(Buffer.from(encodedReaction, 'base64').toString('utf8'))
   : null
@@ -55,7 +66,15 @@ function log(entry) {
   } catch {}
 }
 
-log({ event: 'start' })
+log({
+  event: 'start',
+  terminalHandle: process.env.ORCA_TERMINAL_HANDLE,
+  paneKey: process.env.ORCA_PANE_KEY,
+  hasLaunchToken: Boolean(process.env.ORCA_AGENT_LAUNCH_TOKEN),
+  cliControlPath,
+  cliEntry,
+  cliCommand
+})
 
 // Raw mode is what every agent TUI does, and it is load-bearing here: a cooked
 // PTY applies ICRNL, so the synthesized Enter would arrive as \\n and be
@@ -99,6 +118,47 @@ setInterval(() => {
   log({ event: 'title', title })
 }, 50)
 
+let lastCliStamp = null
+setInterval(() => {
+  if ((!cliEntry && !cliCommand) || !existsSync(cliControlPath)) return
+  let request
+  let stamp
+  try {
+    stamp = statSync(cliControlPath).mtimeMs
+    if (stamp === lastCliStamp) return
+    request = JSON.parse(readFileSync(cliControlPath, 'utf8'))
+  } catch {
+    return
+  }
+  lastCliStamp = stamp
+  log({ event: 'cli-start', requestId: request.requestId, cliEntry, cliCommand })
+  const cliExecutable =
+    cliCommand && process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : cliCommand
+  const cliArgs =
+    cliCommand && process.platform === 'win32'
+      ? ['/d', '/s', '/c', cliCommand, ...request.args]
+      : request.args
+  const result = cliCommand
+    ? spawnSync(cliExecutable, cliArgs, {
+        env: { ...process.env, ORCA_DEV_CLI_INVOCATION: '1' },
+        encoding: 'utf8',
+        timeout: 20_000
+      })
+    : spawnSync(process.execPath, [cliEntry, ...request.args], {
+    env: { ...process.env, ORCA_DEV_CLI_INVOCATION: '1' },
+    encoding: 'utf8',
+    timeout: 20_000
+  })
+  log({
+    event: 'cli',
+    requestId: request.requestId,
+    status: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    error: result.error ? String(result.error) : undefined
+  })
+}, 50)
+
 setInterval(() => {}, 60_000)
 `
 
@@ -110,6 +170,8 @@ export type MailPaneAgent = {
   readLedger: () => AgentLedgerEntry[]
   /** Concatenated stdin — what the agent actually received. */
   readStdin: () => string
+  runCli: (requestId: string, args: string[]) => void
+  readCliResult: (requestId: string) => AgentLedgerEntry | undefined
   hasStarted: () => boolean
   /** Emitted-title count; the readiness signal when a title is re-sent as-is. */
   titleEmitCount: () => number
@@ -117,6 +179,8 @@ export type MailPaneAgent = {
 
 type MailPaneAgentOptions = {
   titleOnStdin?: { needle: string; title: string }
+  cliEntry?: string
+  cliCommand?: string
 }
 
 // Why worker exit and not a spec's afterAll: Playwright reuses a worker across
@@ -136,7 +200,8 @@ export function createMailPaneAgent(options: MailPaneAgentOptions = {}): MailPan
   const scriptPath = path.join(dir, 'agent.cjs')
   const ledgerPath = path.join(dir, 'ledger.jsonl')
   const controlPath = path.join(dir, 'title')
-  writeFileSync(scriptPath, AGENT_SOURCE)
+  const cliControlPath = path.join(dir, 'cli-control.json')
+  writeFileSync(scriptPath, MAIL_PANE_AGENT_SOURCE)
   writeFileSync(ledgerPath, '')
 
   // Why forward slashes: valid for node on Windows and parsed identically by
@@ -165,7 +230,7 @@ export function createMailPaneAgent(options: MailPaneAgentOptions = {}): MailPan
   )
 
   return {
-    launchCommand: `node ${quote(scriptPath)} ${quote(ledgerPath)} ${quote(controlPath)} ${quote(encodedReaction)}`,
+    launchCommand: `node ${quote(scriptPath)} ${quote(ledgerPath)} ${quote(controlPath)} ${quote(encodedReaction)} ${quote(cliControlPath)} ${quote(options.cliEntry ?? '')} ${quote(options.cliCommand ?? '')}`,
     setTitle: (title: string) => writeFileSync(controlPath, title),
     readLedger,
     readStdin: () =>
@@ -173,6 +238,10 @@ export function createMailPaneAgent(options: MailPaneAgentOptions = {}): MailPan
         .filter((entry) => entry.event === 'stdin')
         .map((entry) => entry.data ?? '')
         .join(''),
+    runCli: (requestId: string, args: string[]) =>
+      writeFileSync(cliControlPath, JSON.stringify({ requestId, args })),
+    readCliResult: (requestId: string) =>
+      readLedger().find((entry) => entry.event === 'cli' && entry.requestId === requestId),
     hasStarted: () => readLedger().some((entry) => entry.event === 'start'),
     titleEmitCount: () => readLedger().filter((entry) => entry.event === 'title').length
   }

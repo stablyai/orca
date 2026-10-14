@@ -1,3 +1,4 @@
+import { ORCHESTRATION_SUBSCRIPTION_HANDLERS } from './orchestration/subscription-handlers'
 import type { CommandHandler } from '../dispatch'
 import { ORCHESTRATION_CHECK_HANDLER } from './orchestration/message-check-handler'
 import {
@@ -17,6 +18,7 @@ import { ORCHESTRATION_WORKER_OBSERVATION_HANDLERS } from './orchestration/worke
 import { ORCHESTRATION_WORKER_TERMINAL_HANDLERS } from './orchestration/worker-terminal-handlers'
 
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
+  ...ORCHESTRATION_SUBSCRIPTION_HANDLERS,
   ...ORCHESTRATION_RUN_HANDLERS,
   ...ORCHESTRATION_SEND_HANDLER,
   ...ORCHESTRATION_CHECK_HANDLER,
