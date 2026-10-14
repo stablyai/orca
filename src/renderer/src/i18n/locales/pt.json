@@ -8,7 +8,9 @@
   },
   "common": {
     "retry": "Tentar novamente",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "connect": "Conectar",
+    "disconnect": "Desconectar"
   },
   "quickOpen": {
     "moreMatchesAvailable": "Mais resultados podem estar disponíveis. Refine sua busca para reduzir os resultados.",
@@ -2187,7 +2189,9 @@
         "automationsDescription": "Agende o trabalho dos agentes e escolha se Automações aparece na barra lateral.",
         "shareSkillsTitle": "Compartilhar Skills",
         "shareSkillsDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
-        "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown."
+        "floatingWorkspaceWebDescription": "Abas globais de terminal e markdown.",
+        "planeTitle": "Plane",
+        "planeDescription": "Como o Plane funciona no Orca, checklist de configuração, habilidade de agente e prompts de exemplo."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "A colagem é muito grande."
@@ -2725,6 +2729,27 @@
         "title": "Adicione pastas de unidades do Windows neste computador",
         "descriptionWithPath": "{{value0}} está em uma unidade do Windows. O Git no WSL relata falsas alterações de fim de linha nela, não detecta edições feitas pelo Windows e faz buscas nela lentamente.",
         "description": "Esta pasta está em uma unidade do Windows. O Git no WSL relata falsas alterações de fim de linha nela, não detecta edições feitas pelo Windows e faz buscas nela lentamente."
+      },
+      "plane": {
+        "usage": {
+          "examples": {
+            "readTicket": "Ler a tarefa vinculada",
+            "readTicketSummary": "Obtenha o contexto completo da tarefa vinculada do Plane antes de iniciar o trabalho.",
+            "readTicketPrompt": "Use {{value0}} para ler a tarefa vinculada do Plane para este worktree, depois resuma o objetivo e os critérios de aceitação antes de começar.",
+            "postUpdate": "Publicar uma atualização de progresso",
+            "postUpdateSummary": "Comente o progresso ou um resumo de conclusão na tarefa do Plane.",
+            "postUpdatePrompt": "Use {{value0}} para publicar uma atualização de conclusão na tarefa vinculada do Plane com o que mudou e como foi verificado.",
+            "moveState": "Avançar a tarefa",
+            "moveStateSummary": "Avance o estado do fluxo de trabalho do Plane à medida que o trabalho avança.",
+            "moveStatePrompt": "Use {{value0}} para mover a tarefa vinculada do Plane para Em andamento ou Em revisão agora que a alteração está em andamento.",
+            "triagePriority": "Triar e definir prioridade",
+            "triagePrioritySummary": "Atualize a prioridade ou o estado na tarefa do Plane conforme o escopo for esclarecido.",
+            "triagePriorityPrompt": "Use {{value0}} para triar a tarefa vinculada do Plane — atualize sua prioridade para urgente/alta/média/baixa e ajuste o estado.",
+            "createFollowup": "Criar uma tarefa de acompanhamento",
+            "createFollowupSummary": "Crie uma nova tarefa no Plane para trabalhos pendentes ou bugs relacionados encontrados durante o desenvolvimento.",
+            "createFollowupPrompt": "Use {{value0}} para criar uma nova tarefa no Plane para o trabalho de acompanhamento pendente."
+          }
+        }
       }
     },
     "components": {
@@ -5057,7 +5082,9 @@
           "linearDescription": "Como o Linear funciona no Orca, checklist de configuração, skill de agente e exemplos de prompts.",
           "tasksDescription": "Conecte provedores, instale a skill do Linear e escolha o que aparece em Tarefas.",
           "remoteServersDescription": "Execute o Orca em outra máquina e trabalhe nela por aqui.",
-          "noSettingsFoundForQuery": "Nenhuma configuração encontrada para \"{{value0}}\""
+          "noSettingsFoundForQuery": "Nenhuma configuração encontrada para \"{{value0}}\"",
+          "planeTitle": "Plane",
+          "planeDescription": "Como o Plane funciona no Orca, checklist de configuração, habilidade de agente e prompts de exemplo."
         },
         "experimental": {
           "search": {
@@ -6045,7 +6072,10 @@
             "7166b9090c": "Autenticação do GitHub via a CLI gh.",
             "f16e41cc72": "Integração com o GitHub",
             "760e2446e0": "Autenticação do Bitbucket Cloud com um token de API salvo ou variáveis de ambiente.",
-            "af5ae87847": "token de acesso"
+            "af5ae87847": "token de acesso",
+            "plane_title": "Integração com Plane",
+            "plane_description": "Conecte o Plane Cloud ou auto-hospedado para navegar e vincular tarefas.",
+            "plane_keyword": "plane"
           }
         },
         "token": {
@@ -6527,7 +6557,9 @@
           "integrationsHint": "As credenciais de todos os provedores também estão em",
           "integrationsLink": "Integrações",
           "skillHint": ". Depois que o Linear estiver conectado, os exemplos de uso permanecem em Configurações → Linear.",
-          "incompleteBannerBodyWithLinear": "Oculte provedores que você não usa, ou expanda um cartão e conclua suas etapas. Para o Linear: acesso à API, a skill de agente e Mostrar em Tarefas."
+          "incompleteBannerBodyWithLinear": "Oculte provedores que você não usa, ou expanda um cartão e conclua suas etapas. Para o Linear: acesso à API, a skill de agente e Mostrar em Tarefas.",
+          "plane": "Plane",
+          "planeDescription": "Conecte o Plane Cloud ou Plane auto-hospedado e exiba-o em Tarefas."
         },
         "privacy": {
           "search": {
@@ -6628,7 +6660,9 @@
                 "connectedSiteSingular": "{{count}} site conectado",
                 "connectedSitePlural": "{{count}} sites conectados",
                 "connectedWorkspaceSingular": "{{count}} espaço de trabalho conectado",
-                "connectedWorkspacePlural": "{{count}} espaços de trabalho conectados"
+                "connectedWorkspacePlural": "{{count}} espaços de trabalho conectados",
+                "checkingPlane": "Verificando o acesso ao Plane antes de exibir as ações de configuração.",
+                "addPlaneAccess": "Conecte o Plane Cloud ou uma instância auto-hospedada usando um token de API."
               }
             }
           }
@@ -7500,7 +7534,8 @@
             "setup": "configuração",
             "apiKey": "chave de api",
             "skill": "skill",
-            "connect": "conectar"
+            "connect": "conectar",
+            "plane": "plane"
           }
         },
         "MobilePairingConnectionOptions": {
@@ -9449,6 +9484,72 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "Este pacote de idioma está incompleto demais para mudar para ele."
+        },
+        "PlaneAgentSkillPane": {
+          "title": "Plane",
+          "description": "Como o Plane funciona no Orca: navegue por tarefas, inicie workspaces vinculados e permita que agentes atualizem tickets com /orca-plane.",
+          "skillTitle": "Habilidade do Plane",
+          "howToUse": "Exemplos de prompts",
+          "howToUseDescription": "Clique em um card para copiar o prompt. Use-os em um worktree vinculado ao Plane após a habilidade ser instalada.",
+          "manageConnectionHint": "Revise workspaces do Plane conectados e tokens de API em",
+          "manageConnectionLink": "Integrações"
+        },
+        "PlaneAgentSkillGuide": {
+          "setupConnectTitle": "1. Conectar Plane",
+          "setupConnectBody": "Token de API pessoal para o Orca listar tarefas e abrir workspaces vinculados.",
+          "manageKeys": "Gerenciar acesso",
+          "addAccess": "Adicionar acesso",
+          "setupSkillTitle": "2. Instalar a habilidade do agente",
+          "setupSkillBody": "Permite que agentes de código usem /orca-plane para leitura, atualizações, comentários, prioridades e estados.",
+          "setupVisibleTitle": "3. Exibir o Plane em Tarefas",
+          "setupVisibleBody": "Mantém o Plane no seletor de fontes de Tarefas e nos atalhos da barra lateral.",
+          "openTaskSources": "Fontes de tarefas",
+          "setupTitle": "Checklist de configuração",
+          "setupBody": "Todos os três são necessários para o fluxo completo de Tarefas + agentes. O caminho inicial também fica em Fontes de tarefas.",
+          "setupReady": "Tudo pronto",
+          "setupProgress": "{{done}} de {{total}} prontos",
+          "notesTitle": "Importante saber",
+          "notesIntro": "Lembretes rápidos assim que o Plane estiver conectado e a habilidade instalada.",
+          "noteLinkedTitle": "Comece a partir de uma tarefa do Plane",
+          "noteLinkedBody": "Ações em tarefas funcionam melhor em um worktree criado a partir de Tarefas, para que ela fique vinculada como contexto.",
+          "noteSlashTitle": "Mencione /orca-plane",
+          "noteSlashBody": "No chat, use /orca-plane (ou peça em linguagem natural) para que o agente carregue a habilidade naquele turno.",
+          "noteInstanceTitle": "Cloud e Auto-hospedado",
+          "noteInstanceBody": "Suporta tanto o Plane Cloud (app.plane.so) quanto instâncias auto-hospedadas personalizadas do Plane.",
+          "noteVisibilityTitle": "Ocultar ≠ desconectar",
+          "noteVisibilityBody": "Ocultar o Plane em Fontes de tarefas apenas o remove do seletor. Isso não exclui seu token nem a habilidade.",
+          "setupChecking": "Verificando…"
+        },
+        "TaskSourcePlaneSetup": {
+          "connectTitle": "Conectar Plane",
+          "connectDescription": "Adicione um token de API para o Orca navegar por tarefas e abrir workspaces com o contexto do ticket.",
+          "manageAccess": "Gerenciar acesso",
+          "addAccess": "Adicionar acesso ao Plane",
+          "connectedHint": "Workspaces e tokens são armazenados para o runtime ativo.",
+          "recheck": "Verificar conexão novamente",
+          "skillTitle": "Instalar habilidade do agente Plane",
+          "skillDescription": "Permite que agentes usem /orca-plane para ler tickets, publicar atualizações, mover estados e comentar.",
+          "skillBlocked": "Conecte o Plane primeiro e depois instale a habilidade para os agentes.",
+          "skillPanelTitle": "Habilidade do Plane",
+          "showDescription": "Incluir o Plane no seletor de fontes da página de Tarefas e nos atalhos da barra lateral."
+        },
+        "plane": {
+          "agent": {
+            "skill": {
+              "search": {
+                "title": "Plane",
+                "description": "Status da habilidade do Plane, exemplos de uso e links para a configuração de Fontes de tarefas.",
+                "plane": "plane",
+                "tickets": "tarefas",
+                "issues": "incidências",
+                "skill": "habilidade",
+                "orcaPlane": "orca-plane"
+              }
+            }
+          },
+          "cloud": "Plane Cloud",
+          "connectionFailed": "Falha na conexão",
+          "cardFooter": "Navegue por tarefas e abra worktrees com o contexto do ticket diretamente do Plane Cloud ou de sua instância auto-hospedada."
         }
       },
       "right": {
@@ -11699,7 +11800,8 @@
           "fee535205b": "Tarefas",
           "d599269755": "Ocultar da barra lateral",
           "artifacts": "Artefatos",
-          "skills": "Skills"
+          "skills": "Skills",
+          "openPlaneTasks": "Abrir tarefas do Plane"
         },
         "AddRepoHostSelector": {
           "host": "Host",
@@ -18641,6 +18743,20 @@
                 }
               }
             }
+          },
+          "plane": {
+            "connectTitle": "Conecte seu workspace do Plane",
+            "connectDescription": "Navegue, acompanhe e inicie trabalhos a partir de tarefas do Plane diretamente em worktrees isolados.",
+            "connectButton": "Conectar Plane",
+            "selectWorkspace": "Selecionar workspace",
+            "allProjects": "Todos os projetos",
+            "refreshIssues": "Atualizar tarefas",
+            "openInPlane": "Abrir no Plane",
+            "noIssuesFound": "Nenhuma tarefa encontrada",
+            "createIssueHint": "Crie uma tarefa no Plane para visualizá-la aqui.",
+            "backlog": "Backlog",
+            "openInWorktree": "Abrir no Worktree",
+            "viewInPlane": "Ver no Plane"
           }
         }
       },
@@ -19689,6 +19805,23 @@
           "noTabGroup": "Não é possível executar “{{action}}” — nenhum grupo de abas está disponível.",
           "noMovableChat": "Não é possível executar “{{action}}” — nenhum chat que possa ser movido está ativo.",
           "clientUnsupported": "Não é possível executar “{{action}}” — este cliente e este runtime não oferecem suporte a essa ação."
+        }
+      },
+      "plane": {
+        "connect": {
+          "dialog": {
+            "title": "Conectar Plane",
+            "description": "Conecte seu workspace do Plane para navegar por tarefas e abrir worktrees com o contexto do ticket.",
+            "deploymentType": "Tipo de implantação",
+            "planeCloud": "Plane Cloud",
+            "selfHosted": "Auto-hospedado",
+            "instanceUrl": "URL da instância",
+            "instanceUrlPlaceholder": "https://plane.suaempresa.com",
+            "personalApiToken": "Token de API pessoal",
+            "createApiToken": "Criar token de API",
+            "apiTokenPlaceholder": "plane_api_...",
+            "connecting": "Conectando..."
+          }
         }
       }
     },

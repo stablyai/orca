@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
+import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { PlaneIcon } from '@/components/icons/PlaneIcon'
 import { PlaneConnectDialog } from '@/components/plane-connect-dialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -12,8 +11,10 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import type { PlaneIssue } from '../../../../../shared/plane-types'
+import { PlaneIssueRow } from './PlaneIssueRow'
 
 export function TaskPagePlaneContent({
   model: _model
@@ -52,12 +53,7 @@ export function TaskPagePlaneContent({
         projectId: selectedProjectId === 'all' ? undefined : selectedProjectId
       })
     }
-  }, [
-    planeStatus.connected,
-    planeStatus.activeWorkspaceSlug,
-    selectedProjectId,
-    fetchPlaneIssues
-  ])
+  }, [planeStatus.connected, planeStatus.activeWorkspaceSlug, selectedProjectId, fetchPlaneIssues])
 
   if (!planeStatusChecked) {
     return (
@@ -71,17 +67,20 @@ export function TaskPagePlaneContent({
     return (
       <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
         <PlaneIcon className="mb-4 size-10 text-muted-foreground/60" />
-        <p className="text-base font-medium text-foreground">Connect your Plane workspace</p>
-        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-          Browse, track, and start work from Plane issues directly in isolated worktrees.
+        <p className="text-base font-medium text-foreground">
+          {translate(
+            'auto.components.task.page.plane.connectTitle',
+            'Connect your Plane workspace'
+          )}
         </p>
-        <Button
-          type="button"
-          size="sm"
-          className="mt-6"
-          onClick={() => setConnectDialogOpen(true)}
-        >
-          Connect Plane
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+          {translate(
+            'auto.components.task.page.plane.connectDescription',
+            'Browse, track, and start work from Plane issues directly in isolated worktrees.'
+          )}
+        </p>
+        <Button type="button" size="sm" className="mt-6" onClick={() => setConnectDialogOpen(true)}>
+          {translate('auto.components.task.page.plane.connectButton', 'Connect Plane')}
         </Button>
         <PlaneConnectDialog
           open={connectDialogOpen}
@@ -139,7 +138,12 @@ export function TaskPagePlaneContent({
               onValueChange={(val) => void selectPlaneWorkspace(val)}
             >
               <SelectTrigger className="h-7 w-[160px] text-xs">
-                <SelectValue placeholder="Select workspace" />
+                <SelectValue
+                  placeholder={translate(
+                    'auto.components.task.page.plane.selectWorkspace',
+                    'Select workspace'
+                  )}
+                />
               </SelectTrigger>
               <SelectContent>
                 {workspaces.map((w) => (
@@ -153,11 +157,16 @@ export function TaskPagePlaneContent({
 
           <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
             <SelectTrigger className="h-7 min-w-[140px] text-xs">
-              <SelectValue placeholder="All Projects" />
+              <SelectValue
+                placeholder={translate(
+                  'auto.components.task.page.plane.allProjects',
+                  'All Projects'
+                )}
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all" className="text-xs">
-                All Projects
+                {translate('auto.components.task.page.plane.allProjects', 'All Projects')}
               </SelectItem>
               {planeProjects.map((p) => (
                 <SelectItem key={p.id} value={p.id} className="text-xs">
@@ -173,7 +182,7 @@ export function TaskPagePlaneContent({
             size="icon-sm"
             onClick={handleRefresh}
             disabled={planeLoading}
-            title="Refresh issues"
+            title={translate('auto.components.task.page.plane.refreshIssues', 'Refresh issues')}
           >
             <RefreshCw className={`size-3.5 ${planeLoading ? 'animate-spin' : ''}`} />
           </Button>
@@ -186,11 +195,12 @@ export function TaskPagePlaneContent({
             size="sm"
             className="h-7 gap-1 text-xs text-muted-foreground hover:text-foreground"
             onClick={() => {
-              const url = activeWorkspace.url || `${planeStatus.instanceUrl}/${activeWorkspace.slug}`
+              const url =
+                activeWorkspace.url || `${planeStatus.instanceUrl}/${activeWorkspace.slug}`
               void window.api.shell.openUrl(url)
             }}
           >
-            <span>Open in Plane</span>
+            <span>{translate('auto.components.task.page.plane.openInPlane', 'Open in Plane')}</span>
             <ExternalLink className="size-3" />
           </Button>
         )}
@@ -204,69 +214,21 @@ export function TaskPagePlaneContent({
           </div>
         ) : planeIssues.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center py-14 text-center">
-            <p className="text-sm font-medium text-foreground">No issues found</p>
+            <p className="text-sm font-medium text-foreground">
+              {translate('auto.components.task.page.plane.noIssuesFound', 'No issues found')}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Create an issue in Plane to see it here.
+              {translate(
+                'auto.components.task.page.plane.createIssueHint',
+                'Create an issue in Plane to see it here.'
+              )}
             </p>
           </div>
         ) : (
           <div className="w-full divide-y divide-border/40">
-            {planeIssues.map((issue) => {
-              const stateColor = issue.state?.color || '#808080'
-              return (
-                <div
-                  key={issue.id}
-                  className="group flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-muted/30"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <span className="shrink-0 font-mono text-xs font-semibold text-muted-foreground">
-                      {issue.key}
-                    </span>
-                    <span className="truncate text-xs font-medium text-foreground">
-                      {issue.title}
-                    </span>
-                    <Badge
-                      variant="outline"
-                      className="shrink-0 gap-1.5 border-transparent text-[11px] font-normal"
-                      style={{ backgroundColor: `${stateColor}18`, color: stateColor }}
-                    >
-                      <span
-                        className="size-1.5 rounded-full"
-                        style={{ backgroundColor: stateColor }}
-                      />
-                      {issue.state?.name || 'Backlog'}
-                    </Badge>
-                    {issue.priority && issue.priority !== 'none' && (
-                      <Badge variant="secondary" className="shrink-0 capitalize text-[10px]">
-                        {issue.priority}
-                      </Badge>
-                    )}
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-7 gap-1 px-2.5 text-xs font-medium"
-                      onClick={() => handleOpenInWorktree(issue)}
-                    >
-                      <Plus className="size-3" />
-                      Open in Worktree
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => void window.api.shell.openUrl(issue.url)}
-                      title="View in Plane"
-                    >
-                      <ExternalLink className="size-3.5 text-muted-foreground group-hover:text-foreground" />
-                    </Button>
-                  </div>
-                </div>
-              )
-            })}
+            {planeIssues.map((issue) => (
+              <PlaneIssueRow key={issue.id} issue={issue} onOpenInWorktree={handleOpenInWorktree} />
+            ))}
           </div>
         )}
       </div>

@@ -129,7 +129,7 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
   },
   {
     id: 'plane',
-    label: 'Plane',
+    label: translate('auto.components.settings.TasksPane.plane', 'Plane'),
     Icon: ({ className }) => <PlaneIcon className={className} />
   }
 ])
