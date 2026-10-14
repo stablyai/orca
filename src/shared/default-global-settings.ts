@@ -15,6 +15,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
+import { TERMINAL_INLINE_IMAGE_CACHE_MB_DEFAULT } from './terminal-inline-image-cache-policy'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
 export function buildDefaultSettings(args: {
@@ -76,6 +77,7 @@ export function buildDefaultSettings(args: {
     // Why on: the addon is lazy-loaded off the critical path and only creates
     // canvas layers once a pane receives an image; parser/decoder setup still has overhead.
     terminalInlineImages: true,
+    terminalInlineImageCacheMb: TERMINAL_INLINE_IMAGE_CACHE_MB_DEFAULT,
     terminalCursorStyle: 'block',
     terminalCursorStyleDefaultedToBlock: true,
     terminalCursorBlink: true,

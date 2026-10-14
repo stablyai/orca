@@ -29,6 +29,7 @@ import {
 } from './terminal-pane-lifecycle-primitives'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
+import { normalizeTerminalInlineImageCacheMb } from '../../../../shared/terminal-inline-image-cache-policy'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
 /** Builds the imperative PaneManager option bag from the mount context. */
@@ -112,6 +113,8 @@ export function createTerminalPaneManagerOptions(
       ),
     terminalInlineImagesEnabled: () =>
       resolveTerminalInlineImagesEnabled(settingsRef.current?.terminalInlineImages),
+    terminalInlineImageCacheMb: () =>
+      normalizeTerminalInlineImageCacheMb(settingsRef.current?.terminalInlineImageCacheMb),
     terminalOptions: () => {
       const currentSettings = settingsRef.current
       const terminalFontWeights = resolveTerminalFontWeights(

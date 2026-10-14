@@ -75,6 +75,8 @@ export type PaneManagerOptions = {
   /** Whether inline terminal images (SIXEL / iTerm2 IIP / Kitty graphics) are
    *  enabled. Resolved per pane open and toggleable at runtime. */
   terminalInlineImagesEnabled?: () => boolean
+  /** Per-pane decoded inline-image cache (MB); read when the addon attaches. */
+  terminalInlineImageCacheMb?: () => number
   terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */

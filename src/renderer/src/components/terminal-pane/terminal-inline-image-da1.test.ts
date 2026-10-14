@@ -27,7 +27,7 @@ describe('inline image DA1 ownership', () => {
       terminal.onData((data) => replies.push(data))
       if (loading === 'primed') {
         await primeTerminalImageAddon()
-        attachInlineImages(pane)
+        attachInlineImages(pane, 32)
       }
       const owner = installTerminalCapabilityReplyHandlers({
         terminal,
@@ -42,7 +42,7 @@ describe('inline image DA1 ownership', () => {
       })
       try {
         if (loading === 'deferred') {
-          attachInlineImages(pane)
+          attachInlineImages(pane, 32)
           expect(pane.imageAttachmentDeferred).toBe(true)
           await primeTerminalImageAddon()
         }
@@ -65,7 +65,7 @@ describe('inline image DA1 ownership', () => {
         detachInlineImages(pane)
         await query()
         expect(replies.splice(0)).toEqual(['\x1b[?1;2c'])
-        attachInlineImages(pane)
+        attachInlineImages(pane, 32)
         await query()
         expect(replies.splice(0)).toEqual(['\x1b[?1;2;4c'])
       } finally {

@@ -11,8 +11,9 @@ import {
 import { buildInlineImageAddonOptions } from './terminal-inline-image-options'
 
 // Panes whose setting is on but that opened before the lazy addon chunk
-// resolved. The loader's onLoaded handler drains them into a real attach.
-const panesAwaitingImageAddon = new Set<ManagedPaneInternal>()
+// resolved, with the cache size to use. The loader's onLoaded handler drains
+// them into a real attach.
+const panesAwaitingImageAddon = new Map<ManagedPaneInternal, number>()
 
 // Keyed on the terminal, not the pane: PTY connections hold a toPublicPane()
 // wrapper, which does not carry imageAddon.
@@ -27,9 +28,9 @@ setTerminalImageAddonLoadHandlers({
   onLoaded: () => {
     // attachInlineImages removes the pane it handles from the set, so deleting
     // the current iterator entry mid-iteration is safe.
-    for (const pane of panesAwaitingImageAddon) {
+    for (const [pane, storageLimitMb] of panesAwaitingImageAddon) {
       try {
-        attachInlineImages(pane)
+        attachInlineImages(pane, storageLimitMb)
       } catch (err) {
         // Why per-pane: this runs inside the loader promise, so one bad pane
         // must not strand the rest of the drain or raise an unhandled rejection.
@@ -41,7 +42,7 @@ setTerminalImageAddonLoadHandlers({
 })
 
 /** Attach in place so enabling images preserves scrollback and the PTY binding. */
-export function attachInlineImages(pane: ManagedPaneInternal): void {
+export function attachInlineImages(pane: ManagedPaneInternal, storageLimitMb: number): void {
   if (pane.imageAddon) {
     return
   }
@@ -49,7 +50,7 @@ export function attachInlineImages(pane: ManagedPaneInternal): void {
   if (!ImageAddonConstructor) {
     // Chunk not resolved yet: latch and let the loader's onLoaded attach us.
     pane.imageAttachmentDeferred = true
-    panesAwaitingImageAddon.add(pane)
+    panesAwaitingImageAddon.set(pane, storageLimitMb)
     void primeTerminalImageAddon()
     return
   }
@@ -57,7 +58,7 @@ export function attachInlineImages(pane: ManagedPaneInternal): void {
   pane.imageAttachmentDeferred = false
   let imageAddon: ImageAddon | null = null
   try {
-    imageAddon = new ImageAddonConstructor(buildInlineImageAddonOptions())
+    imageAddon = new ImageAddonConstructor(buildInlineImageAddonOptions(storageLimitMb))
     pane.terminal.loadAddon(imageAddon)
     pane.imageAddon = imageAddon
     terminalsRenderingInlineImages.add(pane.terminal)
@@ -90,9 +91,21 @@ export function detachInlineImages(pane: ManagedPaneInternal): void {
 }
 
 /** Enable or disable inline images in-place on a running terminal. */
-export function setInlineImagesEnabled(pane: ManagedPaneInternal, enabled: boolean): void {
+export function setInlineImagesEnabled(
+  pane: ManagedPaneInternal,
+  enabled: boolean,
+  storageLimitMb: number
+): void {
   if (enabled) {
-    attachInlineImages(pane)
+    if (pane.imageAddon) {
+      // Why: the patched addon reads storageLimit live for its Kitty blob and
+      // decoder budgets, and the setter evicts down to the new cap.
+      if (pane.imageAddon.storageLimit !== storageLimitMb) {
+        pane.imageAddon.storageLimit = storageLimitMb
+      }
+      return
+    }
+    attachInlineImages(pane, storageLimitMb)
   } else {
     rearmTerminalImageAddonLoad()
     detachInlineImages(pane)

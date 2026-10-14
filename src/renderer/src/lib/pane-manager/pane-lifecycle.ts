@@ -20,6 +20,7 @@ import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-web
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { TERMINAL_INLINE_IMAGE_CACHE_MB_DEFAULT } from '../../../../shared/terminal-inline-image-cache-policy'
 import { attachInlineImages, detachInlineImages } from './pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 import { cancelPendingTerminalViewportPresents } from './pane-viewport-present'
@@ -34,7 +35,11 @@ export { createPaneDOM } from './pane-dom-creation'
 export function openTerminal(
   pane: ManagedPaneInternal,
   // Named rather than positional: two adjacent optional booleans swap silently.
-  { ligatures = false, inlineImages = false }: { ligatures?: boolean; inlineImages?: boolean } = {}
+  {
+    ligatures = false,
+    inlineImages = false,
+    inlineImageCacheMb = TERMINAL_INLINE_IMAGE_CACHE_MB_DEFAULT
+  }: { ligatures?: boolean; inlineImages?: boolean; inlineImageCacheMb?: number } = {}
 ): void {
   const {
     terminal,
@@ -114,7 +119,7 @@ export function openTerminal(
   }
   // Deferred attachment restores Orca's DA1 handler after the addon registers its own.
   if (inlineImages) {
-    attachInlineImages(pane)
+    attachInlineImages(pane, inlineImageCacheMb)
   }
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)

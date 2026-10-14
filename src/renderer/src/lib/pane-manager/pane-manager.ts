@@ -262,8 +262,8 @@ export class PaneManager {
   }
 
   /** Enable or disable inline images for one pane in place (live toggle). */
-  setPaneInlineImagesEnabled(paneId: number, enabled: boolean): void {
-    this.withPane(paneId, (pane) => setInlineImagesEnabled(pane, enabled))
+  setPaneInlineImagesEnabled(paneId: number, enabled: boolean, cacheMb: number): void {
+    this.withPane(paneId, (pane) => setInlineImagesEnabled(pane, enabled, cacheMb))
   }
 
   setPaneGpuRendering(paneId: number, enabled: boolean): void {
