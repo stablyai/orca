@@ -16,11 +16,7 @@ import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
-import {
-  applyWorkspacePinIntent,
-  resolveWorkspacePinShortcutTarget,
-  type WorkspacePinIntent
-} from '../components/sidebar/workspace-pin-shortcut-target'
+import { createWorkspacePinCommandHandlers } from './workspace-pin-command-handlers'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -148,17 +144,6 @@ export function createAppCommandHandlers(
     run()
     return true
   }
-  const setWorkspacePin = (actionId: KeybindingActionId, intent: WorkspacePinIntent): boolean => {
-    if (floatingWorkspaceFocused) {
-      return false
-    }
-    const store = useAppStore.getState()
-    const target = resolveWorkspacePinShortcutTarget(store)
-    if (!target) {
-      return false
-    }
-    return claim(actionId, () => applyWorkspacePinIntent(store, target, intent))
-  }
   const revealRightSidebarTab = (
     actionId: KeybindingActionId,
     tab: Parameters<AppShortcutActions['setRightSidebarTab']>[0]
@@ -284,9 +269,7 @@ export function createAppCommandHandlers(
         })
       }
     ],
-    ['workspace.pin', () => setWorkspacePin('workspace.pin', 'pin')],
-    ['workspace.unpin', () => setWorkspacePin('workspace.unpin', 'unpin')],
-    ['workspace.togglePin', () => setWorkspacePin('workspace.togglePin', 'toggle')],
+    ...createWorkspacePinCommandHandlers({ floatingWorkspaceFocused, claim }),
     [
       'workspace.openBoard',
       () => {
