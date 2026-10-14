@@ -5,30 +5,40 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { requestTerminalTabRename } from '../tab-bar/terminal-tab-rename-request'
 import { useTabStripRenameHold } from './tab-strip-rename-hold'
 
-const panel = document.createElement('div')
-document.body.appendChild(panel)
+const stripRow = document.createElement('div')
+document.body.appendChild(stripRow)
 
 function mountRenameInput(): HTMLInputElement {
   const input = document.createElement('input')
   input.setAttribute('data-tab-rename-input', 'true')
-  panel.appendChild(input)
+  stripRow.appendChild(input)
   return input
 }
 
 function renderHold(ownsTab: (tabId: string) => boolean) {
-  return renderHook(() =>
-    useTabStripRenameHold({ enabled: true, panelRef: { current: panel }, ownsTab })
-  )
+  const rendered = renderHook(() => useTabStripRenameHold({ enabled: true, ownsTab }))
+  act(() => rendered.result.current.setStripRowNode(stripRow))
+  return rendered
 }
 
-afterEach(() => {
-  panel.replaceChildren()
+/** MutationObserver delivers on a microtask. */
+async function flushObserver(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve()
+  })
+}
+
+afterEach(async () => {
+  await act(async () => {
+    stripRow.replaceChildren()
+    await Promise.resolve()
+  })
 })
 
 describe('useTabStripRenameHold', () => {
-  it('holds for a rename of its own tab until the input unmounts', async () => {
+  it('holds for a requested rename of its own tab until the input unmounts', async () => {
     const { result } = renderHold((tabId) => tabId === 'tab-1')
-    expect(result.current).toBe(false)
+    expect(result.current.renameActive).toBe(false)
 
     let input: HTMLInputElement | null = null
     act(() => {
@@ -36,32 +46,39 @@ describe('useTabStripRenameHold', () => {
       input = mountRenameInput()
       requestTerminalTabRename('tab-1')
     })
-    expect(result.current).toBe(true)
+    expect(result.current.renameActive).toBe(true)
 
     await act(async () => {
       input?.remove()
-      // MutationObserver delivers on a microtask.
       await Promise.resolve()
     })
-    expect(result.current).toBe(false)
+    expect(result.current.renameActive).toBe(false)
   })
 
-  it('ignores a rename addressed to another group', () => {
+  it('holds for an editor opened without a request, as a double-click or the context menu do', async () => {
     const { result } = renderHold(() => false)
 
     act(() => {
       mountRenameInput()
-      requestTerminalTabRename('tab-9')
     })
+    await flushObserver()
 
-    expect(result.current).toBe(false)
+    expect(result.current.renameActive).toBe(true)
   })
 
-  it('releases at once when the group mounted no rename input', () => {
+  it('ignores a request addressed to another group', () => {
+    const { result } = renderHold(() => false)
+
+    act(() => requestTerminalTabRename('tab-9'))
+
+    expect(result.current.renameActive).toBe(false)
+  })
+
+  it('releases at once when no tab answered the request', () => {
     const { result } = renderHold(() => true)
 
     act(() => requestTerminalTabRename('tab-1'))
 
-    expect(result.current).toBe(false)
+    expect(result.current.renameActive).toBe(false)
   })
 })
