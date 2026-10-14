@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as AutoHideStripPreference from './auto-hide-single-tab-strip-preference'
 
-async function loadModule(getSync?: () => unknown): Promise<{
-  isAutoHideSingleTabStripEnabled: (settings: unknown) => boolean
-}> {
+async function loadModule(getSync?: () => unknown): Promise<typeof AutoHideStripPreference> {
   vi.resetModules()
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: getSync ? { api: { settings: { getSync } } } : {}
   })
-  return (await import('./auto-hide-single-tab-strip-preference')) as never
+  return import('./auto-hide-single-tab-strip-preference')
 }
 
 afterEach(() => {
