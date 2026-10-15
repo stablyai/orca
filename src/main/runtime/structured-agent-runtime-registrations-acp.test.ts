@@ -7,10 +7,10 @@ import {
 import { decideAgentLaunchMode } from '../agent-launch/agent-launch-mode'
 
 describe('ACP agents in the runtime registrations', () => {
-  it('registers Grok beside Claude and Codex with its declared capabilities', () => {
+  it('registers Grok beside the other built-ins and ACP agents with its declared capabilities', () => {
     expect(
       STRUCTURED_AGENT_RUNTIME_REGISTRATIONS.map(({ definition }) => definition.agent)
-    ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'omp'])
+    ).toEqual(['pi', 'codex', 'claude', 'grok', 'opencode', 'omp', 'zcode'])
     expect(structuredAgentRuntimeRegistration('grok')?.definition).toMatchObject({
       handleTransport: 'acp',
       accountHomeVariable: 'GROK_HOME',

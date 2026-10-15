@@ -194,7 +194,7 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
 
     expect(screen.queryByText('Resume in New CLI')).toBeNull()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New Native Chat' }))
-    expect(mocks.handleResumeInNewChat).toHaveBeenCalledWith(cliRow, 'wt-1')
+    expect(mocks.handleResumeInNewChat).toHaveBeenCalledWith(cliRow, 'wt-1', 'history')
   })
 
   it('offers nothing before the fresh answer and never shows a stale cached row', async () => {

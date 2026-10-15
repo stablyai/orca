@@ -54,6 +54,40 @@ export const openCodeTranscriptDefaultDeps: Required<OpenCodeTranscriptDeps> = {
   readPage: (args, signal) => readOpenCodeTranscriptPageViaWorker(args, signal)
 }
 
+/**
+ * Resolve a subscribe's read legs against its own abort signal, with the agent
+ * tag (when any) already applied to every leg. Kept here so the poll loop stays
+ * free of default-vs-override plumbing.
+ */
+export function bindOpenCodeTranscriptDeps(
+  deps: OpenCodeTranscriptDeps,
+  signal: AbortSignal,
+  agent?: 'zcode'
+): {
+  resolveDbPath: () => Promise<string | null>
+  readSignal: (dbPath: string, sessionId: string) => Promise<OpenCodeTranscriptSignal | null>
+  readPage: (
+    page: Parameters<NonNullable<OpenCodeTranscriptDeps['readPage']>>[0]
+  ) => Promise<OpenCodeTranscriptPage | null>
+} {
+  return {
+    resolveDbPath: () =>
+      (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(undefined, signal, agent),
+    readSignal: (dbPath, sessionId) =>
+      (deps.readSignal ?? openCodeTranscriptDefaultDeps.readSignal)(
+        dbPath,
+        sessionId,
+        signal,
+        agent
+      ),
+    readPage: (page) =>
+      (deps.readPage ?? openCodeTranscriptDefaultDeps.readPage)(
+        { ...page, ...(agent ? { agent } : {}) },
+        signal
+      )
+  }
+}
+
 export type OpenCodeTailResult =
   | { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number }
   | { error: string; notFound?: true }

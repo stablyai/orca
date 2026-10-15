@@ -26,6 +26,8 @@ import type { StructuredAgentCommandSettings } from '../native-chat/structured-a
 import type { CodexStructuredSessionAdapterDeps } from '../codex/codex-structured-session-adapter'
 import type { readCodexCliInstallation } from '../preflight/codex-cli-installation'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
+import type { ZcodeStructuredSessionAdapterDeps } from '../zcode/zcode-structured-session-state'
+import type { ZcodeStructuredLaunchPartDeps } from '../zcode/zcode-structured-launch-resolution'
 import {
   StructuredAgentSessionHost,
   type StructuredAgentSessionHostDeps
@@ -37,6 +39,7 @@ import {
   installAgentSessionAttachments,
   stopAgentSessionAttachments
 } from './structured-agent-session-attachment-wiring'
+import { installStructuredAgentSessionAttentionDelivery } from './structured-agent-session-attention-wiring'
 import {
   openAgentSessionRecordStoreOnce,
   releaseAgentSessionRecordStore,
@@ -113,6 +116,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   /** Scripted transports must also replace the real host's version probe. */
   readCodexInstallation?: typeof readCodexCliInstallation
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
+  openZcodeConnection?: ZcodeStructuredSessionAdapterDeps['openConnection']
+  resolveZcodeCommand?: ZcodeStructuredLaunchPartDeps['resolveCommand']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
@@ -334,24 +339,7 @@ async function installOnJournal(
       environment: envResolvers
     }))
   })
-  if (deps.attentionDelivery) {
-    const installed = host
-    const delivery = deps.attentionDelivery
-    // Lives exactly as long as the host: teardown drops the host and its subscribers together.
-    installed.subscribeTurnCompletions({
-      id: 'host-attention-delivery',
-      includePrompts: true,
-      emit: (event) => {
-        if (event.type === 'end') {
-          return
-        }
-        const sessionId =
-          event.type === 'prompt' ? event.prompt.sessionId : event.completion.sessionId
-        delivery.deliver(event, installed.readStatusSummary(sessionId))
-      },
-      onState: delivery.reconcile
-    })
-  }
+  installStructuredAgentSessionAttentionDelivery({ host, delivery: deps.attentionDelivery })
   setStructuredAgentSessionHost(host)
   // The host starts with its runtime, local or remote, so this is the runtime-start listing.
   const modelCatalog = host.deps.modelCatalog

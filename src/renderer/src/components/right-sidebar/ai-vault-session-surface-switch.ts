@@ -4,11 +4,16 @@ import {
   aiVaultSessionRowResumeGating,
   type AiVaultSessionResumeState
 } from './ai-vault-session-resume'
-import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
+import type {
+  AiVaultResumeInChatEligibility,
+  AiVaultResumeInChatRoute
+} from './ai-vault-session-resume-in-chat'
 
 export type AiVaultSessionSurfaceSwitchTargets = {
   /** Where "Resume in New Native Chat" opens, or null when it is not offered. */
   resumeInNewChatWorkspaceId: string | null
+  /** How the offered chat opens: a structured adoption, or the read-only history tab. */
+  resumeInNewChatRoute: AiVaultResumeInChatRoute | null
   /** Where "Resume in New CLI" opens its fork, or null when it is not offered. */
   resumeInNewCliWorktreeId: string | null
 }
@@ -25,6 +30,7 @@ export function resolveAiVaultSessionSurfaceSwitchTargets(
 ): AiVaultSessionSurfaceSwitchTargets {
   return {
     resumeInNewChatWorkspaceId: resumeInChat?.available ? resumeInChat.workspaceId : null,
+    resumeInNewChatRoute: resumeInChat?.available ? resumeInChat.route : null,
     resumeInNewCliWorktreeId: aiVaultSessionCliForkWorktreeId(session, {
       worktreeId: resumeState?.worktreeId,
       disabled: aiVaultSessionRowResumeGating(session, resumeState).resumeDisabled

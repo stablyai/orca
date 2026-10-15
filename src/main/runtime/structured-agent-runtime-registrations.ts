@@ -50,6 +50,7 @@ import {
 } from '../acp/acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from '../acp/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../pi/rpc-runtime-registration'
+import { ZCODE_RUNTIME_REGISTRATION } from '../zcode/zcode-runtime-registration'
 import type { AgentModelCatalogDiscovery } from '../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import {
   acpModelCatalogDiscovery,
@@ -309,7 +310,8 @@ export const STRUCTURED_AGENT_RUNTIME_REGISTRATIONS: readonly StructuredAgentRun
           })
         )
     },
-    ...ACP_LAUNCH_SPECS.map(acpRegistration)
+    ...ACP_LAUNCH_SPECS.map(acpRegistration),
+    ZCODE_RUNTIME_REGISTRATION
   ]
 
 /** The registration of `agent`; null for an agent this runtime does not drive. */

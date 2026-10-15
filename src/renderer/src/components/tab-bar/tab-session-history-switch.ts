@@ -62,6 +62,8 @@ export type TabSessionHistorySubject = {
 export type TabSessionSwitch = {
   action: 'resume-in-new-chat' | 'resume-in-new-cli'
   worktreeId: string
+  /** How a `resume-in-new-chat` opens: a structured adoption, or the read-only history tab. */
+  chatRoute?: 'structured' | 'history'
 }
 
 /** Skips lookups on hosts where the row's gate can never pass, so no remote scan runs for nothing. */
@@ -222,7 +224,8 @@ export function resolveTabSessionSwitch(
   return targets.resumeInNewChatWorkspaceId
     ? {
         action: 'resume-in-new-chat',
-        worktreeId: targets.resumeInNewChatWorkspaceId
+        worktreeId: targets.resumeInNewChatWorkspaceId,
+        ...(targets.resumeInNewChatRoute ? { chatRoute: targets.resumeInNewChatRoute } : {})
       }
     : null
 }

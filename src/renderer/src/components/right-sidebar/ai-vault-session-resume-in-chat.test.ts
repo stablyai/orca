@@ -37,7 +37,11 @@ function eligibility(
 
 describe('resolveAiVaultSessionResumeInChatEligibility', () => {
   it('offers the chat for a local Claude row in its own workspace', () => {
-    expect(eligibility()).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca' })
+    expect(eligibility()).toEqual({
+      available: true,
+      workspaceId: 'repo-1::/repo/orca',
+      route: 'structured'
+    })
   })
 
   it.each<AiVaultSession['agent']>(['grok', 'omp', 'opencode', 'opencode2', 'pi'])(
@@ -45,7 +49,8 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     (agent) => {
       expect(eligibility({ session: session({ agent }) })).toEqual({
         available: true,
-        workspaceId: 'repo-1::/repo/orca'
+        workspaceId: 'repo-1::/repo/orca',
+        route: 'structured'
       })
     }
   )
@@ -72,6 +77,56 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     ).toEqual({ available: false, reason: 'already-structured' })
   })
 
+  it('routes an unadopted local ZCode row into the structured adoption', () => {
+    expect(
+      eligibility({ session: session({ agent: 'zcode', filePath: undefined }) })
+    ).toMatchObject({ available: true, route: 'structured' })
+  })
+
+  it('routes a ZCode row whose database is stored inside WSL to the read-only history tab', () => {
+    expect(
+      eligibility({
+        session: session({
+          agent: 'zcode',
+          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.zcode/cli/db/db.sqlite'
+        })
+      })
+    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca', route: 'history' })
+  })
+
+  it('keeps a WSL-stored ZCode row available for the history tab even without a structured route', () => {
+    expect(
+      eligibility({
+        structuredRouteAvailable: false,
+        session: session({
+          agent: 'zcode',
+          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.zcode/cli/db/db.sqlite'
+        })
+      })
+    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca', route: 'history' })
+  })
+
+  it('withholds the unadopted local ZCode row when no structured route exists here', () => {
+    expect(
+      eligibility({
+        structuredRouteAvailable: false,
+        session: session({ agent: 'zcode', filePath: undefined })
+      })
+    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca', route: 'history' })
+  })
+
+  it('refuses an adopted ZCode row as already structured', () => {
+    expect(
+      eligibility({
+        session: session({
+          agent: 'zcode',
+          filePath: undefined,
+          structuredSession: { sessionId: 'chat-1', workspaceId: 'repo-1::/repo/orca' }
+        })
+      })
+    ).toEqual({ available: false, reason: 'already-structured' })
+  })
+
   it('refuses a row recorded on a remote host', () => {
     expect(eligibility({ session: session({ executionHostId: 'ssh:build-box' }) })).toEqual({
       available: false,
@@ -83,6 +138,19 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     expect(
       eligibility({
         session: session({
+          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.claude/projects/p/session-1.jsonl'
+        })
+      })
+    ).toEqual({ available: false, reason: 'remote' })
+  })
+
+  it('routes a WSL-stored Claude row to refusal, not the read-only tab', () => {
+    // The read-only fallback is a ZCode-only path: Claude's transcript renders through the same
+    // structured reader, so WSL storage stays a refusal for it.
+    expect(
+      eligibility({
+        session: session({
+          agent: 'claude',
           filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.claude/projects/p/session-1.jsonl'
         })
       })

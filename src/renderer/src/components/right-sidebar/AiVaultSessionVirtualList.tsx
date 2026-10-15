@@ -81,7 +81,11 @@ export function AiVaultSessionVirtualList({
   onJumpToWorktree: (worktreeId: string) => void
   onResume: (session: AiVaultSession, worktreeId: string) => void
   onContinueInNewSession: (session: AiVaultSession, worktreeId: string) => void
-  onResumeInNewChat: (session: AiVaultSession, worktreeId: string) => void
+  onResumeInNewChat: (
+    session: AiVaultSession,
+    worktreeId: string,
+    route?: 'structured' | 'history'
+  ) => void
   onResumeInNewCli: (session: AiVaultSession, worktreeId: string) => void
   onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void

@@ -107,7 +107,12 @@ export function TabSessionSurfaceSwitchMenuItems({
         tooltipSide="right"
         onResumeInNewChat={
           move.action === 'resume-in-new-chat'
-            ? () => launchActions.handleResumeInNewChat(session, move.worktreeId)
+            ? () =>
+                launchActions.handleResumeInNewChat(
+                  session,
+                  move.worktreeId,
+                  move.chatRoute ?? 'history'
+                )
             : undefined
         }
         onResumeInNewCli={

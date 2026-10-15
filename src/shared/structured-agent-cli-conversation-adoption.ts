@@ -10,6 +10,7 @@ export const CLI_CONVERSATION_ADOPTING_AGENTS = {
   codex: 'codex',
   grok: 'grok',
   omp: 'omp',
+  zcode: 'zcode',
   opencode: 'opencode',
   // OpenCode 2.x lists its conversations as `opencode2` rows; an OpenCode chat runs either line.
   opencode2: 'opencode',
