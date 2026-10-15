@@ -372,6 +372,7 @@
 
 .pane-title-bar[data-chromeless] .pane-title-split-trigger::before,
 .pane-title-bar[data-chromeless] .pane-title-close::before {
+  /* Why: rounded backing clears text on hover without obscuring row-one text while idle. */
   content: '';
   position: absolute;
   top: 50%;
@@ -386,6 +387,18 @@
   );
   border-radius: 9999px;
   transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+
+.pane-title-bar[data-chromeless] .pane-title-split-trigger:hover::before,
+.pane-title-bar[data-chromeless] .pane-title-close:hover::before,
+.pane-title-bar[data-chromeless]:hover .pane-title-split-trigger::before,
+.pane-title-bar[data-chromeless]:hover .pane-title-close::before,
+.pane-title-bar[data-chromeless]:focus-within .pane-title-split-trigger::before,
+.pane-title-bar[data-chromeless]:focus-within .pane-title-close::before {
+  opacity: 1;
 }
 
 .pane-title-close {
@@ -412,10 +425,17 @@
 
 .pane-title-bar[data-chromeless] .pane-title-split-trigger svg,
 .pane-title-bar[data-chromeless] .pane-title-close svg {
-  /* Why: chromeless controls overlap row-one terminal text; the rounded backing
-     clears text inside open glyphs without adding one shared toolbar fill. */
+  /* Why: thinner idle stroke keeps row-one text readable under floating controls. */
   position: relative;
-  stroke-width: 2.75px;
+  stroke-width: 1.75px;
+  transition: stroke-width 120ms ease;
+}
+
+.pane-title-bar[data-chromeless] .pane-title-split-trigger:hover svg,
+.pane-title-bar[data-chromeless] .pane-title-close:hover svg,
+.pane-title-bar[data-chromeless]:hover .pane-title-split-trigger svg,
+.pane-title-bar[data-chromeless]:hover .pane-title-close svg {
+  stroke-width: 2.25px;
 }
 
 .pane-title-bar[data-active-pane] .pane-title-split-trigger,
@@ -425,7 +445,24 @@
   opacity: 1;
 }
 
+/* Why: idle chromeless controls remain discoverable without blocking underlying text. */
+.pane-title-bar[data-chromeless][data-active-pane] .pane-title-split-trigger,
+.pane-title-bar[data-chromeless][data-active-pane] .pane-title-close {
+  opacity: 0.35;
+}
+
+.pane-title-bar[data-chromeless]:hover .pane-title-split-trigger,
+.pane-title-bar[data-chromeless]:hover .pane-title-close,
+.pane-title-bar[data-chromeless]:focus-within .pane-title-split-trigger,
+.pane-title-bar[data-chromeless]:focus-within .pane-title-close,
+.pane-title-bar[data-chromeless] .pane-title-split-trigger:hover,
+.pane-title-bar[data-chromeless] .pane-title-close:hover {
+  opacity: 1;
+}
+
 /* A shown but unavailable action (pending, or its host needs an update) reads as dimmed. */
+/* Why: kept after the chromeless rules above; equal specificity, so this must win to keep a
+   disabled control dimmed instead of letting its hover/focus rule restore full opacity. */
 .pane-title-bar[data-active-pane] .pane-title-split-trigger:disabled,
 .pane-title-bar:hover .pane-title-split-trigger:disabled,
 .pane-title-bar:focus-within .pane-title-split-trigger:disabled {
