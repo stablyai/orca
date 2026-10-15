@@ -48,7 +48,8 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
-    if (isIndexJump && isAutoRepeat) {
+    // A held next-attention chord would spin through the queue and wake every sleeping session on the way.
+    if ((isIndexJump || action.type === 'jumpToNextAttention') && isAutoRepeat) {
       // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a
       // repeat would leak a raw key to xterm/DOM, and re-firing the jump is never what a hold means.
       event.preventDefault()
