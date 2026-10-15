@@ -20,18 +20,47 @@ test.describe('Terminal Panes', () => {
   test('Always-on pane header split button hover stays transparent', async ({ orcaPage }) => {
     const splitButton = orcaPage.getByRole('button', { name: 'Split Terminal Right' })
     await expect(splitButton).toBeVisible()
+
+    const readControlStyle = () =>
+      splitButton.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const beforeStyle = getComputedStyle(element, '::before')
+        const svg = element.querySelector('svg')
+        const svgStyle = svg ? getComputedStyle(svg) : null
+        return {
+          backgroundColor: style.backgroundColor,
+          opacity: Number(style.opacity),
+          beforeOpacity: Number(beforeStyle.opacity),
+          strokeWidth: svgStyle?.strokeWidth
+        }
+      })
+
+    const idleStyle = await readControlStyle()
+    expect(idleStyle.backgroundColor).toBe('rgba(0, 0, 0, 0)')
+    expect(idleStyle.opacity).toBeLessThanOrEqual(0.4)
+    expect(idleStyle.beforeOpacity).toBe(0)
+    expect(idleStyle.strokeWidth).toBe('1.75px')
+
     await splitButton.hover()
-
-    const hoverStyle = await splitButton.evaluate((element) => {
-      const style = getComputedStyle(element)
-      return {
-        backgroundColor: style.backgroundColor,
-        opacity: style.opacity
-      }
-    })
-
+    await expect
+      .poll(async () => (await readControlStyle()).strokeWidth, { timeout: 1_000 })
+      .toBe('2.25px')
+    const hoverStyle = await readControlStyle()
     expect(hoverStyle.backgroundColor).toBe('rgba(0, 0, 0, 0)')
-    expect(Number(hoverStyle.opacity)).toBeGreaterThan(0.9)
+    expect(hoverStyle.opacity).toBeGreaterThan(0.9)
+    expect(hoverStyle.beforeOpacity).toBeGreaterThan(0.9)
+    expect(hoverStyle.strokeWidth).toBe('2.25px')
+
+    // Move pointer away and focus via keyboard
+    await orcaPage.mouse.move(0, 0)
+    await splitButton.focus()
+    await expect
+      .poll(async () => (await readControlStyle()).strokeWidth, { timeout: 1_000 })
+      .toBe('2.25px')
+    const focusStyle = await readControlStyle()
+    expect(focusStyle.opacity).toBeGreaterThan(0.9)
+    expect(focusStyle.beforeOpacity).toBeGreaterThan(0.9)
+    expect(focusStyle.strokeWidth).toBe('2.25px')
   })
 
   test('shows a pane divider after splitting', async ({ orcaPage }) => {
