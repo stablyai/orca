@@ -7,7 +7,7 @@ import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-p
 import {
   filterFolderWorkspacesFromOtherDevices,
   getPairedDeviceIdsByEnvironment
-} from './workspace-creator-visibility'
+} from '../../../../shared/workspace-creator-visibility'
 import {
   computeLiveVisibleSidebarWorktrees,
   type VisibleWorktreeShortcutTarget
