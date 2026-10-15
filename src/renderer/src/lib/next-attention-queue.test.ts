@@ -116,7 +116,7 @@ function brief(queue: AttentionTarget[]): string[] {
   )
 }
 
-const order = (...ids: string[]) => ids.map((id) => ({ id }))
+const order = (...ids: string[]) => ids.map((id) => ({ id, identityHostId: 'local' as const }))
 
 describe('buildAttentionQueue', () => {
   it('lists workspaces in sidebar order and panes in layout order', () => {
@@ -241,8 +241,8 @@ describe('buildAttentionQueue', () => {
     const queue = buildAttentionQueue(
       state,
       [
-        { id: 'folder:f', executionHostId: 'local' },
-        { id: 'folder:f', executionHostId: 'runtime:box' }
+        { id: 'folder:f', identityHostId: 'local', executionHostId: 'local' },
+        { id: 'folder:f', identityHostId: 'runtime:box', executionHostId: 'runtime:box' }
       ],
       NOW
     )
@@ -262,7 +262,7 @@ describe('buildAttentionQueue', () => {
 
     expect(buildAttentionQueue(state, order('a'), NOW)).toEqual([
       {
-        workspaceIdentity: '|a',
+        workspaceIdentity: 'local|a',
         worktreeId: 'a',
         level: 'tab',
         tabKind: 'agent-session',
@@ -356,8 +356,20 @@ describe('buildAttentionQueue', () => {
     })
 
     expect(buildAttentionQueue(state, order('a'), NOW)).toEqual([
-      { workspaceIdentity: '|a', worktreeId: 'a', level: 'workspace', ownerPaneKey: paneKey }
+      { workspaceIdentity: 'local|a', worktreeId: 'a', level: 'workspace', ownerPaneKey: paneKey }
     ])
+  })
+
+  it('finds the unread flag of a host-less workspace when a runtime host is focused', () => {
+    const state = makeState({
+      worktreesByRepo: { 'repo-1': [worktree('a', { isUnread: true })] },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host focus reads only this setting.
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+    })
+
+    const queue = buildAttentionQueue(state, [{ id: 'a', identityHostId: 'runtime:env-1' }], NOW)
+
+    expect(brief(queue)).toEqual(['a/workspace'])
   })
 
   it('keeps same-id workspaces on two hosts apart', () => {
@@ -373,8 +385,8 @@ describe('buildAttentionQueue', () => {
     const queue = buildAttentionQueue(
       state,
       [
-        { id: 'a', executionHostId: 'local' },
-        { id: 'a', executionHostId: 'ssh:box' }
+        { id: 'a', identityHostId: 'local', executionHostId: 'local' },
+        { id: 'a', identityHostId: 'ssh:box', executionHostId: 'ssh:box' }
       ],
       NOW
     )
@@ -394,8 +406,8 @@ describe('buildAttentionQueue', () => {
     const queue = buildAttentionQueue(
       state,
       [
-        { id: 'a', executionHostId: 'local' },
-        { id: 'a', executionHostId: 'ssh:box' }
+        { id: 'a', identityHostId: 'local', executionHostId: 'local' },
+        { id: 'a', identityHostId: 'ssh:box', executionHostId: 'ssh:box' }
       ],
       NOW
     )
