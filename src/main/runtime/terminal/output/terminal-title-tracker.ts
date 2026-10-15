@@ -24,6 +24,9 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
   protected abstract createTerminalSideEffectCommandCodeDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']>
+  protected abstract createTerminalSideEffectBobApprovalDetector(
+    ptyId: string
+  ): NonNullable<RuntimePtyTitleTrackerEntry['bobApprovalDetector']>
 
   protected getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
     if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
