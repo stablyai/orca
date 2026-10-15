@@ -1261,6 +1261,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "対応が必要なワークスペースはありません"
+        },
         "sshManagedServer": {
           "refusedBlocked": "この SSH ホストを管理対象の Orca サーバーに移動できませんでした。理由は設定の [SSH ホスト] で確認できます。"
         }

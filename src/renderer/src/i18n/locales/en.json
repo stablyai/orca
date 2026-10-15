@@ -1441,6 +1441,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "No workspaces need attention"
+        },
         "sshManagedServer": {
           "refusedBlocked": "This SSH host could not move to a managed Orca server. SSH Hosts in Settings shows why."
         }

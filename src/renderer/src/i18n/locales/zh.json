@@ -1261,6 +1261,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "没有需要关注的工作区"
+        },
         "sshManagedServer": {
           "refusedBlocked": "此 SSH 主机无法迁移到受管的 Orca 服务器。设置中的“SSH 主机”会显示原因。"
         }
