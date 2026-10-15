@@ -2,8 +2,10 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getAttentionOrderWorkspaceTargets } from '@/components/sidebar/attention-order-workspaces'
-import type { VisibleWorktreeShortcutTarget } from '@/components/sidebar/visible-worktrees'
+import {
+  getAttentionOrderWorkspaceTargets,
+  type AttentionOrderWorkspace
+} from '@/components/sidebar/attention-order-workspaces'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { buildAttentionQueue, type AttentionTarget } from '@/lib/next-attention-queue'
 import { pickNextAttentionTarget, type AttentionPosition } from '@/lib/next-attention-target'
@@ -15,7 +17,7 @@ import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qu
 
 function currentAttentionPosition(
   state: AppState,
-  orderedWorkspaces: readonly VisibleWorktreeShortcutTarget[]
+  orderedWorkspaces: readonly AttentionOrderWorkspace[]
 ): AttentionPosition {
   const worktreeId = state.activeWorktreeId
   // Off the terminal view the user sees no workspace, so even the active one is a fresh destination.
@@ -25,7 +27,7 @@ function currentAttentionPosition(
   // Host-unqualified activation names no host; the sidebar row it landed on does.
   const hostId =
     state.activeWorkspaceExecutionHostId ??
-    orderedWorkspaces.find((workspace) => workspace.id === worktreeId)?.executionHostId
+    orderedWorkspaces.find((workspace) => workspace.id === worktreeId)?.identityHostId
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const activeGroup = (state.groupsByWorktree[worktreeId] ?? []).find(
     (group) => group.id === activeGroupId
@@ -41,25 +43,28 @@ function currentAttentionPosition(
   }
 }
 
-function navigateToAttentionTarget(target: AttentionTarget): void {
+type NavigationOutcome = 'reached' | 'workspace-unreachable' | 'tab-gone'
+
+function navigateToAttentionTarget(target: AttentionTarget): NavigationOutcome {
   const { worktreeId } = target
   const activated = activateAndRevealWorkspace(worktreeId, {
     navigationIntent: 'user-open',
     ...(target.executionHostId ? { executionHostId: target.executionHostId } : {})
   })
   if (activated === false) {
-    return
+    return 'workspace-unreachable'
   }
   if (target.tabKind === 'agent-session' && target.unifiedTabId) {
-    activateStructuredAgentSessionTab({ worktreeId, tabId: target.unifiedTabId })
-    return
+    return activateStructuredAgentSessionTab({ worktreeId, tabId: target.unifiedTabId })
+      ? 'reached'
+      : 'tab-gone'
   }
   if (target.tabKind === 'terminal' && target.terminalTabId) {
     const terminalTabId = target.terminalTabId
     const state = useAppStore.getState()
     // The tab may have closed between building the queue and activating its workspace.
     if (!(state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === terminalTabId)) {
-      return
+      return 'tab-gone'
     }
     const leafId = target.leafId ?? null
     // No ack here: the on-screen scan reads the pane once it is actually visible.
@@ -69,12 +74,13 @@ function navigateToAttentionTarget(target: AttentionTarget): void {
       state.activateTab(target.unifiedTabId, { worktreeId })
     }
     activateTerminalTabOnOwner(worktreeId, terminalTabId, leafId)
-    return
+    return 'reached'
   }
   const owner = target.ownerPaneKey ? parsePaneKey(target.ownerPaneKey) : null
   if (owner) {
     activateTerminalTabOnOwner(worktreeId, owner.tabId, owner.leafId)
   }
+  return 'reached'
 }
 
 export function jumpToNextAttentionFromShortcut(state: AppState, now: number): void {
@@ -83,10 +89,8 @@ export function jumpToNextAttentionFromShortcut(state: AppState, now: number): v
     return
   }
   const orderedWorkspaces = getAttentionOrderWorkspaceTargets()
-  const target = pickNextAttentionTarget(
-    buildAttentionQueue(state, orderedWorkspaces, now),
-    currentAttentionPosition(state, orderedWorkspaces)
-  )
+  const queue = buildAttentionQueue(state, orderedWorkspaces, now)
+  const target = pickNextAttentionTarget(queue, currentAttentionPosition(state, orderedWorkspaces))
   if (!target) {
     toast.info(
       translate('auto.hooks.ipcEvents.nextAttention.none', 'No workspaces need attention'),
@@ -94,5 +98,22 @@ export function jumpToNextAttentionFromShortcut(state: AppState, now: number): v
     )
     return
   }
-  navigateToAttentionTarget(target)
+  // Why walk on: a stateless pick would otherwise return to an unreachable target on every press.
+  const start = queue.indexOf(target)
+  // Why: a workspace that failed to open already told the user why; retrying its other targets repeats that.
+  const unreachableWorkspaces = new Set<string>()
+  for (let offset = 0; offset < queue.length; offset += 1) {
+    const candidate = queue[(start + offset) % queue.length]
+    if (unreachableWorkspaces.has(candidate.workspaceIdentity)) {
+      continue
+    }
+    const outcome = navigateToAttentionTarget(candidate)
+    if (outcome === 'reached') {
+      return
+    }
+    if (outcome === 'workspace-unreachable') {
+      unreachableWorkspaces.add(candidate.workspaceIdentity)
+    }
+    console.warn('[next-attention] could not reach target', candidate.workspaceIdentity)
+  }
 }

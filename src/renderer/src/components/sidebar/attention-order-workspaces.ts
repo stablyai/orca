@@ -1,6 +1,11 @@
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
-import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
@@ -8,12 +13,17 @@ import {
   filterFolderWorkspacesFromOtherDevices,
   getPairedDeviceIdsByEnvironment
 } from '../../../../shared/workspace-creator-visibility'
-import {
-  computeLiveVisibleSidebarWorktrees,
-  type VisibleWorktreeShortcutTarget
-} from './visible-worktrees'
+import { computeLiveVisibleSidebarWorktrees } from './visible-worktrees'
 
 const NO_COLLAPSED_GROUPS = new Set<string>()
+
+export type AttentionOrderWorkspace = {
+  id: string
+  /** Host the row resolves to: keys identity, since the active workspace records the resolved host. */
+  identityHostId: ExecutionHostId
+  /** The row's own hostId, passed to activation as-is like Cmd+1–9 so legacy rows find their owner. */
+  executionHostId?: ExecutionHostId
+}
 
 /**
  * The sorted, filtered worktrees WorktreeList last rendered, before row grouping.
@@ -32,7 +42,7 @@ export function setPublishedSidebarWorktrees(worktrees: readonly Worktree[] | nu
 export function computeAttentionOrderWorkspaceTargets(
   state: AppState,
   sidebarWorktrees: readonly Worktree[]
-): VisibleWorktreeShortcutTarget[] {
+): AttentionOrderWorkspace[] {
   // Why: the row replay only filters folders by host; the sidebar also hides other devices' folders.
   const folderWorkspaces = state.hideWorkspacesFromOtherDevices
     ? filterFolderWorkspacesFromOtherDevices(
@@ -48,14 +58,18 @@ export function computeAttentionOrderWorkspaceTargets(
     sidebarWorktrees
   )
   // Why single-location: it keeps each workspace's first row, so a pinned copy wins over its group copy.
-  // Why the resolved host: a local row carries no hostId, but the active workspace records the host it resolved to.
-  return getRenderedWorkspaceRowsInSidebarOrder(rows, 'single-location').map((row) => ({
-    id: row.worktree.id,
-    executionHostId: getWorktreeExecutionHostId(row.worktree, row.repo)
-  }))
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+  return getRenderedWorkspaceRowsInSidebarOrder(rows, 'single-location').map((row) => {
+    const identityHostId = getWorktreeExecutionHostId(row.worktree, row.repo, defaultHostId)
+    // Why pin local: an unqualified id could otherwise resolve to a same-id remote row first.
+    const executionHostId =
+      row.worktree.hostId ??
+      (identityHostId === LOCAL_EXECUTION_HOST_ID ? identityHostId : undefined)
+    return { id: row.worktree.id, identityHostId, ...(executionHostId ? { executionHostId } : {}) }
+  })
 }
 
-export function getAttentionOrderWorkspaceTargets(): VisibleWorktreeShortcutTarget[] {
+export function getAttentionOrderWorkspaceTargets(): AttentionOrderWorkspace[] {
   const state = useAppStore.getState()
   return computeAttentionOrderWorkspaceTargets(
     state,
