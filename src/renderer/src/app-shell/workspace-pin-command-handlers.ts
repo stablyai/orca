@@ -4,6 +4,7 @@ import {
   type WorkspacePinIntent
 } from '../components/sidebar/workspace-pin-shortcut-target'
 import { useAppStore } from '../store'
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 
 export type ClaimShortcut = (actionId: KeybindingActionId, run: () => void) => boolean
@@ -22,7 +23,9 @@ export function createWorkspacePinCommandHandlers(deps: {
   claim: ClaimShortcut
 }): [KeybindingActionId, () => boolean][] {
   const setWorkspacePin = (actionId: KeybindingActionId, intent: WorkspacePinIntent): boolean => {
-    if (deps.floatingWorkspaceFocused) {
+    // Why: an open menu drops :hover from the row it was opened on, so the resolver would pin the
+    // focused workspace instead of that row; declining is what delete does in the same state.
+    if (deps.floatingWorkspaceFocused || hasVisibleOverlay()) {
       return false
     }
     const store = useAppStore.getState()
