@@ -1356,6 +1356,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "확인이 필요한 워크스페이스가 없습니다"
+        },
         "sshManagedServer": {
           "refusedBlocked": "이 SSH 호스트에 Orca를 설정할 수 없습니다. 이유는 설정의 SSH 호스트에서 확인할 수 있습니다."
         }

@@ -1356,6 +1356,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "対応が必要なワークスペースはありません"
+        },
         "sshManagedServer": {
           "refusedBlocked": "この SSH ホストに Orca をセットアップできませんでした。理由は設定の [SSH ホスト] で確認できます。"
         }

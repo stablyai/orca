@@ -48,7 +48,8 @@ export function installMainWindowShortcutRouting(args: {
     }
 
     const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
-    if (isIndexJump && isAutoRepeat) {
+    // A held next-attention chord would spin through the queue and wake every sleeping session on the way.
+    if ((isIndexJump || action.type === 'jumpToNextAttention') && isAutoRepeat) {
       // Renderer index handlers skip repeats; contain them here or raw keys leak to xterm/DOM.
       event.preventDefault()
       return true

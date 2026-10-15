@@ -1356,6 +1356,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "没有需要关注的工作区"
+        },
         "sshManagedServer": {
           "refusedBlocked": "无法在此 SSH 主机上设置 Orca。设置中的“SSH 主机”会显示原因。"
         }
