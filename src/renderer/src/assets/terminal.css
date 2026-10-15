@@ -402,7 +402,9 @@
 .pane-title-bar[data-chromeless]:hover .pane-title-split-trigger::before,
 .pane-title-bar[data-chromeless]:hover .pane-title-close::before,
 .pane-title-bar[data-chromeless]:focus-within .pane-title-split-trigger::before,
-.pane-title-bar[data-chromeless]:focus-within .pane-title-close::before {
+.pane-title-bar[data-chromeless]:focus-within .pane-title-close::before,
+.pane-title-bar[data-chromeless] .pane-title-split-trigger:focus-visible::before,
+.pane-title-bar[data-chromeless] .pane-title-close:focus-visible::before {
   opacity: 1;
 }
 
@@ -439,7 +441,11 @@
 .pane-title-bar[data-chromeless] .pane-title-split-trigger:hover svg,
 .pane-title-bar[data-chromeless] .pane-title-close:hover svg,
 .pane-title-bar[data-chromeless]:hover .pane-title-split-trigger svg,
-.pane-title-bar[data-chromeless]:hover .pane-title-close svg {
+.pane-title-bar[data-chromeless]:hover .pane-title-close svg,
+.pane-title-bar[data-chromeless]:focus-within .pane-title-split-trigger svg,
+.pane-title-bar[data-chromeless]:focus-within .pane-title-close svg,
+.pane-title-bar[data-chromeless] .pane-title-split-trigger:focus-visible svg,
+.pane-title-bar[data-chromeless] .pane-title-close:focus-visible svg {
   stroke-width: 2.25px;
 }
 
@@ -461,7 +467,9 @@
 .pane-title-bar[data-chromeless]:focus-within .pane-title-split-trigger,
 .pane-title-bar[data-chromeless]:focus-within .pane-title-close,
 .pane-title-bar[data-chromeless] .pane-title-split-trigger:hover,
-.pane-title-bar[data-chromeless] .pane-title-close:hover {
+.pane-title-bar[data-chromeless] .pane-title-close:hover,
+.pane-title-bar[data-chromeless] .pane-title-split-trigger:focus-visible,
+.pane-title-bar[data-chromeless] .pane-title-close:focus-visible {
   opacity: 1;
 }
 
@@ -472,6 +480,12 @@
 .pane-title-bar:hover .pane-title-split-trigger:disabled,
 .pane-title-bar:focus-within .pane-title-split-trigger:disabled {
   opacity: 0.5;
+}
+
+/* Why: otherwise 0.5 outdims the 0.35 idle chromeless control; hover/focus keep 0.5. */
+.pane-title-bar[data-chromeless][data-active-pane]:not(:hover):not(:focus-within)
+  .pane-title-split-trigger:disabled {
+  opacity: 0.25;
 }
 
 .pane-title-bar:hover .pane-title-close,
