@@ -3,12 +3,16 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } 
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
+  hasGuestTreeKillArtifacts,
+  GUEST_TREE_KILL_RESOURCE_DIR
+} from '../../shared/guest-tree-kill-artifacts'
+import {
   buildDaemonHostManifest,
   daemonHostFitsPathBudget,
   destPath,
   executeManifest,
   toPosixRelative,
-  WINDOWS_PROCESS_TREE_REQUIRED,
+  missingProcessTreeFiles,
   type DaemonHostSources
 } from './daemon-host-manifest'
 import {
@@ -137,13 +141,6 @@ function processTreeRelDir(sources: DaemonHostSources): string {
   return toPosixRelative(sources.appDir, sources.windowsProcessTreeDir)
 }
 
-/** True when any file require() needs is absent from a copy of the package. */
-function missingProcessTreeFiles(packageDir: string): boolean {
-  return WINDOWS_PROCESS_TREE_REQUIRED.some(
-    (relative) => !existsSync(join(packageDir, ...relative.split('/')))
-  )
-}
-
 // Sibling of the legacy shared HOST_SUBDIR, whose older pruners delete every unpinned child dir.
 // That legacy root is never reclaimed here: profile-scoped pid evidence can't prove another
 // profile's daemon gone, and new code never writes there, so its cost is a finite one-time
@@ -229,7 +226,8 @@ function findRelocatedDaemonHost(
     if (
       !existsSync(execPath) ||
       !existsSync(entryPath) ||
-      missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources)))
+      missingProcessTreeFiles(destPath(dest, processTreeRelDir(sources))) ||
+      !hasGuestTreeKillArtifacts(join(dest, 'resources', GUEST_TREE_KILL_RESOURCE_DIR))
     ) {
       continue
     }
@@ -258,12 +256,15 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   // Checked against the source before copying: the mirror check below would refuse
   // the result anyway, and re-copying ~260MB on every launch to reach that verdict
   // is the loop this shares its list with the copy plan to prevent.
-  if (!inventory || missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
+  if (
+    !inventory ||
+    missingProcessTreeFiles(sources.windowsProcessTreeDir) ||
+    !hasGuestTreeKillArtifacts(join(sources.resourcesPath, GUEST_TREE_KILL_RESOURCE_DIR))
+  ) {
     return null
   }
   const version = getAppEnvironment().getVersion()
-  const root = getDaemonHostRootDir()
-  const versionRoot = join(root, version)
+  const versionRoot = join(getDaemonHostRootDir(), version)
   const nonce = randomBytes(6).toString('hex')
   // The marker carries the fingerprint; the name need only be unique, and short (conpty path budget).
   const dest = join(versionRoot, `build-${nonce}`)

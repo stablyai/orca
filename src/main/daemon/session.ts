@@ -49,15 +49,10 @@ export class Session {
     this.subprocess = opts.subprocess
     this.processNameIsSpawnFile = opts.subprocess.processNameIsSpawnFile === true
     this.onSessionExit = opts.onExit
-    const pipeline = createSessionOutputPipeline({
-      cols: opts.cols,
-      rows: opts.rows,
-      scrollback: opts.scrollback,
-      wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks,
-      subprocess: this.subprocess,
-      isAlive: () => !this._disposed && this._state !== 'exited'
-    })
+    const pipeline = createSessionOutputPipeline(
+      opts,
+      () => !this._disposed && this._state !== 'exited'
+    )
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
@@ -133,6 +128,11 @@ export class Session {
 
   get pid(): number {
     return this.subprocess.pid
+  }
+
+  /** Spawn-captured tree-kill identity; undefined where never captured. */
+  get spawnIdentity() {
+    return this.subprocess.spawnIdentity
   }
 
   /** Terminate this session's pty job object. `unavailable` is not proof of death. */

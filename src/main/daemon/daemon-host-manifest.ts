@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
+import { GUEST_TREE_KILL_RESOURCE_DIR } from '../../shared/guest-tree-kill-artifacts'
 
 // What the relocated host is made of: which files are mirrored, where each lands,
 // and which of a package's files are runtime rather than bulk. The lifecycle
@@ -96,6 +97,13 @@ function isRuntimeProcessHostPath(packageRel: string): boolean {
   )
 }
 
+/** True when any file require() needs is absent from a copy of the package. */
+export function missingProcessTreeFiles(packageDir: string): boolean {
+  return WINDOWS_PROCESS_TREE_REQUIRED.some(
+    (relative) => !existsSync(join(packageDir, ...relative.split('/')))
+  )
+}
+
 /** A required file, a directory on the way to one, or anything in lib/ (index.js requires its siblings). */
 function isRuntimeProcessTreePath(packageRel: string): boolean {
   return (
@@ -188,6 +196,12 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     filter: isRuntimeNodePtyPath
   })
 
+  const guestHelperDir = join(resourcesPath, GUEST_TREE_KILL_RESOURCE_DIR)
+  ops.push({
+    sourcePath: guestHelperDir,
+    destRel: toPosixRelative(appDir, guestHelperDir),
+    kind: 'dir'
+  })
   return ops
 }
 

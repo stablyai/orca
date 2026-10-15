@@ -3,6 +3,7 @@ import { normalizePtySize } from './daemon-pty-size'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { createDaemonPtyEnvironment } from './pty-subprocess/spawn-environment'
 import { createPtyShellLaunchPlan } from './pty-subprocess/shell-launch-plan'
+import { captureSpawnedRootCreationTimeMs } from './pty-subprocess/spawn-root-identity'
 import { spawnNativeDaemonPty, type SpawnedDaemonPty } from './pty-subprocess/native-pty-spawn'
 import {
   formatPtySpawnError,
@@ -101,7 +102,8 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     throw error
   }
 
-  return createDaemonPtySubprocessHandle({
+  // Register exit listeners before reading identity; node-pty does not replay early exits.
+  const handle = createDaemonPtySubprocessHandle({
     process: spawned.process,
     shellPath: spawned.shellPath,
     spawnCwd: spawned.spawnCwd,
@@ -113,4 +115,10 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     sessionId: opts.sessionId,
     startupAgentRecognition: launch.startupAgentRecognition
   })
+  // The native shell handle anchors identity without waiting for a process-table scan.
+  const rootCreationTimeMs = captureSpawnedRootCreationTimeMs(spawned.process)
+  if (rootCreationTimeMs !== undefined) {
+    handle.spawnIdentity = { ...handle.spawnIdentity, rootCreationTimeMs }
+  }
+  return handle
 }

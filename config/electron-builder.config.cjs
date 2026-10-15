@@ -390,11 +390,24 @@ module.exports = {
   beforePack: (
     context,
     mobileWebBundleDir = MOBILE_WEB_BUNDLE_DIR,
-    ensureWaylandClipboard = ensureBundledWaylandClipboard
+    ensureWaylandClipboard = ensureBundledWaylandClipboard,
+    guestHelperDir = join(__dirname, '../resources/guest-tree-kill')
   ) => {
     assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
     assertBundledRipgrepInstalled()
     assertProcessHostOutputBuilt()
+    if (context.electronPlatformName === 'win32') {
+      execFileSync(
+        process.execPath,
+        [
+          join(__dirname, 'scripts/build-guest-tree-kill.mjs'),
+          '--check',
+          '--artifact-root',
+          guestHelperDir
+        ],
+        { stdio: 'inherit' }
+      )
+    }
     assertOrcadTemplateBuilt()
     assertMobileWebBundleBuilt(mobileWebBundleDir)
     if (context.electronPlatformName === 'linux') {
@@ -465,6 +478,16 @@ module.exports = {
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
     if (context.electronPlatformName === 'win32') {
+      execFileSync(
+        process.execPath,
+        [
+          join(__dirname, 'scripts/build-guest-tree-kill.mjs'),
+          '--check',
+          '--artifact-root',
+          join(resourcesDir, 'guest-tree-kill')
+        ],
+        { stdio: 'inherit' }
+      )
       verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
       verifyPackagedWindowsAgentHook(resourcesDir, context.arch)
     }
@@ -550,6 +573,7 @@ module.exports = {
     ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
       ...commonExtraResources,
+      { from: 'resources/guest-tree-kill', to: 'guest-tree-kill' },
       ...windowsRuntimeResources,
       winSpeechNativeResource,
       {

@@ -2,6 +2,22 @@ import type { Session } from './session'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { terminateShutdownDescendants } from './terminal-descendant-shutdown'
+import { runWslGuestTreeKill } from './wsl-guest-tree-kill'
+
+// Leave room for checkpoints and physical root exit within the daemon shutdown budget.
+const DAEMON_WINDOWS_SWEEP_TIMEOUT_MS = 4_000
+
+function startWslGuestTreeKill(session: Session): Promise<void> | null {
+  if (process.platform !== 'win32') {
+    return null
+  }
+  const { wslDistro } = session
+  const ptyTreeId = session.spawnIdentity?.ptyTreeId
+  if (!wslDistro || !ptyTreeId) {
+    return null
+  }
+  return runWslGuestTreeKill({ distro: wslDistro, treeId: ptyTreeId })
+}
 
 async function disposeLiveSession(session: Session): Promise<void> {
   if (!session.beginTermination() && !session.isAlive) {
@@ -9,12 +25,16 @@ async function disposeLiveSession(session: Session): Promise<void> {
     return
   }
   try {
-    await killWithDescendantSweep(session.pid, () => {}, {
+    const sweep = killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
+      expectedRootCreationTimeMs: session.spawnIdentity?.rootCreationTimeMs,
+      sweepTimeoutMs: process.platform === 'win32' ? DAEMON_WINDOWS_SWEEP_TIMEOUT_MS : undefined,
       terminateDescendants: terminateShutdownDescendants,
       awaitEscalation: true
     })
+    // The guest kill has its own wsl.exe client; concurrent cleanup avoids stacking deadlines.
+    await Promise.all([sweep, startWslGuestTreeKill(session)])
   } finally {
     await session.forceKillAndDisposeSubprocess()
   }
@@ -55,6 +75,8 @@ async function disposeTerminalHostSessions(
     [...sessions].map(async (session) => {
       session.detachAllClients()
       if (isAlreadyTracked?.(session)) {
+        // A tracked host-side close does not reach the WSL guest tree.
+        await startWslGuestTreeKill(session)
         return
       }
       // Why: live children retain native ownership until physical exit, while

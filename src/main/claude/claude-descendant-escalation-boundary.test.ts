@@ -118,7 +118,7 @@ describe('Claude descendant forced-sweep fence', () => {
 
     const calls = await sweep([firstWalk, refresh], [...LIVE_TREE, retained])
 
-    expect(signalledPids(calls)).toEqual([...EARLIER_BORN, ...WALK_SECOND_BORN, 900])
+    expect(signalledPids(calls)).toEqual([...EARLIER_BORN, ...WALK_SECOND_BORN])
     expect(killedPids(calls)).toEqual([...EARLIER_BORN, ...WALK_SECOND_BORN])
   })
 })

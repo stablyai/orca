@@ -122,6 +122,7 @@ export class TerminalSessionTeardown {
     await killWithDescendantSweep(session.pid, () => {}, {
       ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
       terminateOwnedTree: () => session.terminateOwnedTree(),
+      expectedRootCreationTimeMs: session.spawnIdentity?.rootCreationTimeMs,
       terminateDescendants: terminateShutdownDescendants,
       awaitEscalation: true
     })
@@ -175,6 +176,7 @@ export class TerminalSessionTeardown {
             // Session still owns the root PID captured by ps.
             ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
             terminateOwnedTree: () => session.terminateOwnedTree(),
+            expectedRootCreationTimeMs: session.spawnIdentity?.rootCreationTimeMs,
             terminateDescendants: (snapshot) => {
               entry.descendantVerification = terminateShutdownDescendants(snapshot)
               return entry.descendantVerification

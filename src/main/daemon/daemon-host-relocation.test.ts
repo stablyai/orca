@@ -17,6 +17,10 @@ import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import {
+  assertGuestTreeKillArtifacts,
+  guestTreeKillSha256
+} from '../../shared/guest-tree-kill-artifacts'
 
 // Mutable host stub. Relocation now reads the AppEnvironment port rather than electron's
 // `app`, so orcad's daemon launch path can resolve without Electron in the graph.
@@ -126,6 +130,92 @@ afterEach(() => {
 })
 
 describe('buildDaemonHostManifest', () => {
+  it('keeps both verified guest helpers in the relocated tree after the old install is removed', () => {
+    const host = materializeRelocatedDaemonHost()
+    expect(host).not.toBeNull()
+    const root = join(dirname(host!.execPath), 'resources', 'guest-tree-kill')
+    rmSync(join(installDir, 'resources', 'guest-tree-kill'), { recursive: true })
+    expect(() => assertGuestTreeKillArtifacts(root)).not.toThrow()
+  })
+
+  it.each(['linux-x64', 'linux-arm64'])(
+    'refuses an incomplete or altered relocated %s helper',
+    (platform) => {
+      const host = materializeRelocatedDaemonHost()
+      expect(host).not.toBeNull()
+      const path = join(
+        dirname(host!.execPath),
+        'resources',
+        'guest-tree-kill',
+        platform,
+        'orca-guest-tree-kill'
+      )
+      writeFileSync(path, 'corrupt helper')
+      expect(getRelocatedDaemonHost()).toBeNull()
+      const repairedHost = materializeRelocatedDaemonHost()
+      expect(repairedHost).not.toBeNull()
+      expect(repairedHost!.execPath).not.toBe(host!.execPath)
+      rmSync(
+        join(
+          dirname(repairedHost!.execPath),
+          'resources',
+          'guest-tree-kill',
+          platform,
+          'orca-guest-tree-kill'
+        )
+      )
+      expect(getRelocatedDaemonHost()).toBeNull()
+    }
+  )
+
+  it.each(['linux-x64', 'linux-arm64'])(
+    'publishes a new immutable mirror when only the %s helper changes',
+    (platform) => {
+      const oldHost = materializeRelocatedDaemonHost()
+      expect(oldHost).not.toBeNull()
+      const guestRoot = join(installDir, 'resources', 'guest-tree-kill')
+      const helperPath = join(guestRoot, platform, 'orca-guest-tree-kill')
+      const updatedBytes = Buffer.concat([readFileSync(helperPath), Buffer.from([1])])
+      writeFileSync(helperPath, updatedBytes)
+      const manifestPath = join(guestRoot, 'manifest.json')
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+      manifest.artifacts[platform].sha256 = guestTreeKillSha256(updatedBytes)
+      writeFileSync(manifestPath, JSON.stringify(manifest))
+
+      expect(getRelocatedDaemonHost()).toBeNull()
+      const newHost = materializeRelocatedDaemonHost()
+      expect(newHost).not.toBeNull()
+      expect(newHost!.execPath).not.toBe(oldHost!.execPath)
+      expect(
+        readFileSync(
+          join(
+            dirname(newHost!.execPath),
+            'resources',
+            'guest-tree-kill',
+            platform,
+            'orca-guest-tree-kill'
+          )
+        )
+      ).toEqual(updatedBytes)
+      expect(existsSync(oldHost!.execPath)).toBe(true)
+    }
+  )
+
+  it('refuses an oversized manifest in a relocated mirror', () => {
+    const host = materializeRelocatedDaemonHost()
+    expect(host).not.toBeNull()
+    writeFileSync(
+      join(dirname(host!.execPath), 'resources', 'guest-tree-kill', 'manifest.json'),
+      ' '.repeat(64 * 1024 + 1)
+    )
+    expect(getRelocatedDaemonHost()).toBeNull()
+  })
+
+  it('does not start copying a runtime whose source helpers are missing', () => {
+    rmSync(join(installDir, 'resources', 'guest-tree-kill'), { recursive: true })
+    expect(materializeRelocatedDaemonHost()).toBeNull()
+  })
+
   it('mirrors the win-unpacked layout: exe + data blobs + resources tree, no GPU DLLs', () => {
     const appDir = 'C:\\app'
     const ops = buildDaemonHostManifest({

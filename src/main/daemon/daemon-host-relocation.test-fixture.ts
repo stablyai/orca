@@ -1,10 +1,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { writeGuestTreeKillArtifactsFixture } from '../../shared/guest-tree-kill-artifacts-test-fixture'
 
 // Build a win-unpacked fixture: exe + blobs + DLLs at root, daemon bundle and
 // node-pty under resources, mirroring the packaged layout the copy expects.
 export function buildInstallFixture(root: string): void {
   mkdirSync(root, { recursive: true })
+  writeGuestTreeKillArtifactsFixture(join(root, 'resources', 'guest-tree-kill'))
   writeFileSync(join(root, 'Orca.exe'), 'exe-bytes')
   const processHostDir = join(root, 'resources', 'node_modules', '@orca', 'process-host')
   mkdirSync(join(processHostDir, 'dist'), { recursive: true })
