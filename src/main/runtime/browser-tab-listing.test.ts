@@ -93,6 +93,15 @@ describe('mergeBrowserTabListing', () => {
     ])
   })
 
+  it('lists an id held by both a live page and a client page once, as the client page', () => {
+    const tabs = mergeBrowserTabListing({
+      tabBar: [],
+      liveTabs: [live('shared')],
+      clientTabs: [{ ...live('shared'), title: 'client' }]
+    })
+    expect(tabs.map((tab) => [tab.browserPageId, tab.title])).toEqual([['shared', 'client']])
+  })
+
   it('never marks an unloaded tab active, falling back to the first loaded one', () => {
     const tabs = mergeBrowserTabListing({
       tabBar: [barEntry('a'), barEntry('b')],

@@ -80,7 +80,8 @@ export function mergeBrowserTabListing(input: {
     )
   }
   const unlisted = input.liveTabs
-    .filter((tab) => !listed.has(tab.browserPageId))
+    // Why clientIds: the client row stays the only entry for an id both registries hold.
+    .filter((tab) => !listed.has(tab.browserPageId) && !clientIds.has(tab.browserPageId))
     .map((tab) => ({ ...tab, loaded: true }))
   const clients = input.clientTabs.map((tab) => ({ ...tab, loaded: true }))
   const tabs = [...fromBar, ...unlisted, ...clients]
