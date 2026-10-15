@@ -9,6 +9,7 @@ import {
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
+import { resolvePaneStyleOptions } from '@/lib/terminal-theme'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -23,18 +24,22 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId,
   isActive,
   isFocusedGroup,
+  hasSplitGroups,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
   isFocusedGroup: boolean
+  hasSplitGroups: boolean
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element | null {
   // Each chat is read from the host recorded on its tab, never from its workspace id, which two
   // hosts can share.
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
+  const settings = useAppStore((state) => state.settings)
+  const paneStyle = settings ? resolvePaneStyleOptions(settings) : undefined
   if (!target) {
     return null
   }
@@ -45,16 +50,30 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
-      <NativeChatView
-        mode="structured"
-        tabId={tab.id}
-        groupId={groupId}
-        sessionId={tab.entityId}
-        agent={tab.agentSessionAgent}
-        isVisible={isActive}
-        isFocusedGroup={isFocusedGroup}
-        target={target}
-      />
+      <div
+        className="flex min-h-0 min-w-0 flex-1"
+        style={{
+          opacity: hasSplitGroups
+            ? isFocusedGroup
+              ? paneStyle?.activePaneOpacity
+              : paneStyle?.inactivePaneOpacity
+            : undefined,
+          transition: paneStyle?.opacityTransitionMs
+            ? `opacity ${paneStyle.opacityTransitionMs}ms ease`
+            : undefined
+        }}
+      >
+        <NativeChatView
+          mode="structured"
+          tabId={tab.id}
+          groupId={groupId}
+          sessionId={tab.entityId}
+          agent={tab.agentSessionAgent}
+          isVisible={isActive}
+          isFocusedGroup={isFocusedGroup}
+          target={target}
+        />
+      </div>
     </RetainedPaneHost>
   )
 })
@@ -101,6 +120,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
               groupActiveTabById.get(tab.groupId) === tab.id &&
               tab.groupId === activeGroupId
             )}
+            hasSplitGroups={groups.length > 1}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

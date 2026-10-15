@@ -2,9 +2,11 @@
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { resolvePaneStyleOptions } from '@/lib/terminal-theme'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 type MockAppState = {
+  settings?: Parameters<typeof resolvePaneStyleOptions>[0]
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
@@ -216,6 +218,13 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatVisible).toBe('true')
     expect(chatSurface(view.container, FIRST_TAB_ID).dataset.chatFocusedGroup).toBe('false')
     expect(chatSurface(view.container, SECOND_TAB_ID).dataset.chatFocusedGroup).toBe('true')
+    const first = chatSurface(view.container, FIRST_TAB_ID).parentElement
+    const second = chatSurface(view.container, SECOND_TAB_ID).parentElement
+    expect(first?.style.opacity).toBe('0.5')
+    expect(second?.style.opacity).toBe('1')
+    act(() => mocks.store?.setState({ activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID } }))
+    expect(first?.style.opacity).toBe('1')
+    expect(second?.style.opacity).toBe('0.5')
   })
 
   it('marks no column as focused when the focused group id names nothing', () => {
@@ -233,6 +242,13 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
 
 function createState(activeTabId: string): MockAppState {
   return {
+    settings: {
+      terminalInactivePaneOpacity: 0.5,
+      terminalActivePaneOpacity: 1,
+      terminalPaneOpacityTransitionMs: 120,
+      terminalDividerThicknessPx: 1,
+      terminalFocusFollowsMouse: false
+    },
     unifiedTabsByWorktree: {
       [WORKTREE_ID]: [
         structuredTab(FIRST_TAB_ID, 'session-1', 0),
