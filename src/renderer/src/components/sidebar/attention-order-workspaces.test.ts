@@ -163,6 +163,26 @@ describe('next-attention workspace order', () => {
     expect(ids()).not.toContain(folderWorkspaceKey(theirs.id))
   })
 
+  it('keys a legacy SSH row by its resolved host but activates it without one', () => {
+    seedStore([makeWorktree('wt-remote')], {
+      repos: [{ ...makeRepo('repo1'), connectionId: 'box' }, makeRepo('repo2')]
+    })
+
+    const [target] = getAttentionOrderWorkspaceTargets()
+
+    expect(target.id).toBe('wt-remote')
+    expect(target.identityHostId).not.toBe('local')
+    expect(target.executionHostId).toBeUndefined()
+  })
+
+  it('pins a local row to the local host so a same-id remote row cannot take its activation', () => {
+    seedStore([makeWorktree('wt-local')])
+
+    expect(getAttentionOrderWorkspaceTargets()).toEqual([
+      { id: 'wt-local', identityHostId: 'local', executionHostId: 'local' }
+    ])
+  })
+
   it('skips workspaces a sidebar filter hides', () => {
     const shown = makeWorktree('wt-shown')
     const hidden = makeWorktree('wt-hidden', { repoId: 'repo2' })

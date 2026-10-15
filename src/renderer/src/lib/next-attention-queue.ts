@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { VisibleWorktreeShortcutTarget } from '@/components/sidebar/visible-worktrees'
+import type { AttentionOrderWorkspace } from '@/components/sidebar/attention-order-workspaces'
 import {
   buildExplicitEntriesByTabId,
   collectTabPaneInputs,
@@ -16,8 +16,8 @@ import {
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
 import {
+  getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -69,7 +69,12 @@ function indexUnreadPaneKeys(state: AppState): Map<string, string[]> {
     }
     const tabId = paneKeyTabId(paneKey)
     if (tabId !== null) {
-      byTab.set(tabId, [...(byTab.get(tabId) ?? []), paneKey])
+      const keys = byTab.get(tabId)
+      if (keys) {
+        keys.push(paneKey)
+      } else {
+        byTab.set(tabId, [paneKey])
+      }
     }
   }
   return byTab
@@ -197,11 +202,14 @@ function indexWorkspaceFlags(state: AppState): Map<string, WorkspaceFlag> {
     ...getAllWorktreesFromState(state).map((worktree) => ({ worktree, repoId: worktree.repoId })),
     ...state.folderWorkspaces.map((folder) => ({ worktree: folderWorkspaceToWorktree(folder) }))
   ]
+  // Same default as the sidebar order, or a host-less row would key under a different identity.
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const flags = new Map<string, WorkspaceFlag>()
   for (const { worktree, repoId } of rows) {
     const hostId = getWorktreeExecutionHostId(
       worktree,
-      repoId === undefined ? undefined : repoMap.get(repoId)
+      repoId === undefined ? undefined : repoMap.get(repoId),
+      defaultHostId
     )
     flags.set(composeWorktreeHostIdentity(hostId, worktree.id), {
       isUnread: worktree.isUnread,
@@ -214,7 +222,7 @@ function indexWorkspaceFlags(state: AppState): Map<string, WorkspaceFlag> {
 /** Every place needing the user, top-to-bottom: sidebar order, then tab strip, then panes. */
 export function buildAttentionQueue(
   state: AppState,
-  orderedWorkspaces: readonly VisibleWorktreeShortcutTarget[],
+  orderedWorkspaces: readonly AttentionOrderWorkspace[],
   now: number
 ): AttentionTarget[] {
   // Why chat tabs too: a structured chat projects its status under its unified tab id.
@@ -243,7 +251,7 @@ export function buildAttentionQueue(
   // Tab maps key by bare worktree id, so one host's tabs would otherwise repeat under its same-id twin.
   const tabsClaimedBy = new Set<string>()
   for (const workspace of orderedWorkspaces) {
-    const workspaceIdentity = composeWorktreeHostIdentity(workspace.executionHostId, workspace.id)
+    const workspaceIdentity = composeWorktreeHostIdentity(workspace.identityHostId, workspace.id)
     if (seenWorkspaces.has(workspaceIdentity)) {
       continue
     }
@@ -257,7 +265,7 @@ export function buildAttentionQueue(
 
 function workspaceTargets(
   ctx: QueueContext,
-  workspace: VisibleWorktreeShortcutTarget,
+  workspace: AttentionOrderWorkspace,
   workspaceIdentity: string,
   ownsTabs: boolean
 ): AttentionTarget[] {
@@ -267,9 +275,7 @@ function workspaceTargets(
     worktreeId: workspace.id,
     ...(workspace.executionHostId ? { executionHostId: workspace.executionHostId } : {})
   }
-  const flag = ctx.workspaceFlags.get(
-    composeWorktreeHostIdentity(workspace.executionHostId ?? LOCAL_EXECUTION_HOST_ID, workspace.id)
-  ) ?? { isUnread: false, lastActivityAt: 0 }
+  const flag = ctx.workspaceFlags.get(workspaceIdentity) ?? { isUnread: false, lastActivityAt: 0 }
   const targets: AttentionTarget[] = []
   for (const tab of ownsTabs ? orderedWorkspaceTabs(state, workspace.id) : []) {
     targets.push(
