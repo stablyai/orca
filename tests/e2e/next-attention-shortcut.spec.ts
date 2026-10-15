@@ -49,6 +49,15 @@ test.describe('Go to next workspace needing attention', () => {
 
   test('says so and stays put when nothing needs attention', async ({ orcaPage, electronApp }) => {
     const activeId = await waitForActiveWorktree(orcaPage)
+    // Why: a startup bell or agent row would make the queue non-empty and hide the toast.
+    await orcaPage.evaluate(() => {
+      window.__store?.setState({
+        unreadTerminalTabs: {},
+        unreadTerminalPanes: {},
+        unreadAgentCompletionPanes: {},
+        agentStatusByPaneKey: {}
+      })
+    })
 
     await sendNextAttentionShortcut(electronApp)
 

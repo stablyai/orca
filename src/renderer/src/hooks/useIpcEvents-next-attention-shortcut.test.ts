@@ -63,7 +63,7 @@ function seed(overrides: Partial<AppState>): AppState {
 describe('jumpToNextAttentionFromShortcut', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.orderedWorkspaces.mockReturnValue([{ id: 'a', executionHostId: 'local' }])
+    mocks.orderedWorkspaces.mockReturnValue([{ id: 'a', identityHostId: 'local' }])
     mocks.activateAndRevealWorkspace.mockReturnValue({})
   })
 
@@ -107,8 +107,7 @@ describe('jumpToNextAttentionFromShortcut', () => {
     jumpToNextAttentionFromShortcut(state, NOW)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('a', {
-      navigationIntent: 'user-open',
-      executionHostId: 'local'
+      navigationIntent: 'user-open'
     })
     expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('t1', LEAF)
     expect(activateTab).toHaveBeenCalledWith('u1', { worktreeId: 'a' })
@@ -245,6 +244,46 @@ describe('jumpToNextAttentionFromShortcut', () => {
     expect(mocks.toastInfo).not.toHaveBeenCalled()
   })
 
+  it('walks on to the next target when one cannot be reached', () => {
+    mocks.orderedWorkspaces.mockReturnValue([
+      { id: 'a', identityHostId: 'local' },
+      { id: 'b', identityHostId: 'local' }
+    ])
+    mocks.activateAndRevealWorkspace.mockImplementation((id: string) => (id === 'a' ? false : {}))
+    const state = seed({
+      tabsByWorktree: { a: [terminalTab('ta', 'a')], b: [terminalTab('tb', 'b')] },
+      unreadTerminalTabs: { ta: 'terminal-bell', tb: 'terminal-bell' }
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    jumpToNextAttentionFromShortcut(state, NOW)
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenLastCalledWith('b', expect.anything())
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tb', null)
+    warn.mockRestore()
+  })
+
+  it('tries an unreachable workspace once even when it holds several targets', () => {
+    mocks.orderedWorkspaces.mockReturnValue([
+      { id: 'a', identityHostId: 'local' },
+      { id: 'b', identityHostId: 'local' }
+    ])
+    mocks.activateAndRevealWorkspace.mockImplementation((id: string) => (id === 'a' ? false : {}))
+    const state = seed({
+      tabsByWorktree: {
+        a: [terminalTab('ta1', 'a'), terminalTab('ta2', 'a')],
+        b: [terminalTab('tb', 'b')]
+      },
+      unreadTerminalTabs: { ta1: 'terminal-bell', ta2: 'terminal-bell', tb: 'terminal-bell' }
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    jumpToNextAttentionFromShortcut(state, NOW)
+
+    expect(mocks.activateAndRevealWorkspace.mock.calls.map(([id]) => id)).toEqual(['a', 'b'])
+    warn.mockRestore()
+  })
+
   it('does nothing while the Cmd+J palette is open', () => {
     const state = seed({
       activeModal: 'worktree-palette',
@@ -276,8 +315,8 @@ describe('jumpToNextAttentionFromShortcut', () => {
 
   it('steps past the place the user is already at', () => {
     mocks.orderedWorkspaces.mockReturnValue([
-      { id: 'a', executionHostId: 'local' },
-      { id: 'b', executionHostId: 'local' }
+      { id: 'a', identityHostId: 'local' },
+      { id: 'b', identityHostId: 'local' }
     ])
     const state = seed({
       activeWorktreeId: 'a',
