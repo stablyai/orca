@@ -39,7 +39,10 @@ import { useAppStore } from '@/store'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import { translate } from '@/i18n/i18n'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import {
+  appendAgentLaunchDraft,
+  resolveQuickCreateLinkedWorkItemPrompt
+} from '@/lib/linked-work-item-context'
 import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
@@ -120,8 +123,12 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
 
-      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+      const { prompt: quickPrompt, draftPrompt: linkedDraftPrompt } =
         resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+      const quickDraftPrompt =
+        agent === null
+          ? linkedDraftPrompt
+          : appendAgentLaunchDraft(linkedDraftPrompt, options?.agentDraft)
 
       const {
         startupPlan,
@@ -135,7 +142,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         launchHost: selectedRepoAgentLaunchFact,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote,
-        telemetrySource
+        telemetrySource,
+        sessionOptionOverrides: options?.sessionOptions
       })
 
       const startupPolicySettlement = await settleComposerSubmit(
@@ -197,6 +205,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           Boolean(activeEphemeralVmRecipeId) || selectedRepoTarget?.kind === 'environment',
         taskSourceContext,
         linkedWorkItem: submitLinkedWorkItem,
+        linkedPluginTask: options?.linkedPluginTask,
         workspaceRunContext,
         workspaceName,
         nameWasGenerated,

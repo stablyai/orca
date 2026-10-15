@@ -47,6 +47,8 @@ function testWorker(): PluginWorkerHandle & { dispose: ReturnType<typeof vi.fn> 
   return {
     commands: ['run'],
     invokeCommand: vi.fn(async () => null),
+    taskSources: [],
+    invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
     lastActivityAt: () => Date.now(),
     inFlightCount: () => 0,

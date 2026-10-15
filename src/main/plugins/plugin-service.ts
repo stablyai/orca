@@ -31,9 +31,9 @@ import { PluginContentPackRegistry } from './plugin-content-pack-registry'
 import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
-import { assertPluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent } from './plugin-event-delivery'
 import { PluginInstallationState } from './plugin-installation-state'
+import { invokePluginTaskSource, invokePluginWorkerCommand } from './plugin-worker-invocation'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
@@ -68,10 +68,7 @@ export class PluginService {
     )
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
     this.panels = new PluginPanelController({
-      resolveApprovedPlugin: (pluginKey) => {
-        const plugin = this.findValidPlugin(pluginKey)
-        return plugin && this.canStartPluginWork(plugin) ? plugin : null
-      },
+      resolveApprovedPlugin: (pluginKey) => this.findStartablePlugin(pluginKey),
       contentVerifier: this.contentVerifier,
       executeHostCall: (pluginKey, method, params) =>
         this.executeHostCall(pluginKey, method, params, { viaPanel: true }),
@@ -268,17 +265,22 @@ export class PluginService {
     })
   }
 
-  async invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
+  /** Null unless the plugin may start a worker or panel right now. */
+  findStartablePlugin(pluginKey: string): ValidDiscoveredPlugin | null {
     const plugin = this.findValidPlugin(pluginKey)
-    if (!plugin || !this.canStartPluginWork(plugin)) {
-      throw new Error(`plugin ${pluginKey} is not enabled`)
-    }
-    assertPluginWorkerCommand(plugin, commandId)
-    const handle = await this.workerController.ensure(plugin)
-    if (!handle.commands.includes(commandId)) {
-      throw new Error(`plugin ${pluginKey} registered no handler for ${commandId}`)
-    }
-    return handle.invokeCommand(commandId, args)
+    return plugin && this.canStartPluginWork(plugin) ? plugin : null
+  }
+
+  ensureWorker(plugin: ValidDiscoveredPlugin): ReturnType<PluginWorkerController['ensure']> {
+    return this.workerController.ensure(plugin)
+  }
+
+  invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
+    return invokePluginWorkerCommand(this, pluginKey, commandId, args)
+  }
+
+  invokeTaskSource(request: unknown): ReturnType<typeof invokePluginTaskSource> {
+    return invokePluginTaskSource(this, request)
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {

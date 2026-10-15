@@ -4,6 +4,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { LinkedPluginTask } from '../../../../shared/plugins/plugin-task-link'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/folder-workspace-composer-helpers'
@@ -14,6 +15,7 @@ export type QuickCreationRequestInput = {
   indeterminateProgress: boolean
   taskSourceContext: TaskSourceContext | null
   linkedWorkItem: LinkedWorkItemSummary | null
+  linkedPluginTask?: WorktreeCreationRequest['linkedPluginTask']
   workspaceRunContext: WorktreeCreationRequest['workspaceRunContext']
   workspaceName: string
   nameWasGenerated: boolean
@@ -56,6 +58,12 @@ export type QuickCreationRequestInput = {
 
 export type QuickSubmitOptions = {
   setupOnly?: boolean
+  /** Draft typed into the agent after launch (not sent for folder-group targets). */
+  agentDraft?: string
+  /** Session options (e.g. model, effort) layered over the agent's defaults for this launch. */
+  sessionOptions?: Record<string, string>
+  /** Plugin task the new workspace links back to. */
+  linkedPluginTask?: LinkedPluginTask
 }
 
 export function buildQuickCreationRequest(
@@ -68,6 +76,7 @@ export function buildQuickCreationRequest(
     ...(input.taskSourceContext ? { taskSourceContext: input.taskSourceContext } : {}),
     linkedWorkItem: toFolderWorkspaceLinkedTask(input.linkedWorkItem),
     linkedTaskSourceContext: input.taskSourceContext,
+    ...(input.linkedPluginTask ? { linkedPluginTask: input.linkedPluginTask } : {}),
     ...(input.workspaceRunContext ? { workspaceRunContext: input.workspaceRunContext } : {}),
     name: input.workspaceName,
     ...(input.nameWasGenerated ? { nameWasGenerated: true } : {}),

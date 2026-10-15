@@ -26,6 +26,7 @@ import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { persistCreatedWorkspacePluginTaskLink } from '@/lib/plugin-task-workspace-link'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
 // switches app views; only the terminal route renders the creation panel.
@@ -155,6 +156,7 @@ export async function executeWorktreeCreation(
     return
   }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
+  persistCreatedWorkspacePluginTaskLink(worktree.id, preparedRequest.linkedPluginTask)
 
   const backendSpawned = result.startupTerminal?.spawned === true
   if (preparedRequest.startupPlan && !backendSpawned && !preparedRequest.startupPlan.launchToken) {

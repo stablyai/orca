@@ -79,6 +79,37 @@ describe('startPluginWorker', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
+  it('routes task source calls and their results through the worker channel', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: [], taskSources: ['roadmap'] })
+    const handle = await pending
+
+    const listed = handle.invokeTaskSource('roadmap', 'list', { query: '' })
+    const failed = handle.invokeTaskSource('roadmap', 'get', { itemId: 'x' })
+    child.emit('message', { type: 'taskSourceResult', callId: 0, ok: true, value: { items: [] } })
+    child.emit('message', { type: 'taskSourceResult', callId: 1, ok: false, error: 'gone' })
+
+    expect(handle.taskSources).toEqual(['roadmap'])
+    expect(child.send).toHaveBeenCalledWith({
+      type: 'invokeTaskSource',
+      callId: 0,
+      sourceId: 'roadmap',
+      operation: 'list',
+      params: { query: '' }
+    })
+    await expect(listed).resolves.toEqual({ items: [] })
+    await expect(failed).rejects.toThrow('gone')
+  })
+
+  it('treats a ready message without task sources as none', async () => {
+    const child = new FakeChild()
+    const pending = start(child)
+    child.emit('message', { type: 'ready', commands: [] })
+
+    await expect(pending).resolves.toMatchObject({ taskSources: [] })
+  })
+
   it('counts delivered events as in flight until their acknowledgement', async () => {
     const child = new FakeChild()
     const pending = start(child)

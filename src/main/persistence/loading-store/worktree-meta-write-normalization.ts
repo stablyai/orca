@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { normalizeLinkedPluginTask } from '../../../shared/plugins/plugin-task-link'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
@@ -43,6 +44,9 @@ export function mergeWorktreeMetaForWrite(
     ...identity
   }
   updated.linkedWorkItem = normalizeWorkspaceLinkedItem(updated.linkedWorkItem)
+  if (updated.linkedPluginTask !== undefined) {
+    updated.linkedPluginTask = normalizeLinkedPluginTask(updated.linkedPluginTask)
+  }
   const sourceContext = normalizeStoredTaskSourceContext(updated.linkedTaskSourceContext)
   updated.linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
     updated.linkedWorkItem,
