@@ -239,6 +239,16 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
       nativeChatVisuals: {
         isEnabled: () => this.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
+      transientRecovery: {
+        enabled: () =>
+          this.requireStore().getSettings().nativeChatAutoContinueOnTransientError === true,
+        onDisabled: (listener) =>
+          this.requireStore().onSettingsChanged?.((updates) => {
+            if (updates.nativeChatAutoContinueOnTransientError === false) {
+              listener()
+            }
+          }) ?? (() => {})
+      },
       resolveShellEnvironmentPolicy: () =>
         nativeChatShellEnvironmentPolicy(this.requireStore().getSettings()),
       resolveClaudeAuthPolicy: () =>
