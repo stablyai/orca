@@ -7,14 +7,17 @@ import { setTimeout } from 'node:timers/promises'
 // holds the target file open. A short retry avoids transient failures without
 // masking real permission errors. Total backoff (~750ms) covers typical AV
 // scan windows seen in issue #1507.
+const DEFAULT_MAX_ATTEMPTS = 6
 export function renameFileWithWindowsRetry(source: string, target: string): void {
   runFileOperationWithWindowsRetry(() => renameSync(source, target))
 }
 
+/** `maxAttempts` raises the budget (attempt n waits n × 50 ms), e.g. for a just-killed process tree. */
 export async function renameFileWithWindowsRetryAsync(
   source: string,
   target: string,
-  isCurrent: () => boolean = () => true
+  isCurrent: () => boolean = () => true,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS
 ): Promise<boolean> {
   for (let attempt = 1; ; attempt++) {
     if (!isCurrent()) {
@@ -24,7 +27,7 @@ export async function renameFileWithWindowsRetryAsync(
       await rename(source, target)
       return true
     } catch (error) {
-      if (!shouldRetryFileOperation(error, attempt)) {
+      if (!shouldRetryFileOperation(error, attempt, maxAttempts)) {
         throw error
       }
       await setTimeout(attempt * 50)
@@ -42,7 +45,7 @@ function runFileOperationWithWindowsRetry(operation: () => void): void {
       operation()
       return
     } catch (error) {
-      if (shouldRetryFileOperation(error, attempt)) {
+      if (shouldRetryFileOperation(error, attempt, DEFAULT_MAX_ATTEMPTS)) {
         sleepSync(attempt * 50)
         continue
       }
@@ -51,10 +54,10 @@ function runFileOperationWithWindowsRetry(operation: () => void): void {
   }
 }
 
-function shouldRetryFileOperation(error: unknown, attempt: number): boolean {
+function shouldRetryFileOperation(error: unknown, attempt: number, maxAttempts: number): boolean {
   return (
     process.platform === 'win32' &&
-    attempt < 6 &&
+    attempt < maxAttempts &&
     error instanceof Error &&
     'code' in error &&
     (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY')

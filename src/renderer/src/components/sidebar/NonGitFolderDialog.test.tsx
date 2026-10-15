@@ -63,8 +63,8 @@ vi.mock('@/store', () => {
 })
 
 vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ open, children }: { open: boolean; children: ReactModule.ReactNode }) =>
-    open ? <div>{children}</div> : null,
+  // Rendered even while the Perforce check gates `open`; static markup never runs that effect.
+  Dialog: ({ children }: { children: ReactModule.ReactNode }) => <div>{children}</div>,
   DialogContent: ({ children }: { children: ReactModule.ReactNode }) => <div>{children}</div>,
   DialogDescription: ({ children }: { children: ReactModule.ReactNode }) => <p>{children}</p>,
   DialogFooter: ({ children }: { children: ReactModule.ReactNode }) => <footer>{children}</footer>,
@@ -138,6 +138,7 @@ describe('NonGitFolderDialog', () => {
     vi.stubGlobal('window', {
       api: {
         repos: { addRemote: mocks.addRemote },
+        perforce: { detectFolder: vi.fn().mockResolvedValue({ isWorkspace: false }) },
         onboarding: { get: mocks.onboardingGet }
       }
     })

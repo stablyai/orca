@@ -135,7 +135,8 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     startedAt: Date.now(),
     phase: getInitialWorktreeCreationPhase(entry.request),
     error: undefined,
-    provisioningLog: undefined
+    provisioningLog: undefined,
+    progressDetail: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

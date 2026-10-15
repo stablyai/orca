@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 11a5e71..1b2e74b 100644
+index 11a5e71..84f2f29 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -3,7 +3,6 @@
@@ -10,13 +10,14 @@ index 11a5e71..1b2e74b 100644
        ],
        "conditions": [
          ['OS=="win"', {
-@@ -12,15 +11,15 @@
+@@ -12,15 +11,16 @@
              "src/cpu_worker.cc",
              "src/process.cc",
              "src/process_worker.cc",
 -            "src/process_commandline.cc"
 +            "src/process_commandline.cc",
-+            "src/process_launch.cc"
++            "src/process_launch.cc",
++            "src/process_file_users.cc"
            ],
 -          "include_dirs": [],
 +          "include_dirs": ["deps/node-addon-api"],
@@ -32,15 +33,16 @@ index 11a5e71..1b2e74b 100644
                  "/guard:cf",
                  "/sdl",
 diff --git a/lib/index.js b/lib/index.js
-index e586cd6..0ee62c3 100644
+index e586cd6..44189c9 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -7,11 +7,14 @@
+@@ -7,11 +7,15 @@
  exports.getAllProcesses = exports.getProcessTree = exports.getProcessCpuUsage = exports.getProcessList = exports.filterProcessList = exports.buildProcessTree = exports.ProcessDataFlag = void 0;
  const util_1 = require("util");
  const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
 +exports.getProcessCreationTime = native === undefined ? undefined : native.getProcessCreationTime;
 +exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;
++exports.getProcessIdsUsingPaths = native === undefined ? undefined : native.getProcessIdsUsingPaths;
  var ProcessDataFlag;
  (function (ProcessDataFlag) {
      ProcessDataFlag[ProcessDataFlag["None"] = 0] = "None";
@@ -50,7 +52,7 @@ index e586cd6..0ee62c3 100644
  })(ProcessDataFlag = exports.ProcessDataFlag || (exports.ProcessDataFlag = {}));
  // requestInProgress is used for any function that uses CreateToolhelp32Snapshot, as multiple calls
  // to this cannot be done at the same time.
-@@ -66,11 +69,12 @@
+@@ -66,11 +70,12 @@
      // • the properties are inlined/splatted
      // • the 'ppid' field is omitted
      // • the depth of the tree is limited by `maxDepth`
@@ -65,16 +67,18 @@ index e586cd6..0ee62c3 100644
      });
      return buildNode(root, maxDepth);
 diff --git a/lib/index.ts b/lib/index.ts
-index 7b53aad..284dae1 100644
+index 7b53aad..da2a19c 100644
 --- a/lib/index.ts
 +++ b/lib/index.ts
-@@ -6,12 +6,16 @@
+@@ -6,12 +6,18 @@
  import { promisify } from 'util';
  
  const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
 +export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined = native?.getProcessCreationTime;
 +/** The flag bits this compiled addon reports; undefined off win32. */
 +export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;
++/** Pids with a handle open on each path (FileProcessIdsUsingFileInformation); null where a path could not be queried. */
++export const getProcessIdsUsingPaths: ((paths: string[]) => Promise<(number[] | null)[]>) | undefined = native?.getProcessIdsUsingPaths;
  import { IProcessInfo, IProcessTreeNode, IProcessCpuInfo } from '@vscode/windows-process-tree';
  
  export enum ProcessDataFlag {
@@ -86,7 +90,7 @@ index 7b53aad..284dae1 100644
  }
  
  type RequestCallback = (processList: IProcessInfo[]) => void;
-@@ -81,11 +85,12 @@
+@@ -81,11 +87,12 @@
    // • the properties are inlined/splatted
    // • the 'ppid' field is omitted
    // • the depth of the tree is limited by `maxDepth`
@@ -101,18 +105,19 @@ index 7b53aad..284dae1 100644
    });
  
 diff --git a/src/addon.cc b/src/addon.cc
-index 5253960..f146490 100644
+index 5253960..0fc1d7f 100644
 --- a/src/addon.cc
 +++ b/src/addon.cc
-@@ -6,6 +6,7 @@
+@@ -6,6 +6,8 @@
  #include <napi.h>
  #include "cpu_worker.h"
  #include "process_worker.h"
 +#include "process_launch.h"
++#include "process_file_users.h"
  
  void GetProcessList(const Napi::CallbackInfo& args) {
    Napi::Env env(args.Env());
-@@ -50,9 +51,33 @@
+@@ -50,9 +52,34 @@
    worker->Queue();
  }
  
@@ -139,6 +144,7 @@ index 5253960..f146490 100644
    exports.Set("getProcessList", Napi::Function::New(env, GetProcessList));
    exports.Set("getProcessCpuUsage", Napi::Function::New(env, GetProcessCpuUsage));
 +  exports.Set("spawnOutsideJob", Napi::Function::New(env, SpawnOutsideJob));
++  exports.Set("getProcessIdsUsingPaths", Napi::Function::New(env, GetProcessIdsUsingPaths));
 +  // Lets a caller prove THIS BINARY understands CREATIONTIME. The JS enum is
 +  // patched source and says nothing about what the .node was compiled from.
 +  exports.Set("supportedProcessDataFlags",
@@ -418,6 +424,217 @@ index 716051d..25907c0 100644
 +  return StoreCommandLineUtf8(process_info, command_line->Buffer,
 +                              command_line->Length / sizeof(wchar_t));
  }
+diff --git a/src/process_file_users.cc b/src/process_file_users.cc
+new file mode 100644
+index 0000000..6c82221
+--- /dev/null
++++ b/src/process_file_users.cc
+@@ -0,0 +1,189 @@
++// Orca: which processes have a file or folder open.
++//
++// Windows refuses to rename or delete a folder while any process holds a
++// handle inside it, and a shell or agent whose working directory is there
++// names no path on its command line. The kernel keeps the answer per file:
++// FileProcessIdsUsingFileInformation, the query Restart Manager is built on.
++// It opens only the path itself -- no other process is opened or read.
++//
++// Each query walks the system's whole handle table in the kernel: ~50 ms per
++// path with 200k handles open, NTFS and ReFS alike. Callers keep the path list
++// short, and the paths are asked on a few threads of this one worker rather
++// than on several libuv workers the main process needs for its file I/O.
++
++#include "process_file_users.h"
++
++#include <algorithm>
++#include <atomic>
++#include <cstddef>
++#include <thread>
++#include <windows.h>
++#include <winternl.h>
++#include <string>
++#include <system_error>
++#include <utility>
++#include <vector>
++
++namespace {
++
++const ULONG kFileProcessIdsUsingFileInformation = 47;
++const NTSTATUS kStatusInfoLengthMismatch = static_cast<NTSTATUS>(0xC0000004L);
++// A list that outgrows this is not a holder list a dialog can show anyway.
++const size_t kMaxBufferBytes = 1 << 20;
++// Measured: 8 threads ask 51 folders in a third of the single-thread time; more contend in the kernel.
++const size_t kMaxThreads = 8;
++
++// FILE_INFORMATION_CLASS in winternl.h does not name class 47, so the class
++// travels as a ULONG rather than a cast enum.
++typedef NTSTATUS(NTAPI* NtQueryInformationFileFn)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, ULONG);
++
++// FILE_PROCESS_IDS_USING_FILE_INFORMATION from ntifs.h.
++struct FileProcessIdsUsingFile {
++  ULONG NumberOfProcessIdsInList;
++  ULONG_PTR ProcessIdList[1];
++};
++
++// ntdll ships no import library for this entry point; it has to be resolved.
++NtQueryInformationFileFn NtQueryInformationFileEntry() {
++  static const NtQueryInformationFileFn entry = []() -> NtQueryInformationFileFn {
++    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
++    return ntdll ? reinterpret_cast<NtQueryInformationFileFn>(
++                       GetProcAddress(ntdll, "NtQueryInformationFile"))
++                 : nullptr;
++  }();
++  return entry;
++}
++
++struct PathUsers {
++  bool ok = false;
++  std::vector<DWORD> pids;
++};
++
++PathUsers QueryPathUsers(const std::wstring& path) {
++  PathUsers result;
++  const NtQueryInformationFileFn query = NtQueryInformationFileEntry();
++  if (!query) {
++    return result;
++  }
++  // Attributes only, sharing everything: the probe must never be the holder
++  // that blocks the delete it is diagnosing. Backup semantics opens folders.
++  HANDLE file = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
++                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
++                            OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
++  if (file == INVALID_HANDLE_VALUE) {
++    return result;
++  }
++  std::vector<unsigned char> buffer(4096);
++  NTSTATUS status = kStatusInfoLengthMismatch;
++  IO_STATUS_BLOCK io{};
++  while (true) {
++    status = query(file, &io, buffer.data(), static_cast<ULONG>(buffer.size()),
++                   kFileProcessIdsUsingFileInformation);
++    if (status != kStatusInfoLengthMismatch || buffer.size() >= kMaxBufferBytes) {
++      break;
++    }
++    buffer.resize(buffer.size() * 4);
++  }
++  CloseHandle(file);
++  if (status < 0) {
++    return result;
++  }
++  const auto* info = reinterpret_cast<const FileProcessIdsUsingFile*>(buffer.data());
++  const size_t capacity =
++      (buffer.size() - offsetof(FileProcessIdsUsingFile, ProcessIdList)) / sizeof(ULONG_PTR);
++  const size_t count = info->NumberOfProcessIdsInList < capacity
++                           ? info->NumberOfProcessIdsInList
++                           : capacity;
++  result.pids.reserve(count);
++  for (size_t index = 0; index < count; index++) {
++    result.pids.push_back(static_cast<DWORD>(info->ProcessIdList[index]));
++  }
++  result.ok = true;
++  return result;
++}
++
++class PathUsersWorker : public Napi::AsyncWorker {
++ public:
++  PathUsersWorker(Napi::Env env, std::vector<std::wstring> paths)
++      : Napi::AsyncWorker(env),
++        paths_(std::move(paths)),
++        deferred_(Napi::Promise::Deferred::New(env)) {}
++
++  Napi::Promise Promise() const { return deferred_.Promise(); }
++
++ protected:
++  void Execute() override {
++    results_.resize(paths_.size());
++    std::atomic<size_t> next{0};
++    auto drain = [this, &next]() {
++      for (size_t index = next++; index < paths_.size(); index = next++) {
++        results_[index] = QueryPathUsers(paths_[index]);
++      }
++    };
++    const size_t cores = std::max<size_t>(1, std::thread::hardware_concurrency());
++    const size_t helpers = std::min({kMaxThreads, cores, paths_.size()});
++    std::vector<std::thread> threads;
++    for (size_t count = 1; count < helpers; count++) {
++      try {
++        threads.emplace_back(drain);
++      } catch (const std::system_error&) {
++        break;  // Fewer threads only make it slower.
++      }
++    }
++    drain();
++    for (std::thread& thread : threads) {
++      thread.join();
++    }
++  }
++
++  void OnOK() override {
++    Napi::Env env = Env();
++    Napi::Array out = Napi::Array::New(env, results_.size());
++    for (size_t index = 0; index < results_.size(); index++) {
++      const PathUsers& users = results_[index];
++      if (!users.ok) {
++        out.Set(static_cast<uint32_t>(index), env.Null());
++        continue;
++      }
++      Napi::Array pids = Napi::Array::New(env, users.pids.size());
++      for (size_t pid = 0; pid < users.pids.size(); pid++) {
++        pids.Set(static_cast<uint32_t>(pid), Napi::Number::New(env, users.pids[pid]));
++      }
++      out.Set(static_cast<uint32_t>(index), pids);
++    }
++    deferred_.Resolve(out);
++  }
++
++  void OnError(const Napi::Error& error) override { deferred_.Reject(error.Value()); }
++
++ private:
++  std::vector<std::wstring> paths_;
++  std::vector<PathUsers> results_;
++  Napi::Promise::Deferred deferred_;
++};
++
++}  // namespace
++
++// getProcessIdsUsingPaths(paths) -> Promise<(number[] | null)[]>, null where a
++// path could not be opened or queried.
++Napi::Value GetProcessIdsUsingPaths(const Napi::CallbackInfo& args) {
++  Napi::Env env(args.Env());
++  if (args.Length() != 1 || !args[0].IsArray()) {
++    throw Napi::TypeError::New(env, "getProcessIdsUsingPaths expects an array of paths.");
++  }
++  const Napi::Array input = args[0].As<Napi::Array>();
++  std::vector<std::wstring> paths;
++  paths.reserve(input.Length());
++  for (uint32_t index = 0; index < input.Length(); index++) {
++    const Napi::Value value = input.Get(index);
++    if (!value.IsString()) {
++      throw Napi::TypeError::New(env, "getProcessIdsUsingPaths expects an array of paths.");
++    }
++    const std::u16string text = value.As<Napi::String>().Utf16Value();
++    paths.emplace_back(text.begin(), text.end());
++  }
++  auto* worker = new PathUsersWorker(env, std::move(paths));
++  const Napi::Promise promise = worker->Promise();
++  worker->Queue();
++  return promise;
++}
+diff --git a/src/process_file_users.h b/src/process_file_users.h
+new file mode 100644
+index 0000000..d55c366
+--- /dev/null
++++ b/src/process_file_users.h
+@@ -0,0 +1,10 @@
++// Orca: which processes have a file or folder open.
++
++#ifndef SRC_PROCESS_FILE_USERS_H_
++#define SRC_PROCESS_FILE_USERS_H_
++
++#include <napi.h>
++
++Napi::Value GetProcessIdsUsingPaths(const Napi::CallbackInfo& args);
++
++#endif  // SRC_PROCESS_FILE_USERS_H_
 diff --git a/src/process_launch.cc b/src/process_launch.cc
 new file mode 100644
 index 0000000..e3141c5
@@ -597,10 +814,10 @@ index f59559d..1d61c87 100644
    }
  
 diff --git a/typings/windows-process-tree.d.ts b/typings/windows-process-tree.d.ts
-index 70e242b..b1d0a53 100644
+index 70e242b..51113d2 100644
 --- a/typings/windows-process-tree.d.ts
 +++ b/typings/windows-process-tree.d.ts
-@@ -7,9 +7,18 @@
+@@ -7,9 +7,24 @@
    export enum ProcessDataFlag {
      None = 0,
      Memory = 1,
@@ -616,11 +833,17 @@ index 70e242b..b1d0a53 100644
 +   */
 +  export const supportedProcessDataFlags: number | undefined;
 +  export const getProcessCreationTime: ((pid: number) => number | undefined) | undefined;
++  /**
++   * The pids with a handle open on each path, from the kernel's own per-file list
++   * (FileProcessIdsUsingFileInformation); null where a path could not be queried.
++   * Opens only the paths themselves. Undefined off win32 and on older binaries.
++   */
++  export const getProcessIdsUsingPaths: ((paths: string[]) => Promise<(number[] | null)[]>) | undefined;
 +
    export interface IProcessInfo {
      pid: number;
      ppid: number;
-@@ -24,6 +33,9 @@
+@@ -24,6 +39,9 @@
       * The string returned is at most 512 chars, strings exceeding this length are truncated.
       */
      commandLine?: string;
@@ -630,7 +853,7 @@ index 70e242b..b1d0a53 100644
    }
  
    export interface IProcessCpuInfo extends IProcessInfo {
-@@ -35,6 +47,7 @@
+@@ -35,6 +53,7 @@
      name: string;
      memory?: number;
      commandLine?: string;

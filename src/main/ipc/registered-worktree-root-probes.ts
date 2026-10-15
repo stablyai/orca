@@ -1,7 +1,10 @@
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
+import { splitWorktreeId } from '../../shared/worktree/id'
+import { isPerforceCopyWorktreeIdForRepo } from '../../shared/worktree/perforce-copy-worktree'
 import { getErrorCode } from '../git/worktree-operation-options'
 import { resolveLocalProjectRuntimesForRepos } from '../local-project-runtime-resolution'
 import type { Store } from '../persistence'
@@ -24,6 +27,11 @@ export async function listWorktreeRootsWithConcurrency(
   repos: readonly Repo[]
 ): Promise<ListedRoots[]> {
   const runtimes = resolveLocalProjectRuntimesForRepos(store, repos)
+  // Perforce copies of folder projects are known only from metadata; skip the read when none can exist.
+  const worktreeIds =
+    repos.some(isFolderRepo) && typeof store.getAllWorktreeMeta === 'function'
+      ? Object.keys(store.getAllWorktreeMeta())
+      : []
   const results: ListedRoots[] = []
   let nextIndex = 0
   await Promise.all(
@@ -43,6 +51,9 @@ export async function listWorktreeRootsWithConcurrency(
             )) {
               roots.add(resolve(worktree.path))
             }
+            for (const copyPath of perforceCopyPaths(repo, worktreeIds)) {
+              roots.add(resolve(copyPath))
+            }
           } catch (error) {
             console.warn(
               `[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`,
@@ -56,6 +67,18 @@ export async function listWorktreeRootsWithConcurrency(
     )
   )
   return results
+}
+
+function perforceCopyPaths(repo: Repo, worktreeIds: readonly string[]): string[] {
+  if (!isFolderRepo(repo)) {
+    return []
+  }
+  return worktreeIds.flatMap((worktreeId) => {
+    const path = isPerforceCopyWorktreeIdForRepo(repo, worktreeId)
+      ? splitWorktreeId(worktreeId)?.worktreePath
+      : undefined
+    return path ? [path] : []
+  })
 }
 
 /** An unavailable mount is not evidence that a recovered worktree disappeared. */

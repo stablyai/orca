@@ -2,19 +2,19 @@ import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../../shared/repo-types'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
 import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-logic'
 
-export function createFolderWorkspace(
+/** Metadata a new folder-project workspace gets, shared by folder workspaces and Perforce copies. */
+export function folderWorkspaceCreateMeta(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
-  store: Store
-): CreateWorktreeResult {
-  const now = Date.now()
-  const instanceId = randomUUID()
-  const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+  store: Store,
+  now: number
+): Partial<WorktreeMeta> {
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.displayName,
     args.displayNameKind,
@@ -22,8 +22,7 @@ export function createFolderWorkspace(
     args.cliProvenance?.kind === 'created-by-cli',
     args.nameWasGenerated === true
   )
-  const meta = store.setWorktreeMeta(worktreeId, {
-    instanceId,
+  return {
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
@@ -62,6 +61,19 @@ export function createFolderWorkspace(
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {})
+  }
+}
+
+export function createFolderWorkspace(
+  args: CreateWorktreeArgsWithSystemProvenance,
+  repo: Repo,
+  store: Store
+): CreateWorktreeResult {
+  const instanceId = randomUUID()
+  const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+  const meta = store.setWorktreeMeta(worktreeId, {
+    instanceId,
+    ...folderWorkspaceCreateMeta(args, repo, store, Date.now())
   })
   return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
 }

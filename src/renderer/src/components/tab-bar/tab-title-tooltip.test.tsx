@@ -9,6 +9,9 @@ import BrowserTab from './BrowserTab'
 import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
 
+vi.mock('../right-sidebar/perforce/use-perforce-edited-tab', () => ({
+  usePerforceEditedTab: () => false
+}))
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: ({ id }: { id: string }) => ({
     attributes: {

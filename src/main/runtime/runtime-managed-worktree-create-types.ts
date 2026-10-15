@@ -42,6 +42,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   telemetrySource?: WorkspaceCreateTelemetrySource
   workspaceStatus?: string
   manualOrder?: number
+  /** A Perforce project's new workspace becomes a copy; `settings` are the client's Settings > Perforce. */
+  perforceCopy?: { stream?: unknown; settings?: unknown }
   sparseCheckout?: { directories: string[]; presetId?: string }
   pushTarget?: GitPushTarget
   runHooks?: boolean

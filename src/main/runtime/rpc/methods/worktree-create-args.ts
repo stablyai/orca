@@ -44,6 +44,7 @@ export function buildManagedWorktreeCreateArgs(
     telemetrySource: params.telemetrySource,
     workspaceStatus: params.workspaceStatus,
     manualOrder: params.manualOrder,
+    ...(params.perforceCopy ? { perforceCopy: params.perforceCopy } : {}),
     sparseCheckout: params.sparseCheckout,
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,
