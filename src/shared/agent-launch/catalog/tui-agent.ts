@@ -10,6 +10,7 @@ export type TuiAgent =
   | 'mimo-code'
   | 'pi' // Pi (pi.dev)
   | 'omp' // OMP (omp.sh)
+  | 'omo' // OmO (npm `omo-ai`)
   | 'qoder'
   | 'qoder-cn' // Qoder CLI China
   | 'gemini'
