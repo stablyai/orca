@@ -130,6 +130,7 @@ export function aliasFromCandidate(candidate: GitHubPRRefreshCandidate): GitHubP
     branch: candidate.branch,
     worktreeId: candidate.worktreeId,
     connectionId: candidate.connectionId ?? null,
+    executionHostId: candidate.executionHostId ?? null,
     currentHeadOid: candidate.currentHeadOid ?? null,
     linkedPRNumber: candidate.linkedPRNumber ?? null,
     fallbackPRNumber:

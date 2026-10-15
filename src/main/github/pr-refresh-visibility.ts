@@ -16,6 +16,19 @@ export class PRRefreshVisibility {
     return this.visibleByWindow.delete(windowId)
   }
 
+  pruneCandidates(matches: (candidate: GitHubPRRefreshCandidate) => boolean): boolean {
+    let removed = false
+    for (const window of this.visibleByWindow.values()) {
+      for (const [key, candidate] of window.candidates) {
+        if (matches(candidate)) {
+          window.candidates.delete(key)
+          removed = true
+        }
+      }
+    }
+    return removed
+  }
+
   report(candidates: GitHubPRRefreshCandidate[], generation: number, windowId: number): boolean {
     this.pruneDestroyedWindows()
     const existing = this.visibleByWindow.get(windowId)

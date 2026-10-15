@@ -328,7 +328,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
-    notifyReposChanged: () => this.notifyReposChanged()
+    notifyReposChanged: () => this.notifyReposChanged(),
+    onRepoRemoved: (repoId, hostId) => this.notifier?.repoRemoved?.(repoId, hostId)
   })
 
   protected readonly repositorySparsePresets = new RuntimeRepositorySparsePresets({

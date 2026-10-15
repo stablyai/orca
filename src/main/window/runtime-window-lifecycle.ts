@@ -11,6 +11,7 @@ import type {
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { pruneRepoPRRefresh } from '../github/pr-refresh-coordinator'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
@@ -47,6 +48,7 @@ export function registerRuntimeWindowLifecycle(
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
+    repoRemoved: (repoId, hostId) => pruneRepoPRRefresh(repoId, hostId),
     automationsChanged: (payload) => send('automations:changed', payload),
     activateWorktree: (
       repoId,

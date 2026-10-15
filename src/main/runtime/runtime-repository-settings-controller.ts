@@ -14,6 +14,7 @@ type RuntimeRepositorySettingsDependencies = {
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
+  onRepoRemoved?: (repoId: string, hostId: string) => void
 }
 
 type RepositoryUpdates = Partial<
@@ -116,6 +117,11 @@ export class RuntimeRepositorySettingsController {
     const hostId = getRepoExecutionHostId(repo)
     assertWslMoveRepoWritable(store, repo)
     store.removeProjectForHost(repo.id, hostId)
+    try {
+      this.deps.onRepoRemoved?.(repo.id, hostId)
+    } catch (error) {
+      console.error('[repos] failed to stop review refresh after project removal', error)
+    }
     this.deps.forgetTerminalTopology(repo.id)
     this.deps.invalidateResolvedWorktrees()
     this.deps.invalidateWorktreeScan(repo.id)

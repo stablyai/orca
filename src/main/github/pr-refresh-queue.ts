@@ -270,10 +270,10 @@ export class PRRefreshQueue {
     }
   }
 
-  pruneWorktreeAliases(worktreeId: string): void {
+  pruneAliases(matches: (alias: GitHubPRRefreshAlias) => boolean): void {
     for (const [key, entry] of this.entries) {
       for (const alias of entry.aliases.values()) {
-        if (alias.worktreeId === worktreeId) {
+        if (matches(alias)) {
           this.removeInvalidAlias(key, alias)
         }
       }

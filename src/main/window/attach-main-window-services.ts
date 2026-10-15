@@ -8,6 +8,7 @@ import {
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
 import { registerRepoHandlers } from '../ipc/repos'
+import { pruneRepoPRRefresh } from '../github/pr-refresh-coordinator'
 import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
@@ -71,7 +72,7 @@ export function attachMainWindowServices(
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
-  registerRepoHandlers(mainWindow, store, runtime)
+  registerRepoHandlers(mainWindow, store, runtime, pruneRepoPRRefresh)
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
   setWorktreeCatalogRemoteClientNotifier(runtime)

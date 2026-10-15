@@ -15,7 +15,11 @@ import {
   isWslMoveSourceHost
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
-export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoCatalogHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  onRepoRemoved?: (repoId: string, hostId: string) => void
+): void {
   // Why one shared reference: enrichment dedupes coalesced callers by callback identity, so a fresh
   // closure per list call would stack up (and re-broadcast) for the length of a slow sweep.
   const broadcastReposChanged = (): void => notifyReposChanged(mainWindow)
@@ -94,6 +98,11 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
         assertWslMoveProjectWritable(store, { repoId: args.repoId })
       }
       store.removeProjectForHost(args.repoId, hostId)
+      try {
+        onRepoRemoved?.(args.repoId, hostId)
+      } catch (error) {
+        console.error('[repos] failed to stop review refresh after project removal', error)
+      }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
     }

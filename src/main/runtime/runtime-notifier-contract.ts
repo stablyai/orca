@@ -42,6 +42,7 @@ export type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  repoRemoved?(repoId: string, hostId: string): void
   activateWorktree(
     repoId: string,
     worktreeId: string,

@@ -1,5 +1,6 @@
 import type {
   GitHubPRRefreshCandidate,
+  GitHubPRRefreshAlias,
   GitHubPRRefreshReason,
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
@@ -22,6 +23,7 @@ import { PRRefreshQueueDrainer } from './pr-refresh-queue-drainer'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
+import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../shared/execution-host'
 
 const retry = new PRRefreshRetryState()
 const queue = new PRRefreshQueue((key) => retry.reset(key))
@@ -57,7 +59,18 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
 }
 
 export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
-  queue.pruneWorktreeAliases(worktreeId)
+  queue.pruneAliases((alias) => alias.worktreeId === worktreeId)
+}
+
+export function pruneRepoPRRefresh(repoId: string, hostId: string): void {
+  const matches = (alias: GitHubPRRefreshAlias): boolean =>
+    alias.repoId === repoId &&
+    (normalizeExecutionHostId(alias.executionHostId) ??
+      (alias.connectionId ? `ssh:${alias.connectionId}` : LOCAL_EXECUTION_HOST_ID)) === hostId
+  visibility.pruneCandidates(matches)
+  queue.pruneAliases(matches)
+  removeInvisibleVisibleRefreshes()
+  drainer.schedule()
 }
 
 export function enqueuePRRefresh(
