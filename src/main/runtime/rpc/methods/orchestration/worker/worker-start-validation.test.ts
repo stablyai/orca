@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrcaRuntimeWithGetTerminalInteractiveWait } from '../../../../orca-runtime-get-terminal-interactive-wait'
+import { OrcaRuntimeWithGetTerminalInteractiveWait } from '../../../../terminal/wait/terminal-interactive-wait'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import {
   prepareLocalWorkerStart,
