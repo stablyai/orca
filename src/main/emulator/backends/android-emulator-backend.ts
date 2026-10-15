@@ -172,13 +172,13 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   async stopHelperForDevice(
     deviceId: string,
-    options: { helperPid?: number; includeOrphaned?: boolean } = {}
+    options: { helperPid?: number; includeOrphaned?: boolean; ownedOnly?: boolean } = {}
   ): Promise<void> {
     this.streams.stop(deviceId)
     // Reap a port-forward leaked by an unclean exit: the in-memory handle is gone
     // after a crash, so streams.stop can't remove it. Best-effort, serial-scoped,
     // and must never throw on this teardown path.
-    if (options.includeOrphaned) {
+    if (options.includeOrphaned && !options.ownedOnly) {
       const sdk = this.sdkState.resolve()
       if (!sdk) {
         return

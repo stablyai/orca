@@ -9,6 +9,7 @@ export type ServeSimHelperProcess = {
 }
 
 const SERVE_SIM_DETACHED_HELPER_FLAG = '--exit-on-simulator-shutdown'
+export const SERVE_SIM_OWNER_ENV = 'ORCA_SERVE_SIM_OWNER'
 
 type ServeSimHelperProcessLookupOptions = {
   helperPid?: number
@@ -95,4 +96,74 @@ export async function killServeSimHelperProcessesForDevice(
       // Best effort; serve-sim's own --kill remains the authoritative path.
     }
   }
+}
+
+export async function killOwnedServeSimHelperProcessesForDevice(
+  deviceUdid: string,
+  ownerId: string
+): Promise<void> {
+  if (platform() !== 'darwin' || !ownerId) {
+    return
+  }
+  const table = await execFileText('ps', ['-axo', 'pid=,command=']).catch(() => '')
+  const helpers = parseServeSimHelperProcesses(table).filter((helper) =>
+    containsExactToken(helper.command, deviceUdid)
+  )
+  const counts = new Map<number, number>()
+  for (const line of iterateProcessOutputLines(table)) {
+    const pidMatch = /^\s*(\d+)\s/.exec(line)
+    if (pidMatch) {
+      const pid = Number(pidMatch[1])
+      counts.set(pid, (counts.get(pid) ?? 0) + 1)
+    }
+  }
+  await Promise.all(
+    helpers.map(async ({ pid }) => {
+      if (pid <= 0 || counts.get(pid) !== 1) {
+        return
+      }
+      // A shared state-file PID or device match is not proof that Orca launched it.
+      const output = await execFileText('ps', [
+        '-Eww',
+        '-p',
+        String(pid),
+        '-o',
+        'pid=,command='
+      ]).catch(() => '')
+      const current = parseServeSimHelperProcesses(output)
+      const helper = current[0]
+      let rowCount = 0
+      for (const line of iterateProcessOutputLines(output)) {
+        if (line.trim()) {
+          rowCount += 1
+        }
+      }
+      if (
+        rowCount !== 1 ||
+        current.length !== 1 ||
+        helper?.pid !== pid ||
+        !containsExactToken(helper.command, deviceUdid) ||
+        !containsExactToken(helper.command, `${SERVE_SIM_OWNER_ENV}=${ownerId}`)
+      ) {
+        return
+      }
+      try {
+        process.kill(pid, 'SIGTERM')
+      } catch {
+        // The owned helper may already have exited.
+      }
+    })
+  )
+}
+
+function containsExactToken(command: string, token: string): boolean {
+  const index = command.indexOf(token)
+  if (index === -1) {
+    return false
+  }
+  // Inspect both token boundaries even beyond the command scanner's 4 KiB bound.
+  return commandContainsToken(
+    command.slice(Math.max(0, index - 1), index + token.length + 1),
+    token
+  )
 }

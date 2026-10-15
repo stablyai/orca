@@ -5,14 +5,15 @@ import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
 const stopAgentHookServer = idle()
+const killAllPty = settled()
 const stopStructuredAgentSessionRuntime = settled()
 
-// Every teardown member settles except the profile store, so only the writer can hold quit.
+// Keep unrelated teardown members settled so each test isolates its pending resource.
 const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/filesystem-watcher': { closeAllWatchers: settled() },
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
-  '../ipc/pty/kill-all': { killAllPty: idle() },
+  '../ipc/pty/kill-all': { killAllPty },
   '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
   '../ipc/ssh-shutdown-drain': { beginSshShutdown: settled() },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -61,10 +62,12 @@ afterEach(() => {
 
 async function startQuit(
   flushFinalOrThrowAsync: () => Promise<void>,
-  services: Record<string, unknown> = {}
+  services: Record<string, unknown> = {},
+  shutdownLocalPtys: () => Promise<void> = async () => {}
 ) {
   vi.resetModules()
   vi.useFakeTimers()
+  killAllPty.mockReset().mockImplementation(shutdownLocalPtys)
   const app = Object.assign(new EventEmitter(), { quit: vi.fn() })
   const admission = { release: vi.fn() }
   const store = {
@@ -114,6 +117,54 @@ it('releases admission only after the final flush and freeze complete', async ()
   await vi.advanceTimersByTimeAsync(0)
   expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
   expect(admission.release).toHaveBeenCalledOnce()
+  expect(app.quit).toHaveBeenCalledOnce()
+})
+
+it('waits for local PTY cleanup before quitting', async () => {
+  const ptyShutdown = Promise.withResolvers<void>()
+  const { app } = await startQuit(
+    async () => {},
+    {},
+    () => ptyShutdown.promise
+  )
+
+  await vi.advanceTimersByTimeAsync(0)
+  expect(killAllPty).toHaveBeenCalledOnce()
+  expect(app.quit).not.toHaveBeenCalled()
+
+  ptyShutdown.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(app.quit).toHaveBeenCalledOnce()
+  expect(console.warn).not.toHaveBeenCalled()
+})
+
+it('reports pending local PTY cleanup and quits at the teardown deadline', async () => {
+  const { app } = await startQuit(
+    async () => {},
+    {},
+    () => new Promise<void>(() => {})
+  )
+
+  await vi.advanceTimersByTimeAsync(WILL_QUIT_TEARDOWN_DEADLINE_MS - 1)
+  expect(app.quit).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+
+  expect(app.quit).toHaveBeenCalledOnce()
+  expect(console.warn).toHaveBeenCalledWith('[shutdown] Quit teardown deadline reached', {
+    pendingTeardowns: ['local-ptys']
+  })
+})
+
+it('continues quitting when local PTY cleanup rejects', async () => {
+  const { app } = await startQuit(
+    async () => {},
+    {},
+    async () => {
+      throw new Error('PTY cleanup failed')
+    }
+  )
+
+  await vi.advanceTimersByTimeAsync(0)
   expect(app.quit).toHaveBeenCalledOnce()
 })
 

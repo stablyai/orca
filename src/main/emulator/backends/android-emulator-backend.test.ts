@@ -270,7 +270,12 @@ describe('AndroidEmulatorBackend', () => {
     })
     const info = await android.startSession('emulator-5554')
     expect(info).toMatchObject({ deviceUdid: 'emulator-5554', streamCodec: 'h264' })
-    await android.stopHelperForDevice('emulator-5554')
+    runner.mockClear()
+    await android.stopHelperForDevice('emulator-5554', {
+      includeOrphaned: true,
+      ownedOnly: true
+    })
     expect(close).toHaveBeenCalledTimes(1)
+    expect(runner).not.toHaveBeenCalled()
   })
 })
