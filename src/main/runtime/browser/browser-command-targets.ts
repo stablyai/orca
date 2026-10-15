@@ -175,11 +175,10 @@ export class RuntimeBrowserCommandTargets {
     worktreeId: string | undefined,
     browserPageId: string
   ): Promise<void> {
-    if (await this.host.serveBrowserTabs?.start(worktreeId, browserPageId)) {
-      return
+    if (!(await this.host.serveBrowserTabs?.start(worktreeId, browserPageId))) {
+      await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
+      await waitForTabRegistration(browserPageId)
     }
-    await this.sendActivateView(worktreeId ? { worktreeId, browserPageId } : { browserPageId })
-    await waitForTabRegistration(browserPageId)
     // Why: a woken tab should behave like one that was open all along, not a blank page mid-load.
     await waitForTabFirstLoad(browserPageId)
   }
