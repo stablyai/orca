@@ -103,7 +103,8 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'workspace', 'worktree', 'pin', 'unpin', 'toggle'],
-    defaultBindings: platformBindings(['Mod+Alt+P']),
+    // Why: a new default chord silently evicts a user override that already uses it; new actions ship unbound.
+    defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
   {

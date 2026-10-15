@@ -245,19 +245,22 @@ describe('keybindings', () => {
     )
   })
 
-  it('binds only the pin toggle by default and leaves the idempotent set actions unassigned', () => {
+  it('keeps the workspace pin actions unassigned until users customize them', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const binding = { key: 'p', code: 'KeyP', control: false, meta: true, alt: true, shift: false }
 
     for (const platform of platforms) {
-      expect(getEffectiveKeybindingsForAction('workspace.togglePin', platform)).toEqual([
-        'Mod+Alt+P'
-      ])
+      expect(getEffectiveKeybindingsForAction('workspace.togglePin', platform)).toEqual([])
       expect(getEffectiveKeybindingsForAction('workspace.pin', platform)).toEqual([])
       expect(getEffectiveKeybindingsForAction('workspace.unpin', platform)).toEqual([])
     }
 
-    expect(keybindingMatchesAction('workspace.togglePin', binding, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('workspace.togglePin', binding, 'darwin')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.togglePin', binding, 'darwin', {
+        'workspace.togglePin': ['Mod+Alt+P']
+      })
+    ).toBe(true)
     expect(keybindingMatchesAction('workspace.pin', binding, 'darwin')).toBe(false)
     expect(
       keybindingMatchesAction('workspace.pin', binding, 'darwin', {
