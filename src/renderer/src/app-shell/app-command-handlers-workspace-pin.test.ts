@@ -6,6 +6,7 @@ import type { AppShortcutState, ShortcutDispatchInput } from './app-command-hand
 const mocks = vi.hoisted(() => ({
   applyWorkspacePinIntent: vi.fn(),
   floatingWorkspaceFocused: false,
+  visibleOverlay: false,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hoisted slot starts empty and each test assigns the row it needs.
   pinTarget: null as Worktree | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: beforeEach replaces this with the fields the handlers read; the empty seed is never exercised.
@@ -32,6 +33,10 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
 
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
+}))
+
+vi.mock('@/lib/visible-overlay', () => ({
+  hasVisibleOverlay: () => mocks.visibleOverlay
 }))
 
 import { createAppCommandHandlers } from './app-command-handlers'
@@ -65,6 +70,7 @@ describe('workspace pin app commands', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.floatingWorkspaceFocused = false
+    mocks.visibleOverlay = false
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pin handlers read only the active workspace id off the store.
     mocks.store = { activeWorktreeId: 'repo::/feature' } as AppState
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the target is forwarded untouched to a mocked apply, which only needs these two fields.
@@ -97,6 +103,16 @@ describe('workspace pin app commands', () => {
 
   it('falls through while the floating workspace panel has focus', () => {
     mocks.floatingWorkspaceFocused = true
+    const input = shortcutInput()
+    const handler = createAppCommandHandlers(shortcutState(), input).get('workspace.togglePin')
+
+    expect(handler?.()).toBe(false)
+    expect(input.preventDefault).not.toHaveBeenCalled()
+    expect(mocks.applyWorkspacePinIntent).not.toHaveBeenCalled()
+  })
+
+  it('falls through while an overlay such as a context menu is open', () => {
+    mocks.visibleOverlay = true
     const input = shortcutInput()
     const handler = createAppCommandHandlers(shortcutState(), input).get('workspace.togglePin')
 
