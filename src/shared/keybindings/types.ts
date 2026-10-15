@@ -38,6 +38,7 @@ export type KeybindingActionId =
   | 'workspace.delete'
   | 'workspace.openBoard'
   | 'workspace.selectByIndex'
+  | 'workspace.nextAttention'
   | 'voice.dictation'
   | 'view.tasks'
   | 'view.plugins'

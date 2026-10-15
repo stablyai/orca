@@ -10,6 +10,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { useAppStore } from '../../store'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
+import { jumpToNextAttentionFromShortcut } from './next-attention-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 
 export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void {
@@ -67,6 +68,14 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         toggleAgentDashboardFromShortcut(useAppStore.getState(), () => {
           void window.api.dashboard.openPopout()
         })
+      })
+    )
+  }
+
+  if (window.api.ui.onJumpToNextAttention) {
+    unsubs.push(
+      window.api.ui.onJumpToNextAttention(() => {
+        jumpToNextAttentionFromShortcut(useAppStore.getState(), Date.now())
       })
     )
   }

@@ -1578,6 +1578,9 @@
         "folderAccessFix": "Solucionar"
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "Ningún espacio de trabajo requiere atención"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Orca no pudo instalarse en este host SSH. Hosts SSH en Ajustes muestra por qué."
         }
