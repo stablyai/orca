@@ -165,6 +165,8 @@ export function addLiveTerminalTab(
   store.getState().createUnifiedTab(worktreeId, 'terminal', {
     id: `unified-${tabId}`,
     entityId: tabId,
+    // Why: these scenarios seed tabs of one pane; the lone-pane auto-split would put them on screen.
+    placementFixed: true,
     ...(targetGroupId ? { targetGroupId } : {})
   })
   const ptyId = `pty-${tabId}`
