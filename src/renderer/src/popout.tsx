@@ -23,9 +23,12 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { installInactiveWindowAttribute } from './lib/inactive-window-attribute'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+const disposeInactiveWindowAttribute = installInactiveWindowAttribute()
+import.meta.hot?.dispose(disposeInactiveWindowAttribute)
 // Why: the pop-out window is a separate BrowserWindow with its own React root,
 // so it must run the same renderer bootstrap as main.tsx (crash diagnostics,
 // theme, i18n, error boundary) rather than inheriting anything from the main

@@ -9,6 +9,8 @@ vi.mock('@electron-toolkit/utils', async () =>
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+// Why: covered by window-focus-relay.test.ts; the repaint cases below count the window's focus handlers.
+vi.mock('./window-focus-relay', () => ({ installWindowFocusRelay: vi.fn() }))
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()

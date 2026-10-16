@@ -190,6 +190,11 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('window:maximize-changed', listener)
     return () => ipcRenderer.removeListener('window:maximize-changed', listener)
   },
+  onWindowFocusChanged: (callback: (isFocused: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, isFocused: boolean) => callback(isFocused)
+    ipcRenderer.on('window:focus-changed', listener)
+    return () => ipcRenderer.removeListener('window:focus-changed', listener)
+  },
   requestClose: (): void => {
     ipcRenderer.send('window:request-close')
   },

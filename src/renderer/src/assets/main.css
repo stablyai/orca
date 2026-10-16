@@ -1805,6 +1805,12 @@ html.native-shell .app-layout {
   }
 }
 
+/* Each step keeps WindowServer and the GPU busy on macOS; rest as the full ring while unfocused (#9576). */
+:root[data-window-inactive] .agent-working-spinner {
+  animation: none;
+  border-top-color: var(--color-yellow-500);
+}
+
 /* Why: keyframes run when the content mounts already in its final state. */
 @keyframes compact-agent-expansion-reveal {
   from {

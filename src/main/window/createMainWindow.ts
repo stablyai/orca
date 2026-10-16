@@ -32,6 +32,7 @@ import {
 } from './main-window-visual-lifecycle'
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
+import { installWindowFocusRelay } from './window-focus-relay'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session-runtime-end-record'
 
@@ -189,6 +190,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  installWindowFocusRelay(mainWindow)
   const focus = installMainWindowFocusLifecycle({
     isWindowClosing: state.isWindowClosing,
     mainWindow,
