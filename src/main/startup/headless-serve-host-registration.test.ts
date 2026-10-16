@@ -5,6 +5,9 @@ const mocks = await vi.hoisted(async () => {
   return createSshIpcMocks()
 })
 
+const recipes = vi.hoisted(() => ({ register: vi.fn() }))
+vi.mock('../ipc/ephemeral-vm', () => ({ registerEphemeralVmHandlers: recipes.register }))
+
 vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
@@ -28,7 +31,7 @@ import { connectRegisteredSshTarget, listRegisteredSshTargets } from '../ssh/ssh
 import { createSshIpcHarness } from '../ipc/ssh-ipc-test-harness'
 import type { SshTarget } from '../../shared/ssh-types'
 import { mainProcessState } from './main-process-state'
-import { registerHeadlessServeSshHandlers } from './headless-serve-ssh-registration'
+import { registerHeadlessServeHostHandlers } from './headless-serve-host-registration'
 
 const { mockSshStore, mockConnectionManager } = mocks
 const target: SshTarget = {
@@ -66,8 +69,9 @@ describe('SSH registration on a headless `orca serve`', () => {
     })
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SSH harness store implements every method registerSshHandlers reads.
-    registerHeadlessServeSshHandlers(harness.mockStore as never, {} as never)
+    registerHeadlessServeHostHandlers(harness.mockStore as never, {} as never)
 
+    expect(recipes.register).toHaveBeenCalledWith(harness.mockStore)
     expect(listRegisteredSshTargets()).toEqual([target])
     await expect(connectRegisteredSshTarget('ssh-1')).resolves.toMatchObject({
       targetId: 'ssh-1',

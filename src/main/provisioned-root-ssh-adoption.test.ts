@@ -73,6 +73,31 @@ describe('adoptProvisionedRootSshCheckout', () => {
     })
   })
 
+  it('reuses adopted metadata when a completed creation is replayed after new commits', async () => {
+    seedRuntime(userDataPath, projectRoot)
+    const listWorktrees = vi.fn().mockResolvedValue([gitWorktree(projectRoot)])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption only reads these two provider methods.
+    registerSshGitProvider(connectionId, {
+      listWorktrees,
+      exec: sparseCheckoutProbe(false)
+    } as never)
+    const { store, setWorktreeMeta } = makeStore()
+    const args = {
+      userDataPath,
+      request: request(projectRoot),
+      repo: repo(projectRoot),
+      store,
+      isRepoCurrent: () => true
+    }
+    const first = await adoptProvisionedRootSshCheckout(args)
+    vi.mocked(store.getWorktreeMeta).mockReturnValue(setWorktreeMeta.mock.results[0].value)
+    listWorktrees.mockResolvedValue([{ ...gitWorktree(projectRoot), head: 'new-agent-commit' }])
+    const replay = await adoptProvisionedRootSshCheckout(args)
+    expect(replay.worktree.instanceId).toBe(first.worktree.instanceId)
+    expect(replay.worktree.head).toBe('new-agent-commit')
+    expect(setWorktreeMeta).toHaveBeenCalledOnce()
+  })
+
   it('pins an explicit label even when it equals the adopted branch', async () => {
     seedRuntime(userDataPath, projectRoot)
     registerSshGitProvider(connectionId, {
@@ -431,7 +456,9 @@ function makeStore(): {
     ...updates
   }))
   return {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements only the persistence methods used by adoption.
     store: {
+      getWorktreeMeta: vi.fn(),
       getSettings: () => ({ nestWorkspaces: false, workspaceDir: '.orca/worktrees' }),
       setWorktreeMeta
     } as unknown as Store,

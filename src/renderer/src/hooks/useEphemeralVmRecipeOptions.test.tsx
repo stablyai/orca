@@ -164,7 +164,12 @@ describe('useEphemeralVmRecipeOptions', () => {
       <Harness repoId="repo-runtime" repoExecutionHostId="runtime:windows-2" />
     )
 
-    expect(listRecipes).not.toHaveBeenCalled()
-    expect(container.querySelector('[data-testid="error"]')?.textContent).toBe('none')
+    expect(listRecipes).toHaveBeenCalledWith({
+      repoId: 'repo-runtime',
+      ownerEnvironmentId: 'windows-2'
+    })
+    expect(container.querySelector('[data-testid="error"]')?.textContent).toBe(
+      'Repo not found: repo-runtime'
+    )
   })
 })

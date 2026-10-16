@@ -1,3 +1,4 @@
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-target'
@@ -39,7 +40,23 @@ export async function prepareRequestForCreate(
     const sourceRepo = store.repos.find(
       (repo) => repo.id === request.ephemeralVmRecipe?.sourceRepoId
     )
+    const owner = sourceRepo ? parseExecutionHostId(getRepoExecutionHostId(sourceRepo)) : null
     preparedTarget = await prepareEphemeralVmWorkspaceTarget({
+      ...(request.ephemeralVmRecipe.ownerEnvironmentId
+        ? { ownerEnvironmentId: request.ephemeralVmRecipe.ownerEnvironmentId }
+        : owner?.kind === 'runtime'
+          ? { ownerEnvironmentId: owner.environmentId }
+          : {}),
+      ...(request.ephemeralVmRecipe.checkoutMode === 'provisioned-root'
+        ? {
+            workspaceRequest: {
+              ...request,
+              repo: request.ephemeralVmRecipe.sourceRepoId,
+              createdWithAgent: request.agent,
+              comment: request.note
+            }
+          }
+        : {}),
       repoId: request.ephemeralVmRecipe.sourceRepoId,
       recipeId: request.ephemeralVmRecipe.recipeId,
       projectId:
@@ -77,6 +94,14 @@ export async function prepareRequestForCreate(
     ...(preparedTarget.checkoutMode === 'provisioned-root'
       ? { baseBranch: request.baseBranch, compareBaseRef: request.compareBaseRef }
       : getEphemeralVmPortableBaseSelection(request)),
+    ...(preparedTarget.ownerEnvironmentId
+      ? {
+          ephemeralVmRecipe: {
+            ...request.ephemeralVmRecipe,
+            ownerEnvironmentId: preparedTarget.ownerEnvironmentId
+          }
+        }
+      : {}),
     ephemeralVmRuntimeId: preparedTarget.runtimeId,
     ephemeralVmCheckoutMode: preparedTarget.checkoutMode,
     ...(preparedTarget.expectedRefHead
@@ -169,6 +194,9 @@ export async function attachEphemeralVmRuntimeToWorkspace(
   try {
     await window.api.ephemeralVm.attachWorkspace({
       runtimeId: request.ephemeralVmRuntimeId,
+      ...(request.ephemeralVmRecipe?.ownerEnvironmentId
+        ? { ownerEnvironmentId: request.ephemeralVmRecipe.ownerEnvironmentId }
+        : {}),
       workspaceId
     })
     if (request.ephemeralVmRuntimeEnvironmentId) {
@@ -198,7 +226,13 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
 ): Promise<void> {
   await cleanupFailedEphemeralVmWorkspace(request, {
     deleteProjectHostSetup: (setupId) => useAppStore.getState().deleteProjectHostSetup({ setupId }),
-    cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
+    cleanupRuntime: (runtimeId) =>
+      window.api.ephemeralVm.cleanup({
+        runtimeId,
+        ...(request.ephemeralVmRecipe?.ownerEnvironmentId
+          ? { ownerEnvironmentId: request.ephemeralVmRecipe.ownerEnvironmentId }
+          : {})
+      }),
     reportSetupError: (error) =>
       console.error('Failed to remove provisioned-root project setup:', error),
     reportRuntimeError: (error) =>

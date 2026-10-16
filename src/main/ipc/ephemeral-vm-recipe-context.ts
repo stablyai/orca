@@ -10,7 +10,9 @@ export type EphemeralVmRecipeListResult = {
   status: 'ok' | 'error'
   repoPath: string | null
   recipes: OrcaVmRecipe[]
-  diagnostics: NonNullable<ReturnType<typeof loadHooks>>['environmentRecipeDiagnostics']
+  diagnostics: NonNullable<
+    NonNullable<ReturnType<typeof loadHooks>>['environmentRecipeDiagnostics']
+  >
   message?: string
 }
 
@@ -19,7 +21,9 @@ export type EphemeralVmRecipeCatalogEntry = {
   repoName: string
   repoPath: string
   recipes: OrcaVmRecipe[]
-  diagnostics: NonNullable<ReturnType<typeof loadHooks>>['environmentRecipeDiagnostics']
+  diagnostics: NonNullable<
+    NonNullable<ReturnType<typeof loadHooks>>['environmentRecipeDiagnostics']
+  >
 }
 
 export type RecipeRepoResult =
@@ -27,7 +31,7 @@ export type RecipeRepoResult =
   | { ok: false; message: string; doctor: (recipeId: string) => EphemeralVmRecipeDoctorResult }
 
 export function listRecipes(
-  store: Store,
+  store: Pick<Store, 'getRepo' | 'getRepos'>,
   repoId: string,
   pluginRecipes: readonly OrcaVmRecipe[] = []
 ): EphemeralVmRecipeListResult {
@@ -47,7 +51,8 @@ export function listRecipes(
       repoPath: repo.path,
       recipes: [],
       diagnostics: [],
-      message: 'Ephemeral VM recipes run on the local desktop host in v1.'
+      message:
+        'Ephemeral VM recipes run on the owning Orca host; use a checkout local to that host.'
     }
   }
   const hooks = loadHooks(repo.path)
@@ -60,7 +65,7 @@ export function listRecipes(
 }
 
 export function listRecipeCatalog(
-  store: Store,
+  store: Pick<Store, 'getRepo' | 'getRepos'>,
   pluginRecipes: readonly OrcaVmRecipe[] = []
 ): EphemeralVmRecipeCatalogEntry[] {
   return store
@@ -79,19 +84,25 @@ export function listRecipeCatalog(
     .filter((entry) => entry.recipes.length > 0 || entry.diagnostics.length > 0)
 }
 
-export function getRecipeRepo(store: Store, repoId: string): RecipeRepoResult {
+export function getRecipeRepo(
+  store: Pick<Store, 'getRepo' | 'getRepos'>,
+  repoId: string
+): RecipeRepoResult {
   const repo = store.getRepo(repoId)
   if (!repo || isFolderRepo(repo)) {
     return failedRecipeRepo(null, `Repo not found: ${repoId}`)
   }
   if (repo.connectionId) {
-    return failedRecipeRepo(repo.path, 'Ephemeral VM recipes run on the local desktop host in v1.')
+    return failedRecipeRepo(
+      repo.path,
+      'Ephemeral VM recipes run on the owning Orca host; use a checkout local to that host.'
+    )
   }
   return { ok: true, repo }
 }
 
 export function getRuntimeRecipeContext(
-  store: Store,
+  store: Pick<Store, 'getRepo' | 'getRepos'>,
   userDataPath: string,
   runtimeId: string
 ): {

@@ -99,6 +99,15 @@ export async function adoptProvisionedRootSshCheckout(args: {
   if (gitWorktree.branch !== `refs/heads/${requestedBranch}`) {
     throw new Error("The recipe projectRoot is not checked out on Orca's requested branch.")
   }
+  const worktreeId = `${repo.id}::${gitWorktree.path}`
+  const existingMeta =
+    runtime.workspaceId === worktreeId ? store.getWorktreeMeta(worktreeId) : undefined
+  if (
+    runtime.workspaceId === worktreeId &&
+    existingMeta?.ephemeralVmCheckoutMode === 'provisioned-root'
+  ) {
+    return { worktree: mergeWorktree(repo.id, gitWorktree, existingMeta) }
+  }
   if (request.baseBranch && !request.expectedRefHead) {
     throw new Error('The requested provisioned-root ref identity is missing.')
   }
@@ -106,7 +115,6 @@ export async function adoptProvisionedRootSshCheckout(args: {
     throw new Error("The recipe projectRoot was not created from Orca's requested ref.")
   }
 
-  const worktreeId = `${repo.id}::${gitWorktree.path}`
   attachEphemeralVmRuntimeToWorkspace({
     userDataPath: args.userDataPath,
     runtimeId: request.runtimeId,

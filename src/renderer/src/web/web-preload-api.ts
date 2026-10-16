@@ -1,3 +1,4 @@
+import { createWebEphemeralVmApi } from './preload-api/web-ephemeral-vm-api'
 import type { PreloadApi } from '../../../preload/api-types'
 import type { StatsSummary } from '../../../shared/process-stats-types'
 import { createWebE2EApi } from './preload-api/web-e2e-api'
@@ -65,6 +66,7 @@ export function installWebPreloadApi(): void {
 
 function createWebPreloadApi(): Partial<PreloadApi> {
   return {
+    ephemeralVm: createWebEphemeralVmApi(),
     ...createWebAppApi(),
     ...createWebStarNagApi(),
     ...createWebPlatformApi(),

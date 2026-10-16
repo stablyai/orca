@@ -1,3 +1,4 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
@@ -189,7 +190,13 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         await withWorktreeSleepTeardown(worktreeId, async () => {
           await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
           if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
-            await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
+            const owner = parseExecutionHostId(
+              useAppStore.getState().getKnownWorktreeById(worktreeId)?.hostId
+            )
+            await window.api.ephemeralVm.suspendWorkspace({
+              workspaceId: worktreeId,
+              ...(owner?.kind === 'runtime' ? { ownerEnvironmentId: owner.environmentId } : {})
+            })
           }
         })
         // Why: a workspace the user activated during the batch is awake by their choice.

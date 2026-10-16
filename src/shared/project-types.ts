@@ -67,6 +67,7 @@ export type ProjectHostSetup = {
 }
 
 export type ProjectHostSetupExistingFolderArgs = {
+  runtimeOwnerEnvironmentId?: string
   projectId: string
   projectProviderIdentity?: ProjectProviderIdentity
   hostId: ExecutionHostId

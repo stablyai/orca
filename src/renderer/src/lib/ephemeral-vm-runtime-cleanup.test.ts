@@ -36,7 +36,7 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
   })
 
   it('cleans only the confirmed host runtime when another host owns the same workspace id', async () => {
-    listRuntimes.mockResolvedValue([
+    listRuntimes.mockResolvedValueOnce([
       runtime({
         id: 'rt-a',
         workspaceId: 'wt-1',
@@ -49,6 +49,7 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
       })
     ])
 
+    listRuntimes.mockResolvedValue([])
     await cleanupEphemeralVmRuntimesForDeleted({
       hostScopedWorkspaces: [{ workspaceId: 'wt-1', executionHostId: 'runtime:env-a' }]
     })

@@ -177,6 +177,17 @@ import {
   TypeParams
 } from './emulator-params'
 import {
+  EphemeralVmAdopt,
+  EphemeralVmAttach,
+  EphemeralVmProvision,
+  EphemeralVmProvisionId,
+  EphemeralVmProvisionWorkspace,
+  EphemeralVmRecipe,
+  EphemeralVmRepo,
+  EphemeralVmRuntime,
+  EphemeralVmWorkspace
+} from './ephemeral-vm-params'
+import {
   FileCommitUpload,
   FileCopy,
   FileDelete,
@@ -805,6 +816,21 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.tap': TapParams,
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
+  'ephemeralVm.adoptProvisionedRoot': EphemeralVmAdopt,
+  'ephemeralVm.attachWorkspace': EphemeralVmAttach,
+  'ephemeralVm.cancelProvision': EphemeralVmProvisionId,
+  'ephemeralVm.cleanup': EphemeralVmRuntime,
+  'ephemeralVm.doctor': EphemeralVmRecipe,
+  'ephemeralVm.getCleanupCommand': EphemeralVmRuntime,
+  'ephemeralVm.listRecipeCatalog': null,
+  'ephemeralVm.listRecipes': EphemeralVmRepo,
+  'ephemeralVm.listRuntimes': null,
+  'ephemeralVm.provision': EphemeralVmProvision,
+  'ephemeralVm.provisionEvents': EphemeralVmProvisionId,
+  'ephemeralVm.provisionWorkspace': EphemeralVmProvisionWorkspace,
+  'ephemeralVm.resumeWorkspace': EphemeralVmWorkspace,
+  'ephemeralVm.stopCleanup': EphemeralVmRuntime,
+  'ephemeralVm.suspendWorkspace': EphemeralVmWorkspace,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,

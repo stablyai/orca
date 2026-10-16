@@ -5,7 +5,7 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export async function activateWorktreeFromSidebar(
   worktreeId: string,
@@ -28,7 +28,14 @@ export async function activateWorktreeFromSidebar(
 
   if (typeof window !== 'undefined' && window.api?.ephemeralVm?.resumeWorkspace) {
     try {
-      const runtime = await window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
+      const current = (await import('@/store')).useAppStore.getState()
+      const owner = parseExecutionHostId(
+        executionHostId ?? current.getKnownWorktreeById(worktreeId)?.hostId
+      )
+      const runtime = await window.api.ephemeralVm.resumeWorkspace({
+        workspaceId: worktreeId,
+        ...(owner?.kind === 'runtime' ? { ownerEnvironmentId: owner.environmentId } : {})
+      })
       if (runtime?.runtimeEnvironmentId) {
         const store = (await import('@/store')).useAppStore
         store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())

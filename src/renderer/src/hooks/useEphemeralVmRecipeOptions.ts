@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
 
 type EphemeralVmRecipeOptionsArgs = {
@@ -22,12 +22,13 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const requestGeneration = useRef(0)
+  const ownerHost = parseExecutionHostId(args.repoExecutionHostId)
+  const ownerEnvironmentId = ownerHost?.kind === 'runtime' ? ownerHost.environmentId : undefined
   const canLoad =
     args.enabled &&
     Boolean(args.repoId) &&
     args.repoIsGit &&
     !args.repoConnectionId &&
-    args.repoExecutionHostId === LOCAL_EXECUTION_HOST_ID &&
     !args.projectGroupTarget
 
   const load = useCallback(
@@ -42,7 +43,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
         return
       }
       void window.api.ephemeralVm
-        .listRecipes({ repoId: args.repoId })
+        .listRecipes({ repoId: args.repoId, ...(ownerEnvironmentId ? { ownerEnvironmentId } : {}) })
         .then((result) => {
           if (generation !== requestGeneration.current) {
             return
@@ -78,7 +79,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           setError(cause instanceof Error ? cause.message : String(cause))
         })
     },
-    [args.initialRecipeId, args.repoId, canLoad]
+    [args.initialRecipeId, args.repoId, ownerEnvironmentId, canLoad]
   )
 
   useEffect(() => {

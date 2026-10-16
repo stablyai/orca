@@ -1,3 +1,5 @@
+import { hasEphemeralVmHost } from './ephemeral-vm-host-registry'
+import { EPHEMERAL_VM_HOST_RUNTIME_CAPABILITY } from '../../shared/ephemeral-vm-host-capability'
 import { OrcaRuntimeWithGetRuntimeId } from './orca-runtime-get-runtime-id'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
@@ -88,6 +90,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: RuntimeCapability[] = RUNTIME_CAPABILITIES.filter(
       (capability) =>
+        (capability !== EPHEMERAL_VM_HOST_RUNTIME_CAPABILITY || hasEphemeralVmHost()) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
         (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||

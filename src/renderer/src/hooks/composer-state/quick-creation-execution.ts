@@ -1,3 +1,4 @@
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { ComposerModel } from './composer-model'
 
 type QuickCreationExecutionInput = Pick<
@@ -164,7 +165,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         const selectedRecipe = ephemeralVmRecipes.find(
           (recipe) => recipe.id === activeEphemeralVmRecipeId
         )
+        const owner = parseExecutionHostId(selectedRepoExecutionHostId)
         ephemeralVmRecipe = {
+          ...(owner?.kind === 'runtime' ? { ownerEnvironmentId: owner.environmentId } : {}),
           sourceRepoId: repoId,
           recipeId: activeEphemeralVmRecipeId,
           projectId: selectedWorkspaceTarget.target.projectId,

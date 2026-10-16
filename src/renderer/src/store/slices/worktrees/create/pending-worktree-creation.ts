@@ -64,9 +64,13 @@ export function createRemovePendingWorktreeCreation(
     if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
       return
     }
+    const ownerEnvironmentId = removedEntry.request.ephemeralVmRecipe?.ownerEnvironmentId
     if (removedEntry.phase === 'provisioning-vm' && window.api?.ephemeralVm?.cancelProvision) {
       void window.api.ephemeralVm
-        .cancelProvision({ provisionId: creationId })
+        .cancelProvision({
+          provisionId: creationId,
+          ...(ownerEnvironmentId ? { ownerEnvironmentId } : {})
+        })
         .catch(() => undefined)
     }
     if (!removedEntry.request.ephemeralVmRuntimeId || !window.api?.ephemeralVm?.cleanup) {
@@ -74,7 +78,11 @@ export function createRemovePendingWorktreeCreation(
     }
     void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
       deleteProjectHostSetup: (setupId) => get().deleteProjectHostSetup({ setupId }),
-      cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
+      cleanupRuntime: (runtimeId) =>
+        window.api.ephemeralVm.cleanup({
+          runtimeId,
+          ...(ownerEnvironmentId ? { ownerEnvironmentId } : {})
+        }),
       reportSetupError: (error) =>
         console.error('Failed to remove cancelled provisioned-root project setup:', error),
       reportRuntimeError: (error) =>

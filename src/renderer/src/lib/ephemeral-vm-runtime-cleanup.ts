@@ -1,5 +1,6 @@
 import {
   isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -46,19 +47,43 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
         composeWorktreeHostIdentity(target.executionHostId, target.workspaceId)
       )
     )
-    const runtimes = await window.api.ephemeralVm.listRuntimes()
+    const owners = new Set<string | undefined>([undefined])
+    for (const target of args.hostScopedWorkspaces ?? []) {
+      const owner = parseExecutionHostId(target.executionHostId)
+      if (owner?.kind === 'runtime') {
+        owners.add(owner.environmentId)
+      }
+    }
+    const runtimes = (
+      await Promise.all(
+        [...owners].map(async (ownerEnvironmentId) =>
+          (
+            await window.api.ephemeralVm.listRuntimes(
+              ownerEnvironmentId ? { ownerEnvironmentId } : undefined
+            )
+          ).map((runtime) => ({ ...runtime, ownerEnvironmentId }))
+        )
+      )
+    ).flat()
     const matchingRuntimes = runtimes.filter(
       (runtime) =>
         (runtime.cleanupStatus !== 'succeeded' || runtime.sshTargetId !== undefined) &&
         ((runtime.workspaceId !== undefined && workspaceIdSet.has(runtime.workspaceId)) ||
           (runtime.workspaceId !== undefined &&
-            ((runtime.runtimeEnvironmentId !== undefined &&
+            ((runtime.ownerEnvironmentId !== undefined &&
               hostScopedWorkspaceIdentities.has(
                 composeWorktreeHostIdentity(
-                  toRuntimeExecutionHostId(runtime.runtimeEnvironmentId),
+                  toRuntimeExecutionHostId(runtime.ownerEnvironmentId),
                   runtime.workspaceId
                 )
               )) ||
+              (runtime.runtimeEnvironmentId !== undefined &&
+                hostScopedWorkspaceIdentities.has(
+                  composeWorktreeHostIdentity(
+                    toRuntimeExecutionHostId(runtime.runtimeEnvironmentId),
+                    runtime.workspaceId
+                  )
+                )) ||
               (runtime.sshTargetId !== undefined &&
                 hostScopedWorkspaceIdentities.has(
                   composeWorktreeHostIdentity(
@@ -70,7 +95,10 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
     )
     for (const runtime of matchingRuntimes) {
       try {
-        const cleaned = await window.api.ephemeralVm.cleanup({ runtimeId: runtime.id })
+        const cleaned = await window.api.ephemeralVm.cleanup({
+          runtimeId: runtime.id,
+          ...(runtime.ownerEnvironmentId ? { ownerEnvironmentId: runtime.ownerEnvironmentId } : {})
+        })
         if (runtime.sshTargetId) {
           const targetIds = cleaned.sshTargetId ? retainedSshTargetIds : destroyedSshTargetIds
           targetIds.add(runtime.sshTargetId)

@@ -1,3 +1,4 @@
+import { EPHEMERAL_VM_METHODS } from './ephemeral-vm'
 import { STATUS_METHODS } from './status'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad-terminal-census'
 import { ORCAD_MIGRATION_METHODS } from './orcad-migration'
@@ -63,6 +64,7 @@ export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,
+  ...EPHEMERAL_VM_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,

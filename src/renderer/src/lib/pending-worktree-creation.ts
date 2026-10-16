@@ -54,6 +54,7 @@ export type WorktreeCreationRequest = {
   /** Recipe to provision before creating the worktree. Kept serializable so
    *  retry can rerun the recipe after a failed create. */
   ephemeralVmRecipe?: {
+    ownerEnvironmentId?: string
     sourceRepoId: string
     recipeId: string
     projectId: string

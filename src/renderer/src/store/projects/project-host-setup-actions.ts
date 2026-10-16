@@ -12,7 +12,11 @@ import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
 import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { translate } from '@/i18n/i18n'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
 import { repoWithFetchedOwner } from '../repos/owner-routing'
@@ -37,7 +41,11 @@ export function createProjectHostSetupActions(
   return {
     setupProjectExistingFolder: async (args) => {
       try {
-        const target = getProjectSetupRuntimeTarget(args.hostId)
+        const target = getProjectSetupRuntimeTarget(
+          args.runtimeOwnerEnvironmentId
+            ? toRuntimeExecutionHostId(args.runtimeOwnerEnvironmentId)
+            : args.hostId
+        )
         await assertProjectHostSetupMutationRuntimeCapabilities(target)
         const projectProviderIdentity =
           args.projectProviderIdentity ??

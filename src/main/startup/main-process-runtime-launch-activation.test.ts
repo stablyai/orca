@@ -33,8 +33,8 @@ vi.mock('../runtime/runtime-rpc', () => ({
   }
 }))
 vi.mock('../runtime/headless-runtime-graph', () => ({ publishHeadlessRuntimeGraph: vi.fn() }))
-vi.mock('./headless-serve-ssh-registration', () => ({
-  registerHeadlessServeSshHandlers: vi.fn(() => {
+vi.mock('./headless-serve-host-registration', () => ({
+  registerHeadlessServeHostHandlers: vi.fn(() => {
     launchOrder.push('ssh-registered')
   })
 }))

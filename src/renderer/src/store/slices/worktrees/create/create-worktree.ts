@@ -52,10 +52,16 @@ async function runCreateAttempt(
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
   ): Promise<CreateWorktreeResult> =>
     provisionedRoot
-      ? await window.api.worktrees.adoptProvisionedRoot({
-          ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
-          ...provisionedRoot
-        })
+      ? target.kind === 'environment'
+        ? await window.api.ephemeralVm.adoptProvisionedRoot({
+            ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
+            ...provisionedRoot,
+            ownerEnvironmentId: target.environmentId
+          })
+        : await window.api.worktrees.adoptProvisionedRoot({
+            ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
+            ...provisionedRoot
+          })
       : target.kind === 'local'
         ? // Why local can still reject on the parent: paired web clients route this API to their host.
           await window.api.worktrees.create(
@@ -192,9 +198,7 @@ export function createCreateWorktree(
           'Update the remote runtime to link Jira'
         )
       }
-      if (options?.provisionedRoot && target.kind !== 'local') {
-        throw new Error('Provisioned-root recipes currently require a direct SSH connection.')
-      }
+
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         try {
           const outcome = await runCreateAttempt(
