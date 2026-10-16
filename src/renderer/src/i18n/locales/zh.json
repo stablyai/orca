@@ -2987,7 +2987,7 @@
               "906b5e4cb8": "Linear/项目/{{value0}}",
               "85607ff793": "项目",
               "20b9d09b7d": "未知",
-              "f059181bd9": "私人的",
+              "f059181bd9": "私有",
               "27d91cb1a6": "共享",
               "9f0f51fd9e": "在 Linear 中创建或保存视图，然后刷新。",
               "f4c79cff5f": "查看下面的工作区错误，然后刷新。",
@@ -3520,7 +3520,7 @@
             "openInFinder": "在 Finder 中打开",
             "openFolder": "打开文件夹",
             "openWithDefaultApp": "使用默认应用程序打开",
-            "switchTerminal": "开关 terminal",
+            "switchTerminal": "切换终端",
             "openTaskTerminal": "打开任务终端",
             "systemBrowser": "系统浏览器",
             "orcaBrowser": "Orca 浏览器",
@@ -4525,7 +4525,7 @@
           "b760c0b622": "顶级模型",
           "2d9eb39264": "token总数",
           "beb6f24f37": "预计成本",
-          "da62578d9d": "用法",
+          "da62578d9d": "使用情况",
           "0eb31e79ee": "Orca IDE",
           "960324e9b8": "事件",
           "6adac63cfe": "轮次"
@@ -5482,7 +5482,7 @@
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "运行钩子",
-          "43b7bec4cd": "别跑",
+          "43b7bec4cd": "不运行",
           "c494b3ccb1": "在",
           "79afc6772b": "orca.yaml",
           "531689199b": "永远信任",
@@ -5685,9 +5685,9 @@
         "SidebarToolbar": {
           "19e32d0e5f": "打开文件夹选择器以添加项目",
           "abc62b6328": "添加项目",
-          "87d0064026": "工作区板已移到底部栏",
-          "a30e34eb5c": "关闭工作区板",
-          "49f62c5665": "工作区板"
+          "87d0064026": "工作区看板已移到底部栏",
+          "a30e34eb5c": "关闭工作区看板",
+          "49f62c5665": "工作区看板"
         },
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "隐藏默认分支",
@@ -5771,7 +5771,7 @@
           "f369f5c5a3": "关闭",
           "e1a34450fc": "按状态组织工作区并打开工作区卡。",
           "81870af08f": "已选择",
-          "c6a77ab0f4": "工作区板"
+          "c6a77ab0f4": "工作区看板"
         },
         "WorkspaceKanbanPinDropTarget": {
           "c30151c5ee": "拖放到此处即可固定，无需更改状态。",
@@ -5783,14 +5783,14 @@
           "b45b350eb0": "向左手机 {{value0}}",
           "8ce44af9a8": "重命名 {{value0}}",
           "395e541d5d": "状态",
-          "34f03eb0de": "董事会设置",
-          "26cbc92150": "工作区板设置",
+          "34f03eb0de": "看板设置",
+          "26cbc92150": "工作区看板设置",
           "87d24a0c2f": "同步看板和议题状态",
           "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
-          "3611d1ae7f": "调整工作区板列的大小",
+          "3611d1ae7f": "调整工作区看板列宽",
           "2df01a03ff": "没有匹配项"
         },
         "WorkspaceStatusAppearancePopover": {
@@ -5977,7 +5977,7 @@
           "sidebarRowMissing": "目标不再存在",
           "failedUnnestWorkspace": "展开工作区失败",
           "groupRenameFailed": "重命名组失败",
-          "groupRenameFailedDesc": "Orca 无法与该群组的主持人确认新名称。重新连接后重新检查该组。",
+          "groupRenameFailedDesc": "Orca 无法与该分组所在的主机确认新名称。重新连接后请再次检查该分组。",
           "hostRepairRequired": "Re-pair required"
         },
         "WorktreeMetaDialog": {
@@ -6539,7 +6539,7 @@
           "sshConfigPickerRestartRequired": "重新启动 Orca 以完成应用 SSH 配置选择器更新。",
           "sshConfigPickerFilled": "从 {{value0}} 开始填充。查看并保存。",
           "sshConfigPickerTitle": "从 ~/.ssh/config 中选择",
-          "sshConfigPickerDescription": "选择一位主持人来填写表格。单击“保存”之前不会保存任何内容。",
+          "sshConfigPickerDescription": "选择一个主机以填写表单。点击“保存”之前不会保存任何内容。",
           "sshConfigPickerFilter": "过滤主机...",
           "sshConfigPickerHostsLabel": "SSH 配置主机",
           "sshConfigPickerLoading": "正在读取 ~/.ssh/config...",
@@ -7169,15 +7169,15 @@
           "a4a9372eb2": "搜索分支...",
           "7db7fb87e5": "按名称搜索分支...",
           "773a5687a3": "跟随主分支",
-          "ade9a5bb03": ") 来确定结果范围。",
+          "ade9a5bb03": "）以限定结果范围。",
           "b468f46726": "upstream/main",
-          "80f7c82303": "）或完整的参考（例如",
+          "80f7c82303": "）或完整引用（例如",
           "915ad97875": "upstream",
-          "a5c16712c1": "已检测多个遥控器。输入远程名称（例如",
+          "a5c16712c1": "发现多个远程仓库。请输入远程仓库名称（例如",
           "9a14ec7400": "选择下面的一个基础分支",
           "086ce7f369": "跟随主分支 ({{value0}})",
-          "2f3cda96f5": "固定此仓库",
-          "ee110e1830": "没有默认的基本参考"
+          "2f3cda96f5": "已为此仓库固定",
+          "ee110e1830": "未设置默认基础引用"
         },
         "BrowserDefaultZoomSetting": {
           "265597101f": "默认缩放",
@@ -7380,7 +7380,7 @@
           "0c9a33f468": "捕获应用程序窗口，以便智能体可以检查视觉状态。",
           "07bbe4c4cb": "截图",
           "4d03dec2d0": "读取应用程序界面树并执行请求的操作。",
-          "6b5a2cd3a5": "无障碍",
+          "6b5a2cd3a5": "辅助功能",
           "6b17602073": "重置访问权限",
           "506f2acf7a": "正在重置访问...",
           "4b65070096": "darwin",
@@ -7408,7 +7408,7 @@
           "7ca17b62c8": "当 Orca 运行的智能体读取其他应用的数据时，macOS 会显示 Orca，因为 Orca 是执行终端命令的进程。请为 Orca 授予此权限，以减少此类提示。然后退出并重新打开 Orca。",
           "c566bca278": "完全磁盘访问权限",
           "9f35980756": "击键注入、窗口控制和 UI 自动化工具。",
-          "5b2f22ca2d": "无障碍",
+          "5b2f22ca2d": "辅助功能",
           "0639db5496": "屏幕截图、视觉自动化和 UI 检查工具。",
           "f24f31a884": "屏幕录制",
           "550cfa3750": "网络摄像头捕获和摄像头驱动的本地测试应用程序。",
@@ -7984,7 +7984,7 @@
           "2772d2f257": "当触发工作树已经可见时跳过通知。",
           "00cd406dbb": "专注时抑制",
           "2a42dd8d6f": "通知音量",
-          "4aa5085cd7": "风俗：",
+          "4aa5085cd7": "自定义：",
           "c258cb96dc": "选择通知声音",
           "2a2033c388": "选择发送桌面通知时 Orca 播放的警报。",
           "88686e6ca8": "通知声音",
@@ -8049,14 +8049,14 @@
           "f79084947b": "新应用程序"
         },
         "OrchestrationPane": {
-          "52e0634e2c": "要求协调智能体使用编排进行切换、工作树切换以及顺序或并行子智能体。",
+          "52e0634e2c": "让协调智能体通过编排处理交接、工作树移交，以及顺序或并行的子智能体。",
           "ae79504732": "如何使用",
           "9bedd2a6e5": "使智能体能够通过 Orca 传递上下文并协调工作。",
           "07641b9768": "编排技能",
-          "2aacdb0517": "跨切换、工作树切换和子智能体工作协调编码智能体。",
+          "2aacdb0517": "在交接、工作树移交和子智能体工作中协调编码智能体。",
           "191ac34567": "智能体编排",
-          "nestedWorkerDepthTitle": "嵌套工人深度",
-          "nestedWorkerDepthDescription": "多少代的派遣工可能会产生自己的工人。 1 保持智能体树平坦：协调者调度工人，而那些工人不调度。",
+          "nestedWorkerDepthTitle": "工作智能体嵌套深度",
+          "nestedWorkerDepthDescription": "已派发的工作智能体可以再派发自己的工作智能体的层数。设为 1 时智能体树保持扁平：协调者派发工作智能体，这些工作智能体不再派发。",
           "7bc082f4de": "复制安装命令"
         },
         "OrchestrationSetupCard": {
@@ -8748,7 +8748,7 @@
           "88bfbf1a9c": "没有为此存储库保存稀疏预设。",
           "d7565029a9": "新预设",
           "17f8c4ce10": "管理保存的目录集以创建稀疏工作树。",
-          "388513be2d": "稀疏结账预设",
+          "388513be2d": "稀疏检出预设",
           "a05bc9183f": "保存预设",
           "2d7d45e991": "取消",
           "c240a16f25": "使用仓库相对路径，例如packages/web 或apps/api。",
@@ -8921,11 +8921,11 @@
           "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
         },
         "TerminalAppearanceSection": {
-          "a14a427ae4": "窗格分隔线的厚度。",
-          "f27a99978d": "分隔板厚度",
+          "a14a427ae4": "窗格分隔线的粗细。",
+          "f27a99978d": "分隔线粗细",
           "db632cb50e": "不透明度应用于当前不活动的窗格。",
           "a6fdd6a3b1": "非活动窗格不透明度",
-          "1b79379d4f": "控制非活动窗格调光和分割分隔板厚度。",
+          "1b79379d4f": "控制非活动窗格的变暗程度和分隔线粗细。",
           "e1a5c25555": "终端面板",
           "04cdf85dec": "终端光标的不透明度。",
           "b9f1804422": "Cursor 不透明度",
@@ -9029,7 +9029,7 @@
           "2fba319f21": "渲染",
           "cc8c5ca224": "Windows 默认值",
           "d78fc4fdef": "加载分布",
-          "219aaa59f4": "WSL分布",
+          "219aaa59f4": "WSL 发行版",
           "2503f1e86b": "当活动工作区不在 WSL 中时，用于新建 WSL 终端窗格和进行本地智能体检测。",
           "5fe79a5e56": "选择新建 WSL 终端和本地智能体扫描所使用的 WSL 发行版。",
           "b637dd57a7": "WSL",
@@ -9138,7 +9138,7 @@
           "1846f6ee6a": "终端网格周围的垂直填充（以像素为单位）。",
           "1afcc1d973": "垂直内边距",
           "25e2f8e8e1": "终端网格周围的水平填充（以像素为单位）。",
-          "36b8402015": "水平填充",
+          "36b8402015": "水平内边距",
           "53ce336e15": "重新启动 Orca 以应用窗口模糊更改。",
           "c65bb9ce63": "需要重新启动",
           "97950bb087": "将背景模糊应用到终端窗口。需要重新启动。",
@@ -9147,7 +9147,7 @@
           "ea7b1a158e": "背景不透明度",
           "03acb60aa0": "控制终端背景的透明度。",
           "00eaa6b881": "窗口外观和背景设置。",
-          "b96ba13ed1": "窗户",
+          "b96ba13ed1": "窗口",
           "42e01a6055": "ANSI 亮白色",
           "16948119cb": "亮白",
           "1601140f03": "ANSI 亮青色",
@@ -9204,7 +9204,7 @@
         },
         "VoicePane": {
           "68de13f72c": "删除模型失败。",
-          "1ba81c0ff0": "受到推崇的",
+          "1ba81c0ff0": "推荐",
           "cfde55c7b0": "下载模型失败。",
           "43fd4f454b": "语音模型",
           "ba4a900d1d": "听写模式",
@@ -9837,7 +9837,7 @@
               "798be54d7e": "自动化",
               "e27f8bafbf": "截屏",
               "26c1290d83": "屏幕录制",
-              "82f01c2d2c": "可达性",
+              "82f01c2d2c": "辅助功能",
               "fefb452f5b": "计算机控制",
               "9210db582b": "当您要求时，允许智能体检查屏幕截图并操作本地应用程序。",
               "442bec10fe": "计算机控制"
@@ -9866,7 +9866,7 @@
               "7f145a3984": "窗户",
               "5610022e1e": "自动化",
               "0a467b750e": "截屏",
-              "08f8039ca9": "可达性",
+              "08f8039ca9": "辅助功能",
               "3cd51d18a1": "屏幕录制",
               "2e5d98ab56": "允许屏幕截图、屏幕检查、击键和窗口自动化。",
               "39bb49e662": "屏幕录制和辅助功能",
@@ -10519,12 +10519,12 @@
         "orchestration": {
           "search": {
             "f5d39af41e": "子智能体",
-            "c766a01978": "不可触摸",
+            "c766a01978": "交接",
             "08c65b12a2": "例子",
             "f278fd04db": "codex",
             "32c5098e7b": "claude",
             "21c28ccdf7": "协调员",
-            "741dfc03fa": "工人",
+            "741dfc03fa": "工作智能体",
             "ca54c69806": "有向无环图",
             "7ad948b714": "任务",
             "eee028ae14": "派遣",
@@ -10671,7 +10671,7 @@
             "aa42616e3d": "查看",
             "4f3c0230c2": "疏",
             "90a331fd68": "保存用于稀疏工作树创建的目录集。",
-            "1f0f20bbb6": "稀疏结账预设",
+            "1f0f20bbb6": "稀疏检出预设",
             "4733ec2395": "../worktrees",
             "58d8bca414": "相对的",
             "a325a89dff": "工作区路径",
@@ -10889,7 +10889,7 @@
             "4655567c37": "终端网格周围的垂直填充（以像素为单位）。",
             "692c4ad032": "垂直内边距",
             "75691e4911": "终端网格周围的水平填充（以像素为单位）。",
-            "b4f182f24d": "水平填充",
+            "b4f182f24d": "水平内边距",
             "6c2f9f05c8": "活力",
             "4f7f8f28ca": "透明度",
             "f6dd9ff606": "背景",
@@ -10978,7 +10978,7 @@
             "c6178a2b4d": "焦点跟随鼠标",
             "f637a7dee9": "厚度",
             "e58d4040d0": "窗格分隔线的厚度。",
-            "2d5ab88b7c": "分隔板厚度",
+            "2d5ab88b7c": "分隔线粗细",
             "6c4c85ba43": "调光",
             "18dd5026c6": "不透明度应用于当前不活动的窗格。",
             "72bbcbd1dd": "非活动窗格不透明度",
@@ -11107,7 +11107,7 @@
               "02c772582a": "操作系统",
               "6e3adf4cba": "wsl",
               "978457945b": "选择新建 WSL 终端和本地智能体扫描所使用的 WSL 发行版。",
-              "1f402b3651": "WSL分布",
+              "1f402b3651": "WSL 发行版",
               "d57f870938": "高级",
               "4af2f7526e": "版本",
               "d414022016": "pwsh",
@@ -11748,7 +11748,7 @@
           "75e396bf42": "Grok 统一计费账户的月度已用额度。",
           "b36fa2c908": "已登录。Orca 读取存储在磁盘上的 Grok CLI 会话。",
           "f08c41de73": "会话已过期 — 在运行 Orca 的计算机上运行 grok 并等待其启动。如果提示，请完成登录，然后点击刷新使用量。无需发送聊天消息。",
-          "0bb18642b7": "用法",
+          "0bb18642b7": "使用情况",
           "a8f4139350": "Grok 报告没有该帐户的使用百分比。"
         },
         "AppearanceWindowSidebarSection": {
@@ -12315,7 +12315,7 @@
           "middleClickAriaLabel": "中键单击",
           "actionsLabel": "操作",
           "openUrlLabel": "打开网址",
-          "leaveToTerminalLabel": "前往航站楼"
+          "leaveToTerminalLabel": "交给终端"
         },
         "ReleaseChannelSection": {
           "switchFailed": "无法切换到该版本。",
@@ -12402,7 +12402,7 @@
           "benefitsTitle": "包含在您的帐户中",
           "artifactsTitle": "神器分享",
           "artifactsDescription": "发布 HTML 和 Markdown 文件，然后管理 Orca 中的每个共享链接。",
-          "relayTitle": "Orca 接力赛",
+          "relayTitle": "Orca Relay",
           "relayDescription": "通过蜂窝网络或任何 Wi-Fi 将 Orca Mobile 连接到此桌面。",
           "skillsTitle": "技能分享",
           "skillsDescription": "在未列出的链接后面共享一项技能或一整套技能，并将它们安装在您使用的任何计算机上。",
@@ -12421,7 +12421,7 @@
           "howItWorksDescription": "安排智能体工作一次，然后让 Orca 创建每次运行并将其结果保存在一起。",
           "defineStepTitle": "描述工作",
           "defineStepDescription": "选择项目、智能体、提示和时间表。",
-          "runStepTitle": "Orca 开始每次跑步",
+          "runStepTitle": "Orca 开始每次运行",
           "runStepDescription": "当时间表到期时，选定的智能体将获得一个新的工作区。",
           "reviewStepTitle": "查看结果",
           "reviewStepDescription": "检查最近的运行并在需要时继续工作。",
@@ -12515,7 +12515,7 @@
               "description": "Bitbucket Cloud 的拉取请求和构建状态。",
               "edit": "编辑凭据",
               "connect": "连接",
-              "accountUnknown": "比特桶云",
+              "accountUnknown": "Bitbucket Cloud",
               "authModeToken": "访问令牌",
               "authModeBasic": "电子邮件和 API 令牌",
               "disconnect": "断开 Bitbucket 连接",
@@ -12541,7 +12541,7 @@
           "title": "色彩对比",
           "description": "提高文本可读性或保留终端程序选择的颜色。",
           "ratio": "对比目标",
-          "autoDescription": "平衡可读性与终端主题。受到推崇的。",
+          "autoDescription": "兼顾可读性与终端主题。推荐使用。",
           "offDescription": "保持程序颜色不变，包括暗淡文本和电力线分隔符。",
           "customDescription": "选择文本与其背景之间对比度的增加程度。",
           "auto": "自动的",
@@ -14600,8 +14600,8 @@
             "29732f2fb0": "新 PR"
           },
           "AiVaultSearchEvidence": {
-            "sourceUnverifiable": "无法验证成绩单的可用性",
-            "sourceMissing": "成绩单不再可用",
+            "sourceUnverifiable": "无法确认会话记录是否可用",
+            "sourceMissing": "会话记录已不可用",
             "metadataMatch": "会话元数据中的匹配",
             "sourceActionsUnavailable": "转录来源不可用。"
           },
@@ -16911,14 +16911,14 @@
             "67e9b9fcd6": "新的浏览器配置文件",
             "58f2c81542": "转变",
             "a38f217b46": "切换配置文件将重新加载此页面。任何未保存的表单数据都将丢失。",
-            "fe683eb3b4": "开关配置文件",
+            "fe683eb3b4": "切换配置文件",
             "a771c2b6c8": "浏览器设置...",
             "ed8f54509d": "默认",
             "e5d31de1a9": "视口尺寸",
             "56f94f4ffa": "从文件...",
             "eb280bfb11": "从 {{value0}}",
             "2293adf620": "导入 Cookie",
-            "cf7cdc67ef": "新档案...",
+            "cf7cdc67ef": "新建配置文件…",
             "7b838540c7": "浏览器菜单",
             "6aa42813e4": "从 {{value1}}{{value2}} 导入 {{value0}} cookie。",
             "a7a86702b3": "创建并切换到 {{value0}} 配置文件",
@@ -17084,7 +17084,7 @@
           "007c8ad874": "提示词",
           "a1d52c2189": "使用范围",
           "449fc83bf7": "token",
-          "401f40ae79": "预计。花费",
+          "401f40ae79": "预计花费",
           "a7c312430d": "最后一次运行",
           "2df8970cd5": "智能体",
           "e353ab9516": "预检查",
@@ -17302,7 +17302,7 @@
           "9ce96621f4": "搜索分支..."
         },
         "ExternalAutomationManagers": {
-          "e02f970595": "未找到外部自动化经理。",
+          "e02f970595": "未找到外部自动化管理器。",
           "6da3bfba4b": "发现自动化。",
           "3d58d5b67d": "不",
           "a42bf2b27e": "删除外部自动化",
@@ -18361,7 +18361,7 @@
         "1f6b2c9d4e": "你得到什么",
         "8d2e4f7a1b": "神器分享",
         "2c9a5b6e8d": "发布 HTML 和 Markdown 文件并管理 Orca 的每个共享链接。",
-        "6e3f1a9c5b": "Orca 接力赛",
+        "6e3f1a9c5b": "Orca Relay",
         "4b7d2e8f1a": "通过蜂窝网络或任何 Wi-Fi 将 Orca Mobile 连接到此桌面。",
         "9a4c6b2d7e": "技能分享",
         "3d8e5f1b9c": "分享未列出链接背后的技能并将其安装在您使用的任何计算机上。",
@@ -19122,17 +19122,17 @@
         "outputFile": "输出：{{value0}}",
         "detailsUnavailable": "此会话的任务详细信息不可用。",
         "countAgentsOne": "1 个智能体",
-        "countAgentsMany": "{{value0}} 智能体",
-        "countShellOne": "1 个外壳",
+        "countAgentsMany": "{{value0}} 个智能体",
+        "countShellOne": "1 个 shell",
         "countShellMany": "{{value0}} 个 shell",
         "countShellCommandOne": "1 个 shell 命令",
-        "countMonitorsOne": "1台显示器",
-        "countMonitorsMany": "{{value0}} 监视器",
+        "countMonitorsOne": "1 个监控任务",
+        "countMonitorsMany": "{{value0}} 个监控任务",
         "countWorkflowsOne": "1 个工作流程",
-        "countWorkflowsMany": "{{value0}} 工作流程",
+        "countWorkflowsMany": "{{value0}} 个工作流程",
         "countTasksOne": "1 项任务",
-        "countTasksMany": "{{value0}} 任务",
-        "headerTotal": "{{value0}} 后台任务",
+        "countTasksMany": "{{value0}} 项任务",
+        "headerTotal": "{{value0}} 个后台任务",
         "stateWorking": "处理中",
         "stateWorkingCount": "{{value0}} 处理中",
         "stateMonitoring": "监控",
@@ -19143,15 +19143,15 @@
         "stateBlockedCount": "{{value0}} 被阻止",
         "stateDone": "完毕",
         "stateDoneCount": "{{value0}} 完毕",
-        "stateIdle": "停止了",
+        "stateIdle": "已停止",
         "stateIdleCount": "{{value0}} 停止了",
         "stateUnverifiable": "状态不可用",
         "stateUnverifiableCount": "{{value0}} 状态不可用",
         "reasonWaiting": "需要批准",
-        "reasonBlocked": "失败的",
+        "reasonBlocked": "失败",
         "groupAgents": "智能体",
-        "groupShell": "壳",
-        "groupMonitors": "显示器",
+        "groupShell": "Shell",
+        "groupMonitors": "监控",
         "groupWorkflows": "工作流程",
         "groupTasks": "任务"
       },
@@ -19600,14 +19600,14 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         },
         "relativeTime": {
-          "never": "绝不",
+          "never": "从未",
           "justNow": "现在",
           "minutesAgo": "{{value0}}分钟前",
           "hoursAgo": "{{value0}} 小时前",
           "daysAgo": "{{value0}} 天前"
         },
         "host": {
-          "label": "主持人：{{value0}}",
+          "label": "主机：{{value0}}",
           "unknown": "未知主机",
           "candidateName": "{{value0}} 在 {{value1}} 上"
         },
@@ -20256,7 +20256,7 @@
     }
   },
   "quickOpen": {
-    "moreMatchesAvailable": "可能会有更多比赛。优化您的搜索以缩小结果范围。",
+    "moreMatchesAvailable": "可能还有更多匹配结果。请细化搜索以缩小范围。",
     "recentValidationFailed": "无法检查最近的文件：{{error}}"
   },
   "checksPanel": {
@@ -20634,7 +20634,7 @@
       "confirmStopTitle": "停止共享服务器？",
       "confirmStopDescription": "这将关闭所有共享它的开放 Codex 会话，包括 Orca 之外的会话。",
       "cancel": "取消",
-      "runs": "跑步"
+      "runs": "运行"
     },
     "paneMove": {
       "failed": "无法将窗格移动到新选项卡。"
