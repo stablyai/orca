@@ -37,6 +37,7 @@ function tagHeaders(worktrees: Worktree[], tagOrder: TagSectionOrder): string[] 
     undefined,
     undefined,
     undefined,
+    [],
     tagOrder
   )
   // Untagged has no data label; each client names it, as the window does here.

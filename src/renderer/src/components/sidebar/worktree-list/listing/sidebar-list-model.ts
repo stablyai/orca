@@ -56,6 +56,7 @@ export type SectionRowsArgs = {
   groupBy: WorktreeGroupBy
   sortBy: SortBy
   projectOrderBy: ProjectOrderBy
+  /** Omitted: tag sections sort by name. */
   tagOrder?: TagSectionOrder
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId

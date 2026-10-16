@@ -29,7 +29,7 @@ import { assertParentInAnotherStore } from '../lineage/cross-store-parent-store-
 import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
-type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
+export type ManagedWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
   lineage?: {
     parentWorktree?: string
@@ -59,7 +59,7 @@ type Ports = {
 
 export async function updateRuntimeManagedWorktreeMetadata(args: {
   selector: string
-  updates: Updates
+  updates: ManagedWorktreeMetaUpdates
   store: RuntimeStore
   ports: Ports
 }): Promise<Worktree> {
