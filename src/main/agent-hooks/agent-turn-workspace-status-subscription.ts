@@ -32,7 +32,29 @@ export function subscribeWorkspaceStatusToAgentTurns(
   runtime: Pick<OrcaRuntimeService, 'updateManagedWorktreeMeta' | 'notifyFolderWorkspaceChanged'>
 ): void {
   const deps = agentTurnWorkspaceStatusDeps(store, runtime)
+  // Why queue by workspace: emitEnrichedStatus calls this synchronously but the move awaits an async
+  // write, so back-to-back boundaries for one workspace would read the column before the prior write
+  // lands and skip it. Same workspace runs in turn; different workspaces stay parallel.
+  const queueByWorktree = new Map<string, Promise<void>>()
   agentHookServer.subscribeEnrichedStatus((enriched) => {
-    void maybeSyncWorkspaceStatusOnAgentTurn(turnEventOf(enriched), deps)
+    const event = turnEventOf(enriched)
+    const worktreeId =
+      (event.tabId ? deps.resolveWorktreeIdForTab(event.tabId) : undefined) ?? event.worktreeId
+    if (!worktreeId) {
+      void maybeSyncWorkspaceStatusOnAgentTurn(event, deps)
+      return
+    }
+    const previous = queueByWorktree.get(worktreeId) ?? Promise.resolve()
+    const next = previous
+      .catch(() => undefined)
+      .then(() => maybeSyncWorkspaceStatusOnAgentTurn(event, deps))
+    queueByWorktree.set(worktreeId, next)
+    void next
+      .catch(() => undefined)
+      .finally(() => {
+        if (queueByWorktree.get(worktreeId) === next) {
+          queueByWorktree.delete(worktreeId)
+        }
+      })
   })
 }
