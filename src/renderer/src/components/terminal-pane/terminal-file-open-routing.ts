@@ -48,6 +48,7 @@ import {
   type HttpLinkDestination
 } from '@/lib/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
+import type { ShellFileLocation } from '../../../../shared/shell-open-types'
 
 export type FileOpenFailure = {
   /** `missing` is a verified absence; `unverifiable` means the host could not answer (dropped SSH, timeout, denied path). */
@@ -212,9 +213,15 @@ export function openDetectedFilePath(
       : openWithSystemDefault
     if (opensWithSystemDefault && canOpenWithSystemDefault) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
+      const location: ShellFileLocation | undefined =
+        line !== null && !statResult.isDirectory
+          ? { line, ...(column !== null ? { column } : {}) }
+          : undefined
+
       const openedWithSystemDefault = await window.api.shell.openFilePath(
         mappedFilePath,
-        LOCAL_EXECUTION_HOST_ID
+        LOCAL_EXECUTION_HOST_ID,
+        location
       )
       if (openedWithSystemDefault || statResult.isDirectory) {
         return
