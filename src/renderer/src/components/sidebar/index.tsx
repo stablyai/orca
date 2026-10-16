@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
+import SidebarAgentScopeStrip from './SidebarAgentScopeStrip'
 import SidebarNav from './SidebarNav'
 import { setSidebarLiveWidth } from './sidebar-live-width'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
@@ -180,6 +181,7 @@ function Sidebar({
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
+              <SidebarAgentScopeStrip />
               {sidebarBody === 'agents' ? (
                 <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
                   <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>

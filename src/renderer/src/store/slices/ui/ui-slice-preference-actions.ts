@@ -35,6 +35,7 @@ import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
+import { normalizeFilterAgentIds } from '../../../../../shared/workspace-agent-filter'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
@@ -104,6 +105,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
+    filterAgentIds: null,
+    setFilterAgentIds: (ids) => {
+      const filterAgentIds = normalizeFilterAgentIds(ids)
+      set({ filterAgentIds })
+      window.api.ui.set({ filterAgentIds }).catch(console.error)
+    },
 
     explorerDisplayRootByWorktree: {},
     /** Stores an explicit root choice while rejecting empty IDs and prototype-related record keys. */

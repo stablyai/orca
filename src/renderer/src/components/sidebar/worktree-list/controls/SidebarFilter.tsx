@@ -34,6 +34,7 @@ import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import SidebarAgentFilterSection from '../../SidebarAgentFilterSection'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -239,6 +240,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
           checked={hideDetachedHeadWorkspaces}
           onChange={setHideDetachedHeadWorkspaces}
         />
+        <DropdownMenuSeparator />
+        <SidebarAgentFilterSection />
 
         {canFilterRepos && (
           <>

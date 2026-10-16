@@ -144,6 +144,7 @@ export function usePersistedUIWriter(): void {
       explorerDisplayRootByWorktree: s.explorerDisplayRootByWorktree,
       showDotfilesByWorktree: s.showDotfilesByWorktree,
       filterRepoIds: s.filterRepoIds,
+      filterAgentIds: s.filterAgentIds,
       // Persist focus/visibility acknowledgements and close/dismiss cleanup by map identity so retained rows do not return unread after restart.
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       // Retain Clear completed across restart.

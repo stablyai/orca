@@ -5687,8 +5687,10 @@
           "e029a2d775": "状态",
           "c2c7a45cda": "没有任何",
           "hosts": "主机",
+          "agents": "智能体",
           "showSection": "显示",
           "allHostsDetail": "显示所有主机",
+          "allAgentsDetail": "显示每个智能体",
           "configuredSshHost": "已配置 SSH",
           "projectSshHost": "项目 SSH",
           "activeRuntimeHost": "新项目的默认主机",
@@ -6257,6 +6259,17 @@
           "hosts": "主机",
           "visibleHosts_other": "{{count}} 个主机"
         },
+        "sidebarAgentOptions": {
+          "allAgents": "全部智能体",
+          "visibleAgentsCount": "{{value0}} 个智能体"
+        },
+        "SidebarAgentFilterSection": {
+          "agent": "智能体"
+        },
+        "SidebarAgentScopeStrip": {
+          "scopedTo": "可见 {{value0}}",
+          "backToAll": "全部智能体"
+        },
         "HostRemoveDialog": {
           "1a2b3c4d5e": "已移除 {{value0}}",
           "2b3c4d5e6f": "删除主机失败",
@@ -6308,7 +6321,8 @@
           "f0a1b2c3d4": "已跳过 Linear 问题 {{value0}}：此工作区位于多个主机上。",
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
-          "e9f0a1b2c3": "失败 {{value0}} 个"
+          "e9f0a1b2c3": "失败 {{value0}} 个",
+          "noWorkspacesMatchFilters": "没有符合当前筛选条件的工作区"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "无法设置父工作树",

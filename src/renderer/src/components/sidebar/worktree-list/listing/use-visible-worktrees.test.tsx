@@ -52,6 +52,7 @@ describe('useVisibleSidebarWorktrees', () => {
           hideDetachedHeadWorkspaces: false,
           hideWorkspacesFromOtherDevices: false,
           alwaysShowDefaultBranchWorkspace: true,
+          filterAgentIds: null,
           visibleWorkspaceHostIds: null,
           workspaceHostScope: 'all'
         },
@@ -87,6 +88,7 @@ describe('useVisibleSidebarWorktrees', () => {
           hideDetachedHeadWorkspaces: false,
           hideWorkspacesFromOtherDevices: false,
           alwaysShowDefaultBranchWorkspace: true,
+          filterAgentIds: null,
           visibleWorkspaceHostIds: ['ssh:box'],
           workspaceHostScope: 'all'
         },
@@ -108,7 +110,7 @@ describe('useVisibleSidebarWorktrees', () => {
     const worktree = makeWorktree('alpha', 'Alpha workspace', { hostId: 'local' })
     useAppStore.setState({ worktreesByRepo: { [repo.id]: [worktree] } })
 
-    const baseArgs = {
+    const baseArgs: Parameters<typeof useVisibleSidebarWorktrees>[0] = {
       filterState: {
         showSleepingWorkspaces: true,
         filterRepoIds: [],
@@ -118,6 +120,7 @@ describe('useVisibleSidebarWorktrees', () => {
         hideDetachedHeadWorkspaces: false,
         hideWorkspacesFromOtherDevices: false,
         alwaysShowDefaultBranchWorkspace: true,
+        filterAgentIds: null,
         visibleWorkspaceHostIds: null,
         workspaceHostScope: 'all'
       },
@@ -173,6 +176,7 @@ describe('useVisibleSidebarWorktrees', () => {
           hideDetachedHeadWorkspaces: false,
           hideWorkspacesFromOtherDevices: false,
           alwaysShowDefaultBranchWorkspace: true,
+          filterAgentIds: null,
           visibleWorkspaceHostIds: null,
           workspaceHostScope: 'all'
         },
