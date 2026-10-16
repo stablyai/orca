@@ -19,7 +19,6 @@ import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
-import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
 import {
   confirmTerminalHostForegroundProcess,
   confirmTerminalHostShellForeground,
@@ -230,7 +229,7 @@ export class TerminalHost {
   inspectProcess(
     sessionId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
-  ): Promise<TerminalHostProcessInspection> {
+  ): ReturnType<typeof inspectTerminalHostProcess> {
     pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const session = this.sessions.get(sessionId)
     if (
@@ -245,6 +244,7 @@ export class TerminalHost {
     }
     return inspectTerminalHostProcess({
       sessionId,
+      currentSession: () => this.sessions.get(sessionId),
       session: session?.isAlive ? session : null,
       ...(options?.expectedIncarnationId
         ? { expectedIncarnationId: options.expectedIncarnationId }

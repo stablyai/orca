@@ -56,10 +56,11 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       worktreeId,
       connectionId
     })
+    const newRun = event.origin === 'process' && event.payload.state === 'working'
     // Why: a verified process-lifetime Working proves a new agent run, as a hook new-turn event does.
     const disposition = this.getAgentStatusDisposition(
       paneKey,
-      event.origin === 'process' && event.payload.state === 'working'
+      newRun
         ? { processNewTurn: true }
         : this.restartedStatusLaunchTokenHashByPaneKey.get(paneKey)?.allowRetainedOwner
           ? { retainedLaunchTokenHash }
@@ -138,7 +139,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     ) {
       // A handle-authority transfer is a new pane observation even when its payload is a
       // duplicate; enriched subscribers must capture the replacement pane identity.
-      this.refreshTerminalStatusEvidence(previous, mutationBefore, mutationBefore !== undefined)
+      this.refreshTerminalStatusEvidence(previous, mutationBefore, mutationBefore !== undefined, newRun)
       return
     }
     // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is
@@ -184,7 +185,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       undefined,
       event.origin ?? 'osc',
       undefined,
-      mutationBefore
+      mutationBefore,
+      newRun
     )
   }
 }

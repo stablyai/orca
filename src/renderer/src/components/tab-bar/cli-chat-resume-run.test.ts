@@ -217,6 +217,25 @@ describe('CLI identity resume through the existing launch owner', () => {
     }
   })
 
+  it('keeps the terminal and directs a refused terminal writer to Session History', async () => {
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: {
+        code: 'agent_session_conflict', message: 'private host evidence',
+        details: { reason: 'conversationHeldElsewhere' },
+        createAttemptRefusedBeforeCommit: true
+      }
+    })
+    await runCliChatResume(SOURCE, true)
+    expect(mocks.toast).toHaveBeenCalledTimes(1)
+    expect(mocks.toast.mock.calls[0]?.[0]).toMatch(
+      /^Exit Claude.* in the terminal, then open this conversation from Session History\.$/
+    )
+    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(tabs()).toEqual([])
+    expect([...structuredLaunchStates()]).toEqual([])
+  })
+
   it('opens a proved owner only for the header, on the initiating host, without importing', async () => {
     const owner = { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
     mocks.call.mockResolvedValue({

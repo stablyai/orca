@@ -248,7 +248,7 @@ export class Session {
     return this.output.getCwd()
   }
 
-  inspectChildProcesses(): PtyChildProcessVerdict {
+  inspectChildProcesses(): PtyChildProcessVerdict | Promise<PtyChildProcessVerdict> {
     return this.subprocess.inspectChildProcesses?.() ?? 'unverifiable'
   }
 

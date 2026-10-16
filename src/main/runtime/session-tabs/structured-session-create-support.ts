@@ -4,7 +4,7 @@ import {
 } from '../../native-chat/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
+import { OrcaRuntimeWithStructuredSessionAccountHome } from './structured-session-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
@@ -33,7 +33,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 
-export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithGetWorktreePs {
+export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithStructuredSessionAccountHome {
   protected abstract restoreStructuredAgentSessionTabsOnce(
     ...args: Parameters<
       RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
@@ -52,41 +52,6 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       location: await this.resolveStructuredAgentSessionLocation(worktreeSelector),
       runtime: this
     })
-  }
-
-  /** Where a launch of `agent` finds its account, resolved on this host by the agent's own
-   *  registration; null for an agent this runtime does not register, whose create is refused. */
-  protected structuredAgentAccountHomeResolver(
-    agent: StructuredAgentId,
-    worktree: string,
-    purpose: 'launch' | 'read',
-    hostLaunchDirectory?: string
-  ) {
-    const registration = structuredAgentRuntimeMetadata(agent)
-    if (!registration) {
-      return null
-    }
-    const services = {
-      getClaudeConfigDirectory: (target) => this.accounts.getClaudeConfigDirectory(target),
-      prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
-      readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
-      workspaceTrustSettings: () => this.requireStore().getSettings()
-    }
-    return async ({ launchEnv, location }) =>
-      registration.resolveAccountHome(
-        {
-          launchEnv,
-          location: location ?? null,
-          purpose,
-          workspacePath:
-            purpose === 'launch'
-              ? async () =>
-                  hostLaunchDirectory ??
-                  (await this.resolveRuntimeFileTarget(worktree)).worktree.path
-              : null
-        },
-        services
-      )
   }
 
   /** The definition this runtime registers for `agent`: what its account home pins. Read from the
@@ -240,6 +205,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       return committedReplay
     }
     const resumeFrom = input.resumeFrom
+    if (resumeFrom) {
+      await this.assertStructuredAdoptionTerminalWritersExited(input.agent, resumeFrom.providerSessionId)
+    }
     const workspaceCwd = resumeFrom ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path : ''
     const selectedAccountHome = await resolveAccountHome({ launchEnv, location })
     // Adopting pins the account home to wherever the conversation actually lives, which is not

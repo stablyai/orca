@@ -2964,6 +2964,7 @@
         "unavailable": "Selected answer unavailable"
       },
       "resumeInNewChat": {
+        "exitFirst": "Exit {{agent}} in the terminal, then open this conversation from Session History.",
         "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."
       },
       "state": {

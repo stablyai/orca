@@ -1,3 +1,8 @@
+import { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } from '../runtime/agent-status-observed-pane-identity'
+import { assertCliConversationWritersExited } from '../runtime/structured-agent-cli-writers'
+import { OPEN_CODE_WRITER_TOPOLOGY, cliWriterExecutionMatcher } from './server/cli-writer-observation'
+import { toAgentStatusIpcPayload } from './server/server-status-identity'
+import { buildRelayHookEnvelope } from '../../wsl-guest/agent-hook-envelope-build'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,6 +28,8 @@ afterEach(() => {
 })
 
 class PresenceTestServer extends AgentHookServer {
+  persistedWriterState(): string { return this.serializeStatusFile() }
+
   applyTranscriptUpdate(): void {
     const row = this.state.lastStatusByPaneKey.get(PANE)
     if (row) {
@@ -78,6 +85,100 @@ function visible(server: AgentHookServer): boolean {
 }
 
 describe('host-owned hook presence', () => {
+  it('keeps writer observations exact and topology local to the accepted row', async () => {
+    const server = await createServer()
+    await hook(server, 'SessionStart')
+    const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
+    expect(row).toBeDefined()
+    if (!row) {
+      throw new Error('Missing hook row')
+    }
+    const observed = server.readCliWriterObservation(row)
+    probe.mockResolvedValue('exited')
+    expect(await observed?.presence()).toBe('exited')
+    expect(observed?.current()).toBe(true)
+    expect(server.readCliWriterObservation({ ...row, providerSession: { key: 'session_id', id: 'other' } })).toBeNull()
+    await hook(server, 'UserPromptSubmit')
+    expect(observed?.current()).toBe(false)
+    expect(server.persistedWriterState()).not.toContain('pane-owned')
+  })
+
+  it('retains OpenCode execution evidence through inference and repaint, never replacement', async () => {
+    const server = await createServer()
+    const identities = new AgentStatusObservedPaneIdentities()
+    const capture = new AgentStatusObservedPaneIdentityCapture(identities)
+    let incarnation = 'execution-a'
+    const runtime = {
+      getAgentStatusTerminalHandleForPaneKey: () => 'terminal-a',
+      getTerminalProcessIncarnation: () => incarnation,
+      getAgentStatusOrchestrationContextForPaneKey: () => undefined
+    }
+    server.subscribeEnrichedStatus((row) => capture.observe(row))
+    const row = () => {
+      const value = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)
+      if (!value) {
+        throw new Error('Missing OpenCode row')
+      }
+      return value
+    }
+    const observation = () => server.readCliWriterObservation(row())
+    const post = async (extra: Record<string, unknown> = { opencodeMajor: 2 }) => {
+      expect((await postHookEvent(server, { ...buildBody({ hook_event_name: 'SessionBusy',
+        sessionID: 'open-code-conversation', prompt: 'task' }), ...extra }, '/hook/opencode2')).status).toBe(204)
+    }
+    await post()
+    capture.attach(runtime)
+    server.setCliWriterExecutionMatcher(cliWriterExecutionMatcher(identities, runtime))
+    expect(observation()?.topology).toBe('unverifiable')
+    await post()
+    const shellAlone = vi.fn(async () => false)
+    const inspect = () => assertCliConversationWritersExited({ rows: () => server.getStatusSnapshot(), saved: () => [],
+      observation: (value) => server.readCliWriterObservation(value), pane: () => ({ ptyId: 'pty', incarnationId: incarnation, identity: incarnation }),
+      sleeping: () => false, shellAlone }, 'opencode', 'open-code-conversation')
+    await expect(inspect()).rejects.toMatchObject({ refusal: { code: 'agent_session_conflict' } })
+    const interrupt = () => {
+      const value = row()
+      expect(server.inferInterrupt({ paneKey: PANE, baselineUpdatedAt: value.receivedAt,
+        baselineStateStartedAt: value.stateStartedAt, baselinePrompt: value.prompt,
+        baselineAgentType: value.agentType, intent: 'ctrl-c' })).toBe(true)
+    }
+    interrupt()
+    expect(observation()?.topology).toBe('pane-owned')
+    const repaint = (origin?: 'process') => server.ingestTerminalStatus({ paneKey: PANE,
+      tabId: 'tab-1', worktreeId: 'wt-1', terminalHandle: 'terminal-a', origin,
+      payload: { state: 'done', prompt: 'changed repaint', agentType: 'opencode2' } })
+    repaint()
+    expect(observation()?.topology).toBe('pane-owned')
+    shellAlone.mockResolvedValue(true)
+    await expect(inspect()).resolves.toBeUndefined()
+    const binding = row().providerSession
+    expect(binding && OPEN_CODE_WRITER_TOPOLOGY in binding).toBe(true)
+    const snapshot = row()
+    const event = { ...snapshot, restoredUnconfirmed: snapshot.restoredUnconfirmed ? true as const : undefined,
+      payload: { state: 'done' as const, prompt: '', agentType: 'opencode2' } }
+    for (const value of [event, toAgentStatusIpcPayload(event), buildRelayHookEnvelope(event, 'opencode2')]) {
+      expect(JSON.stringify(value)).not.toContain('pane-owned')
+      expect(Object.getOwnPropertySymbols(structuredClone(value).providerSession ?? {})).toEqual([])
+    }
+    expect(server.persistedWriterState()).not.toContain('pane-owned')
+    for (const extra of [{}, { opencodeSharedServer: 1 }]) {
+      await post(extra)
+      expect(observation()?.topology).not.toBe('pane-owned')
+    }
+    await post()
+    server.ingestTerminalStatus({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1',
+      origin: 'process', payload: { state: 'working', prompt: 'task', agentType: 'opencode2' } })
+    expect(observation()?.topology).toBe('unverifiable')
+    await post()
+    incarnation = 'execution-b'
+    interrupt()
+    expect(identities.read(PANE)).toMatchObject({ processIncarnation: 'execution-b' })
+    expect(observation()?.topology).toBe('unverifiable')
+    repaint()
+    expect(observation()?.topology).toBe('unverifiable')
+    await expect(inspect()).rejects.toMatchObject({ refusal: { code: 'agent_session_conflict' } })
+  })
+
   it('clears the status on SessionEnd while the terminal survives, without a renderer', async () => {
     const server = await createServer()
     await hook(server, 'SessionStart')

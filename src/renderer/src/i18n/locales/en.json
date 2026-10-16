@@ -18713,6 +18713,7 @@
         "showTerminal": "Show terminal"
       },
       "resumeInNewChat": {
+        "exitFirst": "Exit {{agent}} in the terminal, then open this conversation from Session History.",
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
         "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."
       },

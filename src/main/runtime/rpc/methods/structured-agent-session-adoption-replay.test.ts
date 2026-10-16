@@ -1,3 +1,5 @@
+import type { AgentProcessVerdict } from '../../../../shared/agent-process-presence'
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,6 +14,7 @@ import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-w
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../core'
+import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
@@ -82,7 +85,12 @@ function createParams(operationId = OPERATION, sessionId = SESSION) {
   }
 }
 
-async function call(dispatcher: RpcDispatcher, params: unknown, client = CLIENT, unary = false) {
+async function call(
+  dispatcher: RpcDispatcher,
+  params: unknown,
+  client: RpcDispatchStreamingOptions = CLIENT,
+  unary = false
+) {
   const replies: RpcResponse[] = []
   const request: RpcRequest = {
     id: `request-${replies.length + 1}`,
@@ -146,6 +154,7 @@ describe('committed adopting create RPC replay', () => {
 
     let selectedHome = originalHome
     const selectAccountHome = vi.fn(() => selectedHome)
+    let writerVerdict: AgentProcessVerdict = 'live'
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
@@ -153,7 +162,11 @@ describe('committed adopting create RPC replay', () => {
         })
       } as never,
       undefined,
-      { prepareCodexStructuredLaunch: selectAccountHome }
+      { prepareCodexStructuredLaunch: selectAccountHome,
+        readHookCliWriterObservation: () => ({
+          current: () => true, topology: 'pane-owned', presence: async () => writerVerdict
+        })
+      }
     )
     const sourceRow = {
       paneKey: 'source-pane', worktreeId: WORKSPACE, agentType: 'codex',
@@ -212,6 +225,29 @@ describe('committed adopting create RPC replay', () => {
       runtime,
       methods: STRUCTURED_AGENT_SESSION_METHODS
     })
+    const historyFields = {
+      worktree: `id:${WORKSPACE}`, agent: 'codex' as const,
+      resumeFrom: { providerSessionId: THREAD }
+    }
+    const historyParams = {
+      ...historyFields,
+      envelope: { ...createParams().envelope,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create', sessionId: SESSION, fields: historyFields
+        })
+      }
+    }
+    for (const capabilities of [CLIENT.clientCapabilities,
+      [...CLIENT.clientCapabilities, AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY]]) {
+      expect(await call(dispatcher, historyParams, { ...CLIENT, clientCapabilities: capabilities }, unary))
+        .toMatchObject({ ok: true, result: { ok: false, refusal: {
+          code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' },
+          createAttemptRefusedBeforeCommit: true
+        } } })
+      expect(store.getRecord(SESSION)).toBeFalsy()
+      expect(sessionAdapter.acquire).not.toHaveBeenCalled()
+    }
+    writerVerdict = 'exited'
     const params = createParams()
 
     rows = unary ? [] : [{ ...sourceRow, providerSession: { ...sourceRow.providerSession, id: 'replaced' } }]
@@ -291,14 +327,18 @@ describe('committed adopting create RPC replay', () => {
       } } }
     })
 
+    // Only an exact committed replay bypasses an unavailable writer scan.
+    const freshRefusal = unary
+      ? { code: 'agent_session_identity_required' }
+      : { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
     const otherOperation = createParams(`${Date.now()}-00000000000000000000000000000002`)
     expect(await call(dispatcher, otherOperation)).toMatchObject({
       ok: true,
-      result: { ok: false, refusal: { code: 'agent_session_identity_required' } }
+      result: { ok: false, refusal: freshRefusal }
     })
     expect(await call(dispatcher, params, { ...CLIENT, clientId: 'device-b' })).toMatchObject({
       ok: true,
-      result: { ok: false, refusal: { code: 'agent_session_identity_required' } }
+      result: { ok: false, refusal: freshRefusal }
     })
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
     expect(internal.publishStructuredAgentSessionTab).toHaveBeenCalledTimes(2)

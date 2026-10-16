@@ -6,7 +6,7 @@ import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 export type SubprocessHandle = {
   pid: number
   processNameIsSpawnFile?: boolean
-  inspectChildProcesses?(): PtyChildProcessVerdict
+  inspectChildProcesses?(): PtyChildProcessVerdict | Promise<PtyChildProcessVerdict>
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(options?: { rawFallback?: boolean }): string | null

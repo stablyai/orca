@@ -1,3 +1,4 @@
+import type { CliWriterExecutionMatches } from './cli-writer-observation'
 import { isTmuxInnerSubject } from '../../../shared/tmux-agent-hook-owner'
 import type {
   AgentStatusClearIpcPayload,
@@ -26,6 +27,12 @@ import { structuredStatusLegacyEvent } from './server-structured-status-row'
 const UNORDERED_STATUS_ROW = Number.MAX_SAFE_INTEGER
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
+  protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
+
+  setCliWriterExecutionMatcher(matcher: CliWriterExecutionMatches): void {
+    this.cliWriterExecutionMatches = matcher
+  }
+
   setStartupPromptClaimListener(
     listener: (body: unknown) => boolean | 'pending',
     clear: () => void

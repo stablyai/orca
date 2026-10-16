@@ -13,7 +13,10 @@ import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/structured-agent-session-provisional-tab'
+import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
+import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
+import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 
 export function activateAiVaultResumeWorkspace(workspaceId: string): boolean {
   return activateAndRevealWorkspace(workspaceId) !== false
@@ -40,10 +43,12 @@ export async function resumeAiVaultSessionInNewChat(
       worktreeId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
     })
+    const selection = useAppStore.getState()
+    const waitForCreate = workspaceHasSleepingAgentSessions(selection, worktreeId)
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
       hooks: {},
-      beforeOpen: () => {
+      beforeOpen: waitForCreate ? undefined : () => {
         if (useAppStore.getState().activeWorktreeId !== worktreeId) {
           return activateAiVaultResumeWorkspace(worktreeId)
         }
@@ -52,6 +57,17 @@ export async function resumeAiVaultSessionInNewChat(
     })
     if (launch) {
       void launch.settlement.then((settlement) => {
+        const state = useAppStore.getState()
+        if (waitForCreate && settlement.kind === 'structured' && state.activeWorktreeId !== worktreeId &&
+          state.activeWorktreeId === selection.activeWorktreeId &&
+          state.activeWorkspaceExecutionHostId === selection.activeWorkspaceExecutionHostId &&
+          state.activeView === selection.activeView &&
+          state.worktreeNavHistory === selection.worktreeNavHistory &&
+          state.worktreeNavHistoryIndex === selection.worktreeNavHistoryIndex &&
+          resolveWebSessionVisibleTabId(state, selection.activeWorktreeId ?? '') ===
+            resolveWebSessionVisibleTabId(selection, selection.activeWorktreeId ?? '')) {
+          activateAiVaultResumeWorkspace(worktreeId)
+        }
         if (settlement.kind === 'failed' && !settlement.notified) {
           notifyAiVaultSessionResumeInChatFailure(settlement.error, rowAgent)
         }
@@ -69,16 +85,18 @@ function notifyAiVaultSessionResumeInChatFailure(
   error: unknown,
   rowAgent: CliConversationRowAgent
 ): void {
-  if (hasRuntimeRpcErrorCode(error, 'agent_session_conflict')) {
+  const failure = structuredLaunchFailure(error)
+  if (hasRuntimeRpcErrorCode(error, 'agent_session_conflict') || failure?.code === 'agent_session_conflict') {
     toast.error(
-      translate(
-        'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
-        'Another chat is already holding this conversation.'
-      )
+      failure?.details?.reason === 'conversationHeldElsewhere' && !failure.owner
+        ? cliConversationExitGuidance(rowAgent)
+        : translate(
+            'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
+            'Another chat is already holding this conversation.'
+          )
     )
     return
   }
-  const failure = structuredLaunchFailure(error)
   if (
     failure?.code === 'agent_session_identity_required' &&
     failure.details?.reason === 'transcriptNotFound'
