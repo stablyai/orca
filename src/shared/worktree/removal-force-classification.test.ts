@@ -67,3 +67,15 @@ describe('isProvenLivePtyRemovalError', () => {
     ).toBe(false)
   })
 })
+
+describe('classifyWorktreeForceDeleteReason for initialized submodules', () => {
+  const submoduleError = 'fatal: working trees containing submodules cannot be moved or removed'
+
+  it('offers force for the refusal Git gives a checkout with submodules', () => {
+    expect(classifyWorktreeForceDeleteReason(submoduleError)).toBe('submodules')
+  })
+
+  it('does not re-offer force once the removal was already forced', () => {
+    expect(classifyWorktreeForceDeleteReason(submoduleError, true)).toBeNull()
+  })
+})

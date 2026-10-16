@@ -98,6 +98,20 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+    if (forceDeleteReason === 'submodules') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        description: translate(
+          'auto.components.sidebar.delete.worktree.toast.submodules',
+          'Git only removes a workspace with initialized submodules when forced. Force Delete also deletes the submodule checkouts, including commits in them that were never pushed.'
+        ),
+        isDestructive: false
+      }
+    }
     if (forceDeleteReason === 'missing-registration') {
       return {
         title: translate(

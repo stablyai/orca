@@ -14,6 +14,7 @@ import { areWorktreePathsEqual } from './worktree-path-comparison'
 import { isPrunableGitFileWorktree } from '../worktree-prunable-git-file'
 import { removeStaleLocalWorktreeRegistration } from '../local-worktree-removal-recovery'
 import { sweepStaleWorktreeTrash, WORKTREE_TRASH_DIR_NAME } from '../worktree-trash'
+import { classifyWorktreeForceDeleteReason } from '../../shared/worktree/removal'
 
 const execFileAsync = promisify(execFile)
 
@@ -93,6 +94,47 @@ describe('worktree removal against the real Git binary', () => {
     await expect(removeWorktree(repoPath, worktreePath, false)).rejects.toThrow()
     expect(existsSync(join(worktreePath, 'seed.txt'))).toBe(true)
     expect(await isRegistered(worktreePath)).toBe(true)
+  })
+
+  // Why (#28164): Git refuses any non-force remove once submodules are initialized, so the toast
+  // must recognize that refusal as forceable, and the forced retry must then succeed.
+  it('offers force for a clean checkout with initialized submodules, which force then removes', async () => {
+    const libPath = join(scratchDir, 'lib')
+    await mkdir(libPath)
+    await git(['init', '-q'], libPath)
+    await git(
+      [
+        '-c',
+        'user.email=lib@example.invalid',
+        '-c',
+        'user.name=Lib',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'lib'
+      ],
+      libPath
+    )
+    await git(
+      ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', libPath, 'lib'],
+      worktreePath
+    )
+    await git(['commit', '-qm', 'add lib'], worktreePath)
+
+    const refusal = await removeWorktree(repoPath, worktreePath, false, {
+      deleteBranch: false
+    }).then(
+      () => null,
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
+    expect(refusal).not.toBeNull()
+    expect(classifyWorktreeForceDeleteReason(refusal ?? '')).toBe('submodules')
+    expect(await isRegistered(worktreePath)).toBe(true)
+
+    await removeWorktree(repoPath, worktreePath, true, { deleteBranch: false })
+    expect(existsSync(worktreePath)).toBe(false)
+    expect(await isRegistered(worktreePath)).toBe(false)
   })
 
   it('does not delete a checkout through a malformed registration that names its git file', async () => {

@@ -144,6 +144,22 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
+  // Why (#28164): Git refuses a non-force remove of a checkout with initialized submodules even
+  // when it is clean, so without the offer the workspace could never be deleted from Orca.
+  it('offers force delete when Git refuses a checkout with initialized submodules', () => {
+    expect(
+      toastCopyForRemovalError(
+        'feature/foo',
+        'Command failed: git worktree remove /repo/wt\nfatal: working trees containing submodules cannot be moved or removed'
+      )
+    ).toEqual({
+      title: 'Failed to delete workspace feature/foo',
+      description:
+        'Git only removes a workspace with initialized submodules when forced. Force Delete also deletes the submodule checkouts, including commits in them that were never pushed.',
+      isDestructive: false
+    })
+  })
+
   it('preserves the raw error when force delete is unavailable', () => {
     expect(getDeleteWorktreeToastCopy('feature/foo', null, 'permission denied')).toEqual({
       title: 'Failed to delete workspace feature/foo',

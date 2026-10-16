@@ -16,6 +16,7 @@ export type WorktreeForceDeleteReason =
   | 'missing-registration'
   | 'unstopped-pty'
   | 'running-agent-session'
+  | 'submodules'
 
 // Why: everything before this separator is the worktree id — a user-chosen filesystem path.
 // Only the detail after it is Orca's own wording, so verdict matchers anchor on the boundary
@@ -140,6 +141,10 @@ export function classifyWorktreeForceDeleteReason(
     error.includes('Worktree is no longer registered with Git and its directory is already gone')
   ) {
     return 'missing-registration'
+  }
+  // Why: Git refuses a non-force remove of any checkout with initialized submodules, clean or not.
+  if (error.includes('working trees containing submodules cannot be moved or removed')) {
+    return 'submodules'
   }
   if (
     error.includes('Worktree has uncommitted or untracked changes') ||
