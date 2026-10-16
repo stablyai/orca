@@ -68,13 +68,15 @@ describe('Store', () => {
   })
   it('persists normalized worktree tags across a reload and clears them with an empty list', async () => {
     const store = await createStore()
-    store.setWorktreeMeta('wt1', { tags: ['Billing', ' billing ', 'web'] })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), {
+      tags: ['Billing', ' billing ', 'web']
+    })
     store.flush()
 
     const restored = await createStore()
     expect(restored.getWorktreeMeta('wt1')?.tags).toEqual(['Billing', 'web'])
 
-    restored.setWorktreeMeta('wt1', { tags: [] })
+    restored.setWorktreeMeta(hostWorktreeTarget({ id: 'wt1', hostId: 'local' }), { tags: [] })
     restored.flush()
     expect(readDataFile()).toMatchObject({
       worktreeMeta: { wt1: expect.not.objectContaining({ tags: expect.anything() }) }
