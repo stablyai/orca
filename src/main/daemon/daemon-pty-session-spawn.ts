@@ -1,3 +1,4 @@
+import { orcadRestartWorkAdmission } from '../orcad/orcad-restart-work-admission'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
@@ -32,7 +33,11 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
   }
 
-  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+  spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    return orcadRestartWorkAdmission.admit(() => this.spawnAdmitted(opts))
+  }
+
+  private async spawnAdmitted(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     this.assertSpawnAdmission()
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)

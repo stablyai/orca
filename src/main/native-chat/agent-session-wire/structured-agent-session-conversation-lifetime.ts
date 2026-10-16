@@ -112,6 +112,9 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   })
 
   return {
+    restartWorkCount: () => idleSweep.restartWorkCount() + deps().store.listRecords().filter(
+      (record) => !sessions.has(record.sessionId) && hasOpenDispatch(record.sessionId)
+    ).length,
     idleSweep,
     stopAgent,
     /** A host stop of the child the expired attempt published, if it is still that one and still

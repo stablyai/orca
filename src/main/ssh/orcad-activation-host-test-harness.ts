@@ -11,10 +11,12 @@ import {
 } from './orcad-activation-record'
 import { isSnapshotCaptureCommand } from './orcad-snapshot-capture-command'
 import { sshCommandExitError } from './ssh-relay-exec-command'
+import type { OrcadRestartAdmissionPort } from './orcad-restart-admission-client'
+import { BUILD_HASH, readyLine } from './orcad-activation-readiness-fixture'
+export { BUILD_HASH, readyLine } from './orcad-activation-readiness-fixture'
 
 export const OLD = '0.1.0+aa01'
 export const NEW = '0.2.0+bb01'
-export const BUILD_HASH = 'abc123def4567890'
 /** State the incoming build migrates on load; the outgoing build cannot read it. */
 const MIGRATION = '|migrated-by-new'
 
@@ -120,6 +122,33 @@ export class FakeOrcadHost {
         this.record = contents
       }
     })
+  }
+
+  /** The slot's own restart admission: an idle reservation, then a commit the slot exits on. */
+  restartAdmission(version: string): OrcadRestartAdmissionPort {
+    return {
+      reserve: async () => ({
+        status: 'reserved',
+        token: `restart-${version}`,
+        census: {
+          liveSessions: 0,
+          startedSinceActivation: 0,
+          daemonProtocolVersion: 3,
+          chatWork: 0
+        }
+      }),
+      commit: async () => {
+        try {
+          return this.mutate(() => {
+            this.alive.delete(version)
+            return 'committed' as const
+          })
+        } catch {
+          return 'unknown'
+        }
+      },
+      release: async () => {}
+    }
   }
 
   /** Returns false where a stale-only takeover would answer busy. */
@@ -300,35 +329,4 @@ function lockRecord(version: string) {
     acquiredAt: new Date(0).toISOString(),
     nonce: `nonce-${version}`
   }
-}
-
-export function readyLine(version: string): string {
-  return JSON.stringify({
-    type: 'orca_server_ready',
-    schemaVersion: 1,
-    runtimeId: 'r1',
-    boundEndpoint: 'ws://127.0.0.1:7777',
-    advertisedEndpoint: null,
-    managedWslCliReconciliation: 'settled',
-    pairing: { available: false, reason: 'disabled_by_operator', guidance: 'n/a' },
-    health: {
-      buildHash: BUILD_HASH,
-      buildVersion: version,
-      nodeVersion: '24.21.0',
-      nodeAbi: '137',
-      platform: 'linux',
-      arch: 'x64',
-      pid: 1,
-      stopRequests: 1,
-      terminalDaemon: {
-        state: 'live',
-        ownsFreshSessions: true,
-        pid: 2,
-        buildVersion: version,
-        entryPath: '/x/daemon-entry.js',
-        protocolVersion: 3,
-        selfTest: { ok: true, coverage: 'pty-spawn', verdict: 'healthy', durationMs: 5 }
-      }
-    }
-  })
 }

@@ -93,13 +93,13 @@ export function ManagedServerRow({
     void loadStatus()
   }, [loadStatus])
 
-  const run = async (action: ManagedServerAction): Promise<void> => {
+  const run = async (action: ManagedServerAction, force = false): Promise<void> => {
     setBusy(action)
     try {
       const selector = { selector: environment.id }
       const result =
         action === 'update'
-          ? await api.update(selector)
+          ? await api.update(force ? { ...selector, force: true } : selector)
           : action === 'rollback'
             ? await api.rollback(selector)
             : action === 'recover' || action === 'restoreSnapshot'
@@ -137,6 +137,9 @@ export function ManagedServerRow({
   }
 
   const recovery = status?.recovery ?? null
+  const offersForce =
+    status?.deferredUpdate?.forceable === true &&
+    status.terminals.restartAdmissionSupported === false
   const disabled = busy !== null
   return (
     <div className="space-y-2 px-4 py-3">
@@ -195,7 +198,7 @@ export function ManagedServerRow({
                 'Update to {{version}} deferred.',
                 { version: status.deferredUpdate.candidateVersion }
               )}{' '}
-              {managedServerOutcomeLabel(status.deferredUpdate)}
+              {managedServerOutcomeLabel(status.deferredUpdate, offersForce)}
             </p>
           ) : null}
         </div>
@@ -210,6 +213,20 @@ export function ManagedServerRow({
         >
           {translate('auto.components.settings.managedServers.row.update', 'Update')}
         </Button>
+        {offersForce ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => void run('update', true)}
+          >
+            {translate(
+              'auto.components.settings.managedServers.row.forceUpdateStopChats',
+              'Force update and stop chats'
+            )}
+          </Button>
+        ) : null}
         {status?.rollbackAvailable ? (
           <Button
             type="button"

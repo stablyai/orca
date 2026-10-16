@@ -1,3 +1,4 @@
+import { ORCAD_RESTART_ADMISSION_METHOD, OrcadRestartAdmissionParamsSchema } from '../../../../shared/orcad-restart-admission'
 import { defineMethod } from '../core'
 import {
   ORCAD_TERMINAL_CENSUS_METHOD,
@@ -23,6 +24,19 @@ export const ORCAD_TERMINAL_CENSUS_METHODS = [
         () => collectOrcadTerminalCensus(params.activatedAt),
         before.liveSessions === null ? null : before.liveSessions - released
       )
+    }
+  }),
+  defineMethod({
+    name: ORCAD_RESTART_ADMISSION_METHOD,
+    permission: 'host-admin',
+    params: OrcadRestartAdmissionParamsSchema,
+    handler: async (params) => {
+      const { orcadRestartAdmission } = await import('../../../orcad/orcad-restart-admission')
+      switch (params.action) {
+        case 'reserve': return orcadRestartAdmission.reserve(params.activatedAt, params.force)
+        case 'commit': return orcadRestartAdmission.commit(params.token)
+        case 'release': return orcadRestartAdmission.release(params.token)
+      }
     }
   })
 ]

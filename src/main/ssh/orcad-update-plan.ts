@@ -43,6 +43,19 @@ export type OrcadUpdateDeferCode =
   | 'orcad_update_strands_live_terminals'
   | 'orcad_update_daemon_protocol_unverifiable'
   | 'orcad_update_ends_in_process_terminals'
+  | 'orcad_update_chat_work_running'
+  | 'orcad_update_chat_work_unverifiable'
+  | 'orcad_update_restart_not_reserved'
+  | 'orcad_update_legacy_host'
+
+type OrcadUpdatePlanInput = {
+  record: OrcadActivationRecord
+  candidateVersion: string
+  census: OrcadTerminalCensus
+  /** The candidate's daemon protocol and the older ones it can still attach to. */
+  candidateDaemonProtocol: OrcadDaemonProtocolFacts
+  force?: boolean
+}
 
 /**
  * Decide whether to restart orcad onto `candidateVersion`.
@@ -52,14 +65,42 @@ export type OrcadUpdateDeferCode =
  * every one of those terminals exits — a mixed pair whose duration the operator, not the
  * deploy, should decide. `force` is how they decide it.
  */
-export function planOrcadUpdate(input: {
-  record: OrcadActivationRecord
-  candidateVersion: string
-  census: OrcadTerminalCensus
-  /** The candidate's daemon protocol and the older ones it can still attach to. */
-  candidateDaemonProtocol: OrcadDaemonProtocolFacts
-  force?: boolean
-}): OrcadUpdateDecision {
+export function planOrcadUpdate(input: OrcadUpdatePlanInput): OrcadUpdateDecision {
+  const terminals = planOrcadTerminalRestart(input)
+  if (terminals.action !== 'proceed' || input.record.active === null) {
+    return terminals
+  }
+  // Terminal policy comes first; only a proven older host may use the explicit Force bootstrap.
+  const { chatWork } = input.census
+  if (chatWork === undefined || chatWork === null) {
+    if (input.census.restartAdmissionSupported === false) {
+      return input.force ? terminals : {
+        action: 'defer',
+        code: 'orcad_update_legacy_host',
+        reason: 'This older server cannot verify chat work. Finish its chats, then use Force update to upgrade it.'
+      }
+    }
+    return {
+      action: 'defer',
+      code: 'orcad_update_chat_work_unverifiable',
+      reason:
+        'This Orca server did not report whether chats are still working, so restarting it ' +
+        'could end a running turn. It keeps serving; update when it can answer.'
+    }
+  }
+  if (chatWork > 0) {
+    return {
+      action: 'defer',
+      code: 'orcad_update_chat_work_running',
+      reason:
+        `${chatWork} chat${chatWork === 1 ? ' has' : 's have'} work still owed on this host. ` +
+        'The server keeps serving. Once the chats finish, choose Update or reconnect to retry.'
+    }
+  }
+  return terminals
+}
+
+function planOrcadTerminalRestart(input: OrcadUpdatePlanInput): OrcadUpdateDecision {
   if (input.record.active === input.candidateVersion) {
     return {
       action: 'noop',

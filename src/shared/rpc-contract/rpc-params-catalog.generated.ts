@@ -33,6 +33,7 @@ import { MobileRelayHostWorktreesParamsSchema } from '../mobile-relay-hosts-cont
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration-scrollback'
+import { OrcadRestartAdmissionParamsSchema } from '../orcad-restart-admission'
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
 import {
@@ -1113,6 +1114,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orcad.migration.stageBlobChunk': OrcadMigrationBlobChunkRequestSchema,
   'orcad.migration.stageCatalog': OrcadMigrationCatalogParams,
   'orcad.migration.stageSnapshotChunk': OrcadMigrationSnapshotChunkRequestSchema,
+  'orcad.restartAdmission': OrcadRestartAdmissionParamsSchema,
   'orcad.terminalCensus': OrcadTerminalCensusParamsSchema,
   'orchestration.ask': AskParams,
   'orchestration.callerShow': null,

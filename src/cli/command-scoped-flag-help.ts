@@ -32,7 +32,8 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     references: '--references           List the bundled reference names for a topic'
   },
   'environment update': {
-    force: '--force                Restart over running terminals instead of deferring the update'
+    force:
+      '--force                Restart over terminals; older servers may interrupt chats, capable servers protect unfinished chats'
   },
   'environment recover': {
     'accept-changed-state':

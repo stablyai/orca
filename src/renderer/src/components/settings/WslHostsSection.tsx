@@ -128,10 +128,10 @@ export function WslHostsSection({
                         'Update to {{version}} deferred.',
                         { version: deferred.candidateVersion }
                       )}{' '}
-                      {managedServerOutcomeLabel({
-                        outcome: 'deferred',
-                        code: deferred.code
-                      })}
+                      {managedServerOutcomeLabel(
+                        { outcome: 'deferred', code: deferred.code },
+                        deferred.forceable === true
+                      )}
                     </p>
                   ) : null}
                 </div>
@@ -154,7 +154,15 @@ export function WslHostsSection({
                         disabled={connectingId !== null}
                         onClick={() => void connect(environment.id, true)}
                       >
-                        {translate('auto.components.settings.wslHosts.forceUpdate', 'Force update')}
+                        {deferred.code === 'orcad_update_legacy_host'
+                          ? translate(
+                              'auto.components.settings.wslHosts.forceUpdateStopChats',
+                              'Force update and stop chats'
+                            )
+                          : translate(
+                              'auto.components.settings.wslHosts.forceUpdate',
+                              'Force update'
+                            )}
                       </Button>
                     ) : null}
                   </>

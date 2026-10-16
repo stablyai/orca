@@ -18,7 +18,11 @@ export const OrcadTerminalCensusSchema = z.object({
    * Of `liveSessions`, how many run inside orcad itself (a degraded daemon's fallback). Unlike
    * daemon sessions these end with any orcad restart. Absent from hosts that predate it.
    */
-  inProcessSessions: CountSchema.optional()
+  inProcessSessions: CountSchema.optional(),
+  /** Host-owned chat obligations; absent on older hosts, which cannot prove restart safety. */
+  chatWork: CountSchema.optional(),
+  /** Client status proof; absent when the peer's restart capability could not be verified. */
+  restartAdmissionSupported: z.boolean().optional()
 })
 
 export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema>

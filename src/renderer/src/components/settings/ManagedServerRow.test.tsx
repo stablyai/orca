@@ -43,16 +43,18 @@ async function render(
 ) {
   const stop = vi.fn(async () => ({ outcome: 'unlinked' }))
   const forget = vi.fn(async () => ({ outcome: 'forgotten' }))
+  const update = vi.fn(async () => ({ outcome: 'updated' }))
   const recover = vi.fn(async (args: { acceptChangedState?: boolean }) =>
     args.acceptChangedState
       ? { outcome: 'none' }
       : { outcome: 'refused', verdict: 'unverifiable', code: 'orcad_recovery_changed_state' }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row calls only getStatus, stop, forget and recover here.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row calls only the mocked methods here.
   const api = {
     getStatus: vi.fn(getStatus),
     stop,
     forget,
+    update,
     recover
   } as unknown as ManagedOrcadPreloadApi
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only id and name.
@@ -64,13 +66,34 @@ async function render(
   await act(async () => {
     root.render(<ManagedServerRow api={api} environment={environment} onChanged={() => {}} />)
   })
-  return { container, stop, forget, recover }
+  return { container, stop, forget, recover, update }
 }
 
 const button = (container: HTMLElement, label: string) =>
   [...container.querySelectorAll('button')].find((entry) => entry.textContent === label)
 
 describe('managed server row', () => {
+  it.each([false, true, undefined])('offers Force only with legacy proof (%s)', async (proof) => {
+    const { container, update } = await render({
+      ...status,
+      terminals: { ...status.terminals, restartAdmissionSupported: proof },
+      deferredUpdate: status.deferredUpdate
+        ? { ...status.deferredUpdate, code: 'orcad_update_terminals_running', forceable: true }
+        : null
+    })
+    const force = button(container, 'Force update and stop chats')
+    expect(Boolean(force)).toBe(proof === false)
+    await act(async () => button(container, 'Update')?.click())
+    expect(update).toHaveBeenLastCalledWith({ selector: 'env-1' })
+    if (proof === false) {
+      expect(container.textContent).toContain(
+        'On older servers that cannot check for running chats'
+      )
+      await act(async () => force?.click())
+      expect(update).toHaveBeenLastCalledWith({ selector: 'env-1', force: true })
+    }
+  })
+
   it('reports unknown terminals, the running migration and the deferred update', async () => {
     const { container } = await render()
     expect(container.textContent).toContain('Running terminals: unknown')

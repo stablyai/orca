@@ -1,3 +1,4 @@
+import { orcadRestartWorkAdmission } from '../orcad/orcad-restart-work-admission'
 import type * as pty from 'node-pty'
 import type {
   IPtyProvider,
@@ -79,7 +80,7 @@ export class LocalPtyProvider implements IPtyProvider {
    * Windows launches can pre-deliver startup commands in argv, so the stdin fallback only runs when needed.
    */
   spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    return spawnLocalPty(args, () => this.opts)
+    return orcadRestartWorkAdmission.admit(() => spawnLocalPty(args, () => this.opts))
   }
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.

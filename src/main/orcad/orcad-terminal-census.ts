@@ -1,3 +1,5 @@
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { orcadRestartWorkAdmission } from './orcad-restart-work-admission'
 /** The terminal census a managed orcad reports to the client planning an update or stop. */
 import {
   countInProcessFallbackTerminals,
@@ -36,6 +38,7 @@ export async function collectOrcadTerminalCensus(
   const [protocol] = protocols
   return {
     liveSessions: sessions.length + inProcess,
+    chatWork: (getStructuredAgentSessionHost()?.restartWorkCount() ?? 0) + orcadRestartWorkAdmission.pending,
     // In-process terminals carry no creation time to compare against activation.
     startedSinceActivation:
       timestampsKnown && inProcess === 0

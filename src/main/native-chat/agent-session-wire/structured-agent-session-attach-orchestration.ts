@@ -1,3 +1,4 @@
+import { structuredAgentSessionRestartRefusal } from './structured-agent-session-restart-admission'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 // The host's attach, lifted out of the host class.
 //
@@ -110,6 +111,10 @@ async function runAttach(
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionAttachOptions
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  const updating = structuredAgentSessionRestartRefusal()
+  if (updating) {
+    return updating
+  }
   // Begun first, so a close or Stop during any phase below still stops the start.
   const acquire = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
   try {

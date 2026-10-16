@@ -1,3 +1,4 @@
+import { nextSendableQueuedCard } from '../agent-session-journal/queued-message-pause'
 // The one thing that puts an idle agent to rest.
 //
 // Nothing a viewer does keeps an agent alive or starts one: a chat on screen and a chat in a
@@ -100,6 +101,28 @@ export class StructuredAgentSessionIdleSweep {
     }
   }
 
+  /** Uses the same owed-work predicate as idle eviction, including work waiting for a child. */
+  restartWorkCount(): number {
+    return [...this.deps.sessions].filter(([id, session]) =>
+      this.owesRestartWork(id, session)
+    ).length
+  }
+
+  /** Release idle children inside their session lock without waiting for the cache TTL. */
+  async drainForRestart(): Promise<void> {
+    await Promise.all([...this.deps.sessions.keys()].map((id) =>
+      this.deps.serialize(id, async () => {
+        const session = this.deps.sessions.get(id)
+        if (!session || this.owesRestartWork(id, session)) {
+          return
+        }
+        if (session.child) {
+          await this.deps.stopAgent(id)
+        }
+      })
+    ))
+  }
+
   /** One pass over every open conversation. Sessions run concurrently, so one waiting behind a
    *  locked start does not hold up the rest; a pass still running skips the next. */
   async tick(): Promise<void> {
@@ -151,6 +174,13 @@ export class StructuredAgentSessionIdleSweep {
       await this.deps.stopAgent(sessionId)
     }
     await this.deps.closeConversation(sessionId)
+  }
+
+  private owesRestartWork(id: string, session: StructuredAgentSessionHostSession): boolean {
+    const queue = session.journal.queuedMessages
+    return nextSendableQueuedCard(queue.pauses(), queue.list()) !== null ||
+      session.child?.phase === 'starting' || this.queuedOrDelivering(id, session) ||
+      this.deps.hasOpenDispatch(id) || (session.child !== null && this.owesWork(id, session))
   }
 
   private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {

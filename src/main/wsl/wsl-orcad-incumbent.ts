@@ -16,6 +16,11 @@ import type { OrcadRemoteContext } from '../ssh/orcad-remote-context'
 import type { OrcadSlotOptions } from '../ssh/orcad-recovery-slot'
 import { readRemoteOrcadBuildHash } from '../ssh/orcad-remote-build-hash'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
+import {
+  orcadRestartAdmissionPort,
+  type OrcadIncumbentConnector,
+  type OrcadRestartAdmissionPort
+} from '../ssh/orcad-restart-admission-client'
 import { tunneledOrcadPairingCode } from '../ssh/orcad-tunneled-pairing'
 import type { StartedPortForward } from '../ssh/ssh-port-forward-provider'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
@@ -26,8 +31,10 @@ export type WslOrcadIncumbent = {
   census: OrcadTerminalCensus
   /** The incumbent's proven readiness; null when it could not be started or proven. */
   readiness: ServeReadiness | null
-  /** Counts again (no wake) just before activation stops the incumbent; null without readiness. */
-  recount: (() => Promise<OrcadTerminalCensus>) | null
+  /** Reserves its restart over a fresh bridge (no wake) under the fence; null without readiness. */
+  restartAdmission: OrcadRestartAdmissionPort | null
+  /** Fresh proof for explicit Force on a host that predates restart admission. */
+  recount?: () => Promise<OrcadTerminalCensus>
 }
 
 const UNVERIFIABLE: OrcadTerminalCensus = {
@@ -46,6 +53,7 @@ export type WslOrcadIncumbentDependencies = {
     target: WslOrcadHostTarget
   ) => Promise<StartedPortForward>
   census: typeof requestOrcadTerminalCensus
+  restartAdmission: typeof orcadRestartAdmissionPort
 }
 
 const DEFAULT_DEPENDENCIES: WslOrcadIncumbentDependencies = {
@@ -59,7 +67,8 @@ const DEFAULT_DEPENDENCIES: WslOrcadIncumbentDependencies = {
       localPort: 0,
       label: `Orca server in WSL: ${target.label} (update check)`
     }),
-  census: requestOrcadTerminalCensus
+  census: requestOrcadTerminalCensus,
+  restartAdmission: orcadRestartAdmissionPort
 }
 
 /**
@@ -76,7 +85,7 @@ export async function readWslOrcadIncumbent(
   const record = args.context.activationRecord
   const activatedAt = record.activatedAt ? Date.parse(record.activatedAt) : Number.NaN
   if (!record.active || !Number.isFinite(activatedAt) || activatedAt < 0) {
-    return { census: UNVERIFIABLE, readiness: null, recount: null }
+    return { census: UNVERIFIABLE, readiness: null, restartAdmission: null }
   }
   let readiness: ServeReadiness
   try {
@@ -93,43 +102,44 @@ export async function readWslOrcadIncumbent(
         }
       )
     } else {
-      return { census: UNVERIFIABLE, readiness: null, recount: null }
+      return { census: UNVERIFIABLE, readiness: null, restartAdmission: null }
     }
   } catch {
-    return { census: UNVERIFIABLE, readiness: null, recount: null }
+    return { census: UNVERIFIABLE, readiness: null, restartAdmission: null }
   }
-  const recount = (): Promise<OrcadTerminalCensus> =>
-    countIncumbentTerminals(args, readiness, activatedAt, dependencies)
-  return { census: await recount(), readiness, recount }
+  const connect = incumbentConnector(args, readiness, dependencies)
+  // Why release: finished automation shells would otherwise defer every update, as on SSH.
+  const census = await connect((connection) =>
+    dependencies.census(connection, activatedAt, undefined, {
+      releaseFinishedAutomationTerminals: true
+    })
+  ).catch(() => UNVERIFIABLE)
+  return {
+    census,
+    readiness,
+    recount: () => connect((connection) => dependencies.census(connection, activatedAt)),
+    restartAdmission: dependencies.restartAdmission(connect, activatedAt)
+  }
 }
 
-async function countIncumbentTerminals(
+/** One request per bridge, closed before returning: a WSL deploy holds no standing tunnel. */
+function incumbentConnector(
   args: { context: OrcadRemoteContext<WslOrcadHostTarget>; slot: OrcadSlotOptions },
   readiness: ServeReadiness,
-  activatedAt: number,
   dependencies: WslOrcadIncumbentDependencies
-): Promise<OrcadTerminalCensus> {
-  let forward: StartedPortForward | null = null
-  try {
-    forward = await dependencies.listen(
-      args.slot.conn,
-      orcadBoundPort(readiness) ?? ORCAD_MANAGED_REMOTE_PORT,
-      args.context.target
+): OrcadIncumbentConnector {
+  const port = orcadBoundPort(readiness) ?? ORCAD_MANAGED_REMOTE_PORT
+  return (run) =>
+    dependencies.listen(args.slot.conn, port, args.context.target).then((forward) =>
+      Promise.resolve()
+        .then(() => {
+          const code = tunneledOrcadPairingCode(readiness, forward.entry.localPort)
+          const offer = parsePairingCode(code)
+          if (!offer) {
+            throw new Error('The Orca server in WSL did not offer a pairing for its bridge.')
+          }
+          return run(pairedRuntimeConnectionFromOffer(offer))
+        })
+        .finally(() => forward.close().catch(() => {}))
     )
-    const offer = parsePairingCode(tunneledOrcadPairingCode(readiness, forward.entry.localPort))
-    if (!offer) {
-      return UNVERIFIABLE
-    }
-    // Why release: finished automation shells would otherwise defer every update, as on SSH.
-    return await dependencies.census(
-      pairedRuntimeConnectionFromOffer(offer),
-      activatedAt,
-      undefined,
-      { releaseFinishedAutomationTerminals: true }
-    )
-  } catch {
-    return UNVERIFIABLE
-  } finally {
-    await forward?.close().catch(() => {})
-  }
 }

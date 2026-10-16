@@ -12627,6 +12627,7 @@
             "refresh": "Refresh status",
             "migration": "Migration: {{phase}}",
             "update": "Update",
+            "forceUpdateStopChats": "Force update and stop chats",
             "rollback": "Roll back",
             "recover": "Recover",
             "cancelStop": "Cancel stop",
@@ -12713,6 +12714,10 @@
           },
           "loadFailed": "Orca couldn’t load SSH hosts and unfinished moves. Reopen Settings to try again.",
           "outcome": {
+            "chatWorkRunning": "Chats on this server still have work to finish. Let them finish or respond to their prompts, then choose Update or reconnect to retry.",
+            "chatWorkUnverifiable": "Orca couldn’t confirm whether chats on this server have finished. Choose Update or reconnect when the server is reachable.",
+            "restartNotReserved": "The server couldn’t prepare a safe restart. Choose Update or reconnect to retry.",
+            "legacyHost": "On older servers that cannot check for running chats, Force update stops any running chat. Finish chats first; you can continue an interrupted chat after the update.",
             "activeServer": "Not done: this server is the default host for new projects. Choose another one in Advanced before stopping it.",
             "live": "Not done: terminals on this server are still running. Close them and try again.",
             "unverifiable": "Not done: Orca couldn’t confirm what is running on this server. Try again when the host is reachable.",
@@ -12871,6 +12876,7 @@
           "connect": "Connect",
           "remove": "Remove",
           "forceUpdate": "Force update",
+          "forceUpdateStopChats": "Force update and stop chats",
           "turnOn": "Turn on in Experimental"
         },
         "restartServer": {

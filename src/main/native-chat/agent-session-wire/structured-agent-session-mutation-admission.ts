@@ -1,3 +1,4 @@
+import { structuredAgentSessionRestartRefusal } from './structured-agent-session-restart-admission'
 // The one route every mutating agent-session call takes: recompute the fingerprint,
 // accept a plan that declares a command receipt through it, otherwise admit
 // through the ledger and check the lease. Methods cannot grow their own admission rules.
@@ -91,6 +92,10 @@ export type AgentSessionMutationRequest<TValue> = {
 export async function admitAndRunAgentSessionMutation<TValue>(
   request: AgentSessionMutationRequest<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
+  const updating = structuredAgentSessionRestartRefusal()
+  if (updating) {
+    return updating
+  }
   const { plan, envelope } = request
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: plan.method,

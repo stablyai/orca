@@ -74,7 +74,8 @@ const slot = {
 const census = {
   liveSessions: 0,
   startedSinceActivation: 0,
-  daemonProtocolVersion: 3
+  daemonProtocolVersion: 3,
+  chatWork: 0
 }
 
 const deploy = (): Promise<unknown> =>
@@ -82,7 +83,8 @@ const deploy = (): Promise<unknown> =>
     ...slot,
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc',
-    census
+    census,
+    restartAdmission: host.restartAdmission(OLD)
   })
 const deployFromNewerApp = (): Promise<unknown> =>
   deployOrcad({
@@ -90,6 +92,7 @@ const deployFromNewerApp = (): Promise<unknown> =>
     localOrcadDir: '/local/out/orcad',
     target: 'linux-x64-glibc',
     census,
+    restartAdmission: host.restartAdmission(OLD),
     appVersion: '1.9.0'
   })
 const rollback = (): Promise<unknown> =>
@@ -255,7 +258,8 @@ describe('recovery refusals keep the fence', () => {
       activeVersion: NEW
     })
     expect(host.data).toBe(data)
-    expect(host.commands.filter((command) => command.includes('kill -TERM'))).toHaveLength(1)
+    // The incumbent ended itself through its reservation, and recovery never signals the candidate.
+    expect(host.commands.filter((command) => command.includes('kill -TERM'))).toHaveLength(0)
     expectExactlyTheRecordedSlot()
     expect(host.record).toContain(`"previous": "${OLD}"`)
   })

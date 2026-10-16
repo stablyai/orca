@@ -52,9 +52,11 @@ import {
 } from './orcad-recovery-slot'
 import { orcadSnapshotPath } from './orcad-incumbent-recovery'
 import {
+  commitIncumbentRestart,
+  reserveIncumbentRestart,
   restartAfterSnapshotFailure,
   restoreAfterRejectedCandidate,
-  stopTransactionIncumbent
+  type OrcadIncumbentRestart
 } from './orcad-transaction-incumbent'
 import { withOrcadLogTail } from './orcad-remote-log-tail'
 import { orcadCandidateLaunchFailureCode } from '../orcad/orcad-host-unavailable'
@@ -164,17 +166,17 @@ export async function activateInstalledOrcad(
   }
 
   // Last check before anything stops: the census above may predate a long upload.
-  if (incumbent && options.recountCensus && countedLockedRecord(options, record)) {
-    const recount = planOrcadUpdate({
+  let restart: (OrcadIncumbentRestart & { incumbent: OrcadSlotIdentity }) | null = null
+  if (incumbent) {
+    const reserved = await reserveIncumbentRestart(options, {
       record,
       candidateVersion: fullVersion,
-      census: await options.recountCensus(),
-      candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
-      ...(options.force !== undefined ? { force: options.force } : {})
+      counted: countedLockedRecord(options, record)
     })
-    if (recount.action === 'defer') {
-      return notActivated(recount.code, recount.reason)
+    if (reserved.action === 'defer') {
+      return notActivated(reserved.code, reserved.reason)
     }
+    restart = { ...reserved, incumbent }
   }
 
   const startedAt = now()
@@ -186,19 +188,35 @@ export async function activateInstalledOrcad(
     snapshotDirName: orcadSnapshotDirName(fullVersion, startedAt.getTime()),
     now: startedAt
   })
-  await writeOrcadActivationTransaction(options, transaction)
+  try {
+    await writeOrcadActivationTransaction(options, transaction)
+  } catch (error) {
+    if (restart?.kind === 'host') {
+      await restart.admission.release(restart.token)
+    }
+    throw error
+  }
   lock.retainOnError()
   // Past the first mutation a cancel would strand a stopped host, so the run finishes or rolls back.
   options = withoutAbortSignal(options)
 
-  const unstopped = incumbent ? await stopTransactionIncumbent(options, incumbent, lock) : null
-  if (unstopped) {
-    return notActivated(
-      'orcad_outgoing_stop_incomplete',
-      `${unstopped} No snapshot was taken and the candidate was not started. Orca requires ` +
-        'matching runtime readiness before signaling an incumbent and confirmed exit before ' +
-        'snapshotting.'
-    )
+  // Only after the journal is durable: from the commit on, the incumbent may already be exiting.
+  if (restart) {
+    const ended = await commitIncumbentRestart(options, restart.incumbent, lock, restart)
+    if (ended.outcome === 'refused') {
+      return notActivated(
+        'orcad_update_restart_not_reserved',
+        `New work started on orcad ${restart.incumbent.version} before it could restart, so ` +
+          'it kept serving. Once that work finishes, retry the update or reconnect.'
+      )
+    }
+    if (ended.outcome === 'unconfirmed') {
+      return notActivated(
+        'orcad_outgoing_stop_incomplete',
+        `${ended.reason} No snapshot was taken and the candidate was not started. Orca requires ` +
+          'confirmed exit before snapshotting.'
+      )
+    }
   }
   transaction = withOrcadActivationIncumbentStopped(transaction, now())
   await writeOrcadActivationTransaction(options, transaction)

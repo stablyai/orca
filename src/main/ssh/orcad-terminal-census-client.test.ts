@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
+import {
+  ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY,
+  ORCAD_RESTART_ADMISSION_RUNTIME_CAPABILITY
+} from '../../shared/orcad-runtime-capabilities'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
@@ -70,17 +73,24 @@ describe('managed orcad terminal census client', () => {
       validate({ ok: true, result: { capabilities: [ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY] } })
       return { ok: true, result: census }
     })
-    await expect(collect(active)).resolves.toEqual(census)
+    await expect(collect(active)).resolves.toEqual({ ...census, restartAdmissionSupported: false })
     expect(order).toEqual(['wake', 'census'])
   })
 
   it('asks an advertising host with the activation time', async () => {
     answerWith([ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY], { ok: true, result: census })
-    await expect(collect(active)).resolves.toEqual(census)
+    await expect(collect(active)).resolves.toEqual({ ...census, restartAdmissionSupported: false })
     expect(mocks.send.mock.calls[0]?.slice(1, 3)).toEqual([
       'orcad.terminalCensus',
       { activatedAt: Date.parse(active.activatedAt) }
     ])
+  })
+
+  it('derives restart support from successful status, overriding census payload claims', async () => {
+    answerWith([ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY, ORCAD_RESTART_ADMISSION_RUNTIME_CAPABILITY], {
+      ok: true, result: { ...census, restartAdmissionSupported: false }
+    })
+    await expect(collect(active)).resolves.toEqual({ ...census, restartAdmissionSupported: true })
   })
 
   it.each([

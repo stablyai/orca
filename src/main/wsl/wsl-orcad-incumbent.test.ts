@@ -6,6 +6,10 @@ import type { OrcadRemoteContext } from '../ssh/orcad-remote-context'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import type { StartedPortForward } from '../ssh/ssh-port-forward-provider'
+import type {
+  OrcadIncumbentConnector,
+  OrcadRestartAdmissionPort
+} from '../ssh/orcad-restart-admission-client'
 import { readWslOrcadIncumbent, type WslOrcadIncumbentDependencies } from './wsl-orcad-incumbent'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
@@ -90,6 +94,15 @@ function dependencies(overrides: Partial<WslOrcadIncumbentDependencies> = {}) {
       } as unknown as StartedPortForward
     }),
     census: vi.fn(async () => LIVE),
+    // Each reservation call reports which bridge endpoint it reached.
+    restartAdmission: vi.fn(
+      (connect: OrcadIncumbentConnector): OrcadRestartAdmissionPort => ({
+        reserve: () =>
+          connect(async (connection) => ({ status: 'defer', reason: connection.endpoint })),
+        commit: async () => 'refused',
+        release: async () => {}
+      })
+    ),
     ...overrides
   }
   return { deps, close }
@@ -116,11 +129,14 @@ describe('readWslOrcadIncumbent', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('recounts over a fresh bridge without waking anything again', async () => {
+  it('reserves the restart over a fresh bridge without waking anything again', async () => {
     const { deps, close } = dependencies()
     const incumbent = await readWslOrcadIncumbent({ context: context(), slot }, deps)
-    vi.mocked(deps.census).mockResolvedValueOnce({ ...LIVE, liveSessions: 3 })
-    await expect(incumbent.recount?.()).resolves.toMatchObject({ liveSessions: 3 })
+    const reserved = await incumbent.restartAdmission?.reserve(false)
+    expect(reserved).toMatchObject({ reason: expect.stringMatching(/^ws:\/\/127\.0\.0\.1:51000/u) })
+    expect(vi.mocked(deps.restartAdmission).mock.calls[0]?.[1]).toBe(
+      Date.parse('2026-10-12T01:00:00.000Z')
+    )
     expect(deps.wake).toHaveBeenCalledTimes(1)
     expect(deps.listen).toHaveBeenCalledTimes(2)
     expect(close).toHaveBeenCalledTimes(2)
@@ -153,7 +169,7 @@ describe('readWslOrcadIncumbent', () => {
     await expect(readWslOrcadIncumbent({ context: context(), slot }, deps)).resolves.toEqual({
       census: UNVERIFIABLE,
       readiness: null,
-      recount: null
+      restartAdmission: null
     })
     expect(deps.listen).not.toHaveBeenCalled()
   })
@@ -176,7 +192,7 @@ describe('readWslOrcadIncumbent', () => {
     await expect(readWslOrcadIncumbent({ context: context(null), slot }, deps)).resolves.toEqual({
       census: UNVERIFIABLE,
       readiness: null,
-      recount: null
+      restartAdmission: null
     })
     expect(deps.wake).not.toHaveBeenCalled()
   })

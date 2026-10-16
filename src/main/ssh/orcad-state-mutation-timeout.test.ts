@@ -66,9 +66,20 @@ const slot = {
   sleep: async () => {},
   now: () => new Date('2026-02-02T00:00:00.000Z')
 }
-const census = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
+const census = {
+  liveSessions: 0,
+  startedSinceActivation: 0,
+  daemonProtocolVersion: 3,
+  chatWork: 0
+}
 const deploy = (): Promise<unknown> =>
-  deployOrcad({ ...slot, localOrcadDir: '/local/out/orcad', target: 'linux-x64-glibc', census })
+  deployOrcad({
+    ...slot,
+    localOrcadDir: '/local/out/orcad',
+    target: 'linux-x64-glibc',
+    census,
+    restartAdmission: host.restartAdmission(OLD)
+  })
 const rollback = (): Promise<unknown> =>
   rollbackOrcad({
     ...slot,

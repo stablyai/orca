@@ -15,6 +15,7 @@ import { readOrcadActivationRecord } from './orcad-activation-record-store'
 import type { OrcadActivationRecord } from './orcad-activation-record'
 import type { OrcadActivationVerdict } from './orcad-activation-gate'
 import type { OrcadTerminalCensus } from './orcad-update-plan'
+import type { OrcadRestartAdmissionPort } from './orcad-restart-admission-client'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { installOrcadBundle } from './orcad-remote-install'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -58,9 +59,11 @@ export type OrcadDeployOptions = {
    */
   censusRecord?: OrcadActivationRecord
   /**
-   * Counts again under the fence just before the incumbent stops, so a terminal opened during
-   * the upload still defers the update. Called only while the incumbent is the one counted.
+   * The counted incumbent's restart admission. Its reservation recounts under the fence after the
+   * upload, so work started meanwhile still defers; without it an active incumbent never restarts.
    */
+  restartAdmission?: OrcadRestartAdmissionPort
+  /** Explicit Force bootstrap only: positively identify an older host again before its stop. */
   recountCensus?: () => Promise<OrcadTerminalCensus>
   force?: boolean
   /** The Orca app version activating, recorded so an older client never downgrades the host. */

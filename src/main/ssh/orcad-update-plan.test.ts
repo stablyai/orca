@@ -69,7 +69,12 @@ describe('planOrcadUpdate', () => {
       candidateDaemonProtocol: PROTOCOL,
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: null, startedSinceActivation: null, daemonProtocolVersion: 3 },
+      census: {
+        liveSessions: null,
+        startedSinceActivation: null,
+        daemonProtocolVersion: 3,
+        chatWork: 0
+      },
       force: true
     })
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
@@ -80,10 +85,36 @@ describe('planOrcadUpdate', () => {
       candidateDaemonProtocol: PROTOCOL,
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: 2, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+      census: { liveSessions: 2, startedSinceActivation: 0, daemonProtocolVersion: 3, chatWork: 0 },
       force: true
     })
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
+  })
+
+  // Force is consent to a mixed daemon pair, not to ending a chat turn; silence is not zero.
+  it.each([
+    [undefined, 'orcad_update_chat_work_unverifiable'],
+    [null, 'orcad_update_chat_work_unverifiable'],
+    [1, 'orcad_update_chat_work_running']
+  ] as const)('defers on chat work %s even when forced over idle terminals', (chatWork, code) => {
+    const census = { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
+    const plan = planOrcadUpdate({
+      candidateDaemonProtocol: PROTOCOL,
+      record: record(),
+      candidateVersion: '0.3.0+cc01',
+      census: chatWork === undefined ? census : { ...census, chatWork },
+      force: true
+    })
+    expect(plan).toMatchObject({ action: 'defer', code })
+    // A first install has no running server whose chats it could end.
+    expect(
+      planOrcadUpdate({
+        candidateDaemonProtocol: PROTOCOL,
+        record: record({ active: null }),
+        candidateVersion: '0.3.0+cc01',
+        census
+      })
+    ).toMatchObject({ action: 'proceed' })
   })
 
   it.each([false, true])(
@@ -138,7 +169,7 @@ describe('planOrcadUpdate', () => {
       candidateDaemonProtocol: PROTOCOL,
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 }
+      census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3, chatWork: 0 }
     })
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: false })
   })
@@ -245,7 +276,8 @@ describe('D7 daemon protocol crossing', () => {
   const census = (daemonProtocolVersion: number | null, liveSessions: number | null = 2) => ({
     liveSessions,
     startedSinceActivation: 0,
-    daemonProtocolVersion
+    daemonProtocolVersion,
+    chatWork: 0
   })
 
   it.each([false, true])(

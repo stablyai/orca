@@ -1,3 +1,4 @@
+import type { OrcadRestartAdmissionResult } from '../../shared/orcad-restart-admission'
 // WSL via orcad against real WSL2 distros (step C10): deploy and launch (C4), connect over the
 // wsl.exe stdio bridge (C5), drive runtime RPC through it, and prove liveness (C6) on one
 // systemd-off and one systemd-on distro. Two phases, each its own process, so the holder is
@@ -406,7 +407,21 @@ async function updatePhase(distro: string): Promise<Receipt> {
     await runInTerminal(connection, created.terminal.handle, ':', `terminal in ${distro}`)
     return created.terminal.handle
   }
+  const idle = await requestOrcadTerminalCensus(pairedConnection(before), 0)
+  expect(idle).toMatchObject({ liveSessions: 0, chatWork: 0 })
+  const reserved = await rpc<OrcadRestartAdmissionResult>(before, 'orcad.restartAdmission', {
+    action: 'reserve', activatedAt: 0
+  })
+  expect(reserved.status).toBe('reserved')
+  expect(reserved.token).toBeTypeOf('string')
+  // New work supersedes an update reservation; its later commit cannot stop this server.
   const terminal = await openTerminal(before)
+  const superseded = await rpc<OrcadRestartAdmissionResult>(before, 'orcad.restartAdmission', {
+    action: 'commit', token: reserved.token
+  })
+  expect(superseded.status).toBe('defer')
+  await rpc(before, 'status.get')
+  result.restartAdmission = { idle, reserved: reserved.status, superseded: superseded.status }
 
   // A live terminal: the incumbent keeps serving and the update waits, forceably.
   templates.set(key, nextTemplate('n1'))

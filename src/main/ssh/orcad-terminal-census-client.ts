@@ -2,7 +2,10 @@
  * Asks a managed orcad, through its tunnel, how many terminals its daemon runs. Every failure,
  * including an older host without the method, reads as an unverifiable census, never as zero.
  */
-import { ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
+import {
+  ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY,
+  ORCAD_RESTART_ADMISSION_RUNTIME_CAPABILITY
+} from '../../shared/orcad-runtime-capabilities'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
 import {
@@ -18,6 +21,10 @@ import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote
 import type { OrcadActivationRecord } from './orcad-activation-record'
 import { ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from './orcad-managed-serving-verify'
+import {
+  orcadRestartAdmissionPort,
+  type OrcadRestartAdmissionPort
+} from './orcad-restart-admission-client'
 
 const UNVERIFIABLE: OrcadTerminalCensus = {
   liveSessions: null,
@@ -58,6 +65,25 @@ export async function collectManagedTerminalCensus(
   }
 }
 
+/** The update's restart admission through the same ensured tunnel; null without an active slot. */
+export function managedOrcadRestartAdmission(
+  userDataPath: string,
+  environment: KnownRuntimeEnvironment,
+  record: OrcadActivationRecord
+): OrcadRestartAdmissionPort | null {
+  const activatedAt = record.activatedAt ? Date.parse(record.activatedAt) : Number.NaN
+  if (!record.active || !Number.isFinite(activatedAt) || activatedAt < 0) {
+    return null
+  }
+  return orcadRestartAdmissionPort(
+    (run) =>
+      ensureOrcadManagedTunnel(userDataPath, environment.id).then(() =>
+        run(getPreferredPairedRuntimeConnection(environment))
+      ),
+    activatedAt
+  )
+}
+
 /** The census over an already-open connection; any failure is unverifiable, never zero. */
 export async function requestOrcadTerminalCensus(
   connection: PairedRuntimeConnection,
@@ -65,6 +91,7 @@ export async function requestOrcadTerminalCensus(
   timeoutMs = 15_000,
   options: { releaseFinishedAutomationTerminals?: boolean } = {}
 ): Promise<OrcadTerminalCensus> {
+  let restartAdmissionSupported: boolean | undefined
   try {
     const response = await sendRemoteRuntimeRequestWithStatusPreflight<unknown>(
       connection,
@@ -83,11 +110,20 @@ export async function requestOrcadTerminalCensus(
         ) {
           throw new Error('The managed Orca server does not report a terminal census.')
         }
+        restartAdmissionSupported = status.result.capabilities.includes(
+          ORCAD_RESTART_ADMISSION_RUNTIME_CAPABILITY
+        )
       },
       undefined,
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
-    return response.ok ? OrcadTerminalCensusSchema.parse(response.result) : UNVERIFIABLE
+    if (!response.ok) {
+      return UNVERIFIABLE
+    }
+    return {
+      ...OrcadTerminalCensusSchema.parse(response.result),
+      restartAdmissionSupported
+    }
   } catch {
     return UNVERIFIABLE
   }

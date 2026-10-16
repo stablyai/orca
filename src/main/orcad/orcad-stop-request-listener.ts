@@ -94,6 +94,8 @@ export function installOrcadStopRequestListeners(
     managedStop?: OrcadManagedStopContext
     /** Runs once for a validated managed request before the stop; it cannot prevent it. */
     beforeManagedStop?: (request: OrcadManagedStopRequest) => Promise<void>
+    /** Legacy updates use the plain slot file; explicit managed stops remain unconditional. */
+    restartSlot?: () => Promise<void>
     pollIntervalMs?: number
   }
 ): OrcadStopRequestListener {
@@ -110,6 +112,12 @@ export function installOrcadStopRequestListeners(
       join(options.installRoot, ORCAD_STOP_REQUEST_FILENAME),
       (path) => {
         unlinkSync(path)
+        if (options.restartSlot) {
+          void options.restartSlot().catch((error: unknown) =>
+            console.error('[orcad] slot restart admission failed:', error)
+          )
+          return null
+        }
         return true
       },
       () => onRequest(),

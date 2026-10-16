@@ -147,8 +147,7 @@ export function managedOrcadDeployPolicy(
   }
 }
 
-// Why only this code: deploy never has a session count to force past, so forcing an unknown
-// census lands on the daemon-protocol deferral, which force cannot clear.
+// Unknown contact never authorizes Force; a proven older host can use its existing stop path.
 export function isForceableOrcadDeferral(code: string): boolean {
-  return code === 'orcad_update_terminals_running'
+  return code === 'orcad_update_terminals_running' || code === 'orcad_update_legacy_host'
 }

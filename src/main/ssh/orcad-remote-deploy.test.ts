@@ -121,11 +121,19 @@ type HostScript = {
   candidateStopResult?: string
   readinessAtMs?: number
   orcadLog?: string
+  /** Set once the incumbent accepted its restart, until it is launched again. */
+  incumbentExited?: boolean
 }
 
+let currentScript: HostScript | null = null
+
 function scriptHost(script: HostScript): void {
+  currentScript = script
   mockExec.mockImplementation(async (_conn, command: string) => {
     const text = String(command)
+    if (text.includes('orcad_reused') && text.includes(OLD_VERSION)) {
+      return script.incumbentExited ? 'DEAD' : ''
+    }
     if (text.startsWith('tail -c')) {
       return script.orcadLog ?? ''
     }
@@ -166,6 +174,9 @@ function scriptHost(script: HostScript): void {
       )
     }
     if (text.includes('nohup')) {
+      if (!text.includes(NEW_VERSION)) {
+        script.incumbentExited = false
+      }
       script.log.push(`launch:${text.includes(NEW_VERSION) ? NEW_VERSION : OLD_VERSION}`)
       return '9999'
     }
@@ -185,6 +196,28 @@ function scriptHost(script: HostScript): void {
   })
 }
 
+const IDLE_CENSUS = {
+  liveSessions: 0,
+  startedSinceActivation: 0,
+  daemonProtocolVersion: 3,
+  chatWork: 0
+}
+
+/** The incumbent's admission; its commit ends the incumbent as its own shutdown would. */
+function restartAdmission() {
+  return {
+    reserve: vi.fn(async () => ({ status: 'reserved' as const, token: 'r1', census: IDLE_CENSUS })),
+    commit: vi.fn(async () => {
+      if (currentScript) {
+        currentScript.log.push('commit')
+        currentScript.incumbentExited = true
+      }
+      return 'committed' as const
+    }),
+    release: vi.fn(async () => {})
+  }
+}
+
 function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOptions {
   return {
     conn: Object.create(null),
@@ -196,7 +229,8 @@ function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOption
     userDataDir: '/home/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0, daemonProtocolVersion: 3 },
+    census: IDLE_CENSUS,
+    restartAdmission: restartAdmission(),
     readinessTimeoutMs: 50,
     sleep: async () => {},
     now: () => new Date('2026-02-02T00:00:00.000Z'),
@@ -616,7 +650,7 @@ describe('deployOrcad', () => {
     })
   })
 
-  it('stops the incumbent before snapshotting, so SQLite WAL files are quiescent', async () => {
+  it('ends the incumbent before snapshotting, so SQLite WAL files are quiescent', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
       readiness: { [NEW_VERSION]: readyLine({}) },
@@ -626,29 +660,10 @@ describe('deployOrcad', () => {
     await deployOrcad(options())
     expect(script.log.indexOf('snapshot')).toBeGreaterThan(-1)
     expect(script.log.indexOf('snapshot')).toBeLessThan(script.log.indexOf(`launch:${NEW_VERSION}`))
-    expect(script.log.indexOf(`stop:${OLD_VERSION}`)).toBeLessThan(script.log.indexOf('snapshot'))
+    expect(script.log.indexOf('commit')).toBeLessThan(script.log.indexOf('snapshot'))
   })
 
-  it('defers on a recount just before the stop when a terminal opened during the upload', async () => {
-    const script: HostScript = {
-      activationRecord: ACTIVE_OLD,
-      readiness: { [NEW_VERSION]: readyLine({}) },
-      log: []
-    }
-    scriptHost(script)
-    const recountCensus = vi.fn(async () => ({
-      liveSessions: 1,
-      startedSinceActivation: 1,
-      daemonProtocolVersion: 3
-    }))
-    expect(
-      await deployOrcad(options({ censusRecord: JSON.parse(ACTIVE_OLD), recountCensus }))
-    ).toMatchObject({ outcome: 'installed-not-activated', code: 'orcad_update_terminals_running' })
-    expect(recountCensus).toHaveBeenCalledTimes(1)
-    expect(script.log).toEqual(['preflight'])
-  })
-
-  it('never recounts an incumbent other than the one it counted', async () => {
+  it('never reserves an incumbent other than the one it counted', async () => {
     const script: HostScript = {
       activationRecord: ACTIVE_OLD,
       readiness: { [NEW_VERSION]: readyLine({}) },
@@ -660,9 +675,11 @@ describe('deployOrcad', () => {
     vi.mocked(uploadRelayDirectory).mockImplementationOnce(async () => {
       script.activationRecord = JSON.stringify(peer)
     })
-    const recountCensus = vi.fn()
-    await deployOrcad(options({ censusRecord: counted, admitRecord: () => null, recountCensus }))
-    expect(recountCensus).not.toHaveBeenCalled()
+    const admission = restartAdmission()
+    await deployOrcad(
+      options({ censusRecord: counted, admitRecord: () => null, restartAdmission: admission })
+    )
+    expect(admission.reserve).not.toHaveBeenCalled()
   })
 
   it('installs but does not activate when terminals are running', async () => {
@@ -719,7 +736,7 @@ describe('deployOrcad', () => {
     expect(result).toMatchObject({ outcome: 'installed-not-activated' })
     expect(script.log).toEqual([
       'preflight',
-      `stop:${OLD_VERSION}`,
+      'commit',
       'snapshot',
       `launch:${NEW_VERSION}`,
       `stop:${NEW_VERSION}`,
@@ -747,7 +764,7 @@ describe('deployOrcad', () => {
       expect(result).toMatchObject({ outcome: 'installed-not-activated' })
       expect(script.log).toEqual([
         'preflight',
-        `stop:${OLD_VERSION}`,
+        'commit',
         'snapshot',
         `launch:${NEW_VERSION}`,
         `stop:${NEW_VERSION}`,
@@ -777,7 +794,7 @@ describe('deployOrcad', () => {
     await expect(deployOrcad(options())).rejects.toThrow('incumbent was stopped')
     expect(script.log).toEqual([
       'preflight',
-      `stop:${OLD_VERSION}`,
+      'commit',
       'snapshot',
       `launch:${OLD_VERSION}`
     ])
@@ -798,7 +815,7 @@ describe('deployOrcad', () => {
 
       expect(script.log).toEqual([
         'preflight',
-        `stop:${OLD_VERSION}`,
+        'commit',
         'snapshot',
         `launch:${NEW_VERSION}`,
         `stop:${NEW_VERSION}`

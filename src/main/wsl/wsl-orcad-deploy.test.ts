@@ -318,6 +318,12 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
   })
 
   it('plans the update on the census the running orcad reports, not an unknown one', async () => {
+    const restartAdmission = { reserve: vi.fn(), commit: vi.fn(), release: vi.fn() }
+    mocks.incumbent.mockResolvedValueOnce({
+      census: LIVE,
+      readiness: INCUMBENT_READINESS,
+      restartAdmission
+    })
     mocks.deploy.mockResolvedValueOnce({
       outcome: 'installed-and-activated',
       fullVersion: '1.5.0+ab',
@@ -330,7 +336,23 @@ describe('deployAndLaunchWslOrcad across an app update (E1)', () => {
     expect(mocks.incumbent).toHaveBeenCalledTimes(1)
     expect(mocks.deploy.mock.calls[0][0]).toMatchObject({
       census: LIVE,
-      censusRecord: activeOld
+      censusRecord: activeOld,
+      restartAdmission
+    })
+  })
+
+  // Q5: owed chat work defers like terminals do, but Force cannot end a chat turn.
+  it('keeps the incumbent serving while its chats still owe work', async () => {
+    mocks.deploy.mockResolvedValueOnce({
+      outcome: 'installed-not-activated',
+      fullVersion: '1.5.0+ab',
+      code: 'orcad_update_chat_work_running',
+      reason: '1 chat has work still owed'
+    })
+    await expect(launch()).resolves.toMatchObject({
+      outcome: 'ready',
+      fullVersion: '1.4.0+aa',
+      deferredUpdate: { code: 'orcad_update_chat_work_running', forceable: false }
     })
   })
 

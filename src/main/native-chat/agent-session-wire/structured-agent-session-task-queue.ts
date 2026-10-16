@@ -1,3 +1,4 @@
+import { orcadRestartWorkAdmission } from '../../orcad/orcad-restart-work-admission'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 
 export class StructuredAgentSessionTaskQueue {
@@ -5,7 +6,7 @@ export class StructuredAgentSessionTaskQueue {
   private readonly attaching = new Set<Promise<unknown>>()
 
   serialize<T>(sessionId: string, task: () => Promise<T>): Promise<T> {
-    return runKeyedSerializedOperation(this.chains, sessionId, task)
+    return orcadRestartWorkAdmission.track(() => runKeyedSerializedOperation(this.chains, sessionId, task))
   }
 
   trackAttach<T>(operation: Promise<T>): Promise<T> {

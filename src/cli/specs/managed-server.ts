@@ -21,7 +21,7 @@ export const MANAGED_SERVER_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca environment update --environment <selector> [--force] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'force'],
     notes: [
-      'Without --force, an update that would restart over running terminals is deferred and reported, not applied.',
+      'Without --force, updates defer over running terminals or when chat work cannot be checked. On older servers that cannot check chats, --force stops running chats; finish them first and continue interrupted chats after updating. Servers that can check chats still protect unfinished chat work, even with --force.',
       SELECTOR_NOTE,
       DESKTOP_NOTE
     ],
