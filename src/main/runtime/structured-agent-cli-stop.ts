@@ -12,6 +12,14 @@ import {
 } from '../pty-descendant-termination'
 import { DESCENDANT_KILL_VERIFY_MS } from '../pty-descendant-exit-verification'
 import { matchStructuredAgentCliSourceRow } from '../native-chat/structured-agent-cli-source'
+import {
+  isWindowsProcessStartTimeAvailable,
+  readWindowsProcessIdentityTableFresh
+} from '../windows/windows-process-table'
+import {
+  windowsProcessStartTime,
+  type PtyJobTerminationReport
+} from '../windows/windows-pty-job-termination-report'
 
 export type CliSourceStopHost = {
   rows: () => AgentStatusIpcPayload[]
@@ -21,6 +29,8 @@ export type CliSourceStopHost = {
   shellForeground: (ptyId: string) => Promise<boolean>
   rootPid: (ptyId: string) => Promise<number | null>
   stop: (workspaceId: string, ptyId: string) => Promise<{ postStopVerified: boolean }>
+  /** Windows: ends the pane's job on its owner and lists every member it ended. */
+  terminateJobAndReport: (ptyId: string) => Promise<PtyJobTerminationReport>
 }
 
 export type CliSourceStopRequest = {
@@ -108,8 +118,12 @@ export async function captureCliSourceProcessIdentities(
     throw unconfirmed()
   }
   if (process.platform === 'win32') {
-    // Why: job membership is daemon-owned; a root-only table cannot prove completeness.
-    throw unconfirmed()
+    // Why: only the job lists detached members, so reading it and ending it is one owner-side step.
+    const report = await host.terminateJobAndReport(ptyId).catch(() => null)
+    if (!report?.terminated) {
+      throw unconfirmed()
+    }
+    return report.identities.map(({ pid, startTime }) => ({ pid, platform: 'win32', startTime }))
   }
   const snapshot = await captureDescendantSnapshot(rootPid)
   if (!snapshot?.root || snapshot.rootPgid === null) {
@@ -128,13 +142,14 @@ export async function captureCliSourceProcessIdentities(
 
 /** Fresh whole-host rows keep reparented descendants probeable after the PTY closes. */
 export async function probeCliSourceSurvivors(
-  survivors: readonly AgentProcessIdentity[]
+  survivors: readonly AgentProcessIdentity[],
+  platform: NodeJS.Platform = process.platform
 ): Promise<AgentProcessIdentity[]> {
   if (survivors.length === 0) {
     return []
   }
-  if (process.platform === 'win32') {
-    return [...survivors]
+  if (platform === 'win32') {
+    return probeWindowsCliSourceSurvivors(survivors)
   }
   const table = await readProcessTableBeforeDeadline(readProcessTable, DESCENDANT_SNAPSHOT_TIMEOUT_MS)
   if (!table) {
@@ -142,8 +157,32 @@ export async function probeCliSourceSurvivors(
   }
   const byPid = new Map(table.rows.map((row) => [row.pid, row.startedAt]))
   return survivors.filter((identity) =>
-    identity.platform !== process.platform || byPid.get(identity.pid) === identity.startTime
+    identity.platform !== platform || byPid.get(identity.pid) === identity.startTime
   )
+}
+
+async function probeWindowsCliSourceSurvivors(
+  survivors: readonly AgentProcessIdentity[]
+): Promise<AgentProcessIdentity[]> {
+  const table = isWindowsProcessStartTimeAvailable()
+    ? await readWindowsProcessIdentityTableFresh().catch(() => null)
+    : null
+  if (!table) {
+    return [...survivors]
+  }
+  const byPid = new Map(table.map((row) => [row.pid, row]))
+  return survivors.filter((identity) => {
+    if (identity.platform !== 'win32') {
+      return true
+    }
+    const row = byPid.get(identity.pid)
+    // A row without a creation time can't rule out the same process, so it stays a survivor.
+    return (
+      row !== undefined &&
+      (row.creationTimeMs === undefined ||
+        windowsProcessStartTime(row.creationTimeMs) === identity.startTime)
+    )
+  })
 }
 
 export async function stopCliSourceAndJudge(
@@ -152,7 +191,14 @@ export async function stopCliSourceAndJudge(
   ptyId: string,
   identities: readonly AgentProcessIdentity[]
 ): Promise<AgentProcessIdentity[]> {
-  const stopped = await host.stop(workspaceId, ptyId).catch(() => ({ postStopVerified: false }))
+  const stopped = await host.stop(workspaceId, ptyId).catch((error: unknown) => ({
+    // Why: on Windows the capture already ended the pane's whole job, so a pane already gone
+    // is that stop; the survivor probe below still has to prove every member exited.
+    postStopVerified:
+      process.platform === 'win32' &&
+      error instanceof Error &&
+      error.message === 'terminal_stop_pty_set_mismatch'
+  }))
   const deadline = Date.now() + DESCENDANT_KILL_VERIFY_MS
   let survivors = await probeCliSourceSurvivors(identities)
   while (survivors.length > 0 && Date.now() < deadline) {

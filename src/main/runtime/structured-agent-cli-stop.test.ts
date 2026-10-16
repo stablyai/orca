@@ -1,10 +1,17 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { CliSourceStopHost } from './structured-agent-cli-stop'
+import type * as WindowsProcessTable from '../windows/windows-process-table'
 
 const processTable = vi.hoisted(() => ({
   read: vi.fn(),
-  capture: vi.fn()
+  capture: vi.fn(),
+  readWindows: vi.fn()
+}))
+vi.mock('../windows/windows-process-table', async (load) => ({
+  ...await load<typeof WindowsProcessTable>(),
+  isWindowsProcessStartTimeAvailable: () => true,
+  readWindowsProcessIdentityTableFresh: processTable.readWindows
 }))
 vi.mock('../pty-descendant-termination', () => ({
   DESCENDANT_SNAPSHOT_TIMEOUT_MS: 1_000,
@@ -46,7 +53,8 @@ function host(rows: AgentStatusIpcPayload[]): CliSourceStopHost {
     presence: async () => 'live',
     shellForeground: async () => false,
     rootPid: async () => 123,
-    stop: async () => ({ postStopVerified: true })
+    stop: async () => ({ postStopVerified: true }),
+    terminateJobAndReport: async () => ({ terminated: false })
   }
 }
 
@@ -103,4 +111,18 @@ it('re-probes the captured identity after its child re-parents away from the PTY
   expect(await probeCliSourceSurvivors(captured)).toEqual([])
   processTable.read.mockRejectedValue(new Error('table unreadable'))
   expect(await probeCliSourceSurvivors(captured)).toEqual(captured)
+})
+
+it('judges Windows survivors by creation time, keeping rows it cannot prove', async () => {
+  const survivors = [1, 2, 3, 4].map((pid) => ({
+    pid, platform: 'win32' as const, startTime: String(pid * 1000)
+  }))
+  processTable.readWindows.mockResolvedValue([
+    { pid: 1, ppid: 0, name: 'pwsh.exe', creationTimeMs: 1000 },
+    { pid: 2, ppid: 0, name: 'reused.exe', creationTimeMs: 9999 },
+    { pid: 3, ppid: 0, name: 'claude.exe' }
+  ])
+  expect(await probeCliSourceSurvivors(survivors, 'win32')).toEqual([survivors[0], survivors[2]])
+  processTable.readWindows.mockRejectedValue(new Error('table unreadable'))
+  expect(await probeCliSourceSurvivors(survivors, 'win32')).toEqual(survivors)
 })

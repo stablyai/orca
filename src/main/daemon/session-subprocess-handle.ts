@@ -2,6 +2,7 @@ import type { PtyChildProcessVerdict } from '../../shared/terminal-process-inspe
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
+import type { PtyJobTerminationReport } from '../windows/windows-pty-job-termination-report'
 
 export type SubprocessHandle = {
   pid: number
@@ -41,6 +42,8 @@ export type SubprocessHandle = {
    * `terminated`, so callers must fall back rather than assume the tree is gone.
    */
   terminateOwnedTree(): JobTerminationOutcome
+  /** Windows only: ends the pty's job and lists every member it ended. */
+  terminatePtyJobAndReport?(options: { wslDistro: string | null }): Promise<PtyJobTerminationReport>
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number, cause?: TerminalExitCause) => void): void

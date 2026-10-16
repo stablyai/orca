@@ -22,3 +22,7 @@ export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & 
     steadyState?: boolean
   }
 }
+
+export type TerminatePtyJobAndReportRequest = Omit<GetForegroundProcessRequest, 'type'> & {
+  type: 'terminatePtyJobAndReport'
+}

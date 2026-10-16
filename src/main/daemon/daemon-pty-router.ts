@@ -231,6 +231,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return (await this.adapterFor(id).confirmShellForeground?.(id)) ?? false
   }
 
+  terminatePtyJobAndReport(id: string) {
+    return this.adapterFor(id).terminatePtyJobAndReport(id)
+  }
+
   async serialize(ids: string[]): Promise<string> {
     return this.current.serialize(ids)
   }

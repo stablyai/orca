@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, PROTOCOL_VERSION } from './types'
+import {
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  PROTOCOL_VERSION,
+  TERMINATE_PTY_JOB_AND_REPORT_PROTOCOL_VERSION
+} from './types'
 
 type ClientInternals = {
   client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
@@ -75,4 +79,18 @@ describe('steadyState across daemon versions', () => {
     expect(request).toHaveBeenCalledWith('getForegroundProcess', { sessionId: 'sess-a' })
     adapter.dispose()
   })
+})
+
+it('never asks a daemon older than the job report to end a job', async () => {
+  const reply = { terminated: true, identities: [{ pid: 10, startTime: '1000' }] }
+  const request = vi.fn(async () => reply)
+  const oldAdapter = createAdapter(TERMINATE_PTY_JOB_AND_REPORT_PROTOCOL_VERSION - 1, request)
+  await expect(oldAdapter.terminatePtyJobAndReport('sess-a')).resolves.toEqual({
+    terminated: false
+  })
+  expect(request).not.toHaveBeenCalled()
+  const adapter = createAdapter(TERMINATE_PTY_JOB_AND_REPORT_PROTOCOL_VERSION, request)
+  await expect(adapter.terminatePtyJobAndReport('sess-a')).resolves.toEqual(reply)
+  oldAdapter.dispose()
+  adapter.dispose()
 })

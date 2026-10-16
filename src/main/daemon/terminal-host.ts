@@ -25,10 +25,14 @@ import {
   confirmTerminalHostShellForeground,
   getSettledTerminalHostSnapshot,
   getTerminalHostAppliedSize,
+  getTerminalHostForegroundProcess,
   getTerminalHostPartialEscapeTail,
   getTerminalHostSnapshot,
-  takeTerminalHostPendingOutput
+  hasLiveTerminalHostSessions,
+  takeTerminalHostPendingOutput,
+  terminateTerminalHostPtyJob
 } from './terminal-host-session-inspection-operations'
+import type { PtyJobTerminationReport } from '../windows/windows-pty-job-termination-report'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
@@ -218,13 +222,8 @@ export class TerminalHost {
     )
   }
 
-  // Why: null-not-throw — fetched for the tab-bar icon, so a vanished pane should quietly yield "no agent".
   getForegroundProcess(sessionId: string): string | null {
-    const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return null
-    }
-    return session.getForegroundProcess()
+    return getTerminalHostForegroundProcess(this.sessions.get(sessionId))
   }
 
   inspectProcess(
@@ -258,6 +257,10 @@ export class TerminalHost {
 
   async confirmForegroundProcess(sessionId: string): Promise<string | null> {
     return confirmTerminalHostForegroundProcess(this.sessions.get(sessionId))
+  }
+
+  terminatePtyJobAndReport(sessionId: string): Promise<PtyJobTerminationReport> {
+    return terminateTerminalHostPtyJob(this.sessions.get(sessionId))
   }
 
   async confirmShellForeground(sessionId: string): Promise<boolean> {
@@ -314,12 +317,7 @@ export class TerminalHost {
   }
 
   hasLiveSessions(): boolean {
-    let hasLive = false
-    // Read every Session, even after a live one, to preserve the inventory's error order.
-    for (const session of this.sessions.values()) {
-      hasLive = session.isAlive || hasLive
-    }
-    return hasLive
+    return hasLiveTerminalHostSessions(this.sessions.values())
   }
 
   dispose(): Promise<void> {

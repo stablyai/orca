@@ -41,7 +41,8 @@ const sourceHost: CliStop.CliSourceStopHost = {
   presence: async () => 'live',
   shellForeground: async () => false,
   rootPid: async () => 4321,
-  stop: async () => ({ postStopVerified: true })
+  stop: async () => ({ postStopVerified: true }),
+  terminateJobAndReport: async () => ({ terminated: false })
 }
 const cliSourceStop = {
   host: sourceHost,
@@ -80,7 +81,7 @@ async function adoptedParams() {
   })
 }
 
-it.skipIf(process.platform === 'win32')('reserves and saves identities before stop, then imports after exit', async () => {
+it('reserves and saves identities before stop, then imports after exit', async () => {
   const params = await adoptedParams()
   stop.judge.mockImplementation(async () => {
     expect(rig.store.getRecord(HOST_TEST_SESSION)?.adoptionSurvivors).toEqual([identity])
@@ -97,7 +98,7 @@ it.skipIf(process.platform === 'win32')('reserves and saves identities before st
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
 })
 
-it.skipIf(process.platform === 'win32')('keeps an unproven writer across replay and later re-probes it', async () => {
+it('keeps an unproven writer across replay and later re-probes it', async () => {
   const params = await adoptedParams()
   stop.judge.mockResolvedValue([identity])
   expect(await rig.host.create(CREATE_TEST_CALLER, params, { cliSourceStop })).toMatchObject({

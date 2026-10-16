@@ -5,6 +5,7 @@ import { forceKillPosixPtyProcessGroups } from '../../pty/posix-pty-process-grou
 import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
 import { readPtsName } from '../../pty/node-pty-pts-name'
 import { terminatePtyJob } from '../../windows/windows-pty-job'
+import { terminatePtyJobAndReport } from '../../windows/windows-pty-job-termination-report'
 import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
@@ -71,7 +72,11 @@ export function createDaemonPtySubprocessHandle(args: {
     pid: proc.pid,
     processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
     ...(process.platform === 'win32'
-      ? { inspectChildProcesses: () => inspectSpawnFileWindowsChildProcesses(proc) }
+      ? {
+          inspectChildProcesses: () => inspectSpawnFileWindowsChildProcesses(proc),
+          terminatePtyJobAndReport: (options: { wslDistro: string | null }) =>
+            terminatePtyJobAndReport(proc, options)
+        }
       : {}),
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,

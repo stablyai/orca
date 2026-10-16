@@ -4,6 +4,11 @@ import type * as pty from 'node-pty'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { ptyShellProcessId } from '../windows/windows-pty-job'
+import {
+  terminatePtyJobAndReport,
+  type PtyJobTerminationReport
+} from '../windows/windows-pty-job-termination-report'
+import { PTY_JOB_NOT_TERMINATED } from './pty-job-termination-report-validation'
 import { isWslAvailableAsync } from '../wsl'
 import { resolveGitBashPath } from '../git-bash'
 import { resolveProcessCwd } from './process-cwd'
@@ -174,4 +179,13 @@ export function onLocalPtyExit(callback: ExitCallback): () => void {
 
 export function getLocalPtyProcess(id: string): pty.IPty | undefined {
   return ptyProcesses.get(id)
+}
+
+export async function terminateLocalPtyJobAndReport(id: string): Promise<PtyJobTerminationReport> {
+  const proc = ptyProcesses.get(id)
+  // Why: only a pane recorded as native (null distro) is known not to run a WSL guest.
+  if (!proc || !ptyWslDistroById.has(id) || ptyWslDistroById.get(id) !== null) {
+    return PTY_JOB_NOT_TERMINATED
+  }
+  return terminatePtyJobAndReport(proc, { wslDistro: null })
 }

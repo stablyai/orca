@@ -22,6 +22,7 @@ import type {
   PtySpawnResult
 } from '../providers/pty-provider-contract'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { PtyJobTerminationReport } from '../windows/windows-pty-job-termination-report'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
@@ -143,6 +144,8 @@ export type RuntimePtyController = {
   ): Promise<PtyProcessInspection>
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>
+  /** Windows: the PTY's owner ends its job and lists every member it ended. */
+  terminatePtyJobAndReport?(ptyId: string): Promise<PtyJobTerminationReport>
   hasChildProcesses?(ptyId: string): Promise<boolean>
   clearBuffer?(ptyId: string): Promise<void>
   resetInputModes?(ptyId: string): Promise<void>

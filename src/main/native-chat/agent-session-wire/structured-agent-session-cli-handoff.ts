@@ -36,12 +36,6 @@ export async function stopCliSourceBeforeAdoption(input: {
       : { providerSessionId: source.resumeFrom.providerSessionId },
     workspaceId: source.workspaceId
   })
-  // Why: the complete ConPTY job tree is daemon-owned and not yet available to this host.
-  if (pane && process.platform === 'win32') {
-    throw agentSessionRefusalError('agent_session_conflict', {
-      reason: 'conversationHeldElsewhere'
-    })
-  }
   await store.founding.reserveAdoption(request)
   input.onReserved()
   if (priorSurvivors !== undefined) {

@@ -4,6 +4,7 @@ import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-li
 import { structuredAgentRuntimeRegistration } from '../structured-agent-runtime-registrations'
 import type { CliSourceStopHost } from '../structured-agent-cli-stop'
 import type { OrcaRuntimeWithStopExactTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop-targets'
+import { PTY_JOB_NOT_TERMINATED } from '../../providers/pty-job-termination-report-validation'
 
 /** Host-side terminal facts and agent account selection for chat adoption. */
 export abstract class OrcaRuntimeWithStructuredSessionCliSourceHost extends OrcaRuntimeWithGetWorktreePs {
@@ -27,7 +28,10 @@ export abstract class OrcaRuntimeWithStructuredSessionCliSourceHost extends Orca
       },
       stop: (workspaceId, ptyId) => this.stopExactTerminalsForWorktree(
         `id:${workspaceId}`, [ptyId], { targetOnly: true, keepHistory: false }
-      )
+      ),
+      terminateJobAndReport: (ptyId) =>
+        this.ptyController?.terminatePtyJobAndReport?.(ptyId) ??
+        Promise.resolve(PTY_JOB_NOT_TERMINATED)
     }
   }
 

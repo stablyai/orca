@@ -28,7 +28,8 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 }))
 vi.mock('../windows/windows-process-table', () => ({
   readWindowsProcessIdentityTable: readWindows,
-  readWindowsProcessIdentityTableFresh: readWindows
+  readWindowsProcessIdentityTableFresh: readWindows,
+  isWindowsProcessStartTimeAvailable: () => true
 }))
 vi.mock('../providers/windows-agent-foreground-process', () => ({
   shouldInspectWindowsAgentForeground: () => true,

@@ -6,7 +6,6 @@ import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
 import type { SubprocessHandle } from './session-subprocess-handle'
-import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
@@ -135,9 +134,9 @@ export class Session {
     return this.subprocess.pid
   }
 
-  /** Terminate this session's pty job object. `unavailable` is not proof of death. */
-  terminateOwnedTree(): JobTerminationOutcome {
-    return this.subprocess.terminateOwnedTree()
+  /** This session's pty job object. An `unavailable` termination is not proof of death. */
+  get job(): Pick<SubprocessHandle, 'terminateOwnedTree' | 'terminatePtyJobAndReport'> {
+    return this.subprocess
   }
 
   write(data: string): void {

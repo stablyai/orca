@@ -14,6 +14,7 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { PtyJobTerminationReport } from '../windows/windows-pty-job-termination-report'
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
@@ -246,6 +247,8 @@ export type IPtyProvider = {
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
   confirmShellForeground?: (id: string) => Promise<boolean>
+  /** Windows: the PTY's owner ends its job and lists every member it ended. */
+  terminatePtyJobAndReport?: (id: string) => Promise<PtyJobTerminationReport>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.

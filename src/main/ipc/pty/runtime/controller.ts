@@ -29,6 +29,7 @@ import {
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
   serializeProviderBufferFromRuntimeController,
+  terminatePtyJobAndReportFromRuntimeController,
   waitForRendererSerializerFromRuntimeController,
   writePtyFromRuntimeController
 } from './operations'
@@ -69,6 +70,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
+    terminatePtyJobAndReport: (ptyId) => terminatePtyJobAndReportFromRuntimeController(ptyId),
     getCwd: (ptyId) => getCwdFromRuntimeController(ptyId),
     hasChildProcesses: (ptyId) => hasChildProcessesFromRuntimeController(ptyId),
     clearBuffer: (ptyId) => clearBufferFromRuntimeController(deps, ptyId),

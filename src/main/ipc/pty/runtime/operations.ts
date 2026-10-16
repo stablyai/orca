@@ -7,6 +7,10 @@ import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import {
+  PTY_JOB_NOT_TERMINATED,
+  validatePtyJobTerminationReport
+} from '../../../providers/pty-job-termination-report-validation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import {
   writeRefused,
@@ -175,6 +179,15 @@ export async function confirmShellForegroundFromRuntimeController(ptyId: string)
     return (await getProviderForPty(ptyId).confirmShellForeground?.(ptyId)) ?? false
   } catch {
     return false
+  }
+}
+
+export async function terminatePtyJobAndReportFromRuntimeController(ptyId: string) {
+  try {
+    const reply = await getProviderForPty(ptyId).terminatePtyJobAndReport?.(ptyId)
+    return validatePtyJobTerminationReport(reply)
+  } catch {
+    return PTY_JOB_NOT_TERMINATED
   }
 }
 

@@ -48,6 +48,7 @@ import {
   resizeLocalPty,
   resumeLocalPtyProducer,
   sendLocalPtySignal,
+  terminateLocalPtyJobAndReport,
   writeLocalPty
 } from './local-pty-session-operations'
 import { spawnLocalPty } from './local-pty-spawn'
@@ -173,6 +174,10 @@ export class LocalPtyProvider implements IPtyProvider {
 
   confirmShellForeground(id: string): Promise<boolean> {
     return confirmLocalPtyShellForeground(id)
+  }
+
+  terminatePtyJobAndReport(id: string) {
+    return terminateLocalPtyJobAndReport(id)
   }
 
   async serialize(_ids: string[]): Promise<string> {

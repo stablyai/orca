@@ -20,6 +20,7 @@ import {
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import { PTY_JOB_NOT_TERMINATED } from '../providers/pty-job-termination-report-validation'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
@@ -200,6 +201,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   async confirmShellForeground(id: string): Promise<boolean> {
     return (await this.providerFor(id).confirmShellForeground?.(id)) ?? false
   }
+  terminatePtyJobAndReport = async (id: string) =>
+    (await this.providerFor(id).terminatePtyJobAndReport?.(id)) ?? PTY_JOB_NOT_TERMINATED
 
   async serialize(ids: string[]): Promise<string> {
     return this.fallback.serialize(ids)
@@ -216,9 +219,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return results.flat()
   }
 
-  async getDefaultShell(): Promise<string> {
-    return this.fallback.getDefaultShell()
-  }
+  getDefaultShell = async (): Promise<string> => this.fallback.getDefaultShell()
 
   async getProfiles(): Promise<{ name: string; path: string }[]> {
     return this.fallback.getProfiles()

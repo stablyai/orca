@@ -1,4 +1,3 @@
-import { performance } from 'node:perf_hooks'
 import { setPtyOwnerHostColors } from '../../shared/pty-owner-color-query-colors'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -6,7 +5,7 @@ import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations
 import type { DaemonServerLifecycle } from './daemon-server-lifecycle'
 import type { DaemonSessionAttachments } from './daemon-session-attachments'
 import type { DaemonSessionBackgroundRouting } from './daemon-session-background-routing'
-import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
+import { readDaemonSessionSnapshot } from './daemon-snapshot-request'
 import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { DaemonHealthRequests } from './daemon-health-requests'
@@ -134,6 +133,8 @@ export class DaemonRequestRouter {
         return {
           confirmed: await this.options.host.confirmShellForeground(request.payload.sessionId)
         }
+      case 'terminatePtyJobAndReport':
+        return this.options.host.terminatePtyJobAndReport(request.payload.sessionId)
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
         return {}
@@ -145,7 +146,11 @@ export class DaemonRequestRouter {
       case 'shutdownIfIdle':
         return this.shutdownIfIdle(clientId, request.id)
       case 'getSnapshot':
-        return this.getSnapshot(request.payload.sessionId, request.payload.scrollbackRows)
+        return readDaemonSessionSnapshot(
+          this.options.host,
+          request.payload.sessionId,
+          request.payload.scrollbackRows
+        )
       case 'getSize':
         return { size: this.options.host.getAppliedSize(request.payload.sessionId) }
       case 'takePendingOutput':
@@ -238,23 +243,6 @@ export class DaemonRequestRouter {
       this.options.lifecycle.retireAfterIdleReply(clientId, requestId, client.controlSocket)
     }
     return { retiring }
-  }
-
-  private async getSnapshot(sessionId: string, requestedRows: unknown): Promise<unknown> {
-    const startedAt = performance.now()
-    const scrollbackRows =
-      typeof requestedRows === 'number' && Number.isFinite(requestedRows)
-        ? Math.max(0, Math.min(50_000, Math.floor(requestedRows)))
-        : undefined
-    const snapshot = await this.options.host.getSettledSnapshot(sessionId, { scrollbackRows })
-    const snapshotMs = performance.now() - startedAt
-    if (snapshotMs >= 25) {
-      recordDaemonStreamBacklogEvent('slowGetSnapshot', {
-        sessionIdSuffix: sessionId.slice(-10),
-        snapshotMs: Math.round(snapshotMs)
-      })
-    }
-    return { snapshot }
   }
 
   private async shutdown(

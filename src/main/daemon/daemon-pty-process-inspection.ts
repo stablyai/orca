@@ -4,11 +4,17 @@ import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import {
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+  TERMINATE_PTY_JOB_AND_REPORT_PROTOCOL_VERSION,
   type ListSessionsResult,
   type SessionInfo
 } from './types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
+import type { PtyJobTerminationReport } from '../windows/windows-pty-job-termination-report'
+import {
+  PTY_JOB_NOT_TERMINATED,
+  validatePtyJobTerminationReport
+} from '../providers/pty-job-termination-report-validation'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
   // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
@@ -77,6 +83,20 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       return result.foregroundProcess
     } catch {
       return null
+    }
+  }
+
+  // Why no request: an older daemon cannot end the job, so it can never prove the stop.
+  async terminatePtyJobAndReport(id: string): Promise<PtyJobTerminationReport> {
+    if (this.protocolVersion < TERMINATE_PTY_JOB_AND_REPORT_PROTOCOL_VERSION) {
+      return PTY_JOB_NOT_TERMINATED
+    }
+    try {
+      return validatePtyJobTerminationReport(
+        await this.client.request<unknown>('terminatePtyJobAndReport', { sessionId: id })
+      )
+    } catch {
+      return PTY_JOB_NOT_TERMINATED
     }
   }
 
