@@ -249,17 +249,22 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
             : {})
         })
       }
+      // Why: a window notifier only renames the open tab. The session alias still
+      // has to be stored, or Agent History loses the name after the tab closes.
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
           this.rememberManualTerminalTitle(leaf.tabId, normalizedTitle)
+          this.persistHeadlessTerminalTitle(pty.pty.worktreeId, leaf.tabId, normalizedTitle)
+          this.rememberTerminalSessionTitle(leaf.tabId, handle, normalizedTitle)
           this.notifier?.renameTerminal(leaf.tabId, normalizedTitle)
           return { handle, tabId: leaf.tabId, title: normalizedTitle }
         }
       }
       // A notifier can exist before its pane graph; retain the rename on the known tab.
-      if (this.notifier?.renameTerminal && tabId) {
+      if (tabId) {
         this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, normalizedTitle)
-        this.notifier.renameTerminal(tabId, normalizedTitle)
+        this.rememberTerminalSessionTitle(tabId, handle, normalizedTitle)
+        this.notifier?.renameTerminal(tabId, normalizedTitle)
       }
       return { handle, tabId, title: normalizedTitle }
     }
@@ -272,7 +277,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       boundPty.titleUpdatedAt = Date.now()
       this.touchMobileSessionSnapshotsForPty(boundPty.ptyId)
     }
+    this.rememberManualTerminalTitle(leaf.tabId, normalizedTitle)
     this.persistHeadlessTerminalTitle(leaf.worktreeId, leaf.tabId, normalizedTitle)
+    this.rememberTerminalSessionTitle(leaf.tabId, handle, normalizedTitle)
     this.notifier?.renameTerminal(leaf.tabId, normalizedTitle)
     this.touchMobileSessionTabsForWorktree(leaf.worktreeId, { immediate: true })
     return { handle, tabId: leaf.tabId, title: normalizedTitle }

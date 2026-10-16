@@ -40,7 +40,60 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
     })
   }
 
-  resolveSessionIdForTab(tabId: string): string | null {
+  readLiveTerminalCustomTitle(args: { tabId?: string; terminalHandle?: string }): string | null {
+    if (args.terminalHandle) {
+      const live = this.getLivePtyForHandle(args.terminalHandle)?.pty.customTitle?.trim()
+      if (live) {
+        return live
+      }
+      const record = this.handles.get(args.terminalHandle)
+      const recorded = record?.ptyId ? this.ptysById.get(record.ptyId)?.customTitle?.trim() : null
+      if (recorded) {
+        return recorded
+      }
+      const handleTab = record?.tabId ? this.tabs.get(record.tabId)?.customTitle?.trim() : null
+      if (handleTab) {
+        return handleTab
+      }
+    }
+    if (!args.tabId) {
+      return null
+    }
+    const tabTitle = this.tabs.get(args.tabId)?.customTitle?.trim()
+    if (tabTitle) {
+      return tabTitle
+    }
+    for (const pty of this.ptysById.values()) {
+      if (pty.tabId === args.tabId && pty.customTitle?.trim()) {
+        return pty.customTitle.trim()
+      }
+    }
+    for (const leaf of this.leaves.values()) {
+      if (leaf.tabId === args.tabId && leaf.ptyId) {
+        const title = this.ptysById.get(leaf.ptyId)?.customTitle?.trim()
+        if (title) {
+          return title
+        }
+      }
+    }
+    return null
+  }
+
+  protected rememberTerminalSessionTitle(
+    tabId: string | null | undefined,
+    handle: string | undefined,
+    title: string | null
+  ): void {
+    if (!tabId) {
+      return
+    }
+    const sessionId = this.resolveSessionIdForTab(tabId, handle)
+    if (sessionId) {
+      this.setSessionCustomTitle(sessionId, title)
+    }
+  }
+
+  resolveSessionIdForTab(tabId: string, handle?: string): string | null {
     const session = this.store?.getWorkspaceSession?.()
     if (session) {
       for (const tabs of Object.values(session.tabsByWorktree)) {
@@ -56,6 +109,36 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
             return unified.aiVaultTitle.sessionId
           }
         }
+      }
+    }
+    const paneKeys: string[] = []
+    for (const leaf of this.leaves.values()) {
+      if (leaf.tabId === tabId) {
+        paneKeys.push(this.makeRuntimePaneKey(leaf))
+      }
+    }
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      const matches =
+        (Boolean(handle) && entry.terminalHandle === handle) ||
+        entry.tabId === tabId ||
+        paneKeys.includes(entry.paneKey)
+      if (matches && entry.providerSession?.id) {
+        return entry.providerSession.id
+      }
+    }
+    for (const leaf of this.leaves.values()) {
+      if (leaf.tabId !== tabId || !leaf.ptyId) {
+        continue
+      }
+      const recorded = this.ptysById.get(leaf.ptyId)?.providerSessionId
+      if (recorded) {
+        return recorded
+      }
+    }
+    if (handle) {
+      const recorded = this.getLivePtyForHandle(handle)?.pty.providerSessionId
+      if (recorded) {
+        return recorded
       }
     }
     for (const leaf of this.leaves.values()) {

@@ -84,6 +84,27 @@ describe('the main-window agent-status listener', () => {
       'agentStatus:set:hook-pane'
     ])
   })
+
+  it('copies a live custom title onto a provider session the first time its id arrives', () => {
+    const setSessionCustomTitle = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The listener only reads these four runtime methods for the alias backfill.
+    mainProcessState.runtime = {
+      getSessionCustomTitle: () => null,
+      setSessionCustomTitle,
+      getAgentStatusOrchestrationContextForPaneKey: () => undefined,
+      getAgentStatusTerminalHandleForPaneKey: () => 'term-1',
+      readLiveTerminalCustomTitle: ({ tabId, terminalHandle }) =>
+        tabId === 'tab-1' && terminalHandle === 'term-1' ? 'Pinned alias' : null
+    } as unknown as typeof mainProcessState.runtime
+
+    hooks.listener!(
+      statusPayload({
+        providerSession: { key: 'session_id', id: 'sess-1' }
+      })
+    )
+
+    expect(setSessionCustomTitle).toHaveBeenCalledWith('sess-1', 'Pinned alias')
+  })
 })
 
 it('forwards retirement acknowledgement only on live status delivery', () => {

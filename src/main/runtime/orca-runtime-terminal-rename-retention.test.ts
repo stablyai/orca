@@ -11,6 +11,7 @@ import {
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 
 describe('terminal rename before renderer graph hydration', () => {
   it.each(['Media Engine Orch', null])(
@@ -91,24 +92,89 @@ describe('terminal rename before renderer graph hydration', () => {
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(runtimeStore.setWorkspaceSession).not.toHaveBeenCalled()
   })
+
+  it('stores the session alias while a desktop rename notifier is attached', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const rows: AgentStatusIpcPayload[] = []
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture store implements RuntimeStore; its mock typing drops callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore, undefined, {
+      getAgentStatusSnapshot: () => rows
+    })
+    runtime.setNotifier(notifier(() => {}))
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: 'alias-pty' })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    rows.push({
+      state: 'working',
+      prompt: '',
+      paneKey: created.paneKey ?? 'pane-key',
+      tabId: 'host-tab',
+      terminalHandle: created.handle,
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1,
+      providerSession: { key: 'session_id', id: 'sess-alias' }
+    })
+
+    await runtime.renameTerminal(created.handle, 'Alias')
+
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe('Alias')
+    expect(getSession().sessionCustomTitles?.['sess-alias']).toBe('Alias')
+    await runtime.renameTerminal(created.handle, null)
+    expect(getSession().sessionCustomTitles?.['sess-alias']).toBeUndefined()
+  })
+
+  it('restores a stored session title onto a resumed terminal that has none', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      sessionCustomTitles: { 'sess-kept': 'Kept name' }
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture store implements RuntimeStore; its mock typing drops callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: 'resume-pty' })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      sessionId: 'sess-kept'
+    })
+
+    expect(created.title).toBe('Kept name')
+    expect(runtime['ptysById'].get('resume-pty')?.customTitle).toBe('Kept name')
+    expect(runtime['ptysById'].get('resume-pty')?.providerSessionId).toBe('sess-kept')
+  })
 })
 
-describe('terminal view rename characterization', () => {
-  function notifier(renameTerminal: RuntimeNotifier['renameTerminal']): RuntimeNotifier {
-    return {
-      worktreesChanged() {},
-      reposChanged() {},
-      activateWorktree() {},
-      createTerminal() {},
-      splitTerminal() {},
-      renameTerminal,
-      focusTerminal() {},
-      closeTerminal() {},
-      sleepWorktree() {},
-      terminalFitOverrideChanged() {},
-      terminalDriverChanged() {}
-    }
+function notifier(renameTerminal: RuntimeNotifier['renameTerminal']): RuntimeNotifier {
+  return {
+    worktreesChanged() {},
+    reposChanged() {},
+    activateWorktree() {},
+    createTerminal() {},
+    splitTerminal() {},
+    renameTerminal,
+    focusTerminal() {},
+    closeTerminal() {},
+    sleepWorktree() {},
+    terminalFitOverrideChanged() {},
+    terminalDriverChanged() {}
   }
+}
+
+describe('terminal view rename characterization', () => {
   it('keeps rename persistence before the current notifier with its own receiver', async () => {
     const runtime = new OrcaRuntimeService()
     const pty = runtime['recordPtyWorktree']('rename-pty', 'folder-workspace', {

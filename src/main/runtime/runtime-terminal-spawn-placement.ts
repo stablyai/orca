@@ -1,6 +1,7 @@
 import type { TerminalPanePlacement } from '../../shared/terminal-pane-placement'
 import type { TerminalPaneSplitDirection } from '../../shared/terminal-tab-types'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-terminal-contracts'
+import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
 /**
  * A runtime-started tab opens in the group asked for, else the first group (as the live view). Its
@@ -26,6 +27,24 @@ export function newTabIn(opts: {
     placement: viewMode || title ? { kind: 'new-tab', row } : { kind: 'new-tab' },
     ...(targetGroupId ? { groupId: targetGroupId } : {})
   }
+}
+
+export function applyCreatedTerminalTitle(
+  pty: RuntimePtyWorktreeRecord,
+  requestedTitle: string | undefined,
+  sessionCustomTitle: (sessionId: string) => string | null
+): string | null {
+  const titled =
+    requestedTitle ||
+    (pty.providerSessionId ? sessionCustomTitle(pty.providerSessionId) : null) ||
+    null
+  pty.title = titled
+  if (!titled) {
+    pty.titleUpdatedAt = null
+    return null
+  }
+  pty.customTitle = titled
+  return titled
 }
 
 export function runtimeSplitPlacement(
