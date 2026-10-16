@@ -341,6 +341,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               autoComplete="off"
               keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
               returnKeyType="send"
+              multiline
+              textAlignVertical="top"
+              submitBehavior="submit"
               blurOnSubmit={false}
               // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
               editable={canCompose}
