@@ -4,13 +4,11 @@ import type {
 } from '../repositories/runtime-remote-fetch-controller'
 import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
-import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { GitPushTarget } from '../../../shared/worktree/types'
 import {
   persistRuntimeManagedWorktreeSortOrder,
-  updateRuntimeManagedWorktreeMetadata
+  updateRuntimeManagedWorktreeMetadata,
+  type ManagedWorktreeMetaUpdates
 } from './metadata/runtime-managed-worktree-metadata'
-import type { CrossStoreParentRef } from '../../../shared/worktree/lineage-types'
 import { RuntimeWorktreeReviewBase } from './metadata/runtime-worktree-review-base'
 import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
@@ -93,19 +91,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     })
   }
 
-  async updateManagedWorktreeMeta(
-    worktreeSelector: string,
-    updates: Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
-      pushTarget?: GitPushTarget | null
-      lineage?: {
-        parentWorktree?: string
-        matchFolderWorkspaces?: boolean
-        crossStoreParent?: CrossStoreParentRef
-        crossStoreParentIsBotHome?: true
-        noParent?: boolean
-      }
-    }
-  ) {
+  async updateManagedWorktreeMeta(worktreeSelector: string, updates: ManagedWorktreeMetaUpdates) {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
