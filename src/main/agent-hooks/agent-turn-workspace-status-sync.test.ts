@@ -10,7 +10,8 @@ import {
   DEFAULT_WORKSPACE_STATUS_ID,
   WORKSPACE_STATUS_IN_REVIEW_ID,
   WORKSPACE_STATUS_TODO_ID,
-  cloneDefaultWorkspaceStatuses
+  cloneDefaultWorkspaceStatuses,
+  getDefaultWorkspaceStatusId
 } from '../../shared/workspace-statuses'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { AgentTurnOutcome } from '../../shared/agent-turn-outcome'
@@ -201,6 +202,24 @@ describe('maybeSyncWorkspaceStatusOnAgentTurn', () => {
       statuses: cloneDefaultWorkspaceStatuses().filter((status) => status.id !== 'in-review')
     })
     expect(writes).toEqual([])
+  })
+
+  it('moves to In review from the resolved default column when In progress is removed', async () => {
+    const statuses = cloneDefaultWorkspaceStatuses().filter((status) => status.id !== 'in-progress')
+    const writes = await runTurn([{ rowState: 'working' }, { rowState: 'done' }], {
+      statuses,
+      current: getDefaultWorkspaceStatusId(statuses)
+    })
+    expect(writes).toEqual([[WORKTREE_ID, WORKSPACE_STATUS_IN_REVIEW_ID]])
+  })
+
+  it('returns a new turn to the resolved default column when In progress is removed', async () => {
+    const statuses = cloneDefaultWorkspaceStatuses().filter((status) => status.id !== 'in-progress')
+    const writes = await runTurn([{ rowState: 'done' }, { rowState: 'working' }], {
+      statuses,
+      current: WORKSPACE_STATUS_IN_REVIEW_ID
+    })
+    expect(writes).toEqual([[WORKTREE_ID, getDefaultWorkspaceStatusId(statuses)]])
   })
 
   it('stays put when the card is already in the column the edge would move it to', async () => {

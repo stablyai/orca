@@ -2,9 +2,9 @@ import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { AgentTurnOutcome } from '../../shared/agent-turn-outcome'
 import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../shared/worktree/types'
 import {
-  DEFAULT_WORKSPACE_STATUS_ID,
   WORKSPACE_STATUS_IN_REVIEW_ID,
   WORKSPACE_STATUS_TODO_ID,
+  getDefaultWorkspaceStatusId,
   isWorkspaceStatusId
 } from '../../shared/workspace-statuses'
 
@@ -148,7 +148,14 @@ async function moveToReview(
   if (otherPaneWorking) {
     return
   }
-  await moveCard(worktreeId, [DEFAULT_WORKSPACE_STATUS_ID], WORKSPACE_STATUS_IN_REVIEW_ID, deps)
+  // Why the resolved default, not the constant: a card with no explicit status shows
+  // getDefaultWorkspaceStatusId, which differs from 'in-progress' once the person removes that column.
+  await moveCard(
+    worktreeId,
+    [getDefaultWorkspaceStatusId(deps.getWorkspaceStatuses())],
+    WORKSPACE_STATUS_IN_REVIEW_ID,
+    deps
+  )
 }
 
 async function moveToProgress(
@@ -158,7 +165,7 @@ async function moveToProgress(
   await moveCard(
     worktreeId,
     [WORKSPACE_STATUS_IN_REVIEW_ID, WORKSPACE_STATUS_TODO_ID],
-    DEFAULT_WORKSPACE_STATUS_ID,
+    getDefaultWorkspaceStatusId(deps.getWorkspaceStatuses()),
     deps
   )
 }
