@@ -116,7 +116,9 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     const tab = this.tabs.get(leaf.tabId) ?? null
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
-    const title = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
+    const manualTitle = pty?.customTitle?.trim() || tab?.customTitle?.trim() || null
+    const liveTitle = getLatestLeafTitle(this.getLeafDisplayRecord(leaf), tab?.title ?? null)
+    const title = manualTitle ?? liveTitle
     // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
     // restored surface whose PTY died with a prior run still reads connected.
     // Demote only on a controller-proven absence, and only for locally-scoped
@@ -152,7 +154,7 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
       ...this.resolvePaneAgentIdentityField(
         pty?.launchAgent,
         pty?.foregroundAgent,
-        title,
+        liveTitle,
         isTerminalLeafId(leaf.leafId) ? makePaneKey(leaf.tabId, leaf.leafId) : null
       )
     }

@@ -96,6 +96,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   managementTitle: string | null
   managementTitleAt: number | null
   controllerTitle: string | null
+  customTitle?: string | null
   title: string | null
   titleUpdatedAt: number | null
   lastOutputAt: number | null

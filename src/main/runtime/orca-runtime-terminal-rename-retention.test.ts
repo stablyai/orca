@@ -10,6 +10,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
+import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 
 describe('terminal rename before renderer graph hydration', () => {
   it.each(['Media Engine Orch', null])(
@@ -419,4 +420,45 @@ describe('terminal query erased boundary regressions', () => {
     await expect(runtime.remove('ssh-host')).rejects.toThrow('PTY provider unavailable')
     expect(runtime.providerReads).not.toHaveBeenCalled()
   })
+
+  it('restores non-manual fallback title when clearing manual terminal title', () => {
+    const runtime = new OrcaRuntimeService(null)
+    const worktreeId = 'wt-1'
+    const tabId = 'tab-1'
+    runtime['tabs'].set(tabId, {
+      tabId,
+      worktreeId,
+      title: 'Original Title',
+      customTitle: null,
+      activeLeafId: null,
+      layout: null
+    })
+    runtime['mobileSessionTabsByWorktree'].set(worktreeId, {
+      worktree: worktreeId,
+      tabs: [
+        {
+          id: 'mob-tab-1',
+          type: 'terminal',
+          parentTabId: tabId,
+          title: 'Original Title',
+          customTitle: null
+        } as unknown as RuntimeMobileSessionTerminalTab
+      ],
+      groups: [],
+      generation: 1,
+      snapshotVersion: 1,
+      publicationEpoch: 'epoch'
+    })
+
+    runtime['persistHeadlessTerminalTitle'](worktreeId, tabId, 'Custom Title')
+    expect(runtime['tabs'].get(tabId)?.title).toBe('Custom Title')
+    expect(runtime['tabs'].get(tabId)?.customTitle).toBe('Custom Title')
+    expect(runtime['mobileSessionTabsByWorktree'].get(worktreeId)?.tabs[0].title).toBe('Custom Title')
+
+    runtime['persistHeadlessTerminalTitle'](worktreeId, tabId, null)
+    expect(runtime['tabs'].get(tabId)?.customTitle).toBeNull()
+    expect(runtime['tabs'].get(tabId)?.title).toBe('Terminal')
+    expect(runtime['mobileSessionTabsByWorktree'].get(worktreeId)?.tabs[0].title).toBe('Terminal')
+  })
 })
+

@@ -35,7 +35,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     scheduleDelayedAction,
     unsubscribeTerminal,
     subscribeToTerminal,
-    fetchTerminals
+    fetchTerminals,
+    fetchSessionTabs
   } = scope
   async function handleRenameTerminal(value: string) {
     if (!client || !renameTarget) {
@@ -59,7 +60,17 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           terminalsRef.current = next
           return next
         })
-        scheduleDelayedAction(() => void fetchTerminals(), 300)
+        const nextSessionTabs = sessionTabsRef.current.map((tab) =>
+          tab.type === 'terminal' && tab.terminal === target.handle
+            ? { ...tab, title: title || 'Terminal' }
+            : tab
+        )
+        sessionTabsRef.current = nextSessionTabs
+        setSessionTabs(nextSessionTabs)
+        scheduleDelayedAction(() => {
+          void fetchTerminals()
+          void fetchSessionTabs()
+        }, 300)
       }
     } catch {
       // Rename failed — refresh will restore the server title.

@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { View, Text, ScrollView, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -55,6 +56,8 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     scrollActiveTabIntoView,
     switchSessionTab,
     openSessionTabActionSheetAfterKeyboardDismiss,
+    setRenameTarget,
+    activeHandleRef,
     visibleTabs,
     showConnectionRetry,
     terminalSummary,
@@ -63,6 +66,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   } = controller
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
   const revealSidebar = useHostSidebarReveal()
+  const lastTabTapRef = useRef<{ id: string; time: number } | null>(null)
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>
       <View style={styles.sessionTopBar}>
@@ -168,7 +172,23 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                     scrollActiveTabIntoView(t.id, false)
                   }
                 }}
-                onPress={() => switchSessionTab(t)}
+                onPress={() => {
+                  const isDoubleTap =
+                    lastTabTapRef.current?.id === t.id &&
+                    Date.now() - lastTabTapRef.current.time < 350
+                  if (isDoubleTap && t.type === 'terminal' && typeof t.terminal === 'string') {
+                    lastTabTapRef.current = null
+                    triggerMediumImpact()
+                    setRenameTarget({
+                      handle: t.terminal,
+                      title: t.title,
+                      isActive: t.terminal === activeHandleRef.current
+                    })
+                    return
+                  }
+                  lastTabTapRef.current = { id: t.id, time: Date.now() }
+                  switchSessionTab(t)
+                }}
                 onLongPress={() => {
                   triggerMediumImpact()
                   openSessionTabActionSheetAfterKeyboardDismiss(t)

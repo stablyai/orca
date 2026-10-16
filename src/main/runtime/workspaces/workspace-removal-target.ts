@@ -220,36 +220,63 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
   }
 
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
+    const normalizedTitle = title?.trim() || null
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
-      pty.pty.title = title
+      pty.pty.customTitle = normalizedTitle
+      pty.pty.title = normalizedTitle
       // Why: a manual rename must outrank later agent OSC title updates (which
       // win by timestamp), so stamp it as the freshest title.
       pty.pty.titleUpdatedAt = Date.now()
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
+      const tabId = pty.pty.tabId ?? pty.record.tabId
+      if (tabId) {
+        const inMemoryTab = this.tabs.get(tabId)
+        if (inMemoryTab) {
+          inMemoryTab.customTitle = normalizedTitle
+          if (normalizedTitle !== null) {
+            inMemoryTab.title = normalizedTitle
+          }
+        }
+      }
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
       if (!this.notifier?.renameTerminal && pty.pty.tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, pty.pty.tabId, title)
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, pty.pty.tabId, normalizedTitle)
       }
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
-          this.notifier?.renameTerminal(leaf.tabId, title)
-          return { handle, tabId: leaf.tabId, title }
+          const inMemoryTab = this.tabs.get(leaf.tabId)
+          if (inMemoryTab) {
+            inMemoryTab.customTitle = normalizedTitle
+            if (normalizedTitle !== null) {
+              inMemoryTab.title = normalizedTitle
+            }
+          }
+          this.notifier?.renameTerminal(leaf.tabId, normalizedTitle)
+          return { handle, tabId: leaf.tabId, title: normalizedTitle }
         }
       }
-      const tabId = pty.pty.tabId ?? pty.record.tabId
       // A notifier can exist before its pane graph; retain the rename on the known tab.
       if (this.notifier?.renameTerminal && tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, title)
-        this.notifier.renameTerminal(tabId, title)
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, normalizedTitle)
+        this.notifier.renameTerminal(tabId, normalizedTitle)
       }
-      return { handle, tabId, title }
+      return { handle, tabId, title: normalizedTitle }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.renameTerminal(leaf.tabId, title)
-    return { handle, tabId: leaf.tabId, title }
+    const boundPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : null
+    if (boundPty) {
+      boundPty.customTitle = normalizedTitle
+      boundPty.title = normalizedTitle
+      boundPty.titleUpdatedAt = Date.now()
+      this.touchMobileSessionSnapshotsForPty(boundPty.ptyId)
+    }
+    this.persistHeadlessTerminalTitle(leaf.worktreeId, leaf.tabId, normalizedTitle)
+    this.notifier?.renameTerminal(leaf.tabId, normalizedTitle)
+    this.touchMobileSessionTabsForWorktree(leaf.worktreeId, { immediate: true })
+    return { handle, tabId: leaf.tabId, title: normalizedTitle }
   }
 
   async resolveAgentTerminalCreateOptions(

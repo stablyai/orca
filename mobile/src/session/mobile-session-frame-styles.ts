@@ -93,8 +93,8 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     paddingRight: spacing.sm
   },
   tab: {
-    width: 128,
-    maxWidth: 128,
+    minWidth: 56,
+    maxWidth: 140,
     minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
