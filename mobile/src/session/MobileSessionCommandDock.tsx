@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, TextInput, Pressable } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { View, Text, ScrollView, TextInput, Pressable, Keyboard } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import {
   ArrowUp,
@@ -69,6 +70,50 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     keyboardLift
   } = controller
   const accessoryBarKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const commandInputNodeRef = useRef<TextInput | null>(null)
+  const isFocusedRef = useRef(false)
+  const prevInputRef = useRef(bufferedTerminalDraftState.input)
+  const [emptyResetEpoch, setEmptyResetEpoch] = useState(0)
+
+  const handleCommandFieldRef = useCallback(
+    (node: TextInput | null) => {
+      commandInputNodeRef.current = node
+      bindCommandField(node)
+      if (node && isFocusedRef.current) {
+        node.focus()
+      }
+    },
+    [bindCommandField]
+  )
+
+  // Why: When user cancels/dismisses the Android soft keyboard, the native ReactEditText remains
+  // focused. If selection handles or ActionMode were active, the displaced layout / empty text causes
+  // Android PopupWindow to float to (0, 0) top-left corner. Blurring on keyboardDidHide forces
+  // clearFocus() and completely dismisses all native handle popups.
+  useEffect(() => {
+    if (hostOs() !== 'android') {
+      return
+    }
+    const sub = Keyboard.addListener('keyboardDidHide', () => {
+      isFocusedRef.current = false
+      commandInputNodeRef.current?.blur()
+    })
+    return () => sub.remove()
+  }, [])
+
+  // Why: On Android multiline, selecting text and clearing all input leaves Android's SelectionActionMode
+  // and its dual teardrop handles active at (0, 0) because React Native's controlled setText("") does
+  // not terminate native ActionMode. Cycling the key on transition to empty forces native ReactEditText
+  // to unmount and detach from window, which invokes onDetachedFromWindow() -> stopTextActionMode()
+  // and dismissHandleViews(), completely purging ghost handles.
+  useEffect(() => {
+    if (hostOs() === 'android') {
+      if (prevInputRef.current && !bufferedTerminalDraftState.input) {
+        setEmptyResetEpoch((e) => e + 1)
+      }
+      prevInputRef.current = bufferedTerminalDraftState.input
+    }
+  }, [bufferedTerminalDraftState.input])
   return (
     !activeMarkdownTab &&
     !activeFileTab &&
@@ -318,13 +363,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         ) : (
           <View style={styles.inputBar}>
             <TextInput
-              ref={bindCommandField}
-              // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
+              ref={handleCommandFieldRef}
+              // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there;
+              // cycling emptyResetEpoch on text clear forcibly tears down any lingering Android ActionMode/PopupWindow.
               key={
                 hostOs() === 'android'
-                  ? autocompleteEnabled
-                    ? 'cmd-input-ac-on'
-                    : 'cmd-input-ac-off'
+                  ? `cmd-input-${emptyResetEpoch}-${autocompleteEnabled ? 'ac-on' : 'ac-off'}`
                   : 'cmd-input'
               }
               style={styles.textInput}
@@ -337,6 +381,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               autoCorrect={autocompleteEnabled}
               spellCheck={autocompleteEnabled}
               smartInsertDelete={false}
+              dataDetectorTypes="none"
               // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
               autoComplete="off"
               keyboardType={getTerminalCommandKeyboardType(hostOs(), autocompleteEnabled)}
@@ -348,6 +393,12 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
               editable={canCompose}
               onSubmitEditing={() => void handleSend()}
+              onFocus={() => {
+                isFocusedRef.current = true
+              }}
+              onBlur={() => {
+                isFocusedRef.current = false
+              }}
             />
             <MobileTerminalInputActions
               canSend={canSend}

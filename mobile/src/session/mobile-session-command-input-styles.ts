@@ -162,7 +162,8 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     paddingBottom: spacing.xs + 2,
     fontSize: TEXT_INPUT_FONT_SIZE,
     fontFamily: typography.monoFamily,
-    lineHeight: 18,
+    lineHeight: 20,
+    includeFontPadding: false,
     marginRight: spacing.sm
   },
   liveInputBar: {
