@@ -324,6 +324,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   closedTerminalTabTombstonesByTabId: salvagedOptional(
     'closedTerminalTabTombstonesByTabId',
     salvagingRecord(terminalTabIdSchema, closedTerminalTabTombstoneSchema)
+  ),
+  sessionCustomTitles: salvagedOptional(
+    'sessionCustomTitles',
+    salvagingRecord(z.string(), z.string().min(1).max(256))
   )
 })
 

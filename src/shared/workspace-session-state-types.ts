@@ -151,6 +151,8 @@ export type WorkspaceSessionState = {
   /** Terminal tabs this client watched the user close, kept until the host's own snapshot stops
    *  listing them. See shared/closed-terminal-tab-tombstones.ts for why absence alone cannot say it. */
   closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
+  /** User-defined custom titles/aliases for agent sessions, keyed by sessionId. */
+  sessionCustomTitles?: Record<string, string>
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
