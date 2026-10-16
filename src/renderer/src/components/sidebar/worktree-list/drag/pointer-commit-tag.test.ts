@@ -5,6 +5,7 @@ import type { WorktreeDropCommitContext } from './drop-commit-context'
 import type { WorktreePointerDrag } from './row-state'
 import { NO_WORKTREE_SIDEBAR_DROP_TARGET } from './row-state'
 import { getTagGroupKey } from '../../../../../../shared/sidebar-list/sections/tag-groups'
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getTagDropTargetProps } from './tag-target'
 
 vi.mock('../../workspace-board/drag/workspace-kanban-sidebar-drop', () => ({
@@ -73,7 +74,10 @@ describe('pointer drop onto a tag section', () => {
   it('adds that tag when dropped into a different tag section', () => {
     const ctx = commit(renderSection(getTagGroupKey('billing team')), getTagGroupKey('api'))
 
-    expect(ctx.onTagWorktrees).toHaveBeenCalledWith(['local::wt-1', 'local::wt-2'], 'billing team')
+    expect(ctx.onTagWorktrees).toHaveBeenCalledWith(
+      [composeWorktreeHostIdentity('local', 'wt-1'), composeWorktreeHostIdentity('local', 'wt-2')],
+      'billing team'
+    )
     expect(ctx.clearWorktreeDrag).toHaveBeenCalled()
   })
 
