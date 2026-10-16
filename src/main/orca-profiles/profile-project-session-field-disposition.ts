@@ -137,6 +137,10 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   closedTerminalTabTombstonesByTabId: {
     onRepoRemoval: 'notRepoScoped',
     onTransfer: 'notTransferred'
+  },
+  sessionCustomTitles: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
   }
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldDisposition>
 

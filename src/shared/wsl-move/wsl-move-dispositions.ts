@@ -141,7 +141,8 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   },
   terminalTopologyRevisionByRepoId: { disposition: 'rederive', item: 35 },
   terminalSurfaceTombstonesByPaneKey: moveDisposition(34),
-  closedTerminalTabTombstonesByTabId: moveDisposition(34)
+  closedTerminalTabTombstonesByTabId: moveDisposition(34),
+  sessionCustomTitles: notApplicableDisposition(32, 'Session titles are kept.')
 } as const satisfies Record<keyof WorkspaceSessionState, WslMoveFieldDisposition>
 
 /** Nested PTY bindings dropped wherever they appear in moved session rows (item 36). */

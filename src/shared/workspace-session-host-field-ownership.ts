@@ -57,7 +57,8 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   terminalSurfaceTombstonesByPaneKey: 'surfaceTombstoneKeyed',
   // Why not tabKeyed: the tab is already gone, so worktreeIdByTabId can never resolve it. Routing by
   // the record's own worktreeId is the same problem terminalSurfaceTombstonesByPaneKey has.
-  closedTerminalTabTombstonesByTabId: 'surfaceTombstoneKeyed'
+  closedTerminalTabTombstonesByTabId: 'surfaceTombstoneKeyed',
+  sessionCustomTitles: 'global'
 } as const satisfies Record<keyof WorkspaceSessionState, WorkspaceSessionFieldOwnership>
 
 // Why: an unclassified persisted field would otherwise disappear from every non-local host.

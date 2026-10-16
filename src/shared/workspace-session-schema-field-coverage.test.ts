@@ -54,7 +54,8 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   terminalPtyIncarnationsByPaneKey: true,
   terminalTopologyRevisionByRepoId: true,
   terminalSurfaceTombstonesByPaneKey: true,
-  closedTerminalTabTombstonesByTabId: true
+  closedTerminalTabTombstonesByTabId: true,
+  sessionCustomTitles: true
 } satisfies Record<keyof WorkspaceSessionState, true>
 
 const MINIMAL_SESSION = {
