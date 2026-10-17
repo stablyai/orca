@@ -1,12 +1,6 @@
 import { aiVaultResumeMountAdapters } from './ai-vault-resume-mount-adapters'
-import {
-  agentHistoryMountAdapters,
-  agentHistoryMountExposures
-} from './agent-history-mount-adapters'
-import {
-  agentHistoryScreenMountAdapters,
-  agentHistoryScreenMountExposures
-} from './agent-history-screen-mount-adapters'
+import { agentHistoryMountAdapters } from './agent-history-mount-adapters'
+import { agentHistoryScreenMountAdapters } from './agent-history-screen-mount-adapters'
 import { browserMountAdapters } from './browser-mount-adapters'
 import { clientEventStreamMountAdapters } from './client-event-stream-mount-adapters'
 import { clipboardImageMountAdapters } from './clipboard-image-mount-adapters'
@@ -15,10 +9,7 @@ import { desktopNotificationStreamMountAdapters } from './desktop-notification-s
 import { dictationMountAdapters } from './dictation-mount-adapters'
 import { diffReviewActionMountAdapters } from './diff-review-action-mount-adapters'
 import { diffReviewMountAdapters } from './diff-review-mount-adapters'
-import {
-  fileExplorerScreenMountAdapters,
-  fileExplorerScreenMountExposures
-} from './file-explorer-screen-mount-adapters'
+import { fileExplorerScreenMountAdapters } from './file-explorer-screen-mount-adapters'
 import { fileInventoryMountAdapters } from './file-inventory-mount-adapters'
 import { fileTapOpenMountAdapters } from './file-tap-open-mount-adapters'
 import { fileRequestMountAdapters } from './file-request-mount-adapters'
@@ -31,10 +22,7 @@ import { mobileWebBundleMountAdapters } from './mobile-web-bundle-mount-adapters
 import { nativeChatPagingMountAdapters } from './native-chat-paging-mount-adapters'
 import { nativeChatWriteMountAdapters } from './native-chat-write-mount-adapters'
 import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
-import {
-  notificationTestScreenMountAdapters,
-  notificationTestScreenMountExposures
-} from './notification-test-screen-mount-adapters'
+import { notificationTestScreenMountAdapters } from './notification-test-screen-mount-adapters'
 import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
 import { newWorkspaceRepositoryMountAdapters } from './new-workspace-repository-mount-adapters'
 import { pairingJournalMountAdapters } from './pairing-journal-mount-adapters'
@@ -56,10 +44,7 @@ import { sessionTerminalGestureMountAdapters } from './session-terminal-gesture-
 import { sessionTerminalInputMountAdapters } from './session-terminal-input-mount-adapters'
 import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
 import { sourceControlMountAdapters } from './source-control-mount-adapters'
-import {
-  sourceControlScreenReadMountAdapters,
-  sourceControlScreenReadMountExposures
-} from './source-control-screen-read-mount-adapters'
+import { sourceControlScreenReadMountAdapters } from './source-control-screen-read-mount-adapters'
 import { structuredAgentLaunchMountAdapters } from './structured-agent-launch-mount-adapters'
 import { taskItemChecksStatusMountAdapters } from './task-item-checks-status-mount-adapters'
 import { taskItemConversationMountAdapters } from './task-item-conversation-mount-adapters'
@@ -74,10 +59,7 @@ import { taskProjectRowCommentMountAdapters } from './task-project-row-comment-m
 import { taskProjectRowFieldMountAdapters } from './task-project-row-field-mount-adapters'
 import { taskProjectRowMergeMountAdapters } from './task-project-row-merge-mount-adapters'
 import { taskProjectRowReadMountAdapters } from './task-project-row-read-mount-adapters'
-import {
-  tasksRouteScreenMountAdapters,
-  tasksRouteScreenMountExposures
-} from './tasks-route-screen-mount-adapters'
+import { tasksRouteScreenMountAdapters } from './tasks-route-screen-mount-adapters'
 import { taskWorkspaceHookMountAdapters } from './task-workspace-hook-mount-adapters'
 import { taskWorkspaceSenderMountAdapters } from './task-workspace-sender-mount-adapters'
 import { terminalMountAdapters } from './terminal-mount-adapters'
@@ -94,13 +76,11 @@ import type { MountedOperationModule } from '../mounted-operation-module'
 export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   {
     source: 'agent-history-mount-adapters.ts',
-    mounts: agentHistoryMountAdapters,
-    exposes: agentHistoryMountExposures
+    mounts: agentHistoryMountAdapters
   },
   {
     source: 'agent-history-screen-mount-adapters.ts',
-    mounts: agentHistoryScreenMountAdapters,
-    exposes: agentHistoryScreenMountExposures
+    mounts: agentHistoryScreenMountAdapters
   },
   { source: 'ai-vault-resume-mount-adapters.ts', mounts: aiVaultResumeMountAdapters },
   { source: 'browser-mount-adapters.ts', mounts: browserMountAdapters },
@@ -116,8 +96,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   { source: 'diff-review-mount-adapters.ts', mounts: diffReviewMountAdapters },
   {
     source: 'file-explorer-screen-mount-adapters.ts',
-    mounts: fileExplorerScreenMountAdapters,
-    exposes: fileExplorerScreenMountExposures
+    mounts: fileExplorerScreenMountAdapters
   },
   { source: 'file-inventory-mount-adapters.ts', mounts: fileInventoryMountAdapters },
   { source: 'file-tap-open-mount-adapters.ts', mounts: fileTapOpenMountAdapters },
@@ -141,8 +120,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   },
   {
     source: 'notification-test-screen-mount-adapters.ts',
-    mounts: notificationTestScreenMountAdapters,
-    exposes: notificationTestScreenMountExposures
+    mounts: notificationTestScreenMountAdapters
   },
   { source: 'pairing-journal-mount-adapters.ts', mounts: pairingJournalMountAdapters },
   { source: 'pr-sidebar-mount-adapters.ts', mounts: prSidebarMountAdapters },
@@ -185,8 +163,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   { source: 'source-control-mount-adapters.ts', mounts: sourceControlMountAdapters },
   {
     source: 'source-control-screen-read-mount-adapters.ts',
-    mounts: sourceControlScreenReadMountAdapters,
-    exposes: sourceControlScreenReadMountExposures
+    mounts: sourceControlScreenReadMountAdapters
   },
   {
     source: 'structured-agent-launch-mount-adapters.ts',
@@ -222,8 +199,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   { source: 'task-project-row-read-mount-adapters.ts', mounts: taskProjectRowReadMountAdapters },
   {
     source: 'tasks-route-screen-mount-adapters.ts',
-    mounts: tasksRouteScreenMountAdapters,
-    exposes: tasksRouteScreenMountExposures
+    mounts: tasksRouteScreenMountAdapters
   },
   { source: 'task-workspace-hook-mount-adapters.ts', mounts: taskWorkspaceHookMountAdapters },
   { source: 'task-workspace-sender-mount-adapters.ts', mounts: taskWorkspaceSenderMountAdapters },

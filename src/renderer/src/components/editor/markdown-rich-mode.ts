@@ -6,6 +6,7 @@ import {
 } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
 import { canRenderMarkdownAtSize } from './markdown-rich-size-limit'
+import { hasUnsafeOrderedCodeFirstItem } from './markdown-ordered-code-eligibility'
 import { translate } from '@/i18n/i18n'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
@@ -89,6 +90,12 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
 export function resolveMarkdownRichModeUnsupportedMessage(
   reason: MarkdownRichModeUnsupportedReason | null
 ): string | null {
+  if (reason === 'other') {
+    return translate(
+      'auto.components.editor.markdown.rich.mode.unsupported',
+      'Editable only in code mode because this file contains unsupported Markdown syntax.'
+    )
+  }
   if (reason === null) {
     return null
   }
@@ -117,6 +124,10 @@ export function getMarkdownRichModeUnsupportedReason(
     if (matcher.pattern.test(contentWithoutCode)) {
       return matcher.reason
     }
+  }
+
+  if (hasUnsafeOrderedCodeFirstItem(body)) {
+    return 'other'
   }
 
   if (hasHtml) {
