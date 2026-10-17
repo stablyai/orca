@@ -52,9 +52,10 @@ export function getSystemCliInstallDirectories(
   directories.push(
     '/nix/var/nix/profiles/default/bin',
     join(homePath, '.nix-profile', 'bin'),
-    // Why both: the opencode and Pi installers' own defaults, which no version manager owns (#829).
+    // Why: the opencode, Pi and Grok installers' own defaults, which no version manager owns (#829, #17590).
     join(homePath, '.opencode', 'bin'),
-    join(homePath, '.vite-plus', 'bin')
+    join(homePath, '.vite-plus', 'bin'),
+    join(homePath, '.grok', 'bin')
   )
   return directories
 }
