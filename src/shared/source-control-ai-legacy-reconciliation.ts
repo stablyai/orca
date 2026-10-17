@@ -24,15 +24,21 @@ function hasEntries(value: Record<string, unknown> | null | undefined): boolean 
   return Object.keys(value ?? {}).length > 0
 }
 
+// An absent legacy field reads back as undefined: that is absence, not a rollback-build edit, so
+// it must not overwrite the new-format value or land as an own undefined key (crash 21699b66).
+function legacyFieldChanged<T>(legacy: T | undefined, projected: T | undefined): boolean {
+  return legacy !== undefined && legacy !== projected
+}
+
 function legacyCoreChanges(
   legacy: CommitMessageAiSettings,
   projected: CommitMessageAiSettings
 ): LegacyCoreChanges {
   return {
-    enabled: legacy.enabled !== projected.enabled,
-    agentId: legacy.agentId !== projected.agentId,
-    customPrompt: legacy.customPrompt !== projected.customPrompt,
-    customAgentCommand: legacy.customAgentCommand !== projected.customAgentCommand
+    enabled: legacyFieldChanged(legacy.enabled, projected.enabled),
+    agentId: legacyFieldChanged(legacy.agentId, projected.agentId),
+    customPrompt: legacyFieldChanged(legacy.customPrompt, projected.customPrompt),
+    customAgentCommand: legacyFieldChanged(legacy.customAgentCommand, projected.customAgentCommand)
   }
 }
 
