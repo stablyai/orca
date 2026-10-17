@@ -1095,6 +1095,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.updateIssue': IssueUpdateOfLinearParams,
   'managedRuntime.cancel': ManagedRuntimeCancelParams,
   'managedRuntime.install': ManagedRuntimeAgentParams,
+  'managedRuntime.remove': ManagedRuntimeAgentParams,
   'managedRuntime.subscribe': ManagedRuntimeAgentParams,
   'managedServer.cancelStop': ManagedServerSelector,
   'managedServer.forget': ManagedServerSelector,

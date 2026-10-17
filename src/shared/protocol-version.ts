@@ -62,7 +62,10 @@ export * from './agent-session-resume-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
 import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES } from './agent-session-create-capabilities'
-import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY } from './managed-runtime-install'
+import {
+  MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
+  MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
+} from './managed-runtime-install'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import { MOBILE_RELAY_RUNTIME_CAPABILITIES } from './mobile-desktop-relay-contract'
 import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
@@ -231,6 +234,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
+  MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY,
