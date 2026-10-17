@@ -28,13 +28,13 @@ describe('findKnownHugeFolderPathsToIgnore', () => {
   })
 
   it('returns existing known-huge folders that are not already ignored', async () => {
-    await fs.mkdir(path.join(dir, 'node_modules'))
-    await fs.mkdir(path.join(dir, 'dist'))
+    for (const folder of ['node_modules', 'dist', '.dart_tool', '.gradle', '.turbo', 'Pods']) {
+      await fs.mkdir(path.join(dir, folder))
+    }
 
     const result = await findKnownHugeFolderPathsToIgnore(dir)
 
-    expect(result).toContain('node_modules')
-    expect(result).toContain('dist')
+    expect(result).toEqual(['node_modules', 'dist', '.dart_tool', '.gradle', '.turbo', 'Pods'])
   })
 
   it('excludes folders that are already git-ignored', async () => {

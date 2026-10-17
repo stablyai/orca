@@ -8,7 +8,18 @@ import type { GitRuntimeOptions } from './git-runtime-options'
 // entry limit is a dependency/build folder that should have been ignored. Offer
 // to ignore these by name (matching the well-known offenders) the way a mature
 // SCM does, rather than asking the user to hand-edit .gitignore.
-const KNOWN_HUGE_FOLDER_NAMES = ['node_modules', '.next', 'dist', 'build', 'target', 'vendor']
+const KNOWN_HUGE_FOLDER_NAMES = [
+  'node_modules',
+  '.next',
+  'dist',
+  'build',
+  'target',
+  'vendor',
+  '.dart_tool',
+  '.gradle',
+  '.turbo',
+  'Pods'
+]
 
 /**
  * Return the relative names of known-huge folders that exist in the worktree and

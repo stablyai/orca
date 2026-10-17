@@ -33,6 +33,9 @@ describe('buildParcelWatcherIgnoreOptions', () => {
       expect(fallbackRegex.test(`packages/app/${dir}`)).toBe(true)
       expect(fallbackRegex.test(`packages/app/${dir}/file.ts`)).toBe(true)
     }
+    expect(WATCHER_IGNORE_DIRS).toEqual(
+      expect.arrayContaining(['.dart_tool', '.gradle', '.turbo', 'Pods'])
+    )
     expect(fallbackRegex.test('packages/app/node_modules-cache/file.ts')).toBe(false)
     expect(fallbackRegex.test('packages/app/.github/workflows/check.yml')).toBe(false)
     expect(fallbackRegex.test('project\\node_modules/file.ts')).toBe(false)
