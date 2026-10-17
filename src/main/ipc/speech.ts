@@ -2,7 +2,8 @@ import { ipcMain, BrowserWindow, systemPreferences } from 'electron'
 import { join } from 'node:path'
 import { writeFile, unlink } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import { getCatalogModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import type { SttEventSink } from '../speech/stt-service'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import {
@@ -104,6 +105,21 @@ export function registerSpeechHandlers(store: Store): void {
       const owner = getDesktopOwner(senderId, sessionId)
       let sessionListenerRemoved = false
       let sessionReady = false
+      let rendererLost = false
+      let retired = false
+      let retireOnRendererLoss: (() => void) | null = null
+      const localModel = getCatalogModel(modelId)?.provider === 'local'
+      const cleanupRendererObservation = (): void => {
+        if (localModel) {
+          window.webContents.off('render-process-gone', onRendererLost)
+          window.webContents.off('destroyed', onRendererLost)
+        }
+      }
+      const onRendererLost = (): void => {
+        rendererLost = true
+        cleanupRendererObservation()
+        retireOnRendererLoss?.()
+      }
       const cleanupOnWindowClosed = (): void => {
         windowClosed = true
         cleanupSessionListener()
@@ -119,11 +135,16 @@ export function registerSpeechHandlers(store: Store): void {
       const cleanupSessionListener = (): void => {
         sessionListenerRemoved = true
         window.off('closed', cleanupOnWindowClosed)
+        cleanupRendererObservation()
         if (dictationListeners.get(senderId)?.cleanup === cleanupSessionListener) {
           dictationListeners.delete(senderId)
         }
       }
       window.once('closed', cleanupOnWindowClosed)
+      if (localModel) {
+        window.webContents.once('render-process-gone', onRendererLost)
+        window.webContents.once('destroyed', onRendererLost)
+      }
 
       try {
         // Why: on macOS, the Electron binary needs explicit TCC permission for
@@ -159,46 +180,58 @@ export function registerSpeechHandlers(store: Store): void {
           return
         }
 
-        await getSpeechSttService(store).startDictation(
-          modelId,
-          (msg) => {
-            if (msg.type === 'ready') {
-              sessionReady = true
-            }
-            if (window.isDestroyed()) {
-              return
-            }
-            switch (msg.type) {
-              case 'ready':
-                window.webContents.send('speech:ready', { sessionId })
-                break
-              case 'partial':
-                window.webContents.send('speech:partial', { text: msg.text ?? '', sessionId })
-                break
-              case 'final':
-                window.webContents.send('speech:final', { text: msg.text ?? '', sessionId })
-                break
-              case 'stopped':
-                cleanupSessionListener()
-                window.webContents.send('speech:stopped', { sessionId })
-                break
-              case 'error':
-                window.webContents.send('speech:error', { error: msg.error ?? '', sessionId })
-                void getSpeechSttService(store)
-                  .stopDictation(owner)
-                  .catch(() => undefined)
-                  .finally(cleanupSessionListener)
-                break
-            }
-          },
-          resolvedHotwordsPath,
-          owner
-        )
+        const service = getSpeechSttService(store)
+        const send = (channel: string, payload: unknown): void => {
+          if (!rendererLost && !window.isDestroyed()) {
+            window.webContents.send(channel, payload)
+          }
+        }
+        const sink: SttEventSink = (msg) => {
+          if (retired) {
+            return
+          }
+          if (msg.type === 'ready') {
+            sessionReady = true
+          }
+          if (window.isDestroyed()) {
+            return
+          }
+          switch (msg.type) {
+            case 'ready':
+              send('speech:ready', { sessionId })
+              break
+            case 'partial':
+              send('speech:partial', { text: msg.text ?? '', sessionId })
+              break
+            case 'final':
+              send('speech:final', { text: msg.text ?? '', sessionId })
+              break
+            case 'stopped':
+              cleanupSessionListener()
+              send('speech:stopped', { sessionId })
+              break
+            case 'error':
+              send('speech:error', { error: msg.error ?? '', sessionId })
+              void getSpeechSttService(store)
+                .stopDictation(owner)
+                .catch(() => undefined)
+                .finally(cleanupSessionListener)
+              break
+          }
+        }
+        await service.startDictation(modelId, sink, resolvedHotwordsPath, owner)
         // Coalesced starts install no sink; only an accepted start supersedes the close hook.
         if (sessionReady) {
           dictationListeners.get(senderId)?.cleanup()
           if (!sessionListenerRemoved) {
             dictationListeners.set(senderId, { owner, cleanup: cleanupSessionListener })
+            if (localModel && !rendererLost) {
+              retireOnRendererLoss = () => {
+                retired = true
+                cleanupSessionListener()
+                void service.retireActiveLocal(owner, sink).catch(() => {})
+              }
+            }
           }
         } else {
           cleanupSessionListener()

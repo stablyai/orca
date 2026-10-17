@@ -35,6 +35,13 @@ const environment = vi.hoisted(
 )
 
 const fileAccess = vi.hoisted(() => ({ write: vi.fn(), unlink: vi.fn() }))
+const cloudFinish = vi.hoisted(() => vi.fn(async () => 'cloud result'))
+
+vi.mock('../speech/openai-transcription-client', () => ({
+  OpenAiTranscriptionSession: class {
+    finish = cloudFinish
+  }
+}))
 
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof FsPromises>()),
@@ -67,9 +74,9 @@ vi.mock('../speech/openai-api-key-store', () => ({
 }))
 vi.mock('../speech/model-catalog', () => ({
   SPEECH_MODEL_CATALOG: [],
-  getCatalogModel: () => ({
+  getCatalogModel: (id: string) => ({
     id: 'test-model',
-    provider: 'local',
+    provider: id === 'cloud-model' ? 'openai' : 'local',
     type: 'transducer',
     streaming: true,
     sampleRate: 16000,
@@ -106,13 +113,17 @@ vi.mock('node:worker_threads', async () => {
 })
 
 import { registerSpeechHandlers } from './speech'
-import { SttService as SpeechService } from '../speech/stt-service'
+import { IDLE_WORKER_TEARDOWN_MS, SttService as SpeechService } from '../speech/stt-service'
 import { handleSttWorkerFailure } from '../speech/stt-session-stop'
 import { RuntimeMobileDictationController } from '../runtime/runtime-mobile-dictation-controller'
 
+class TestWebContents extends EventEmitter {
+  send = vi.fn()
+}
+
 class TestWindow extends EventEmitter {
   destroyed = false
-  webContents = { send: vi.fn() }
+  webContents = new TestWebContents()
   isDestroyed(): boolean {
     return this.destroyed
   }
@@ -154,6 +165,7 @@ describe('speech worker exit ownership', () => {
     environment.readyOnInit = true
     fileAccess.write.mockReset().mockResolvedValue(undefined)
     fileAccess.unlink.mockReset().mockResolvedValue(undefined)
+    cloudFinish.mockClear()
     window = new TestWindow()
     environment.window = window
     const modelManager: Pick<ModelManager, 'getModelState' | 'getModelDir'> = {
@@ -173,6 +185,165 @@ describe('speech worker exit ownership', () => {
     await Promise.resolve()
     await Promise.resolve()
     await service().prepareModelForDeletion('test-model')
+    vi.useRealTimers()
+  })
+
+  it.each(['render-process-gone', 'destroyed'])(
+    'retires an active local owner on %s while keeping the normal warm lifetime',
+    async (event) => {
+      vi.useFakeTimers()
+      const unrelated = vi.fn()
+      window.webContents.on(event, unrelated)
+      await start('1')
+      const current = worker()
+      const messages = vi.spyOn(current, 'postMessage')
+      const oldSink = service()['state'].eventSink
+      window.webContents.send.mockClear()
+
+      window.webContents.emit(event)
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(messages.mock.calls.filter(([message]) => message.type === 'stop')).toHaveLength(1)
+      expect(service()['state'].activeOwner).toBeNull()
+      expect(service()['state'].eventSink).toBeNull()
+      expect(window.listenerCount('closed')).toBe(0)
+      expect(window.webContents.listeners(event)).toEqual([unrelated])
+      expect(service()['state'].idleTeardownTimer).not.toBeNull()
+      oldSink?.({ type: 'final', text: 'abandoned text' })
+      oldSink?.({ type: 'error', error: 'late old error' })
+      expect(window.webContents.send).not.toHaveBeenCalled()
+      window.webContents.emit('destroyed')
+      window.emit('closed')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(messages.mock.calls.filter(([message]) => message.type === 'stop')).toHaveLength(1)
+
+      await service().startDictation('test-model', vi.fn(), undefined, 'mobile:recovered')
+      expect(worker()).toBe(current)
+      await service().stopDictation('mobile:recovered')
+      await vi.advanceTimersByTimeAsync(IDLE_WORKER_TEARDOWN_MS - 1)
+      expect(service().isActive()).toBe(true)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(service().isActive()).toBe(false)
+    }
+  )
+
+  it('does not let a retired sink cancel a repeated owner while its replacement starts', async () => {
+    await start('1')
+    const oldWorker = worker()
+    oldWorker.emitStoppedOnStop = false
+    const oldSink = service()['state'].eventSink
+    window.webContents.emit('render-process-gone')
+    const replacement = start('1')
+    expect(service()['state'].starting).toBe(true)
+    oldSink?.({ type: 'error', error: 'late error' })
+    oldWorker.emit('message', { type: 'final', text: 'stale final' })
+    oldWorker.emit('message', { type: 'stopped' })
+    await replacement
+    expect(worker()).not.toBe(oldWorker)
+    expect(service()['state'].activeOwner).toBe('desktop:9:1')
+    expect(service()['state'].canceledOwners.size).toBe(0)
+    expect(window.listenerCount('closed')).toBe(1)
+    expect(window.webContents.send).not.toHaveBeenCalledWith('speech:final', expect.anything())
+    oldSink?.({ type: 'stopped' })
+    expect(window.listenerCount('closed')).toBe(1)
+    await stop('1')
+  })
+
+  it('ignores stale sink capabilities after the same owner accepts another session', async () => {
+    await start('1')
+    const staleSink = service()['state'].eventSink
+    if (!staleSink) {
+      throw new Error('Missing accepted sink')
+    }
+    await stop('1')
+    await start('1')
+    const current = worker()
+    const messages = vi.spyOn(current, 'postMessage')
+    await service().retireActiveLocal('desktop:9:1', staleSink)
+    await service().retireActiveLocal('desktop:other:1', service()['state'].eventSink ?? vi.fn())
+    expect(messages).not.toHaveBeenCalled()
+    expect(service()['state'].activeOwner).toBe('desktop:9:1')
+    current.emit('message', { type: 'partial', text: 'current text' })
+    expect(window.webContents.send).toHaveBeenCalledWith('speech:partial', {
+      text: 'current text',
+      sessionId: '1'
+    })
+    await stop('1')
+  })
+
+  it('does not retire a startup after a renderer was lost before it settled', async () => {
+    environment.readyOnInit = false
+    const pending = start('1')
+    await Promise.resolve()
+    const current = worker()
+    const messages = vi.spyOn(current, 'postMessage')
+    window.webContents.emit('render-process-gone')
+    const startingSink = service()['state'].eventSink
+    if (!startingSink) {
+      throw new Error('Missing starting sink')
+    }
+    await service().retireActiveLocal('desktop:9:1', startingSink)
+    current.emit('message', { type: 'ready' })
+    await pending
+    expect(messages).not.toHaveBeenCalled()
+    expect(service()['state'].activeOwner).toBe('desktop:9:1')
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    expect(window.webContents.listenerCount('render-process-gone')).toBe(0)
+    expect(window.listenerCount('closed')).toBe(1)
+    await stop('1')
+  })
+
+  it('does not finish cloud audio on renderer loss or a local retirement request', async () => {
+    await handler('speech:startDictation')(sender, 'cloud-model', undefined, 'cloud')
+    const sink = service()['state'].eventSink
+    if (!sink) {
+      throw new Error('Missing cloud sink')
+    }
+    window.webContents.emit('render-process-gone')
+    window.webContents.emit('destroyed')
+    await service().retireActiveLocal('desktop:9:cloud', sink)
+    expect(cloudFinish).not.toHaveBeenCalled()
+    expect(service()['state'].activeOwner).toBe('desktop:9:cloud')
+    await stop('cloud')
+    expect(cloudFinish).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['error', 'exit', 'timeout'])(
+    'releases a lost owner when its stop ends with %s',
+    async (outcome) => {
+      vi.useFakeTimers()
+      await start()
+      const current = worker()
+      current.emitStoppedOnStop = false
+      window.webContents.send.mockClear()
+      window.webContents.emit('render-process-gone')
+      if (outcome === 'error') {
+        current.emit('error', new Error('stop failed'))
+      }
+      if (outcome === 'exit') {
+        current.emit('exit', 1)
+      }
+      await vi.advanceTimersByTimeAsync(outcome === 'timeout' ? 60_000 : 0)
+      expect(service()['state'].activeOwner).toBeNull()
+      expect(service().isActive()).toBe(false)
+      expect(window.webContents.send).not.toHaveBeenCalled()
+      await start('recovered')
+      await stop('recovered')
+    }
+  )
+
+  it('keeps a live local session through navigation and delivers final text before stopped', async () => {
+    await start()
+    window.webContents.emit('did-start-loading')
+    expect(service()['state'].activeOwner).toBe('desktop:9:one')
+    worker().emit('message', { type: 'final', text: 'keep this' })
+    await stop()
+    expect(window.webContents.send.mock.calls.slice(-2)).toEqual([
+      ['speech:final', { text: 'keep this', sessionId: 'one' }],
+      ['speech:stopped', { sessionId: 'one' }]
+    ])
+    expect(window.webContents.listenerCount('render-process-gone')).toBe(0)
+    expect(window.webContents.listenerCount('destroyed')).toBe(0)
   })
 
   it('bounds close listeners through repeated starts and stops with no remaining worker', async () => {
