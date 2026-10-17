@@ -82,6 +82,7 @@
       "expo-router",
       "expo-notifications",
       "./plugins/android-respect-rotation-lock.js",
+      "./plugins/android-split-screen-fix.js",
       [
         "expo-splash-screen",
         {
