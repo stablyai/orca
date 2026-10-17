@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveGitCommandWithoutProbe } from './command-runner/git-command-resolution'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
@@ -26,12 +27,58 @@ import {
 const worktreePath = path.resolve('repo')
 const windowsRelativePath = 'tests\\breakgit'
 const wslOptions = { wslDistro: 'Ubuntu' }
+const originalPlatform = process.platform
 
 describe('WSL git pathspecs', () => {
   beforeEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'tests/breakgit\0', stderr: '' })
   })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+  })
+
+  it.each(['wsl.localhost', 'wsl$'])(
+    'normalizes mutations when the %s cwd alone selects WSL',
+    async (host) => {
+      const cwd = `\\\\${host}\\Ubuntu\\home\\dev\\repo`
+      await stageFile(cwd, windowsRelativePath)
+      await unstageFile(cwd, windowsRelativePath)
+      await bulkStageFiles(cwd, [windowsRelativePath])
+      await bulkUnstageFiles(cwd, [windowsRelativePath])
+      await discardChanges(cwd, windowsRelativePath)
+      await bulkDiscardChanges(cwd, [windowsRelativePath])
+
+      expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+        ['add', '--', ':(literal)tests/breakgit'],
+        ['reset', '--quiet', '--', ':(literal)tests/breakgit'],
+        ['add', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        ['reset', '--quiet', '--pathspec-from-file=-', '--pathspec-file-nul'],
+        ['ls-files', '--error-unmatch', '--', ':(literal)tests/breakgit'],
+        ['restore', '--worktree', '--', ':(literal)tests/breakgit'],
+        ['ls-files', '-z', '--', ':(literal)tests/breakgit'],
+        ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul']
+      ])
+      const inputs = gitExecFileAsyncMock.mock.calls
+        .map(([, options]) => options.stdin)
+        .filter((input) => input !== undefined)
+      expect(inputs).toEqual(Array(3).fill(':(literal)tests/breakgit\0'))
+      for (const [, options] of gitExecFileAsyncMock.mock.calls) {
+        expect(options).not.toHaveProperty('wslDistro')
+      }
+      const [args, options] = gitExecFileAsyncMock.mock.calls[0]
+      const resolved = resolveGitCommandWithoutProbe(args, options)
+      expect(resolved).toMatchObject({
+        binary: 'wsl.exe',
+        wsl: { distro: 'Ubuntu', linuxPath: '/home/dev/repo' },
+        wslMode: 'non-login-shell'
+      })
+      expect(resolved.args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'bash', '-c'])
+      expect(resolved.args.at(-1)).toContain("'git' 'add' '--' ':(literal)tests/breakgit'")
+    }
+  )
 
   it('uses POSIX separators for tracked file mutations executed inside WSL', async () => {
     await stageFile(worktreePath, windowsRelativePath, wslOptions)
@@ -81,11 +128,18 @@ describe('WSL git pathspecs', () => {
     }
   })
 
-  it('preserves backslashes for host Git where they can be literal filename characters', async () => {
-    await stageFile(worktreePath, windowsRelativePath)
+  it.each(['linux', 'darwin', 'win32'])(
+    'preserves backslashes for host Git on %s',
+    async (platform) => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+      await stageFile(worktreePath, windowsRelativePath)
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['add', '--', ':(literal)tests\\breakgit'], {
-      cwd: worktreePath
-    })
-  })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+        ['add', '--', ':(literal)tests\\breakgit'],
+        {
+          cwd: worktreePath
+        }
+      )
+    }
+  )
 })

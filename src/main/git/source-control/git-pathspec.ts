@@ -2,7 +2,10 @@ import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
 } from '../../../shared/windows-command-line-budget'
-import { resolveGitCommandWithoutProbe } from '../command-runner/git-command-resolution'
+import {
+  resolveGitCommandWithoutProbe,
+  wslDistroForCommand
+} from '../command-runner/git-command-resolution'
 import { WINDOWS_CHECKOUT_GIT_CONFIG_ARGS } from '../wsl-windows-checkout-git-config'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 
@@ -17,9 +20,15 @@ const BULK_CHUNK_SIZE = 100
  */
 const POSIX_COMMAND_LINE_BUDGET = 128_000
 
-export function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
-  // Why: Git inside WSL needs POSIX paths, but host paths must stay literal, so convert backslashes only for WSL.
-  const runtimePath = options.wslDistro ? filePath.replace(/\\/g, '/') : filePath
+export function literalPathspec(
+  filePath: string,
+  worktreePath: string,
+  options: GitRuntimeOptions
+): string {
+  // A UNC cwd can select WSL without a distro option; native filenames stay literal.
+  const runtimePath = wslDistroForCommand(worktreePath, options.wslDistro)
+    ? filePath.replace(/\\/g, '/')
+    : filePath
   return `:(literal)${runtimePath}`
 }
 
@@ -76,7 +85,7 @@ export function bulkPathspecCommands(
   let pathspecs: string[] = []
   let length = baseLength
   for (const filePath of filePaths) {
-    const pathspec = literalPathspec(filePath, options)
+    const pathspec = literalPathspec(filePath, worktreePath, options)
     const cost =
       finishedCommandLineLength([...leadingArgs, pathspec], worktreePath, options) - baseLength
     if (pathspecs.length > 0 && (pathspecs.length >= BULK_CHUNK_SIZE || length + cost > budget)) {
