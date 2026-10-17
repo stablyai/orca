@@ -17,6 +17,7 @@ import { useLiveWorktreeName } from './use-live-worktree-name'
 import { useMissingWorktreeBounce } from './use-missing-worktree-bounce'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { firstParam } from '../navigation/route-param-reader'
 
 export function useMobileSessionFoundation() {
   const {
@@ -26,33 +27,38 @@ export function useMobileSessionFoundation() {
     created,
     warning: createdWarning
   } = useLocalSearchParams<{
-    hostId: string
-    worktreeId: string
-    name?: string
-    created?: string
-    warning?: string
+    hostId?: string | string[]
+    worktreeId?: string | string[]
+    name?: string | string[]
+    created?: string | string[]
+    warning?: string | string[]
   }>()
-  const isFolderWorkspaceRoute = worktreeId.startsWith('folder:') // Synthetic ids have no repo scope.
+  const routeHostId = firstParam(hostId)
+  const routeWorktreeId = firstParam(worktreeId)
+  const routeName = firstParam(routeWorktreeName)
+  const routeCreated = firstParam(created)
+  const routeCreatedWarning = firstParam(createdWarning)
+  const isFolderWorkspaceRoute = routeWorktreeId.startsWith('folder:') // Synthetic ids have no repo scope.
   // Why: the floating sentinel has no repo/worktree, so repo-backed surfaces hide.
-  const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
+  const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(routeWorktreeId)
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
-  const { client, clientId, state: connState } = useWorkspaceClient(hostId)
+  const { client, clientId, state: connState } = useWorkspaceClient(routeHostId || undefined)
   const { hostCapabilities } = useHostProtocolGates()
-  const reconnectAttempts = useReconnectAttempt(hostId)
-  const lastConnectedAt = useLastConnectedAt(hostId)
+  const reconnectAttempts = useReconnectAttempt(routeHostId)
+  const lastConnectedAt = useLastConnectedAt(routeHostId)
   const forceReconnectHost = useForceReconnect()
   const { name: worktreeName, resolution: worktreeResolution } = useLiveWorktreeName({
     client,
     connState,
-    routeName: routeWorktreeName,
-    worktreeId
+    routeName,
+    worktreeId: routeWorktreeId
   })
   // Why: a workspace deleted on the desktop leaves every RPC on this route failing forever.
   useMissingWorktreeBounce({
-    hostId,
-    worktreeId,
+    hostId: routeHostId,
+    worktreeId: routeWorktreeId,
     resolution: worktreeResolution,
     bounce: (id) => router.replace(hostRouteWithNotice(id, 'worktree-missing'))
   })
@@ -80,7 +86,7 @@ export function useMobileSessionFoundation() {
       // sentinel has no repo to probe.
       client: isFloatingWorkspaceRoute ? null : client,
       connState,
-      worktreeId,
+      worktreeId: routeWorktreeId,
       includeBranchIdentity: false
     })
   useEffect(() => {
@@ -88,13 +94,13 @@ export function useMobileSessionFoundation() {
       setActivePanel(null)
     }
   }, [activePanel, prRepoContextLoaded, prIsGithubRepo])
-  const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
+  const initialCreateWarning = routeCreatedWarning.trim()
   return {
-    hostId,
-    worktreeId,
-    routeWorktreeName,
-    created,
-    createdWarning,
+    hostId: routeHostId,
+    worktreeId: routeWorktreeId,
+    routeWorktreeName: routeName,
+    created: routeCreated,
+    createdWarning: routeCreatedWarning,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     router,

@@ -62,6 +62,13 @@ describe('useMobileNativeChatReadability', () => {
     expect(sendRequest).not.toHaveBeenCalled()
   })
 
+  it('fails closed without reading repos when the route worktree is missing', async () => {
+    const sendRequest = await mount(null, '')
+
+    expect(readable).toBe(false)
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
   it('fails closed immediately while a reused route resolves its new worktree', async () => {
     let resolveNext: (response: unknown) => void = () => {}
     const client = {

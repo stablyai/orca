@@ -30,6 +30,10 @@ export function useMobileNativeChatReadability(
       return
     }
     let active = true
+    if (!worktreeId) {
+      setState({ client, worktreeId, readable: false })
+      return
+    }
     if (!client) {
       setState({ client, worktreeId, readable: false })
       return
