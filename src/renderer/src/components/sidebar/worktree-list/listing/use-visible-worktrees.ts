@@ -6,6 +6,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { computeVisibleWorktrees } from '../../visible-worktrees'
+import { someRepoHidesWhenIdle } from '../../repo-idle-visibility'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -34,6 +35,7 @@ export function useVisibleSidebarWorktrees(args: {
    *  423-workspace scan on every unrelated settings write. */
   defaultHostId: ExecutionHostId
   agentSendTargetWorktreeId: string | null
+  activeWorktreeId?: string | null
 }) {
   const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, defaultHostId } = args
   const {
@@ -49,10 +51,11 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const tracksActivity = !showSleepingWorkspaces || someRepoHidesWhenIdle(repoMap)
+  const agentStatusEpoch = useAppStore((s) => (tracksActivity ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
   // sleeping-workspaces list cannot evict the sample the live lists share.
-  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
+  const agentStatusNow = tracksActivity ? getAgentStatusEpochNow(agentStatusEpoch) : 0
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedDeviceIdsByEnvironment = useMemo(
@@ -64,16 +67,16 @@ export function useVisibleSidebarWorktrees(args: {
   )
 
   // Read tabsByWorktree when needed for filtering or sorting
-  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
+  const needsActivityMaps = tracksActivity || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) =>
     needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
   )
   const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
+    tracksActivity ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
-    getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
+    getStructuredChatWorktreeIds(!tracksActivity, s.unifiedTabsByWorktree)
   )
 
   // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
@@ -81,16 +84,16 @@ export function useVisibleSidebarWorktrees(args: {
     // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
     // share a sample, so the timestamp alone would not re-key this memo.
     void agentStatusEpoch
-    return showSleepingWorkspaces
-      ? EMPTY_WORKTREE_ID_SET
-      : getWorktreeIdsWithLiveAgent(
+    return tracksActivity
+      ? getWorktreeIdsWithLiveAgent(
           useAppStore.getState().agentStatusByPaneKey,
           tabsByWorktree,
           agentStatusNow
         )
-  }, [agentStatusEpoch, agentStatusNow, showSleepingWorkspaces, tabsByWorktree])
+      : EMPTY_WORKTREE_ID_SET
+  }, [agentStatusEpoch, agentStatusNow, tracksActivity, tabsByWorktree])
   const sleepingSweepExemptWorktreeIds = useSleepingSweepRetention({
-    enabled: !showSleepingWorkspaces,
+    enabled: tracksActivity,
     worktreesByRepo,
     tabsByWorktree,
     ptyIdsByTabId,
@@ -124,9 +127,11 @@ export function useVisibleSidebarWorktrees(args: {
       preserveLineageParentOrder: sortBy === 'manual',
       forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
         ? [args.agentSendTargetWorktreeId]
-        : undefined
+        : undefined,
+      activeWorktreeId: args.activeWorktreeId
     })
   }, [
+    args.activeWorktreeId,
     args.agentSendTargetWorktreeId,
     worktreeIdsWithLiveAgent,
     sleepingSweepExemptWorktreeIds,

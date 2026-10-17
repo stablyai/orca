@@ -80,6 +80,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
       | 'defaultJiraProject'
+      | 'hideWhenIdle'
       | 'customWorktreeVisibilitySources'
       | 'worktreeVisibilitySourcePreferences'
     >
@@ -143,6 +144,9 @@ export function sanitizeRepoUpdatesForPersistence<
     } else {
       sanitized.projectHostSetupMethod = setupMethod
     }
+  }
+  if ('hideWhenIdle' in sanitized && typeof sanitized.hideWhenIdle !== 'boolean') {
+    delete sanitized.hideWhenIdle
   }
   if ('forkSyncMode' in sanitized) {
     const forkSyncMode = sanitizeForkSyncMode(sanitized.forkSyncMode)

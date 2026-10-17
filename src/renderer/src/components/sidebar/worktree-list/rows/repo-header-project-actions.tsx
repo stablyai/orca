@@ -3,6 +3,7 @@ import {
   CircleX,
   Ellipsis,
   Eye,
+  EyeOff,
   FolderInput,
   FolderTree,
   Plus,
@@ -64,6 +65,7 @@ export type RepoHeaderProjectActions = {
   onCreateGroupFromRepo: (repo: Repo) => void
   onMoveProjectToGroup: (repo: Repo, groupId: string) => void
   onRemoveProjectFromGroup: (repo: Repo) => void
+  onToggleHideWhenIdle: (repo: Repo) => void
   onRemoveProject: (repo: Repo) => void
   onCreateForRepo: (projectId: string) => void
 }
@@ -135,6 +137,15 @@ export function RepoHeaderProjectActionsMenu({
             {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo))}
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem onSelect={() => actions.onToggleHideWhenIdle(repo)}>
+          {repo.hideWhenIdle ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+          {repo.hideWhenIdle
+            ? translate(
+                'auto.components.sidebar.WorktreeList.showWhenIdle',
+                'Always show in sidebar'
+              )
+            : translate('auto.components.sidebar.WorktreeList.hideWhenIdle', 'Hide when idle')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>
           {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
           <FolderTree className="size-3.5" />

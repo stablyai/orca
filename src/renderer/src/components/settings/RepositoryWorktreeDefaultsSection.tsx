@@ -3,6 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Switch } from '../ui/switch'
 import { BaseRefPicker } from './BaseRefPicker'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { SearchableSetting } from './SearchableSetting'
@@ -13,7 +14,10 @@ import {
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/external-worktree-visibility'
 
-type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'> & {
+type RepositoryWorktreeDefaultsUpdate = Pick<
+  Repo,
+  'worktreeBasePath' | 'worktreeBaseRef' | 'hideWhenIdle'
+> & {
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
 }
 
@@ -119,6 +123,39 @@ export function RepositoryWorktreeDefaultsSection({
               </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate('auto.components.settings.RepositoryPane.hideWhenIdle', 'Hide when idle')}
+        description={translate(
+          'auto.components.settings.RepositoryPane.hideWhenIdleDescription',
+          'Hide this project from the sidebar and board while none of its workspaces has a terminal, agent or browser tab. Jump to workspace still finds it.'
+        )}
+        keywords={[repo.displayName, 'idle', 'sleeping', 'hide', 'sidebar', 'checkout']}
+        className="space-y-2"
+        forceVisible={forceVisible}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <Label className="text-sm font-semibold">
+              {translate('auto.components.settings.RepositoryPane.hideWhenIdle', 'Hide when idle')}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.RepositoryPane.hideWhenIdleDescription',
+                'Hide this project from the sidebar and board while none of its workspaces has a terminal, agent or browser tab. Jump to workspace still finds it.'
+              )}
+            </p>
+          </div>
+          <Switch
+            aria-label={translate(
+              'auto.components.settings.RepositoryPane.hideWhenIdle',
+              'Hide when idle'
+            )}
+            checked={repo.hideWhenIdle === true}
+            onCheckedChange={(checked) => void updateRepo(repo.id, { hideWhenIdle: checked })}
+          />
         </div>
       </SearchableSetting>
 
