@@ -187,6 +187,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneTransportsRef: { current: new Map() },
       isActiveRef,
       isVisibleRef,
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     })
 
@@ -254,6 +255,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneCount: 1,
       isSyncFitEnabled: true,
       isWorktreeActive: true,
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     }
 
@@ -347,6 +349,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneCount: 1,
       isSyncFitEnabled: true,
       isWorktreeActive: true,
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn(),
       isActive: true,
       isVisible: true,
@@ -395,6 +398,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneCount: 1,
       isSyncFitEnabled: true,
       isWorktreeActive: true,
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     }
 
@@ -462,6 +466,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneCount: 1,
       isSyncFitEnabled: true,
       isWorktreeActive: true,
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     }
 
@@ -516,6 +521,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       isVisibleRef: { current: false },
       paneCount: 1,
       isSyncFitEnabled: true,
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     }
 
@@ -608,6 +614,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       isVisibleRef: { current: false },
       paneCount: 1,
       isSyncFitEnabled: true,
+      expandedPaneIdRef: { current: null },
       toggleExpandPane: vi.fn()
     }
 
