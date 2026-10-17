@@ -1,10 +1,14 @@
 import type { AppState } from '@/store/types'
-import type { AgentMainAgentStatus } from '../../../../shared/main-agent-status'
+import {
+  mainAgentStatusEqual,
+  type AgentMainAgentStatus
+} from '../../../../shared/main-agent-status'
 
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
 
 type AgentStatusProjectionCacheEntry = {
   entry: AppState['agentStatusByPaneKey'][string]
+  inputs: ReturnType<typeof agentStatusProjectionInputs>
   projection: string
 }
 type AgentStatusProjectionCache = {
@@ -19,11 +23,11 @@ function mainAgentKey(mainAgent: AgentMainAgentStatus | undefined) {
   return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
 }
 
-function serializeAgentStatusEntry(
+function agentStatusProjectionInputs(
   paneKey: string,
   entry: AppState['agentStatusByPaneKey'][string]
-): string {
-  return JSON.stringify({
+) {
+  return {
     paneKey,
     entryPaneKey: entry.paneKey,
     state: entry.state,
@@ -34,13 +38,7 @@ function serializeAgentStatusEntry(
     turnStartedAt: entry.turnStartedAt ?? null,
     agentType: entry.agentType ?? null,
     terminalTitle: entry.terminalTitle ?? null,
-    stateHistory: entry.stateHistory.map((history) => ({
-      state: history.state,
-      prompt: history.prompt,
-      startedAt: history.startedAt,
-      interrupted: history.interrupted ?? null,
-      mainAgent: mainAgentKey(history.mainAgent)
-    })),
+    stateHistory: entry.stateHistory,
     toolName: entry.toolName ?? null,
     toolInput: entry.toolInput ?? null,
     // Include the prompt so a newly captured question re-fires mobile publication.
@@ -50,7 +48,46 @@ function serializeAgentStatusEntry(
     interrupted: entry.interrupted ?? null,
     // A failure changes the verdict and leaves `interrupted` as it was.
     mainAgent: mainAgentKey(entry.mainAgent)
-  })
+  }
+}
+
+function projectionInputsEqual(
+  inputs: ReturnType<typeof agentStatusProjectionInputs>,
+  previous: ReturnType<typeof agentStatusProjectionInputs>
+): boolean {
+  // Both inputs come from the same fixed-key projection, including its history reference.
+  const previousValues = Object.values(previous)
+  const values = Object.values(inputs)
+  return (
+    values.length === previousValues.length &&
+    values.every((value, index) => Object.is(value, previousValues[index]))
+  )
+}
+
+function buildAgentStatusProjectionEntry(
+  paneKey: string,
+  entry: AppState['agentStatusByPaneKey'][string],
+  previous: AgentStatusProjectionCacheEntry | undefined
+): AgentStatusProjectionCacheEntry {
+  const inputs = agentStatusProjectionInputs(paneKey, entry)
+  if (previous && mainAgentStatusEqual(entry.mainAgent, previous.entry.mainAgent)) {
+    inputs.mainAgent = previous.inputs.mainAgent
+  }
+  // Same-bucket heartbeats preserve the immutable history and preview strings.
+  const projection =
+    previous && projectionInputsEqual(inputs, previous.inputs)
+      ? previous.projection
+      : JSON.stringify({
+          ...inputs,
+          stateHistory: inputs.stateHistory.map((history) => ({
+            state: history.state,
+            prompt: history.prompt,
+            startedAt: history.startedAt,
+            interrupted: history.interrupted ?? null,
+            mainAgent: mainAgentKey(history.mainAgent)
+          }))
+        })
+  return { entry, inputs, projection }
 }
 
 export function buildRuntimeMobileAgentStatusProjection(
@@ -90,7 +127,7 @@ export function buildRuntimeMobileAgentStatusProjection(
     const entryCache =
       previous?.entry === entry
         ? previous
-        : { entry, projection: serializeAgentStatusEntry(paneKey, entry) }
+        : buildAgentStatusProjectionEntry(paneKey, entry, previous)
     entries.set(paneKey, entryCache)
     parts.push(entryCache.projection)
     projectionUnchanged &&= previous?.projection === entryCache.projection
