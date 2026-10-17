@@ -1,5 +1,5 @@
 import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-types'
-import { colors } from '../../theme/mobile-theme'
+import { darkColors as colors } from '../../theme/mobile-dark-colors'
 
 export const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,

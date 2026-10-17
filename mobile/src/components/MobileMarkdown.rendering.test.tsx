@@ -1,3 +1,26 @@
+vi.mock('./MobileMarkdownCodeBlock', () => ({
+  MobileMarkdownCodeBlock: ({
+    code,
+    language,
+    fontSize,
+    lineHeight
+  }: {
+    code: string
+    language?: string
+    fontSize?: number
+    lineHeight?: number
+  }) =>
+    createElement(
+      'View',
+      null,
+      language ? createElement('Text', null, language) : null,
+      createElement('Text', { style: { fontSize, lineHeight } }, code)
+    )
+}))
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
+}))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy' }))
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -61,7 +84,7 @@ describe('MobileMarkdown rendering', () => {
     [
       'C1: nested lists keep their own markers and numbers',
       '1. **Frontend**\n   - React\n   - Vite\n2. Backend',
-      ['1.', 'Frontend', '-', 'React', '-', 'Vite', '2.', 'Backend']
+      ['1.', 'Frontend', '•', 'React', '•', 'Vite', '2.', 'Backend']
     ],
     [
       'C1: blank lines keep one list, and a list cut short keeps its numbers',
@@ -71,7 +94,7 @@ describe('MobileMarkdown rendering', () => {
     [
       'C1: a wrapped item stays one item',
       '- a long item\nwrapped at sixty\n- next',
-      ['-', 'a long item\nwrapped at sixty', '-', 'next']
+      ['•', 'a long item\nwrapped at sixty', '•', 'next']
     ],
     [
       'C1: a number starting a wrapped line is not a list',
@@ -115,7 +138,7 @@ describe('MobileMarkdown rendering', () => {
     [
       'C18: blocks inside a quote',
       '> - a\n>\n> ```sh\n> ls\n> ```\n> > inner',
-      ['-', 'a', 'sh', 'ls', 'inner']
+      ['•', 'a', 'sh', 'ls', 'inner']
     ],
     ['C19: underlined headings and closing hashes', 'Title\n=====\n\n## Sub ##', ['Title', 'Sub']],
     [
@@ -220,7 +243,7 @@ describe('MobileMarkdown tone', () => {
     expect(styleOf(renderer!.root, 'Title').fontSize).toBe(30)
     expect(styleOf(renderer!.root, 'quoted').fontSize).toBe(26)
     expect(styleOf(renderer!.root, 'const a = 1').fontSize).toBe(24)
-    expect(styleOf(renderer!.root, 'code').fontSize).toBe(24)
+    expect(styleOf(renderer!.root, 'code').fontSize).toBeCloseTo(23.4)
     expect(styleOf(renderer!.root, 'Cell').fontSize).toBe(24)
   })
 })

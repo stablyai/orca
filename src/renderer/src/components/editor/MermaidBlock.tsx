@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import { Maximize2 } from 'lucide-react'
 import type mermaidNamespace from 'mermaid'
 import DOMPurify from 'dompurify'
+import { readableMermaidFlowchartSvg } from '../../../../shared/mermaid-flowchart-contrast'
 import { getMermaidConfig } from './mermaid-config'
 import { readMermaidThemeColors } from './mermaid-theme-colors'
 import { translate } from '@/i18n/i18n'
@@ -103,10 +104,13 @@ export default function MermaidBlock({
           // Why: although mermaid uses DOMPurify internally, we add an explicit
           // sanitization pass as defense-in-depth against XSS in case upstream
           // behaviour changes or a mermaid version ships without sanitization.
+          const sanitizedSvg = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } })
           setRendered({
             content,
             result: {
-              svg: DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } }),
+              svg: colors
+                ? readableMermaidFlowchartSvg(sanitizedSvg, colors.foreground, colors.background)
+                : sanitizedSvg,
               background: colors?.background
             }
           })

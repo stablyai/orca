@@ -113,11 +113,11 @@ function renderPhrasing(
     }
     case 'inlineCode': {
       // A span keeps its line's leading; only its own smaller size scales.
-      const size =
-        ctx.textScale !== 1 ? { fontSize: styles.inlineCode.fontSize * ctx.textScale } : null
+      const size = { fontSize: (inlineFontSize(outer) ?? 13 * ctx.textScale) * 0.9 }
       return ctx.onOpenFile && isFilePathCodeSpan(node.value) ? (
         <MarkdownText
           key={key}
+
           style={[
             outer,
             styles.inlineCode,
@@ -126,12 +126,17 @@ function renderPhrasing(
             styles.inlineCodeLink,
             ctx.tone.link
           ]}
+
           onPress={() => ctx.onOpenFile?.(normalizeFilePath(node.value.trim()))}
         >
           {node.value}
         </MarkdownText>
       ) : (
-        <MarkdownText key={key} style={[outer, styles.inlineCode, size, ctx.tone.inlineCode]}>
+        <MarkdownText
+          key={key}
+
+          style={[outer, styles.inlineCode, size, ctx.tone.inlineCode]}
+        >
           {node.value}
         </MarkdownText>
       )
@@ -164,4 +169,23 @@ export function renderInline(
   keyPrefix = ''
 ): ReactNode[] {
   return nodes.map((node, index) => renderPhrasing(node, `${keyPrefix}${index}`, ctx, outer))
+}
+
+function inlineFontSize(style: unknown): number | undefined {
+  if (Array.isArray(style)) {
+    for (const entry of style.toReversed()) {
+      const size = inlineFontSize(entry)
+      if (size !== undefined) {
+        return size
+      }
+    }
+  } else if (
+    style &&
+    typeof style === 'object' &&
+    'fontSize' in style &&
+    typeof style.fontSize === 'number'
+  ) {
+    return style.fontSize
+  }
+  return undefined
 }

@@ -40,3 +40,16 @@ export async function loadPageMermaid(): Promise<PageMermaid> {
   const engine = await import('./mermaid-page-engine.generated')
   return engine.default
 }
+
+// Mermaid's temporary DOM and configuration belong to one render at a time.
+let renderQueue: Promise<void> = Promise.resolve()
+
+export function enqueuePageMermaidRender(render: () => Promise<void>): void {
+  const complete = () => {
+    if (renderQueue === tail) {
+      renderQueue = Promise.resolve()
+    }
+  }
+  const tail = renderQueue.then(render, render).then(complete, complete)
+  renderQueue = tail
+}

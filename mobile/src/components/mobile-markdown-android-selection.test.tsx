@@ -1,3 +1,7 @@
+vi.mock('../platform/clipboard', () => ({
+  useClipboardWriter: () => ({ writeText: async () => {} })
+}))
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy' }))
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -73,7 +77,10 @@ describe('MobileMarkdown on Android', () => {
     }
     expect(all.filter((node) => !node.props.onPress && node.props.onLongPress)).toHaveLength(0)
     const images = renderer!.root.findAll(
-      (node) => String(node.type) === 'Pressable' && typeof node.props.onPress === 'function'
+      (node) =>
+        String(node.type) === 'Pressable' &&
+        typeof node.props.onPress === 'function' &&
+        node.props.accessibilityLabel !== 'Copy code'
     )
     expect(images.length).toBeGreaterThan(0)
     for (const node of images) {
