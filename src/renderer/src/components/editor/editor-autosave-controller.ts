@@ -96,13 +96,21 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     }
     detail.claim()
 
-    const matchingFiles =
-      'fileId' in detail
-        ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
-        : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
+    try {
+      const matchingFiles =
+        'fileId' in detail
+          ? store.getState().openFiles.filter((file) => file.id === detail.fileId)
+          : getOpenFilesForExternalFileChange(store.getState().openFiles, detail)
 
-    await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
-    detail.resolve()
+      await Promise.all(matchingFiles.map((file) => quiesceFileSave(file.id)))
+    } catch (error) {
+      // Why: claim() makes us the caller's only settler, so a throw here strands it
+      // forever with no error surfaced (folder delete hang, #18371). Quiescing is
+      // best-effort — log and let the caller's mutation proceed.
+      console.error('Editor save quiesce failed', error)
+    } finally {
+      detail.resolve()
+    }
   }
 
   // Why: the root subscriber fires on every store tick; skip the scan unless the four autosave inputs changed.
