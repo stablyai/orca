@@ -89,6 +89,23 @@ describe('the cell box xterm laid out', () => {
     expect(postedTypes()).not.toContain('measure')
   })
 
+  it('sizes a fit from a pong that stands in for a dropped web-ready', () => {
+    const { handle, notify, webView, onWebReady } = mount()
+    expect(handle().fitDimensions(FRAME)).toBeNull()
+    act(() => webView().props.onLoadEnd())
+    const ping = nativeWebViewMethods.postMessage.mock.calls
+      .map(([message]) => JSON.parse(message))
+      .find((message) => message.type === 'ping')
+    notify({
+      type: 'pong',
+      pingId: ping.id,
+      terminalAvailable: true,
+      cellBox: cellAt(scale)
+    })
+    expect(onWebReady).toHaveBeenCalledTimes(1)
+    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
+  })
+
   it('fits each box the document reports, and refits only when the document says so', () => {
     // The document holds the grid and decides; its tests pin the one-refit bound.
     const { handle, notify, onCellBoxChange } = mount()

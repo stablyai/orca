@@ -71,6 +71,7 @@ export function useTerminalWebViewController(
   } = props
   const { pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
+  const webReadyNotifiedRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
@@ -133,6 +134,7 @@ export function useTerminalWebViewController(
       clearWebReadyWatchdog()
       clearEngineError()
       if (notifyParent) {
+        webReadyNotifiedRef.current = true
         onWebReady?.()
       }
       // Why: reload clears queued commands, so readiness must always restore the
@@ -150,6 +152,14 @@ export function useTerminalWebViewController(
     ]
   )
 
+  /** Asks the document whether it is alive, unless it already said so or a probe is out. */
+  const probeWebReady = useCallback(() => {
+    if (isWebReadyRef.current || pendingPingIdRef.current !== null) {
+      return
+    }
+    pendingPingIdRef.current = sendToDocument({ type: 'ping' })
+  }, [sendToDocument])
+
   /** One notify from the document, already parsed. */
   const receive = useCallback(
     (msg: Record<string, unknown>) => {
@@ -162,9 +172,15 @@ export function useTerminalWebViewController(
       } else if (
         msg.type === 'pong' &&
         typeof msg.pingId === 'number' &&
+        // A document whose engine script failed still answers pings; it is not ready.
+        msg.terminalAvailable === true &&
         msg.pingId === pendingPingIdRef.current
       ) {
-        confirmWebReady(false)
+        // Why: a pong announces only a document whose web-ready was dropped; a foreground-recovery
+        // pong must not re-announce a document the parent already subscribed to. Its cell box is
+        // what sizes that recovered subscribe's viewport.
+        cellBoxRef.current = readTerminalCellBox(msg)
+        confirmWebReady(!webReadyNotifiedRef.current)
       } else if (msg.type === 'ready') {
         // Why: the document's init() rAF chain has run — term is open, renderService is
         // populated, first paint has happened, and its box was reported. Resolve any pending
@@ -220,6 +236,7 @@ export function useTerminalWebViewController(
    */
   const resetReadiness = useCallback(() => {
     isWebReadyRef.current = false
+    webReadyNotifiedRef.current = false
     pendingPingIdRef.current = null
     pendingMessages.clear()
     writeCoalescer.clear()
@@ -328,6 +345,7 @@ export function useTerminalWebViewController(
     confirmWebReady,
     engineError,
     handle,
+    probeWebReady,
     receive,
     reportNativeEngineError,
     resetReadiness

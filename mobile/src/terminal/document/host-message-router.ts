@@ -9,6 +9,7 @@ import { repositionOverlay } from './selection-overlay'
 import { cancelSelect } from './selection-range'
 import { resetEvictionCounter } from './selection-state-and-eviction'
 import { applyTerminalTheme } from './terminal-theme'
+import { laidOutCellBox } from './laid-out-cell-box'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
 import { resetWriteQueue } from './write-queue'
@@ -53,7 +54,14 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   }
   if (msg.type === 'ping') {
-    notify(scope, { type: 'pong', pingId: msg.id })
+    // Why: a pong that stands in for a dropped web-ready must carry the same cell box, or the
+    // host's first subscribe goes out unmeasured and the snapshot comes back at host size.
+    notify(scope, {
+      type: 'pong',
+      pingId: msg.id,
+      terminalAvailable: scope.hasEngine(),
+      cellBox: laidOutCellBox(scope)?.cellBox ?? null
+    })
   } else if (msg.type === 'init') {
     holdHostFrame(scope, msg)
     init(
