@@ -21,6 +21,7 @@ import {
 import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-delete'
 import { handleRichMarkdownTableBackspace } from './rich-markdown-table-row-delete'
 import { handleRichMarkdownTableEnter } from './rich-markdown-table-enter'
+import { exitHeadingOnEnter } from './rich-markdown-heading-continuation'
 import { handleRichMarkdownTableTab } from './rich-markdown-table-tab'
 import {
   indentRichMarkdownListItem,
@@ -70,9 +71,8 @@ export type KeyHandlerContext = {
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
 }
 
-function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
-  return isImeOwnedKeyboardEvent(event) || editor?.view.composing === true
-}
+const isComposingMarkdownInput = (event: KeyboardEvent, editor: Editor | null): boolean =>
+  isImeOwnedKeyboardEvent(event) || editor?.view.composing === true
 
 /**
  * Why: extracted from RichMarkdownEditor to stay under the file line-limit
@@ -192,7 +192,7 @@ export function createRichMarkdownKeyHandler(
         !ctx.slashMenuRef.current &&
         !ctx.docLinkMenuRef.current &&
         !isComposingMarkdownInput(event, ed) &&
-        handleRichMarkdownTableEnter(ed)
+        (handleRichMarkdownTableEnter(ed) || exitHeadingOnEnter(ed, event))
       ) {
         event.preventDefault()
         return true
