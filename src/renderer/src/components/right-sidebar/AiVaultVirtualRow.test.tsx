@@ -68,6 +68,7 @@ function renderSession(session: AiVaultSession, blocked = false, searchHit?: AiV
         })}
         getSessionResumeInChat={() => ({ available: false, reason: 'already-structured' })}
         onToggleGroup={vi.fn()}
+        onToggleGroupExpanded={vi.fn()}
         onToggleSessionDetails={vi.fn()}
         onJumpToOriginalPane={vi.fn()}
         onJumpToWorktree={vi.fn()}

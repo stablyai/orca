@@ -5,6 +5,7 @@ import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { VaultGroupHeader } from './AiVaultPanelControls'
 import { VaultSessionRow } from './AiVaultSessionRow'
+import { AiVaultGroupMoreRow } from './AiVaultGroupMoreRow'
 import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
@@ -31,6 +32,7 @@ import { canResumeAiVaultSearchHit, hasAiVaultSearchHitPath } from './ai-vault-s
 export type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
   | { type: 'session'; groupKey: string; session: AiVaultSession }
+  | { type: 'group-more'; groupKey: string; hiddenCount: number; expanded: boolean }
 
 export function AiVaultVirtualRow({
   row,
@@ -50,6 +52,7 @@ export function AiVaultVirtualRow({
   getSessionResumeActions,
   getSessionResumeInChat,
   onToggleGroup,
+  onToggleGroupExpanded,
   onToggleSessionDetails,
   onJumpToOriginalPane,
   onJumpToWorktree,
@@ -83,6 +86,7 @@ export function AiVaultVirtualRow({
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   getSessionResumeInChat: (session: AiVaultSession) => AiVaultResumeInChatEligibility
   onToggleGroup: (key: string) => void
+  onToggleGroupExpanded: (key: string) => void
   onToggleSessionDetails: (sessionId: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
   onJumpToWorktree: (worktreeId: string) => void
@@ -101,6 +105,22 @@ export function AiVaultVirtualRow({
 }): React.JSX.Element | null {
   if (!row) {
     return null
+  }
+  if (row.type === 'group-more') {
+    return (
+      <div
+        ref={measureElement}
+        data-index={index}
+        className="absolute left-0 top-0 w-full"
+        style={{ transform: `translateY(${start}px)` }}
+      >
+        <AiVaultGroupMoreRow
+          hiddenCount={row.hiddenCount}
+          expanded={row.expanded}
+          onToggle={() => onToggleGroupExpanded(row.groupKey)}
+        />
+      </div>
+    )
   }
 
   const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index

@@ -31,6 +31,7 @@ function header(focusSearchRequestId: number) {
       group="project"
       hideEmptySessions={false}
       sessionLimit={250}
+      groupSessionLimit="all"
       adjustmentCount={0}
       focusSearchRequestId={focusSearchRequestId}
       onQueryChange={vi.fn()}
@@ -41,6 +42,7 @@ function header(focusSearchRequestId: number) {
       onGroupChange={vi.fn()}
       onHideEmptySessionsChange={vi.fn()}
       onSessionLimitChange={vi.fn()}
+      onGroupSessionLimitChange={vi.fn()}
       onReset={vi.fn()}
       onRefresh={vi.fn()}
     />
