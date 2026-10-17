@@ -52,7 +52,11 @@ vi.mock('./main-process-relay-status', () => ({
   getDesktopRelayStatus: vi.fn(),
   publishDesktopRelayStatus: vi.fn()
 }))
-vi.mock('./main-process-relay-startup', () => ({ startDesktopRelayService: vi.fn() }))
+vi.mock('./main-process-relay-startup', () => ({
+  startDesktopRelayService: vi.fn(() => {
+    launchOrder.push('relay-start')
+  })
+}))
 vi.mock('./main-process-serve', () => ({
   getServeOptions: vi.fn(() => null),
   getBundledWebClientRoot: vi.fn(() => null),
@@ -309,7 +313,7 @@ describe('desktop startup activation', () => {
     })
 
     expect(windows).toHaveLength(0)
-    expect(launchOrder).toEqual(['ssh-registered', 'rpc-start'])
+    expect(launchOrder).toEqual(['ssh-registered', 'rpc-start', 'relay-start'])
     // Signals mark their quit, so the macOS native-quit guard lets them through (#15537).
     expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, quitProcess)
     expect(installServeNativeQuitGuard).toHaveBeenCalledWith(

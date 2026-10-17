@@ -173,6 +173,7 @@ async function launchServeMode(
     throw error
   })
   scheduleAgentLaunchRecordWarmup(null)
+  startDesktopRelayService(runtimeRpc)
   // Why: a phone paired to a headless host still registers and unregisters its token;
   // it simply never receives a push, because nothing dispatches notifications here.
   startDesktopPushService(runtimeRpc)
