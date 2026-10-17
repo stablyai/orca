@@ -1,3 +1,10 @@
+import { randomUUID } from 'node:crypto'
+import {
+  codexMcpToolApprovalDecisions,
+  isCodexMcpToolApproval,
+  type CodexMcpToolApprovalDecision
+} from './codex-mcp-tool-approval'
+export { codexMcpToolApprovalDecisions, isCodexMcpToolApproval } from './codex-mcp-tool-approval'
 import {
   MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
   MAX_CODEX_PROMPT_REGISTRY_BYTES,
@@ -14,6 +21,7 @@ import { readRecord, readString as readRecordString } from './codex-item-field-r
 export const CODEX_COMMAND_APPROVAL_METHOD = 'item/commandExecution/requestApproval'
 export const CODEX_FILE_CHANGE_APPROVAL_METHOD = 'item/fileChange/requestApproval'
 export const CODEX_USER_INPUT_METHOD = 'item/tool/requestUserInput'
+export const CODEX_MCP_ELICITATION_METHOD = 'mcpServer/elicitation/request'
 
 export type CodexPendingPrompt = {
   requestId: number | string
@@ -29,6 +37,8 @@ export type CodexPendingPrompt = {
   questionIdAliases: ReadonlyMap<string, string>
   optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
   answers: Map<string, string>
+  /** Set when the request limits the decisions, so an unoffered one is refused. */
+  offeredDecisions?: readonly CodexMcpToolApprovalDecision[]
 }
 
 export type CodexAbandonedCommand = { threadId: string; itemId: string }
@@ -47,12 +57,27 @@ export function isCodexPromptMethod(method: string): boolean {
   return (
     method === CODEX_COMMAND_APPROVAL_METHOD ||
     method === CODEX_FILE_CHANGE_APPROVAL_METHOD ||
-    method === CODEX_USER_INPUT_METHOD
+    method === CODEX_USER_INPUT_METHOD ||
+    method === CODEX_MCP_ELICITATION_METHOD
   )
+}
+
+/** A fresh registry id fences elicitation request ids reused after app-server restart. */
+function readPromptItemId(
+  request: { id: number | string; method: string; params: unknown },
+  registryId: string
+) {
+  if (request.method === CODEX_MCP_ELICITATION_METHOD) {
+    return isCodexMcpToolApproval(request.params)
+      ? `mcp-elicitation:${registryId}:${request.id}`
+      : null
+  }
+  return readString(request.params, 'itemId')
 }
 
 /** Session-local callback ownership; none of this state is reconstructed from the journal. */
 export class CodexPromptRegistry {
+  private readonly registryId = randomUUID()
   private readonly byAddress = new Map<string, CodexPendingPrompt>()
   private readonly journalItemIds = new Map<string, string>()
   private readonly boundPrompts = new Map<string, CodexPendingPrompt>()
@@ -72,7 +97,7 @@ export class CodexPromptRegistry {
     method: string
     params: unknown
   }): CodexPendingPrompt | null {
-    const codexItemId = readString(request.params, 'itemId')
+    const codexItemId = readPromptItemId(request, this.registryId)
     const threadId = readString(request.params, 'threadId')
     if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
       return null
@@ -94,13 +119,19 @@ export class CodexPromptRegistry {
     if (turnId && turnIdentity.turnId === null) {
       return null
     }
+    const isMcpElicitation = request.method === CODEX_MCP_ELICITATION_METHOD
     const prompt: CodexPendingPrompt = {
       requestId: request.id,
       method: request.method,
       threadId,
       ...turnIdentity,
       codexItemId,
-      promptKey: readString(request.params, 'approvalId') ?? codexItemId,
+      promptKey: isMcpElicitation
+        ? codexItemId
+        : (readString(request.params, 'approvalId') ?? codexItemId),
+      ...(isMcpElicitation
+        ? { offeredDecisions: codexMcpToolApprovalDecisions(request.params) }
+        : {}),
       questionIds,
       questionIdAliases:
         request.method === CODEX_USER_INPUT_METHOD

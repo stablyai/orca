@@ -12,7 +12,9 @@ import {
   CODEX_APPROVAL_DECISIONS,
   CODEX_COMMAND_APPROVAL_METHOD,
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
+  CODEX_MCP_ELICITATION_METHOD,
   codexJournalPromptIdPart,
+  codexMcpToolApprovalDecisions,
   encodeCodexJournalQuestionOptionId,
   type CodexApprovalDecision
 } from './codex-structured-prompt-replies'
@@ -84,6 +86,9 @@ export function codexApprovalItem(input: {
   detail: string | null
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
+  if (input.method === CODEX_MCP_ELICITATION_METHOD) {
+    return codexMcpToolApprovalItem(params)
+  }
   return {
     kind: 'approval',
     title:
@@ -94,6 +99,20 @@ export function codexApprovalItem(input: {
           : 'Approve this action?',
     detail: boundNullablePromptText(approvalDetail(params) ?? input.detail),
     options: codexApprovalOptions(input.params),
+    resolution: { ...PENDING }
+  }
+}
+
+function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournalApprovalItem {
+  const toolParams = readParams(params._meta).tool_params
+  return {
+    kind: 'approval',
+    title: boundPromptText(readString(params, 'message') ?? 'Allow this tool call?'),
+    detail: toolParams === undefined ? null : boundPromptText(JSON.stringify(toolParams)),
+    options: codexMcpToolApprovalDecisions(params).map((decision) => ({
+      id: decision,
+      label: APPROVAL_DECISION_LABELS[decision]
+    })),
     resolution: { ...PENDING }
   }
 }
