@@ -44,6 +44,20 @@ describe('DaemonRespawnThrottle', () => {
   })
 })
 
+describe('DaemonCrashLoopError', () => {
+  it('exposes the admission window as retryAfterMs so callers can schedule their own retry', () => {
+    let now = 0
+    const throttle = new DaemonRespawnThrottle({ maxAttempts: 1, windowMs: 1_000, now: () => now })
+    throttle.admit()
+    now = 400
+    const refused = throttle.admit()
+    if (refused.allowed) {
+      throw new Error('expected the second admission to be refused')
+    }
+    expect(new DaemonCrashLoopError(refused).retryAfterMs).toBe(600)
+  })
+})
+
 describe('DaemonSpawner crash-loop containment', () => {
   const handle: DaemonProcessHandle = { shutdown: async () => {} }
 
