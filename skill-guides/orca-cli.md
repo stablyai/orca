@@ -92,6 +92,8 @@ ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json
 ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
@@ -106,7 +108,7 @@ Selectors:
 
 - `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
-- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
+- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd; when targeting a paired server with `--environment` or `--pairing-code`, use an explicit selector from that server instead.
 - For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
 Lineage rules:
@@ -115,6 +117,8 @@ Lineage rules:
 - Use `--parent-worktree active` when the child worktree relationship should be explicit.
 - Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
+- A parent can be in a different project from its child, such as `worktree create --repo id:<otherRepoId> --name related-task --parent-worktree id:<parentRepoId>::<parentPath>`. A worktree parent and child must use the same execution host (local machine, SSH target, or paired server).
+- To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 - If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
 
