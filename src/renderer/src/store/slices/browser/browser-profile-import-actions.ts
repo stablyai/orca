@@ -2,7 +2,6 @@ import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-s
 import type { BrowserCookieImportResult } from '../../../../../shared/browser-workspace-types'
 import type { BrowserDetectProfilesResult } from '../../../../../shared/runtime-types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { translate } from '@/i18n/i18n'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
 import {
   getBrowserSettingsHostId,
@@ -23,26 +22,7 @@ export function createBrowserProfileImportActions(
       const initialState = get()
       const hostId = getBrowserSettingsHostId(initialState)
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
-      if (getBrowserSettingsRuntimeEnvironmentId(initialState)) {
-        const reason = translate(
-          'auto.store.slices.browser.remoteCookieImportUnavailable',
-          'Manual cookie file import is unavailable while a remote runtime is active.'
-        )
-        set((state) =>
-          browserImportStateForHostUpdate(state, hostId, {
-            profileId,
-            status: 'error',
-            summary: null,
-            error: reason
-          })
-        )
-        return retainCookieImportExecutionHost(
-          { ok: false as const, reason },
-          hostId,
-          executionHostLabel,
-          'client'
-        )
-      }
+      const environmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
       set((state) =>
         browserImportStateForHostUpdate(state, hostId, {
           profileId,
@@ -53,7 +33,8 @@ export function createBrowserProfileImportActions(
       )
       try {
         const result = (await window.api.browser.sessionImportCookies({
-          profileId
+          profileId,
+          ...(environmentId ? { environmentId } : {})
         })) as BrowserCookieImportResult
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')

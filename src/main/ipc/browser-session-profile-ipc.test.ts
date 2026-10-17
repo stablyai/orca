@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  importCookieFileMock,
   handleMock,
   removeHandlerMock,
   createProfileMock,
@@ -8,12 +9,18 @@ const {
   detectBrowsersMock,
   setBrowserIdentityModeMock
 } = vi.hoisted(() => ({
+  importCookieFileMock: vi.fn(),
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   createProfileMock: vi.fn(),
   routeIdentityMock: vi.fn(),
   detectBrowsersMock: vi.fn(() => []),
   setBrowserIdentityModeMock: vi.fn(async () => ({ ok: true }))
+}))
+
+vi.mock('../browser/browser-client-route-cookie-import', () => ({
+  importCookieFileIntoClientRoutePartition: importCookieFileMock,
+  importCookiesIntoClientRoutePartition: vi.fn()
 }))
 
 vi.mock('../browser/browser-identity-mode-store', () => ({
@@ -57,6 +64,7 @@ import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust
 
 describe('browser session profile IPC', () => {
   beforeEach(() => {
+    importCookieFileMock.mockReset()
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     createProfileMock.mockReset()
@@ -76,6 +84,44 @@ describe('browser session profile IPC', () => {
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
   }
+
+  function manualImportHandler() {
+    registerBrowserHandlers()
+    return handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:importCookies'
+    )?.[1]
+  }
+
+  it('routes manual imports to the named environment with a main-owned file picker', async () => {
+    setTrustedBrowserRendererWebContentsId(91)
+    importCookieFileMock.mockResolvedValue({ ok: false, reason: 'canceled' })
+    const handler = manualImportHandler()
+    expect(
+      await handler({ sender: trustedSender() }, { profileId: 'default', environmentId: 'env-a' })
+    ).toEqual({ ok: false, reason: 'canceled' })
+    expect(importCookieFileMock).toHaveBeenCalledWith(
+      { environmentId: 'env-a', browserProfileId: 'default' },
+      expect.any(Function)
+    )
+  })
+
+  it('does not fall through to a local profile when the environment is not client-hosted', async () => {
+    setTrustedBrowserRendererWebContentsId(91)
+    importCookieFileMock.mockResolvedValue(null)
+    const handler = manualImportHandler()
+    expect(
+      await handler({ sender: trustedSender() }, { profileId: 'default', environmentId: 'env-a' })
+    ).toMatchObject({ ok: false, reason: expect.stringContaining('hosted on this device') })
+  })
+
+  it('rejects unauthorized manual environment imports', async () => {
+    setTrustedBrowserRendererWebContentsId(92)
+    const handler = manualImportHandler()
+    expect(
+      await handler({ sender: trustedSender() }, { profileId: 'default', environmentId: 'env-a' })
+    ).toEqual({ ok: false, reason: 'Not authorized' })
+    expect(importCookieFileMock).not.toHaveBeenCalled()
+  })
 
   function identitySetHandler(): (
     event: { sender: Electron.WebContents },

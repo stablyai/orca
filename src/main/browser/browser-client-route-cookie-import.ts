@@ -1,7 +1,11 @@
-import type { BrowserCookieImportResult } from '../../shared/browser-workspace-types'
+import type {
+  BrowserSessionProfileSource,
+  BrowserCookieImportResult
+} from '../../shared/browser-workspace-types'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
+  importCookiesFromFile,
   selectBrowserProfile,
   type DetectedBrowser
 } from './browser-cookie-import'
@@ -29,6 +33,57 @@ export type ClientRouteCookieImportRequest = {
 export async function importCookiesIntoClientRoutePartition(
   request: ClientRouteCookieImportRequest
 ): Promise<BrowserCookieImportResult | null> {
+  return runClientRouteCookieImport(request, () => {
+    const browser = resolveImportSource(request)
+    if ('reason' in browser) {
+      return browser
+    }
+    return {
+      importIntoPartition: (partition: string) =>
+        importCookiesFromBrowser(browser.source, partition),
+      source: {
+        browserFamily: browser.source.family,
+        profileName: importedProfileName(browser.source)
+      }
+    }
+  })
+}
+
+type ClientRouteImportTarget = Pick<
+  ClientRouteCookieImportRequest,
+  'environmentId' | 'browserProfileId'
+>
+type ClientRouteImportSource = {
+  importIntoPartition: (partition: string) => Promise<BrowserCookieImportResult>
+  source: Omit<BrowserSessionProfileSource, 'importedAt'>
+}
+
+export async function importCookieFileIntoClientRoutePartition(
+  request: ClientRouteImportTarget,
+  chooseFile: () => Promise<string | null>
+): Promise<BrowserCookieImportResult | null> {
+  return runClientRouteCookieImport(request, () => ({
+    importIntoPartition: async (partition) => {
+      const filePath = await chooseFile()
+      if (!filePath) {
+        return { ok: false, reason: 'canceled' }
+      }
+      if (settledRoutePartition(request) !== partition) {
+        return {
+          ok: false,
+          reason: 'The browser connection changed while choosing a cookie file. Try again.'
+        }
+      }
+      return importCookiesFromFile(filePath, partition)
+    },
+    source: { browserFamily: 'manual' }
+  }))
+}
+
+async function runClientRouteCookieImport(
+  request: ClientRouteImportTarget,
+  resolveSource: () => ClientRouteImportSource | { ok: false; reason: string }
+): Promise<BrowserCookieImportResult | null> {
   const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(request.environmentId)
   if (!routeIdentity) {
     return null
@@ -37,9 +92,9 @@ export async function importCookiesIntoClientRoutePartition(
   if (!profile) {
     return { ok: false, reason: 'Session profile not found.' }
   }
-  const browser = resolveImportSource(request)
-  if ('reason' in browser) {
-    return browser
+  const source = resolveSource()
+  if ('reason' in source) {
+    return source
   }
   let partition: string
   try {
@@ -47,7 +102,7 @@ export async function importCookiesIntoClientRoutePartition(
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : String(error) }
   }
-  const result = await importCookiesFromBrowser(browser.source, partition)
+  const result = await source.importIntoPartition(partition)
   // Why: the import runs for seconds. A host replacement inside that window retargets the
   // route, so reporting success here would badge a partition no page will ever read from.
   const settled = settledRoutePartition(request)
@@ -70,8 +125,7 @@ export async function importCookiesIntoClientRoutePartition(
     environmentId: request.environmentId,
     profileId: request.browserProfileId,
     source: {
-      browserFamily: browser.source.family,
-      profileName: importedProfileName(browser.source),
+      ...source.source,
       importedAt: Date.now()
     }
   })
@@ -79,7 +133,7 @@ export async function importCookiesIntoClientRoutePartition(
 }
 
 /** Partition the route resolves to now, or null when the host no longer serves this environment. */
-function settledRoutePartition(request: ClientRouteCookieImportRequest): string | null {
+function settledRoutePartition(request: ClientRouteImportTarget): string | null {
   const routeIdentity = getPairedRuntimeBrowserClientRouteIdentity(request.environmentId)
   if (!routeIdentity) {
     return null

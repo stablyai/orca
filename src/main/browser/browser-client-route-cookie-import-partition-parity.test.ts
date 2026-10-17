@@ -10,6 +10,7 @@ const {
   getProfileMock,
   getRouteIdentityMock,
   importCookiesFromBrowserMock,
+  importCookiesFromFileMock,
   requireRouteBrowserProfileMock,
   updateProfileSourceMock
 } = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const {
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
   importCookiesFromBrowserMock: vi.fn(),
+  importCookiesFromFileMock: vi.fn(),
   requireRouteBrowserProfileMock: vi.fn(),
   updateProfileSourceMock: vi.fn()
 }))
@@ -31,6 +33,7 @@ const {
 vi.mock('./browser-cookie-import', () => ({
   detectInstalledBrowsers: detectInstalledBrowsersMock,
   importCookiesFromBrowser: importCookiesFromBrowserMock,
+  importCookiesFromFile: importCookiesFromFileMock,
   selectBrowserProfile: vi.fn()
 }))
 vi.mock('./browser-route-partition-binding-runtime', () => ({
@@ -47,7 +50,10 @@ vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
 }))
 
-import { importCookiesIntoClientRoutePartition } from './browser-client-route-cookie-import'
+import {
+  importCookiesIntoClientRoutePartition,
+  importCookieFileIntoClientRoutePartition
+} from './browser-client-route-cookie-import'
 import { BrowserClientNetworkRouteRegistry } from './browser-client-network-route-registry'
 import {
   browserAuthorityExecutionHostStorageIdentity,
@@ -185,6 +191,22 @@ describe('cookie-import target vs. client-hosted page partition', () => {
         revision: 1,
         distro: 'Ubuntu'
       })
+    )
+  })
+})
+
+describe('manual file target vs. client-hosted page partition', () => {
+  it('writes the selected desktop file into the same jar as a page on the paired server', async () => {
+    const expected = await importPartition()
+    importCookiesFromFileMock.mockResolvedValue({ ok: true, summary: { importedCookies: 1 } })
+    const result = await importCookieFileIntoClientRoutePartition(
+      { environmentId: 'env-a', browserProfileId },
+      async () => '/test/cookies.json'
+    )
+    expect(result).toMatchObject({ ok: true })
+    expect(importCookiesFromFileMock).toHaveBeenLastCalledWith('/test/cookies.json', expected)
+    expect(expected).toBe(
+      await pagePartition({ kind: 'native', runtimeId: authorityRuntimeId, revision: 1 })
     )
   })
 })

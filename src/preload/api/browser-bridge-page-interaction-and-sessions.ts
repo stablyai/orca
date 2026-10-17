@@ -154,7 +154,7 @@ export const browserPageInteractionAndSessionsApi = {
   identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:deleteProfile', args),
-  sessionImportCookies: (args: { profileId: string }) =>
+  sessionImportCookies: (args: { profileId: string; environmentId?: string }) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),

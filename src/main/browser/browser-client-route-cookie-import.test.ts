@@ -6,6 +6,7 @@ const {
   getProfileMock,
   getRouteIdentityMock,
   importCookiesFromBrowserMock,
+  importCookiesFromFileMock,
   requireRouteBrowserProfileMock,
   recordClientRouteImportSourceMock,
   selectBrowserProfileMock
@@ -21,6 +22,7 @@ const {
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
   importCookiesFromBrowserMock: vi.fn(),
+  importCookiesFromFileMock: vi.fn(),
   requireRouteBrowserProfileMock: vi.fn(),
   recordClientRouteImportSourceMock: vi.fn(),
   selectBrowserProfileMock: vi.fn()
@@ -29,6 +31,7 @@ const {
 vi.mock('./browser-cookie-import', () => ({
   detectInstalledBrowsers: detectInstalledBrowsersMock,
   importCookiesFromBrowser: importCookiesFromBrowserMock,
+  importCookiesFromFile: importCookiesFromFileMock,
   selectBrowserProfile: selectBrowserProfileMock
 }))
 vi.mock('./browser-route-partition-binding-runtime', () => ({
@@ -47,7 +50,7 @@ vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
 }))
 
-const { importCookiesIntoClientRoutePartition } =
+const { importCookiesIntoClientRoutePartition, importCookieFileIntoClientRoutePartition } =
   await import('./browser-client-route-cookie-import')
 
 const routeIdentity = {
@@ -202,5 +205,61 @@ describe('importCookiesIntoClientRoutePartition', () => {
       ok: false,
       reason: 'Session profile not found.'
     })
+  })
+})
+
+describe('importCookieFileIntoClientRoutePartition', () => {
+  it('imports a desktop file into the environment route jar, not the local profile jar', async () => {
+    importCookiesFromFileMock.mockResolvedValue({ ok: true, summary: { importedCookies: 3 } })
+    const chooseFile = vi.fn(async () => '/test/cookies.json')
+    expect(await importCookieFileIntoClientRoutePartition(request, chooseFile)).toMatchObject({
+      ok: true,
+      profileId: 'default'
+    })
+    expect(importCookiesFromFileMock).toHaveBeenCalledWith(
+      '/test/cookies.json',
+      expect.stringMatching(/^persist:orca-browser-v1-[a-f0-9]{64}$/)
+    )
+    expect(recordClientRouteImportSourceMock).toHaveBeenCalledWith({
+      environmentId: 'env-a',
+      profileId: 'default',
+      source: { browserFamily: 'manual', importedAt: expect.any(Number) }
+    })
+    expect(importCookiesFromBrowserMock).not.toHaveBeenCalled()
+  })
+
+  it('does not open the file picker for a non-client-hosted environment', async () => {
+    getRouteIdentityMock.mockReturnValue(null)
+    const chooseFile = vi.fn()
+    expect(await importCookieFileIntoClientRoutePartition(request, chooseFile)).toBeNull()
+    expect(chooseFile).not.toHaveBeenCalled()
+  })
+
+  it('preserves cancellation without importing or recording a source', async () => {
+    expect(await importCookieFileIntoClientRoutePartition(request, async () => null)).toEqual({
+      ok: false,
+      reason: 'canceled'
+    })
+    expect(importCookiesFromFileMock).not.toHaveBeenCalled()
+    expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
+  })
+
+  it('never opens the picker when partition binding conflicts', async () => {
+    bindingStore.get.mockReturnValue('b'.repeat(64))
+    const chooseFile = vi.fn()
+    expect(await importCookieFileIntoClientRoutePartition(request, chooseFile)).toMatchObject({
+      ok: false
+    })
+    expect(chooseFile).not.toHaveBeenCalled()
+  })
+
+  it('does not badge a replacement connection if re-pairing occurs while the picker is open', async () => {
+    importCookiesFromFileMock.mockResolvedValue({ ok: true, summary: { importedCookies: 3 } })
+    const result = await importCookieFileIntoClientRoutePartition(request, async () => {
+      getRouteIdentityMock.mockReturnValue(repairedRouteIdentity)
+      return '/test/cookies.json'
+    })
+    expect(result).toMatchObject({ ok: false, reason: expect.stringContaining('re-paired') })
+    expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
   })
 })
