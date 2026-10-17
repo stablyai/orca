@@ -103,9 +103,9 @@ export function agentLaunchExistingParams(args: {
 /**
  * Reads the launch receipt.
  *
- * Deliberately mode-blind: whichever surface the host built, it published and activated that tab
- * before answering, so the create flow navigates to the workspace and the host's own active-tab
- * marking decides what opens. That is why nothing here branches on `outcome.kind` to pick a
+ * Deliberately mode-blind: whichever surface the host built, it published that tab and selected it
+ * for this device before answering, so the create flow navigates to the workspace and the device's
+ * own selection decides what opens. That is why nothing here branches on `outcome.kind` to pick a
  * destination — a create-time guess would just race the snapshot that already knows.
  */
 export function readAgentLaunchCreateOutcome(result: unknown): AgentLaunchCreateOutcome | null {

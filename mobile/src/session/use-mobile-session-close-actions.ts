@@ -1,4 +1,4 @@
-import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
+import { withoutPendingHandle } from './pending-session-selection'
 import {
   sessionTabClose,
   sessionTerminalClose,
@@ -79,17 +79,27 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         clearTerminalLiveInputDefault(target.handle)
+        const retiredTab = sessionTabsRef.current.find(
+          (tab) => tab.type === 'terminal' && tab.terminal === target.handle
+        )
+        if (selectedSessionTabIdRef.current === retiredTab?.id) {
+          selectedSessionTabIdRef.current = null
+        }
         const next = terminals.filter((terminal) => terminal.handle !== target.handle)
         setTerminals(next)
         terminalsRef.current = next
         if (activeHandleRef.current === target.handle) {
           const replacement = next[0] ?? null
+          const replacementTab = sessionTabsRef.current.find(
+            (tab) => tab.type === 'terminal' && tab.terminal === replacement?.handle
+          )
+          selectedSessionTabIdRef.current = replacementTab?.id ?? null
           activeHandleRef.current = replacement?.handle ?? null
           pendingSelectionRef.current = replacement
             ? {
                 kind: 'terminal',
                 handle: replacement.handle,
-                tabId: pendingSelectionTabId(pendingSelectionRef.current)
+                tabId: replacementTab?.id ?? null
               }
             : withoutPendingHandle(pendingSelectionRef.current)
           setActiveHandle(replacement?.handle ?? null)
@@ -157,9 +167,11 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         // Why: bulk close re-activates the anchor before awaiting each close;
         // the render-synced ref sees that switch while this closure would not,
         // so comparing against the ref keeps the anchor from being nulled out.
+        if (selectedSessionTabIdRef.current === tab.id) {
+          selectedSessionTabIdRef.current = null
+        }
         if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
           activeSessionTabTypeRef.current = null
-          selectedSessionTabIdRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)
           activeHandleRef.current = null

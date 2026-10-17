@@ -69,6 +69,7 @@ export type TerminalActions = {
       /** Published atomically with pendingStartup for automatic resume ownership. */
       automaticResumeClaim?: AutomaticAgentResumeClaim
       activate?: boolean
+      recordFocus?: boolean
       /** Creates the tab in a new split group instead of targetGroupId. */
       split?: TabSplitTarget
       recordInteraction?: boolean
@@ -97,7 +98,7 @@ export type TerminalActions = {
   ) => void
   reorderTabs: (worktreeId: string, tabIds: string[]) => void
   setTabBarOrder: (worktreeId: string, order: string[]) => void
-  setActiveTab: (tabId: string) => void
+  setActiveTab: (tabId: string, options?: { recordFocus?: boolean }) => void
   setActiveTabForWorktree: (worktreeId: string, tabId: string) => void
   /** Resolve the canonical legacy terminal-tab owner key for renderer lifecycle guards. */
   getTerminalTabOwnerWorktreeId?: (tabId: string) => string | null

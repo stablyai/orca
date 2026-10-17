@@ -202,7 +202,8 @@ function structuredAgentLaunchState(
     agent,
     options.executionHostId,
     options.resumeFrom,
-    options.hostSeedOptions
+    options.hostSeedOptions,
+    options.recordFocus
   )
   const text = launchPromptText(options)
   const stagedPrompt = text

@@ -25,8 +25,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     })
 
     expect(createTab).toHaveBeenCalledTimes(2)
-    expect(store.setActiveTab).toHaveBeenNthCalledWith(1, 'tab-1')
-    expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1')
+    expect(store.setActiveTab).toHaveBeenNthCalledWith(1, 'tab-1', { recordFocus: false })
+    expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1', { recordFocus: false })
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })
@@ -79,7 +79,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(result).toBe('tab-1')
     expect(createTab).toHaveBeenCalledTimes(1)
-    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
+    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1', { recordFocus: false })
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })
@@ -293,7 +293,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
         env: { ORCA_ROOT_PATH: '/tmp/repo' }
       })
-      expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1')
+      expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1', { recordFocus: false })
       expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
         recordInteraction: false
       })
@@ -314,8 +314,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(createTab).toHaveBeenCalledTimes(2)
     // Main tab is activated first (new terminal), then setup tab is created,
     // and the helper re-activates the main tab so focus stays on tab-1.
-    expect(store.setActiveTab).toHaveBeenNthCalledWith(1, 'tab-1')
-    expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1')
+    expect(store.setActiveTab).toHaveBeenNthCalledWith(1, 'tab-1', { recordFocus: false })
+    expect(store.setActiveTab).toHaveBeenLastCalledWith('tab-1', { recordFocus: false })
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })

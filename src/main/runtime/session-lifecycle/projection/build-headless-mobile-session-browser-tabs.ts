@@ -6,6 +6,7 @@ import type {
   RuntimeMobileSessionTerminalTab
 } from '../../../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
@@ -298,9 +299,13 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     result: RuntimeMobileSessionTabsResult,
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
+    const scope = parseWorkspaceKey(result.worktree)
     return this.clientSessionTabSelections.project(
       this.withSessionTabsHolds(result, clientNavigationId),
-      clientNavigationId
+      clientNavigationId,
+      scope?.type === 'folder'
+        ? this.store?.getFolderWorkspace?.(scope.folderWorkspaceId)?.createdWithAgent
+        : this.store?.getWorktreeMeta?.(result.worktree)?.createdWithAgent
     )
   }
 

@@ -36,10 +36,16 @@ import { getStructuredAgentLaunchStatus } from './structured-agent-session-launc
 import { getStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from './structured-agent-session-host-admission'
+import { LEAF_ID, makeSnapshot } from '@/runtime/web-session-tabs-sync-test-harness'
+import { applyFreshWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
+import { makeOpenFile } from '@/store/slices/store-test-helpers'
+import type { Tab } from '../../../shared/tab-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
 
 const WORKTREE = 'repo-1::/srv/app'
-const INITIAL_SETTINGS = useAppStore.getState().settings
+const INITIAL_STATE = useAppStore.getState()
 
 function pairedPlan(
   overrides: { resumeFrom?: { providerSessionId: string }; executionHostId?: 'local' } = {}
@@ -69,19 +75,129 @@ function expectNoChatCommitted(): void {
   ).toBeNull()
 }
 
+function acceptedChatSnapshot(chat: Tab, siblings: RuntimeMobileSessionTabsResult['tabs'] = []) {
+  return makeSnapshot(
+    [
+      {
+        type: 'agent-session',
+        id: `agent-session:${chat.entityId}`,
+        sessionId: chat.entityId,
+        agent: 'claude',
+        title: 'Claude Chat',
+        isActive: true
+      },
+      ...siblings
+    ],
+    {
+      worktree: WORKTREE,
+      publicationEpoch: chat.entityId,
+      activeTabId: `agent-session:${chat.entityId}`,
+      activeTabType: 'agent-session'
+    }
+  )
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.hostPermission.mockResolvedValue({ kind: 'allowed' })
   localStorage.clear()
+  useAppStore.setState(INITIAL_STATE, true)
   useAppStore.setState({
     activeWorktreeId: WORKTREE,
     activeWorkspaceExecutionHostId: null,
     unifiedTabsByWorktree: {},
-    settings: INITIAL_SETTINGS
+    worktreesByRepo: {},
+    detectedWorktreesByRepo: {},
+    folderWorkspaces: [],
+    settings: INITIAL_STATE.settings
   })
 })
 
 describe('a structured chat launch on a paired server', () => {
+  it.each(['setup', 'file', null])(
+    'publishes automatic chat without replacing a choice during admission: %s',
+    async (pick) => {
+      let answer!: (support: { supported: boolean }) => void
+      mocks.createSupport.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+      const launch = beginStructuredAgentSessionProvisionalLaunch({
+        plan: pairedPlan(),
+        hooks: {},
+        recordFocus: false
+      })
+      const setup = pick === 'setup' ? useAppStore.getState().createTab(WORKTREE) : null
+      const file =
+        pick === 'file' ? makeOpenFile({ id: '/srv/app/index.ts', worktreeId: WORKTREE }) : null
+      const fileId = file ? useAppStore.getState().openFile(file) : null
+      answer({ supported: true })
+      await vi.waitFor(() =>
+        expect(getStructuredAgentLaunchStatus(WORKTREE, 'claude')).toBe('pending')
+      )
+      const state = useAppStore.getState()
+      expect(state.unifiedTabsByWorktree[WORKTREE]).toHaveLength(pick ? 2 : 1)
+      const chat = state.unifiedTabsByWorktree[WORKTREE]!.find(
+        (tab) => tab.contentType === 'agent-session'
+      )!
+      const fileTab = state.unifiedTabsByWorktree[WORKTREE]!.find(
+        (tab) => tab.contentType === 'editor' && tab.entityId === fileId
+      )
+      const selected = setup?.id ?? fileTab?.id ?? chat.id
+      const selectedType = setup ? 'terminal' : fileId ? 'editor' : 'agent-session'
+      expect(chat.lastFocusedAt).toBeUndefined()
+      expect(peekWebSessionFocusIntent({ environmentId: 'server-1' }, WORKTREE)).toBeNull()
+      expect(state.activeGroupIdByWorktree[WORKTREE]).toBe(chat.groupId)
+      expect(state.groupsByWorktree[WORKTREE]?.[0]?.activeTabId).toBe(selected)
+      expect(state.activeTabType).toBe(selectedType)
+      expect(state.activeTabTypeByWorktree[WORKTREE]).toBe(selectedType)
+      expect(fileId ? state.activeFileId : state.activeTabId).toBe(fileId ?? setup?.id ?? null)
+      const siblings: RuntimeMobileSessionTabsResult['tabs'] = []
+      if (setup) {
+        siblings.push({
+          type: 'terminal',
+          id: `${setup.id}::${LEAF_ID}`,
+          parentTabId: setup.id,
+          leafId: LEAF_ID,
+          title: 'Setup',
+          terminal: 'term_setup',
+          status: 'ready',
+          isActive: false
+        })
+      }
+      if (file) {
+        siblings.push({
+          type: 'file',
+          mode: 'edit',
+          id: fileTab!.id,
+          title: 'index.ts',
+          filePath: file.filePath,
+          relativePath: file.relativePath,
+          language: file.language,
+          isDirty: file.isDirty,
+          isActive: false
+        })
+      }
+      const snapshot = acceptedChatSnapshot(chat, siblings)
+      useAppStore.setState(applyFreshWebSessionTabsSnapshot(state, snapshot, 'server-1'))
+      const accepted = useAppStore.getState()
+      const acceptedSelection = setup ? toWebTerminalSurfaceTabId(setup.id) : selected
+      expect(accepted.activeGroupIdByWorktree[WORKTREE]).toBe(chat.groupId)
+      expect(accepted.groupsByWorktree[WORKTREE]?.[0]?.activeTabId).toBe(acceptedSelection)
+      expect(accepted.activeTabType).toBe(selectedType)
+      expect(accepted.activeTabTypeByWorktree[WORKTREE]).toBe(selectedType)
+      expect(fileId ? accepted.activeFileId : accepted.activeTabId).toBe(
+        fileId ?? acceptedSelection
+      )
+      expect(
+        fileId
+          ? accepted.activeFileIdByWorktree[WORKTREE]
+          : accepted.activeTabIdByWorktree[WORKTREE]
+      ).toBe(fileId ?? acceptedSelection)
+      expect(
+        accepted.unifiedTabsByWorktree[WORKTREE]?.find((tab) => tab.id === chat.id)?.lastFocusedAt
+      ).toBeUndefined()
+      expect(peekWebSessionFocusIntent({ environmentId: 'server-1' }, WORKTREE)).toBeNull()
+      launch?.cancel()
+    }
+  )
   it('opens only the terminal when the server declines, keeping the workspace selected', async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     const onHostDeclined = vi.fn(() => ({
@@ -237,6 +353,21 @@ describe('a structured chat launch on a paired server', () => {
         })
       ])
     )
+    expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]?.[0]?.lastFocusedAt).toBeTypeOf(
+      'number'
+    )
+    expect(peekWebSessionFocusIntent({ environmentId: 'server-1' }, WORKTREE)).not.toBeNull()
+    const state = useAppStore.getState()
+    const chat = state.unifiedTabsByWorktree[WORKTREE]![0]!
+    useAppStore.setState(
+      applyFreshWebSessionTabsSnapshot(state, acceptedChatSnapshot(chat), 'server-1')
+    )
+    const accepted = useAppStore.getState()
+    expect(accepted.groupsByWorktree[WORKTREE]?.[0]?.activeTabId).toBe(chat.id)
+    expect(accepted.activeTabId).toBe(chat.id)
+    expect(accepted.activeTabType).toBe('agent-session')
+    expect(accepted.unifiedTabsByWorktree[WORKTREE]?.[0]?.lastFocusedAt).toBe(chat.lastFocusedAt)
+    expect(peekWebSessionFocusIntent({ environmentId: 'server-1' }, WORKTREE)).toBeNull()
     launch?.cancel()
   })
 })

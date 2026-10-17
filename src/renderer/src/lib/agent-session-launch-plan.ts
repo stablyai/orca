@@ -65,6 +65,7 @@ export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
 }
 
 export type AgentSessionLaunchTarget = {
+  recordFocus?: boolean
   /** Overrides the verdict's workspace when it was created after planning. */
   worktreeId?: string
   /** The host that admitted the chat, when one was asked first; it is the host the chat is made on. */
@@ -118,6 +119,7 @@ function beginStructuredPlanLaunch(
       verdict.agent,
       {
         ...structuredLaunchOptions(verdict),
+        recordFocus: target?.recordFocus,
         ...(executionHostId ? { executionHostId } : {}),
         ...(target?.seedOptions ? { hostSeedOptions: target.seedOptions } : {})
       },

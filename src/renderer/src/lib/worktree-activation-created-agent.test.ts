@@ -45,6 +45,42 @@ afterEach(() => {
 })
 
 describe('activateAndRevealWorktree', () => {
+  // A phone's create leaves Setup active in this window; a desktop that never opened it lands on the agent.
+  it('derives the creation agent until the viewer makes an explicit choice', () => {
+    const worktree = makeWorktree()
+    seedAlreadyActiveWorktree(worktree, { activeView: 'tasks' })
+    const activateTab = vi.fn()
+    const [setupTab] = useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []
+    const chatTab = {
+      ...setupTab!,
+      id: 'chat-1',
+      contentType: 'agent-session' as const,
+      agentSessionAgent: 'codex' as const
+    }
+    useAppStore.setState({
+      activateTab,
+      unifiedTabsByWorktree: {
+        [worktree.id]: [setupTab!, chatTab]
+      }
+    })
+
+    activateAndRevealWorktree(worktree.id)
+    expect(activateTab).toHaveBeenCalledWith('chat-1', {
+      worktreeId: worktree.id,
+      recordFocus: false
+    })
+    activateTab.mockClear()
+    useAppStore.setState({ lastVisitedAtByWorktreeId: { [worktree.id]: 1 } })
+    activateAndRevealWorktree(worktree.id)
+    expect(activateTab).toHaveBeenCalled()
+    activateTab.mockClear()
+    useAppStore.setState({
+      unifiedTabsByWorktree: { [worktree.id]: [{ ...setupTab!, lastFocusedAt: 0 }, chatTab] }
+    })
+    activateAndRevealWorktree(worktree.id)
+    expect(activateTab).not.toHaveBeenCalled()
+  })
+
   it('does not restamp focus recency when reselecting the already-active terminal worktree', () => {
     const worktree = makeWorktree()
     const { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar } =

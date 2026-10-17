@@ -18,6 +18,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     activeHandleRef,
     activeSessionTabTypeRef,
     pendingSelectionRef,
+    selectedSessionTabIdRef,
     switchSessionTabRef,
     unsubscribeTerminal,
     subscribeToTerminal,
@@ -33,6 +34,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
           tab.type === 'terminal' && tab.terminal === handle
       )
       terminalDiagnosticsRef.current.tabSwitch('terminal', matchingTab?.id ?? '', false, handle)
+      selectedSessionTabIdRef.current = matchingTab?.id ?? null
       pendingSelectionRef.current = { kind: 'terminal', handle, tabId: matchingTab?.id ?? null }
       activeSessionTabTypeRef.current = 'terminal'
       defaultTerminalHandlesToLiveInput([handle])
@@ -72,6 +74,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
 
   const switchSessionTab = useCallback(
     (tab: MobileSessionTab) => {
+      selectedSessionTabIdRef.current = tab.id
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)

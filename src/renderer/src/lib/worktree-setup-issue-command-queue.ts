@@ -30,12 +30,13 @@ export function queueSetupAndIssueCommands(
     }
     const setupTab = store.createTab(worktreeId, undefined, undefined, {
       recordInteraction: false,
-      ...(opts?.activateCreatedTabs === false ? { activate: false } : {}),
+      // Why: Setup is shown, not chosen; only an activated create would record focus.
+      ...(opts?.activateCreatedTabs === false ? { activate: false } : { recordFocus: false }),
       pendingStartup: setupCommand
     })
     // Why: createTab auto-activates the new tab; revert so focus stays on the primary terminal while Setup runs in the background.
     if (opts?.activateCreatedTabs !== false && terminalTabId) {
-      store.setActiveTab(terminalTabId)
+      store.setActiveTab(terminalTabId, { recordFocus: false })
     }
     // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
     store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })

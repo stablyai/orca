@@ -1,3 +1,6 @@
+import { preferredWorkspaceViewerTab } from '@/lib/workspace-creation-tab-selection'
+import { findKnownWorktreeById } from '../../store/slices/worktrees/listing/detected-worktree-meta'
+import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 import type { prepareWebSessionTabsSnapshotBrowser } from './apply-preparation-browser'
 import { buildTerminalUnifiedTab } from './tab-builders'
 import { isAgentSessionTab } from './terminal-surfaces'
@@ -40,7 +43,8 @@ export function prepareWebSessionTabsSnapshotUnified(
       entry.tab,
       hostGroupIdByTabId.get(entry.hostTabId) ?? targetGroupId,
       environmentId,
-      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id)
+      entry.tab.viewMode ?? existingViewModeByTabId.get(entry.tab.id),
+      base.existingTabIndex.getTerminalContinuation(entry.tab.id, entry.hostTabId)
     )
   )
   const mirroredBrowserUnifiedTabs = mirroredBrowserTabs.map((entry) => entry.unifiedTab)
@@ -56,6 +60,20 @@ export function prepareWebSessionTabsSnapshotUnified(
     retainedUnifiedTabs.length + mirroredUnifiedTabs.length > 0
       ? [...retainedUnifiedTabs, ...mirroredUnifiedTabs]
       : null
+  const preferredViewerTab = preferredWorkspaceViewerTab(
+    nextUnifiedTabs ?? [],
+    nextTerminalTabs ?? [],
+    findKnownWorktreeById(
+      {
+        worktreesByRepo: state.worktreesByRepo ?? {},
+        detectedWorktreesByRepo: state.detectedWorktreesByRepo ?? {},
+        folderWorkspaces: state.folderWorkspaces ?? [],
+        floatingWorkspacePath: state.floatingWorkspacePath ?? null
+      },
+      worktreeId,
+      executionHostIdForSessionTabsOwner(environmentId)
+    )?.createdWithAgent
+  )
   const validUnifiedTabIds = new Set(nextUnifiedTabs?.map((tab) => tab.id) ?? [])
   const activeHostTerminalId =
     terminalSurfaceTabs.find((tab) => tab.id === snapshot.activeTabId)?.id ??
@@ -128,6 +146,7 @@ export function prepareWebSessionTabsSnapshotUnified(
       : null
   const nextActiveTerminalId =
     intentTerminalId ??
+    (preferredViewerTab?.contentType === 'terminal' ? preferredViewerTab.entityId : null) ??
     currentActiveTerminalStillExists ??
     (snapshot.activeTabType === 'terminal'
       ? (activeMirroredTerminalId ?? mirroredTerminalTabEntries[0]?.id)
@@ -144,6 +163,7 @@ export function prepareWebSessionTabsSnapshotUnified(
       : null
   const nextActiveBrowserWorkspaceId =
     intentBrowserWorkspaceId ??
+    (preferredViewerTab?.contentType === 'browser' ? preferredViewerTab.entityId : null) ??
     currentActiveBrowserStillExists ??
     (snapshot.activeTabType === 'browser'
       ? (activeMirroredBrowserWorkspaceId ?? mirroredBrowserTabs[0]?.workspace.id)
@@ -159,6 +179,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     : null
   const nextActiveEditorFileId =
     intentEditorFileId ??
+    (preferredViewerTab?.contentType === 'editor' ? preferredViewerTab.entityId : null) ??
     currentActiveEditorStillExists ??
     (snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
       ? (activeMirroredEditorFileId ?? mirroredEditorTabs[0]?.file.id)
@@ -167,7 +188,8 @@ export function prepareWebSessionTabsSnapshotUnified(
   const currentVisibleUnifiedTabId = resolveWebSessionVisibleTabId(
     state,
     worktreeId,
-    nextUnifiedTabs ?? []
+    nextUnifiedTabs ?? [],
+    base.provisionalHandoffHostTabIds
   )
   const currentVisibleStructuredTabId =
     currentVisibleUnifiedTabId &&
@@ -198,9 +220,13 @@ export function prepareWebSessionTabsSnapshotUnified(
             ? (intentMirroredEditor?.unifiedTab.id ?? null)
             : null
     : null
+  // Why: this viewer's own selection, the creation tab or its visible tab, absent an explicit intent.
+  const viewerSelectedUnifiedTabId = intentUnifiedTabId
+    ? null
+    : (preferredViewerTab?.id ?? currentVisibleUnifiedTabId)
   const nextActiveUnifiedTabId =
     intentUnifiedTabId ??
-    currentVisibleUnifiedTabId ??
+    viewerSelectedUnifiedTabId ??
     reservedEmptyPreviewFallbackTabId ??
     (snapshot.activeTabType === 'agent-session'
       ? (activeMirroredAgentTabId ?? mirroredAgentUnifiedTabs[0]?.id ?? nextActiveTerminalId)
@@ -236,6 +262,7 @@ export function prepareWebSessionTabsSnapshotUnified(
 
   return {
     ...base,
+    preferredViewerTab,
     mirroredTerminalUnifiedTabs,
     mirroredBrowserUnifiedTabs,
     mirroredEditorUnifiedTabs,
@@ -272,6 +299,7 @@ export function prepareWebSessionTabsSnapshotUnified(
     currentVisibleStructuredTabId,
     reservedEmptyPreviewFallbackTabId,
     intentUnifiedTabId,
+    viewerSelectedUnifiedTabId,
     nextActiveUnifiedTabId,
     mirroredUnifiedIds,
     hostToLocalTabId

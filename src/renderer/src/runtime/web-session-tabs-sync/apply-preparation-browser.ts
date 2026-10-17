@@ -43,7 +43,10 @@ export function prepareWebSessionTabsSnapshotBrowser(
     snapshot.tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.sessionId)
   )
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
-  const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
+  const existingTabIndex = buildWebSessionExistingTabIndex({
+    unifiedTabs: currentUnifiedTabs,
+    provisionalHandoffHostTabIds: base.provisionalHandoffHostTabIds
+  })
   const readyBrowserTabs = reconcilesNonAgentTabs ? snapshot.tabs.filter(isReadyBrowserTab) : []
   const nextRemoteBrowserPageIds = new Set(readyBrowserTabs.map((tab) => tab.browserPageId))
   const mirroredBrowserTabs = buildMirroredBrowserTabs(

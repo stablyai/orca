@@ -1,7 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeRuntimeOwnedWorktree, makeWorktree } from './store-test-helpers'
+import {
+  LEAF_ID,
+  makeSnapshot,
+  resetWebSessionTabsSyncTestState
+} from '@/runtime/web-session-tabs-sync-test-harness'
+import { applyFreshWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
+import { makeHostSnapshot } from '@/runtime/host-session-mirror-frame-fixtures'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -18,15 +26,121 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 createTabsSliceMockApi()
 
 const WT = 'repo1::/tmp/feature'
+const hostWorktree = makeRuntimeOwnedWorktree(
+  { id: WT, repoId: 'repo1', createdWithAgent: 'codex' },
+  'host'
+)
 
 describe('TabsSlice', () => {
   let store: ReturnType<typeof createTestStore>
 
   beforeEach(() => {
     store = createTestStore()
+    resetWebSessionTabsSyncTestState()
   })
 
   describe('reconcileWorktreeTabModel', () => {
+    it('selects a late creation agent only until an actual Setup choice', () => {
+      store.setState({
+        activeWorktreeId: WT,
+        worktreesByRepo: {
+          repo1: [makeWorktree({ id: WT, repoId: 'repo1', createdWithAgent: 'codex' })]
+        }
+      })
+      const setup = store.getState().createTab(WT, undefined, undefined, { recordFocus: false })
+      const agent = store.getState().createTab(WT, undefined, undefined, {
+        launchAgent: 'codex',
+        activate: false,
+        recordFocus: false
+      })
+      expect(store.getState().activeTabId).toBe(agent.id)
+      store.getState().setActiveTab(setup.id)
+      store.getState().reconcileWorktreeTabModel(WT)
+      expect(store.getState().activeTabId).toBe(setup.id)
+      store.setState({ activeWorktreeId: 'other', activeTabId: 'elsewhere' })
+      store.getState().reconcileWorktreeTabModel(WT)
+      expect(store.getState().activeTabId).toBe('elsewhere')
+    })
+    it.each([false, true])(
+      'keeps accepted fallback distinct from an actual Setup pick: %s',
+      (pick) => {
+        store.setState({
+          activeWorktreeId: WT,
+          worktreesByRepo: { repo1: [hostWorktree] }
+        })
+        const first = makeHostSnapshot(WT, `setup::${LEAF_ID}`, 'setup')
+        first.tabs = first.tabs.map((tab) => ({ ...tab, launchAgent: undefined }))
+        store.setState(applyFreshWebSessionTabsSnapshot(store.getState(), first, 'host'))
+        const setupId = toWebTerminalSurfaceTabId('setup')
+        expect(store.getState().activeTabId).toBe(setupId)
+        if (pick) {
+          store.getState().setActiveTab(setupId)
+        }
+        const next = {
+          ...first,
+          snapshotVersion: 2,
+          tabs: [...first.tabs, ...makeHostSnapshot(WT, `agent::${LEAF_ID}`, 'agent').tabs]
+        }
+        store.setState(applyFreshWebSessionTabsSnapshot(store.getState(), next, 'host'))
+        const selected = pick ? setupId : toWebTerminalSurfaceTabId('agent')
+        const state = store.getState()
+        const group = state.groupsByWorktree[WT].find(
+          (g) => g.id === state.activeGroupIdByWorktree[WT]
+        )
+        expect(group?.activeTabId).toBe(selected)
+        expect(state.activeTabId).toBe(selected)
+        expect(state.activeTabIdByWorktree[WT]).toBe(selected)
+        expect(state.activeTabType).toBe('terminal')
+        expect(state.activeTabTypeByWorktree[WT]).toBe('terminal')
+      }
+    )
+
+    it.each([true, false])(
+      'keeps current split focus after a historical pick: metadata %s',
+      (metadata) => {
+        store.setState({
+          activeWorktreeId: WT,
+          worktreesByRepo: {
+            repo1: [{ ...hostWorktree, createdWithAgent: metadata ? 'codex' : undefined }]
+          }
+        })
+        const a = store.getState().createTab(WT, undefined, undefined, { launchAgent: 'codex' })
+        const groupA = store.getState().activeGroupIdByWorktree[WT]
+        const groupB = store.getState().createEmptySplitGroup(WT, groupA, 'right')!
+        const b = store.getState().createTab(WT, groupB, undefined, { recordFocus: false })
+        store.getState().setActiveTab(a.id)
+        store.getState().focusGroup(WT, groupB)
+        expect(store.getState().activeGroupIdByWorktree[WT]).toBe(groupB)
+        expect(store.getState().activeTabId).toBe(b.id)
+        expect(
+          store.getState().groupsByWorktree[WT].find((g) => g.id === groupB)?.activeTabId
+        ).toBe(b.id)
+        const snapshot = makeSnapshot(
+          [a, b].map((tab) => ({
+            type: 'terminal' as const,
+            id: `${tab.id}::${LEAF_ID}`,
+            parentTabId: tab.id,
+            leafId: LEAF_ID,
+            title: tab.title,
+            terminal: `term_${tab.id}`,
+            status: 'ready' as const,
+            isActive: tab.id === a.id,
+            launchAgent: tab.id === a.id ? ('codex' as const) : undefined
+          })),
+          { worktree: WT }
+        )
+        store.setState(applyFreshWebSessionTabsSnapshot(store.getState(), snapshot, 'host'))
+        const state = store.getState()
+        const selected = toWebTerminalSurfaceTabId(b.id)
+        expect(state.activeGroupIdByWorktree[WT]).toBe(groupB)
+        expect(state.groupsByWorktree[WT].find((g) => g.id === groupB)?.activeTabId).toBe(selected)
+        expect(state.activeTabId).toBe(selected)
+        expect(state.activeTabIdByWorktree[WT]).toBe(selected)
+        expect(state.activeTabType).toBe('terminal')
+        expect(state.activeTabTypeByWorktree[WT]).toBe('terminal')
+      }
+    )
+
     it('drops unified tabs whose backing content no longer exists', () => {
       const groupId = 'g-1'
       store.setState({

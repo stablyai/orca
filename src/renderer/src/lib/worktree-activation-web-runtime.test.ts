@@ -296,7 +296,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(result).toBe('tab-1')
     expect(createTab).toHaveBeenCalledTimes(1)
-    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
+    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1', { recordFocus: false })
     expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-2', 'Setup', {
       recordInteraction: false
     })
@@ -404,8 +404,9 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(result).toBe('tab-1')
     expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      pendingActivationSpawn: true
+      pendingActivationSpawn: true,
+      recordFocus: false
     })
-    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
+    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1', { recordFocus: false })
   })
 })

@@ -10,6 +10,7 @@ import {
 } from './client-session-tab-closed-selection'
 import type { StoredClientSessionTabSelection } from './client-session-tab-closed-selection'
 import { normalizePersistedMobileClientTabSelections } from './client-session-tab-selection-persistence'
+import { selectionBeforeDevicePick } from './client-session-tab-creation-default'
 
 export type ClientSessionTabSelection = {
   activeTabId: string | null
@@ -185,7 +186,8 @@ export class ClientSessionTabSelectionStore {
 
   project(
     snapshot: RuntimeMobileSessionTabsResult,
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    createdWithAgent?: string
   ): RuntimeMobileSessionTabsResult {
     if (!clientNavigationId) {
       return snapshot
@@ -214,7 +216,10 @@ export class ClientSessionTabSelectionStore {
         snapshotVersion: snapshot.snapshotVersion + state.revision
       }
     }
-    const projected = projectClientSessionTabSelection(closed.snapshot, state.selection)
+    const projected = projectClientSessionTabSelection(
+      closed.snapshot,
+      selectionBeforeDevicePick(state, closed.snapshot.tabs, createdWithAgent)
+    )
     // Why: a browser guest process swap drops its tab for one snapshot; the topology fallback
     // must not overwrite (and persist) the device's explicit pick, or focus never returns.
     const selectionSurvived =

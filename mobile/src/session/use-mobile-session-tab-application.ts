@@ -6,6 +6,7 @@ import {
   withoutPendingTabId
 } from './pending-session-selection'
 import { useCallback } from 'react'
+import { CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX } from '../../../src/shared/runtime-session-contracts'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalRecordsByCurrentOrder,
@@ -119,6 +120,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
 
       const followsHost = result.navigationIntent === 'follow'
       if (followsHost) {
+        selectedSessionTabIdRef.current =
+          (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0])?.id ?? null
         pendingSelectionRef.current = withoutPendingHandle(
           pendingSelectionRef.current?.kind === 'launched' ? null : pendingSelectionRef.current
         )
@@ -127,6 +130,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         const pending = pendingSelectionRef.current
         const launch = resolveLaunchedSelection(pending, nextTabs)
         pendingSelectionRef.current = launch.selection
+        if (launch.landedTabId) {
+          selectedSessionTabIdRef.current = launch.landedTabId
+        }
         if (launch.landedTabId && pending?.kind === 'launched') {
           // Why: the reply can wait a minute on prompt delivery; the tab is what the lock waited for.
           releaseTerminalCreateLock({ creatingTerminalRef, setCreating }, pending.lock)
@@ -149,6 +155,13 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         selectedSessionTabId: selectedSessionTabIdRef.current,
         navigationIntent: result.navigationIntent
       })
+      if (
+        pendingActiveSessionTabId &&
+        nextTabs.some((tab) => tab.id === pendingActiveSessionTabId) &&
+        !followsHost
+      ) {
+        selectedSessionTabIdRef.current = pendingActiveSessionTabId
+      }
       let active = resolved.activeTab
       let selectionSource: string = resolved.selectionSource
       if (resolved.clearPendingActiveSessionTabId) {
@@ -169,6 +182,9 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         const pendingTerminalExists = mergedTerminalsForActive.some(
           (terminal) => terminal.handle === pendingActiveTerminalHandle
         )
+        if (pendingTerminalTab) {
+          selectedSessionTabIdRef.current = pendingTerminalTab.id
+        }
         if (active?.type === 'terminal' && active.terminal === pendingActiveTerminalHandle) {
           const snapshotActive = nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null
           if (
@@ -201,7 +217,10 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         }
       }
       diagnostics.tabsApplied(result, nextTabs, active, selectionSource)
-      if (!resolved.retainSelectedSessionTabId || active !== resolved.activeTab) {
+      if (
+        !result.publicationEpoch?.endsWith(CLIENT_NAVIGATION_PUBLICATION_EPOCH_SUFFIX) &&
+        (!resolved.retainSelectedSessionTabId || active !== resolved.activeTab)
+      ) {
         selectedSessionTabIdRef.current = active?.id ?? null
       }
       activeSessionTabTypeRef.current = active?.type ?? null

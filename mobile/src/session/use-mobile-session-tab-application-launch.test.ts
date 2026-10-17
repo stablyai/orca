@@ -119,6 +119,23 @@ function activations(sendRequest: ReturnType<typeof scope>['sendRequest']): unkn
 }
 
 describe('landing on a launched tab', () => {
+  it.each([true, false])(
+    'keeps a displayed fallback separate from a pick on a new host: %s',
+    (modern) => {
+      const { state } = scope(null)
+      state.selectedSessionTabIdRef.current = null
+      const apply = mount(state)
+      const epoch = modern ? 'host:client-navigation' : 'host'
+      apply(snapshot([terminalTab('setup', 'term_setup', true)], { publicationEpoch: epoch }))
+      expect(state.selectedSessionTabIdRef.current).toBe(modern ? null : 'setup')
+      const agent = terminalTab('agent', 'term_agent', true)
+      apply(snapshot([terminalTab('setup', 'term_setup'), agent], { publicationEpoch: epoch }))
+      expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith(modern ? 'agent' : 'setup')
+      state.selectedSessionTabIdRef.current = 'setup'
+      apply(snapshot([terminalTab('setup', 'term_setup'), agent], { publicationEpoch: epoch }))
+      expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('setup')
+    }
+  )
   it('records a launched terminal as this device’s pick on the host once its tab arrives', () => {
     const { state, sendRequest } = scope(launchedSelection('l1', { handle: 'term_new' }))
     const apply = mount(state)
@@ -138,6 +155,7 @@ describe('landing on a launched tab', () => {
       }
     ])
     expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('tab-new')
+    expect(state.selectedSessionTabIdRef.current).toBe('tab-new')
     expect(state.unsubscribeTerminal).toHaveBeenCalledWith('term_old')
     expect(state.subscribeToTerminal).toHaveBeenLastCalledWith('term_new')
 
@@ -154,6 +172,7 @@ describe('landing on a launched tab', () => {
 
     expect(activations(sendRequest)).toEqual([expect.objectContaining({ tabId: 'opaque-7' })])
     expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('opaque-7')
+    expect(state.selectedSessionTabIdRef.current).toBe('opaque-7')
   })
 
   it('leaves the host’s choice alone when it moved this device itself', () => {
@@ -168,6 +187,7 @@ describe('landing on a launched tab', () => {
 
     expect(activations(sendRequest)).toEqual([])
     expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith('tab-old')
+    expect(state.selectedSessionTabIdRef.current).toBe('tab-old')
   })
 
   it('frees the + lock when the tab lands, not when the host replies', () => {
@@ -177,6 +197,7 @@ describe('landing on a launched tab', () => {
 
     apply(snapshot([old]))
     expect(state.creatingTerminalRef.current).toBe('l1')
+    expect(state.selectedSessionTabIdRef.current).toBe('tab-old')
     expect(state.setCreating).not.toHaveBeenCalled()
 
     apply(snapshot([old, reservedTerminalTab('term_new')]))
@@ -209,6 +230,7 @@ describe('landing on a launched tab', () => {
     ])
     expect(state.setActiveSessionTabId).toHaveBeenLastCalledWith(`${PANE.tabId}::${PANE.leafId}`)
     expect(state.subscribeToTerminal).toHaveBeenLastCalledWith('term_new')
+    expect(state.selectedSessionTabIdRef.current).toBe(`${PANE.tabId}::${PANE.leafId}`)
     expect(state.creatingTerminalRef.current).toBeNull()
   })
 })

@@ -54,8 +54,8 @@ export function agentLaunchSurfaceFactory(
   context: RpcContext,
   attachOperationId?: string,
   operationCallerKey?: string,
-  // True when the launch shows its surface to the paired caller itself rather than to everyone.
-  callerPresentsSurface = false,
+  // The paired caller selects and shows the tab itself, so the host's reveal warning is not its news.
+  callerShowsTab = false,
   terminalSpawn: TerminalSpawnDispatch = trackTerminalSpawnDispatch(),
   // The tab shown before the launch ran; asked at spawn, since the window's answer and the user's
   // close can both land after admission.
@@ -110,8 +110,9 @@ export function agentLaunchSurfaceFactory(
         agent,
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),
+        // A paired device never activates host-wide; it selects the tab for itself.
         activate:
-          !callerPresentsSurface &&
+          context.caller?.kind !== 'paired-device' &&
           (presentation === undefined || (presentation === 'focused' && movesHostWindow))
       }).catch((error: unknown) => {
         if (error === acquisitionFailure && provesStructuredAbsence(error)) {
@@ -225,7 +226,7 @@ export function agentLaunchSurfaceFactory(
         // dropping it here was what left a client with no way to name the tab it just asked for.
         ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
         // Its only warning is that the host could not reveal the tab, which the caller shows itself.
-        ...(terminal.warning && !callerPresentsSurface ? { warning: terminal.warning } : {}),
+        ...(terminal.warning && !callerShowsTab ? { warning: terminal.warning } : {}),
         ...(promptRodeLaunchCommand ? { promptRodeLaunchCommand } : {})
       }
     },

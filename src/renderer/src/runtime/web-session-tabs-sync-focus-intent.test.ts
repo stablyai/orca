@@ -3,6 +3,7 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
 import type { Tab } from '../../../shared/tab-types'
 import type { OpenFile } from '../store/slices/editor'
+import { makeWorktree } from '../store/slices/store-test-helpers'
 import { acceptReplayedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-lifecycle'
 import {
   applyFreshWebSessionTabsSnapshot,
@@ -31,7 +32,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('does not let repeated remote terminal status snapshots steal local tab focus', () => {
     const agentTabId = toWebTerminalSurfaceTabId('host-tab-1')
-    const shellTabId = toWebTerminalSurfaceTabId('host-tab-2')
+    const shellTabId = 'host-tab-2'
     const agentUnifiedTab: Tab = {
       id: agentTabId,
       entityId: agentTabId,
@@ -43,6 +44,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       color: null,
       sortOrder: 0,
       createdAt: NOW,
+      lastFocusedAt: NOW,
       isPreview: false,
       isPinned: false
     }
@@ -57,11 +59,16 @@ describe('applyWebSessionTabsSnapshot', () => {
       color: null,
       sortOrder: 1,
       createdAt: NOW + 1,
+      lastFocusedAt: 0,
       isPreview: false,
       isPinned: false
     }
 
+    const worktree = makeWorktree({ id: WT, repoId: 'repo1', createdWithAgent: 'codex' })
     const state = makeState({
+      worktreesByRepo: {
+        repo1: [{ ...worktree, runtimeOwnerEnvironmentId: ENV }]
+      },
       activeTabId: shellTabId,
       activeTabIdByWorktree: { [WT]: shellTabId },
       activeTabType: 'terminal',
@@ -110,6 +117,7 @@ describe('applyWebSessionTabsSnapshot', () => {
           type: 'terminal',
           id: `host-tab-1::${LEAF_ID}`,
           title: 'codex [thinking]',
+          launchAgent: 'codex',
           parentTabId: 'host-tab-1',
           leafId: LEAF_ID,
           isActive: true,
@@ -139,17 +147,46 @@ describe('applyWebSessionTabsSnapshot', () => {
         ]
       }
     )
-    const patch = applyWebSessionTabsSnapshot(
-      state,
-      remoteActiveSnapshot,
-      ENV,
-      NOW + 10
-    ) as Partial<WebSessionTabsSyncState>
+    const promotionSnapshot = {
+      ...remoteActiveSnapshot,
+      activeTabId: 'host-chat',
+      activeTabType: 'agent-session' as const,
+      tabs: [
+        ...remoteActiveSnapshot.tabs.map((tab) => ({ ...tab, isActive: false })),
+        {
+          type: 'agent-session' as const,
+          id: 'host-chat',
+          sessionId: 'session-1',
+          agent: 'codex' as const,
+          title: 'Chat',
+          status: 'ready' as const,
+          isActive: true
+        }
+      ]
+    }
+    const patch = applyWebSessionTabsSnapshot(state, promotionSnapshot, ENV, NOW + 10)
 
-    expect(patch.activeTabId).toBeUndefined()
-    expect(patch.activeTabIdByWorktree).toBeUndefined()
-    // Why: client-owned placement — an ambient snapshot must not rewrite groups at all.
-    expect(patch.groupsByWorktree).toBeUndefined()
+    const promoted = toWebTerminalSurfaceTabId(shellTabId)
+    const effective = { ...state, ...patch }
+    expect(effective.activeGroupIdByWorktree[WT]).toBe('host-group-1')
+    expect(effective.activeTabId).toBe(promoted)
+    expect(effective.activeTabType).toBe('terminal')
+    expect(effective.activeTabTypeByWorktree[WT]).toBe('terminal')
+    expect(effective.activeTabIdByWorktree[WT]).toBe(promoted)
+    expect(patch.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(promoted)
+    const promotedTab = effective.unifiedTabsByWorktree[WT]?.find((tab) => tab.id === promoted)
+    expect(promotedTab?.lastFocusedAt).toBe(0)
+    const unchosen = makeState({
+      ...state,
+      unifiedTabsByWorktree: {
+        [WT]: [
+          { ...agentUnifiedTab, lastFocusedAt: undefined },
+          { ...shellUnifiedTab, lastFocusedAt: undefined }
+        ]
+      }
+    })
+    const derived = applyWebSessionTabsSnapshot(unchosen, remoteActiveSnapshot, ENV, NOW + 10)
+    expect(derived?.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(agentTabId)
 
     const followed = applyWebSessionTabsSnapshot(
       state,
@@ -267,6 +304,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       color: null,
       sortOrder: 0,
       createdAt: NOW,
+      lastFocusedAt: 0,
       isPreview: false,
       isPinned: false
     }
@@ -344,6 +382,9 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabType).toBeUndefined()
     expect(patch.activeFileIdByWorktree?.[WT]).toBeUndefined()
     expect(patch.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe('host-editor')
+    expect(
+      patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.id === 'host-editor')?.lastFocusedAt
+    ).toBe(0)
   })
 
   it('focuses a caller-created terminal even when an older host leaves it inactive', () => {

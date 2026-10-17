@@ -54,7 +54,7 @@ export function createTerminalTabNavigationActions(
         }
       })
     },
-    setActiveTab: (tabId) => {
+    setActiveTab: (tabId, options) => {
       let tabOwnerWorktreeId: string | null = null
       set((s) => {
         tabOwnerWorktreeId = resolveActiveTabOwnerWorktreeId(
@@ -91,10 +91,10 @@ export function createTerminalTabNavigationActions(
           .flat()
           .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
       if (item) {
-        state.activateTab(
-          item.id,
-          tabOwnerWorktreeId !== null ? { worktreeId: tabOwnerWorktreeId } : undefined
-        )
+        state.activateTab(item.id, {
+          ...(tabOwnerWorktreeId !== null ? { worktreeId: tabOwnerWorktreeId } : {}),
+          ...options
+        })
       }
     },
     getTerminalTabOwnerWorktreeId: (tabId) =>

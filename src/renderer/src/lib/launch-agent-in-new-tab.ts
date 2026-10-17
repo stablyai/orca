@@ -76,6 +76,7 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   activate?: boolean
   /** The launch seeds a workspace being opened, so its PTY spawn must not reshuffle Recent. */
   pendingActivationSpawn?: boolean
+  recordFocus?: boolean
   /** Lets a workspace reveal itself before the selected surface opens. */
   beforeSurfaceOpen?: (
     surface: { kind: 'local-terminal' } | { kind: 'host-published' }
@@ -193,6 +194,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     const structured = launchStructuredAgentFromNewTab({
       plan,
       worktreeId,
+      recordFocus: args.recordFocus,
       ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
       ...(groupId ? { groupId } : {}),
       ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),

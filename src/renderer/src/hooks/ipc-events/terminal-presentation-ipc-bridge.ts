@@ -102,15 +102,16 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           if (frameDrawnTab) {
             reusedTab = frameDrawnTab
           }
+          const followsLaunchViewer =
+            agentLaunchViewer === 'focus-window' || agentLaunchViewer === 'focus-in-workspace'
           const tab =
             reusedTab ??
             (ptyId
               ? store.createTab(worktreeId, undefined, undefined, {
                   initialPtyId: ptyId,
-                  activate:
-                    shouldActivate ||
-                    agentLaunchViewer === 'focus-window' ||
-                    agentLaunchViewer === 'focus-in-workspace',
+                  activate: shouldActivate || followsLaunchViewer,
+                  // Why: shown for the viewer that launched it, not chosen in this window.
+                  ...(!shouldActivate && followsLaunchViewer ? { recordFocus: false } : {}),
                   ...(launchAgent
                     ? {
                         launchAgent,

@@ -25,6 +25,7 @@ export function launchStructuredAgentFromNewTab(args: {
   plan: AgentSessionLaunchPlan
   worktreeId: string
   groupId?: string
+  recordFocus?: boolean
   focusIntent?: NativeChatComposerFocusIntent
   beforeSurfaceOpen?: LaunchAgentInNewTabArgs['beforeSurfaceOpen']
   onHostDeclined?: () => StructuredLaunchTerminal
@@ -39,6 +40,7 @@ export function launchStructuredAgentFromNewTab(args: {
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan,
     hooks: {},
+    recordFocus: args.recordFocus,
     ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
     target: { worktreeId: args.worktreeId },
     ...(args.groupId ? { targetGroupId: args.groupId } : {}),

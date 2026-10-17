@@ -340,3 +340,35 @@ describe('client session-tab selection', () => {
     })
   })
 })
+
+describe('a workspace created with an agent', () => {
+  // The bug: a phone-created workspace opened on Setup for every device that had not picked a tab.
+  it('opens on that agent for every device until the device picks a tab', () => {
+    const setup = snapshot().tabs[0]!
+    const setupOnly: RuntimeMobileSessionTabsResult = {
+      ...snapshot(),
+      tabGroups: [{ id: 'group-left', activeTabId: 'terminal-a', tabOrder: ['terminal-a'] }],
+      tabs: [setup]
+    }
+    const chat = { type: 'agent-session', id: 'chat-1', sessionId: 's', agent: 'claude' } as const
+    const chatTab = { ...chat, title: 'Claude', isActive: false }
+    const withChat: RuntimeMobileSessionTabsResult = {
+      ...setupOnly,
+      snapshotVersion: 2,
+      tabGroups: [
+        { id: 'group-left', activeTabId: 'terminal-a', tabOrder: ['terminal-a', 'chat-1'] }
+      ],
+      tabs: [setup, chatTab]
+    }
+    const store = new ClientSessionTabSelectionStore()
+
+    // Setup is only a fallback before the chat exists, never the phone's pick.
+    expect(store.project(setupOnly, 'phone', 'claude').activeTabId).toBe(setup.id)
+    expect(store.project(withChat, 'phone', 'claude').activeTabId).toBe('chat-1')
+    expect(store.project(withChat, 'second-phone', 'claude').activeTabId).toBe('chat-1')
+    store.activate(withChat, 'phone', setup.id)
+    expect(store.project({ ...withChat, snapshotVersion: 3 }, 'phone', 'claude').activeTabId).toBe(
+      setup.id
+    )
+  })
+})

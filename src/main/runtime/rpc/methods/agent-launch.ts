@@ -119,7 +119,7 @@ async function runAgentLaunch(
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
-  const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
+  const callerNavigationId = agentLaunchCallerNavigationId(context)
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
