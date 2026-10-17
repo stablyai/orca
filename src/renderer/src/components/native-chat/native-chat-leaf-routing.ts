@@ -115,6 +115,10 @@ export function resolveNativeChatLeafRoute(args: {
   if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
   }
+  if (!args.chatLeafId && !confirmedAgentExit) {
+    // Host and agent evidence can hydrate after the pane; keep the request unbound until eligible.
+    return { chatLeafId: null, exitChat: false }
+  }
   // Why: removing the owning leaf or confirming its agent exited must not leave
   // the composer targeting a plain shell. Return the tab to terminal mode.
   return { chatLeafId: null, exitChat: true }

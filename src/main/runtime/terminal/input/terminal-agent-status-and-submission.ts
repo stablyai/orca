@@ -213,12 +213,14 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       const answered =
         result.controller === this.ptyController &&
         result.available &&
-        typeof result.process === 'string'
+        typeof result.process === 'string' &&
+        result.process.trim().length > 0
       if (!keepOnSilence || answered) {
         if (!recoverCompletedHook) {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
         }
       } else {
+        // Unverifiable foreground evidence must not close chat or consume the next exit candidate.
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       }
     })
