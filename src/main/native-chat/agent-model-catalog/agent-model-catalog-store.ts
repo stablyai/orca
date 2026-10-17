@@ -38,8 +38,9 @@ export type { AgentModelCatalogFailure }
 // written through by each session's startup and later capability listings.
 // Each entry keeps two listings: the last account-level discovery (the only
 // source of the configured default and default efforts, and the only clock a
-// refresh follows) and the last received session listing (which models exist
-// and their efforts). Readers see the two merged; neither write erases the other.
+// refresh follows) and the last session listing (which models exist and their
+// efforts). Readers see the two merged; neither write erases the other. Whose rows
+// win follows when each listing's producer started, never when it arrived.
 // Success-only: a failure, timeout or empty list is never stored as a catalog
 // and never persisted — it is held separately under a short TTL so a burst of
 // picker opens does not hammer a dead binary, then dies on its own (see
@@ -67,6 +68,8 @@ export type AgentModelCatalogSessionAccess = {
   store: AgentModelCatalogStore
   fingerprint: string
   accountHomePath: string
+  /** When the session's process started; null when unknown. */
+  startedAt?: number | null
 }
 
 export class AgentModelCatalogStore {
@@ -77,10 +80,8 @@ export class AgentModelCatalogStore {
     (fingerprint) => this.get(fingerprint),
     (fingerprint) => this.refreshes.has(fingerprint)
   )
-  private readonly latestWrittenOrder = new Map<string, number>()
   // Catalogs listed under a command or env the agent no longer launches with; cleared by a discovery.
   private readonly dueEntries = new Set<string>()
-  private nextListingOrder = 0
   private persistence: AgentModelCatalogPersistence | null = null
   private readonly now: () => number
 
@@ -166,14 +167,16 @@ export class AgentModelCatalogStore {
     this.failures.expireAgent(agent)
   }
 
-  /** The one ingestion step every listing goes through, whoever listed it. */
+  /** The one ingestion step every listing goes through, whoever listed it. `startedAt` is when
+   *  its producing process started; unknown ranks oldest. */
   recordSuccess(
     fingerprint: string,
     agent: string,
     success: AgentModelCatalogSuccess,
-    source: AgentModelCatalogSource
+    source: AgentModelCatalogSource,
+    startedAt?: number | null
   ): AgentModelCatalogEntry | null {
-    const entry = this.writeSuccess(fingerprint, agent, success, source, ++this.nextListingOrder)
+    const entry = this.writeSuccess(fingerprint, agent, success, source, startedAt ?? 0)
     this.listingWaiters.notify(fingerprint)
     return entry
   }
@@ -182,31 +185,44 @@ export class AgentModelCatalogStore {
     fingerprint: string,
     agent: string,
     success: AgentModelCatalogSuccess,
-    source: AgentModelCatalogSource
+    source: AgentModelCatalogSource,
+    startedAt: number
   ): AgentModelCatalogEntry | null {
     return agentModelCatalogEntryWithSuccess(
       this.entries.get(fingerprint),
       { agent, fingerprint },
       success,
       source,
-      this.now()
+      { at: this.now(), startedAt }
     )
+  }
+
+  /** Whether a discovery whose producer started at `startedAt` began before the held one's. */
+  private discoverySuperseded(fingerprint: string, startedAt: number): boolean {
+    return startedAt < (this.entries.get(fingerprint)?.discovered?.startedAt ?? 0)
   }
 
   /** Records which model and effort the account's own config resolves to, for an agent whose
    *  listing names none; null forgets a default that config no longer resolves to. Superseded by
-   *  the next chat that resolves it; never creates an entry on its own. */
+   *  the next chat that resolves it, unless that chat started earlier; never creates an entry. */
   recordConfiguredDefault(
     fingerprint: string,
-    choice: AgentModelCatalogConfiguredChoice | null
+    choice: AgentModelCatalogConfiguredChoice | null,
+    startedAt?: number | null
   ): void {
     const previous = this.entries.get(fingerprint)
-    const entry = previous && entryWithConfiguredDefault(previous, choice, this.now())
+    if (!previous) {
+      return
+    }
+    const clock = { at: this.now(), startedAt: startedAt ?? 0 }
+    const entry = entryWithConfiguredDefault(previous, choice, clock)
     if (!entry) {
       return
     }
     this.entries.set(fingerprint, entry)
-    this.persistence?.save([...this.entries.values()])
+    if (agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry)) {
+      this.persistence?.save([...this.entries.values()])
+    }
     this.listingWaiters.notify(fingerprint)
   }
 
@@ -215,18 +231,19 @@ export class AgentModelCatalogStore {
     agent: string,
     success: AgentModelCatalogSuccess,
     source: AgentModelCatalogSource,
-    order: number
+    startedAt: number
   ): AgentModelCatalogEntry | null {
-    const entry = this.entryFromSuccess(fingerprint, agent, success, source)
+    const previous = this.entries.get(fingerprint)
+    // An earlier-started producer's discovery is not the account's answer: nothing of it is kept.
+    if (source === 'discovery' && this.discoverySuperseded(fingerprint, startedAt)) {
+      return previous ?? null
+    }
+    const entry = this.entryFromSuccess(fingerprint, agent, success, source, startedAt)
     if (!entry) {
       return null
     }
-    const previous = this.entries.get(fingerprint)
     this.entries.delete(fingerprint)
     this.entries.set(fingerprint, entry)
-    if (source === 'discovery' && this.refreshes.has(fingerprint)) {
-      this.latestWrittenOrder.set(fingerprint, order)
-    }
     // A live listing is not the account's answer: it neither clears a failure nor a probe's verdict.
     if (source === 'discovery') {
       this.dueEntries.delete(fingerprint)
@@ -262,11 +279,11 @@ export class AgentModelCatalogStore {
       listers.delete(lister)
       if (listers.size === 0 && this.refreshes.get(fingerprint) === listers) {
         this.refreshes.delete(fingerprint)
-        this.latestWrittenOrder.delete(fingerprint)
       }
       this.listingWaiters.notify(fingerprint)
     }
-    const order = ++this.nextListingOrder
+    // A probe's child spawns now; a session lists from the process it already runs.
+    const startedAt = typeof lister === 'function' ? this.now() : (lister.startedAt ?? 0)
     // Agent, outcome and duration only: a slow listing shows in the trace log without its content.
     const span = startSpan('agentModelCatalog.discovery', {
       attributes: { agent, lister: typeof lister === 'function' ? 'probe' : 'session' }
@@ -276,14 +293,14 @@ export class AgentModelCatalogStore {
         span.setAttribute('models', success.models.length)
         span.end()
         // An older lister still receives its own result, but cannot replace a newer discovery.
-        const superseded =
-          (this.latestWrittenOrder.get(fingerprint) ?? 0) > order && this.entries.has(fingerprint)
+        const superseded = this.discoverySuperseded(fingerprint, startedAt)
         if (superseded && success.origin === 'probe') {
           this.failures.listed(fingerprint, agent, success.origin, success.unavailable)
         }
+        // Its own rows, unsaved: ranked above every held listing only for this answer.
         const entry = superseded
-          ? this.entryFromSuccess(fingerprint, agent, success, 'discovery')
-          : this.writeSuccess(fingerprint, agent, success, 'discovery', order)
+          ? this.entryFromSuccess(fingerprint, agent, success, 'discovery', Infinity)
+          : this.writeSuccess(fingerprint, agent, success, 'discovery', startedAt)
         settle()
         return entry
       },

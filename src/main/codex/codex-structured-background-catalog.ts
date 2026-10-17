@@ -36,12 +36,9 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
     if (!isCurrent()) {
       return
     }
-    const latest = fingerprint ? store?.get(fingerprint) : undefined
-    if (latest && latest !== prior) {
-      return
-    }
     if (fingerprint && store) {
-      // `model/list` is Codex's account-level listing, the one its probe also runs.
+      // `model/list` is Codex's account-level listing, the one its probe also runs; the store
+      // keeps it only over listings from app-servers that started no later.
       store.recordSuccess(
         fingerprint,
         'codex',
@@ -49,7 +46,8 @@ async function refresh(input: BackgroundCatalogInput): Promise<void> {
           models: listing.models,
           origin: 'live-session'
         },
-        'discovery'
+        'discovery',
+        access?.startedAt
       )
     }
   } catch (error) {

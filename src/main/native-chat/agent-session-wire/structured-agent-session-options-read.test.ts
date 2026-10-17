@@ -124,7 +124,8 @@ describe('options at rest', () => {
           models: [{ id: 'old', label: 'Old', isDefault: true, efforts: [] }]
         })
         reader.adoptSession(emptyStart ? {} : { configOptions })
-        modelCatalog.recordLiveListing(SESSION, reader.startListing())
+        const started = reader.startListing()
+        modelCatalog.recordLiveListing(SESSION, started)
         reader.adoptConfigOptions(
           configOptions.map((option) =>
             option.type === 'select' && option.category === 'model'
@@ -137,7 +138,17 @@ describe('options at rest', () => {
         await read()
         live = false
         const answer = await read()
-        expect(answer.models).toEqual(reader.read().models)
+        // A menu the read didn't observe keeps the one the start listed.
+        expect(answer.models).toEqual(
+          reader.read().models.map((model) =>
+            model.efforts.length > 0
+              ? model
+              : {
+                  ...model,
+                  efforts: started.models.find((row) => row.id === model.id)?.efforts ?? []
+                }
+          )
+        )
       }
     }
   )

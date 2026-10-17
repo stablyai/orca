@@ -220,7 +220,7 @@ export async function acquireCodexStructuredSession(input: {
     assertCodexConnectionOpen(connection, sessionId)
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
-    const catalogAccess = codexAcquireCatalogAccess(deps, launch)
+    const catalogAccess = codexAcquireCatalogAccess(deps, launch, process.processStartTimeMs)
     acquisitions.assertCurrent(sessionId, attempt)
     assertCodexConnectionOpen(connection, sessionId)
     acquisitions.deleteIfCurrent(sessionId, attempt)

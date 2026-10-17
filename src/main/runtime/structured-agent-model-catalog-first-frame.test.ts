@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { agentSessionLeaseFixture } from '../../shared/agent-session-record.test-fixture'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
 import {
@@ -163,7 +164,10 @@ describe('a running chat’s listing, saved for the next chat', () => {
     const record = grokRecord()
     const catalog = service(store, { grok: GROK_LISTING }, [record])
     await newChatFirstFrame(catalog, 'grok')
-    // The running chat switched to the mini model and reports a list with one more model.
+    // A chat started after that probe switched to the mini model and lists one more model.
+    record.lease = agentSessionLeaseFixture({
+      ownerProcess: { hostId: 'local', pid: 1, processStartTimeMs: Date.now(), spawnToken: 's' }
+    })
     const options = new AcpStructuredOptions(GROK_ACP_DIALECT)
     options.adoptSession({
       models: {

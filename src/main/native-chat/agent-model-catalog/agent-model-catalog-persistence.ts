@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   agentModelCatalogEntry,
+  liveLeads,
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
@@ -107,7 +108,9 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
         }
       : {}),
     origin: row.origin,
-    at: row.at
+    at: row.at,
+    // Its producer is gone, so it ranks oldest; ties fall back to arrival.
+    startedAt: 0
   }
 }
 
@@ -136,17 +139,37 @@ function parseEntry(value: unknown): AgentModelCatalogEntry | null {
           ...(configuredEffort ? { effort: configuredEffort } : {}),
           at: configured.at
         }
-      : null
+      : null,
+    0
   )
+}
+
+/** A listing as saved: its producer's start means nothing to another run. */
+function persistedListing(listing: AgentModelCatalogListing | null): unknown {
+  if (!listing) {
+    return null
+  }
+  const { startedAt: _startedAt, ...saved } = listing
+  return saved
 }
 
 /** Only the two listings and the configured default are written; the merged view is derived again on load. */
 function persistedEntry(entry: AgentModelCatalogEntry): unknown {
+  const { discovered, live } = entry
+  const liveIsNewer = Boolean(liveLeads(discovered, live))
+  // Starts die with this run; encode their winner without changing discovery's freshness.
+  const savedLive =
+    live && discovered
+      ? {
+          ...live,
+          at: liveIsNewer ? Math.max(live.at, discovered.at) : Math.min(live.at, discovered.at - 1)
+        }
+      : live
   return {
     agent: entry.agent,
     fingerprint: entry.fingerprint,
-    discovered: entry.discovered,
-    live: entry.live,
+    discovered: persistedListing(entry.discovered),
+    live: persistedListing(savedLive),
     ...(entry.configured ? { configured: entry.configured } : {})
   }
 }

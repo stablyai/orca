@@ -101,8 +101,8 @@ describe('a live listing beside the account-level discovery', () => {
     const read = await run.read()
     expect(read?.listingNamesConfiguredModel).toBe(true)
     expect(await run.defaultOf()).toBe('grok-4')
-    // The session's newer membership stays, with the default effort discovery named.
-    expect(read?.models.map((model) => model.id)).toEqual(['grok-4', 'grok-3-mini', 'grok-code'])
+    // A chat with no known start ranks below the discovery: its rows lead, its default lands.
+    expect(read?.models.map((model) => model.id)).toEqual(['grok-4', 'grok-3-mini'])
     expect(read?.models[0]?.defaultEffort).toBe('high')
   })
 

@@ -11,14 +11,15 @@ function listing(
   return {
     models: [{ id: 'openai/gpt-6', label: 'GPT-6', isDefault: false, efforts }],
     origin,
-    at
+    at,
+    startedAt: at
   }
 }
 
 const CONFIGURED = { modelId: 'openai/gpt-6', effort: 'xhigh', at: 1 }
 
 function model(discovered: AgentModelCatalogListing, live: AgentModelCatalogListing) {
-  return agentModelCatalogEntry('pi', 'fp', discovered, live, CONFIGURED)?.models[0]
+  return agentModelCatalogEntry('pi', 'fp', discovered, live, CONFIGURED, 0)?.models[0]
 }
 
 describe('the effort menu of a model whose configured effort one listing lacks', () => {

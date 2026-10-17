@@ -10,6 +10,7 @@ import {
   agentModelCatalogFingerprintForRecord
 } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
+import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
 import {
   AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
   AGENT_MODEL_CATALOG_FRESH_MS,
@@ -38,8 +39,11 @@ function success(...ids: string[]): AgentModelCatalogSuccess {
 }
 
 /** A live session's per-spawn handle; each call is a distinct lister. */
-function liveLister(store: AgentModelCatalogStore): AgentModelCatalogSessionAccess {
-  return { store, fingerprint: 'fp-1', accountHomePath: '/homes/a' }
+function liveLister(
+  store: AgentModelCatalogStore,
+  startedAt: number | null = null
+): AgentModelCatalogSessionAccess {
+  return { store, fingerprint: 'fp-1', accountHomePath: '/homes/a', startedAt }
 }
 
 describe('agent model catalog store', () => {
@@ -193,7 +197,7 @@ describe('agent model catalog store', () => {
     expect(store.shouldRefresh('fp-1')).toBe(true)
   })
 
-  it('keeps the newer completed listing when an older chat finishes later', async () => {
+  it('keeps the later-started app-server’s listing when an older one finishes later', async () => {
     const store = new AgentModelCatalogStore()
     const save = vi.fn()
     await store.attachPersistence({ load: async () => [], save, flush: async () => {} })
@@ -201,10 +205,10 @@ describe('agent model catalog store', () => {
     const older = store.refresh(
       'fp-1',
       'codex',
-      liveLister(store),
+      liveLister(store, 1),
       () => new Promise<AgentModelCatalogSuccess>((resolve) => (settleOlder = resolve))
     )
-    const newer = await store.refresh('fp-1', 'codex', liveLister(store), async () =>
+    const newer = await store.refresh('fp-1', 'codex', liveLister(store, 2), async () =>
       success('gpt-new')
     )
     settleOlder(success('gpt-old'))
@@ -216,37 +220,121 @@ describe('agent model catalog store', () => {
     expect(save).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a direct live update ahead of a pending older probe', async () => {
-    const store = new AgentModelCatalogStore()
+  it('keeps an app-server that started after a pending probe was requested ahead of it', async () => {
+    const store = new AgentModelCatalogStore({ now: () => 1_000 })
     let settleProbe!: (success: AgentModelCatalogSuccess) => void
     const probe: AgentModelCatalogProbe = () =>
       new Promise<AgentModelCatalogSuccess>((resolve) => (settleProbe = resolve))
     const pending = store.refresh('fp-1', 'codex', probe, () =>
       probe({ variable: 'CODEX_HOME', path: '/homes/a' })
     )
-    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'discovery')
+    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'discovery', 2_000)
     settleProbe({ ...success('gpt-probe'), origin: 'probe' })
     expect((await pending)!.models[0]!.id).toBe('gpt-probe')
     expect(store.get('fp-1')!.models[0]!.id).toBe('gpt-live')
   })
 
+  it('ranks listings and the configured default by when their chat started, not arrival', () => {
+    const store = new AgentModelCatalogStore({ now: () => 5_000 })
+    const menu = (value: string) => [{ value, label: value }]
+    const row = (
+      id: string,
+      efforts: AgentSessionModelOption['efforts'] = [],
+      isDefault = false
+    ): AgentSessionModelOption => ({ id, label: id, isDefault, efforts })
+    const listed = (startedAt: number, ...models: AgentSessionModelOption[]) =>
+      store.recordSuccess('fp', 'claude', { models, origin: 'live-session' }, 'live', startedAt)
+    store.recordSuccess(
+      'fp',
+      'claude',
+      { models: [row('opus'), row('haiku', [], true)], origin: 'probe' },
+      'discovery',
+      1
+    )
+    // Chats report only their current model's menu.
+    listed(2, row('opus', menu('high'), true), row('haiku'))
+    expect(store.get('fp')!.models.map((model) => model.isDefault)).toEqual([true, false])
+    // A listing that names no default still uses discovery's flags on shared rows.
+    listed(2, row('opus', menu('high')), row('haiku'))
+    expect(store.get('fp')!.models.map((model) => model.isDefault)).toEqual([false, true])
+    listed(2, row('opus', menu('high'), true), row('haiku'))
+    // An older CLI's chat reads later: its rows and default lose, its known menu fills a gap.
+    listed(1, row('opus[1m]', [], true), row('haiku', menu('low')))
+    // The newer chat switched to haiku: the menu learned for opus survives.
+    listed(2, row('opus', [], true), row('haiku', menu('low')))
+    expect(store.get('fp')!.models).toEqual([
+      row('opus', menu('high'), true),
+      row('haiku', menu('low'))
+    ])
+
+    const configured = { modelId: 'opus', sameModelIds: ['default'], effort: 'high' }
+    store.recordConfiguredDefault('fp', configured, 2)
+    // The older chat's late readback doesn't win.
+    store.recordConfiguredDefault('fp', { modelId: 'opus[1m]' }, 1)
+    expect(store.get('fp')!.configured?.modelId).toBe('opus')
+    expect(store.get('fp')!.models[0]!.defaultEffort).toBe('high')
+
+    // A later-started listing that doesn't name the configured model: its own default stands.
+    store.recordSuccess(
+      'fp',
+      'claude',
+      { models: [row('default', menu('high'), true), row('sonnet')], origin: 'probe' },
+      'discovery',
+      3
+    )
+    const entry = store.get('fp')!
+    // Nor does its effort: the chat's opus ran it, not this listing's default.
+    expect(entry.models).toEqual([row('default', menu('high'), true), row('sonnet')])
+    const result = agentModelCatalogResultFromEntry(entry, true, false)
+    expect(result.listingNamesConfiguredModel).toBe(false)
+  })
+
   it('still writes a pending probe that resolves after a live save, keeping both', async () => {
-    const store = new AgentModelCatalogStore()
+    const directory = mkdtempSync(join(tmpdir(), 'pr-30042-catalog-'))
+    const persistence = createAgentModelCatalogFilePersistence(directory)
+    let at = 100
+    const store = new AgentModelCatalogStore({ now: () => at })
+    await store.attachPersistence(persistence)
     let settleProbe!: (success: AgentModelCatalogSuccess) => void
     const probe: AgentModelCatalogProbe = () =>
       new Promise<AgentModelCatalogSuccess>((resolve) => (settleProbe = resolve))
     const pending = store.refresh('fp-1', 'codex', probe, () =>
       probe({ variable: 'CODEX_HOME', path: '/homes/a' })
     )
-    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live')
+    at = 300
+    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live', 200)
+    at = 400
     settleProbe({ ...success('gpt-probe'), origin: 'probe' })
     await pending
     const entry = store.get('fp-1')!
     expect(entry.discovered!.models[0]!.id).toBe('gpt-probe')
     expect(entry.live!.models[0]!.id).toBe('gpt-live')
+    await store.flushPersistence()
+    const [saved] = await persistence.load()
+    expect(saved?.models).toEqual(entry.models)
+    expect(entry.live!.at).toBe(300)
+    expect(saved?.discovered?.at).toBe(400)
+    const restarted = new AgentModelCatalogStore({ now: () => at })
+    await restarted.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+    at = 400 + AGENT_MODEL_CATALOG_FRESH_MS - 1
+    expect(restarted.shouldRefresh('fp-1')).toBe(false)
+    at++
+    expect(restarted.shouldRefresh('fp-1')).toBe(true)
+
+    // Identical slot facts can change authority and must schedule another save.
+    store.recordSuccess(
+      'fp-1',
+      'codex',
+      { ...success('gpt-probe'), origin: 'probe' },
+      'discovery',
+      500
+    )
+    await store.flushPersistence()
+    const [flipped] = await persistence.load()
+    expect(flipped?.models[0]?.id).toBe('gpt-probe')
     // A live save neither postpones the next discovery nor clears its failure back-off.
     store.recordFailure('fp-1', 'timed out')
-    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live')
+    store.recordSuccess('fp-1', 'codex', success('gpt-live'), 'live', 200)
     expect(store.hasActiveFailure('fp-1')).toBe(true)
   })
 
@@ -415,7 +503,8 @@ describe('agent model catalog store', () => {
     const sonnet = restarted.get('fp')?.models.find((model) => model.id === 'sonnet')
     expect(sonnet?.defaultEffort).toBe('high')
 
-    restarted.recordConfiguredDefault('fp', null)
+    // A chat started after the restart.
+    restarted.recordConfiguredDefault('fp', null, Date.now())
     expect(restarted.get('fp')?.configured).toBeNull()
     expect(restarted.get('fp')?.models.find((model) => model.id === 'sonnet')).not.toHaveProperty(
       'defaultEffort'

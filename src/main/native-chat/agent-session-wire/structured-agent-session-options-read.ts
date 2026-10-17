@@ -201,6 +201,21 @@ export async function readStructuredAgentSessionOptions(
   reader: StructuredAgentSessionOptionsReader
 ): Promise<AgentSessionOptionsResult> {
   const { adapter, agents, store } = context.deps
+  // Saved in the step that read the child: once it ends, a successor may own the record.
+  const withListingSaved = ({
+    catalogListing,
+    ...answer
+  }: StructuredAgentSessionLiveOptions): AgentSessionOptionsResult => {
+    if (!catalogListing) {
+      return answer
+    }
+    // Check prior membership before saving: a launch-added row cannot verify itself.
+    const listedModelIds = context.deps.modelCatalog
+      ? context.deps.modelCatalog.retainedLiveModelIds(sessionId, catalogListing)
+      : retainedAgentModelCatalogModels(undefined, catalogListing).map((model) => model.id)
+    saveStructuredAgentSessionListing(context, sessionId, catalogListing)
+    return { ...answer, listedModelIds }
+  }
   const started = await context.serialize(sessionId, async () => {
     const session = await context.openConversation(sessionId).catch((error: unknown) => {
       throw journalOpenReadRefusal(error, context.deps.logger, sessionId)
@@ -219,35 +234,22 @@ export async function readStructuredAgentSessionOptions(
     }
     return {
       kind: 'live' as const,
-      options: await adapter.readOptions({ sessionId, fence: child.fence })
+      options: withListingSaved(await adapter.readOptions({ sessionId, fence: child.fence }))
     }
   })
-  const live: StructuredAgentSessionLiveOptions | null =
+  const live: AgentSessionOptionsResult | null =
     started.kind === 'live'
       ? started.options
       : started.kind === 'prepared'
         ? await started.prepared.then((apply) =>
             context.serialize(sessionId, async () => {
               const child = (await context.openConversation(sessionId))?.child
-              return child === started.child ? apply() : null
+              return child === started.child ? withListingSaved(apply()) : null
             })
           )
         : null
-  let options: Omit<AgentSessionOptionsResult, 'rewind'>
-  if (live) {
-    const { catalogListing, ...answer } = live
-    options = answer
-    if (catalogListing) {
-      // Check prior membership before saving: a launch-added row cannot verify itself.
-      const listedModelIds = context.deps.modelCatalog
-        ? context.deps.modelCatalog.retainedLiveModelIds(sessionId, catalogListing)
-        : retainedAgentModelCatalogModels(undefined, catalogListing).map((model) => model.id)
-      saveStructuredAgentSessionListing(context, sessionId, catalogListing)
-      options = { ...answer, listedModelIds }
-    }
-  } else {
-    options = await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId, reader)
-  }
+  const options: Omit<AgentSessionOptionsResult, 'rewind'> =
+    live ?? (await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId, reader))
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)
   const record = store.getRecord(sessionId)

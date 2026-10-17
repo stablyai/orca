@@ -68,7 +68,8 @@ export type AgentModelCatalogService = {
   }) => Promise<AgentSessionModelCatalogResult>
   /** Incoming listing ids, checking only a launch-added row against the pinned account. */
   retainedLiveModelIds: (sessionId: string, listing: AgentModelCatalogLiveListing) => string[]
-  /** Saves a session's listing and newly learned menus so the next chat starts warm. */
+  /** Saves a session's listing and newly learned menus so the next chat starts warm. Call it in
+   *  the step that read the child: the record's owner is taken as the listing's producer. */
   recordLiveListing: (sessionId: string, listing: AgentModelCatalogLiveListing) => void
   /** Lists, in the background, every agent the user has used here (a saved catalog or a chat)
    *  whose catalog for the account a new chat would pin is missing or old, so a picker never meets
@@ -141,7 +142,8 @@ async function recordConfiguredDefault(
   deps: AgentModelCatalogServiceDeps,
   record: AgentSessionRecord,
   fingerprint: string,
-  choice: AgentModelCatalogConfiguredChoice | null
+  choice: AgentModelCatalogConfiguredChoice | null,
+  startedAt: number | null
 ): Promise<void> {
   const accountHome = record.accountHome
   if (!deps.workspaceMayOverrideDefaultModel) {
@@ -158,7 +160,7 @@ async function recordConfiguredDefault(
   ) {
     return
   }
-  deps.store.recordConfiguredDefault(fingerprint, choice)
+  deps.store.recordConfiguredDefault(fingerprint, choice, startedAt)
 }
 
 async function runBounded<T>(
@@ -316,17 +318,21 @@ export function createAgentModelCatalogService(
       }
       // The record's pinned account and host: the account this child listed under.
       const fingerprint = agentModelCatalogFingerprintForRecord(record)
+      const startedAt = record.lease?.ownerProcess?.processStartTimeMs ?? null
       const { configuredDefault, ...listed } = listing
       const saved = deps.store.recordSuccess(
         fingerprint,
         record.provider,
         { ...listed, origin: 'live-session' },
-        'live'
+        'live',
+        startedAt
       )
       if (saved && configuredDefault !== undefined) {
-        // In report order, so the latest chat's resolution is the one kept.
+        // The store keeps the latest-started chat's resolution, whatever order these finish in.
         const recording = (recordingDefaults.get(fingerprint) ?? Promise.resolve())
-          .then(() => recordConfiguredDefault(deps, record, fingerprint, configuredDefault))
+          .then(() =>
+            recordConfiguredDefault(deps, record, fingerprint, configuredDefault, startedAt)
+          )
           .catch(() => {})
           .then(() => {
             if (recordingDefaults.get(fingerprint) === recording) {
