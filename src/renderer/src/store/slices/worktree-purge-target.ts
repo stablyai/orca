@@ -9,11 +9,3 @@ export type WorktreePurgeTarget = Pick<Worktree, 'id' | 'hostId'>
  * state while another host still publishes the id, and everything otherwise.
  */
 export type WorktreePurgeTargets = readonly (string | HostWorktreeTarget)[]
-
-export function normalizeWorktreePurgeTarget(
-  target: string | HostWorktreeTarget
-): WorktreePurgeTarget {
-  return typeof target === 'string'
-    ? { id: target }
-    : { id: target.worktreeId, hostId: target.hostId }
-}

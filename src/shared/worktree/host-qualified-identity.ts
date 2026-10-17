@@ -26,8 +26,8 @@ declare const hostWorktreeTargetBrand: unique symbol
 
 /** One host's copy of a workspace, for destructive entry points that must not reach its twin. */
 export type HostWorktreeTarget = {
+  readonly id: string
   readonly hostId: ExecutionHostId
-  readonly worktreeId: string
   readonly [hostWorktreeTargetBrand]: true
 }
 
@@ -36,7 +36,7 @@ export function hostWorktreeTarget(row: {
   hostId: ExecutionHostId
 }): HostWorktreeTarget {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the only constructor of the brand; `hostId` is a concrete host by the parameter type.
-  return { hostId: row.hostId, worktreeId: row.id } as HostWorktreeTarget
+  return { id: row.id, hostId: row.hostId } as HostWorktreeTarget
 }
 
 /**

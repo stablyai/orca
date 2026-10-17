@@ -1,5 +1,5 @@
 import type { AppState } from '../types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { buildTerminalTabRetirementPlans } from '../slices/terminal-tab-retirement'
 import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardown/purged-structured-launch-retirement'
@@ -7,6 +7,7 @@ import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-tw
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import {
   collectRemovedHostTwinState,
+  isRuntimeHost,
   removedHostCanonicalizer,
   type RemovedHostTwinState
 } from './repo-removal-host-twin-attribution'
@@ -33,7 +34,7 @@ export function collectRemovedHostTwins(
     ...collectHostTwinPurgeScopes(
       state,
       worktreeIds.map((id) => ({ id, hostId }))
-    ).byHost
+    )
   ]
   return {
     twinHostIds: new Map(scopes.flatMap(([, twins]) => [...twins])),
@@ -76,7 +77,7 @@ export function closeRemovedHostTwinState(
         .filter((tabId) => !presentTabIds.has(tabId))
     ])
     // Why: a runtime host stopped its own shells on removal, so no close is sent back to it.
-    const remoteCloseOwnedByHost = parseExecutionHostId(hostId)?.kind === 'runtime'
+    const remoteCloseOwnedByHost = isRuntimeHost(hostId)
     // Why planned together: the planner keeps a PTY another surviving tab still binds.
     const plans = buildTerminalTabRetirementPlans(get(), [...terminalTabIds])
     // Why live-indexed only: a parked layout hint may be another host's session id.

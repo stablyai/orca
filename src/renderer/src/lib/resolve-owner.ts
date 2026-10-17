@@ -32,6 +32,7 @@ import {
   getNestedSshTargetIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -175,22 +176,6 @@ export function runtimeTargetForWorkspaceOwner(
   return match.kind === 'resolved' ? hostRouteForAuthority(match.owner).target : null
 }
 
-const reportedAmbiguousRefusals = new Set<string>()
-
-/** Logs a refusal once per site and workspace: a twin's refusals repeat on every persist or sweep. */
-export function warnAmbiguousOwnerRefusalOnce(site: string, workspaceId: string): void {
-  const key = `${site}\0${workspaceId}`
-  if (reportedAmbiguousRefusals.has(key)) {
-    return
-  }
-  reportedAmbiguousRefusals.add(key)
-  console.warn(`[${site}] refused: ambiguous owner for`, workspaceId)
-}
-
-export function resetAmbiguousOwnerRefusalWarningsForTests(): void {
-  reportedAmbiguousRefusals.clear()
-}
-
 function restoredFolderEnvironmentId(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef
@@ -231,4 +216,27 @@ export function runtimeEnvironmentIdForWorkspaceOwner(
       }
     }
   }
+}
+
+/**
+ * The paired server that owns the workspace, or `null` for this app, a directly dialed SSH target
+ * or a twin: for readers and callers that keep main's path, where a twin names no server.
+ * `refusalAction` logs a twin once, for callers that skip a host write because of it.
+ */
+export function runtimeEnvironmentIdUnlessTwin(
+  state: WorktreeOperationRouteState,
+  workspaceId: string | null | undefined,
+  refusalAction?: string
+): string | null {
+  if (!workspaceId) {
+    return null
+  }
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId })
+  if (owner.kind === 'resolved') {
+    return owner.environmentId
+  }
+  if (refusalAction) {
+    warnAmbiguousOwnerOnce(workspaceId, refusalAction)
+  }
+  return null
 }

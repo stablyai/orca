@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
-import { warnAmbiguousOwnerRefusalOnce } from '@/lib/resolve-owner'
+import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
 import { translate } from '@/i18n/i18n'
@@ -120,7 +120,7 @@ export function linearSettingsForBoardWorktree(
   // Why: a workspace no row places is this computer's, but a twin must not borrow its Linear account.
   const target = getRuntimeTargetForWorktreeOwner(state, worktreeId)
   if (!target) {
-    warnAmbiguousOwnerRefusalOnce('board-task-status-sync', worktreeId)
+    warnAmbiguousOwnerOnce(worktreeId, 'sync a board task status')
   }
   return target
 }

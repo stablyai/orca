@@ -14,10 +14,8 @@ vi.mock('@/lib/reveal-terminal-pane', () => ({
   revealTerminalPane: mocks.revealTerminalPane
 }))
 vi.mock('@/lib/resolve-owner', () => ({
-  runtimeEnvironmentIdForWorkspaceOwner: (state: unknown, ref: { workspaceId: string }) => ({
-    kind: 'resolved',
-    environmentId: mocks.ownerEnvironmentIdForWorkspace(state, ref.workspaceId)
-  })
+  runtimeEnvironmentIdUnlessTwin: (state: unknown, workspaceId: string) =>
+    mocks.ownerEnvironmentIdForWorkspace(state, workspaceId)
 }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => ({}) } }))
 

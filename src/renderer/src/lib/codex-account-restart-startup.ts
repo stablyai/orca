@@ -2,10 +2,10 @@ import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
   resolveSshHostReportedPlatform,
-  sshOwnerEnvironmentIdForPlatform,
   resolveAgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
@@ -71,7 +71,7 @@ export function buildCodexAccountRestartStartup(args: {
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      sshOwnerEnvironmentIdForPlatform(state, args.worktreeId)
+      runtimeEnvironmentIdUnlessTwin(state, args.worktreeId)
     )
   })
   const startupPlan = buildAgentResumeStartupPlan({

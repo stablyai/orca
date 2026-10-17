@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { resetHostTwinModuleStores } from '@/store/host-twin-state-projection.test-fixture'
 import { createHostTwinFixture, type HostTwinFixture } from '@/store/host-twin.test-fixture'
-import { collectTwinHostsAlsoSlept, labelExecutionHosts } from './sleep-twin-confirmation'
+import { collectTwinHostsAlsoSlept } from './sleep-twin-confirmation'
 
 let current: HostTwinFixture | null = null
 
@@ -62,13 +62,5 @@ describe('the twin copies a sleep also reaches', () => {
     }))
 
     expect(collectTwinHostsAlsoSlept(f.store.getState(), [row(f, f.local)])).toEqual([])
-  })
-
-  it('labels hosts as the sidebar does, falling back to the id', () => {
-    const f = twin()
-
-    expect(labelExecutionHosts(f.store.getState(), ['ssh:unknown-target'])).toEqual([
-      expect.any(String)
-    ])
   })
 })

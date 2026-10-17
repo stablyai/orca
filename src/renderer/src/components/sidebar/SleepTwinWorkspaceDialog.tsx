@@ -12,7 +12,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { runSleepWorktrees } from './sleep-worktree-flow'
-import { labelExecutionHosts } from './sleep-twin-confirmation'
+import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
 
 function readStrings(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry) => typeof entry === 'string') : []
@@ -33,7 +33,9 @@ const SleepTwinWorkspaceDialog = React.memo(function SleepTwinWorkspaceDialog() 
       }),
     [modalData.hostIds]
   )
-  const hostLabels = labelExecutionHosts(useAppStore.getState(), hostIds).join(', ')
+  const hostLabels = hostIds
+    .map((hostId) => selectExecutionHostDisplayLabel(useAppStore.getState(), hostId))
+    .join(', ')
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

@@ -1,5 +1,5 @@
 import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { useAppStore } from '../../store'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { TerminalPaneRevealTarget } from '../../../../shared/terminal-pane-reveal'
@@ -7,12 +7,6 @@ import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId
 } from '../../../../shared/terminal-surface-id'
-
-function mirroredEnvironmentIdForWorkspace(workspaceId: string): string | null {
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(useAppStore.getState(), { workspaceId })
-  // Why: reveal only focuses a tab; a twin keeps the id the caller named.
-  return owner.kind === 'resolved' ? owner.environmentId : null
-}
 
 /**
  * External callers name a tab as its owning host does. This window mirrors a paired server's
@@ -24,7 +18,8 @@ function toWindowTabId(target: TerminalPaneRevealTarget): string {
     ? host.kind === 'runtime'
       ? host.environmentId
       : null
-    : mirroredEnvironmentIdForWorkspace(target.worktreeId)
+    : // Why: reveal only focuses a tab; a twin keeps the id the caller named.
+      runtimeEnvironmentIdUnlessTwin(useAppStore.getState(), target.worktreeId)
   return environmentId && !isWebTerminalSurfaceTabId(target.tabId)
     ? toWebTerminalSurfaceTabId(target.tabId)
     : target.tabId

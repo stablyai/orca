@@ -1,7 +1,4 @@
-import {
-  runtimeEnvironmentIdForWorkspaceOwner,
-  warnAmbiguousOwnerRefusalOnce
-} from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
 import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
@@ -11,19 +8,6 @@ import type { Tab } from '../../../shared/tab-types'
 export type MirroredEditorCloseState = WorktreeOperationRouteState & {
   openFiles: readonly OpenFile[]
   unifiedTabsByWorktree: Record<string, Tab[]>
-}
-
-function legacyMirroredFileEnvironmentId(
-  state: MirroredEditorCloseState,
-  worktreeId: string
-): string | null {
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
-  if (owner.kind === 'ambiguous') {
-    // Why: closing on a guessed twin would retire the other host's tab; the local close still runs.
-    warnAmbiguousOwnerRefusalOnce('mirrored-editor-close', worktreeId)
-    return null
-  }
-  return owner.environmentId
 }
 
 // A mirrored editor file is owned by the host, which republishes its open files, so a local-only close is undone by the next
@@ -44,7 +28,8 @@ export function notifyHostOfMirroredEditorClose(
   // Only legacy records need catalog inference; snapshots capture their authoritative runtime owner.
   const runtimeEnvironmentId =
     file.runtimeEnvironmentId === undefined
-      ? legacyMirroredFileEnvironmentId(state, worktreeId)
+      ? // Why: closing on a guessed twin would retire the other host's tab; the local close still runs.
+        runtimeEnvironmentIdUnlessTwin(state, worktreeId, 'close a mirrored editor tab on its host')
       : file.runtimeEnvironmentId
   if (!runtimeEnvironmentId?.trim()) {
     return false

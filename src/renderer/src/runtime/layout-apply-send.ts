@@ -1,5 +1,5 @@
 // Store-free so store slices can send; `layout-owner-command` reads the store for other callers.
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { afterLayoutFrame } from '@/runtime/layout-frame-position'
 import { holdTabPaneTree } from '@/runtime/layout-owner-pane-intents'
@@ -149,7 +149,7 @@ const PANE_COMMANDS: ReadonlySet<WindowLayoutCommand['type']> = new Set([
  * refusal. False when a paired server owns the workspace's layout; the caller acts as today.
  */
 export function sendLayoutApply(
-  state: Parameters<typeof runtimeEnvironmentIdForWorkspaceOwner>[0],
+  state: Parameters<typeof runtimeEnvironmentIdUnlessTwin>[0],
   worktreeId: string,
   command: WindowLayoutCommand,
   handlers: LayoutApplyHandlers
@@ -157,8 +157,7 @@ export function sendLayoutApply(
   // Why: the same owner test that mirrors a workspace's tabs from a paired server; a focused
   // server must not claim a workspace whose row names no owner. A twin stays on main's path: it
   // edits this window's layout, not either host, as the terminal-create path does.
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
-  if (owner.kind === 'resolved' && owner.environmentId) {
+  if (runtimeEnvironmentIdUnlessTwin(state, worktreeId)) {
     return false
   }
   const hold =

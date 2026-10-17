@@ -3,14 +3,14 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { HostAuthority } from '../../../shared/host-authority'
 import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
 import {
-  resetAmbiguousOwnerRefusalWarningsForTests,
   resolveOwner,
   runtimeEnvironmentIdForWorkspaceOwner,
+  runtimeEnvironmentIdUnlessTwin,
   runtimeTargetForWorkspaceOwner,
   type RuntimeEnvironmentOwnerMatch,
-  type WorkspaceOwnerRef,
-  warnAmbiguousOwnerRefusalOnce
+  type WorkspaceOwnerRef
 } from './resolve-owner'
+import { ambiguousOwnerWarnedWorktreeIds } from './ambiguous-owner-warning'
 import type {
   WorktreeOperationOwnerRecord,
   WorktreeOperationRouteState
@@ -354,14 +354,33 @@ describe('runtimeEnvironmentIdForWorkspaceOwner', () => {
   })
 })
 
-describe('warnAmbiguousOwnerRefusalOnce', () => {
-  it('logs each site and workspace once', () => {
-    resetAmbiguousOwnerRefusalWarningsForTests()
+describe('runtimeEnvironmentIdUnlessTwin', () => {
+  const twin: WorktreeOperationRouteState = {
+    repos: [
+      { id: 'repo-1', executionHostId: 'local' },
+      { id: 'repo-1', executionHostId: 'runtime:env-b' }
+    ],
+    worktreesByRepo: { 'repo-1': [worktree('local'), worktree('runtime:env-b', 'env-b')] }
+  }
+
+  it("names a resolved workspace's server", () => {
+    const state: WorktreeOperationRouteState = {
+      repos: [{ id: 'repo-1', executionHostId: 'runtime:env-b' }],
+      worktreesByRepo: { 'repo-1': [worktree('runtime:env-b', 'env-b')] }
+    }
+    expect(runtimeEnvironmentIdUnlessTwin(state, WORKTREE_ID)).toBe('env-b')
+    expect(runtimeEnvironmentIdUnlessTwin(state, null)).toBeNull()
+  })
+
+  it('names no server for a twin, logging a refusal once per action and workspace', () => {
+    ambiguousOwnerWarnedWorktreeIds.clear()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    warnAmbiguousOwnerRefusalOnce('site-a', WORKTREE_ID)
-    warnAmbiguousOwnerRefusalOnce('site-a', WORKTREE_ID)
-    warnAmbiguousOwnerRefusalOnce('site-b', WORKTREE_ID)
+    expect(runtimeEnvironmentIdUnlessTwin(twin, WORKTREE_ID)).toBeNull()
+    expect(warn).not.toHaveBeenCalled()
+    runtimeEnvironmentIdUnlessTwin(twin, WORKTREE_ID, 'action a')
+    runtimeEnvironmentIdUnlessTwin(twin, WORKTREE_ID, 'action a')
+    runtimeEnvironmentIdUnlessTwin(twin, WORKTREE_ID, 'action b')
 
     expect(warn).toHaveBeenCalledTimes(2)
     expect(warn.mock.calls[0]).toContain(WORKTREE_ID)

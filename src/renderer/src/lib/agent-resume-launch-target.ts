@@ -8,7 +8,6 @@ import {
   resolveWindowsShellStartupFamily
 } from '../../../shared/windows-terminal-shell'
 import type { AppState } from '@/store/types'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
 
@@ -34,16 +33,6 @@ export type AgentResumeLaunchTargetArgs = {
 
 function isRemoteResumeTarget(args: AgentResumeLaunchTargetArgs): boolean {
   return Boolean(args.connectionId) || parseExecutionHostId(args.executionHostId)?.kind !== 'local'
-}
-
-/** The paired server whose SSH state reports this workspace's platform, or `null` for this app's. */
-export function sshOwnerEnvironmentIdForPlatform(
-  state: Parameters<typeof runtimeEnvironmentIdForWorkspaceOwner>[0],
-  workspaceId: string
-): string | null {
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId })
-  // Why: only the quoting platform is read here; the launch's host is resolved elsewhere.
-  return owner.kind === 'resolved' ? owner.environmentId : null
 }
 
 /**

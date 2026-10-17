@@ -25,10 +25,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/lib/resolve-owner', () => ({
-  runtimeEnvironmentIdForWorkspaceOwner: () => ({
-    kind: 'resolved',
-    environmentId: mocks.pairedServer
-  })
+  runtimeEnvironmentIdUnlessTwin: () => mocks.pairedServer
 }))
 
 const WORKTREE = 'repo1::/path/wt'

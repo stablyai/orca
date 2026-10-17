@@ -7,10 +7,6 @@ import {
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import {
-  composeWorktreeHostIdentity,
-  type HostScopedWorktreeKey
-} from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreePurgeTarget } from '../../worktree-purge-target'
 import { getFolderWorkspaceHostId } from '../../../folder-workspaces/folder-workspace-catalog'
 import { getProjectGroupHostId } from '../../project-group-owner-routing'
@@ -99,12 +95,8 @@ function resolvePurgedPublishers(
   }
 }
 
-export type HostTwinPurgeScopes = {
-  /** Host identities of every host target whose id a twin still publishes. */
-  twinTargetKeys: Set<HostScopedWorktreeKey>
-  /** Per attributed host, its twin ids with the hosts that still publish them. */
-  byHost: Map<ExecutionHostId, Map<string, ExecutionHostId[]>>
-}
+/** Per attributed host, its twin ids with the hosts that still publish them. */
+export type HostTwinPurgeScopes = Map<ExecutionHostId, Map<string, ExecutionHostId[]>>
 
 /** Host targets whose id a host outside the purge still publishes. A raw id for the same id wins. */
 export function collectHostTwinPurgeScopes(
@@ -118,17 +110,16 @@ export function collectHostTwinPurgeScopes(
       purgedHostsById.set(id, (purgedHostsById.get(id) ?? new Set()).add(hostId))
     }
   }
-  const scopes: HostTwinPurgeScopes = { twinTargetKeys: new Set(), byHost: new Map() }
+  const scopes: HostTwinPurgeScopes = new Map()
   for (const [id, purgedHosts] of purgedHostsById) {
     const { survivors, attributedHostIds } = resolvePurgedPublishers(s, id, purgedHosts)
     if (survivors.length === 0) {
       continue
     }
     for (const hostId of purgedHosts) {
-      scopes.twinTargetKeys.add(composeWorktreeHostIdentity(hostId, id))
       const attributedHostId = attributedHostIds.get(hostId) ?? hostId
-      const scope = scopes.byHost.get(attributedHostId) ?? new Map<string, ExecutionHostId[]>()
-      scopes.byHost.set(attributedHostId, scope.set(id, survivors))
+      const scope = scopes.get(attributedHostId) ?? new Map<string, ExecutionHostId[]>()
+      scopes.set(attributedHostId, scope.set(id, survivors))
     }
   }
   return scopes

@@ -6,7 +6,7 @@ import {
 } from '../../../shared/execution-host'
 import { getHostSettingOverride } from '../../../shared/host-setting-overrides'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/runtime-environment-ssh-selectors'
 import type { AppState } from '@/store/types'
 
@@ -53,12 +53,9 @@ export function selectWorktreeHostDisplayLabel(state: AppState, worktreeId: stri
     return null
   }
   const parsed = parseExecutionHostId(hostId)
-  const owner =
-    parsed?.kind === 'ssh'
-      ? runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
-      : null
   return selectExecutionHostDisplayLabel(state, hostId, {
-    // Why: a label only reads; an undecidable owner names the direct SSH target.
-    sshEnvironmentId: owner?.kind === 'resolved' ? owner.environmentId : null
+    // Why: a label only reads; a twin names the direct SSH target.
+    sshEnvironmentId:
+      parsed?.kind === 'ssh' ? runtimeEnvironmentIdUnlessTwin(state, worktreeId) : null
   })
 }

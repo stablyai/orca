@@ -145,7 +145,7 @@ export function createPurgeWorktreeTerminalState(
 ): WorktreeSlice['purgeWorktreeTerminalState'] {
   return (worktreeTargets) => {
     const purgeableWorktreeTargets = worktreeTargets.filter((target) => {
-      const worktreeId = typeof target === 'string' ? target : target.worktreeId
+      const worktreeId = typeof target === 'string' ? target : target.id
       return worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
     })
     if (purgeableWorktreeTargets.length === 0) {

@@ -1,7 +1,7 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { AppState } from '@/store/types'
 import { hasOpenFileExecutionHostEvidence } from '@/lib/unified-tab-host-ownership'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import {
   findRuntimeWorkspaceFileRoute,
   type RuntimeWorkspaceFileRoute
@@ -32,9 +32,8 @@ export function findRestoredEditorWorkspaceRuntimeOwner(
   if (!worktreeId || file.worktreeId !== worktreeId || hasOpenFileExecutionHostEvidence(file)) {
     return null
   }
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
   // Why: re-homing a tab moves where it saves; a twin keeps the tab where it was.
-  const runtimeEnvironmentId = owner.kind === 'resolved' ? owner.environmentId : null
+  const runtimeEnvironmentId = runtimeEnvironmentIdUnlessTwin(state, worktreeId)
   // Why skip the focused server: its unstamped tabs already read and save there.
   if (
     !runtimeEnvironmentId ||
