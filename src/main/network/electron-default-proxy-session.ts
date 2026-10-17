@@ -1,3 +1,5 @@
+import type { ProxyCaTrustSession } from './proxy-ca-trust'
+
 export type ProxySession = {
   resolveProxy(url: string): Promise<string>
   setProxy(config: {
@@ -6,6 +8,8 @@ export type ProxySession = {
     proxyBypassRules?: string
   }): Promise<void>
   closeAllConnections?: () => Promise<void>
+  /** Optional: only sessions that can host the proxy-CA override implement it. */
+  setCertificateVerifyProc?: ProxyCaTrustSession['setCertificateVerifyProc']
 }
 
 let resolveDefaultProxySession: (() => ProxySession | null) | null = null
