@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import type { PointerSensorOptions, SensorProps } from '@dnd-kit/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeTabDragEvent } from './tab-drag-event-fixture'
+import { getDragPointer } from './tab-drag-pointer'
 import { TabDragPointerSensor } from './tab-drag-pointer-sensor'
 
 function startSensor(options: PointerSensorOptions = {}) {
@@ -110,5 +112,43 @@ describe('tab drag pointer sensor cancellation', () => {
     expect(current.onMove).toHaveBeenCalledOnce()
     expect(current.onCancel).toHaveBeenCalledOnce()
     expect(current.onEnd).not.toHaveBeenCalled()
+  })
+})
+
+describe('tab drag pointer sensor cursor recording', () => {
+  // Why: a derived pointer this far off is what a scrolled source tab strip produces.
+  const scrollShiftedEvent = makeTabDragEvent({
+    activeData: {},
+    overData: null,
+    pointerDown: { x: 10, y: 10 },
+    derivedPointer: { x: -325, y: 10 }
+  })
+
+  it('records the pointerdown position, then each move', () => {
+    startSensor()
+    expect(getDragPointer(scrollShiftedEvent)).toEqual({ x: 10, y: 10 })
+    movePointer()
+    expect(getDragPointer(scrollShiftedEvent)).toEqual({ x: 100, y: 50 })
+  })
+
+  it('records the pointerup position for the drop commit', () => {
+    startSensor()
+    movePointer()
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 130, clientY: 60 }))
+    expect(getDragPointer(scrollShiftedEvent)).toEqual({ x: 130, y: 60 })
+  })
+
+  it('keeps the pointerdown position when released before the drag activates', () => {
+    startSensor({ activationConstraint: { distance: 500 } })
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 130, clientY: 60 }))
+    expect(getDragPointer(scrollShiftedEvent)).toEqual({ x: 10, y: 10 })
+  })
+
+  it('replaces the previous gesture position when a new gesture starts', () => {
+    startSensor()
+    movePointer()
+    document.dispatchEvent(new PointerEvent('pointerup', { clientX: 130, clientY: 60 }))
+    startSensor()
+    expect(getDragPointer(scrollShiftedEvent)).toEqual({ x: 10, y: 10 })
   })
 })

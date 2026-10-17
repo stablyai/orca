@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { makeTabDragEvent } from './tab-drag-event-fixture'
+import { getDragPointer, recordTabDragPointer } from './tab-drag-pointer'
 import {
   resolveTabIndicatorEdges,
   resolveTabInsertion,
@@ -256,5 +258,31 @@ describe('resolveTabIndicatorEdges', () => {
         side: 'right'
       })
     ).toEqual([{ visibleTabId: 'only-tab', side: 'right' }])
+  })
+})
+
+describe('resolveTabInsertion with a scrolled source tab strip', () => {
+  afterEach(() => recordTabDragPointer(null))
+
+  // Over tab spans 600..700; the scroll-shifted delta derives x=620 while the cursor is at 680.
+  const event = makeTabDragEvent({
+    activeData: makeDragData({ unifiedTabId: 'tab-active' }),
+    overData: makeDragData({
+      unifiedTabId: 'tab-over',
+      visibleTabId: 'tab-over',
+      groupId: 'group-2'
+    }),
+    overRect: { left: 600, width: 100 },
+    pointerDown: { x: 1275, y: 19 },
+    derivedPointer: { x: 620, y: 19 }
+  })
+
+  it('picks the side under the real cursor', () => {
+    recordTabDragPointer({ x: 680, y: 19 })
+    expect(resolveTabInsertion(event, isTabDragData, getDragPointer)?.side).toBe('right')
+  })
+
+  it('would pick the other side from the delta alone', () => {
+    expect(resolveTabInsertion(event, isTabDragData, getDragPointer)?.side).toBe('left')
   })
 })
