@@ -22,7 +22,10 @@ jobs:
           script: |
             const issue = context.payload.issue;
             const body = issue.body || "";
-            const osMatch = body.match(/^### Operating system\s+(.+)$/m);
+            // Prefer the current form field; keep older headings for open issues.
+            const osMatch =
+              body.match(/^### Operating system\s+(.+)$/m) ||
+              body.match(/^### Host operating system\s+(.+)$/m);
 
             if (!osMatch) {
               core.info("No operating system field found. Skipping.");
@@ -34,6 +37,8 @@ jobs:
               macos: "os:macos",
               windows: "os:Windows",
               linux: "os:linux",
+              ios: "os:mobile",
+              android: "os:mobile",
             };
 
             const desiredLabel = osLabelMap[selectedOs];
@@ -51,11 +56,20 @@ jobs:
             );
             const nextLabels = [...new Set([...labelsToKeep, desiredLabel])];
 
+            // Apply the plain "mobile" label for mobile clients (current + older forms).
+            const whereMatch =
+              body.match(/^### Where were you using Orca\?\s+(.+)$/m) ||
+              body.match(/^### Client\s+(.+)$/m);
+            const where = whereMatch?.[1]?.trim().toLowerCase() ?? "";
+            if (where.startsWith("mobile")) {
+              nextLabels.push("mobile");
+            }
+
             await github.rest.issues.setLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue.number,
-              labels: nextLabels,
+              labels: [...new Set(nextLabels)],
             });
 
             core.info(`Applied label ${desiredLabel} to issue #${issue.number}.`);
