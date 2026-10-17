@@ -709,7 +709,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const msg = db.insertMessage({ from: 'a', to: 'b', subject: 'hi' })
       // Why: simulate push-on-idle stamping delivered_at without the runtime loop.
-      db.markAsDelivered([msg.id])
+      db.markAsDelivered([msg.id], 'b')
 
       const result = (await call('orchestration.check', {
         terminal: 'b',

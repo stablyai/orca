@@ -332,7 +332,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     })
     if (operation.kind === 'stamp') {
       // A send this lane gave up waiting on ran after all.
-      db.markAsDelivered(staged)
+      db.markAsDelivered(staged, mailboxHandle)
       db.deleteStructuredPointerOperation(mailboxHandle)
       this.sentOperationIds.delete(mailboxHandle)
       return true
@@ -362,7 +362,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
       return false
     }
-    db.markAsDelivered(staged)
+    db.markAsDelivered(staged, mailboxHandle)
     db.deleteStructuredPointerOperation(mailboxHandle)
     this.sentOperationIds.delete(mailboxHandle)
     return true

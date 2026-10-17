@@ -145,6 +145,8 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
       })
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
+    // Why: helpers keep reporting to a stopping creator, so mail sent since begin-stop moves here.
+    this.closeQuestionsForDispatch(dispatchId)
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
@@ -201,6 +203,7 @@ export function reconcileFederatedWorkerStop(
       })
     }
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
+    this.closeQuestionsForDispatch(dispatchId)
     commitLifecycleWriteTransaction(this.db, transaction)
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

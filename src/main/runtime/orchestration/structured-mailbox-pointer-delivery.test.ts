@@ -162,7 +162,7 @@ describe('structured mailbox pointer delivery', () => {
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]![0].operationId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
   })
 
   it('nudges through the worker`s own handle for direct peer mail outside a dispatch', async () => {
@@ -180,7 +180,7 @@ describe('structured mailbox pointer delivery', () => {
     expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
       text: expect.not.stringContaining('--run')
     })
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], IDENTITY.handle)
   })
 
   it('releases its in-flight lane when reading the context fails', async () => {
@@ -194,7 +194,7 @@ describe('structured mailbox pointer delivery', () => {
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).toHaveBeenCalledOnce()
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
   })
 
   it('retains mail when the dispatch settles unknown', async () => {
@@ -224,7 +224,7 @@ describe('structured mailbox pointer delivery', () => {
     delivery.onJournalActivity('session-1')
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
   })
 
   it('rechecks a held notice when the answer edge lands during its host call', async () => {
@@ -238,7 +238,7 @@ describe('structured mailbox pointer delivery', () => {
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).toHaveBeenCalledTimes(2)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
   })
 
   it('sends the pointer through the chat, with who it is from, and counts it pointed once queued', async () => {
@@ -259,7 +259,7 @@ describe('structured mailbox pointer delivery', () => {
       }
     })
     // The chat's queue holds it now, as it holds the person's: the same mail is not pointed again.
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
     expect(stored.has('dispatch:d1')).toBe(false)
   })
 
@@ -305,7 +305,10 @@ describe('structured mailbox pointer delivery', () => {
     expect(send.mock.calls[1]![0].body.from).toMatchObject({
       orchestration: { messages: [{ messageId: 'm2' }] }
     })
-    expect(markAsDelivered.mock.calls).toEqual([[['m1']], [['m2']]])
+    expect(markAsDelivered.mock.calls).toEqual([
+      [['m1'], 'run:run_1'],
+      [['m2'], 'run:run_1']
+    ])
     delivery.onJournalActivity('session-1')
     delivery.deliverForHandle('run:run_1')
     await flush()
@@ -323,7 +326,7 @@ describe('structured mailbox pointer delivery', () => {
     delivery.deliverForHandle('dispatch:d1')
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
   })
 
   it('does not re-nudge a mailbox still holding its own unacked batch', async () => {
@@ -478,7 +481,7 @@ describe('structured mailbox pointer delivery', () => {
     delivery.onJournalActivity('session-1')
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
-    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'], 'dispatch:d1')
     expect(stored.has('dispatch:d1')).toBe(false)
   })
 

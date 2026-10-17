@@ -211,6 +211,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               // Why the worker host's own setting: enforcement runs here, with this
               // host's code, against this host's cap.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+              subWorkersInOwnRun: true,
               cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
             })
           }

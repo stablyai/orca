@@ -36,6 +36,8 @@ export type PreambleParams = {
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
   // Why gated: advertising a verb the depth cap will reject just burns a turn.
   canDispatchSubWorkers?: boolean
+  // Why: a remote worker has no Dispatch row on its own host to start helpers under.
+  subWorkersInOwnRun?: boolean
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -155,7 +157,11 @@ ${postDoneInstructions}`
   const drift =
     params.baseDrift && params.baseDrift.behind > 0 ? buildDriftSection(params.baseDrift) : ''
 
-  const subDispatch = params.canDispatchSubWorkers ? buildSubDispatchSection(cli) : ''
+  const subDispatch = params.canDispatchSubWorkers
+    ? params.subWorkersInOwnRun
+      ? buildOwnRunSubDispatchSection(cli)
+      : buildSubDispatchSection(cli, params.workerHandle)
+    : ''
 
   return `${header}${drift}${subDispatch}
 
@@ -235,7 +241,27 @@ ${chat ? CHAT_REDISPATCH_PARAGRAPH : TERMINAL_REDISPATCH_PARAGRAPH}`
 // as a blocker.
 // Why fenced + blank line before the closing `---`: unfenced `<placeholders>` are stripped as raw
 // HTML by the Chat UI, and a rule directly under a paragraph is a setext H2 (giant last sentence).
-function buildSubDispatchSection(cli: string): string {
+function buildSubDispatchSection(cli: string, workerHandle: string): string {
+  return `
+
+=== SUB-DISPATCH ===
+You may start helper workers for this task. They work in this Dispatch's Run and
+report to you: their questions, escalations, and worker_done arrive in your own
+\`check\`, and your coordinator's mail keeps arriving there too.
+
+\`\`\`sh
+  ${cli} orchestration worker-start --from ${workerHandle} --spec "<sub-task>" --worktree current --agent <agent> --json
+  # Answer a helper's question by its message ID:
+  ${cli} orchestration reply --from ${workerHandle} --id <message_id> --body "<answer>"
+\`\`\`
+
+Wait for every helper's worker_done before reporting your own. Nesting is
+capped; your helpers may not be able to start helpers of their own.
+
+---`
+}
+
+function buildOwnRunSubDispatchSection(cli: string): string {
   return `
 
 === SUB-DISPATCH ===

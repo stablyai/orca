@@ -116,6 +116,8 @@ Use `task-create` plus `worker-start --task <task_id>` for planned fan-out with
 dependencies or a retry of a known Task. Use dependencies only for real ordering
 and prefer parallel waves over chains deeper than three or four steps; nested
 workers obey the depth limit, and a new Run does not reset the caller's depth.
+A dispatched worker starts its own helpers with `worker-start --spec` on the Run
+it works for, without `run-create`; the helpers report to that worker.
 
 A consuming `check` names its caller with `--terminal <handle>`, never `--from`;
 omit it inside the coordinator's own Orca terminal. It returns the bound Run's
