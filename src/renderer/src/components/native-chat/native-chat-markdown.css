@@ -1,3 +1,16 @@
+.native-chat-markdown {
+  font-weight: var(--chat-font-weight);
+}
+
+/* Keep emphasis and code independent of the body weight. */
+.native-chat-markdown :is(strong, b) {
+  font-weight: var(--font-weight-bold);
+}
+
+.native-chat-markdown :is(code, pre) {
+  font-weight: var(--font-weight-normal);
+}
+
 /* Shared markdown also renders sidebar comments, so chat styling stays opt-in. */
 .native-chat-markdown :is(h1, h2, h3, h4, h5, h6, [role='heading'], strong) {
   color: var(--chat-foreground-strong);

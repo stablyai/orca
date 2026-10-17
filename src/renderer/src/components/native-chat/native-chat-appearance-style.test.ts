@@ -267,3 +267,16 @@ describe('contrast hierarchy and incomplete terminal palettes', () => {
     }
   )
 })
+
+it.each([300, 400, 500])('applies body weight %s only outside terminal matching', (fontWeight) => {
+  expect(
+    nativeChatAppearanceStyle(makeSettings({ nativeChatAppearance: { fontWeight } }))[
+      '--chat-font-weight'
+    ]
+  ).toBe(fontWeight)
+  expect(
+    nativeChatAppearanceStyle(
+      makeSettings({ nativeChatAppearance: { fontWeight, matchTerminalInterface: true } })
+    )['--chat-font-weight']
+  ).toBe(400)
+})
