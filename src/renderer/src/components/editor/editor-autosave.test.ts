@@ -3,6 +3,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
+  isAutosaveSuspendedForFile,
   isExternalReloadableEditorTab,
   normalizeAutoSaveDelayMs,
   ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
@@ -145,6 +146,15 @@ describe('requestEditorFileSave', () => {
       'Editor save controller is unavailable.'
     )
   })
+})
+
+describe('isAutosaveSuspendedForFile', () => {
+  it.each(['deleted', 'renamed'] as const)(
+    'suspends autosave for a %s file',
+    (externalMutation) => {
+      expect(isAutosaveSuspendedForFile({ externalMutation })).toBe(true)
+    }
+  )
 })
 
 describe('requestEditorFileClose', () => {

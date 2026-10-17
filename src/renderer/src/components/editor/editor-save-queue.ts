@@ -155,6 +155,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         if (savedFile?.externalMutation === 'changed') {
           trackExternalChangeConflictAction(savedFile, 'save_overwrite')
           nextState.setExternalMutation(file.id, null)
+        } else if (
+          (liveFile.externalMutation === 'deleted' || liveFile.externalMutation === 'renamed') &&
+          savedFile?.externalMutation === liveFile.externalMutation
+        ) {
+          nextState.setExternalMutation(file.id, null)
         }
 
         window.dispatchEvent(
