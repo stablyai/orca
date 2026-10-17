@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { LocalBaseRefRefreshResult } from '../../../../shared/worktree/base-ref-drift-types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
@@ -16,6 +17,7 @@ import {
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
+const persistSettings = vi.fn()
 
 vi.mock('sonner', () => ({
   toast: {
@@ -37,6 +39,8 @@ describe('createWorktree base status merge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
+    persistSettings.mockReset().mockImplementation(async (updates) => updates)
+    vi.stubGlobal('window', { api: { ...mockApi, settings: { set: persistSettings } } })
   })
 
   it('prefetches create base through desktop IPC on the local runtime target', async () => {
@@ -556,7 +560,7 @@ describe('createWorktree base status merge', () => {
     )
   })
 
-  it('persists the dismissal flag when the suggestion toast is closed or swiped', async () => {
+  it('persists a local suggestion dismissal locally after switching hosts', async () => {
     const store = createRepoTestStore()
     store.setState({
       settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
@@ -574,12 +578,18 @@ describe('createWorktree base status merge', () => {
       onDismiss: () => void
     }
     // The close (X)/swipe path persists the decline flag.
+    store.setState({
+      settings: { ...getDefaultSettings('/home/test'), activeRuntimeEnvironmentId: 'another-host' }
+    })
     options.onDismiss()
     await Promise.resolve()
 
-    expect(store.getState().updateSettings).toHaveBeenCalledWith({
+    expect(persistSettings).toHaveBeenCalledWith({
       localBaseRefSuggestionDismissed: true
     })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'settings.update' })
+    )
   })
 
   it('does not record a dismissal on close when the feature is already enabled', async () => {
@@ -603,7 +613,7 @@ describe('createWorktree base status merge', () => {
     options.onDismiss()
     await Promise.resolve()
 
-    expect(store.getState().updateSettings).not.toHaveBeenCalledWith({
+    expect(persistSettings).not.toHaveBeenCalledWith({
       localBaseRefSuggestionDismissed: true
     })
   })

@@ -30,6 +30,8 @@ export type RuntimeClientSettings = Pick<
   | 'prBotAuthorOverrides'
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
+  | 'refreshLocalBaseRefOnWorktreeCreate'
+  | 'localBaseRefSuggestionDismissed'
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
@@ -70,6 +72,8 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'zcodePlanSite'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
+  | 'refreshLocalBaseRefOnWorktreeCreate'
+  | 'localBaseRefSuggestionDismissed'
   | 'machineName'
   | 'nativeChatPermissionMode'
 >

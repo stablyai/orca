@@ -84,6 +84,8 @@ export class RuntimeClientSettingsController {
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
+      refreshLocalBaseRefOnWorktreeCreate: settings.refreshLocalBaseRefOnWorktreeCreate === true,
+      localBaseRefSuggestionDismissed: settings.localBaseRefSuggestionDismissed === true,
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
       machineName: settings.machineName ?? '',
       // Why projected: a web client's Settings → Chat edits this host's new-chat default.

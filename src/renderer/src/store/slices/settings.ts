@@ -208,7 +208,10 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
 
   updateSettings: async (updates) => {
     const shouldPublish = ownerHydration.createSettingsPublicationFence(
-      'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
+      'activeRuntimeEnvironmentId' in updates ||
+        'worktreeVisibilityDefaults' in updates ||
+        'refreshLocalBaseRefOnWorktreeCreate' in updates ||
+        'localBaseRefSuggestionDismissed' in updates
     )
     const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
     try {
@@ -230,7 +233,10 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
 
   updateSettingsOrThrow: async (updates) => {
     const shouldPublish = ownerHydration.createSettingsPublicationFence(
-      'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
+      'activeRuntimeEnvironmentId' in updates ||
+        'worktreeVisibilityDefaults' in updates ||
+        'refreshLocalBaseRefOnWorktreeCreate' in updates ||
+        'localBaseRefSuggestionDismissed' in updates
     )
     const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
     await persistSettingsUpdates(

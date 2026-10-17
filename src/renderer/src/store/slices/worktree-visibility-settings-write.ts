@@ -7,6 +7,38 @@ import {
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '../types'
 
+export async function persistLocalBaseRefSettings(
+  target: ReturnType<typeof defaultScopeHost>,
+  updates: Partial<
+    Pick<GlobalSettings, 'refreshLocalBaseRefOnWorktreeCreate' | 'localBaseRefSuggestionDismissed'>
+  >
+): Promise<Partial<GlobalSettings>> {
+  const settings =
+    target.kind === 'environment'
+      ? (
+          await callRuntimeRpc<{ settings: Partial<GlobalSettings> }>(
+            target,
+            'settings.update',
+            updates,
+            { timeoutMs: 15_000 }
+          )
+        ).settings
+      : await window.api.settings.set(updates)
+  if (
+    !settings ||
+    (updates.refreshLocalBaseRefOnWorktreeCreate !== undefined &&
+      settings.refreshLocalBaseRefOnWorktreeCreate !==
+        updates.refreshLocalBaseRefOnWorktreeCreate) ||
+    (updates.localBaseRefSuggestionDismissed !== undefined &&
+      settings.localBaseRefSuggestionDismissed !== updates.localBaseRefSuggestionDismissed)
+  ) {
+    throw new Error(
+      'The host did not save the local base refresh preferences. Update the server and try again.'
+    )
+  }
+  return settings
+}
+
 export async function persistVisibilityAwareSettings(args: {
   normalizedUpdates: Partial<GlobalSettings>
   currentSettings: GlobalSettings | null
@@ -25,6 +57,38 @@ export async function persistVisibilityAwareSettings(args: {
   } = args
   // Why: the write lands on the default scope host whose defaults the store mirrors.
   const target = defaultScopeHost(currentSettings)
+  if (
+    target.kind === 'environment' &&
+    ('refreshLocalBaseRefOnWorktreeCreate' in normalizedUpdates ||
+      'localBaseRefSuggestionDismissed' in normalizedUpdates)
+  ) {
+    const {
+      refreshLocalBaseRefOnWorktreeCreate,
+      localBaseRefSuggestionDismissed,
+      ...otherUpdates
+    } = normalizedUpdates
+    const updates = {
+      ...(refreshLocalBaseRefOnWorktreeCreate !== undefined
+        ? { refreshLocalBaseRefOnWorktreeCreate }
+        : {}),
+      ...(localBaseRefSuggestionDismissed !== undefined ? { localBaseRefSuggestionDismissed } : {})
+    }
+    await persistLocalBaseRefSettings(target, updates)
+    if (Object.keys(otherUpdates).length > 0) {
+      await persistVisibilityAwareSettings({ ...args, normalizedUpdates: otherUpdates })
+    }
+    if (shouldPublish()) {
+      set((state) => {
+        const active = defaultScopeHost(state.settings)
+        return active.kind === 'environment' &&
+          active.environmentId === target.environmentId &&
+          state.settings
+          ? { settings: { ...state.settings, ...updates } }
+          : {}
+      })
+    }
+    return
+  }
   if ('worktreeVisibilityDefaults' in normalizedUpdates && target.kind === 'environment') {
     const { worktreeVisibilityDefaults, ...localUpdates } = normalizedUpdates
     if (target.environmentId !== supportedRuntimeEnvironmentId) {
@@ -38,10 +102,19 @@ export async function persistVisibilityAwareSettings(args: {
     ) {
       throw new Error('Update this server to configure source defaults.')
     }
-    const localSettings =
+    const persistedLocalSettings =
       Object.keys(localUpdates).length > 0
         ? ((await window.api.settings.set(localUpdates)) as GlobalSettings)
         : currentSettings
+    const localSettings =
+      persistedLocalSettings && currentSettings
+        ? {
+            ...persistedLocalSettings,
+            refreshLocalBaseRefOnWorktreeCreate:
+              currentSettings.refreshLocalBaseRefOnWorktreeCreate,
+            localBaseRefSuggestionDismissed: currentSettings.localBaseRefSuggestionDismissed
+          }
+        : persistedLocalSettings
     let nextSettings = localSettings
     if (target.environmentId === supportedRuntimeEnvironmentId) {
       let result: { settings: Partial<GlobalSettings> }
@@ -106,9 +179,16 @@ export async function persistVisibilityAwareSettings(args: {
   }
   set((state) => ({
     settings: (() => {
-      const persisted = (nextSettings as GlobalSettings | undefined) ?? state.settings
+      let persisted = nextSettings ?? state.settings
       if (!persisted || target.kind !== 'environment') {
         return persisted
+      }
+      if (currentSettings) {
+        persisted = {
+          ...persisted,
+          refreshLocalBaseRefOnWorktreeCreate: currentSettings.refreshLocalBaseRefOnWorktreeCreate,
+          localBaseRefSuggestionDismissed: currentSettings.localBaseRefSuggestionDismissed
+        }
       }
       const defaults =
         state.worktreeVisibilityDefaultsByHost[toRuntimeExecutionHostId(target.environmentId)] ??
