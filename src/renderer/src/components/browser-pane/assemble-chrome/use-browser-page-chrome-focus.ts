@@ -5,6 +5,7 @@ import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import {
   consumeBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  peekBrowserFocusRequest,
   type BrowserFocusRequestDetail
 } from '../host-guest/browser-focus'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
@@ -60,6 +61,9 @@ export function useBrowserPageChromeFocus({
       if (!input) {
         return false
       }
+      if (!keepAddressBarFocusRef.current) {
+        consumeBrowserFocusRequest(browserTabId)
+      }
       guestFocus.blur()
       input.focus()
       if (selection) {
@@ -71,7 +75,7 @@ export function useBrowserPageChromeFocus({
       }
       return document.activeElement === input
     },
-    [addressBarInputRef, guestFocus]
+    [addressBarInputRef, browserTabId, guestFocus]
   )
 
   const focusGuestNow = useCallback(() => {
@@ -187,14 +191,16 @@ export function useBrowserPageChromeFocus({
   }, [chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
 
   useEffect(() => {
-    if (!isActive) {
+    const focusTarget = peekBrowserFocusRequest(browserTabId)
+    if (focusTarget === 'webview' && (!isActive || chromeShortcutScope === 'inactive')) {
+      consumeBrowserFocusRequest(browserTabId)
       return
     }
-    const focusTarget = consumeBrowserFocusRequest(browserTabId)
-    if (!focusTarget) {
+    if (!isActive || !focusTarget) {
       return
     }
     if (focusTarget === 'address-bar') {
+      consumeBrowserFocusRequest(browserTabId)
       return startAddressBarFocusGrab()
     }
     // Why: lowering the latch is not enough — a grab already in flight would spend its remaining
@@ -207,8 +213,13 @@ export function useBrowserPageChromeFocus({
       if (cancelled) {
         return
       }
+      if (peekBrowserFocusRequest(browserTabId) !== 'webview') {
+        return
+      }
       attempts += 1
-      if (!focusGuestNow() && attempts < ADDRESS_BAR_FOCUS_FRAMES) {
+      if (focusGuestNow()) {
+        consumeBrowserFocusRequest(browserTabId)
+      } else if (attempts < ADDRESS_BAR_FOCUS_FRAMES) {
         frameId = window.requestAnimationFrame(runFocus)
       }
     }
@@ -218,7 +229,14 @@ export function useBrowserPageChromeFocus({
       cancelled = true
       window.cancelAnimationFrame(frameId)
     }
-  }, [browserTabId, cancelAddressBarFocusGrab, focusGuestNow, isActive, startAddressBarFocusGrab])
+  }, [
+    browserTabId,
+    cancelAddressBarFocusGrab,
+    chromeShortcutScope,
+    focusGuestNow,
+    isActive,
+    startAddressBarFocusGrab
+  ])
 
   useEffect(() => {
     if (!isActive) {
@@ -229,26 +247,45 @@ export function useBrowserPageChromeFocus({
       if (!detail || detail.pageId !== browserTabId) {
         return
       }
-      const focusTarget = consumeBrowserFocusRequest(browserTabId)
+      const focusTarget = peekBrowserFocusRequest(browserTabId)
       if (!focusTarget) {
         return
       }
       if (focusTarget === 'address-bar') {
+        consumeBrowserFocusRequest(browserTabId)
         // Why: palette-triggered focus fights the same re-grab as a new tab does, so it takes
         // the bar the same bounded way rather than latching on a single try.
         startAddressBarFocusGrab()
         return
       }
+      if (chromeShortcutScope === 'inactive') {
+        consumeBrowserFocusRequest(browserTabId)
+        return
+      }
       cancelAddressBarFocusGrab()
-      focusGuestNow()
+      if (focusGuestNow()) {
+        consumeBrowserFocusRequest(browserTabId)
+      }
     }
-    // Why: an already-active page never remounts, so listen for the event to consume the durable focus request immediately.
+    const cancelPendingFocus = (): void => {
+      consumeBrowserFocusRequest(browserTabId)
+    }
+    // Listen for focus requests delivered after the pane mounts.
     window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    window.addEventListener('pointerdown', cancelPendingFocus, true)
     return () => {
       window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+      window.removeEventListener('pointerdown', cancelPendingFocus, true)
       cancelAddressBarFocusGrab()
     }
-  }, [browserTabId, cancelAddressBarFocusGrab, focusGuestNow, isActive, startAddressBarFocusGrab])
+  }, [
+    browserTabId,
+    cancelAddressBarFocusGrab,
+    chromeShortcutScope,
+    focusGuestNow,
+    isActive,
+    startAddressBarFocusGrab
+  ])
 
   return { focusAddressBarNow, focusGuestNow, startAddressBarFocusGrab, keepAddressBarFocusRef }
 }
