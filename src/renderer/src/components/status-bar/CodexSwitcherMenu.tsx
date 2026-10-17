@@ -1,15 +1,5 @@
-import { ChevronDown, ChevronRight, Loader2, RotateCcw } from 'lucide-react'
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
 import React from 'react'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
 import {
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -17,7 +7,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
-import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { AccountRuntimeToggle, CodexRestartStatusPrompt } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -26,6 +15,7 @@ import {
   isUnavailableInactiveUsage
 } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { renderCodexResetConfirmDialog } from './codex-reset-confirm-dialog'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 
 export function CodexSwitcherMenu({
@@ -101,45 +91,14 @@ export function CodexSwitcherMenu({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent className="sm:max-w-[420px]" {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}>
-          <DialogHeader>
-            <DialogTitle>
-              {translate('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
-            </DialogTitle>
-            <DialogDescription>
-              {translate(
-                'auto.components.status.bar.StatusBar.6d1042aa6f',
-                'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">
-            <Checkbox
-              checked={skipFutureResetConfirm}
-              onCheckedChange={(checked) => setSkipFutureResetConfirm(checked === true)}
-            />
-            <span>
-              {translate('auto.components.status.bar.StatusBar.f077f586db', "Don't ask again")}
-            </span>
-          </label>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
-              {translate('auto.components.status.bar.StatusBar.c0e972d726', 'Cancel')}
-            </Button>
-            <Button onClick={() => void handleConfirmReset()} disabled={isRedeemingReset}>
-              {isRedeemingReset ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RotateCcw className="size-4" />
-              )}
-              {isRedeemingReset
-                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
-                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {renderCodexResetConfirmDialog({
+        open: resetConfirmOpen,
+        setOpen: setResetConfirmOpen,
+        skipFutureResetConfirm,
+        setSkipFutureResetConfirm,
+        isRedeemingReset,
+        handleConfirmReset
+      })}
       {resetCreditCount !== null ? (
         <>
           <DropdownMenuLabel className="space-y-0.5">
