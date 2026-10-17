@@ -81,6 +81,24 @@ function isFunctionKeyToken(key: string): boolean {
   return /^F([1-9]|1[0-9]|2[0-4])$/.test(key)
 }
 
+const NON_TEXT_NAVIGATION_KEYS = [
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'PageUp',
+  'PageDown'
+]
+
+const SAFE_BARE_KEY_TOKENS = [
+  'Backspace',
+  'Delete',
+  'Enter',
+  'Escape',
+  'Tab',
+  ...NON_TEXT_NAVIGATION_KEYS
+]
+
 export function normalizeKeyToken(token: string): string | null {
   if (token === ' ') {
     return 'Space'
@@ -257,24 +275,9 @@ export function isSafeBareKey(parsed: ParsedKeybinding): boolean {
   if (parsed.mod || parsed.meta || parsed.control || parsed.alt) {
     return false
   }
-  // Function keys produce no text, so they're safe bare or with Shift (Shift+letter stays unsafe).
+  // Function and navigation keys produce no text, so they're safe bare or with Shift; text-producing Shift chords stay unsafe.
   if (parsed.shift) {
-    return isFunctionKeyToken(parsed.key)
+    return isFunctionKeyToken(parsed.key) || NON_TEXT_NAVIGATION_KEYS.includes(parsed.key)
   }
-  return (
-    isFunctionKeyToken(parsed.key) ||
-    [
-      'Backspace',
-      'Delete',
-      'Enter',
-      'Escape',
-      'Tab',
-      'ArrowLeft',
-      'ArrowRight',
-      'ArrowUp',
-      'ArrowDown',
-      'PageUp',
-      'PageDown'
-    ].includes(parsed.key)
-  )
+  return isFunctionKeyToken(parsed.key) || SAFE_BARE_KEY_TOKENS.includes(parsed.key)
 }
