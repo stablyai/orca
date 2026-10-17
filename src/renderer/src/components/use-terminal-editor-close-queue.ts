@@ -9,7 +9,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
   const {
     activeWorktreeId,
     closeFile,
-    closedReactionsRef,
+    closeReactionsRef,
     inFlightSaveFileIdRef,
     pendingEditorCloseQueueRef,
     proceedToNativeWindowClose,
@@ -47,9 +47,9 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
       (queuedId) => queuedId !== fileId
     )
-    const onClosed = closedReactionsRef.current.get(fileId)
-    closedReactionsRef.current.delete(fileId)
-    onClosed?.()
+    const reactions = closeReactionsRef.current.get(fileId)
+    closeReactionsRef.current.delete(fileId)
+    reactions?.onClosed?.()
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [])
 

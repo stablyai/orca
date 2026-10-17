@@ -1,6 +1,7 @@
 import type { OpenFile } from '@/store/slices/editor'
 import { shouldPersistWorkspaceSession } from '@/lib/workspace-session'
-import { canAutoSaveOpenFile } from './editor-autosave'
+import { canAutoSaveOpenFile, closeEditorFilesAskingToSave } from './editor-autosave'
+import { getDirtyFilesWithoutBackup } from '@/lib/editor-draft-backup'
 import { flushPendingEditorChange } from './editor-pending-flush'
 import { getDuplicateDirtySavePaths } from './editor-autosave-state-projections'
 import type { AppStoreApi, EditorSaveQueue } from './editor-save-queue'
@@ -83,6 +84,16 @@ export function createEditorRestartSaveHandlers({
 
       const initiallyDirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
       await Promise.all(initiallyDirtyFiles.map((file) => quiesceFileSave(file.id)))
+
+      // Why: these drafts are too large to back up, so the restart asks about them like a quit does.
+      const withoutBackup = getDirtyFilesWithoutBackup(store.getState())
+      if (
+        withoutBackup.length > 0 &&
+        !(await closeEditorFilesAskingToSave(withoutBackup.map((file) => file.id)))
+      ) {
+        detail.reject('Restart cancelled: a large notebook has unsaved changes.')
+        return
+      }
 
       const state = store.getState()
       const dirtyFiles = state.openFiles.filter((file) => file.isDirty)

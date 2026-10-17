@@ -33,7 +33,7 @@ function mainWindowDialogController(fileId: string): TerminalEditorCloseDialogAc
   const pendingEditorCloseQueueRef = { current: [fileId] }
   return {
     advanceEditorCloseQueue: vi.fn(),
-    closedReactionsRef: { current: new Map() },
+    closeReactionsRef: { current: new Map() },
     inFlightSaveFileIdRef: { current: null },
     isClosingRef: { current: false },
     pendingEditorCloseQueueRef,

@@ -15,6 +15,7 @@ import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agen
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
+import { canBackUpEditorDraft } from './editor-draft-backup'
 
 export { buildActiveConnectionIdsAtShutdown }
 
@@ -132,7 +133,9 @@ export function buildEditorSessionData(
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
     // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
-    const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
+    const draft = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
+    const dirtyDraftContent =
+      draft !== undefined && canBackUpEditorDraft(f, draft) ? draft : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,

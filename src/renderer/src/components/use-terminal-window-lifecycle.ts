@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../store'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { getDirtyFilesWithoutBackup } from '@/lib/editor-draft-backup'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import {
@@ -8,6 +9,14 @@ import {
   destroyWebviewsRemovedFromStore
 } from '../store/slices/browser-webview-cleanup'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+
+// Why: re-derived at each close, so a draft that outgrew its backup after the restart's prompt still asks.
+function isRestartRestoringAllDrafts(): boolean {
+  return (
+    isIntentionalAppRestartInProgress() &&
+    getDirtyFilesWithoutBackup(useAppStore.getState()).length === 0
+  )
+}
 
 export function useTerminalWindowLifecycle(controller: TerminalActivationController): void {
   const {
@@ -23,7 +32,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
   } = controller
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent): void => {
-      if (isIntentionalAppRestartInProgress()) {
+      if (isRestartRestoringAllDrafts()) {
         return
       }
       const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
@@ -37,7 +46,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
 
   useEffect(() => {
     setWindowCloseRequestHandler(({ isQuitting }) => {
-      if (isIntentionalAppRestartInProgress()) {
+      if (isRestartRestoringAllDrafts()) {
         window.api.ui.confirmWindowClose()
         return
       }

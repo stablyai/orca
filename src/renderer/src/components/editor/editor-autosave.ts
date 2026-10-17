@@ -55,7 +55,13 @@ export type EditorRequestFileCloseDetail = {
   fileId: string
   /** Runs once the file actually closes — after save or discard, never on cancel. */
   onClosed?: () => void
+  /** Runs if the user cancels the save prompt instead. */
+  onCancelled?: () => void
+  /** Called by the close queue when it takes the request. */
+  claim?: () => void
 }
+
+export type EditorCloseReactions = Pick<EditorRequestFileCloseDetail, 'onClosed' | 'onCancelled'>
 
 export type EditorRequestCmdSaveDetail = {
   fileId: string
@@ -204,13 +210,36 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
 
 export function requestEditorFileClose(
   fileId: string,
-  options?: Pick<EditorRequestFileCloseDetail, 'onClosed'>
+  options?: Omit<EditorRequestFileCloseDetail, 'fileId'>
 ): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {
       detail: { fileId, ...options }
     })
   )
+}
+
+/** Closes files the way their tabs close, asking to save each dirty one; false if the user cancels. */
+export function closeEditorFilesAskingToSave(fileIds: string[]): Promise<boolean> {
+  return Promise.all(
+    fileIds.map(
+      (fileId) =>
+        new Promise<boolean>((resolve) => {
+          let claimed = false
+          requestEditorFileClose(fileId, {
+            claim: () => {
+              claimed = true
+            },
+            onClosed: () => resolve(true),
+            onCancelled: () => resolve(false)
+          })
+          // Why: without the close queue there is nobody to ask, so the files stay unsaved.
+          if (!claimed) {
+            resolve(false)
+          }
+        })
+    )
+  ).then((closed) => closed.every(Boolean))
 }
 
 // CONTRACT: this event fires even when some tabs of the path are dirty —

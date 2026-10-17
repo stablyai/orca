@@ -13,7 +13,7 @@ import type { TerminalEditorCloseQueueController } from './use-terminal-editor-c
 export type TerminalEditorCloseDialogActionsInput = Pick<
   TerminalEditorCloseQueueController,
   | 'advanceEditorCloseQueue'
-  | 'closedReactionsRef'
+  | 'closeReactionsRef'
   | 'inFlightSaveFileIdRef'
   | 'isClosingRef'
   | 'pendingEditorCloseQueueRef'
@@ -31,7 +31,7 @@ export function useTerminalEditorCloseDialogActions(
 ) {
   const {
     advanceEditorCloseQueue,
-    closedReactionsRef,
+    closeReactionsRef,
     inFlightSaveFileIdRef,
     isClosingRef,
     pendingEditorCloseQueueRef,
@@ -116,10 +116,14 @@ export function useTerminalEditorCloseDialogActions(
     }
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
-    closedReactionsRef.current.clear()
+    const cancelled = [...closeReactionsRef.current.values()]
+    closeReactionsRef.current.clear()
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
     releaseCloseDialogGuardAfterDebounce()
+    for (const reactions of cancelled) {
+      reactions.onCancelled?.()
+    }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [releaseCloseDialogGuardAfterDebounce])
 
@@ -130,9 +134,21 @@ export function useTerminalEditorCloseDialogActions(
       if (!fileId) {
         return
       }
-      const onClosed = customEvent.detail?.onClosed
-      if (onClosed) {
-        closedReactionsRef.current.set(fileId, onClosed)
+      const { onClosed, onCancelled, claim } = customEvent.detail
+      claim?.()
+      if (onClosed || onCancelled) {
+        // Why: a second request for a queued file must not drop the first one's reactions.
+        const previous = closeReactionsRef.current.get(fileId)
+        closeReactionsRef.current.set(fileId, {
+          onClosed: () => {
+            previous?.onClosed?.()
+            onClosed?.()
+          },
+          onCancelled: () => {
+            previous?.onCancelled?.()
+            onCancelled?.()
+          }
+        })
       }
       queueEditorCloseRequests([fileId])
     }
@@ -145,7 +161,7 @@ export function useTerminalEditorCloseDialogActions(
         ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
         onRequestEditorClose as EventListener
       )
-  }, [closedReactionsRef, queueEditorCloseRequests])
+  }, [closeReactionsRef, queueEditorCloseRequests])
 
   return { handleSaveDialogSave, handleSaveDialogDiscard, handleSaveDialogCancel }
 }
