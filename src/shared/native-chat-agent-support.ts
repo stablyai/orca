@@ -33,7 +33,10 @@ export function nativeChatRequiresLocalTranscript(agent: string | null | undefin
 export function shouldStepNativeChatAskAnswer(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   return (
-    transcriptAgent === 'claude' || transcriptAgent === 'codex' || transcriptAgent === 'opencode'
+    transcriptAgent === 'claude' ||
+    transcriptAgent === 'codex' ||
+    transcriptAgent === 'opencode' ||
+    transcriptAgent === 'omp'
   )
 }
 

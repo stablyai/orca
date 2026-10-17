@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   buildAskAnswerKeys,
   buildCodexAskAnswerKeys,
+  buildNativeChatAskAnswerKeys,
+  buildOmpAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   parseApprovalFromStatus,
@@ -9,6 +11,7 @@ import {
   parseInteractivePrompt,
   type AskPrompt
 } from './native-chat-interactive-prompt'
+import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
 
 const ESC = String.fromCharCode(27)
 
@@ -302,3 +305,122 @@ for (const agent of ['opencode', 'opencode2']) {
     expect(card?.options[0].send).toBe('\r')
   })
 }
+
+describe('buildOmpAskAnswerKeys', () => {
+  const UP = '\x1b[A'
+  const DOWN = '\x1b[B'
+  const ENTER = '\r'
+  const RIGHT = '\x1b[C'
+  const SPACE = ' '
+  const CLEAR = { raw: AGENT_TUI_CLEAR_INPUT_MAX }
+
+  it('homes to row 0 then moves down to the picked option before Enter', () => {
+    expect(buildOmpAskAnswerKeys(single(['A', 'B', 'C']), [{ indices: [1] }])).toEqual([
+      CLEAR,
+      { raw: `${UP}${UP}${UP}${DOWN}` },
+      { raw: ENTER }
+    ])
+  })
+
+  it('homes only when the first option is picked', () => {
+    expect(buildOmpAskAnswerKeys(single(['A', 'B', 'C']), [{ indices: [0] }])).toEqual([
+      CLEAR,
+      { raw: `${UP}${UP}${UP}` },
+      { raw: ENTER }
+    ])
+  })
+
+  it('routes free text through the Other row and submits the editor', () => {
+    expect(
+      buildOmpAskAnswerKeys(single(['A', 'B', 'C']), [{ indices: [], other: 'Custom' }])
+    ).toEqual([
+      CLEAR,
+      { raw: `${UP}${UP}${UP}${DOWN}${DOWN}${DOWN}` },
+      { raw: ENTER },
+      { text: 'Custom' },
+      { raw: ENTER }
+    ])
+  })
+
+  it('toggles multi-select picks with Space, then Right to Review and Enter to submit', () => {
+    // OMP >= 18.2: Enter on a multi-select row confirms and advances; only Space toggles.
+    expect(buildOmpAskAnswerKeys(single(['A', 'B', 'C'], true), [{ indices: [0, 2] }])).toEqual([
+      CLEAR,
+      { raw: `${UP}${UP}${UP}` },
+      { raw: SPACE },
+      { raw: `${UP}${UP}${UP}${DOWN}${DOWN}` },
+      { raw: SPACE },
+      { raw: RIGHT },
+      { raw: ENTER }
+    ])
+  })
+
+  it('does not step again after multi-select free text, which advances on its own', () => {
+    expect(
+      buildOmpAskAnswerKeys(single(['A', 'B', 'C'], true), [{ indices: [1], other: 'D' }])
+    ).toEqual([
+      CLEAR,
+      { raw: `${UP}${UP}${UP}${DOWN}` },
+      { raw: SPACE },
+      { raw: `${UP}${UP}${UP}${DOWN}${DOWN}${DOWN}` },
+      { raw: ENTER },
+      { text: 'D' },
+      { raw: ENTER },
+      { raw: ENTER }
+    ])
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+    expect(buildOmpAskAnswerKeys(prompt, [{ indices: [], other: 'x' }, { indices: [1] }])).toEqual([
+      CLEAR,
+      { raw: `${UP}${UP}${DOWN}${DOWN}` },
+      { raw: ENTER },
+      { text: 'x' },
+      { raw: ENTER },
+      { raw: `${UP}${UP}${DOWN}` },
+      { raw: ENTER },
+      { raw: ENTER }
+    ])
+  })
+
+  it('steps past an unanswered question in a multi-question prompt', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+
+    expect(buildOmpAskAnswerKeys(prompt, [{ indices: [1] }, { indices: [] }])).toEqual([
+      CLEAR,
+      { raw: `${UP}${UP}${DOWN}` },
+      { raw: ENTER },
+      { raw: RIGHT },
+      { raw: ENTER }
+    ])
+  })
+
+  it('returns no keys when nothing is answered', () => {
+    expect(buildOmpAskAnswerKeys(single(['A', 'B', 'C']), [{ indices: [] }])).toEqual([])
+    expect(buildOmpAskAnswerKeys(single(['A', 'B', 'C']), [])).toEqual([])
+  })
+})
+
+describe('buildNativeChatAskAnswerKeys', () => {
+  it('dispatches by agent to the matching builder', () => {
+    const prompt = single(['A', 'B', 'C'])
+    const selections = [{ indices: [1] }]
+    expect(buildNativeChatAskAnswerKeys('omp', prompt, selections)).toEqual(
+      buildOmpAskAnswerKeys(prompt, selections)
+    )
+    expect(buildNativeChatAskAnswerKeys('codex', prompt, selections)).toEqual(
+      buildCodexAskAnswerKeys(prompt, selections)
+    )
+    expect(buildNativeChatAskAnswerKeys('claude', prompt, selections)).toEqual(
+      buildAskAnswerKeys(prompt, selections)
+    )
+  })
+})

@@ -8,8 +8,7 @@ import {
   shouldStepNativeChatAskAnswer
 } from '../../../../shared/native-chat-agent-support'
 import {
-  buildAskAnswerKeys,
-  buildCodexAskAnswerKeys,
+  buildNativeChatAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   type AskAnswerSelection,
@@ -103,9 +102,8 @@ export function useNativeChatInteractiveSend(
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
-      // Selector TUIs ignore pasted labels; Codex uses a different key sequence.
+      // Selector TUIs ignore pasted labels; each agent's selector takes its own key sequence.
       const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
-      const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
       // not read the live status and mint a fresh baseline for a replacement
@@ -138,9 +136,7 @@ export function useNativeChatInteractiveSend(
       const handle: NativeChatSendHandle = stepsAnswer
         ? sendNativeChatAskAnswer(
             targetPtyId,
-            buildsCodexAnswer
-              ? buildCodexAskAnswerKeys(prompt, selections)
-              : buildAskAnswerKeys(prompt, selections),
+            buildNativeChatAskAnswerKeys(agent, prompt, selections),
             onSettled
           )
         : sendNativeChatMessage(targetPtyId, formatAskAnswer(prompt, selections), {
