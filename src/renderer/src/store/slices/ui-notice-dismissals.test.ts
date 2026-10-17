@@ -264,6 +264,19 @@ describe('createUISlice Codex shared-settings notice', () => {
   })
 })
 
+describe('createUISlice Claude diff panel notice', () => {
+  it('counts as seen until hydration, then follows the persisted flag', () => {
+    const store = createUIStore()
+    expect(store.getState().claudeDiffPanelNoticeSeen).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({}))
+    expect(store.getState().claudeDiffPanelNoticeSeen).toBe(false)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ claudeDiffPanelNoticeSeen: true }))
+    expect(store.getState().claudeDiffPanelNoticeSeen).toBe(true)
+  })
+})
+
 describe('createUISlice clearOsc52ClipboardDefaultOnNotice', () => {
   it('restores the armed notice from persisted UI', () => {
     const store = createUIStore()
