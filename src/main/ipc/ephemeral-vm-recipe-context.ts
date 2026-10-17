@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path'
 import type { Store } from '../persistence'
 import { loadHooks } from '../hooks'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
@@ -99,12 +100,40 @@ export function getRuntimeRecipeContext(
   repo: Extract<RecipeRepoResult, { ok: true }>
   recipe: OrcaVmRecipe
 } {
+  return resolveRuntimeRecipeContext(store, readRuntimeRecipeRecord(userDataPath, runtimeId))
+}
+
+export function getRuntimeRecipeCleanupContext(
+  store: Store,
+  userDataPath: string,
+  runtimeId: string
+): { runtime: EphemeralVmRuntimeRecord; recipe: OrcaVmRecipe; repoPath: string } {
+  const runtime = readRuntimeRecipeRecord(userDataPath, runtimeId)
+  if (runtime.repoId && !store.getRepo(runtime.repoId) && runtime.recipe && runtime.recipeSource) {
+    const repoPath = runtime.recipeSource.repoPath
+    if (!isAbsolute(repoPath)) {
+      throw new Error(`Recipe repo path is not absolute: ${repoPath}`)
+    }
+    return { runtime, recipe: runtime.recipe, repoPath }
+  }
+  const context = resolveRuntimeRecipeContext(store, runtime)
+  return { runtime, recipe: context.recipe, repoPath: context.repo.repo.path }
+}
+
+function readRuntimeRecipeRecord(
+  userDataPath: string,
+  runtimeId: string
+): EphemeralVmRuntimeRecord {
   const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
   if (!runtime) {
     throw new Error(`Unknown ephemeral VM runtime: ${runtimeId}`)
   }
+  return runtime
+}
+
+function resolveRuntimeRecipeContext(store: Store, runtime: EphemeralVmRuntimeRecord) {
   if (!runtime.repoId) {
-    throw new Error(`Ephemeral VM runtime has no repo id: ${runtimeId}`)
+    throw new Error(`Ephemeral VM runtime has no repo id: ${runtime.id}`)
   }
   const repo = getRecipeRepo(store, runtime.repoId)
   if (!repo.ok) {

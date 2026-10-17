@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeResult
@@ -33,6 +34,7 @@ export async function cleanupFailedEphemeralVmStart(
     id: start.context.instanceId ?? start.context.recipeId,
     recipeId: args.recipe.id,
     recipe: args.recipe,
+    recipeSource: { executionHostId: 'local', repoPath: resolve(args.repoPath) },
     ...(args.repoId ? { repoId: args.repoId } : {}),
     ...(args.projectId ? { projectId: args.projectId } : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),

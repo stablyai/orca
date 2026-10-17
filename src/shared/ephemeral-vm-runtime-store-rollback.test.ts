@@ -26,6 +26,7 @@ import {
 } from './ephemeral-vm-runtime-store'
 import {
   EphemeralVmRuntimeStoreSchema,
+  RollbackEphemeralVmRuntimeRecordSchema,
   RollbackEphemeralVmRuntimeStoreSchema,
   type EphemeralVmRuntimeRecord
 } from './ephemeral-vm-runtimes'
@@ -120,6 +121,36 @@ describe('ephemeral VM runtime store rollback projection', () => {
     expect(persisted.runtimes[0].recipe).not.toHaveProperty('checkoutMode')
     expect(persisted.runtimes[0].recipeResult).toMatchObject({ schemaVersion: 1 })
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([provisioned, ordinary])
+  })
+
+  it('retains source through current updates while older rewrites safely strip it', () => {
+    const userDataPath = makeUserDataPath()
+    const source = { executionHostId: 'local' as const, repoPath: join(userDataPath, 'source') }
+    const runtime = { ...provisionedRootRecord(), recipeSource: source }
+    upsertEphemeralVmRuntime(userDataPath, runtime)
+    const featurePath = getEphemeralVmRuntimeFeatureStorePath(userDataPath)
+    const featureBytes = readFileSync(featurePath, 'utf8')
+    updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, { status: 'suspended' })
+    expect(listEphemeralVmRuntimes(userDataPath)[0]).toMatchObject({ recipeSource: source })
+
+    const path = getEphemeralVmRuntimeStorePath(userDataPath)
+    const olderSchema = RollbackEphemeralVmRuntimeStoreSchema.extend({
+      runtimes: RollbackEphemeralVmRuntimeRecordSchema.omit({ recipeSource: true }).array()
+    })
+    const rewritten = olderSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
+    writeFileSync(path, JSON.stringify(rewritten))
+    expect(listEphemeralVmRuntimes(userDataPath)[0]).toMatchObject({
+      id: runtime.id,
+      status: 'suspended',
+      recipe: expect.objectContaining({ checkoutMode: 'provisioned-root' })
+    })
+    expect(listEphemeralVmRuntimes(userDataPath)[0].recipeSource).toBeUndefined()
+    expect(readFileSync(featurePath, 'utf8')).toBe(featureBytes)
+
+    for (const createdAt of [runtime.createdAt, 2_000]) {
+      upsertEphemeralVmRuntime(userDataPath, { ...runtimeRecord(), id: runtime.id, createdAt })
+      expect(listEphemeralVmRuntimes(userDataPath)[0].recipeSource).toBeUndefined()
+    }
   })
 
   it('keeps ordinary v1 bytes and sidecar behavior unchanged', () => {

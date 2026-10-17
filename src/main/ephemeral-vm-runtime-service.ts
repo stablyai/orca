@@ -173,15 +173,26 @@ async function cleanupEphemeralVmRuntimeOnce(
     cleanupLastError: null,
     updatedAt: now
   })
-  const cleanup = await runEphemeralVmRecipeCleanup({
-    repoPath: args.repoPath,
-    recipe: args.recipe,
-    context: contextFromRuntime(args.repoPath, running),
-    recipeResult: running.recipeResult,
-    signal: args.signal,
-    onStdout: args.onStdout,
-    onStderr: args.onStderr
-  })
+  let cleanup
+  try {
+    cleanup = await runEphemeralVmRecipeCleanup({
+      repoPath: args.repoPath,
+      recipe: args.recipe,
+      context: contextFromRuntime(args.repoPath, running),
+      recipeResult: running.recipeResult,
+      signal: args.signal,
+      onStdout: args.onStdout,
+      onStderr: args.onStderr
+    })
+  } catch (error) {
+    updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {
+      status: 'cleanup_failed',
+      cleanupStatus: 'failed',
+      cleanupLastError: error instanceof Error ? error.message : String(error),
+      updatedAt: Date.now()
+    })
+    throw error
+  }
 
   if (!cleanup.ok) {
     const failed = updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {

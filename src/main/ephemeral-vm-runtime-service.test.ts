@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
 import {
@@ -103,7 +103,7 @@ describe('ephemeral VM runtime service', () => {
 
     const provisioned = await provisionEphemeralVmRuntime({
       userDataPath,
-      repoPath,
+      repoPath: relative(process.cwd(), repoPath),
       recipe,
       repoId: 'repo-1',
       projectId: 'project-1',
@@ -119,6 +119,7 @@ describe('ephemeral VM runtime service', () => {
       id: provisioned.start.context.instanceId,
       recipeId: 'cloud-sandbox',
       recipe,
+      recipeSource: { executionHostId: 'local', repoPath },
       repoId: 'repo-1',
       projectId: 'project-1',
       workspaceName: 'Fix Login Race',
@@ -148,6 +149,7 @@ describe('ephemeral VM runtime service', () => {
         id: provisioned.runtime.id,
         status: 'cleaned',
         cleanupStatus: 'succeeded',
+        recipeSource: { executionHostId: 'local', repoPath },
         cleanupLastAttemptAt: 2_000
       }
     })
@@ -363,7 +365,7 @@ describe('ephemeral VM runtime service', () => {
     await expect(
       provisionEphemeralVmRuntime({
         userDataPath,
-        repoPath,
+        repoPath: relative(process.cwd(), repoPath),
         recipe: {
           id: 'cloud-sandbox',
           name: 'Cloud Sandbox',
@@ -378,6 +380,7 @@ describe('ephemeral VM runtime service', () => {
       expect.objectContaining({
         status: 'cleanup_failed',
         cleanupStatus: 'failed',
+        recipeSource: { executionHostId: 'local', repoPath },
         recipe: expect.not.objectContaining({ checkoutMode: expect.anything() }),
         recipeResult: expect.objectContaining({
           schemaVersion: 1,
@@ -453,7 +456,7 @@ describe('ephemeral VM runtime service', () => {
 
     const provisioned = await provisionEphemeralVmRuntime({
       userDataPath,
-      repoPath,
+      repoPath: relative(process.cwd(), repoPath),
       recipe,
       repoId: 'repo-1',
       workspaceName: 'Fix Login Race',
@@ -464,6 +467,7 @@ describe('ephemeral VM runtime service', () => {
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([
       expect.objectContaining({
         recipe,
+        recipeSource: { executionHostId: 'local', repoPath },
         repoId: 'repo-1',
         workspaceName: 'Fix Login Race',
         status: 'cleanup_failed',

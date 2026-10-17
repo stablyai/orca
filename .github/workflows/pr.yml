@@ -363,6 +363,10 @@ jobs:
             echo "VM runtime persistence is unchanged."
             exit 0
           fi
+          # The rollback oracle needs snapshots older than this job's shallow checkout.
+          git fetch --no-tags --depth=1 origin \
+            bf0c77d5bc800e19117084c27fd1441eda9134ad \
+            25abb9368d98ad84a174f530e02f4228d2269062
           node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts
 

@@ -27,7 +27,10 @@ import {
   disconnectRuntimeOwnedSshTarget,
   removeRuntimeOwnedSshTarget
 } from '../ephemeral-vm-runtime-ssh'
-import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
+import {
+  getRuntimeRecipeCleanupContext,
+  getRuntimeRecipeContext
+} from './ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm-runtime-attachment'
 
@@ -80,9 +83,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (runtime.cleanupStatus === 'succeeded') {
         result = { ok: true as const, runtime, skipped: false }
       } else {
-        let resolved: ReturnType<typeof getRuntimeRecipeContext>
+        let resolved: ReturnType<typeof getRuntimeRecipeCleanupContext>
         try {
-          resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
+          resolved = getRuntimeRecipeCleanupContext(store, userDataPath, runtime.id)
         } catch (error) {
           const failed = updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
             status: 'cleanup_failed',
@@ -98,7 +101,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         }
         result = await cleanupEphemeralVmRuntime({
           userDataPath,
-          repoPath: resolved.repo.repo.path,
+          repoPath: resolved.repoPath,
           recipe: resolved.recipe,
           runtimeId: runtime.id
         })
@@ -251,7 +254,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     'ephemeralVm:getCleanupCommand',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmCleanupCommandResult> => {
       const userDataPath = app.getPath('userData')
-      const resolved = getRuntimeRecipeContext(store, userDataPath, args.runtimeId)
+      const resolved = getRuntimeRecipeCleanupContext(store, userDataPath, args.runtimeId)
       const payload = buildEphemeralVmRecipeCleanupPayload({
         recipe: resolved.recipe,
         context: {
@@ -260,7 +263,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           projectId: resolved.runtime.projectId,
           workspaceId: resolved.runtime.workspaceId,
           workspaceName: resolved.runtime.workspaceName,
-          repoPath: resolved.repo.repo.path
+          repoPath: resolved.repoPath
         },
         recipeResult: resolved.runtime.recipeResult
       })
