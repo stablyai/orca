@@ -14,6 +14,7 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { readGiteaAuthEnvValue } from './gitea-auth-env'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
@@ -41,21 +42,16 @@ type RequestOptions = {
   timeoutMs?: number
 }
 
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
 export function normalizeGiteaApiBaseUrl(value: string): string {
   const trimmed = value.trim().replace(/\/+$/, '')
   return /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`
 }
 
 function getAuthConfig(): GiteaAuthConfig {
-  const apiBaseUrl = envValue('ORCA_GITEA_API_BASE_URL')
+  const apiBaseUrl = readGiteaAuthEnvValue('ORCA_GITEA_API_BASE_URL')
   return {
     apiBaseUrl: apiBaseUrl ? normalizeGiteaApiBaseUrl(apiBaseUrl) : null,
-    token: envValue('ORCA_GITEA_TOKEN')
+    token: readGiteaAuthEnvValue('ORCA_GITEA_TOKEN')
   }
 }
 
