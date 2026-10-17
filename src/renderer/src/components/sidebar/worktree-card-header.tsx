@@ -93,14 +93,23 @@ export function WorktreeCardHeader({
     <div className="flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {showPinnedRepoIcon && (
-          <RepoIdentityChip repo={repo!}>
-            <RepoIconGlyph
-              repoIcon={repo!.repoIcon}
-              color={resolveRepoHeaderColor(repo!.badgeColor)}
-              className="size-full"
-              iconClassName="size-3"
-            />
-          </RepoIdentityChip>
+          <>
+            <RepoIdentityChip repo={repo!}>
+              <RepoIconGlyph
+                repoIcon={repo!.repoIcon}
+                color={resolveRepoHeaderColor(repo!.badgeColor)}
+                className="size-full"
+                iconClassName="size-3"
+              />
+            </RepoIdentityChip>
+            {/* Pinned rows lose project grouping; share the header width with the workspace title. */}
+            <span
+              className="min-w-0 max-w-[50%] truncate text-[11px] leading-none text-muted-foreground"
+              data-pinned-repo-label={repo!.id}
+            >
+              {repo!.displayName}
+            </span>
+          </>
         )}
 
         {repo?.connectionId && (
@@ -172,7 +181,7 @@ export function WorktreeCardHeader({
           disabled={isDeleting || affiliateListMode}
           showUnreadEmphasis={showUnreadEmphasis}
           dimReadTitle={newCardStyle}
-          className="text-[13px] leading-5"
+          className={cn('text-[13px] leading-5', showPinnedRepoIcon && 'min-w-8')}
           editingClassName="flex-1"
           titleWrapper={titleWrapper}
           onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
