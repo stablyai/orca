@@ -32,6 +32,7 @@ vi.mock('electron', () => ({
 }))
 
 import { installMainThreadHangWatchdog } from './main-thread-hang-watchdog'
+import { setActiveSink, startSpan } from '../observability/tracer'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -92,7 +93,7 @@ describe('installMainThreadHangWatchdog', () => {
     delete process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS
   })
 
-  it.each(['win32', 'linux'] as const)('creates no worker or timers on %s', (platform) => {
+  it.each(['linux'] as const)('creates no worker or timers on %s', (platform) => {
     for (const isPackaged of [false, true]) {
       for (const forced of [false, true]) {
         appMock.isPackaged = isPackaged
@@ -111,18 +112,77 @@ describe('installMainThreadHangWatchdog', () => {
     }
   })
 
-  it.each(['darwin'] as const)('respects development and diagnostics gates on %s', (platform) => {
-    appMock.isPackaged = false
-    expect(
-      withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
-    ).toBeNull()
-    process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
-    vi.stubEnv('ORCA_DIAGNOSTICS_DISABLED', '1')
-    expect(
-      withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
-    ).toBeNull()
-    vi.unstubAllEnvs()
-    expect(workerState.calls).toHaveLength(0)
+  it.each(['darwin', 'win32'] as const)(
+    'respects development and diagnostics gates on %s',
+    (platform) => {
+      appMock.isPackaged = false
+      expect(
+        withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+      ).toBeNull()
+      process.env.ORCA_HANG_WATCHDOG_FORCE = '1'
+      vi.stubEnv('ORCA_DIAGNOSTICS_DISABLED', '1')
+      expect(
+        withPlatform(platform, () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+      ).toBeNull()
+      vi.unstubAllEnvs()
+      expect(workerState.calls).toHaveLength(0)
+    }
+  )
+
+  it('records Windows span activity and removes the subscription on stop', () => {
+    const worker = fakeWorker()
+    workerState.instance = worker
+    const handle = withPlatform('win32', () =>
+      installMainThreadHangWatchdog({ userDataPath: '/ud' })
+    )
+    setActiveSink({ push: vi.fn(), flush: vi.fn(), close: vi.fn() })
+    try {
+      expect(handle).not.toBeNull()
+      const span = startSpan('git.exec', { attributes: { command: 'private argument' } })
+      expect(worker.postMessage).toHaveBeenLastCalledWith({
+        type: 'span',
+        spanId: span.spanId,
+        name: 'git.exec',
+        active: true
+      })
+      span.end()
+      expect(worker.postMessage).toHaveBeenLastCalledWith({
+        type: 'span',
+        spanId: span.spanId,
+        name: 'git.exec',
+        active: false
+      })
+      handle?.stop()
+      worker.postMessage.mockClear()
+      startSpan('after-stop').end()
+      expect(worker.postMessage).not.toHaveBeenCalled()
+    } finally {
+      handle?.stop()
+      setActiveSink(null)
+    }
+  })
+
+  it('redacts complete secrets before bounding span names', () => {
+    const worker = fakeWorker()
+    workerState.instance = worker
+    const handle = withPlatform('win32', () =>
+      installMainThreadHangWatchdog({ userDataPath: '/ud' })
+    )
+    setActiveSink({ push: vi.fn(), flush: vi.fn(), close: vi.fn() })
+    try {
+      const name = `-----BEGIN PRIVATE KEY-----\n${'private-material'.repeat(20)}\n-----END PRIVATE KEY-----`
+      const span = startSpan(name)
+      expect(worker.postMessage).toHaveBeenLastCalledWith({
+        type: 'span',
+        spanId: span.spanId,
+        name: '[redacted:pem]',
+        active: true
+      })
+      span.end()
+    } finally {
+      handle?.stop()
+      setActiveSink(null)
+    }
   })
 
   it('is a no-op in unpackaged builds unless forced', () => {

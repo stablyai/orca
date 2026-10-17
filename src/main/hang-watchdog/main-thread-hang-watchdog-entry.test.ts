@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { consumeHangDetectionMarker } from './hang-detection-marker'
+import {
+  HANG_WATCHDOG_MAX_SPANS,
+  type MainToHangWatchdogWorkerMessage
+} from './hang-watchdog-worker-protocol'
 
 const { spawnMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(() => ({ unref: vi.fn() }))
@@ -140,10 +144,10 @@ describe('watchdog worker entry', () => {
 
   it('routes heartbeats and shuts down its timer and port', () => {
     const markerPath = join(tmpdir(), `hang-watchdog-entry-${process.pid}.json`)
-    let onMessage: ((message: { type: 'heartbeat' | 'shutdown' }) => void) | undefined
+    let onMessage: ((message: MainToHangWatchdogWorkerMessage) => void) | undefined
     const port = {
       on: vi.fn(
-        (_event: 'message', listener: (message: { type: 'heartbeat' | 'shutdown' }) => void) => {
+        (_event: 'message', listener: (message: MainToHangWatchdogWorkerMessage) => void) => {
           onMessage = listener
         }
       ),
@@ -163,11 +167,23 @@ describe('watchdog worker entry', () => {
       onMessage?.({ type: 'heartbeat' })
       vi.advanceTimersByTime(75)
       expect(consumeHangDetectionMarker(markerPath)).toBeNull()
+      for (let i = 0; i < HANG_WATCHDOG_MAX_SPANS + 2; i++) {
+        onMessage?.({ type: 'span', spanId: String(i), name: `operation.${i}`, active: true })
+      }
+      onMessage?.({ type: 'span', spanId: '2', name: 'operation.2', active: false })
       vi.advanceTimersByTime(50)
-      expect(consumeHangDetectionMarker(markerPath)).toMatchObject({ selfRecovered: false })
+      const stalled = consumeHangDetectionMarker(markerPath)
+      expect(stalled).toMatchObject({ selfRecovered: false })
+      expect(stalled?.activeSpanNames).toHaveLength(HANG_WATCHDOG_MAX_SPANS - 1)
+      expect(stalled?.activeSpanNames).not.toContain('operation.0')
+      expect(stalled?.activeSpanNames).not.toContain('operation.2')
 
+      onMessage?.({ type: 'span', spanId: '3', name: 'operation.3', active: false })
       onMessage?.({ type: 'heartbeat' })
-      expect(consumeHangDetectionMarker(markerPath)).toMatchObject({ selfRecovered: true })
+      expect(consumeHangDetectionMarker(markerPath)).toMatchObject({
+        selfRecovered: true,
+        activeSpanNames: stalled?.activeSpanNames
+      })
       onMessage?.({ type: 'shutdown' })
       expect(port.close).toHaveBeenCalledOnce()
       vi.advanceTimersByTime(1_000)
