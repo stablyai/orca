@@ -25,35 +25,30 @@ const op = (patch: Partial<ManagedRuntimeOperation>): ManagedRuntimeOperation =>
   ...patch
 })
 
-function shown(patch: Partial<ManagedRuntimeInstallState>, surface: 'settings' | 'chat') {
-  const view = managedRuntimeInstallView(
-    { kind: 'known', state: { ...idle, ...patch } },
-    'Fake',
-    surface
-  )
+function shown(patch: Partial<ManagedRuntimeInstallState>) {
+  const view = managedRuntimeInstallView({ kind: 'known', state: { ...idle, ...patch } }, 'Fake')
   return [view.status, view.action?.label ?? null, view.error]
 }
 
 describe('managedRuntimeInstallView', () => {
-  it('says and offers what the host state allows on each surface', () => {
+  it('says and offers what the host state allows', () => {
     const installed = {
       installedVersion: '1.3.0',
       installedCurrent: true,
       source: 'managed' as const
     }
-    expect(shown({}, 'settings')).toEqual(['Not installed.', 'Install Fake', null])
-    expect(shown({}, 'chat')).toEqual([null, 'Install Fake', null])
-    expect(shown({ downloadBytes: 111_456_962 }, 'chat')).toEqual([
+    expect(shown({})).toEqual(['Not installed.', 'Install Fake', null])
+    expect(shown({ downloadBytes: 111_456_962 })).toEqual([
       '112 MB download.',
       'Install Fake',
       null
     ])
-    expect(shown({ operation: op({}) }, 'chat')).toEqual([
+    expect(shown({ operation: op({}) })).toEqual([
       'Downloading 42.0 MB of 111.0 MB.',
       'Cancel installation',
       null
     ])
-    expect(shown({ operation: op({ phase: 'verifying' }) }, 'settings')).toEqual([
+    expect(shown({ operation: op({ phase: 'verifying' }) })).toEqual([
       'Checking the downloaded runtime.',
       'Cancel installation',
       null
@@ -62,44 +57,45 @@ describe('managedRuntimeInstallView', () => {
     const cancelling = managedRuntimeInstallView(
       { kind: 'known', state: { ...idle, operation: op({}) } },
       'Fake',
-      'chat',
       true
     )
     expect(cancelling.status).toBe('Cancelling…')
-    expect(shown({ operation: op({ phase: 'cancelled' }) }, 'chat')).toEqual([
+    expect(shown({ operation: op({ phase: 'cancelled' }) })).toEqual([
       'Installation cancelled.',
       'Retry installation',
       null
     ])
-    expect(
-      shown({ operation: op({ phase: 'failed', error: 'No space left.' }) }, 'settings')
-    ).toEqual(['Not installed.', 'Retry installation', 'No space left.'])
-    expect(shown(installed, 'settings')).toEqual(['Installed.', 'Reinstall Fake', null])
-    expect(
-      shown({ ...installed, installedVersion: '1.2.0', installedCurrent: false }, 'settings')
-    ).toEqual(['Installed.', 'Update Fake', null])
-    expect(shown(installed, 'chat')[1]).toBeNull()
-    expect(shown({ available: false, version: null }, 'settings')).toEqual([
+    expect(shown({ operation: op({ phase: 'failed', error: 'No space left.' }) })).toEqual([
+      'Not installed.',
+      'Retry installation',
+      'No space left.'
+    ])
+    expect(shown(installed)).toEqual(['Installed.', 'Reinstall Fake', null])
+    expect(shown({ ...installed, installedVersion: '1.2.0', installedCurrent: false })).toEqual([
+      'Installed.',
+      'Update Fake',
+      null
+    ])
+    expect(shown({ available: false, version: null })).toEqual([
       'Fake is not available on this host.',
       null,
       null
     ])
-    expect(shown({ damaged: true }, 'chat')).toEqual([
+    expect(shown({ damaged: true })).toEqual([
       'This copy of Fake is damaged.',
       'Install Fake',
       null
     ])
     const external = { source: 'external' as const }
-    expect(shown(external, 'settings')).toEqual([
+    expect(shown(external)).toEqual([
       'Uses the copy of Fake found on this host.',
       "Install Orca's copy",
       null
     ])
-    expect(shown(external, 'chat')[1]).toBeNull()
   })
 
   it('never reads a failed status read as not installed', () => {
-    const view = managedRuntimeInstallView({ kind: 'readFailed' }, 'Fake', 'chat')
+    const view = managedRuntimeInstallView({ kind: 'readFailed' }, 'Fake')
     expect(view.action).toBeNull()
     expect(view.error).toBe('Could not check Fake on this host. Retrying.')
   })

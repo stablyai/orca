@@ -104,7 +104,6 @@ function ProviderDetail(props: {
       <ManagedRuntimeInstallRow
         observation={runtime}
         agentLabel={getAgentLabel(props.agent)}
-        surface="settings"
       />
     </div>
   )

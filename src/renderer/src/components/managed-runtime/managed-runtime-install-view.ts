@@ -2,8 +2,6 @@ import { translate } from '@/i18n/i18n'
 import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
 import type { ManagedRuntimeInstallSnapshot } from '@/runtime/managed-runtime-install-status'
 
-export type ManagedRuntimeInstallSurface = 'settings' | 'chat'
-
 export type ManagedRuntimeInstallAction =
   | { kind: 'install'; label: string }
   | { kind: 'cancel'; label: string; operationId: string }
@@ -17,7 +15,7 @@ export type ManagedRuntimeInstallView = {
   action: ManagedRuntimeInstallAction | null
 }
 
-const megabytes = (bytes: number): string => (bytes / 1_000_000).toFixed(1)
+export const megabytes = (bytes: number): string => (bytes / 1_000_000).toFixed(1)
 
 function runningView(
   operation: NonNullable<ManagedRuntimeInstallState['operation']>,
@@ -52,11 +50,7 @@ function runningView(
   }
 }
 
-function settledView(
-  state: ManagedRuntimeInstallState,
-  agent: string,
-  surface: ManagedRuntimeInstallSurface
-): ManagedRuntimeInstallView {
+function settledView(state: ManagedRuntimeInstallState, agent: string): ManagedRuntimeInstallView {
   const { operation } = state
   const failed = operation?.phase === 'failed'
   const error = failed
@@ -70,9 +64,7 @@ function settledView(
     action: label === null ? null : { kind: 'install', label }
   })
   const install = translate('components.managed-runtime.install', 'Install {{agent}}', { agent })
-  // Install, Reinstall and Update belong to Settings; a chat that can start shows its composer.
-  const settings = surface === 'settings'
-  // A chat already runs a copy found outside Orca; Settings offers Orca's, which then runs first.
+  // A copy found outside Orca already runs; Orca's own, once installed, runs first.
   if (state.source === 'external') {
     return view(
       translate(
@@ -80,7 +72,7 @@ function settledView(
         'Uses the copy of {{agent}} found on this host.',
         { agent }
       ),
-      settings && state.available
+      state.available
         ? translate('components.managed-runtime.installManaged', "Install Orca's copy")
         : null
     )
@@ -89,10 +81,7 @@ function settledView(
     const label = state.installedCurrent
       ? translate('components.managed-runtime.reinstall', 'Reinstall {{agent}}', { agent })
       : translate('components.managed-runtime.update', 'Update {{agent}}', { agent })
-    return view(
-      translate('components.managed-runtime.installed', 'Installed.'),
-      settings ? label : null
-    )
+    return view(translate('components.managed-runtime.installed', 'Installed.'), label)
   }
   if (!state.available) {
     return view(
@@ -113,16 +102,14 @@ function settledView(
       install
     )
   }
-  // The chat card's heading already says it is not installed; the size says what Install costs.
+  // The size says what Install costs.
   const size = state.downloadBytes
   const idle =
     size !== undefined
       ? translate('components.managed-runtime.downloadSize', '{{size}} MB download.', {
           size: Math.ceil(size / 1_000_000)
         })
-      : settings
-        ? translate('components.managed-runtime.notInstalled', 'Not installed.')
-        : null
+      : translate('components.managed-runtime.notInstalled', 'Not installed.')
   const retry = translate('components.managed-runtime.retry', 'Retry installation')
   if (operation?.kind === 'install' && operation.phase === 'cancelled') {
     return view(translate('components.managed-runtime.cancelled', 'Installation cancelled.'), retry)
@@ -136,7 +123,6 @@ function settledView(
 export function managedRuntimeInstallView(
   snapshot: ManagedRuntimeInstallSnapshot,
   agent: string,
-  surface: ManagedRuntimeInstallSurface,
   cancelling = false
 ): ManagedRuntimeInstallView {
   if (snapshot.kind !== 'known') {
@@ -157,6 +143,6 @@ export function managedRuntimeInstallView(
   const { operation } = snapshot.state
   return (
     (operation ? runningView(operation, agent, cancelling) : null) ??
-    settledView(snapshot.state, agent, surface)
+    settledView(snapshot.state, agent)
   )
 }

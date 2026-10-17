@@ -129,6 +129,7 @@ export function createStructuredSessionMocks() {
       }
       isWorking?: boolean
       isStopping?: boolean
+      unavailableHint?: string
       afterStop?: 'queue' | 'send'
       steerQueued?: () => boolean
       onStop?: () => void

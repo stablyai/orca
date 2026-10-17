@@ -85,6 +85,9 @@ export type NativeChatComposerProps = {
   agent: AgentType
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
+  /** The chat can't take input yet (a program it needs isn't installed): the composer is disabled
+   *  and this is its placeholder. */
+  unavailableHint?: string | undefined
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
 import {
   cancelManagedRuntimeInstall,
   installManagedRuntime
@@ -10,26 +9,19 @@ import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'
 import {
   managedRuntimeInstallView,
-  type ManagedRuntimeInstallAction,
-  type ManagedRuntimeInstallSurface
+  type ManagedRuntimeInstallAction
 } from './managed-runtime-install-view'
 
-/** Install, progress and Cancel for the runtime Orca provides an agent, on the host it runs on.
- *  Settings and a chat show the same host answer, so either one's action moves both. */
+/** Settings' Install, progress and Cancel for the runtime Orca provides an agent, on the host it
+ *  runs on. A chat's install card shows the same host answer, so either one's action moves both. */
 export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
-  surface: ManagedRuntimeInstallSurface
 }): React.JSX.Element {
-  const { observation, agentLabel, surface } = props
+  const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
   const [pending, setPending] = useState<ManagedRuntimeInstallAction['kind'] | null>(null)
-  const view = managedRuntimeInstallView(
-    observation.snapshot,
-    agentLabel,
-    surface,
-    pending === 'cancel'
-  )
+  const view = managedRuntimeInstallView(observation.snapshot, agentLabel, pending === 'cancel')
   const [refusal, setRefusal] = useState<string | null>(null)
   const act = (action: ManagedRuntimeInstallAction): void => {
     setPending(action.kind)
@@ -54,41 +46,15 @@ export function ManagedRuntimeInstallRow(props: {
       )
       .finally(() => setPending(null))
   }
-  const chat = surface === 'chat'
   const alert = refusal ?? view.error
   const { action } = view
   return (
-    <div
-      data-managed-runtime-install-row={surface}
-      className={cn(
-        'flex justify-between gap-3',
-        chat
-          ? 'flex-col rounded-lg border border-input bg-card px-4 py-3 text-sm shadow-xs'
-          : 'items-center rounded-md border p-3 text-xs'
-      )}
-    >
+    <div className="flex items-center justify-between gap-3 rounded-md border p-3 text-xs">
       <div className="min-w-0 flex-1 space-y-1">
-        {chat ? (
-          <p className="font-semibold text-foreground">
-            {translate(
-              'components.managed-runtime.chatTitle',
-              'Install {{agent}} to start chatting.',
-              {
-                agent: agentLabel
-              }
-            )}
-          </p>
-        ) : null}
-        {/* Settings keeps the line while the first read is out, so nothing shifts when it lands. */}
-        {view.status !== null || !chat ? (
-          <p
-            role="status"
-            aria-live="polite"
-            className="min-h-4 text-muted-foreground tabular-nums"
-          >
-            {view.status}
-          </p>
-        ) : null}
+        {/* The line stays while the first read is out, so nothing shifts when it lands. */}
+        <p role="status" aria-live="polite" className="min-h-4 text-muted-foreground tabular-nums">
+          {view.status}
+        </p>
         {view.progress === null ? null : (
           <Progress
             value={view.progress}

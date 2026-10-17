@@ -10,6 +10,7 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
+import { NativeChatEmptyPane } from './NativeChatEmptyPane'
 import { NativeChatLoadingCue } from './NativeChatLoadingCue'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
@@ -69,7 +70,6 @@ export function NativeChatStructuredSession(
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
-  const { sendThroughLaunch } = provisionalLaunch
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
   const paneKey = useMemo(
@@ -199,9 +199,9 @@ export function NativeChatStructuredSession(
   // cancel then works.
   const promptsUnanswerable = pendingPromptsAllUnanswerableHere(controller.prompts)
   const composerShown = (prompt === null || promptsUnanswerable) && !readFailedFinally
-  // An owned prompt keeps its card; otherwise a missing program takes the composer's place.
-  const install = useNativeChatInstallSlot(props.target, props.agent, props.isVisible, agentLabel)
-  const composerOpen = composerShown && install.slot.kind !== 'install'
+  // An owned prompt keeps its card; otherwise a missing program leaves the composer disabled.
+  const installLayout = viewState.kind === 'empty' ? 'hero' : 'strip'
+  const install = useNativeChatInstallSlot(props, agentLabel, installLayout)
   const approval = prompt?.body.kind === 'approval' ? chatApprovalFromJournal(prompt.body) : null
   const cancelPrompt = () => {
     if (prompt && (controller.turnId || props.agent === 'pi')) {
@@ -218,14 +218,14 @@ export function NativeChatStructuredSession(
     questionAnswerInputRef,
     isVisible: props.isVisible,
     isFocusedGroup: props.isFocusedGroup,
-    composerReady: composerOpen
+    composerReady: composerShown && install.slot.kind !== 'install'
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const questions = questionBody ? agentSessionPromptQuestions(questionBody) : []
   const structuredTransport = useNativeChatStructuredComposerTransport({
     props,
     controller,
-    sendThroughLaunch,
+    sendThroughLaunch: provisionalLaunch.sendThroughLaunch,
     starting: provisionalLaunch.starting,
     worktreeId: ownerWorktreeId ?? undefined,
     optionPickerRequest,
@@ -301,7 +301,7 @@ export function NativeChatStructuredSession(
             {...(readFailure?.named ? { headline: readFailure.text } : {})}
           />
         ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyState kind="empty" agent={props.agent} />
+          <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
         ) : (
           <NativeChatRewindContext.Provider value={controller.rewind.surface}>
             <NativeChatOrcaStopContext.Provider value={continuation.view}>
@@ -365,7 +365,7 @@ export function NativeChatStructuredSession(
             />
           )}
           {/* Prompt cards take the composer's slot, below the background-task dock. */}
-          {composerOpen ? null : <NativeChatPromptSlotNotices notices={notices} />}
+          {composerShown ? null : <NativeChatPromptSlotNotices notices={notices} />}
           {prompt && approval ? (
             <NativeChatApprovalCard
               key={`${prompt.itemId}:${prompt.revision}`}
@@ -392,7 +392,7 @@ export function NativeChatStructuredSession(
             />
           ) : null}
           {composerShown && <NativeChatInstallSlot slot={install.slot} agentLabel={agentLabel} />}
-          {composerOpen ? (
+          {composerShown ? (
             <NativeChatComposer
               ref={composerRef}
               terminalTabId={props.tabId}
@@ -401,6 +401,7 @@ export function NativeChatStructuredSession(
               targetPtyId={null}
               agent={props.agent}
               {...stopControls.composer}
+              unavailableHint={install.unavailableHint}
               steerQueued={stopControls.stopping ? undefined : submits.queuedMessages.steerNewest}
               structuredTransport={structuredTransport}
               launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}

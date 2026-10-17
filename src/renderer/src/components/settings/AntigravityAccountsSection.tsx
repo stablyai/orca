@@ -298,7 +298,6 @@ export function AntigravityAccountsSection({
           <ManagedRuntimeInstallRow
             observation={chatRuntime}
             agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
-            surface="settings"
           />
         </div>
       ) : null}
