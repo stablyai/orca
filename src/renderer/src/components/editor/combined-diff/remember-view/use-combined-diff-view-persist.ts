@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import type React from 'react'
-import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '../../diff-section-types'
-import { combinedDiffScrollTopCache, combinedDiffViewStateCache } from './combined-diff-view-memory'
+import {
+  combinedDiffScrollTopCache,
+  rememberCombinedDiffViewState
+} from './combined-diff-view-memory'
 
 export function useCombinedDiffViewPersist({
   combinedGitStatusSignature,
@@ -31,7 +33,7 @@ export function useCombinedDiffViewPersist({
     }
     const preservedScrollTop =
       combinedDiffScrollTopCache.get(viewStateKey) ?? scrollContainerRef.current?.scrollTop ?? 0
-    setWithLRU(combinedDiffViewStateCache, viewStateKey, {
+    rememberCombinedDiffViewState(viewStateKey, {
       entrySignature,
       gitStatusSignature: combinedGitStatusSignature,
       sections,

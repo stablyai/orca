@@ -6,7 +6,8 @@ import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '../../diff-section-types'
 import {
   combinedDiffScrollTopCache,
-  combinedDiffViewStateCache
+  combinedDiffViewStateCache,
+  rememberCombinedDiffViewState
 } from '../remember-view/combined-diff-view-memory'
 import type { CombinedDiffScrollAnchors } from './use-combined-diff-scroll-anchors'
 
@@ -110,7 +111,7 @@ export function useCombinedDiffScrollPersistence({
       if (!existing || existing.entrySignature !== entrySignature) {
         return
       }
-      setWithLRU(combinedDiffViewStateCache, viewStateKey, {
+      rememberCombinedDiffViewState(viewStateKey, {
         ...existing,
         scrollTop
       })
