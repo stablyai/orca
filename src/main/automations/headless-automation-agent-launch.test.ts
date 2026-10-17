@@ -119,6 +119,7 @@ describe('headless automation agent launch', () => {
     )
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_existing', {
+      agent: 'aider',
       expectedProcess: 'aider',
       prompt: 'fix the flaky test'
     })
@@ -168,6 +169,7 @@ describe('headless automation agent launch', () => {
     expect(runtime.createManagedWorktree.mock.calls[0]![0]).not.toHaveProperty('startupPrompt')
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_new', {
+      agent: 'goose',
       expectedProcess: 'goose',
       prompt: 'fix the flaky test'
     })
