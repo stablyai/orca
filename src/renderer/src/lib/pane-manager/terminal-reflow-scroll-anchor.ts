@@ -1,11 +1,18 @@
-import type { Terminal } from '@xterm/xterm'
+import type { IBuffer, ITerminalOptions } from '@xterm/xterm'
+
+/** The xterm surface logical-line anchoring reads; a full `Terminal` satisfies it. */
+export type ReflowScrollAnchorTerminal = {
+  cols: number
+  options?: Pick<ITerminalOptions, 'reflowCursorLine' | 'windowsPty'>
+  buffer: { active: Pick<IBuffer, 'baseY' | 'cursorY' | 'getLine'> }
+}
 
 type ReflowLineReader = {
   getCellMetrics: (lineY: number, column: number) => { code: number; width: number } | undefined
   isWrapped: (lineY: number) => boolean
 }
 
-type TerminalWithInternalBufferLines = Terminal & {
+type TerminalWithInternalBufferLines = ReflowScrollAnchorTerminal & {
   _core?: {
     _bufferService?: {
       buffer?: {
@@ -25,7 +32,7 @@ type TerminalWithInternalBufferLines = Terminal & {
 }
 
 export function captureLogicalLineAnchor(
-  terminal: Terminal,
+  terminal: ReflowScrollAnchorTerminal,
   viewportY: number
 ): { cellOffset: number; lineY: number } | undefined {
   const buf = terminal.buffer.active
@@ -48,7 +55,7 @@ export function captureLogicalLineAnchor(
   return { cellOffset, lineY }
 }
 
-function shouldKeepPhysicalResizeAnchor(terminal: Terminal): boolean {
+function shouldKeepPhysicalResizeAnchor(terminal: ReflowScrollAnchorTerminal): boolean {
   const windowsPty = terminal.options?.windowsPty
   if (!windowsPty?.buildNumber) {
     return false
@@ -75,7 +82,7 @@ function lineContainsLine(
 }
 
 export function resolveLogicalCellOffsetLine(
-  terminal: Terminal,
+  terminal: ReflowScrollAnchorTerminal,
   logicalStartY: number,
   cellOffset: number
 ): number {
@@ -95,7 +102,7 @@ export function resolveLogicalCellOffsetLine(
 }
 
 function readReflowedRowCellCount(
-  terminal: Terminal,
+  terminal: ReflowScrollAnchorTerminal,
   lines: ReflowLineReader,
   lineY: number
 ): number {
@@ -109,7 +116,7 @@ function readReflowedRowCellCount(
     : cols
 }
 
-function createReflowLineReader(terminal: Terminal): ReflowLineReader {
+function createReflowLineReader(terminal: ReflowScrollAnchorTerminal): ReflowLineReader {
   const internalLines = (terminal as TerminalWithInternalBufferLines)._core?._bufferService?.buffer
     ?.lines
   if (internalLines) {

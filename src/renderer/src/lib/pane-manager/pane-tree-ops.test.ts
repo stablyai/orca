@@ -6,6 +6,7 @@ import {
   safeFitAndThen
 } from './pane-tree-ops'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
+import type * as TerminalScrollIntentAnchor from './terminal-scroll-intent-anchor'
 import { setFitOverride, hydrateOverrides } from './mobile-fit-overrides'
 import {
   captureTerminalStructuralScrollIntent,
@@ -18,6 +19,13 @@ import {
   cancelTerminalScrollIntentBufferRebuildCompletions,
   endTerminalScrollIntentBufferRebuild
 } from './terminal-scroll-intent-rebuild'
+
+// Why: these doubles return one shared marker for every registerMarker call;
+// the pin anchor's own marker is covered by terminal-scroll-intent-anchor.test.ts.
+vi.mock('./terminal-scroll-intent-anchor', async (importOriginal) => ({
+  ...(await importOriginal<typeof TerminalScrollIntentAnchor>()),
+  anchorPinnedScrollIntent: vi.fn()
+}))
 
 class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
