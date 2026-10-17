@@ -135,10 +135,14 @@ export async function resolveOrchestrationSessionCaller(
   const record = await readSessionRecord(runtime, sessionId)
   assertSessionCanAct(sessionId, record)
   const db = runtime.getOrchestrationDb()
+  const party = resolveOrcaSessionParty(sessionId, db)
   const caller: OrchestrationSessionCaller = Object.freeze({
-    ...resolveOrcaSessionParty(sessionId, db),
+    ...party,
     sessionId,
-    workspaceId: record.location.workspaceId
+    workspaceId: record.location.workspaceId,
+    processIncarnation: party.terminalHandle
+      ? runtime.getTerminalProcessIncarnation(party.terminalHandle)
+      : null
   })
   return {
     request: {

@@ -69,11 +69,33 @@ export const ORCHESTRATION_SEND_METHODS = [
         orchestrationCompatibilityCallerAuthority?.terminalHandle === from
           ? orchestrationCompatibilityCallerAuthority
           : undefined
+      const lifecycleMessage = isDispatchMutationMessageType(params.type)
+      const sessionCallerAuthority =
+        orchestrationCaller?.terminalHandle === from &&
+        orchestrationCaller.paneKey &&
+        orchestrationCaller.processIncarnation
+          ? {
+              terminalHandle: from,
+              paneKey: orchestrationCaller.paneKey,
+              processIncarnation: orchestrationCaller.processIncarnation
+            }
+          : undefined
+      const providerCallerAuthority = attestedCaller ?? sessionCallerAuthority
+      if (
+        lifecycleMessage &&
+        (orchestrationCaller?.terminalHandle || orchestrationCompatibilityCallerAuthority) &&
+        !providerCallerAuthority
+      ) {
+        throw new OrchestrationError(
+          'sender_not_assignee',
+          'Lifecycle authority requires the authenticated caller terminal and current process incarnation; --from and copied Dispatch fields are not authority.'
+        )
+      }
       // Why: attested hook identity survives graph remount; caller params never supply lifecycle authority.
       const sender = orchestrationCallerIdentity(runtime, {
         handle: from,
         session: orchestrationCaller,
-        paneKey: attestedCaller?.paneKey ?? runtime.getTerminalPaneKey(from)
+        paneKey: providerCallerAuthority?.paneKey ?? runtime.getTerminalPaneKey(from)
       })
       const senderPaneKey = sender.paneKey ?? undefined
       // Why: a session caller was already bound to its own identity at the dispatch entry.
@@ -96,7 +118,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           senderPaneKey,
           remoteAttachment,
           processIncarnation:
-            attestedCaller?.processIncarnation ??
+            providerCallerAuthority?.processIncarnation ??
             runtime.getTerminalProcessIncarnation(from) ??
             undefined,
           signal
@@ -218,9 +240,10 @@ export const ORCHESTRATION_SEND_METHODS = [
           dispatchId: routing.dispatchId,
           messageRunId,
           senderPaneKey,
+          providerAttested: Boolean(providerCallerAuthority?.processIncarnation),
           legacyCoordinatorRunId,
           resolveProcessIncarnation: () =>
-            attestedCaller?.processIncarnation ??
+            providerCallerAuthority?.processIncarnation ??
             runtime.getTerminalProcessIncarnation(from) ??
             undefined,
           revalidateLegacyCoordinator,

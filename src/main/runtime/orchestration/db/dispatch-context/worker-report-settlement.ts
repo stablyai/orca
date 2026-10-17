@@ -10,6 +10,11 @@ import {
   SETTLEABLE_WORKER_STATES,
   UNPROVEN_WORKER_STATES
 } from '../../worker-report-admission'
+import {
+  hasCurrentWorkerReportAuthority,
+  type WorkerReportAuthority
+} from '../../worker-report-authority'
+import { recordAcceptedWorkerReportFact } from './worker-report-fact'
 
 type WorkerReportObservation = {
   id: string
@@ -23,39 +28,10 @@ type WorkerReportSettlementParams = {
   outcome: WorkerReportOutcome
   result: string
   observation?: WorkerReportObservation
+  authority?: WorkerReportAuthority
 }
 
 const WORKER_REPORT_TRANSACTION_SAVEPOINT = 'worker_report_transaction'
-
-function recordAcceptedReportFact(db: OrchestrationDb, params: WorkerReportSettlementParams): void {
-  if (!params.observation) {
-    return
-  }
-  const existing = db
-    .getAttemptObservationFacts(params.dispatchId)
-    .find((fact) => fact.id === params.observation?.id)
-  const sequence =
-    existing?.sequence ??
-    ((
-      db.db
-        .prepare(
-          'SELECT MAX(sequence) AS sequence FROM attempt_observation_facts WHERE dispatch_id = ?'
-        )
-        .get(params.dispatchId) as { sequence: number | null }
-    ).sequence ?? -1) + 1
-  db.recordAttemptObservation({
-    id: params.observation.id,
-    dispatchId: params.dispatchId,
-    sequence,
-    authorityId: params.observation.authorityId,
-    authorityClock: 'home',
-    facet: 'worker_report',
-    payload: { status: 'accepted', outcome: params.outcome, reportId: params.observation.id },
-    sourceObservedAt: null,
-    executionReceivedAt: null,
-    homeReceivedAt: params.observation.homeReceivedAt
-  })
-}
 
 export function settleWorkerReport(
   this: OrchestrationDb,
@@ -89,6 +65,13 @@ export function settleWorkerReportInTransaction(
       reason: `Dispatch ${params.dispatchId} belongs to task ${dispatch.task_id}, not ${params.taskId}.`
     }
   }
+  if (params.authority && !hasCurrentWorkerReportAuthority(dispatch, params.authority)) {
+    return {
+      action: 'rejected',
+      code: 'stale_dispatch',
+      reason: `Dispatch ${params.dispatchId} authority changed before the worker report settled.`
+    }
+  }
 
   const expectedDispatchStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
   const expectedTaskStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
@@ -110,7 +93,7 @@ export function settleWorkerReportInTransaction(
     settledDispatchStatus === expectedDispatchStatus &&
     task.status === expectedTaskStatus
   ) {
-    recordAcceptedReportFact(this, params)
+    recordAcceptedWorkerReportFact(this, params)
     return { action: 'settled', outcome: params.outcome, duplicate: true }
   }
   const unprovenWorker = isWorkerStateIn(UNPROVEN_WORKER_STATES, reportingWorker?.state)
@@ -286,7 +269,7 @@ export function settleWorkerReportInTransaction(
   if (params.outcome === 'succeeded') {
     this.promoteReadyTasks(params.taskId)
   }
-  recordAcceptedReportFact(this, params)
+  recordAcceptedWorkerReportFact(this, params)
   this.db.exec('RELEASE settle_worker_report')
   return { action: 'settled', outcome: params.outcome, duplicate: false }
 }

@@ -21,6 +21,8 @@ export type OrchestrationSessionCaller = OrchestrationCallerIdentity &
     sessionId: OrcaSessionId
     /** Where the session runs, from its record; `worker-start --worktree current` places here. */
     workspaceId: string
+    /** The terminal process observed when RPC admission authenticated this session. */
+    processIncarnation: string | null
   }>
 
 /** A caller with neither a pane nor an Orca session id can never be bound to a Run. */

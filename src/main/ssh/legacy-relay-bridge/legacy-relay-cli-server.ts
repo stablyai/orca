@@ -210,7 +210,7 @@ async function dispatchAsCaller(
     const exactReplay = isExactLegacyRelayCliReplay(runtime, fingerprint, requestId, call)
     const db = runtime.getOrchestrationDb()
     assertLegacyRelayCliScope(db, caller, call, deps.livePane, exactReplay)
-    const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN?.trim()
+    const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN?.trim() || authority.attachmentId
     return await dispatcherFor(runtime).dispatch(
       {
         id: `legacy-relay-cli-${requestId}`,
@@ -223,7 +223,7 @@ async function dispatchAsCaller(
         orchestrationCompatibilityEvidence: {
           terminalHandle: caller.handle,
           paneKey: caller.paneKey,
-          ...(launchToken ? { launchToken } : {}),
+          launchToken,
           host: authority
         }
       },

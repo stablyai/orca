@@ -257,7 +257,8 @@ describe('orchestration.workerAbandon', () => {
       paneKey: null,
       orcaSessionId,
       sessionId: orcaSessionId,
-      workspaceId: 'wt'
+      workspaceId: 'wt',
+      processIncarnation: null
     }
 
     await abandon(dispatchId, {

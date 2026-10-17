@@ -1,32 +1,12 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow, WorkerReportOutcome } from './types'
 import { workerReportObservation } from './worker-report-observation'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-
-// Why: the tab half can change on pane break-out, while opaque legacy keys
-// have no safe equivalence beyond exact equality.
-function isSamePane(assigneePaneKey: string, senderPaneKey: string): boolean {
-  if (assigneePaneKey === senderPaneKey) {
-    return true
-  }
-  const assigneeLeaf = parsePaneKey(assigneePaneKey)?.leafId
-  const senderLeaf = parsePaneKey(senderPaneKey)?.leafId
-  return Boolean(assigneeLeaf && senderLeaf && assigneeLeaf === senderLeaf)
-}
-
-function hasLifecycleAuthority(
-  dispatch: { assignee_handle: string | null; assignee_pane_key: string | null },
-  msg: MessageRow
-): boolean {
-  if (dispatch.assignee_pane_key) {
-    return Boolean(
-      msg.sender_pane_key && isSamePane(dispatch.assignee_pane_key, msg.sender_pane_key)
-    )
-  }
-  // Why: rows created before pane identity existed can only use the exact
-  // handle recorded at dispatch; payload knowledge alone is not authority.
-  return dispatch.assignee_handle === msg.from_handle
-}
+import { parseWorkerReportAuthority } from './worker-report-authority'
+import {
+  hasLifecycleMessageAuthority,
+  lifecycleAuthorityRejectionReason
+} from './lifecycle-message-authority'
+import { suppressEarlierWorkerHeartbeats } from './worker-report-heartbeat-suppression'
 
 export type LifecycleReconciliationResult =
   | { action: 'ignored' }
@@ -58,7 +38,6 @@ export type LifecycleRejectionResult = {
 }
 
 type LogFn = (msg: string) => void
-
 const noopLog: LogFn = () => {}
 
 function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<string, unknown> {
@@ -156,10 +135,10 @@ function reconcileHeartbeatMessage(
     return { action: 'suppressed' }
   }
 
-  if (!hasLifecycleAuthority(dispatch, msg)) {
+  if (!hasLifecycleMessageAuthority(dispatch, msg)) {
     // Why: a wrong-pane heartbeat must not refresh liveness — it would mask
     // a hung assignee behind another agent's timer.
-    const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
+    const reason = lifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
     onLog(`Heartbeat rejected: ${reason}`)
     db.convertLifecycleMessageToRejection(msg.id, 'sender_not_assignee', reason)
     return { action: 'rejected', code: 'sender_not_assignee', reason }
@@ -227,6 +206,8 @@ function reconcileWorkerDoneMessage(
     )
   }
 
+  const authority = parseWorkerReportAuthority(payload)
+
   const task = db.getTask(taskId)
   if (!task) {
     return rejectLifecycleMessage(
@@ -259,8 +240,8 @@ function reconcileWorkerDoneMessage(
       onLog
     )
   }
-  if (!hasLifecycleAuthority(dispatch, msg)) {
-    const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
+  if (!hasLifecycleMessageAuthority(dispatch, msg)) {
+    const reason = lifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)
     onLog(`Warning: worker_done rejected: ${reason}`)
     db.convertLifecycleMessageToRejection(msg.id, 'sender_not_assignee', reason)
     return { action: 'rejected', code: 'sender_not_assignee', reason }
@@ -290,12 +271,13 @@ function reconcileWorkerDoneMessage(
     dispatchId,
     outcome: outcome as WorkerReportOutcome,
     result,
-    observation: workerReportObservation(msg)
+    observation: workerReportObservation(msg),
+    authority
   })
   if (settlement.action === 'rejected') {
     return rejectLifecycleMessage(db, msg, settlement.code, settlement.reason, onLog)
   }
-  suppressEarlierHeartbeats(db, msg, dispatchId)
+  suppressEarlierWorkerHeartbeats(db, msg, dispatchId)
 
   if (outcome === 'failed') {
     onLog(`Task ${taskId} failed by worker report`)
@@ -315,34 +297,4 @@ function rejectLifecycleMessage(
   onLog(`Warning: ${msg.type} rejected: ${reason}`)
   db.convertLifecycleMessageToRejection(msg.id, code, reason)
   return { action: 'rejected', code, reason }
-}
-
-function buildLifecycleAuthorityRejectionReason(
-  dispatchId: string,
-  dispatch: { assignee_handle: string | null; assignee_pane_key: string | null },
-  msg: MessageRow
-): string {
-  return (
-    `dispatch ${dispatchId} expected handle ${dispatch.assignee_handle ?? '<unknown>'}, ` +
-    `pane ${dispatch.assignee_pane_key ?? '<legacy>'}; received handle ${msg.from_handle}, ` +
-    `pane ${msg.sender_pane_key ?? '<missing>'}`
-  )
-}
-
-function suppressEarlierHeartbeats(
-  db: OrchestrationDb,
-  workerDone: MessageRow,
-  dispatchId: string
-): void {
-  const heartbeatIds = db
-    .getUnreadMessages(workerDone.to_handle, ['heartbeat'])
-    .filter((message) => {
-      if (message.sequence >= workerDone.sequence) {
-        return false
-      }
-      const payload = parseObjectPayload(message, () => undefined)
-      return payload.dispatchId === dispatchId
-    })
-    .map((message) => message.id)
-  db.markAsReadAndDelivered(heartbeatIds)
 }
