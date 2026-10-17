@@ -13,6 +13,12 @@ import {
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
+import {
+  createShellCommandLinkProvider,
+  insertSuggestedCommandIntoPane
+} from './terminal-command-links'
+import type { PtyTransport } from './pty-transport-types'
+import { translate } from '@/i18n/i18n'
 import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click-priming'
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
@@ -36,6 +42,7 @@ type PaneLinkContext = {
     TerminalPaneLifecycleRefs,
     | 'linkProviderDisposablesRef'
     | 'terminalHandleLinkDisposablesRef'
+    | 'commandLinkDisposablesRef'
     | 'linkifierClickPrimingDisposablesRef'
     | 'linkPointerGesturesRef'
     | 'fileLinkClickFallbackDisposablesRef'
@@ -51,6 +58,8 @@ type PaneLinkContext = {
   getHttpLinkSourceOwnerForPane: (paneId: number) => HttpLinkSourceOwner
   getHttpLinkActionDestinations: (paneId: number) => TerminalHttpLinkActionDestinations
   getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
+  getTransport: (paneId: number) => PtyTransport | undefined
+  tabId: string
   getPaneLinkCwd: (paneId: number) => string
   getUrlOpenLinkHint: (paneId: number) => string
   onShowSessionRestoredBanner: (paneId: number) => void
@@ -69,6 +78,8 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
     getHttpLinkSourceOwnerForPane,
     getHttpLinkActionDestinations,
     getLinkActionContext,
+    getTransport,
+    tabId,
     getPaneLinkCwd,
     getUrlOpenLinkHint,
     onShowSessionRestoredBanner,
@@ -92,6 +103,30 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
         getRuntimeEnvironmentId: () => linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
         linkTooltip: pane.linkTooltip,
         getLinkActionContext: () => getLinkActionContext(pane.id)
+      })
+    )
+  )
+  refs.commandLinkDisposablesRef.current.set(
+    pane.id,
+    pane.terminal.registerLinkProvider(
+      createShellCommandLinkProvider({
+        getTerminal: () =>
+          managerRef.current?.getPanes().find((candidate) => candidate.id === pane.id)?.terminal ??
+          null,
+        linkTooltip: pane.linkTooltip,
+        linkHint: translate(
+          'terminal.commandLink.insertHint',
+          'Click to type this command into the terminal'
+        ),
+        getLinkActionContext: () => getLinkActionContext(pane.id),
+        insertCommand: (command) =>
+          insertSuggestedCommandIntoPane({
+            transport: getTransport(pane.id),
+            tabId,
+            leafId: pane.leafId,
+            focus: () => pane.terminal.focus(),
+            command
+          })
       })
     )
   )

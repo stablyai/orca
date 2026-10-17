@@ -19820,6 +19820,7 @@
       "copyCode": "Copy code",
       "wrapLines": "Wrap lines",
       "disableLineWrap": "Disable line wrap",
+      "insertCommandIntoPrompt": "Insert into prompt",
       "context": {
         "unavailable": "Context usage is not known yet. It becomes available after the agent next responds.",
         "summary": "Context: {{used}} / {{window}} tokens ({{percent}}%), estimated from the last response.",
@@ -21309,6 +21310,9 @@
     "cancel": "Cancel"
   },
   "terminal": {
+    "commandLink": {
+      "insertHint": "Click to type this command into the terminal"
+    },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
       "capacity": "The device saving this terminal reported full storage or an exceeded storage quota. Free space on that device, then try again.",
