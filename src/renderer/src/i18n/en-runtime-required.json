@@ -2449,11 +2449,17 @@
             "e3ff145b98": "Split Left",
             "f7c3d7d5af": "Split Right"
           },
+          "QuickLaunchButton": {
+            "chatLoading": "Checking chat support…"
+          },
           "SortableTabContextMenu": {
             "0ce4bae39d": "Split Left",
             "21132389e9": "Split Right",
             "591f9b12c1": "Split Up",
             "af80ed83c1": "Split Down"
+          },
+          "TabBar": {
+            "ab589350e5": "Could not build launch command for {{value0}}."
           },
           "TabBarQuickCommandsButton": {
             "c781f992e4": "destructive"

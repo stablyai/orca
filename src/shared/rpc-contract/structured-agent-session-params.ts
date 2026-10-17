@@ -282,6 +282,11 @@ export const AcknowledgeAttentionParams = OptionsParams.extend({ observedCursor:
 /** `agentSession.agents` takes nothing: the list is the host's, whichever client asks. */
 export const AgentsParams = z.object({}).strict()
 
+/** `agentSession.subscribeAvailability` names the workspace whose launches it answers for. */
+export const AvailabilityParams = z.strictObject({
+  worktree: Identifier('Invalid worktree selector')
+})
+
 /** `sessionId` scopes the catalog to that session's pinned account; without a
  *  session record the host keys it by the account a new launch would pin.
  *  `worktree` names where a new chat runs, whose own config may replace the default.

@@ -137,9 +137,19 @@ export async function detectAgentsOnHost(host: AgentDetectionHost): Promise<stri
   return detectInstalledAgentsWithShellPathHydration(host.context)
 }
 
+const agentRefreshListeners = new Set<() => void>()
+
+/** Runs after each explicit agent refresh on this host, which can find a CLI installed since. */
+export function onAgentsRefreshedOnHost(listener: () => void): () => void {
+  agentRefreshListeners.add(listener)
+  return () => agentRefreshListeners.delete(listener)
+}
+
 export async function refreshAgentsOnHost(host: AgentDetectionHost): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
   }
-  return refreshShellPathAndDetectAgents(host.context)
+  const result = await refreshShellPathAndDetectAgents(host.context)
+  agentRefreshListeners.forEach((listener) => listener())
+  return result
 }

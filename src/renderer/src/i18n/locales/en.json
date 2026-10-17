@@ -3753,7 +3753,16 @@
             "e518f544b1": "No agents detected",
             "8dea9b5cdf": "No enabled agents",
             "needsServerUpdate": "Update Orca on this server to list this workspace’s agents",
-            "hostUnreachable": "Can’t reach this workspace’s host to list its agents"
+            "hostUnreachable": "Can’t reach this workspace’s host to list its agents",
+            "chatNotInstalled": "Not installed",
+            "chatNotOverSsh": "No chat over SSH",
+            "chatNotInWsl": "No chat in WSL",
+            "chatNotOnHost": "No chat on this host",
+            "chatLoading": "Checking chat support…",
+            "chatUnavailableAfterSelection": "Couldn't start a {{value0}} chat.",
+            "startChat": "Start a {{value0}} chat",
+            "cliTag": "(CLI)",
+            "otherWays": "Other ways to open {{value0}}"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -18950,6 +18959,9 @@
       },
       "thought": "Thought",
       "thoughtForDuration": "Thought for {{duration}}",
+      "explicitChatWsl": "Chat is not available in WSL. Open the agent in a terminal instead.",
+      "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
+      "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
       "structuredSessionHostDeclinedDescription": "This server can't run a {{value0}} chat in this workspace.",
       "structuredSessionHostUnreachable": "Could not reach {{value0}}",

@@ -1,24 +1,29 @@
 import React, { useCallback } from 'react'
-import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import { useAppStore } from '@/store'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { useDetectedAgents } from '@/hooks/useDetectedAgents'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { LaunchSource } from '../../../../shared/telemetry-events'
-import {
-  DEFAULT_DISABLED_TUI_AGENTS,
-  filterEnabledTuiAgents
-} from '../../../../shared/tui-agent-selection'
-import { translate } from '@/i18n/i18n'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
+import { Settings as SettingsIcon } from 'lucide-react'
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger
+} from '@/components/ui/dropdown-menu'
+import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { useAppStore } from '@/store'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { LaunchSource } from '../../../../shared/telemetry-events'
+import { translate } from '@/i18n/i18n'
+import type { NewTabAgentMenuRow } from '@/lib/new-tab-agent-menu-rows'
+import { useNewTabAgentMenuRows, type NewTabAgentMenuModel } from './use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { chatUnavailableLabel, rowTitle, rowLabel, rowId } from './tab-agent-row-presentation'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -49,22 +54,7 @@ function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | nul
   return getAgentCatalog().find((a) => a.id === agent) ?? null
 }
 
-function orderAgents(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: TuiAgent[]
-): TuiAgent[] {
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => detected.includes(entry.id))
-    .map((entry) => entry.id)
-  if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
-    return inCatalogOrder
-  }
-  // Why: surface the user's configured default first — matches the prior
-  // split-button behavior where the default agent was the primary action.
-  return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
-}
-
-function QuickLaunchAgentMenuItemsInner({
+export function useTabAgentMenuLaunch({
   worktreeId,
   groupId,
   onFocusTerminal,
@@ -73,38 +63,26 @@ function QuickLaunchAgentMenuItemsInner({
   launchSource,
   onPromptDelivered,
   onPromptHandedOff,
-  disabled = false
-}: QuickLaunchAgentMenuItemsProps): React.JSX.Element | null {
-  // Why: resolving only the SSH connectionId here made paired-runtime
-  // worktrees fall back to LOCAL detection, listing the client's agents
-  // instead of the remote server's. Use the same ssh/runtime/local owner
-  // resolution as the rest of the tab bar.
-  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
-  const { detectedIds, detectionFailed, needsServerUpdate } =
-    useDetectedAgents(agentDetectionTarget)
-  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
-  const disabledAgents = useAppStore(
-    (s) => s.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
-  )
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
-
-  const openAgentSettings = useCallback(() => {
-    openSettingsTarget({ pane: 'agents', repoId: null })
-    openSettingsPage()
-  }, [openSettingsPage, openSettingsTarget])
-
+  disabled,
+  onFocusHostTerminal
+}: QuickLaunchAgentMenuItemsProps & { onFocusHostTerminal?: () => void }) {
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
-      if (disabled) {
+    (row: NewTabAgentMenuRow) => {
+      if (disabled || row.kind === 'chat-unavailable') {
         return
       }
+      const { agent } = row
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         requestId: newAgentLaunchRequestId(),
         focusIntent: captureNativeChatComposerFocusIntent(),
+        ...(row.kind === 'chat' || row.kind === 'cli'
+          ? {
+              requestedSurface: row.kind === 'chat' ? ('chat' as const) : ('terminal' as const),
+              selectedExecutionHostId: row.executionHostId
+            }
+          : {}),
         agent,
         worktreeId,
         groupId,
@@ -146,6 +124,7 @@ function QuickLaunchAgentMenuItemsInner({
         })
       }
       if (result.surface.kind !== 'local-terminal') {
+        onFocusHostTerminal?.()
         return
       }
       onFocusTerminal(result.surface.tabId)
@@ -159,16 +138,45 @@ function QuickLaunchAgentMenuItemsInner({
       launchSource,
       onPromptDelivered,
       onPromptHandedOff,
-      disabled
+      disabled,
+      onFocusHostTerminal
     ]
   )
 
-  const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
-  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
+  return runLaunch
+}
 
+function QuickLaunchAgentMenuItemsInner(props: QuickLaunchAgentMenuItemsProps): React.JSX.Element {
+  const detectionTarget = useAgentDetectionTargetForWorktree(props.worktreeId)
+  const model = useNewTabAgentMenuRows(props.worktreeId, true, detectionTarget)
+  const runLaunch = useTabAgentMenuLaunch(props)
+  return <ProjectedAgentMenuItems {...props} model={model} runLaunch={runLaunch} />
+}
+
+export function ProjectedAgentMenuItems({
+  disabled = false,
+  model,
+  runLaunch
+}: {
+  disabled?: boolean
+  model: NewTabAgentMenuModel
+  runLaunch: (row: NewTabAgentMenuRow) => void
+}): React.JSX.Element {
+  const {
+    rows,
+    detection: { detectedIds, detectionFailed, needsServerUpdate }
+  } = model
+  const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
+  const openAgentSettings = useCallback(() => {
+    openSettingsTarget({ pane: 'agents', repoId: null })
+    openSettingsPage()
+  }, [openSettingsPage, openSettingsTarget])
   return (
     <>
-      {agents.length === 0 ? (
+      {rows.length === 0 && (detectedIds !== null || detectionFailed || needsServerUpdate) ? (
         <DropdownMenuItem
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
@@ -194,29 +202,76 @@ function QuickLaunchAgentMenuItemsInner({
                   )}
         </DropdownMenuItem>
       ) : null}
-      {agents.map((agent) => {
-        const entry = getCatalogEntry(agent)
-        const label = entry?.label ?? agent
+      {rows.map((row, index) => {
+        const { agent } = row
+        const label = getCatalogEntry(agent)?.label ?? agent
+        // Chat rows come first; the rows that open a terminal start their own group.
+        const startsCliGroup = row.kind === 'cli' && index > 0 && rows[index - 1]?.kind !== 'cli'
+        if (row.kind === 'chat-unavailable') {
+          return (
+            <DropdownMenuItem key={rowId(row)} variant="launch" disabled>
+              <AgentIcon agent={agent} size={14} />
+              <span className="flex-1">{label}</span>
+              <span className="font-normal text-muted-foreground">
+                {chatUnavailableLabel(row.reason)}
+              </span>
+            </DropdownMenuItem>
+          )
+        }
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
-        return (
+        const item = (
           <DropdownMenuItem
-            key={agent}
+            variant="launch"
             disabled={disabled}
-            onSelect={() => runLaunch(agent)}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={translate(
-              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
-              'Launch {{value0}} in a new terminal',
-              { value0: label }
-            )}
+            onSelect={() => runLaunch(row)}
+            title={rowTitle(row, label)}
+            className="flex-1"
           >
             <AgentIcon agent={agent} size={14} />
-            <span className="flex-1">{label}</span>
+            <span className="flex-1">{rowLabel(row)}</span>
             {showsDefaultAgentShortcut ? (
               <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
             ) : null}
           </DropdownMenuItem>
+        )
+        return (
+          <React.Fragment key={rowId(row)}>
+            {startsCliGroup ? <DropdownMenuSeparator /> : null}
+            {row.kind === 'chat' && detectedIds?.includes(agent) ? (
+              <div className="flex items-center">
+                {item}
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger
+                    disabled={disabled}
+                    aria-label={translate(
+                      'auto.components.tab.bar.QuickLaunchButton.otherWays',
+                      'Other ways to open {{value0}}',
+                      { value0: label }
+                    )}
+                  />
+                  <DropdownMenuSubContent>
+                    <DropdownMenuItem
+                      variant="launch"
+                      disabled={disabled}
+                      onSelect={() => runLaunch({ ...row, kind: 'cli' })}
+                      title={rowTitle({ ...row, kind: 'cli' }, label)}
+                    >
+                      <AgentIcon agent={agent} size={14} />
+                      <span>
+                        {label}
+                        <span className="ml-1 font-normal text-muted-foreground">
+                          {translate('auto.components.tab.bar.QuickLaunchButton.cliTag', '(CLI)')}
+                        </span>
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </div>
+            ) : (
+              item
+            )}
+          </React.Fragment>
         )
       })}
       <DropdownMenuItem

@@ -191,7 +191,7 @@ function getActionPresentation(
   }
   if (option.kind === 'agent') {
     return {
-      detail: option.option.label,
+      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
       label:
         labelOverride ??

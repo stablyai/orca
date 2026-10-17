@@ -231,7 +231,8 @@ describe('structured agent session launch', () => {
         1,
         { kind: 'local' },
         'agentSession.createSupport',
-        { worktree: 'id:workspace-1', agent }
+        { worktree: 'id:workspace-1', agent },
+        {}
       )
     }
   )
@@ -271,8 +272,10 @@ describe('structured agent session launch', () => {
       kind: 'admitted'
     })
     vi.mocked(callStructuredAgentSession).mockResolvedValueOnce({ supported: false, reason: 'wsl' })
+    // The reason names what to tell the user (for example, no chat in WSL).
     await expect(admitStructuredLaunchOnHost(server, 'id:wt-1', 'claude')).resolves.toEqual({
-      kind: 'declined'
+      kind: 'declined',
+      reason: 'wsl'
     })
     vi.mocked(callStructuredAgentSession).mockRejectedValueOnce(new Error('runtime unreachable'))
     await expect(admitStructuredLaunchOnHost(server, 'id:wt-1', 'claude')).resolves.toEqual({

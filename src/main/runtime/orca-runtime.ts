@@ -31,6 +31,12 @@ import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-l
 import { rekeyMovedPaneOwners } from './moved-pane-owner-rekey'
 import { applyWindowLayoutCommand, type WindowLayoutCommand } from './runtime-layout-apply'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
+import {
+  installStructuredAgentAvailability,
+  type StructuredAgentAvailability,
+  type StructuredAgentAvailabilityReader
+} from './structured-agent-availability'
+import { resolveHostStructuredAgentCreateSupport } from './structured-agent-launch-support'
 import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
@@ -107,6 +113,36 @@ class OrcaRuntimeService extends OrcaRuntimeWithWorkspaceActivityFacts {
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
+  }
+
+  private structuredAgentAvailability: StructuredAgentAvailability | undefined
+
+  /** Every registered agent's createSupport answer in this workspace, shared by all its readers and
+   *  published as complete generations; returns the release. */
+  subscribeStructuredAgentAvailability(
+    worktreeSelector: string,
+    read: StructuredAgentAvailabilityReader
+  ): () => void {
+    this.structuredAgentAvailability ??= installStructuredAgentAvailability(
+      this.store,
+      async (worktree, agent) =>
+        resolveHostStructuredAgentCreateSupport({
+          agent,
+          worktreeSelector: worktree,
+          location: await this.resolveStructuredAgentSessionLocation(worktree),
+          runtime: this,
+          refreshShellOnMiss: false
+        })
+    )
+    return this.structuredAgentAvailability.subscribe(worktreeSelector, read)
+  }
+
+  protected override notifyReposChanged(): void {
+    super.notifyReposChanged()
+    // Why Windows only: a project's WSL runtime choice is the repo setting a chat's location reads.
+    if (process.platform === 'win32') {
+      this.structuredAgentAvailability?.rederive()
+    }
   }
 
   /** Whether a window owns the layout and can show a launch's tab ahead of its process. */

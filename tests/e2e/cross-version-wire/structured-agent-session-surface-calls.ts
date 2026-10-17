@@ -210,5 +210,12 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.agents',
     hostMethod: null,
     result: { agents: expect.arrayContaining([expect.objectContaining({ agent: 'codex' })]) }
+  },
+  // Answered from the runtime's shared availability resource, not the host, so the stub's first
+  // generation is the only signal that the gate opened.
+  {
+    method: 'agentSession.subscribeAvailability',
+    hostMethod: null,
+    result: { type: 'availability', agents: [] }
   }
 ]

@@ -34,6 +34,9 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: ({ agent }: { agent: string }) => <span>{agent}</span>
 }))
 vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenuSub: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuSubContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuSubTrigger: () => <button aria-label="Other ways to open Codex" />,
   DropdownMenuItem: ({
     children,
     disabled,
@@ -61,6 +64,7 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: launchMoc
 type DivProps = { disabled?: boolean; title?: string; onSelect?: () => void }
 
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
+import * as menuRows from './use-new-tab-agent-menu-rows'
 import {
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
@@ -177,7 +181,20 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
 
   // Why: the notes menu holds what it sent until this result, so a second send leaves them out.
-  it("hands the launch's own delivery outcome to the notes menu", async () => {
+  it('opens the CLI once with notes, then the normal row opens chat', async () => {
+    const model = vi.spyOn(menuRows, 'useNewTabAgentMenuRows').mockReturnValueOnce({
+      rows: [{ kind: 'chat', agent: 'codex', executionHostId: 'runtime:server' }],
+      detection: {
+        detectedIds: ['codex'],
+        detectionFailed: false,
+        needsServerUpdate: false,
+        isLoading: false,
+        isRefreshing: false,
+        refresh: async () => ['codex']
+      },
+      availability: null
+    })
+    launchMock.mockReset()
     const delivery = Promise.resolve({ delivered: true, failureNotified: false })
     launchMock.mockReturnValue({
       surface: { kind: 'host-published' },
@@ -195,10 +212,26 @@ describe('QuickLaunchAgentMenuItems launches', () => {
         onPromptHandedOff={onPromptHandedOff}
       />
     )
+    model.mockRestore()
     fireEvent.click(document.querySelector('[title="Launch Codex in a new terminal"]')!)
 
+    expect(launchMock).toHaveBeenCalledOnce()
+    expect(launchMock.mock.calls[0][0]).toMatchObject({
+      requestedSurface: 'terminal',
+      selectedExecutionHostId: 'runtime:server'
+    })
+    expect(launchMock.mock.calls.at(-1)?.[0].prompt).toBe('review notes')
+    expect(launchMock.mock.calls.at(-1)?.[0].promptDelivery).toBe('submit-after-ready')
+    expect(launchMock.mock.calls.at(-1)?.[0].promptKeptByCaller).toBe(true)
+    expect(launchMock.mock.calls.at(-1)?.[0].groupId).toBe('group-1')
     expect(onPromptHandedOff).toHaveBeenCalledOnce()
     await expect(onPromptHandedOff.mock.calls[0][0]).resolves.toEqual({ delivered: true })
+    fireEvent.click(document.querySelector('[title="Start a Codex chat"]')!)
+    expect(launchMock).toHaveBeenCalledTimes(2)
+    expect(launchMock.mock.calls[1][0]).toMatchObject({
+      requestedSurface: 'chat',
+      selectedExecutionHostId: 'runtime:server'
+    })
   })
 
   // The notes keep their text, so they are the one place that says it did not go.
