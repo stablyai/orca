@@ -100,6 +100,12 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
     ...args: Parameters<SyncMobileSessionTabsMethods['syncMobileSessionTabs']>
   ): ReturnType<SyncMobileSessionTabsMethods['syncMobileSessionTabs']>
 
+  protected abstract rememberTerminalSessionTitle(
+    tabId: string | null | undefined,
+    handle: string | undefined,
+    title: string | null
+  ): void
+
   attachWindow(windowId: number): void {
     if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
       if (

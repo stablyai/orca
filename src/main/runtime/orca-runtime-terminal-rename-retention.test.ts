@@ -132,6 +132,42 @@ describe('terminal rename before renderer graph hydration', () => {
     expect(getSession().sessionCustomTitles?.['sess-alias']).toBeUndefined()
   })
 
+  it('stores the session alias for a restored PTY with a legacy numeric paneKey when leaves are not mounted', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    session.tabsByWorktree[TEST_WORKTREE_ID][0].ptyId = 'restored-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const rows: AgentStatusIpcPayload[] = [
+      {
+        state: 'done',
+        prompt: '',
+        paneKey: 'host-tab:1',
+        connectionId: null,
+        receivedAt: 1,
+        stateStartedAt: 1,
+        providerSession: { key: 'session_id', id: 'sess-legacy-numeric' }
+      }
+    ]
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture store implements RuntimeStore; its mock typing drops callable signatures.
+    const runtime = new OrcaRuntimeService(runtimeStore as RuntimeStore, undefined, {
+      getAgentStatusSnapshot: () => rows
+    })
+    runtime.setNotifier(notifier(() => {}))
+    const pty = runtime['recordPtyWorktree']('restored-pty', TEST_WORKTREE_ID, {
+      connected: true
+    })
+    const handle = runtime['issuePtyHandle'](pty)
+
+    await runtime.renameTerminal(handle, 'Immediate History Name')
+
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(
+      'Immediate History Name'
+    )
+    expect(getSession().sessionCustomTitles?.['sess-legacy-numeric']).toBe(
+      'Immediate History Name'
+    )
+    expect(runtime.getSessionCustomTitle('sess-legacy-numeric')).toBe('Immediate History Name')
+  })
+
   it('restores a stored session title onto a resumed terminal that has none', async () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       sessionCustomTitles: { 'sess-kept': 'Kept name' }

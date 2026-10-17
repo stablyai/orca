@@ -119,15 +119,31 @@ export const AI_VAULT_METHODS = [
       const projected = projectStructuredAiVaultSessions(result, (agent) =>
         clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
       )
-      for (const session of projected.sessions) {
+      projected.sessions = projected.sessions.map((session) => {
+        const agentSessionId = `${session.agent}:${session.sessionId}`
+        const bareSessionId = session.sessionId.includes(':')
+          ? session.sessionId.split(':').pop()!
+          : session.sessionId
         const customTitle =
-          runtime.getSessionCustomTitle(session.sessionId) ??
-          runtime.getSessionCustomTitle(session.id)
-        if (customTitle) {
-          session.title = customTitle
-          session.customTitle = customTitle
+          runtime.getSessionCustomTitle?.(session.sessionId) ??
+          runtime.getSessionCustomTitle?.(session.id) ??
+          runtime.getSessionCustomTitle?.(agentSessionId) ??
+          runtime.getSessionCustomTitle?.(bareSessionId) ??
+          (session.structuredSession
+            ? runtime.getSessionCustomTitle?.(session.structuredSession.sessionId)
+            : null)
+        if (!customTitle) {
+          return session
         }
-      }
+        if (session.structuredSession) {
+          runtime.setSessionCustomTitle?.(session.structuredSession.sessionId, customTitle)
+        }
+        return {
+          ...session,
+          title: customTitle,
+          customTitle
+        }
+      })
       return conditionalAiVaultListResult(
         params.executionHostId
           ? restampAiVaultListResult(projected, params.executionHostId)

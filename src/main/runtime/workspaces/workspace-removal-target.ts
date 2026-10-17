@@ -231,20 +231,25 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       // win by timestamp), so stamp it as the freshest title.
       pty.pty.titleUpdatedAt = Date.now()
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
-      const tabId = pty.pty.tabId ?? pty.record.tabId
+      const resolvedRealTabId =
+        pty.pty.tabId ?? this.resolveRealTabIdForPty(pty.pty.ptyId, pty.pty.worktreeId, handle)
+      if (resolvedRealTabId && !pty.pty.tabId) {
+        pty.pty.tabId = resolvedRealTabId
+      }
+      const tabId = resolvedRealTabId ?? pty.record.tabId
       this.rememberManualTerminalTitle(tabId, normalizedTitle)
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
-      if (!this.notifier?.renameTerminal && pty.pty.tabId) {
-        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, pty.pty.tabId, normalizedTitle)
+      if (!this.notifier?.renameTerminal && resolvedRealTabId) {
+        this.persistHeadlessTerminalTitle(pty.pty.worktreeId, resolvedRealTabId, normalizedTitle)
         // Why: paired desktops rank their own saved-session title above the live one, so the
         // name has to be published as manual or a resumed session hides it (#29975).
-        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, pty.pty.tabId, {
+        this.applyHeadlessSessionTabPropsToSnapshot(pty.pty.worktreeId, resolvedRealTabId, {
           customTitle: normalizedTitle,
           // Why: a name set while the pane slept lives in the snapshot title; a reset must drop it.
           ...(normalizedTitle === null
             ? {
-                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, pty.pty.tabId)
+                title: this.headlessTerminalFallbackTitle(pty.pty.worktreeId, resolvedRealTabId)
               }
             : {})
         })
@@ -254,17 +259,21 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRu
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
           this.rememberManualTerminalTitle(leaf.tabId, normalizedTitle)
-          this.persistHeadlessTerminalTitle(pty.pty.worktreeId, leaf.tabId, normalizedTitle)
+          if (this.notifier?.renameTerminal) {
+            this.persistHeadlessTerminalTitle(pty.pty.worktreeId, leaf.tabId, normalizedTitle)
+          }
           this.rememberTerminalSessionTitle(leaf.tabId, handle, normalizedTitle)
           this.notifier?.renameTerminal(leaf.tabId, normalizedTitle)
           return { handle, tabId: leaf.tabId, title: normalizedTitle }
         }
       }
       // A notifier can exist before its pane graph; retain the rename on the known tab.
-      if (tabId) {
+      if (this.notifier?.renameTerminal && tabId) {
         this.persistHeadlessTerminalTitle(pty.pty.worktreeId, tabId, normalizedTitle)
         this.rememberTerminalSessionTitle(tabId, handle, normalizedTitle)
-        this.notifier?.renameTerminal(tabId, normalizedTitle)
+        this.notifier.renameTerminal(tabId, normalizedTitle)
+      } else {
+        this.rememberTerminalSessionTitle(tabId, handle, normalizedTitle)
       }
       return { handle, tabId, title: normalizedTitle }
     }

@@ -1,6 +1,11 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  getMobileAiVaultCacheKey,
+  readMobileAiVaultCache,
+  writeMobileAiVaultCache
+} from '../agent-history/mobile-ai-vault-session-cache'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 
@@ -91,10 +96,20 @@ describe('useMobileSessionCloseActions', () => {
       renderer = create(createElement(Harness))
     })
 
+    const cacheKey = getMobileAiVaultCacheKey('host-1', 'wt-1', 'workspace')
+    writeMobileAiVaultCache(cacheKey, {
+      sessions: [],
+      issues: [],
+      fingerprint: 'f'.repeat(64),
+      limit: 250
+    })
+    expect(readMobileAiVaultCache(cacheKey)).not.toBeNull()
+
     await act(async () => {
       await actions?.handleRenameTerminal('Auth Worker')
     })
 
+    expect(readMobileAiVaultCache(cacheKey)).toBeNull()
     expect(client.sendRequest).toHaveBeenCalledWith('terminal.rename', {
       terminal: 'term-1',
       title: 'Auth Worker'

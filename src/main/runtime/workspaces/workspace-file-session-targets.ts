@@ -109,10 +109,6 @@ export abstract class OrcaRuntimeWithPersistHeadlessTerminalTitle extends Runtim
         })
       }
     }
-    const sessionId = this.resolveSessionIdForTab(tabId)
-    if (sessionId) {
-      this.setSessionCustomTitle(sessionId, normalizedTitle)
-    }
   }
 
   protected normalizeMobileSessionTabOrder(

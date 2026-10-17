@@ -98,6 +98,7 @@ export async function syncRuntimeGraph(): Promise<void> {
       worktreeId: registeredTab.worktreeId,
       title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
       ...(tab.customTitle?.trim() ? { customTitle: tab.customTitle.trim() } : {}),
+      ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })

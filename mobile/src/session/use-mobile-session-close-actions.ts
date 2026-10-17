@@ -1,3 +1,4 @@
+import { clearMobileAiVaultMemoryCache } from '../agent-history/mobile-ai-vault-session-cache'
 import { pendingSelectionTabId, withoutPendingHandle } from './pending-session-selection'
 import {
   sessionTabClose,
@@ -47,10 +48,12 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
 
     try {
       const title = value.trim()
+      clearMobileAiVaultMemoryCache()
       const response = sessionTerminalRename.interpret(
         await sessionTerminalRename.request(client, { terminal: target.handle, title })
       )
       if (response.accepted) {
+        clearMobileAiVaultMemoryCache()
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
             terminal.handle === target.handle

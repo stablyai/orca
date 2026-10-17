@@ -1,4 +1,11 @@
 import { RuntimeHeadlessTabGroups } from '../session-tabs/headless-tab-group-moves'
+import {
+  lookupPersistedSessionCustomTitle,
+  lookupPersistedTabCustomTitle,
+  parseTabIdFromPaneKey,
+  resolvePersistedSessionIdForTab,
+  resolveRealTabIdFromRuntimeState
+} from './workspace-session-custom-title-resolution'
 
 export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadlessTabGroups {
   protected readonly inMemorySessionCustomTitles = new Map<string, string>()
@@ -7,11 +14,57 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
     if (!sessionId) {
       return null
     }
-    return (
-      this.inMemorySessionCustomTitles.get(sessionId) ??
-      this.store?.getWorkspaceSession?.()?.sessionCustomTitles?.[sessionId] ??
-      null
-    )
+    const session = this.store?.getWorkspaceSession?.()
+    const titles = session?.sessionCustomTitles
+    const lookup = (id: string): string | null =>
+      this.inMemorySessionCustomTitles.get(id) ??
+      titles?.[id] ??
+      this.lookupLiveSessionCustomTitle(id)
+
+    const direct = lookup(sessionId)
+    if (direct) {
+      return direct
+    }
+    if (sessionId.includes(':')) {
+      const bare = sessionId.split(':').at(-1)
+      if (bare) {
+        return lookup(bare)
+      }
+    }
+    return null
+  }
+
+  private lookupLiveSessionCustomTitle(sessionId: string): string | null {
+    for (const pty of this.ptysById.values()) {
+      if (pty.providerSessionId === sessionId && pty.customTitle?.trim()) {
+        return pty.customTitle.trim()
+      }
+    }
+    for (const tab of this.tabs.values()) {
+      if (tab.aiVaultTitle?.sessionId === sessionId && tab.customTitle?.trim()) {
+        return tab.customTitle.trim()
+      }
+    }
+    const statusRows =
+      this.getAgentProviderSessionSnapshotFn?.() ?? this.getAgentStatusSnapshotFn?.() ?? []
+    for (const entry of statusRows) {
+      if (entry.providerSession?.id !== sessionId) {
+        continue
+      }
+      const liveTitle = this.readLiveTerminalCustomTitle({
+        tabId: entry.tabId ?? parseTabIdFromPaneKey(entry.paneKey) ?? undefined,
+        ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
+      })
+      if (liveTitle) {
+        return liveTitle
+      }
+    }
+    const session = this.store?.getWorkspaceSession?.()
+    return session
+      ? lookupPersistedSessionCustomTitle(session, sessionId, (args) =>
+          this.readLiveTerminalCustomTitle(args)
+        )
+      : null
   }
 
   setSessionCustomTitle(sessionId: string, title: string | null): void {
@@ -64,7 +117,10 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
       return tabTitle
     }
     for (const pty of this.ptysById.values()) {
-      if (pty.tabId === args.tabId && pty.customTitle?.trim()) {
+      if (
+        (pty.tabId === args.tabId || parseTabIdFromPaneKey(pty.paneKey) === args.tabId) &&
+        pty.customTitle?.trim()
+      ) {
         return pty.customTitle.trim()
       }
     }
@@ -76,7 +132,8 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
         }
       }
     }
-    return null
+    const session = this.store?.getWorkspaceSession?.()
+    return session ? lookupPersistedTabCustomTitle(session, args.tabId, this.ptysById) : null
   }
 
   protected rememberTerminalSessionTitle(
@@ -84,55 +141,85 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
     handle: string | undefined,
     title: string | null
   ): void {
-    if (!tabId) {
+    if (!tabId && !handle) {
       return
     }
-    const sessionId = this.resolveSessionIdForTab(tabId, handle)
+    const sessionId = this.resolveSessionIdForTab(tabId ?? '', handle)
     if (sessionId) {
       this.setSessionCustomTitle(sessionId, title)
     }
   }
 
+  resolveRealTabIdForPty(ptyId: string, worktreeId?: string, handle?: string): string | null {
+    return resolveRealTabIdFromRuntimeState({
+      ptyId,
+      worktreeId,
+      handle,
+      ptysById: this.ptysById,
+      leaves: this.leaves,
+      mobileSessionTabsByWorktree: this.mobileSessionTabsByWorktree,
+      session: this.store?.getWorkspaceSession?.()
+    })
+  }
+
   resolveSessionIdForTab(tabId: string, handle?: string): string | null {
-    const session = this.store?.getWorkspaceSession?.()
-    if (session) {
-      for (const tabs of Object.values(session.tabsByWorktree)) {
-        const persisted = tabs.find((tab) => tab.id === tabId)
-        if (persisted?.aiVaultTitle?.sessionId) {
-          return persisted.aiVaultTitle.sessionId
-        }
+    if (!tabId || tabId.startsWith('pty:')) {
+      const ptyId = tabId.startsWith('pty:')
+        ? tabId.slice(4)
+        : handle
+          ? (this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.handles.get(handle)?.ptyId)
+          : undefined
+      if (ptyId) {
+        tabId = this.resolveRealTabIdForPty(ptyId, undefined, handle) ?? tabId
       }
-      if (session.unifiedTabs) {
-        for (const tabs of Object.values(session.unifiedTabs)) {
-          const unified = tabs.find((tab) => tab.entityId === tabId || tab.id === tabId)
-          if (unified?.aiVaultTitle?.sessionId) {
-            return unified.aiVaultTitle.sessionId
-          }
-        }
+    }
+    const inMemoryTab = tabId ? this.tabs.get(tabId) : undefined
+    if (inMemoryTab?.aiVaultTitle?.sessionId) {
+      return inMemoryTab.aiVaultTitle.sessionId
+    }
+    const session = this.store?.getWorkspaceSession?.()
+    if (session && tabId) {
+      const persistedId = resolvePersistedSessionIdForTab(session, tabId)
+      if (persistedId) {
+        return persistedId
       }
     }
     const paneKeys: string[] = []
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId === tabId) {
-        paneKeys.push(this.makeRuntimePaneKey(leaf))
+    if (tabId) {
+      for (const leaf of this.leaves.values()) {
+        if (leaf.tabId === tabId) {
+          paneKeys.push(this.makeRuntimePaneKey(leaf))
+        }
       }
     }
-    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+    const statusRows =
+      this.getAgentProviderSessionSnapshotFn?.() ?? this.getAgentStatusSnapshotFn?.() ?? []
+    for (const entry of statusRows) {
+      const parsedTabId = parseTabIdFromPaneKey(entry.paneKey)
       const matches =
         (Boolean(handle) && entry.terminalHandle === handle) ||
-        entry.tabId === tabId ||
-        paneKeys.includes(entry.paneKey)
+        (Boolean(tabId) &&
+          (entry.tabId === tabId || parsedTabId === tabId || paneKeys.includes(entry.paneKey)))
       if (matches && entry.providerSession?.id) {
         return entry.providerSession.id
       }
     }
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId !== tabId || !leaf.ptyId) {
-        continue
+    if (tabId) {
+      for (const leaf of this.leaves.values()) {
+        if (leaf.tabId === tabId && leaf.ptyId) {
+          const recorded = this.ptysById.get(leaf.ptyId)?.providerSessionId
+          if (recorded) {
+            return recorded
+          }
+        }
       }
-      const recorded = this.ptysById.get(leaf.ptyId)?.providerSessionId
-      if (recorded) {
-        return recorded
+      for (const pty of this.ptysById.values()) {
+        if (
+          (pty.tabId === tabId || parseTabIdFromPaneKey(pty.paneKey) === tabId) &&
+          pty.providerSessionId
+        ) {
+          return pty.providerSessionId
+        }
       }
     }
     if (handle) {
@@ -141,23 +228,29 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
         return recorded
       }
     }
-    for (const leaf of this.leaves.values()) {
-      if (leaf.tabId === tabId) {
-        const paneKey = this.makeRuntimePaneKey(leaf)
-        const entries =
-          this.getAgentStatusSnapshotForPaneFn?.(paneKey) ??
-          this.getAgentStatusSnapshotFn?.().filter((row) => row.paneKey === paneKey) ??
-          []
-        for (const entry of entries) {
-          if (entry.providerSession?.id) {
-            return entry.providerSession.id
+    if (tabId) {
+      for (const leaf of this.leaves.values()) {
+        if (leaf.tabId === tabId) {
+          const paneKey = this.makeRuntimePaneKey(leaf)
+          const entries =
+            this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ??
+            this.getAgentStatusSnapshotForPaneFn?.(paneKey) ??
+            statusRows.filter((row) => row.paneKey === paneKey)
+          for (const entry of entries) {
+            if (entry.providerSession?.id) {
+              return entry.providerSession.id
+            }
           }
         }
       }
     }
     for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
       for (const tab of snapshot.tabs) {
-        if (tab.id === tabId || (tab.type === 'terminal' && tab.parentTabId === tabId)) {
+        const matchesTab =
+          (Boolean(tabId) &&
+            (tab.id === tabId || (tab.type === 'terminal' && tab.parentTabId === tabId))) ||
+          (Boolean(handle) && tab.type === 'terminal' && tab.terminal === handle)
+        if (matchesTab) {
           if (tab.type === 'agent-session' && tab.sessionId) {
             return tab.sessionId
           }
@@ -167,9 +260,6 @@ export abstract class RuntimeWorkspaceSessionCustomTitles extends RuntimeHeadles
         }
       }
     }
-    if (tabId.startsWith('agent-session:')) {
-      return tabId.slice('agent-session:'.length)
-    }
-    return null
+    return tabId.startsWith('agent-session:') ? tabId.slice('agent-session:'.length) : null
   }
 }
