@@ -20,7 +20,7 @@ describe('shouldIncludeFileExplorerEntry', () => {
     ).toBe(true)
   })
 
-  it('still excludes internal and bulky directories', () => {
+  it('excludes only .git — node_modules stays loadable so the git-ignored toggle governs it', () => {
     expect(
       shouldIncludeFileExplorerEntry({
         name: '.git',
@@ -35,7 +35,7 @@ describe('shouldIncludeFileExplorerEntry', () => {
         isDirectory: true,
         isSymlink: false
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 })
 
