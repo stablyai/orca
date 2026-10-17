@@ -72,6 +72,23 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.validationCwd).toBe('C:\\Users\\alice')
   })
 
+  it('calls Cmder init.bat through env-expanded quotes before the startup command', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      'codex',
+      undefined,
+      true
+    )
+    expect(result.shellArgs).toEqual([
+      '/K',
+      'chcp 65001 > nul & call %ORCA_CMDER_INIT_QUOTE%%ORCA_CMDER_INIT%%ORCA_CMDER_INIT_QUOTE% & codex'
+    ])
+    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
   it('embeds short cmd.exe startup commands in shell args', () => {
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',

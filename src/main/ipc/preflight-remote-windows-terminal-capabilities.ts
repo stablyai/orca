@@ -5,6 +5,8 @@ export type RemoteWindowsTerminalCapabilities = {
   wslDistros: string[]
   pwshAvailable: boolean
   gitBashAvailable: boolean
+  // Why optional: relays predating Cmder omit it, which means no Cmder.
+  cmderAvailable?: boolean
   hostPlatform: NodeJS.Platform | null
 }
 

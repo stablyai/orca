@@ -127,6 +127,7 @@ export const EXECUTION_HOST_METHODS = [
   'gitlab.workItemDetails',
   // Shell and agent availability are facts about the machine that spawns the process.
   'host.gitBash.isAvailable',
+  'host.cmder.isAvailable',
   'host.platform',
   'host.pwsh.isAvailable',
   'host.wsl.isAvailable',

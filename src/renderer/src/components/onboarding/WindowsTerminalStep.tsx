@@ -1,7 +1,10 @@
 import { Check } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import {
+  WINDOWS_CMDER_SHELL,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../../shared/windows-terminal-shell'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { cn } from '@/lib/utils'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
@@ -41,7 +44,8 @@ function normalizeWindowsShell(value: string | null | undefined): BuiltInWindows
     value === 'powershell.exe' ||
     value === 'cmd.exe' ||
     value === 'wsl.exe' ||
-    value === WINDOWS_GIT_BASH_SHELL
+    value === WINDOWS_GIT_BASH_SHELL ||
+    value === WINDOWS_CMDER_SHELL
   ) {
     return value
   }
@@ -62,6 +66,8 @@ export function WindowsTerminalStep({
       ? [selectedWslDistroName, ...capabilities.wslDistros]
       : capabilities.wslDistros
   const showGitBashOption = capabilities.gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
+  const cmderAvailable = capabilities.cmderAvailable === true
+  const showCmderOption = cmderAvailable || windowsShell === WINDOWS_CMDER_SHELL
   const showWslOption = capabilities.wslAvailable || windowsShell === 'wsl.exe'
 
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
@@ -110,6 +116,24 @@ export function WindowsTerminalStep({
                   'Selected, but Git Bash was not detected on this machine.'
                 ),
             disabled: !capabilities.gitBashAvailable
+          } satisfies ShellOption
+        ]
+      : []),
+    ...(showCmderOption
+      ? [
+          {
+            value: WINDOWS_CMDER_SHELL,
+            label: translate('auto.components.onboarding.WindowsTerminalStep.cmder', 'Cmder'),
+            description: cmderAvailable
+              ? translate(
+                  'auto.components.onboarding.WindowsTerminalStep.cmderDescription',
+                  'Opens Command Prompt with your Cmder prompt, aliases and Clink.'
+                )
+              : translate(
+                  'auto.components.onboarding.WindowsTerminalStep.cmderUnavailable',
+                  'Selected, but Cmder was not detected on this machine.'
+                ),
+            disabled: !cmderAvailable
           } satisfies ShellOption
         ]
       : []),

@@ -1,12 +1,15 @@
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 
 export const WINDOWS_GIT_BASH_SHELL = 'git-bash'
+/** Sentinel for cmd.exe bootstrapped through Cmder's `vendor\init.bat` (clink, aliases, git prompt). */
+export const WINDOWS_CMDER_SHELL = 'cmder'
 
 export type BuiltInWindowsTerminalShell =
   | 'powershell.exe'
   | 'cmd.exe'
   | 'wsl.exe'
   | typeof WINDOWS_GIT_BASH_SHELL
+  | typeof WINDOWS_CMDER_SHELL
 
 /**
  * Classifies a configured `terminalWindowsShell` value into the startup-shell
@@ -23,6 +26,9 @@ export function resolveWindowsShellStartupFamily(
   }
   if (trimmed === WINDOWS_GIT_BASH_SHELL) {
     return 'posix'
+  }
+  if (trimmed.toLowerCase() === WINDOWS_CMDER_SHELL) {
+    return 'cmd'
   }
   const basename = trimmed.replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
   if (basename === 'cmd.exe') {
@@ -82,7 +88,8 @@ const WINDOWS_SHELL_OVERRIDE_CANONICAL_NAMES: ReadonlyMap<string, string> = new 
   // the one host that hard-failed a setting the local and daemon PTYs accept.
   ['bash.exe', 'bash.exe'],
   ['bash', 'bash.exe'],
-  [WINDOWS_GIT_BASH_SHELL, WINDOWS_GIT_BASH_SHELL]
+  [WINDOWS_GIT_BASH_SHELL, WINDOWS_GIT_BASH_SHELL],
+  [WINDOWS_CMDER_SHELL, WINDOWS_CMDER_SHELL]
 ])
 
 /** Canonical spelling for an accepted override (case-insensitive), or undefined when refused. */

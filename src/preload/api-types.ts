@@ -160,6 +160,7 @@ export type PreloadApi = {
   wslMove: WslMoveApi
   pwsh: RuntimeApi['pwsh']
   gitBash: RuntimeApi['gitBash']
+  cmder: RuntimeApi['cmder']
   plugins: PluginsApi
   agentStatus: AgentStatusApi
   mobile: MobileApi

@@ -1,8 +1,9 @@
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { WINDOWS_CMDER_SHELL, WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
 import { resolveUnixPaneShellPath } from '../daemon/shell-ready'
+import { resolveWindowsCmderShellRoot } from '../cmder'
 import { getDefaultWslDistro, parseWslPath } from '../wsl'
 import {
   getDefaultCwd,
@@ -57,6 +58,8 @@ export type LocalPtyLaunchPlan = {
   primaryPreLaunchEnv: Record<string, string | undefined>
   isWslShell: boolean
   launchWslDistro: string | null
+  /** Set when the pane is cmd.exe bootstrapped through Cmder's init.bat. */
+  cmderRoot: string | null
 }
 
 export class DeferredLocalPtyLaunchPlan {
@@ -75,6 +78,7 @@ function finalizeLocalPtyLaunchPlan(
     validationCwd: string
     startupCommandDeliveredInShellArgs?: boolean
     windowsFallbackAttempts?: ReturnType<typeof buildWindowsPowerShellSpawnAttempts>
+    cmderRoot?: string | null
   }
 ): LocalPtyLaunchPlan {
   ensureNodePtySpawnHelperExecutable()
@@ -98,7 +102,8 @@ function finalizeLocalPtyLaunchPlan(
     getFallbackShellReadyConfig: undefined,
     primaryPreLaunchEnv: {},
     isWslShell,
-    launchWslDistro: isWslShell ? (seed.launchWslContext?.distro ?? null) : null
+    launchWslDistro: isWslShell ? (seed.launchWslContext?.distro ?? null) : null,
+    cmderRoot: shell.cmderRoot ?? null
   }
 }
 
@@ -119,6 +124,10 @@ function createWindowsLocalPtyLaunchPlan(
   }
   const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
   const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
+  // Why args.env: orcad's in-process fallback never sets configuredCmderRoot; the setting rides in as ORCA_CMDER_ROOT.
+  const cmderRoot = resolveWindowsCmderShellRoot(shellFamily, {
+    env: { ...process.env, ...args.env }
+  })
   // Why: normalize setting-value and path forms to the PowerShell family so the resolver can fall back to inbox powershell.exe.
   const powerShellImplementation = getOptions().getWindowsPowerShellImplementation?.()
   const resolvedShellFamily: WindowsPowerShellShellFamily =
@@ -139,6 +148,9 @@ function createWindowsLocalPtyLaunchPlan(
       shellPath = resolvedGitBashPath
     } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
       shellPath = 'powershell.exe'
+    } else if (shellFamily.toLowerCase() === WINDOWS_CMDER_SHELL) {
+      // Why: Cmder is cmd.exe plus init.bat; a missing install degrades to plain cmd, not a spawn failure.
+      shellPath = 'cmd.exe'
     } else {
       shellPath = shouldResolvePowerShellFamily
         ? (resolveEffectiveWindowsPowerShell({
@@ -172,7 +184,9 @@ function createWindowsLocalPtyLaunchPlan(
       cwd,
       defaultCwd,
       seed.launchWslContext,
-      args.command
+      args.command,
+      undefined,
+      cmderRoot !== null
     )
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,
@@ -180,7 +194,8 @@ function createWindowsLocalPtyLaunchPlan(
       effectiveCwd: resolved.effectiveCwd,
       validationCwd: resolved.validationCwd,
       startupCommandDeliveredInShellArgs: resolved.startupCommandDeliveredInShellArgs === true,
-      windowsFallbackAttempts
+      windowsFallbackAttempts,
+      cmderRoot
     })
   }
   return shouldProbePwsh

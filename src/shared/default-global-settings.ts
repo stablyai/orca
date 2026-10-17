@@ -95,6 +95,7 @@ export function buildDefaultSettings(args: {
     terminalWindowsShell: 'powershell.exe',
     terminalDefaultShell: '',
     terminalWindowsWslDistro: null,
+    terminalWindowsCmderPath: '',
     localAccountRuntime: 'auto',
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     localAccountWslDistro: null,

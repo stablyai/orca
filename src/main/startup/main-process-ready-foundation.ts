@@ -54,6 +54,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-state-save-delay'
+import { setConfiguredCmderRoot } from '../cmder'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -215,7 +216,11 @@ export async function initializeReadyFoundation(): Promise<void> {
   )
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
+  setConfiguredCmderRoot(store.getSettings().terminalWindowsCmderPath)
   store.onSettingsChanged((updates, settings) => {
+    if ('terminalWindowsCmderPath' in updates) {
+      setConfiguredCmderRoot(settings.terminalWindowsCmderPath)
+    }
     if ('electronHttp1CompatibilityMode' in updates) {
       writeHttp1CompatibilityMarker(
         canonicalUserDataPath,
