@@ -74,7 +74,9 @@ export function activateTabNumberShortcut(index: number): boolean {
     }
     store.setActiveTab(target.entityId)
     store.setActiveTabType('terminal', worktreeId)
-    focusTerminalTabSurface(target.entityId)
+    const activeLeafId =
+      useAppStore.getState().terminalLayoutsByTabId[target.entityId]?.activeLeafId ?? null
+    focusTerminalTabSurface(target.entityId, activeLeafId)
     return true
   }
 

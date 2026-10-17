@@ -32,6 +32,13 @@ import {
   ensureTerminalVisible,
   waitForStartupWorktreeRefresh
 } from './helpers/store'
+import {
+  readPaneIdentitySnapshot,
+  splitActiveTerminalPane,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { clickFileInExplorer } from './helpers/file-explorer'
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 
@@ -80,6 +87,16 @@ async function getFocusedTerminalTabId(page: Page): Promise<string | null> {
       return null
     }
     return active.closest('[data-terminal-tab-id]')?.getAttribute('data-terminal-tab-id') ?? null
+  })
+}
+
+async function getFocusedTerminalLeafId(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement) || !active.classList.contains('xterm-helper-textarea')) {
+      return null
+    }
+    return active.closest<HTMLElement>('.pane[data-leaf-id]')?.dataset.leafId ?? null
   })
 }
 
@@ -196,6 +213,97 @@ test.describe('Tabs', () => {
       window.__store?.getState().closeFile(fileId)
     }, createdFile.id)
     await expect(editor).toBeHidden()
+  })
+
+  test('returning from a file tab restores focus to the last active split pane', async ({
+    orcaPage
+  }, testInfo) => {
+    await orcaPage.setViewportSize({ width: 1440, height: 900 })
+    const terminalTabId = await getActiveTabId(orcaPage)
+    if (!terminalTabId) {
+      throw new Error('Expected an active terminal tab before the focus restoration flow')
+    }
+    expect(await clickFileInExplorer(orcaPage, ['README.md'])).toBe('README.md')
+    await expect(orcaPage.locator('.rich-markdown-editor')).toBeVisible()
+    const fileTab = orcaPage.locator('[data-tab-id]').filter({ hasText: 'README.md' }).first()
+    await expect(fileTab).toBeVisible()
+    await tabLocator(orcaPage, terminalTabId).click({ force: true })
+
+    await waitForActiveTerminalManager(orcaPage)
+    await waitForPaneIdentitySnapshot(orcaPage, 1)
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const focusedSnapshot = await readPaneIdentitySnapshot(orcaPage)
+    const expectedLeafId = focusedSnapshot?.panes.at(-1)?.leafId ?? null
+    expect(expectedLeafId).not.toBeNull()
+    expect(focusedSnapshot?.activeLeafId).toBe(expectedLeafId)
+    await orcaPage
+      .locator(`.pane[data-leaf-id="${expectedLeafId}"] .xterm-screen`)
+      .click({ force: true })
+    await expect.poll(() => getFocusedTerminalLeafId(orcaPage)).toBe(expectedLeafId)
+    await testInfo.attach('01-right-pane-selected', {
+      body: await orcaPage.screenshot(),
+      contentType: 'image/png'
+    })
+
+    await fileTab.click({ force: true })
+    await expect(orcaPage.locator('.rich-markdown-editor')).toBeVisible()
+    await testInfo.attach('02-file-tab-open', {
+      body: await orcaPage.screenshot(),
+      contentType: 'image/png'
+    })
+    await tabLocator(orcaPage, terminalTabId).click({ force: true })
+
+    await expect
+      .poll(() => getFocusedTerminalLeafId(orcaPage), {
+        timeout: 5_000,
+        message: 'The terminal tab did not restore DOM focus to a terminal pane'
+      })
+      .not.toBeNull()
+
+    const marker = `RESTORED_PANE_${Date.now()}`
+    await orcaPage.keyboard.type(marker)
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          (text) =>
+            [...(window.__paneManagers?.values() ?? [])].some((manager) =>
+              manager.getPanes().some((pane) => pane.serializeAddon?.serialize?.().includes(text))
+            ),
+          marker
+        )
+      )
+      .toBe(true)
+    await testInfo.attach('03-input-after-returning-to-terminal', {
+      body: await orcaPage.screenshot(),
+      contentType: 'image/png'
+    })
+    expect(await getFocusedTerminalLeafId(orcaPage)).toBe(expectedLeafId)
+    await expect
+      .poll(async () => {
+        return orcaPage.evaluate(
+          ({ tabId, leafId }) => {
+            const pane = window.__paneManagers
+              ?.get(tabId)
+              ?.getPanes()
+              .find((candidate) => candidate.leafId === leafId)
+            return pane?.serializeAddon?.serialize?.() ?? ''
+          },
+          { tabId: terminalTabId, leafId: expectedLeafId }
+        )
+      })
+      .toContain(marker)
+    const paneContents = await orcaPage.evaluate((tabId) => {
+      const panes = window.__paneManagers?.get(tabId)?.getPanes() ?? []
+      return panes.map((pane) => ({
+        leafId: pane.leafId,
+        content: pane.serializeAddon?.serialize?.() ?? ''
+      }))
+    }, terminalTabId)
+    expect(paneContents.filter((pane) => pane.leafId !== expectedLeafId)).not.toContainEqual(
+      expect.objectContaining({ content: expect.stringContaining(marker) })
+    )
+    expect(await getFocusedTerminalLeafId(orcaPage)).toBe(expectedLeafId)
   })
 
   /**
