@@ -7,6 +7,10 @@ import {
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
 import { toast } from 'sonner'
+import {
+  findVisibleBrowserLinkTarget,
+  type VisibleBrowserLinkState
+} from './visible-browser-link-target'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
@@ -27,7 +31,7 @@ export type HttpLinkSourceOwner =
   | { kind: 'ssh'; connectionId: string }
   | { kind: 'unknown' }
 
-type StoreAccessor = () => {
+type StoreAccessor = () => VisibleBrowserLinkState & {
   settings?: Partial<
     Pick<
       GlobalSettings,
@@ -38,7 +42,12 @@ type StoreAccessor = () => {
     >
   > | null
   setActiveWorktree: (worktreeId: string) => void
-  createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
+  createBrowserTab: (
+    worktreeId: string,
+    url: string,
+    opts: { activate: boolean; targetGroupId?: string }
+  ) => unknown
+  focusGroup?: (worktreeId: string, groupId: string) => void
   repos?: readonly LocalhostLinkRepo[]
   projects?: readonly LocalhostLinkProject[]
   worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
@@ -53,6 +62,7 @@ type WorkspaceHttpLinkBrowserRequest = {
   intent: { kind: 'url' }
   expectedRuntimeEnvironmentId?: string
   expectedSshConnectionId?: string
+  targetGroupId?: string
 }
 
 type WorkspaceHttpLinkBrowserOpener = (request: WorkspaceHttpLinkBrowserRequest) => Promise<void>
@@ -152,10 +162,16 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
       (!effectiveSourceOwner && remoteRuntimeActive))
   ) {
     if (workspaceHttpLinkBrowserOpener) {
+      const placement = state ? findVisibleBrowserLinkTarget(state, worktreeId) : undefined
+      if (placement) {
+        // Why before: remote creation is async; focusing later could steal focus after the user moved on.
+        state?.focusGroup?.(worktreeId, placement.targetGroupId)
+      }
       void workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
         url,
         intent: { kind: 'url' },
+        ...(placement ? { targetGroupId: placement.targetGroupId } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
@@ -182,14 +198,21 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
       // to the global activeWorktreeId deselects the real repo workspace.
       state.setActiveWorktree(worktreeId)
     }
+    // Why fresh state: the labeled-localhost path opens after an await, when the layout may have changed.
+    const openInOrca = (target: string): void => {
+      const current = storeAccessor?.() ?? state
+      const placement = findVisibleBrowserLinkTarget(current, worktreeId)
+      current.createBrowserTab(worktreeId, target, { activate: true, ...placement })
+      if (placement) {
+        current.focusGroup?.(worktreeId, placement.targetGroupId)
+      }
+    }
     const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
     if (!localhostRoute) {
-      state.createBrowserTab(worktreeId, url, { activate: true })
+      openInOrca(url)
       return
     }
-    void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
-      state.createBrowserTab(worktreeId, labeledUrl, { activate: true })
-    })
+    void openLabeledLocalhostLink(url, localhostRoute, openInOrca)
     return
   }
 
