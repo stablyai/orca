@@ -4,6 +4,8 @@ import { useCallback } from 'react'
 import type React from 'react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
+import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { useAppStore } from '@/store'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
@@ -99,9 +101,11 @@ export function VaultSessionRow({
   const title = useAiVaultSessionDisplayTitle(session)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
+  // The host as the user named it, not the generated target id in executionHostId.
+  const hostLabel = useAppStore((s) => selectExecutionHostDisplayLabel(s, session.executionHostId))
   // Computed once so the dropdown menu and the context menu never disagree.
   const deleteBlockedReason = onRequestDelete
-    ? aiVaultSessionDeleteBlockedReason(session)
+    ? aiVaultSessionDeleteBlockedReason(session, hostLabel)
     : translate(
         'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
         'The transcript source is unavailable.'
