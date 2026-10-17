@@ -6,6 +6,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { shellEscape } from './ssh-connection-utils'
 import { isOpenSshConfigBackedTarget } from './system-ssh-args'
+import { killProcess } from './system-ssh-operation-lifecycle'
 
 // Why: ProxyJump and jumpHost are syntactic sugar for ProxyCommand.
 // OpenSSH internally converts `ProxyJump bastion` to
@@ -136,8 +137,6 @@ export function spawnProxyCommand(
     proc.stdout!.off('data', onStdoutData)
     proc.stdout!.off('end', onStdoutEnd)
     proc.stderr!.off('data', onStderrData)
-    proc.stdin!.off('error', onInputError)
-    proc.off('error', onProcessError)
   }
   const onStdoutData = (data: Buffer): void => {
     // Why: honour the Duplex's backpressure so a slow ssh2 consumer cannot
@@ -164,14 +163,27 @@ export function spawnProxyCommand(
     stream.destroy(err)
   }
   const stream = new Duplex({
+    // Wait for child close before treating a finished stream as teardown.
+    autoDestroy: false,
     read() {
       proc.stdout!.resume()
     },
     write(chunk, _encoding, cb) {
       proc.stdin!.write(chunk, cb)
     },
+    final(cb) {
+      if (proc.stdin!.destroyed) {
+        cb()
+        return
+      }
+      proc.stdin!.end(cb)
+    },
     destroy(err, cb) {
       cleanup()
+      proc.stdin!.destroy()
+      proc.stdout!.destroy()
+      proc.stderr!.destroy()
+      killProcess(proc)
       cb(err)
     }
   })
@@ -179,7 +191,24 @@ export function spawnProxyCommand(
   proc.stdout!.on('end', onStdoutEnd)
   proc.stderr!.on('data', onStderrData)
   proc.stdin!.on('error', onInputError)
+  proc.stdout!.on('error', onProcessError)
+  proc.stderr!.on('error', onProcessError)
   proc.on('error', onProcessError)
+  // Keep late teardown errors handled until the child actually closes.
+  proc.once('close', () => {
+    cleanup()
+    proc.stdin!.off('error', onInputError)
+    proc.stdout!.off('error', onProcessError)
+    proc.stderr!.off('error', onProcessError)
+    proc.off('error', onProcessError)
+    if (!stream.destroyed) {
+      if (stream.readableEnded) {
+        stream.destroy()
+      } else {
+        stream.once('end', () => stream.destroy())
+      }
+    }
+  })
 
   return { process: proc, sock: stream as unknown as NetSocket }
 }

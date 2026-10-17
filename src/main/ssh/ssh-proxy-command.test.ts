@@ -12,18 +12,43 @@ vi.mock('child_process', () => ({
 import { spawnProxyCommand } from './ssh-proxy-command'
 
 type MockProxyProcess = EventEmitter & {
-  stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
-  stdout: EventEmitter & { pause: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn> }
-  stderr: EventEmitter
+  stdin: EventEmitter & {
+    write: ReturnType<typeof vi.fn>
+    end: ReturnType<typeof vi.fn>
+    destroy: ReturnType<typeof vi.fn>
+  }
+  stdout: EventEmitter & {
+    pause: ReturnType<typeof vi.fn>
+    resume: ReturnType<typeof vi.fn>
+    destroy: ReturnType<typeof vi.fn>
+  }
+  stderr: EventEmitter & { destroy: ReturnType<typeof vi.fn> }
+  exitCode: number | null
+  killed: boolean
+  kill: ReturnType<typeof vi.fn>
 }
 
 function createMockProxyProcess(): MockProxyProcess {
-  const proc = new EventEmitter() as MockProxyProcess
-  proc.stdin = Object.assign(new EventEmitter(), {
-    write: vi.fn((_chunk, cb?: (error?: Error | null) => void) => cb?.())
+  const proc: MockProxyProcess = Object.assign(new EventEmitter(), {
+    stdin: Object.assign(new EventEmitter(), {
+      write: vi.fn((_chunk, cb?: (error?: Error | null) => void) => cb?.()),
+      end: vi.fn((cb?: () => void) => cb?.()),
+      destroy: vi.fn()
+    }),
+    stdout: Object.assign(new EventEmitter(), {
+      pause: vi.fn(),
+      resume: vi.fn(),
+      destroy: vi.fn()
+    }),
+    stderr: Object.assign(new EventEmitter(), { destroy: vi.fn() }),
+    exitCode: null,
+    killed: false,
+    kill: vi.fn()
   })
-  proc.stdout = Object.assign(new EventEmitter(), { pause: vi.fn(), resume: vi.fn() })
-  proc.stderr = new EventEmitter()
+  proc.kill.mockImplementation(() => {
+    proc.killed = true
+    return true
+  })
   return proc
 }
 
@@ -34,7 +59,7 @@ describe('spawnProxyCommand', () => {
     spawnMock.mockReset()
   })
 
-  it('removes proxy process listeners when the socket is destroyed', () => {
+  it('keeps error guards until the destroyed proxy process actually closes', () => {
     const proc = createMockProxyProcess()
     spawnMock.mockReturnValue(proc)
 
@@ -49,6 +74,8 @@ describe('spawnProxyCommand', () => {
     expect(proc.stdout.listenerCount('end')).toBe(1)
     expect(proc.stderr.listenerCount('data')).toBe(1)
     expect(proc.stdin.listenerCount('error')).toBe(1)
+    expect(proc.stdout.listenerCount('error')).toBe(1)
+    expect(proc.stderr.listenerCount('error')).toBe(1)
     expect(proc.listenerCount('error')).toBe(1)
 
     sock.destroy()
@@ -56,8 +83,130 @@ describe('spawnProxyCommand', () => {
     expect(proc.stdout.listenerCount('data')).toBe(0)
     expect(proc.stdout.listenerCount('end')).toBe(0)
     expect(proc.stderr.listenerCount('data')).toBe(0)
+    for (const emitter of [proc, proc.stdin, proc.stdout, proc.stderr]) {
+      expect(emitter.listenerCount('error')).toBe(1)
+      expect(() => emitter.emit('error', new Error('late teardown error'))).not.toThrow()
+    }
+    expect(proc.listenerCount('close')).toBe(1)
+
+    proc.emit('close', null, 'SIGTERM')
+
     expect(proc.stdin.listenerCount('error')).toBe(0)
+    expect(proc.stdout.listenerCount('error')).toBe(0)
+    expect(proc.stderr.listenerCount('error')).toBe(0)
     expect(proc.listenerCount('error')).toBe(0)
+    expect(proc.listenerCount('close')).toBe(0)
+  })
+
+  it('destroys every owned pipe and signals the child only once', () => {
+    const proc = createMockProxyProcess()
+    spawnMock.mockReturnValue(proc)
+    const { sock } = spawnProxyCommand(
+      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
+      'target.example.com',
+      22,
+      'deploy'
+    )
+
+    sock.destroy()
+    sock.destroy()
+
+    expect(proc.stdin.destroy).toHaveBeenCalledTimes(1)
+    expect(proc.stdout.destroy).toHaveBeenCalledTimes(1)
+    expect(proc.stderr.destroy).toHaveBeenCalledTimes(1)
+    expect(proc.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
+  })
+
+  it.each(['process', 'stdin', 'stdout', 'stderr'] as const)(
+    'propagates a live %s error and absorbs later teardown errors',
+    async (source) => {
+      const proc = createMockProxyProcess()
+      spawnMock.mockReturnValue(proc)
+      const { sock } = spawnProxyCommand(
+        { kind: 'jump-host', jumpHost: 'bastion.example.com' },
+        'target.example.com',
+        22,
+        'deploy'
+      )
+      const errors: Error[] = []
+      sock.on('error', (error) => errors.push(error))
+      const closed = new Promise<void>((resolve) => sock.once('close', resolve))
+      const error = new Error(`${source} failure`)
+      const emitter = source === 'process' ? proc : proc[source]
+
+      emitter.emit('error', error)
+      await closed
+
+      expect(errors).toEqual([error])
+      expect(proc.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
+      expect(() => emitter.emit('error', new Error('late error'))).not.toThrow()
+      proc.emit('close', null, 'SIGTERM')
+      expect(emitter.listenerCount('error')).toBe(0)
+    }
+  )
+
+  it('releases listeners on natural child close without discarding unread output', () => {
+    const proc = createMockProxyProcess()
+    spawnMock.mockReturnValue(proc)
+    const { sock } = spawnProxyCommand(
+      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
+      'target.example.com',
+      22,
+      'deploy'
+    )
+
+    proc.stdout.emit('data', Buffer.from('final output'))
+    proc.stdout.emit('end')
+    proc.exitCode = 0
+    proc.emit('close', 0, null)
+
+    expect(proc.stdout.listenerCount('data')).toBe(0)
+    expect(proc.listenerCount('error')).toBe(0)
+    expect(sock.read()).toEqual(Buffer.from('final output'))
+    sock.destroy()
+    expect(sock.destroyed).toBe(true)
+    expect(proc.kill).not.toHaveBeenCalled()
+    expect(proc.stdout.listenerCount('data')).toBe(0)
+    expect(proc.listenerCount('close')).toBe(0)
+    expect(proc.listenerCount('error')).toBe(0)
+  })
+
+  it('does not signal a child that teardown already killed', () => {
+    const proc = createMockProxyProcess()
+    proc.killed = true
+    spawnMock.mockReturnValue(proc)
+    const { sock } = spawnProxyCommand(
+      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
+      'target.example.com',
+      22,
+      'deploy'
+    )
+
+    sock.destroy()
+    proc.emit('close', null, 'SIGTERM')
+
+    expect(proc.kill).not.toHaveBeenCalled()
+    expect(proc.stdin.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('releases the pipes even if signaling races with child exit', () => {
+    const proc = createMockProxyProcess()
+    proc.kill.mockImplementation(() => {
+      throw new Error('already exited')
+    })
+    spawnMock.mockReturnValue(proc)
+    const { sock } = spawnProxyCommand(
+      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
+      'target.example.com',
+      22,
+      'deploy'
+    )
+
+    expect(() => sock.destroy()).not.toThrow()
+    expect(proc.stdin.destroy).toHaveBeenCalledOnce()
+    expect(proc.stdout.destroy).toHaveBeenCalledOnce()
+    expect(proc.stderr.destroy).toHaveBeenCalledOnce()
+    proc.emit('close', 0, null)
   })
 
   it('drains proxy stderr so the pipe cannot fill and block the child', () => {
