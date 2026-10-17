@@ -8,6 +8,8 @@ import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/componen
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
+import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
@@ -25,6 +27,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
+  const counts = useAgentBucketCounts()
+  const activityBadgeId = useId()
+  const activityCount = counts.attention || counts.working
+  const activityStatusLabel = counts.attention
+    ? translate('dashboardPopout.bucket.attention', 'Needs You')
+    : translate('dashboardPopout.bucket.working', 'Working')
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
@@ -68,7 +76,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
         >
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex shrink-0">
+              <span className="relative inline-flex shrink-0">
                 <PopoverAnchor asChild>
                   <Button
                     type="button"
@@ -80,9 +88,24 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     )}
                     aria-label={activityLabel}
                     aria-pressed={agentsViewActive}
+                    aria-describedby={activityCount > 0 ? activityBadgeId : undefined}
                     onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
                   >
                     <Bell className="size-3.5" strokeWidth={2.25} />
+                    {activityCount > 0 ? (
+                      <span
+                        className="pointer-events-none absolute -right-2 -top-2 inline-flex h-3 items-center gap-0.5 rounded-full border border-sidebar px-0.5 text-[9px] font-medium leading-none tabular-nums bg-sidebar text-sidebar-foreground"
+                        id={activityBadgeId}
+                        aria-label={`${activityStatusLabel}: ${activityCount}`}
+                      >
+                        {counts.attention > 0 ? (
+                          <AgentQuestionIcon className="size-2.5" />
+                        ) : (
+                          <span className="size-1.5 rounded-full bg-(--status-warning)" />
+                        )}
+                        {activityCount}
+                      </span>
+                    ) : null}
                   </Button>
                 </PopoverAnchor>
               </span>
