@@ -1,7 +1,15 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it } from 'vitest'
-import { getWorkspaceComposerInitialFocusTarget } from './workspace-composer-initial-focus'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  getWorkspaceComposerInitialFocusTarget,
+  isComposerProjectSelectShortcut,
+  openWorkspaceComposerProjectSelect
+} from './workspace-composer-initial-focus'
+
+function setUserAgent(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
 
 describe('getWorkspaceComposerInitialFocusTarget', () => {
   it('focuses the workspace name input used by the current composer', () => {
@@ -77,5 +85,57 @@ describe('getWorkspaceComposerInitialFocusTarget', () => {
     root.append(repoTrigger)
 
     expect(getWorkspaceComposerInitialFocusTarget(root)).toBe(repoTrigger)
+  })
+})
+
+describe('isComposerProjectSelectShortcut', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses Cmd+. on macOS and Ctrl+. elsewhere', () => {
+    setUserAgent('Macintosh')
+    expect(isComposerProjectSelectShortcut({ key: '.', metaKey: true })).toBe(true)
+    expect(isComposerProjectSelectShortcut({ key: '。', code: 'Period', metaKey: true })).toBe(
+      true
+    )
+    expect(isComposerProjectSelectShortcut({ key: '.', ctrlKey: true })).toBe(false)
+
+    setUserAgent('Linux')
+    expect(isComposerProjectSelectShortcut({ key: '.', ctrlKey: true })).toBe(true)
+    expect(isComposerProjectSelectShortcut({ key: '.', metaKey: true })).toBe(false)
+  })
+
+  it('ignores extra modifiers, non-period keys, and composing events', () => {
+    setUserAgent('Macintosh')
+    expect(isComposerProjectSelectShortcut({ key: '.', metaKey: true, shiftKey: true })).toBe(
+      false
+    )
+    expect(isComposerProjectSelectShortcut({ key: '.', metaKey: true, altKey: true })).toBe(false)
+    expect(isComposerProjectSelectShortcut({ key: '.', metaKey: true, ctrlKey: true })).toBe(false)
+
+    setUserAgent('Linux')
+    expect(isComposerProjectSelectShortcut({ key: 'Enter', ctrlKey: true })).toBe(false)
+    expect(isComposerProjectSelectShortcut({ key: '.', ctrlKey: true, isComposing: true })).toBe(
+      false
+    )
+  })
+})
+
+describe('openWorkspaceComposerProjectSelect', () => {
+  it('clicks the project combobox shell to open it', () => {
+    const root = document.createElement('div')
+    const shell = document.createElement('div')
+    shell.setAttribute('data-project-combobox-root', 'true')
+    const click = vi.fn()
+    shell.addEventListener('click', click)
+    root.append(shell)
+
+    expect(openWorkspaceComposerProjectSelect(root)).toBe(true)
+    expect(click).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns false when no project picker exists', () => {
+    expect(openWorkspaceComposerProjectSelect(document.createElement('div'))).toBe(false)
   })
 })
