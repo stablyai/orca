@@ -19,7 +19,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'droid',
   'hermes',
   'devin',
-  'zcode'
+  'zcode',
+  'kiro'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -86,6 +87,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     // so there is no native title to fight with, and without this a `tui-idle` wait has no
     // signal to settle on: ZCode also repaints its ASCII banner forever, so the quiescence
     // lane never fires either.
+    synthesizeWorkingTitle: true
+  },
+  kiro: {
+    workingLabel: 'Kiro',
+    permissionLabel: 'Kiro - action required',
+    idleLabel: 'Kiro ready',
+    // Why every state, like ZCode: Kiro sets OSC titles only before its first paint, never through a
+    // turn (`kiro-2-27-1-v3-turn.txt`), so without this an idle pane loses its agent identity.
     synthesizeWorkingTitle: true
   }
 }

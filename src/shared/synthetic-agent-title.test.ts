@@ -47,6 +47,13 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('devin', 'working')).toBe(true)
   })
 
+  it('provides Kiro titles for every hook-driven status, working included', () => {
+    expect(getSyntheticAgentTerminalTitle('kiro', 'done')).toBe('Kiro ready')
+    expect(getSyntheticAgentTerminalTitle('kiro', 'waiting')).toBe('Kiro - action required')
+    expect(shouldDriveSyntheticAgentTitleFromHook('kiro', 'working')).toBe(true)
+    expect(isSyntheticAgentPermissionTitle('Kiro - action required')).toBe(true)
+  })
+
   it('provides Pi-compatible OMP titles for hook-driven status updates', () => {
     expect(getSyntheticAgentTerminalTitle('omp', 'done')).toBe('OMP ready')
     expect(getSyntheticAgentTerminalTitle('omp', 'waiting')).toBe('OMP - action required')

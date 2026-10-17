@@ -475,6 +475,30 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  it('promotes a stale idle Kiro pane through its synthetic ready title', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT, { agentType: 'kiro' })
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Terminal 2', launchAgent: 'kiro' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        // Why: Kiro sets no OSC title through a turn, so this hook-written title is the only
+        // live evidence an idle Kiro pane still has once its hook row is past the stale window.
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Kiro ready' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({ paneKey, agentType: 'kiro', status: 'eligible' })
+    ])
+  })
+
   it('uses launch ownership when promoting a stale unknown status-backed pane', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
     const targets = deriveNotesSendAgentTargets(
