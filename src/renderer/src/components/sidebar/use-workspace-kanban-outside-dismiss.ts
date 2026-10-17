@@ -19,12 +19,21 @@ const WORKSPACE_BOARD_KEEP_OPEN_SELECTOR = [
   '[role="menu"][data-state="open"]'
 ].join(', ')
 
+function eventTargetElement(target: EventTarget | null): Element | null {
+  return target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+}
+
 export function isWorkspaceBoardKeepOpenTarget(target: EventTarget | null): boolean {
-  const element =
-    target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+  const element = eventTargetElement(target)
   // Why: board-owned menus and confirmation dialogs portal to document.body,
   // so DOM containment alone would treat their clicks/focus as board exits.
   return Boolean(element?.closest(WORKSPACE_BOARD_KEEP_OPEN_SELECTOR))
+}
+
+// Why: these controls switch content the board can cover (e.g. right-sidebar
+// tabs in the titlebar), so they must close it or the change stays hidden.
+export function isWorkspaceBoardDismissTarget(target: EventTarget | null): boolean {
+  return Boolean(eventTargetElement(target)?.closest('[data-workspace-board-dismiss]'))
 }
 
 export function useWorkspaceKanbanOutsideDismiss(params: {
@@ -46,6 +55,10 @@ export function useWorkspaceKanbanOutsideDismiss(params: {
         return
       }
       if (event.target instanceof Node && content.contains(event.target)) {
+        return
+      }
+      if (isWorkspaceBoardDismissTarget(event.target)) {
+        onOpenChange(false)
         return
       }
       if (isWorkspaceBoardKeepOpenTarget(event.target)) {

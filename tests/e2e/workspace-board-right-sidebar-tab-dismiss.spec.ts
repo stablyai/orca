@@ -1,0 +1,46 @@
+import { test, expect } from './helpers/orca-app'
+import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+
+/**
+ * Why: on a narrow window the board sheet covers the right sidebar while the
+ * sidebar's tab strip stays clickable in the titlebar, so a tab click used to
+ * switch the panel invisibly behind the board.
+ */
+test.describe('Workspace board right-sidebar tab dismiss', () => {
+  test.beforeEach(async ({ orcaPage }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+  })
+
+  test('clicking a right-sidebar tab closes the board and shows that tab', async ({
+    electronApp,
+    orcaPage
+  }, testInfo) => {
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0].setSize(1000, 800)
+    })
+    await orcaPage.evaluate(() => {
+      const state = window.__store?.getState()
+      if (!state) {
+        throw new Error('window.__store is not available')
+      }
+      state.setSidebarOpen(true)
+      state.setRightSidebarOpen(true)
+      state.setRightSidebarTab('explorer')
+    })
+
+    await orcaPage.getByRole('button', { name: 'Workspace board' }).click()
+    const board = orcaPage.locator('[data-workspace-board-sheet]')
+    await expect(board).toBeVisible()
+    await board.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+    await orcaPage.screenshot({ path: testInfo.outputPath('board-open.png') })
+
+    await orcaPage.getByRole('button', { name: /^Source Control/ }).click()
+
+    await expect(board).toBeHidden()
+    await expect
+      .poll(() => orcaPage.evaluate(() => window.__store?.getState().rightSidebarTab))
+      .toBe('source-control')
+    await orcaPage.screenshot({ path: testInfo.outputPath('after-tab-click.png') })
+  })
+})

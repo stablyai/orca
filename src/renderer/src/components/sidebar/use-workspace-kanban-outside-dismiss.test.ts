@@ -1,5 +1,10 @@
+// @vitest-environment happy-dom
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isWorkspaceBoardKeepOpenTarget } from './use-workspace-kanban-outside-dismiss'
+import {
+  isWorkspaceBoardDismissTarget,
+  isWorkspaceBoardKeepOpenTarget
+} from './use-workspace-kanban-outside-dismiss'
 
 class FakeNode {
   parentElement: FakeElement | null = null
@@ -57,5 +62,17 @@ describe('workspace kanban outside dismiss keep-open targets', () => {
     const target = new FakeElement()
 
     expect(isWorkspaceBoardKeepOpenTarget(target as unknown as EventTarget)).toBe(false)
+  })
+})
+
+describe('workspace kanban outside dismiss targets', () => {
+  it('dismisses the board from inside a right-sidebar tab, not from generic content', () => {
+    const tab = document.createElement('button')
+    tab.setAttribute('data-workspace-board-dismiss', '')
+    const icon = document.createElement('span')
+    tab.append(icon)
+
+    expect(isWorkspaceBoardDismissTarget(icon)).toBe(true)
+    expect(isWorkspaceBoardDismissTarget(document.createElement('div'))).toBe(false)
   })
 })
