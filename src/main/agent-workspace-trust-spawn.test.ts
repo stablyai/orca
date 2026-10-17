@@ -124,21 +124,32 @@ describe('applyAgentWorkspaceTrustToSpawn', () => {
     expect(spawnOptions).toEqual({ agentWorkspaceTrust: { workspacePath: '/srv/wt' } })
   })
 
-  it('trusts Codex in a floating terminal at the folder it starts in', async () => {
+  it.each(['codex', 'kimi'])(
+    'trusts %s in a floating terminal at the folder it starts in',
+    async (launchAgent) => {
+      await applyAgentWorkspaceTrustToSpawn(
+        spawnArgs({ launchAgent, worktreeId: 'global-floating-terminal', cwd: '/Users/me' })
+      )
+      expect(applyAgentWorkspaceTrust).toHaveBeenCalledWith(
+        launchAgent,
+        '/Users/me',
+        expect.anything()
+      )
+    }
+  )
+
+  it.each(['codex', 'kimi'])('trusts %s at the subfolder it starts in', async (launchAgent) => {
     await applyAgentWorkspaceTrustToSpawn(
-      spawnArgs({ launchAgent: 'codex', worktreeId: 'global-floating-terminal', cwd: '/Users/me' })
+      spawnArgs({ launchAgent, worktreeId: 'folder:fw-1', cwd: '/notes/sub' })
     )
-    expect(applyAgentWorkspaceTrust).toHaveBeenCalledWith('codex', '/Users/me', expect.anything())
+    expect(applyAgentWorkspaceTrust).toHaveBeenCalledWith(
+      launchAgent,
+      '/notes/sub',
+      expect.anything()
+    )
   })
 
-  it('trusts Codex at a subfolder it starts in, which its lookup keys on', async () => {
-    await applyAgentWorkspaceTrustToSpawn(
-      spawnArgs({ launchAgent: 'codex', worktreeId: 'folder:fw-1', cwd: '/notes/sub' })
-    )
-    expect(applyAgentWorkspaceTrust).toHaveBeenCalledWith('codex', '/notes/sub', expect.anything())
-  })
-
-  it.each(PRESET_AGENTS.filter((agent) => agent !== 'codex'))(
+  it.each(PRESET_AGENTS.filter((agent) => agent !== 'codex' && agent !== 'kimi'))(
     'trusts the workspace root for %s, whose trust covers its subfolders or matches the root',
     async (agent) => {
       await applyAgentWorkspaceTrustToSpawn(
