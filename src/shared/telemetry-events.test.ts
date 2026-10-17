@@ -441,6 +441,28 @@ describe('agent_prompt_sent schema', () => {
   })
 })
 
+describe('agent_hook_install_failed schema', () => {
+  it('accepts only the fixed error categories', () => {
+    for (const error_message of ['EACCES', 'ENOENT', 'SyntaxError', 'unknown']) {
+      expect(
+        eventSchemas.agent_hook_install_failed.safeParse({ agent: 'codex', error_message }).success
+      ).toBe(true)
+    }
+  })
+
+  it('rejects raw error messages and path-bearing codes (#21492)', () => {
+    for (const error_message of [
+      "EACCES: permission denied, open '/home/someone/.codex/config.toml'",
+      'EACCES /home/someone',
+      'Timed out waiting for another managed-hook install to finish'
+    ]) {
+      expect(
+        eventSchemas.agent_hook_install_failed.safeParse({ agent: 'codex', error_message }).success
+      ).toBe(false)
+    }
+  })
+})
+
 describe('agent_hook_unattributed schema', () => {
   it('accepts the two bounded attribution failure reasons', () => {
     for (const reason of ['empty_pane_key', 'unknown_tab_id'] as const) {
