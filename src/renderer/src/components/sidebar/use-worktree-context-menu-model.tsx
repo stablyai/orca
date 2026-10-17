@@ -22,6 +22,7 @@ import {
   EMPTY_TABS_BY_WORKTREE,
   EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY,
   EMPTY_WORKTREE_LINEAGE_BY_ID,
+  getBulkDetachTargets,
   hasWorktreeParentLink,
   isContextWorktreeDeletable,
   selectMenuScopedMap,
@@ -208,8 +209,11 @@ export function useWorktreeContextMenuModel({
     [cyclicLineageIds, worktree, worktreeLineageById, worktreeMap]
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
-  const hasAnyContextLineage = activeContextWorktrees.some((item) =>
-    hasWorktreeParentLink(item, worktreeLineageById, workspaceLineageByChildKey)
+  const hasAnyContextLineage = useMemo(
+    () =>
+      getBulkDetachTargets(activeContextWorktrees, worktreeLineageById, workspaceLineageByChildKey)
+        .length > 0,
+    [activeContextWorktrees, workspaceLineageByChildKey, worktreeLineageById]
   )
   const eligibleParentCount = useMemo(
     () =>
@@ -321,7 +325,9 @@ export function useWorktreeContextMenuModel({
     useWorktreeContextMenuSecondaryActions({
       activeContextWorktrees,
       contextMenuOpenedAtRef,
-      updateWorktreeLineage
+      updateWorktreeLineage,
+      worktreeLineageById,
+      workspaceLineageByChildKey
     })
 
   const handleCloseAutoFocus = useCallback(
