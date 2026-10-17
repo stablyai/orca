@@ -11,13 +11,15 @@ export function TabHoverCard({
   title,
   icon,
   programName,
-  description
+  description,
+  onOpenChange
 }: {
   children: ReactNode
   title: string
   icon: ReactNode
   programName: string
   description?: string
+  onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const placement = useContext(TabCardPlacementContext)
   const content = useRef<HTMLDivElement>(null)
@@ -87,6 +89,7 @@ export function TabHoverCard({
       delayDuration={openContext?.isWarm ? 0 : undefined}
       onOpenChange={(open) => {
         openContext?.onOpenChange(cardId, open)
+        onOpenChange?.(open)
         if (!open && content.current?.isConnected) {
           captureClosedPlacement(content.current)
         }

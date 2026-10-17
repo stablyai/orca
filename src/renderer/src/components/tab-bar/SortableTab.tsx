@@ -31,6 +31,7 @@ import {
   resolveTerminalTabActivityStatus,
   terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
+import { useClaudeTabAccountLabel } from './use-claude-tab-account-label'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { NativeChatTabSession } from './tab-session-history-switch'
 
@@ -192,6 +193,7 @@ export default function SortableTab({
   })
   const slotProps = useTabStripSlotProps(tab.id, isActive)
   const tabTitle = tab.customTitle ?? tab.title
+  const { label: claudeAccountLabel, onTooltipOpenChange } = useClaudeTabAccountLabel(tab)
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -378,11 +380,12 @@ export default function SortableTab({
             title={displayTitle}
             programName={
               tabAgent
-                ? getAgentLabel(tabAgent)
+                ? [getAgentLabel(tabAgent), claudeAccountLabel].filter(Boolean).join(' · ')
                 : shellForIcon
                   ? basename(shellForIcon)
                   : translate('tabHoverCard.terminal', 'Terminal')
             }
+            onOpenChange={onTooltipOpenChange}
             icon={
               <TerminalTabLeadingIcon
                 agent={tabAgent}

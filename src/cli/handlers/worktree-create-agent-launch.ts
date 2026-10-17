@@ -38,12 +38,21 @@ export async function createWorktreeWithAgent(args: {
   flags: Map<string, string | boolean>
   create: Record<string, unknown>
   launch: CliAgentLaunch
+  /** `--account`: only the create's startup terminal can run Claude on a non-active account. */
+  claudeAccount?: string
   json: boolean
   rawArgs?: readonly string[]
 }): Promise<void> {
-  const { client, flags, create, launch, json, rawArgs } = args
-  const capabilities = await getAgentLaunchCapabilities(client)
+  const { client, flags, create, launch, claudeAccount, json, rawArgs } = args
+  if (claudeAccount && (launch.operationId || hasLaunchModelFlags(flags))) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--account cannot be combined with --model, --effort or --retry-launch.'
+    )
+  }
+  const capabilities = claudeAccount ? undefined : await getAgentLaunchCapabilities(client)
   if (
+    claudeAccount ||
     !capabilities?.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY) ||
     (launch.prompt && !capabilities.includes(AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY))
   ) {
@@ -63,7 +72,8 @@ export async function createWorktreeWithAgent(args: {
       ...create,
       startupAgent: launch.agent,
       startupPrompt: launch.prompt?.text ?? '',
-      launchSource: 'cli'
+      launchSource: 'cli',
+      ...(claudeAccount ? { startupClaudeAccount: claudeAccount } : {})
     }
     const created = await withSetupDecisionRecovery(
       withCliAgentLaunchRecovery(

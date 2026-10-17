@@ -25,6 +25,7 @@ import {
   setDefaultWslDistroOverride
 } from '../git/runner'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { seedClaudePinnedPtyRegistry } from '../claude-accounts/claude-pty-account-registries-startup'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -259,6 +260,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       }
     }
   })
+  seedClaudePinnedPtyRegistry(app.getPath('userData'))
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)

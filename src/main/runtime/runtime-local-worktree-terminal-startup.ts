@@ -57,6 +57,8 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
   request: RuntimeManagedWorktreeCreateArgs
+  /** Resolved `--account`; only the startup agent terminal runs on it. */
+  startupClaudeAccountId?: string
   repo: Repo
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
@@ -112,6 +114,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
+        ...(args.startupClaudeAccountId ? { claudeAccountId: args.startupClaudeAccountId } : {}),
         ...(args.startupLaunchRuntime ? { launchRuntime: args.startupLaunchRuntime } : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
@@ -138,7 +141,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     const provisionInBackground = ports.provisionInBackground?.() === true
     // Why: a failed agent start hands the whole create to the window, which seeds the agent's tab
     // first and lays setup and default tabs around it; main provisioning first would leave it no tab.
-    const agentStartFailed = Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup)
+    // An --account start is never handed to the window, whose launch would use the active account.
+    const agentStartFailed =
+      Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup) &&
+      !args.startupClaudeAccountId
     if (agentStartFailed && !provisionInBackground) {
       ports.activate(repo.id, worktree.id, startup, setup, defaultTabs)
     } else {
@@ -165,7 +171,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ports.activate(
         repo.id,
         worktree.id,
-        startup && !didSpawnStartup ? startup : undefined,
+        // Why: the renderer's fallback launch cannot honour --account; it would use the active one.
+        startup && !didSpawnStartup && !args.startupClaudeAccountId ? startup : undefined,
         failedSetup,
         undefined,
         ...(args.promisedAgentChat && !startup ? ([true] as const) : [])

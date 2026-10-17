@@ -34,6 +34,7 @@ import { tearDownFailedWorkerStart } from './failed-worker-start-teardown'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
+import { assertClaudeAccountWorktreeIsLocal } from './worker-claude-account-placement'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 
@@ -85,7 +86,7 @@ export async function startLocalWorker(args: {
     )
   }
 
-  const { agent, launch } = prepareLocalWorkerStart({
+  const { agent, launch, claudeAccount } = prepareLocalWorkerStart({
     params: launchParams,
     createsWorktree,
     runtime,
@@ -123,6 +124,7 @@ export async function startLocalWorker(args: {
       resolvedWorktreeId: resolvedWorktree?.id
     })
   }
+  await assertClaudeAccountWorktreeIsLocal(runtime, claudeAccount && resolvedWorktree?.id)
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
@@ -190,6 +192,7 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launchPreferences: launch.preferences,
+      ...(claudeAccount ? { claudeAccountId: claudeAccount.accountId } : {}),
       effects,
       onStage: (stage) => {
         failedStage = stage

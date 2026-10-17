@@ -9,6 +9,7 @@ import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { launchWithClaudeAccountChoice } from './claude-account-prompt/choose-claude-launch-account'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
@@ -71,24 +72,28 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       if (!activeWorktreeId) {
         return
       }
+      // Why captured before the account prompt: the prompt itself takes focus.
       const { groupId, focusIntent } = context ?? captureAgentTabLaunchContext(activeWorktreeId)
-      const result = launchAgentInNewTab({
-        requestId: newAgentLaunchRequestId(),
-        focusIntent,
-        agent,
-        worktreeId: activeWorktreeId,
-        groupId,
-        launchSource: 'shortcut'
-      })
-      if (!result) {
-        toast.error(
-          translate(
-            'auto.components.Terminal.e57db40c11',
-            'Could not build launch command for {{value0}}.',
-            { value0: agent }
+      launchWithClaudeAccountChoice(agent, { worktreeId: activeWorktreeId }, (claudeAccountId) => {
+        const result = launchAgentInNewTab({
+          requestId: newAgentLaunchRequestId(),
+          focusIntent,
+          agent,
+          worktreeId: activeWorktreeId,
+          groupId,
+          launchSource: 'shortcut',
+          ...(claudeAccountId ? { claudeAccountId } : {})
+        })
+        if (!result) {
+          toast.error(
+            translate(
+              'auto.components.Terminal.e57db40c11',
+              'Could not build launch command for {{value0}}.',
+              { value0: agent }
+            )
           )
-        )
-      }
+        }
+      })
     },
     [activeWorktreeId]
   )

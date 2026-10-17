@@ -29,6 +29,8 @@ export const WorkerStartParams = z
     agent: OptionalString,
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
+    // Why: an id or email resolved by the worker host, which is the one that owns the accounts.
+    account: OptionalWorkerLaunchPreference,
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     devMode: z.boolean().optional()
@@ -46,6 +48,13 @@ export const WorkerStartParams = z
         code: z.ZodIssueCode.custom,
         path: ['spec'],
         message: '--task and --spec are mutually exclusive'
+      })
+    }
+    if (params.account && params.terminal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['account'],
+        message: '--account applies to a new Claude terminal and cannot combine with --terminal.'
       })
     }
     // Why: --spec creates a new Task, so a retry link to a prior Dispatch could never resolve and

@@ -152,6 +152,33 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler!({})).toEqual(snapshot)
   })
 
+  it("stamps a restored pane's pinned Claude account from the pinned PTY registry", async () => {
+    const row = {
+      paneKey: PANE_KEY,
+      connectionId: null,
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_000,
+      stateStartedAt: 1_699_999_999_000
+    }
+    getStatusSnapshot.mockReturnValue([row])
+    const registry = await import('../claude-accounts/claude-pinned-pty-registry')
+    registry.seedPinnedClaudePtysFromPersistence({ 'wt@@pty-1': 'acct-b' })
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    // The renderer has not reattached the pane yet; only the persisted layout names its PTY.
+    registerAgentHookHandlers(undefined, {
+      getPtyIdForPaneKey: () => undefined,
+      getPersistedTerminalLayouts: () => ({
+        'tab-1': { ptyIdsByLeafId: { '11111111-1111-4111-8111-111111111111': 'wt@@pty-1' } }
+      })
+    })
+
+    expect(handleHandlers.get('agentStatus:getSnapshot')!({})).toEqual([
+      { ...row, claudeAccountId: 'acct-b' }
+    ])
+  })
+
   // The half-migration seam: until PR 2 retires the renderer's own feed bridge, main must not
   // publish structured rows to the renderer at all — one pane key, one writer.
   it('omits structured rows the renderer feed bridge still owns', async () => {

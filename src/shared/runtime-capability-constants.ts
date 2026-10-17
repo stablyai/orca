@@ -10,6 +10,8 @@ export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
 export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
   'repo.search-qualified-refs.v1' as const
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
+/** Host resolves `--account` for Claude worker-start and worktree create launches. */
+export const CLAUDE_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY = 'claude.launch-account.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
@@ -107,6 +109,9 @@ export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 // Older launch schemas reject unknown fields; advertise before clients send keyboard support.
 export const AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY = 'agent-session.keyboard.v1' as const
+// Why: ships with per-project Claude accounts, so a host without it never re-pins a project default.
+export const AGENT_SESSION_CLAUDE_ACCOUNT_RUNTIME_CAPABILITY =
+  'agent-session.claude-account.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Why: structured sessions are journal-backed, not PTY-backed, so an incapable client must not

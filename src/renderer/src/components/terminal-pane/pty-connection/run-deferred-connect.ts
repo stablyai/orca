@@ -10,6 +10,8 @@ import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { findTerminalTabForPane } from './terminal-tab-id'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import type { PtyPaneStartup } from '../pty-connection-types'
+import { readClaudePinnedLaunchErrorCode } from '../../../../../shared/claude/claude-pinned-launch-error'
 import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
 
 import { bindForegroundOutputRefresh } from './foreground-output-refresh'
@@ -139,7 +141,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       )
     }
 
-    session.reportError = (message: string): void => {
+    session.reportError = (message: string, startup?: PtyPaneStartup): void => {
       // Why: the transport connect can reject asynchronously after the pane has been
       // disposed (e.g. its workspace was deleted) — dropping a late error avoids a toast
       // racing the unmount. Mirrors the connect scheduler's disposed guard above.
@@ -152,6 +154,11 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
         // user-facing failure — the pane unmounts once removal completes, so never
         // surface the raw fence error. Covers the parent-removal-fences-child case
         // that startFreshSpawn's own-worktree teardown skip cannot see.
+        return
+      }
+      if (startup && readClaudePinnedLaunchErrorCode(message)) {
+        // Why only refusals: recovery replays the refused spawn; other errors keep their old shape.
+        session.deps.onPtyErrorRef?.current?.(session.pane.id, message, startup)
         return
       }
       session.deps.onPtyErrorRef?.current?.(session.pane.id, message)

@@ -215,6 +215,11 @@ export class ClaudeProfileRouter {
     return this.describe(accountId).home
   }
 
+  /** Settles once the login shell's env, which decides System default, has arrived. */
+  envSettled(): Promise<unknown> {
+    return this.envReady
+  }
+
   /** Creates and sets up an account's folder for sign-in; the login itself is Claude's. */
   async prepareAccount(accountId: string): Promise<string> {
     const profile = this.describe(accountId)

@@ -41,6 +41,8 @@ export async function createWorkerWorktree(args: {
   promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
   launchPreferences?: AgentLaunchPreferences
+  /** `--account`: resolved on this host; the created worktree's agent terminal runs on it. */
+  claudeAccountId?: string
   effects: WorkerEffect[]
 }): Promise<{
   worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
@@ -69,7 +71,8 @@ export async function createWorkerWorktree(args: {
       ? {
           startupAgent: args.agent,
           startupLaunchSource: 'orchestration',
-          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {})
+          ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
+          ...(args.claudeAccountId ? { startupClaudeAccount: args.claudeAccountId } : {})
         }
       : {}),
     activate: false,

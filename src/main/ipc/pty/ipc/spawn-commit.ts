@@ -1,5 +1,6 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { agentHookServer } from '../../../agent-hooks/server'
+import { markClaudePtySpawnedForAuth } from '../claude-pinned-spawn'
 import { registerPty } from '../../../memory/pty-registry'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
@@ -30,6 +31,9 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
 
 async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+    markClaudePtySpawnedForAuth(ctx.result.id, ctx.claudeAuth)
+  }
   admitPtyReattachOwnership(ctx.deps.runtime, ctx.result)
   if (ctx.nativeWindowsConptySpawn) {
     markNativeWindowsConptyPty(ctx.result.id)

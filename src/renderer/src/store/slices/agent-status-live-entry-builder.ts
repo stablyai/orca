@@ -29,6 +29,7 @@ import { registryEntryMatchesStatus } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { claudeAccountIdField } from './agent-status-claude-account'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
 
 export type AgentStatusLiveEntryBuild = {
@@ -253,6 +254,7 @@ export function buildAgentStatusLiveEntry(
       : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+    ...claudeAccountIdField(existing, payload, identity.agentType),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),
     interrupted: payload.interrupted,

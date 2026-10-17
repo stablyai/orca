@@ -2,10 +2,11 @@ import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-pr
 import { mintPtySessionId } from '../../../daemon/pty-session-id'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import {
-  isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
+import { resolveProjectClaudeAccount } from '../../../claude-accounts/project-claude-account-resolution'
+import { isFreshClaudeLaunch, preparePinnableClaudeAuth } from '../claude-pinned-spawn'
 import { getProvider } from '../provider/registry'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
@@ -82,7 +83,6 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       }
     }
   }
-  ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
   // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so buildPtyHostEnv hooks/Pi cleanup can run; daemon still honors opts.sessionId ?? mint().
   // Note: sessionId is STABLE across daemon restarts by design — do NOT simplify to a fresh UUID per spawn; that orphans reconnectable state.
   // Why: only clear ids minted in THIS request on failure — a caller-supplied args.sessionId may name an existing PTY we must not clobber.
@@ -108,10 +108,31 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.codexSelectionTarget = target.codexSelectionTarget
   ctx.spawnTiming.mark('preflight')
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
+  const pinnedClaudeAccountId =
+    ctx.preAdoptedStablePane || args.connectionId
+      ? undefined
+      : resolveProjectClaudeAccount({
+          // Why optional: as in the push-target hook, a partial Store must not fail every spawn.
+          getRepo: (repoId) => ctx.deps.store?.getRepo?.(repoId),
+          worktreeId: args.worktreeId,
+          // Why unchecked: launchConfig is untrusted IPC JSON; the resolver validates the id itself.
+          launchConfigAccountId: args.launchConfig?.claudeAccountId,
+          target: ctx.codexSelectionTarget
+        })
+  ctx.isClaudeLaunch = isFreshClaudeLaunch(
+    { ...args, preAdoptedStablePane: Boolean(ctx.preAdoptedStablePane) },
+    pinnedClaudeAccountId
+  )
+  ctx.claudeAuth = ctx.isClaudeLaunch
+    ? await preparePinnableClaudeAuth(
+        ctx.deps.prepareClaudeAuth,
+        ctx.codexSelectionTarget,
+        pinnedClaudeAccountId
+      )
+    : null
+  // Why not pinned: the routed pointer would send a pinned pane's `claude` back to the selected account.
+  if (!ctx.claudeAuth?.pinnedAccountId) {
+    args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+  }
   ctx.spawnTiming.mark('auth')
 }

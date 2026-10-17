@@ -4,6 +4,16 @@ import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-uns
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
+import {
+  pinnedClaudeAccountIdForPane,
+  type PinnedClaudePaneLookup
+} from '../claude-accounts/pinned-claude-pane-account'
+
+const pinnedPaneLookup: PinnedClaudePaneLookup = {
+  getLivePtyIdForPaneKey: getPtyIdForPaneKey,
+  getPersistedTerminalLayouts: () => state.store?.getWorkspaceSession().terminalLayoutsByTabId
+}
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
@@ -61,6 +71,10 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       const runtime = state.runtime
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+      const claudeAccountId = pinnedClaudeAccountIdForPane(
+        { paneKey, connectionId },
+        pinnedPaneLookup
+      )
       const statusEvent = {
         ...(authorityRestartId && isReplay !== true ? { authorityRestartId } : {}),
         ...payload,
@@ -79,6 +93,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {}),
+        ...(claudeAccountId ? { claudeAccountId } : {}),
         // Why: reconnect replays re-send cached rows; the renderer must not treat them as fresh completions.
         ...(isReplay === true ? { isReplay: true } : {})
       }

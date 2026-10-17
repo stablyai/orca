@@ -5,6 +5,7 @@ import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import { startPaneOnActiveClaudeAccount } from './start-pane-on-active-claude-account'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
@@ -94,6 +95,7 @@ export function TerminalPaneSurface({
     renameInputRef,
     renameValue,
     renamingPaneId,
+    restartPaneWithStartup,
     saveQuickCommand,
     searchOpen,
     searchStateRef,
@@ -201,6 +203,14 @@ export function TerminalPaneSurface({
               paneOnClient={paneOnClient}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onStartOnActiveAccount={() =>
+                startPaneOnActiveClaudeAccount({
+                  paneId: activePane.id,
+                  paneHost: paneTransportsRef,
+                  worktreeId,
+                  restartPane: restartPaneWithStartup
+                })
+              }
               onRetry={
                 isPaneOwnerUnverifiedError(visibleTerminalError)
                   ? () => {

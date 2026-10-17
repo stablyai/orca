@@ -8,6 +8,8 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { launchWithClaudeAccountChoice } from '../claude-account-prompt/choose-claude-launch-account'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -95,11 +97,8 @@ function QuickLaunchAgentMenuItemsInner({
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget])
 
-  const runLaunch = useCallback(
-    (agent: TuiAgent) => {
-      if (disabled) {
-        return
-      }
+  const launchOnAccount = useCallback(
+    (agent: TuiAgent, claudeAccountId: string | undefined, deferred: boolean) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
@@ -112,6 +111,7 @@ function QuickLaunchAgentMenuItemsInner({
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
         ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
+        ...(claudeAccountId ? { claudeAccountId } : {}),
         // Notes keep their text until it goes out, so the new chat's composer never gets a copy.
         ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {})
       })
@@ -148,7 +148,12 @@ function QuickLaunchAgentMenuItemsInner({
       if (result.surface.kind !== 'local-terminal') {
         return
       }
-      onFocusTerminal(result.surface.tabId)
+      // Why: after the account prompt the menu has already closed, so a queued menu-close focus would never run.
+      if (deferred) {
+        focusTerminalTabSurface(result.surface.tabId)
+      } else {
+        onFocusTerminal(result.surface.tabId)
+      }
     },
     [
       worktreeId,
@@ -158,9 +163,20 @@ function QuickLaunchAgentMenuItemsInner({
       promptDelivery,
       launchSource,
       onPromptDelivered,
-      onPromptHandedOff,
-      disabled
+      onPromptHandedOff
     ]
+  )
+
+  const runLaunch = useCallback(
+    (agent: TuiAgent) => {
+      if (disabled) {
+        return
+      }
+      launchWithClaudeAccountChoice(agent, { worktreeId }, (claudeAccountId, deferred) =>
+        launchOnAccount(agent, claudeAccountId, deferred)
+      )
+    },
+    [disabled, worktreeId, launchOnAccount]
   )
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
