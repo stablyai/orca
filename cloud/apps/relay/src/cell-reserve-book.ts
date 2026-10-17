@@ -70,6 +70,7 @@ export class IntakeBucket {
 export class CellReserveBook {
   private readonly bookings = new Map<string, HeldBooking>()
   private readonly intake: IntakeBucket
+  private nextExpiry = Number.POSITIVE_INFINITY
 
   constructor(
     private readonly capacity: BookingCapacity,
@@ -98,7 +99,10 @@ export class CellReserveBook {
       if (known > item.epoch) return { outcome: 'seated-newer', epoch: known }
       if (seated === item.epoch) return { outcome: 'ok' }
       if (booked?.epoch === item.epoch) {
-        if (!dryRun) booked.expiresAt = Math.max(booked.expiresAt, now + item.ttlMs)
+        if (!dryRun) {
+          booked.expiresAt = Math.max(booked.expiresAt, now + item.ttlMs)
+          this.nextExpiry = Math.min(this.nextExpiry, booked.expiresAt)
+        }
         return { outcome: 'ok' }
       }
     } else if (known >= item.epoch) {
@@ -122,6 +126,7 @@ export class CellReserveBook {
       unit,
       handedOff: false
     })
+    this.nextExpiry = Math.min(this.nextExpiry, now + item.ttlMs)
     return { outcome: 'ok' }
   }
 
@@ -154,14 +159,22 @@ export class CellReserveBook {
   clear(): void {
     for (const booking of this.bookings.values()) booking.unit.release()
     this.bookings.clear()
+    this.nextExpiry = Number.POSITIVE_INFINITY
   }
 
   sweep(now = this.now()): void {
+    if (now < this.nextExpiry) return
+    let nextExpiry = Number.POSITIVE_INFINITY
     for (const [key, booking] of this.bookings) {
-      if (booking.expiresAt > now) continue
+      if (booking.expiresAt > now) {
+        nextExpiry = Math.min(nextExpiry, booking.expiresAt)
+        continue
+      }
       this.bookings.delete(key)
       booking.unit.release()
     }
+    // Renewals and takes can leave an earlier bound; it only causes one extra scan.
+    this.nextExpiry = nextExpiry
   }
 
   count(): number {
