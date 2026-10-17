@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { appMetricsMock } = vi.hoisted(() => ({
@@ -16,6 +19,7 @@ import {
   getCrashBreadcrumbSnapshot,
   recordCrashBreadcrumb
 } from './crash-breadcrumb-store'
+import { CrashReportStore } from './crash-report-store'
 import { ProcessGoneDedupe } from './process-gone-dedupe'
 import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-gone-recorder'
 import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-sibling-correlation'
@@ -52,6 +56,7 @@ function event(overrides: Partial<ProcessGoneCrashEvent> = {}): ProcessGoneCrash
 }
 
 let sink: CapturingSink
+const tempDirs: string[] = []
 
 beforeEach(() => {
   sink = capturingSink()
@@ -60,12 +65,13 @@ beforeEach(() => {
   resetProcessGoneSiblingCorrelationForTest()
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
   vi.restoreAllMocks()
   _resetTracerForTests()
   clearCrashBreadcrumbsForTest()
   resetProcessGoneSiblingCorrelationForTest()
+  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
 })
 
 describe('recordProcessGoneCrash', () => {
@@ -712,6 +718,43 @@ describe('minidump signature attachment', () => {
     expect(JSON.stringify(attach.mock.calls[0]?.[1])).not.toContain('abc123')
     expect(JSON.stringify(sink.records)).not.toContain('alice')
     expect(JSON.stringify(sink.records)).not.toContain('abc123')
+  })
+
+  // Crash 8d4a8d01 (v1.4.200, win32) reached triage with no minidumpStatus at all, which reads
+  // identically to "pairing ran and found nothing". Only the async attach below ever wrote the
+  // field, so a session that ends first leaves it absent.
+  it('records a pending minidump status so an unfinished pairing stays distinguishable', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+    const neverSettles = () => new Promise<never>(() => {})
+
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      event(),
+      new ProcessGoneDedupe(),
+      neverSettles
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+    expect(record.mock.calls[0]?.[0]).toMatchObject({
+      details: expect.objectContaining({ minidumpStatus: 'pending' })
+    })
+  })
+
+  it('resolves the seeded pending status in the persisted report, keeping the diagnostics', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'orca-process-gone-'))
+    tempDirs.push(dir)
+    const store = new CrashReportStore(path.join(dir, 'crash-reports.json'))
+
+    recordProcessGoneCrash(store, event(), new ProcessGoneDedupe(), noMinidump)
+
+    await vi.waitFor(async () => {
+      const [persisted] = await store.listRecent()
+      expect(persisted?.details.minidumpStatus).toBe('absent')
+    })
+    // Why: the seed only stays safe while attachDetails merges -- a replacing write would
+    // resolve the status and silently drop every diagnostic recorded alongside it.
+    const [persisted] = await store.listRecent()
+    expect(persisted?.details.mainProcessPid).toBe(process.pid)
   })
 
   it('marks the report when no dump was produced, so absence is visible', async () => {
