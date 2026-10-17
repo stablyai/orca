@@ -7348,6 +7348,8 @@
           "workspaceCount_one": "{{count}} workspace",
           "workspaceCount_other": "{{count}} workspaces"
         },
+        "sectionAttentionCount_one": "{{count}} waiting on you",
+        "sectionAttentionCount_other": "{{count}} waiting on you",
         "titleDerivedAgentRows": {
           "needsInput": "Needs input",
           "running": "Running",

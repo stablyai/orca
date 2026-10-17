@@ -140,6 +140,8 @@ it('composes real dispatched headers, current repo gates and folder cache refres
       pinDragOver: false,
       projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus,
+      countBadgeMode: 'off',
+      attentionWorkspaceIds: new Set(),
       toggleGroupWithScrollAnchor: toggle,
       headerDrag: {
         canReorderRepoHeaders: false,

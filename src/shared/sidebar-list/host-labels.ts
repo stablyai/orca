@@ -14,6 +14,7 @@ import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { getProjectGroupingForRepo, type ProjectGroupingIndex } from '../project-section-grouping'
 import type { WorktreeGroupEntry } from './worktree-group-entry'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
 import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type { RepoOfWorktree } from './row-types'
 
@@ -207,15 +208,13 @@ export function getHostWorktreeCounts(
   return counts
 }
 
-export function getHostWorktreeIds(
+function groupWorktreeKeysByHost(
   worktrees: readonly Worktree[],
   repoOf: RepoOfWorktree,
-  defaultHostId: ExecutionHostId
-): Map<ExecutionHostId, string[]> | undefined {
-  if (worktrees.length === 0) {
-    return undefined
-  }
-  const idsByHost = new Map<ExecutionHostId, string[]>()
+  defaultHostId: ExecutionHostId,
+  keyOf: (worktree: Worktree) => string
+): Map<ExecutionHostId, string[]> {
+  const keysByHost = new Map<ExecutionHostId, string[]>()
   const seenIdentities = new Set<string>()
   for (const worktree of worktrees) {
     const identity = getWorktreeHostIdentity(worktree)
@@ -224,11 +223,22 @@ export function getHostWorktreeIds(
     }
     seenIdentities.add(identity)
     const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
-    const ids = idsByHost.get(hostId) ?? []
-    ids.push(worktree.id)
-    idsByHost.set(hostId, ids)
+    const keys = keysByHost.get(hostId) ?? []
+    keys.push(keyOf(worktree))
+    keysByHost.set(hostId, keys)
   }
-  return idsByHost
+  return keysByHost
+}
+
+export function getHostWorktreeIds(
+  worktrees: readonly Worktree[],
+  repoOf: RepoOfWorktree,
+  defaultHostId: ExecutionHostId
+): Map<ExecutionHostId, string[]> | undefined {
+  if (worktrees.length === 0) {
+    return undefined
+  }
+  return groupWorktreeKeysByHost(worktrees, repoOf, defaultHostId, (worktree) => worktree.id)
 }
 
 /** Folder-only lanes still need host counts; undefined would render their headers globally (#15362). */
@@ -265,6 +275,40 @@ export function getLaneHostWorktreeIds(
     if (!idsByHost.has(hostId)) {
       idsByHost.set(hostId, [])
     }
+  }
+  return idsByHost
+}
+
+/** Per-host slices of the badge's counted keys (see `countedWorkspaceIds`) for worktrees. */
+export function getHostCountedWorktreeKeys(
+  worktrees: readonly Worktree[],
+  repoOf: RepoOfWorktree,
+  defaultHostId: ExecutionHostId
+): Map<ExecutionHostId, string[]> {
+  return groupWorktreeKeysByHost(worktrees, repoOf, defaultHostId, getWorktreeHostIdentity)
+}
+
+/**
+ * Host-scoped keys of everything a lane's count badge tallies.
+ *
+ * Unlike getLaneHostWorktreeIds this does carry folder workspaces: the badge counts
+ * workspaces, and a folder workspace can hold an agent that needs the user.
+ */
+export function getLaneHostCountedWorkspaceIds(
+  worktrees: readonly Worktree[],
+  folderWorkspaces: readonly RenderableFolderWorkspace[],
+  repoOf: RepoOfWorktree,
+  defaultHostId: ExecutionHostId
+): Map<ExecutionHostId, string[]> | undefined {
+  if (worktrees.length === 0 && folderWorkspaces.length === 0) {
+    return undefined
+  }
+  const idsByHost = getHostCountedWorktreeKeys(worktrees, repoOf, defaultHostId)
+  for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
+    const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+    const ids = idsByHost.get(hostId) ?? []
+    ids.push(getFolderWorkspaceHostIdentity(folderWorkspace))
+    idsByHost.set(hostId, ids)
   }
   return idsByHost
 }

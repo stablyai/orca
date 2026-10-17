@@ -16,6 +16,7 @@ import type { WorktreeListVirtualizer } from './use-virtualizer'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
+import type { CollapsedGroupCountBadgeMode } from '../../../../../../shared/collapsed-group-count-badge'
 
 import type { ProjectHeaderHostContext } from '../rows/project-header-host-context'
 
@@ -39,6 +40,8 @@ type BuildArgs = {
   projectHeaderHostContexts: ReadonlyMap<string, ProjectHeaderHostContext>
   headerDrag: WorktreeSidebarHeaderDrag
   getCachedFolderWorkspacePathStatus: ReturnType<typeof useFolderWorkspacePathStatusRows>
+  countBadgeMode: CollapsedGroupCountBadgeMode
+  attentionWorkspaceIds: ReadonlySet<string>
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
@@ -84,6 +87,8 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       headerDrag,
       projectHeaderHostContexts: args.projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
+      countBadgeMode: args.countBadgeMode,
+      attentionWorkspaceIds: args.attentionWorkspaceIds,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
       projectActions: args.projectActions,
       onRenameProjectGroup: props.handleRenameProjectGroup,

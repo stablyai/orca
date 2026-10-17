@@ -81,6 +81,8 @@ function headerContext(): SectionHeaderRowContext {
     dragOverStatus: null,
     pinDragOver: false,
     getCachedFolderWorkspacePathStatus: () => null,
+    countBadgeMode: 'off',
+    attentionWorkspaceIds: new Set(),
     toggleGroupWithScrollAnchor: vi.fn(),
     headerDrag: {
       canReorderRepoHeaders: false,
