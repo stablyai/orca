@@ -12,7 +12,9 @@ Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code
 
 ## How it works
 
-Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents). No API calls, no extra auth. This means the readout is only as fresh as the agent's own bookkeeping — numbers update when the agent writes, not in real time.
+Orca's main process asks each provider for your usage over the network, using the login or key you already set up for that agent.
+
+For Claude, Orca requests `api.anthropic.com/api/oauth/usage` with the token from your existing Claude Code login; it does not ask for extra credentials. It fetches shortly after startup, when you bring the Orca window back to the front (at most once every 5 minutes), and every 15 minutes while the window is visible and focused. Expanding the account list in the status bar's Claude account switcher, or opening the accounts screen in Orca Mobile, also fetches usage for your other saved Claude accounts. If a saved account needs sign-in, the switcher expands that list as soon as it opens, so opening it fetches too. When Claude Code's status line has just reported usage, Orca can skip a fetch.
 
 ## Multi-account accounting
 
