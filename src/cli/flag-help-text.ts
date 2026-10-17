@@ -66,7 +66,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   shell: '--shell <shell>        Windows shell the terminal itself runs as',
   terminal: '--terminal <handle>  Runtime-issued terminal handle',
   text: '--text <text>          Text payload to send or type',
-  'text-stdin': '--text-stdin          Read text payload from stdin',
+  'text-stdin': '--text-stdin           Read the text from stdin, keeping it out of argv',
   'task-id': '--task-id <id>        Task id to include in orchestration payload JSON',
   'task-title': '--task-title <text>    Concise title for an orchestration task',
   'dispatch-id': '--dispatch-id <id>    Dispatch id to include in orchestration payload JSON',
@@ -108,7 +108,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--extra-agent-args=<args> Extra agent arguments for fresh runs; empty clears',
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
   'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
-  'value-stdin': '--value-stdin         Read set-value payload from stdin',
+  'value-stdin': '--value-stdin          Read the value from stdin, keeping it out of argv',
   'window-id': '--window-id <id>      Target a window id from list-windows',
   'window-index': '--window-index <n>   Target a window index from list-windows',
   // Browser automation flags

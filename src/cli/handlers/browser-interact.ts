@@ -21,6 +21,7 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { getBrowserCommandTarget } from '../selectors'
+import { getFlagOrStdinTextPayload } from '../stdin-text-payload'
 
 const checkHandler =
   (checked: boolean): CommandHandler =>
@@ -50,7 +51,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   fill: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlag(flags, 'value')
+    const value = await getFlagOrStdinTextPayload(flags, 'value', { allowEmpty: false })
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserFillResult>('browser.fill', {
       element,

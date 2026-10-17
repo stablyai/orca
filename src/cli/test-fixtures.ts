@@ -84,3 +84,39 @@ export function queueFixtures(mock: Mock, ...fixtures: OkFixture[]): void {
     mock.mockResolvedValueOnce(fixture)
   }
 }
+
+export function mockStdin(
+  isTTY: boolean,
+  chunks: string[]
+): { restore: () => void; wasRead: () => boolean } {
+  const stdin = process.stdin as typeof process.stdin & {
+    isTTY?: boolean
+  }
+  const previousIsTTY = stdin.isTTY
+  const previousAsyncIterator = stdin[Symbol.asyncIterator]
+  Object.defineProperty(stdin, 'isTTY', {
+    configurable: true,
+    value: isTTY
+  })
+  let read = false
+  ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = async function* () {
+    read = true
+    for (const chunk of chunks) {
+      yield Buffer.from(chunk)
+    }
+  }
+  return {
+    wasRead: () => read,
+    restore: () => {
+      Object.defineProperty(stdin, 'isTTY', {
+        configurable: true,
+        value: previousIsTTY
+      })
+      if (previousAsyncIterator) {
+        ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = previousAsyncIterator
+      } else {
+        Reflect.deleteProperty(stdin, Symbol.asyncIterator)
+      }
+    }
+  }
+}

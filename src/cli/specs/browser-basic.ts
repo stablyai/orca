@@ -42,8 +42,12 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['fill'],
     summary: 'Clear and fill a browser input by ref',
-    usage: 'orca fill --element <ref> --value <text> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'worktree']
+    usage:
+      'orca fill --element <ref> (--value <text> | --value-stdin) [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'value-stdin', 'worktree'],
+    notes: [
+      'Use --value-stdin for secrets so they stay out of argv. One trailing newline (LF or CRLF) is dropped.'
+    ]
   },
   {
     path: ['type'],

@@ -21,6 +21,7 @@ ORCA full-screenshot --json
 ORCA pdf --json
 ORCA click --element <ref> --json
 ORCA fill --element <ref> --value <text> --json
+<secret reader> | ORCA fill --element <ref> --value-stdin --json
 ORCA type --input <text> --json
 ORCA select --element <ref> --value <value> --json
 ORCA check --element <ref> --json
@@ -54,6 +55,7 @@ Browser rules:
 - Use typed tab commands (`ORCA tab list/create/close/switch`), not `ORCA exec --command "tab ..."`, so Orca keeps UI state synchronized.
 - Prefer `wait --text`, `--url`, `--selector`, or `--load` after async page changes instead of bare timeouts.
 - Anything not listed above goes through `ORCA exec --command "<agent-browser command>"`.
+- Fill passwords and other secrets with `--value-stdin`, never `--value`: argv is visible to `ps` and shell history. `type` and `inserttext` have no stdin form.
 - If `fill` or `type` fails on a custom input, try `ORCA focus --element @e1 --json` then `ORCA inserttext --text "text" --json`.
 - A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation.
 

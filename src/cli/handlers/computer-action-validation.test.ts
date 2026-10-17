@@ -18,7 +18,7 @@ vi.mock('../runtime-client', async () => {
 })
 
 import { main } from '../index'
-import { okFixture, queueFixtures } from '../test-fixtures'
+import { mockStdin, okFixture, queueFixtures } from '../test-fixtures'
 
 describe('orca computer action CLI validation', () => {
   beforeEach(() => {
@@ -424,33 +424,3 @@ describe('orca computer action CLI validation', () => {
     expect(process.exitCode).toBeUndefined()
   })
 })
-
-function mockStdin(isTTY: boolean, chunks: string[]): { restore: () => void } {
-  const stdin = process.stdin as typeof process.stdin & {
-    isTTY?: boolean
-  }
-  const previousIsTTY = stdin.isTTY
-  const previousAsyncIterator = stdin[Symbol.asyncIterator]
-  Object.defineProperty(stdin, 'isTTY', {
-    configurable: true,
-    value: isTTY
-  })
-  ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = async function* () {
-    for (const chunk of chunks) {
-      yield Buffer.from(chunk)
-    }
-  }
-  return {
-    restore: () => {
-      Object.defineProperty(stdin, 'isTTY', {
-        configurable: true,
-        value: previousIsTTY
-      })
-      if (previousAsyncIterator) {
-        ;(stdin as unknown as Record<symbol, unknown>)[Symbol.asyncIterator] = previousAsyncIterator
-      } else {
-        Reflect.deleteProperty(stdin, Symbol.asyncIterator)
-      }
-    }
-  }
-}
