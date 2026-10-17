@@ -1,14 +1,14 @@
 import { useCallback } from 'react'
 import { useRouter } from 'expo-router'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
-import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
+import { useLandOnWorkspace } from '../navigation/use-open-host-stack-route'
 import {
   notificationCredentialRecoveryRoute,
   type NotificationNavigationTarget
 } from './notification-routing'
 
 export function useOpenNotificationRoute(): (target: NotificationNavigationTarget) => void {
-  const openHostStackRoute = useOpenHostStackRoute()
+  const landOnWorkspace = useLandOnWorkspace()
   const router = useRouter()
 
   return useCallback(
@@ -19,11 +19,11 @@ export function useOpenNotificationRoute(): (target: NotificationNavigationTarge
         return
       }
       if (target.sessionTarget) {
-        openHostStackRoute(target.hostId, target.sessionTarget)
+        landOnWorkspace(target.hostId, target.sessionTarget)
         return
       }
       router.push(hostStackHostRoute(target.hostId))
     },
-    [openHostStackRoute, router]
+    [landOnWorkspace, router]
   )
 }
