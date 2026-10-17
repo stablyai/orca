@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
 import { CliSection } from './CliSection'
 import { GeneralEditorSettingsSection } from './GeneralEditorSettingsSection'
+import { DebuggersSettingsSection } from './DebuggersSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
@@ -16,6 +17,7 @@ import {
   getGeneralWorkspaceSearchEntries
 } from './general-search'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
+import { getGeneralDebuggerSearchEntries } from './general-debugger-search'
 import { RecentTabOrderControl } from './RecentTabOrderControl'
 import { SettingsSectionStack } from './SettingsSectionStack'
 import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
@@ -261,6 +263,13 @@ export function GeneralPane({
         updateSettings={updateSettings}
         fontSuggestions={fontSuggestions}
         onRequestFontSuggestions={onRequestFontSuggestions}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getGeneralDebuggerSearchEntries()) ? (
+      <DebuggersSettingsSection
+        key="debuggers"
+        settings={settings}
+        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralCliSearchEntries()) ? (

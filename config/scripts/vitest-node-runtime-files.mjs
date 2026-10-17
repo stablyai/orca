@@ -34,6 +34,9 @@ export const NODE_RUNTIME_INCLUDE = [
   'src/main/managed-data-accounts/**/*.test.ts',
   'src/main/quit-path-durable-write-blocking.test.ts',
   'src/main/automations/automation-worker-durability.test.ts',
+  // Debug adapters are real child processes, process groups and loopback sockets.
+  'src/main/debug/**/*.test.ts',
+  'src/main/runtime/rpc/methods/debug-methods*.test.ts',
   'src/**/*.node-pty.test.ts',
   'src/**/node-pty-*.test.ts',
   'src/**/*.live-shell.test.ts',

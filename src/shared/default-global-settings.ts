@@ -15,7 +15,18 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
+import type { DebugSettings } from './debug-settings-types'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+
+export function getDefaultDebugSettings(): DebugSettings {
+  return {
+    debugEnabledRepos: [],
+    debugAdapterApprovals: {},
+    debugPythonPath: '',
+    debugJsDebugServerPath: '',
+    debugLaunchApprovals: {}
+  }
+}
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -281,6 +292,7 @@ export function buildDefaultSettings(args: {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: args.voice
+    voice: args.voice,
+    ...getDefaultDebugSettings()
   }
 }

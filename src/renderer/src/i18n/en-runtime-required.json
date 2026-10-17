@@ -3278,5 +3278,10 @@
     "matchLabel": {
       "automation": "Run"
     }
+  },
+  "debug": {
+    "settings": {
+      "adapters": "Debug Adapters"
+    }
   }
 }

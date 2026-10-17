@@ -290,6 +290,8 @@ export default function MonacoEditor({
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
           lineNumbers: 'on',
+          // Breakpoint and stopped-line glyphs; diff viewers and notebook cells keep their own margins.
+          glyphMargin: true,
           renderLineHighlight: 'line',
           automaticLayout: true,
           tabSize: 2,

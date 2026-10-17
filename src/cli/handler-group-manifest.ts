@@ -3,6 +3,7 @@ import { BROWSER_HANDLER_GROUPS } from './browser-handler-groups'
 import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
+import { DEBUG_COMMAND_SPECS } from './specs/debug'
 
 export type HandlerGroup = {
   name: string
@@ -104,6 +105,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'file',
     keys: ['file open', 'file diff', 'file open-changed'],
     load: async () => (await import('./handlers/file.js')).FILE_HANDLERS
+  },
+  {
+    name: 'debug',
+    keys: DEBUG_COMMAND_SPECS.map((spec) => spec.path.join(' ')),
+    load: async () => (await import('./handlers/debug.js')).DEBUG_HANDLERS
   },
   {
     name: 'terminal',

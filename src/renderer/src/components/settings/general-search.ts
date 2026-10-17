@@ -5,6 +5,7 @@ import { searchKeywords, translateSearchKeyword } from './settings-search-keywor
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
+import { getGeneralDebuggerSearchEntries } from './general-debugger-search'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
 export { getGeneralSupportSearchEntries } from './general-support-search'
@@ -265,6 +266,7 @@ export function getGeneralPaneSearchEntries(
     ...getGeneralNavigationSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
     ...getGeneralEditorSearchEntries(),
+    ...getGeneralDebuggerSearchEntries(),
     ...getGeneralCliSearchEntries(),
     ...getGeneralUpdateSearchEntries(),
     ...getGeneralSupportSearchEntries()

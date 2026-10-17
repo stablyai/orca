@@ -84,6 +84,7 @@ import { e2eApi } from './api/e2e-bridge'
 import { mobileApi } from './api/mobile-bridge'
 import { agentStatusApi } from './api/agent-status-bridge'
 import { speechApi } from './api/speech-bridge'
+import { debugApi } from './api/debug-api'
 
 installBrowserFindListener()
 
@@ -186,13 +187,15 @@ const api = {
   agentStatus: agentStatusApi,
   speech: speechApi
 } satisfies PreloadApi
+// Why outside PreloadApi: the web preload has no main process to host a debugger.
+const exposedApi = { ...api, debug: debugApi }
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('api', api)
+    contextBridge.exposeInMainWorld('api', exposedApi)
   } catch (error) {
     console.error(error)
   }
 } else {
-  window.api = api
+  window.api = exposedApi
 }

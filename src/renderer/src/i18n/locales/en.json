@@ -20309,5 +20309,149 @@
       "errorTitle": "Space hit an error.",
       "errorDescription": "Close and reopen Space to try again."
     }
+  },
+  "debug": {
+    "breakpoints": {
+      "verified": "Verified",
+      "pending": "Pending",
+      "failed": "Failed",
+      "unsupported": "Unsupported",
+      "enable": "Enable breakpoint",
+      "line": "Line {{line}}",
+      "remove": "Remove breakpoint",
+      "empty": "No breakpoints",
+      "title": "Breakpoints",
+      "loading": "Loading…"
+    },
+    "callStack": {
+      "empty": "No threads",
+      "title": "Call Stack",
+      "pausedOn": "Paused on {{reason}}",
+      "loading": "Loading…"
+    },
+    "picker": {
+      "launchJsonError": "launch.json could not be read",
+      "empty": "No launch configurations. Add .vscode/launch.json or open a file to debug.",
+      "label": "Launch configuration",
+      "currentFile": "Debug current file"
+    },
+    "console": {
+      "title": "Debug Console",
+      "input": "Evaluate expression"
+    },
+    "confirm": {
+      "adapter": "Adapter",
+      "program": "Program",
+      "module": "Module",
+      "python": "Python",
+      "runtimeExecutable": "Runtime",
+      "runtimeArgs": "Runtime args",
+      "args": "Args",
+      "cwd": "Working directory",
+      "envFile": "Env file",
+      "processId": "Process ID",
+      "host": "Host",
+      "port": "Port",
+      "title": "Confirm debug launch",
+      "heading": "Run “{{name}}”?",
+      "description": "Starting this runs the commands below on this machine.",
+      "changed": "This configuration or its adapter changed since you last looked. Review it again.",
+      "repoLocal": "The adapter binary is inside this repository; anything that can write the repo can change what runs.",
+      "consoleForced": "Console “{{from}}” is not supported; output goes to the Debug Console.",
+      "env": "Environment",
+      "dangerousEnv": "Changes how programs load code",
+      "masked": "(masked)",
+      "cancel": "Cancel",
+      "start": "Start",
+      "workspace": "Workspace",
+      "envFileEntries": "Env file contents",
+      "allKeys": "Everything the adapter receives",
+      "dangerousKey": "Runs commands or binaries"
+    },
+    "panel": {
+      "noWorkspace": "Open a workspace to run and debug it.",
+      "loading": "Loading launch configurations…",
+      "start": "Start Debugging",
+      "tabTitle": "Run and Debug"
+    },
+    "off": {
+      "description": "Debugging is off for this repository. Allowing it lets Orca start the debug adapters you confirm.",
+      "allow": "Allow debugging for this repository",
+      "openSettings": "Open Settings",
+      "allowFailed": "Could not save the setting: {{error}}"
+    },
+    "sections": {
+      "noWorktree": "This folder is not an Orca workspace."
+    },
+    "variables": {
+      "title": "Variables",
+      "valueOf": "{{name}} value: {{value}}",
+      "loading": "Loading…",
+      "showMore": "Show more",
+      "editValue": "New value",
+      "notPaused": "Not paused"
+    },
+    "watch": {
+      "title": "Watch",
+      "editExpression": "Edit expression",
+      "notAvailable": "not available",
+      "remove": "Remove expression",
+      "add": "Add expression",
+      "evaluating": "Evaluating"
+    },
+    "toolbar": {
+      "continue": "Continue",
+      "pause": "Pause",
+      "stepOver": "Step Over",
+      "stepInto": "Step Into",
+      "stepOut": "Step Out",
+      "restart": "Restart",
+      "stop": "Stop",
+      "label": "Debug controls",
+      "noThread": "No thread to act on."
+    },
+    "settings": {
+      "discovering": "Looking for installed debug adapters…",
+      "revoke": "Revoke",
+      "approve": "Approve",
+      "notFound": "Not found",
+      "repoLocal": "This binary is inside {{project}}; anything that writes the repository can change what runs.",
+      "staleApproval": "Approved earlier, no longer found",
+      "title": "Debuggers",
+      "description": "Debug adapters run only for projects you allow, from binaries you approve.",
+      "allowDebugging": "Allow debugging",
+      "allowDebuggingFor": "Allow debugging {{project}}",
+      "launchApprovals": "Approved Launch Configurations",
+      "pythonPath": "Python for debugpy",
+      "pythonPathDescription": "Interpreter that runs debugpy when a launch configuration names none. Leave empty to detect it.",
+      "jsDebugPath": "js-debug Server",
+      "jsDebugPathDescription": "Path to js-debug’s dapDebugServer.js. Leave empty to use the default install location.",
+      "noAdapters": "No debug adapters found for this project.",
+      "adapters": "Debug Adapters",
+      "pythonPathPlaceholder": "python3",
+      "jsDebugPathPlaceholder": "dapDebugServer.js"
+    },
+    "breakpoint": {
+      "logpointTitle": "Logpoint: {{message}}",
+      "conditionTitle": "Breakpoint if {{condition}}",
+      "title": "Breakpoint",
+      "disabledTitle": "Disabled breakpoint"
+    },
+    "breakpointInput": {
+      "conditionPlaceholder": "Break when this expression is true",
+      "logPlaceholder": "Message to log; {expression} is interpolated",
+      "conditionLabel": "Breakpoint condition",
+      "logLabel": "Logpoint message"
+    },
+    "breakpointMenu": {
+      "addConditional": "Add Conditional Breakpoint…",
+      "addLogpoint": "Add Logpoint…",
+      "edit": "Edit Breakpoint…",
+      "toggleEnabled": "Enable/Disable Breakpoint",
+      "remove": "Remove Breakpoint"
+    },
+    "client": {
+      "unavailable": "The debugger is not available in this window."
+    }
   }
 }

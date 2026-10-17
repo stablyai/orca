@@ -118,6 +118,14 @@ export type KeybindingActionId =
   | 'terminal.splitRight'
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
+  | 'debug.startOrContinue'
+  | 'debug.stop'
+  | 'debug.restart'
+  | 'debug.pause'
+  | 'debug.stepOver'
+  | 'debug.stepInto'
+  | 'debug.stepOut'
+  | 'debug.toggleBreakpoint'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

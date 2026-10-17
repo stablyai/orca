@@ -2,6 +2,8 @@ import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
+import { useAppStore } from '@/store'
+import { resolveDebugEditorContext } from '@/lib/debug/debug-editor-context'
 
 const FileExplorer = lazy(() => import('./FileExplorer'))
 const SourceControl = lazy(() => import('./SourceControl'))
@@ -11,6 +13,30 @@ const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
+const DebugPanel = lazy(() =>
+  import('../debug/DebugPanel').then((module) => ({ default: module.DebugPanel }))
+)
+const DebugPanelSections = lazy(() => import('../debug/DebugPanelSections'))
+
+// Sections key the session store by core's realpath; the renderer path only finds the Orca worktree.
+function RunAndDebugPanel(): React.JSX.Element {
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const context = resolveDebugEditorContext({ worktreesByRepo }, activeWorktreeId ?? undefined, '')
+  return (
+    <DebugPanel>
+      {(corePath) =>
+        context ? (
+          <DebugPanelSections
+            worktreePath={corePath}
+            rendererPath={context.rootPath}
+            repoId={context.repoId}
+          />
+        ) : null
+      }
+    </DebugPanel>
+  )
+}
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
@@ -33,6 +59,7 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'ports' && (
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
+        {effectiveTab === 'debug' && <RunAndDebugPanel />}
         {effectiveTab === 'vault' && <AiVaultPanel />}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (

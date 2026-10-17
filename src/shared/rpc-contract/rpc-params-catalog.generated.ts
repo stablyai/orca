@@ -167,6 +167,18 @@ import {
   TypeText
 } from './computer-schemas-params'
 import {
+  DebugBreakpointLocationParams,
+  DebugBreakpointSetParams,
+  DebugEvaluateParams,
+  DebugEventsParams,
+  DebugStackParams,
+  DebugStartParams,
+  DebugThreadParams,
+  DebugVariablesParams,
+  DebugWaitParams,
+  DebugWorktreeParams
+} from './debug-params'
+import {
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
   ButtonParams,
@@ -845,6 +857,24 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.scroll': ScrollOfComputerSchemasParams,
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
+  'debug.breakpoints.list': DebugWorktreeParams,
+  'debug.breakpoints.remove': DebugBreakpointLocationParams,
+  'debug.breakpoints.set': DebugBreakpointSetParams,
+  'debug.configs': DebugWorktreeParams,
+  'debug.continue': DebugThreadParams,
+  'debug.evaluate': DebugEvaluateParams,
+  'debug.events': DebugEventsParams,
+  'debug.next': DebugThreadParams,
+  'debug.pause': DebugThreadParams,
+  'debug.restart': DebugWorktreeParams,
+  'debug.stack': DebugStackParams,
+  'debug.start': DebugStartParams,
+  'debug.status': DebugWorktreeParams,
+  'debug.stepIn': DebugThreadParams,
+  'debug.stepOut': DebugThreadParams,
+  'debug.stop': DebugWorktreeParams,
+  'debug.variables': DebugVariablesParams,
+  'debug.wait': DebugWaitParams,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'diagnostics.memory': null,

@@ -19,6 +19,7 @@ import {
   installMonacoViewStateTracking,
   restoreMonacoViewState
 } from './monaco-view-state-persistence'
+import { connectDebugEditor } from '@/lib/debug/connect-debug-editor'
 
 // Why: binds a freshly created Monaco instance to the app; reads everything through refs so the callback identity stays stable across renders.
 export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
@@ -122,6 +123,10 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         endProgrammaticContentSync(modelKey)
       }
 
+      // Why guarded: a file outside any worktree has no debug session to bind to.
+      const debugEditor = worktreeId
+        ? connectDebugEditor(editorInstance, monaco, { filePath, worktreeId })
+        : null
       setupCopy(editorInstance, monaco, filePath, propsRef)
       unregisterFileSearchSelectionRef.current?.()
       unregisterFileSearchSelectionRef.current = registerFileSearchSelectedTextProvider(() => {
@@ -176,6 +181,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       })
 
       editorInstance.onDidDispose(() => {
+        debugEditor?.dispose()
         cursorPositionSub.dispose()
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
