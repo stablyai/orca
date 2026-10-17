@@ -74,7 +74,7 @@ it.each(['orca', 'all'] as const)(
   'keeps snapshot projections equal to individual %s reads',
   async (scope) => {
     const store = new FixtureStore(30)
-    for (const range of ['7d', '30d', '90d', 'all'] as const) {
+    for (const range of ['today', '7d', '30d', '90d', 'all'] as const) {
       for (const limit of [0, 1, 10]) {
         const snapshot = store.getSnapshot(scope, range, limit)
         expect(snapshot).toEqual({

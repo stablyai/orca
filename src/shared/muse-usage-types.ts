@@ -1,5 +1,7 @@
+import type { UsageRange } from './usage-range'
+
 export type MuseUsageScope = 'orca' | 'all'
-export type MuseUsageRange = '7d' | '30d' | '90d' | 'all'
+export type MuseUsageRange = UsageRange
 export type MuseUsageBreakdownKind = 'model' | 'project'
 
 export type MuseUsageScanState = {
