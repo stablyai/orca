@@ -65,8 +65,20 @@ function findReusableExactRunPane({
   if (!parsed || !terminalTabIds.has(parsed.tabId)) {
     return null
   }
+  // Why: a status row proves what the agent is doing, but its absence proves
+  // nothing — rows are dropped/aged independently of pane lifetime, so a
+  // long-idle seed can outlive its row. Requiring one made reuse depend on the
+  // agent having finished *recently*, which is backwards: the longer a pane sits
+  // idle, the better a reuse target it is (#19193). Accept a missing row only
+  // when this tab is a single-pane layout, so the run's leaf is provably the only
+  // place the agent can be; in a split tab a sibling leaf may hold the agent and
+  // submitting there would type into the wrong pane.
   const entry = state.agentStatusByPaneKey[run.terminalPaneKey]
-  if (!entry || !isReusableAgentStatus(entry, agentId)) {
+  if (entry) {
+    if (!isReusableAgentStatus(entry, agentId)) {
+      return null
+    }
+  } else if (!isSoleLeafInTab(state, parsed.tabId, parsed.leafId)) {
     return null
   }
   if (!isRunPtyLiveInPane(state, parsed.tabId, parsed.leafId, run.terminalPtyId)) {
@@ -93,4 +105,16 @@ function isRunPtyLiveInPane(
   }
   const layoutPtyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
   return layoutPtyId === undefined || layoutPtyId === ptyId
+}
+
+// Why: without a status row, only a single-leaf tab proves the run's pane is the
+// one holding the agent. A known layout must list this leaf and nothing else; an
+// unknown layout is not proof, so it does not qualify.
+function isSoleLeafInTab(
+  state: Pick<AppState, 'terminalLayoutsByTabId'>,
+  tabId: string,
+  leafId: string
+): boolean {
+  const leafIds = Object.keys(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})
+  return leafIds.length === 1 && leafIds[0] === leafId
 }
