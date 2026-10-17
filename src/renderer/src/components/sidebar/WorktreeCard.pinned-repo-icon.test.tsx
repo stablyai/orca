@@ -177,6 +177,8 @@ describe('WorktreeCard pinned repo icon', () => {
 
       expect(markup).toContain('🦊')
       expect(markup).toContain('Project orca')
+      expect(markup).toContain('data-worktree-card-project-badge="true"')
+      expect(markup).toContain('>orca</span>')
       expect(markup).not.toContain('data-worktree-card-meta-row=""')
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
