@@ -1,8 +1,7 @@
 import { titleShowsNoAgent } from '../../../shared/agent-detection'
-import {
-  isClaudeIdentityFrameTitle,
-  resolveExplicitTerminalTitleAgentType
-} from '../../../shared/terminal-title-agent-type'
+import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import { titlePresentsAgent } from '../../../shared/terminal-title-identity-claim'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import {
   resolveCompatibleAgentTypeForOwner,
   shareCompatibleTitleIdentityGroup
@@ -116,10 +115,10 @@ export function resolveTabAgentFromSignals(args: {
   const explicitTitleAgent = resolveSignalAgentForLaunchOwner(rawTitleAgent, owner, ownerIsLaunch)
   const priorIdentity = idleFocusedIdentity ?? launchAgent
   const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
-  // Why: a "claude" token in another agent's task text is a mention, not identity, so it must
-  // not take a pane from its known owner — only a title that PRESENTS Claude may (#8940).
+  // Task-text mentions cannot claim another agent's pane (#8940, #14937).
   const titleClaimsIdentity =
-    explicitTitleAgent !== 'claude' || isClaudeIdentityFrameTitle(args.title)
+    rawTitleAgent !== null &&
+    (!isTuiAgent(rawTitleAgent) || titlePresentsAgent(args.title, rawTitleAgent))
   // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   // Raw title group, not the fallback-rewritten agent: inferred Pi owners would otherwise treat an OMP wrapper title as a different identity.
   const titleReclaimsReusedPane =
