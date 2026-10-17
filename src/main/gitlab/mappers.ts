@@ -97,6 +97,8 @@ type GitLabMRRaw = {
   description?: string | null
   target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
+  head_pipeline?: { status?: string } | null
+  pipeline?: { status?: string } | null
 }
 
 export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
@@ -107,7 +109,7 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     title: data.title,
     state: mapMRState(data.state, data.draft, data.title),
     url: data.web_url ?? data.url ?? '',
-    pipelineStatus,
+    pipelineStatus: settleManualPipelineStatus(data, pipelineStatus),
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
     mergeable,
     ...(mergeStateStatus ? { mergeStateStatus } : {}),
@@ -121,6 +123,14 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     ...(data.author?.username ? { author: data.author.username } : {}),
     ...(data.author?.avatar_url ? { authorAvatarUrl: data.author.avatar_url } : {})
   }
+}
+
+// Why: a pipeline parked on a manual job reads `pending` (see classifyPipelineString) because with
+// "Pipelines must succeed" that job blocks the merge. When GitLab itself reports the MR `mergeable`,
+// the manual job gates nothing (typically a release or deploy step), so pending would never clear.
+function settleManualPipelineStatus(data: GitLabMRRaw, pipelineStatus: CheckStatus): CheckStatus {
+  const raw = (data.head_pipeline ?? data.pipeline)?.status?.toLowerCase()
+  return raw === 'manual' && data.detailed_merge_status === 'mergeable' ? 'success' : pipelineStatus
 }
 
 function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
