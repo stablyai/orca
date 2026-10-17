@@ -155,7 +155,80 @@ describe('hasInstalledAgentSkill', () => {
   it('keeps aliases opt-in for unrelated single-name checks', () => {
     expect(hasInstalledAgentSkill([skill({ name: 'linear-tickets' })], 'orca-linear')).toBe(false)
   })
+
+  // Why: the synced copy kept Computer Use reading as installed after Orca's skill was removed.
+  it('does not count a Claude desktop synced copy as a global install', () => {
+    expect(
+      hasInstalledAgentSkill([syncedComputerUse()], 'computer-use', {
+        sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+      })
+    ).toBe(false)
+  })
+
+  it('counts a global install next to a synced copy of the same name', () => {
+    expect(
+      hasInstalledAgentSkill(
+        [
+          syncedComputerUse(),
+          skill({
+            id: 'skill-2',
+            name: 'computer-use',
+            directoryPath: '/Users/test/.agents/skills/computer-use',
+            skillFilePath: '/Users/test/.agents/skills/computer-use/SKILL.md'
+          })
+        ],
+        'computer-use',
+        { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
+      )
+    ).toBe(true)
+  })
+
+  it('still counts Hermes category installs as global installs', () => {
+    expect(
+      hasInstalledAgentSkill(
+        [
+          skill({
+            name: 'computer-use',
+            sourceLabel: 'Hermes home',
+            rootPath: '/Users/test/.hermes/skills',
+            directoryPath: '/Users/test/.hermes/skills/tools/computer-use',
+            skillFilePath: '/Users/test/.hermes/skills/tools/computer-use/SKILL.md'
+          })
+        ],
+        'computer-use',
+        { sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS }
+      )
+    ).toBe(true)
+  })
+
+  it('still matches nested plugin skills when the caller allows plugins', () => {
+    expect(
+      hasInstalledAgentSkill(
+        [
+          skill({
+            name: 'orca-cli',
+            sourceKind: 'plugin',
+            sourceLabel: 'Codex plugin cache',
+            rootPath: '/Users/test/.codex/plugins/cache',
+            directoryPath: '/Users/test/.codex/plugins/cache/vendor/orca-cli',
+            skillFilePath: '/Users/test/.codex/plugins/cache/vendor/orca-cli/SKILL.md'
+          })
+        ],
+        'orca-cli'
+      )
+    ).toBe(true)
+  })
 })
+
+function syncedComputerUse(): DiscoveredSkill {
+  return skill({
+    name: 'computer-use',
+    sourceLabel: 'Claude Code home',
+    rootPath: '/Users/test/.claude/skills',
+    directoryPath: '/Users/test/.claude/skills/synced/org_bucket/computer-use',
+    skillFilePath: '/Users/test/.claude/skills/synced/org_bucket/computer-use/SKILL.md'
+  })
+}
 
 describe('isOrchestrationSkillName', () => {
   it('matches only the orchestration skill name', () => {
