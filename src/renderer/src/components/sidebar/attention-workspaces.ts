@@ -15,7 +15,10 @@ import {
   createTitleFallbackLeafResolver,
   titleStatusToRowState
 } from './worktree-title-derived-agent-rows'
-import { resolveAttentionWorkspaceKeys } from './attention-workspace-owners'
+import {
+  resolveAttentionWorkspaceKeys,
+  type UnmirroredAttentionRow
+} from './attention-workspace-owners'
 
 /**
  * The store slices an attention verdict reads. Deliberately narrow: the dashboard's
@@ -216,9 +219,9 @@ export function buildAttentionWorkspaceIds(
   now: number
 ): ReadonlySet<string> {
   const index = indexAgentStatusEntries(state)
-  const attentionTabs = new Map<string, (string | null)[]>()
+  const attentionTabs = new Map<string, (string | UnmirroredAttentionRow)[]>()
   const mirroredTabIds = new Set<string>()
-  const addAttention = (workspaceId: string, tabId: string | null): void => {
+  const addAttention = (workspaceId: string, tabId: string | UnmirroredAttentionRow): void => {
     const tabIds = attentionTabs.get(workspaceId)
     if (tabIds) {
       tabIds.push(tabId)
@@ -244,7 +247,7 @@ export function buildAttentionWorkspaceIds(
       continue
     }
     if (isAttentionEntry(entry, now)) {
-      addAttention(entry.worktreeId, null)
+      addAttention(entry.worktreeId, { connectionId: entry.connectionId || null })
     }
   }
 

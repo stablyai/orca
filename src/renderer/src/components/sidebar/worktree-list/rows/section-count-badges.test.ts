@@ -83,6 +83,16 @@ describe('getSectionCountBadges', () => {
     ).toEqual({ total: 2, attention: null })
   })
 
+  it('counts a workspace listed under two lanes of one subtree once in both badges', () => {
+    expect(
+      getSectionCountBadges(
+        { count: 3, countedWorkspaceIds: ['a', 'b', 'a'] },
+        'all',
+        new Set(['a'])
+      )
+    ).toEqual({ total: 2, attention: 1 })
+  })
+
   it('falls back to count when a header carries no workspace ids', () => {
     expect(getSectionCountBadges({ count: 4 }, 'all', new Set(['a']))).toEqual({
       total: 4,
