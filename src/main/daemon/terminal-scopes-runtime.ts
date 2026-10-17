@@ -2,6 +2,7 @@
 import { existsSync } from 'node:fs'
 import { spawnProcess } from '@orca/process-host'
 import { userManagerEnv } from './daemon-cgroup-scope'
+import { warnWhenRealtimeTimeoutIsZero } from './daemon-rttime-limit'
 import { setPtyActiveProcessLimit } from '../windows/windows-pty-job'
 import { resolveTerminalScopes, type TerminalScopeRuntime } from './terminal-scopes'
 import type { PtyProcessCeilingState } from '../../shared/pty-process-ceiling-state'
@@ -51,6 +52,7 @@ export function initializeTerminalScopes(
     // Why log every platform: an operator who set a limit must learn when it did nothing.
     log('terminal-memory-limits', { platform: process.platform, ...resolved.memory })
   }
+  warnWhenRealtimeTimeoutIsZero(log)
   return resolved.ceiling
 }
 
