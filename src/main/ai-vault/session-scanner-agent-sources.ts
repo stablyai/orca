@@ -95,6 +95,9 @@ export type AiVaultAgentSource = {
   // Roots that are alternates for one install rather than distinct locations,
   // so the per-agent limit applies across them rather than to each.
   mergeRootDiscoveries?: boolean
+  // Roots that may be links to one another: each real folder is walked once,
+  // under its first spelling.
+  walkLinkedRootsOnce?: boolean
 }
 
 // Every deletable agent needs an entry — the delete validator derives its roots
@@ -114,6 +117,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         claudeProfileProjectsDirs: options.claudeProfileProjectsDirs
       }),
     extensions: ['.jsonl'],
+    // Why: CLAUDE_CONFIG_DIR/projects can be a link to ~/.claude/projects.
+    walkLinkedRootsOnce: true,
     // Why: Task subagent transcripts under `<session>/subagents/` share the parent
     // sessionId and aren't independently resumable, so they'd just duplicate the
     // parent as untitled rows; prune the subtree and read them on demand under
