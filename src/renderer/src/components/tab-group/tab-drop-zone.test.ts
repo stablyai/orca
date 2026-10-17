@@ -29,4 +29,22 @@ describe('resolvePaneColumnEdgeZone', () => {
       })
     ).toBe('up')
   })
+
+  it('keeps both vertical zones when an auto-hidden strip lets the body start at the panel top', () => {
+    // A short pane whose body reaches panelTop: measuring `up` from the body top would leave the
+    // zone entirely inside the strip band and drop it.
+    const shortPanel = { left: 0, top: 0, width: 300, height: 120 }
+    const bodyRect = { left: 0, top: 0, width: 300, height: 120 }
+    expect(
+      resolvePaneColumnEdgeZone(
+        shortPanel,
+        { x: 150, y: TAB_GROUP_TAB_STRIP_HEIGHT_PX + 5 },
+        {
+          bodyRect
+        }
+      )
+    ).toBe('up')
+    expect(resolvePaneColumnEdgeZone(shortPanel, { x: 150, y: 115 }, { bodyRect })).toBe('down')
+    expect(resolvePaneColumnEdgeZone(shortPanel, { x: 150, y: 75 }, { bodyRect })).toBeNull()
+  })
 })

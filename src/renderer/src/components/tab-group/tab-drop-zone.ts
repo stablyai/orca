@@ -76,13 +76,21 @@ export function resolvePaneColumnEdgeZone(
     return null
   }
 
-  const bodyLocalY = point.y - bodyRect.top
-  const verticalEdge = bodyRect.height * 0.2
+  // Why: an auto-hidden strip leaves the flow, so the body reaches under the revealed strip. Split
+  // zones must be measured from the first pixel the drop can actually land on, or `up` degenerates.
+  const reachableTop = Math.max(bodyRect.top, tabStripBottom)
+  const reachableHeight = bodyRect.top + bodyRect.height - reachableTop
+  if (reachableHeight <= 0) {
+    return null
+  }
+
+  const bodyLocalY = point.y - reachableTop
+  const verticalEdge = reachableHeight * 0.2
 
   if (bodyLocalY < verticalEdge) {
     return 'up'
   }
-  if (bodyLocalY > bodyRect.height - verticalEdge) {
+  if (bodyLocalY > reachableHeight - verticalEdge) {
     return 'down'
   }
   return null
