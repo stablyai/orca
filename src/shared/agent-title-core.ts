@@ -85,6 +85,11 @@ function computeIsGeminiTerminalTitle(title: string): boolean {
   if (hasGeminiStatusGlyph(title)) {
     return true
   }
+  // A decorated task can mention Gemini without presenting it as the owning CLI.
+  const undecorated = stripLeadingAgentTitleDecorationOrEmpty(title)
+  if (undecorated !== title && !undecorated.toLowerCase().startsWith('gemini')) {
+    return false
+  }
   // Why: Pi/OMP titles include cwd/session text; substring matching made
   // paths like "gemini-project" masquerade as Gemini CLI.
   if (isPiAgentTitle(title)) {
