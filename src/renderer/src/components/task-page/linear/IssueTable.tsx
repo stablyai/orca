@@ -1,5 +1,5 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { ChevronDown, FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronRight, FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { cn } from '@/lib/utils'
@@ -23,20 +23,33 @@ export function TaskPageLinearIssueTable({
     effectiveLinearDisplayProperties,
     linearIssueGridStyle,
     linearIssueListRows,
-    handleOpenOrUseLinearItem
+    handleOpenOrUseLinearItem,
+    toggleLinearSection
   } = model
   return (
     <div className="divide-y divide-border/50">
       {linearIssueListRows.map((row) => {
         if (row.type === 'section') {
           return (
-            <div key={row.key} className="flex h-9 items-center gap-2 bg-muted/35 px-3">
-              <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+            <button
+              key={row.key}
+              type="button"
+              aria-expanded={!row.collapsed}
+              onClick={() => {
+                toggleLinearSection(row.key)
+              }}
+              className="flex h-9 w-full cursor-pointer items-center gap-2 bg-muted/35 px-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              {row.collapsed ? (
+                <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
+              )}
               <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
                 {row.label}
               </span>
               <span className="shrink-0 text-[11px] text-muted-foreground">{row.count}</span>
-            </div>
+            </button>
           )
         }
         const issue = row.issue
