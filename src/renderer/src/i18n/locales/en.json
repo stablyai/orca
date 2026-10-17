@@ -6031,7 +6031,11 @@
           "cliCreated": "Created by Orca CLI",
           "jiraIssue": "Jira {{value0}}",
           "viewOnJira": "View on Jira",
-          "linkedJira": "Linked Jira {{value0}}"
+          "linkedJira": "Linked Jira {{value0}}",
+          "otherOpenPullRequest": "1 other open PR for issue #{{value0}}",
+          "otherOpenPullRequests": "{{count}} other open PRs for issue #{{value0}}",
+          "otherOpenPullRequestsHeading": "Other open PRs for this issue",
+          "otherOpenPullRequestRow": "#{{value0}} by {{value1}}, opened {{value2}}"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",

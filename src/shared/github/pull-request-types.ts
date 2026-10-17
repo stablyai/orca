@@ -97,6 +97,17 @@ export type IssueInfo = {
   labels: string[]
   /** Full markdown body when fetched through the single-issue endpoint. */
   description?: string
+  /** Open PRs that reference the issue, newest first; absent when not fetched. */
+  openLinkedPullRequests?: LinkedPullRequestSummary[]
+}
+
+export type LinkedPullRequestSummary = {
+  number: number
+  title: string
+  url: string
+  author: string
+  headRefName: string
+  createdAt: string
 }
 
 export type GitHubViewer = {

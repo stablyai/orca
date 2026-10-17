@@ -2,6 +2,7 @@ import type { ClassifiedError } from '../../shared/classified-error'
 import type { IssueInfo } from '../../shared/github/pull-request-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapIssueInfo } from './mappers'
+import { getOpenLinkedPullRequests } from './issue-open-linked-pull-requests'
 import type { LocalGitExecOptions } from './gh-utils'
 import {
   getIssueGitHubApiRepository,
@@ -65,8 +66,13 @@ export async function getIssue(
         ],
         ghOptions
       )
-      const data = JSON.parse(stdout)
-      return mapIssueInfo(data)
+      const issue = mapIssueInfo(JSON.parse(stdout))
+      const openLinkedPullRequests = await getOpenLinkedPullRequests(
+        ownerRepo,
+        issueNumber,
+        ghOptions
+      )
+      return openLinkedPullRequests ? { ...issue, openLinkedPullRequests } : issue
     }
     // Fallback for non-GitHub remotes
     const { stdout } = await ghExecFileAsync(

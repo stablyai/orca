@@ -15,6 +15,7 @@ import {
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetadataActionIcon } from './WorktreeCardMetadataControls'
 import { IssueStateBadge } from './WorktreeCardMetadataStatusBadges'
+import { WorktreeCardOtherPullRequests } from './WorktreeCardOtherPullRequests'
 import type { WorktreeCardIssueDisplay } from './worktree-card-meta-types'
 
 type WorktreeCardIssueDetailSectionProps = {
@@ -158,6 +159,7 @@ export function WorktreeCardIssueDetailSection({
             ))}
           </div>
         )}
+        <WorktreeCardOtherPullRequests pullRequests={issue.otherOpenPullRequests} />
       </WorktreeCardDetailSectionContent>
     </WorktreeCardDetailSection>
   )
