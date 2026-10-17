@@ -32,6 +32,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'cursor') {
     return 'Cursor'
   }
+  if (provider === 'kiro') {
+    return 'Kiro'
+  }
   return provider
 }
 

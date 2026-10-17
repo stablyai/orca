@@ -85,6 +85,7 @@ export type ProviderRateLimits = {
     | 'grok'
     | 'antigravity'
     | 'cursor'
+    | 'kiro'
     | 'zcode'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
@@ -169,6 +170,7 @@ export type RateLimitState = {
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
+  kiro: ProviderRateLimits | null
   zcode: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives

@@ -6,6 +6,7 @@ import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-ba
 import { getMiniMaxStatusBarToggleSearchEntry } from './appearance-status-bar-minimax-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
 import { getCursorStatusBarToggleSearchEntry } from './appearance-status-bar-cursor-toggle-search'
+import { getKiroStatusBarToggleSearchEntry } from './appearance-status-bar-kiro-toggle-search'
 import { getZcodeStatusBarToggleSearchEntry } from './appearance-status-bar-zcode-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
@@ -170,6 +171,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
     getMiniMaxStatusBarToggleSearchEntry(),
     getGrokStatusBarToggleSearchEntry(),
     getCursorStatusBarToggleSearchEntry(),
+    getKiroStatusBarToggleSearchEntry(),
     getZcodeStatusBarToggleSearchEntry(),
     {
       id: 'ssh',
