@@ -16,6 +16,7 @@ import type { WorktreeListVirtualizer } from './use-virtualizer'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
+import type { CollapsedGroupCountBadgeMode } from '../../../../../../shared/collapsed-group-count-badge'
 
 import type { RepoSshGateResolver } from '@/hooks/use-repo-ssh-gate-resolver'
 
@@ -39,6 +40,8 @@ type BuildArgs = {
   nativeDrag: ReturnType<typeof useWorktreeNativeDrag>
   headerDrag: WorktreeSidebarHeaderDrag
   getCachedFolderWorkspacePathStatus: ReturnType<typeof useFolderWorkspacePathStatusRows>
+  countBadgeMode: CollapsedGroupCountBadgeMode
+  attentionWorkspaceIds: ReadonlySet<string>
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
@@ -86,6 +89,8 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       pinDragOver: runtime.pinDragOver,
       headerDrag,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
+      countBadgeMode: args.countBadgeMode,
+      attentionWorkspaceIds: args.attentionWorkspaceIds,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
       projectActions: {
         getWorktreeVisibilityDefaults: (repo) =>

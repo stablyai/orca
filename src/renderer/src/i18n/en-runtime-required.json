@@ -2123,6 +2123,10 @@
             }
           }
         },
+        "sectionAttentionCount_one": "{{count}} waiting on you",
+        "sectionAttentionCount_other": "{{count}} waiting on you",
+        "sectionWorkspaceCount_one": "{{count}} workspace",
+        "sectionWorkspaceCount_other": "{{count}} workspaces",
         "worktree": {
           "card": {
             "compact": {
