@@ -12,14 +12,68 @@ import {
   StructuredAgentSessionOwnerUnresolvedError
 } from './launch-structured-agent-session'
 import { admitStructuredLaunchOnHost } from './structured-agent-session-host-admission'
+import {
+  clearWebSessionFocusIntent,
+  peekWebSessionFocusIntent
+} from '@/runtime/web-session-focus-intent'
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: vi.fn()
+}))
+const hostPermission = vi.hoisted(() =>
+  vi.fn<() => Promise<{ kind: string; hostMode?: null }>>(async () => ({ kind: 'allowed' }))
+)
+vi.mock('@/runtime/structured-chat-host-permission', () => ({
+  readStructuredChatHostPermissionVerdict: hostPermission
 }))
 
 describe('structured agent session launch', () => {
   beforeEach(() => {
     vi.mocked(callStructuredAgentSession).mockReset()
+  })
+
+  it('only a fresh foreground launch grants publication permission to select its chat', () => {
+    const worktreeId = 'focus-lifecycle'
+    const owner = { environmentId: 'server-1' }
+    const intent = createStructuredAgentSessionLaunchIntent(worktreeId, 'codex', 'runtime:server-1')
+    expect(peekWebSessionFocusIntent(owner, worktreeId)?.hostTabId).toBe(
+      `agent-session:${intent.sessionId}`
+    )
+    clearWebSessionFocusIntent(owner, worktreeId)
+    retryStructuredAgentSessionLaunchIntent(intent)
+    restoreStructuredAgentSessionLaunchIntent({
+      worktreeId,
+      executionHostId: intent.executionHostId,
+      agent: intent.agent,
+      ...intent.params.envelope
+    })
+    createStructuredAgentSessionLaunchIntent(
+      worktreeId,
+      'codex',
+      'runtime:server-1',
+      undefined,
+      undefined,
+      false
+    )
+    expect(peekWebSessionFocusIntent(owner, worktreeId)).toBeNull()
+  })
+
+  // The chat opens before its host answers, so the create is the last thing that can say no.
+  it('issues no create to a host held for its access, or after its chat closed', async () => {
+    vi.mocked(callStructuredAgentSession).mockResolvedValue({ supported: true })
+    const held = createStructuredAgentSessionLaunchIntent('workspace-1', 'claude')
+    hostPermission.mockResolvedValueOnce({ kind: 'refused', hostMode: null })
+    await expect(launchStructuredAgentSession(held)).rejects.toMatchObject({
+      code: 'structured_agent_session_host_permission'
+    })
+    const closed = createStructuredAgentSessionLaunchIntent('workspace-1', 'claude')
+    await expect(launchStructuredAgentSession(closed, undefined, false, () => true)).rejects.toThrow(
+      'cancelled before create'
+    )
+    expect(vi.mocked(callStructuredAgentSession).mock.calls.map(([, method]) => method)).toEqual([
+      'agentSession.createSupport',
+      'agentSession.createSupport'
+    ])
   })
 
   it('creates a native session with a host-verifiable launch intent', async () => {
@@ -323,27 +377,30 @@ describe('structured agent session launch', () => {
     }
   })
 
-  it("reports a paired server's current seed from the create probe, and no local one", async () => {
-    vi.mocked(callStructuredAgentSession).mockImplementation(async (_target, method) =>
-      method === 'agentSession.createSupport'
-        ? { supported: true, seedOptions: { model: 'sonnet' } }
-        : { ok: true, replayed: false, value: { sessionId: 'claude_1', fence: 1 } }
-    )
-    const paired = vi.fn()
-    const local = vi.fn()
+  it.each([undefined, { model: 'sonnet' }])(
+    "reports the paired host's seed answer, including a seedless older host (%s)",
+    async (seedOptions) => {
+      vi.mocked(callStructuredAgentSession).mockImplementation(async (_target, method) =>
+        method === 'agentSession.createSupport'
+          ? { supported: true, seedOptions }
+          : { ok: true, replayed: false, value: { sessionId: 'claude_1', fence: 1 } }
+      )
+      const paired = vi.fn()
+      const local = vi.fn()
 
-    await launchStructuredAgentSession(
-      createStructuredAgentSessionLaunchIntent('workspace-1', 'claude', 'runtime:server-1'),
-      paired
-    )
-    await launchStructuredAgentSession(
-      createStructuredAgentSessionLaunchIntent('workspace-1', 'claude', 'local'),
-      local
-    )
+      await launchStructuredAgentSession(
+        createStructuredAgentSessionLaunchIntent('workspace-1', 'claude', 'runtime:server-1'),
+        paired
+      )
+      await launchStructuredAgentSession(
+        createStructuredAgentSessionLaunchIntent('workspace-1', 'claude', 'local'),
+        local
+      )
 
-    expect(paired).toHaveBeenCalledWith({ model: 'sonnet' })
-    expect(local).not.toHaveBeenCalled()
-  })
+      expect(paired).toHaveBeenCalledWith(seedOptions)
+      expect(local).not.toHaveBeenCalled()
+    }
+  )
 
   it("seeds a paired chat with the server's reported selection, kept through a retry", () => {
     const intent = createStructuredAgentSessionLaunchIntent(

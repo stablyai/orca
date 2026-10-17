@@ -9,6 +9,7 @@ import { formatNativeChatFileReference } from '../../../../shared/agent-image-pa
 import {
   appendToNativeChatComposerDraft,
   nativeChatDraftScopeTabId,
+  readNativeChatComposerDraft,
   resolveNativeChatComposerDraftOwner,
   structuredAgentSessionIdOfDraftScope
 } from './native-chat-composer-draft-store'
@@ -24,6 +25,16 @@ export function nativeChatPendingAttachmentSnapshot(
   scopeKey: string
 ): readonly NativeChatComposerImageAttachment[] {
   return pendingCache.get(scopeKey) ?? EMPTY
+}
+
+/** Pending chips are user content before their file paths settle into the draft. */
+export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
+  const draft = readNativeChatComposerDraft(scopeKey)
+  return (
+    draft.text.trim() !== '' ||
+    draft.images.length > 0 ||
+    nativeChatPendingAttachmentSnapshot(scopeKey).length > 0
+  )
 }
 
 function writePending(scopeKey: string, next: readonly NativeChatComposerImageAttachment[]): void {

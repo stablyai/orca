@@ -26,6 +26,7 @@ export type StructuredAgentLaunchSettlement =
   | { kind: 'terminal' }
 
 export type StructuredAgentLaunchHooks = {
+  activate?: boolean
   onStructuredReady?: (sessionId: string) => void
   /** Abort the moment the caller abandons the launch. The loop cancels on the event, not only by
    *  polling after awaits, so a staged prompt is discarded before it can reach the provider. */
@@ -101,7 +102,10 @@ export function beginStructuredAgentLaunchSettlement(
   options: StructuredAgentLaunchOptions,
   hooks: StructuredAgentLaunchHooks
 ): StructuredAgentLaunchHandle {
-  const launch = startStructuredAgentLaunch(worktreeId, agent, options)
+  const launch = startStructuredAgentLaunch(worktreeId, agent, {
+    ...options,
+    ...(hooks.activate !== undefined ? { activate: hooks.activate } : {})
+  })
   return {
     sessionId: launch.sessionId,
     executionHostId: launch.executionHostId,

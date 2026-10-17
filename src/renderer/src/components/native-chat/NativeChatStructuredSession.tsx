@@ -224,6 +224,7 @@ export function NativeChatStructuredSession(
     controller,
     sendThroughLaunch,
     starting: provisionalLaunch.starting,
+    transportEnabled: provisionalLaunch.transportEnabled,
     worktreeId: ownerWorktreeId ?? undefined,
     optionPickerRequest,
     setOptionPickerRequest,

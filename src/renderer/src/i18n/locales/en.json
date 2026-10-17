@@ -18491,6 +18491,8 @@
         "imagePasteFailed": "Image paste failed.",
         "imageSaving": "Saving pasted image…",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "sessionAttachmentsStarting": "{{agent}} chat is still opening. Wait for it to open, then attach the files again.",
+        "sessionAttachmentsFailed": "{{agent}} chat could not open. Use Retry in the chat, then attach the files again.",
         "pasteUnavailable": "Can't paste — this chat isn't accepting input right now.",
         "model": "Model",
         "effort": "Effort",

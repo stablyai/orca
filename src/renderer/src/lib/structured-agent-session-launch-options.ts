@@ -28,6 +28,7 @@ import {
   type AgentSessionWriteFailure
 } from '../../../shared/agent-session-write-failure'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -35,6 +36,18 @@ export type StructuredLaunchSelection = {
   seed?: Readonly<Record<string, string>>
   /** Encoded picks made before publish; the launch applies them before it publishes. */
   held: Readonly<Record<string, string>>
+  /** A paired server has not yet said what create seeds, so nothing can be picked against it. */
+  seedPending?: true
+}
+
+export function initialStructuredLaunchSelection(
+  intent: StructuredAgentSessionLaunchIntent
+): StructuredLaunchSelection {
+  return {
+    seed: intent.seedOptions,
+    held: {},
+    ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
+  }
 }
 
 export type StructuredLaunchOptionOutcome =
@@ -65,7 +78,12 @@ export function holdStructuredAgentSessionLaunchOption(
   encoded: string
 ): Promise<StructuredLaunchOptionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
-  if (!state || state.cancelled || state.callers.outcome === 'published') {
+  if (
+    !state ||
+    state.cancelled ||
+    state.callers.outcome === 'published' ||
+    state.selection.seedPending
+  ) {
     return null
   }
   const replies = repliesFor(state)

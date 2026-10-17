@@ -15,6 +15,7 @@ import {
 } from '@/runtime/structured-agent-session-client'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
+import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import {
   abandonStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent
@@ -75,6 +76,28 @@ async function requireHostCreateSupport(
   return support.seedOptions
 }
 
+/** A paired host that would run the chat with more access than asked for gets nothing to start.
+ *  The chat's own permission gate says why, so this refusal carries no words of its own. */
+const STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL = 'structured_agent_session_host_permission'
+
+async function requireHostPermission(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
+  const permission = await readStructuredChatHostPermissionVerdict(intent.target, intent.agent)
+  if (permission.kind === 'allowed') {
+    return
+  }
+  if (permission.kind === 'unverified') {
+    throw new StructuredAgentSessionCreateUnknownOutcomeError(
+      'The host could not say what access the chat would run with.',
+      'runtime_unavailable'
+    )
+  }
+  abandonStructuredAgentSessionLaunchIntent(intent)
+  throw new StructuredAgentSessionCreateRefusalError(
+    STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL,
+    STRUCTURED_LAUNCH_HOST_PERMISSION_REFUSAL
+  )
+}
+
 /** Told the seed a paired server says this create will use, which may differ from an earlier
  *  attempt's; a local launch reads its own settings instead. */
 export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
@@ -82,12 +105,15 @@ export type StructuredLaunchHostSeedListener = (seedOptions: LaunchSeed) => void
 export async function launchStructuredAgentSession(
   intent: StructuredAgentSessionLaunchIntent,
   onHostSeed?: StructuredLaunchHostSeedListener,
-  priorCreateOutcomeUnknown = false
+  priorCreateOutcomeUnknown = false,
+  /** A chat closed while its host was being asked issues no create. */
+  isCancelled: () => boolean = () => false
 ): Promise<StructuredAgentLaunchReceipt> {
   const hostSeed = await requireHostCreateSupport(intent)
   if (intent.target.kind !== 'local') {
     onHostSeed?.(hostSeed)
   }
+  await requireHostPermission(intent)
   if (!intent.createPrepared) {
     let supported = false
     try {
@@ -100,6 +126,9 @@ export async function launchStructuredAgentSession(
       intent.prepareCreate?.()
       intent.createPrepared = true
     }
+  }
+  if (isCancelled()) {
+    throw new Error('structured session launch cancelled before create')
   }
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   try {

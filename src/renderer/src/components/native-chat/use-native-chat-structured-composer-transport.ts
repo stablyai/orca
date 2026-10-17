@@ -7,6 +7,7 @@ import type {
 } from './native-chat-composer-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
+import { nativeChatSessionAttachmentNotReadyNotice } from './native-chat-attachment-upload'
 
 /** What the composer of a structured chat sends, picks and runs through, from the chat's controller. */
 export function useNativeChatStructuredComposerTransport(args: {
@@ -20,6 +21,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   ) => boolean | 'queued'
   /** The chat is starting: it takes no send yet. */
   starting: boolean
+  transportEnabled: boolean
   worktreeId: string | undefined
   optionPickerRequest: NativeChatOptionPickerRequest | null
   setOptionPickerRequest: Dispatch<SetStateAction<NativeChatOptionPickerRequest | null>>
@@ -30,6 +32,7 @@ export function useNativeChatStructuredComposerTransport(args: {
 }): NativeChatStructuredComposerTransport {
   const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
   const { setOptionPickerRequest, onError, onSubmitted } = args
+  const { transportEnabled } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
   const acceptsImages = useStructuredAgentAcceptsImages(
     props.target,
@@ -86,7 +89,13 @@ export function useNativeChatStructuredComposerTransport(args: {
       runtime: props.target.kind === 'local' ? 'local' : 'remote',
       sessionId: props.sessionId,
       runtimeEnvironmentId:
-        props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
+        props.target.kind === 'local' ? null : (props.target.environmentId ?? null),
+      ...(!transportEnabled
+        ? {
+            sessionPending: true,
+            sessionPendingNotice: nativeChatSessionAttachmentNotReadyNotice(props.agent, starting)
+          }
+        : {})
     }
   }, [
     acceptsImages,
@@ -101,6 +110,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     sendBlockedReason,
     sendThroughLaunch,
     setOptionPickerRequest,
-    starting
+    starting,
+    transportEnabled
   ])
 }

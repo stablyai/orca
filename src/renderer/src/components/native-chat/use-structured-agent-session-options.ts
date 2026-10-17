@@ -65,7 +65,7 @@ export function useStructuredAgentSessionOptions(args: {
   const launchSeedOptions = launch?.seedOptions
   const held = launch?.heldOptions ?? NO_HELD_OPTIONS
   // Published but not attached: the launch no longer holds picks and there is no fence to send one.
-  const acceptsPicks = !transportEnabled || fence !== null
+  const acceptsPicks = (!transportEnabled || fence !== null) && launch?.seedPending !== true
   const optionCatalog = useMemo(() => structuredAgentSessionSeedCatalog(agent), [agent])
   const {
     optionView,

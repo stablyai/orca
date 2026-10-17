@@ -86,13 +86,23 @@ export function createStructuredAgentSessionLaunchIntent(
   agent: TuiAgent,
   executionHostId?: ExecutionHostId,
   resumeFrom?: StructuredAgentSessionResumeSource,
-  hostSeedOptions?: LaunchSeed
+  hostSeedOptions?: LaunchSeed,
+  activate = true
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
     executionHostId ?? resolveStructuredAgentSessionOwner(useAppStore.getState(), worktreeId)
   )
   const sessionId = createStructuredAgentSessionId(agent, createBrowserUuid)
+  if (activate) {
+    recordWebSessionFocusIntent(
+      structuredAgentSessionFocusOwner(owner.target),
+      worktreeId,
+      `agent-session:${sessionId}`,
+      undefined,
+      resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
+    )
+  }
   return buildStructuredAgentSessionLaunchIntent(
     worktreeId,
     owner,
@@ -112,13 +122,6 @@ function buildStructuredAgentSessionLaunchIntent(
   hostSeedOptions: LaunchSeed
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
-  recordWebSessionFocusIntent(
-    structuredAgentSessionFocusOwner(owner.target),
-    worktreeId,
-    `agent-session:${sessionId}`,
-    undefined,
-    resolveWebSessionVisibleTabId(state, worktreeId)
-  )
   return {
     sessionId,
     worktreeId,
@@ -168,13 +171,6 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
 }): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   const { target } = structuredAgentSessionOwnerTarget(args.worktreeId, args.executionHostId)
-  recordWebSessionFocusIntent(
-    structuredAgentSessionFocusOwner(target),
-    args.worktreeId,
-    `agent-session:${args.sessionId}`,
-    undefined,
-    resolveWebSessionVisibleTabId(state, args.worktreeId)
-  )
   return {
     sessionId: args.sessionId,
     worktreeId: args.worktreeId,

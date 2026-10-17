@@ -47,6 +47,7 @@ import {
   trackStructuredLaunchConfirmationDeadline
 } from './structured-agent-session-launch-prompt-outcome'
 import { repeatedStructuredLaunchAttempt } from './structured-agent-session-launch-request'
+import { initialStructuredLaunchSelection } from './structured-agent-session-launch-options'
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 export {
@@ -109,7 +110,8 @@ function adoptPairedHostSeed(
   state: StructuredLaunchState,
   seedOptions: StructuredLaunchState['selection']['seed']
 ): void {
-  if (JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
+  const { seedPending, ...selection } = state.selection
+  if (!seedPending && JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
     return
   }
   if (seedOptions) {
@@ -117,7 +119,7 @@ function adoptPairedHostSeed(
   } else {
     delete state.intent.seedOptions
   }
-  state.selection = { ...state.selection, seed: seedOptions }
+  state.selection = { ...selection, seed: seedOptions }
   notifyStructuredLaunchListeners()
 }
 
@@ -136,7 +138,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
   state.callers.outcome = 'pending'
   // A new create seeds from the settings of now (a paired server's arrive with its probe); picks
   // held through the failure still apply.
-  state.selection = { ...state.selection, seed: state.intent.seedOptions }
+  state.selection = { ...initialStructuredLaunchSelection(state.intent), held: state.selection.held }
   state.onHostSeed = (seedOptions) => adoptPairedHostSeed(state, seedOptions)
   state.promise = publishWithHeldOptions(
     state,
@@ -202,7 +204,8 @@ function structuredAgentLaunchState(
     agent,
     options.executionHostId,
     options.resumeFrom,
-    options.hostSeedOptions
+    options.hostSeedOptions,
+    options.activate
   )
   const text = launchPromptText(options)
   const stagedPrompt = text
@@ -223,7 +226,7 @@ function structuredAgentLaunchState(
     cancelled: false,
     onVisibilityChanged: notifyStructuredLaunchListeners,
     callers,
-    selection: { seed: intent.seedOptions, held: {} }
+    selection: initialStructuredLaunchSelection(intent)
   }
   state.onHostSeed = (seedOptions) => adoptPairedHostSeed(state, seedOptions)
   callers.onSettled = () => maybeCleanupLaunchState(state)
