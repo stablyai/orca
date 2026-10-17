@@ -7,6 +7,8 @@ import {
   getRateLimit,
   listTodos
 } from '../gitlab/client'
+import { getGlabKnownHosts } from '../gitlab/gl-utils'
+import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { registerGitLabCiJobHandlers } from './gitlab-ci-job-handlers'
 import { registerGitLabIssueHandlers } from './gitlab-issue-handlers'
 import { registerGitLabMergeRequestMutationHandlers } from './gitlab-merge-request-mutation-handlers'
@@ -32,6 +34,13 @@ export function registerGitLabHandlers(store: Store): void {
     async (_event, args?: { force?: boolean; host?: string | null }) =>
       getRateLimit({ force: Boolean(args?.force), host: args?.host ?? null })
   )
+
+  // Why: answers from the repo's own execution context so the Tasks page can tell a
+  // self-hosted GitLab origin from a GitHub one without querying either forge.
+  ipcMain.handle('gitlab:knownHosts', async (_event, args: GitLabRepoSelectorArgs) => {
+    const repo = assertRegisteredRepo(args, store)
+    return getGlabKnownHosts(getRepoRoutingConnectionId(repo), ...localGitOptionArgs(store, repo))
+  })
 
   ipcMain.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)

@@ -1,4 +1,4 @@
-import type { TaskPageSourceAvailabilityPreludeModel } from './use-task-page-source-availability'
+import type { TaskPageSourceRepoScopeModel } from './use-task-page-source-repo-scope'
 import { useMemo } from 'react'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type {
@@ -16,13 +16,15 @@ import {
   getTaskSourceContextSummary
 } from './task-source-context-summary'
 import { getRepoBackedTaskEmptyState } from '@/components/task-page-empty-state'
-export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPreludeModel) {
+export function useTaskPageSourceSummary(model: TaskPageSourceRepoScopeModel) {
   const {
     preflightStatus,
     preflightStatusChecked,
     preflightStatusCurrent,
     preflightDescribesDesktop,
     selectedRepos,
+    githubTaskRepos,
+    gitlabTaskRepos,
     selectedLinearWorkspace,
     selectedJiraSite,
     sourceOptions,
@@ -64,15 +66,16 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     const accountAvailability = accountHostAvailability ? [accountHostAvailability] : []
     const labelFor = (provider: TaskProvider): string =>
       sourceOptions.find((source) => source.id === provider)?.label ?? provider
+    // Why: a repo skipped as hosted on the other forge is never queried, so its host cannot block this source.
     return {
       github:
         getTaskSourceAvailabilityNotice({
           providerLabel: labelFor('github'),
-          sourceCount: selectedRepos.length,
+          sourceCount: githubTaskRepos.length,
           hostLabelById,
           hostAvailability: availabilityForContexts(
             'github',
-            selectedRepos
+            githubTaskRepos
               .map((repo) => getTaskPageRepoSourceContext(repo, 'github'))
               .filter((context): context is TaskSourceContext => context !== null)
           )
@@ -80,11 +83,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
       gitlab:
         getTaskSourceAvailabilityNotice({
           providerLabel: labelFor('gitlab'),
-          sourceCount: selectedRepos.length,
+          sourceCount: gitlabTaskRepos.length,
           hostLabelById,
           hostAvailability: availabilityForContexts(
             'gitlab',
-            selectedRepos
+            gitlabTaskRepos
               .map((repo) => getTaskPageRepoSourceContext(repo, 'gitlab'))
               .filter((context): context is TaskSourceContext => context !== null)
           )
@@ -113,7 +116,8 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     preflightStatusCurrent,
     preflightDescribesDesktop,
     runtimePreflightStatusByHostId,
-    selectedRepos,
+    githubTaskRepos,
+    gitlabTaskRepos,
     sourceOptions
   ])
   const taskSourceContextSummary = useMemo(() => {
@@ -147,18 +151,16 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     taskSourceRepoContexts
   ])
   const taskSourceAvailabilityNotice = useMemo(() => {
+    // Why: the banner must describe the same repos as the source button beside it.
+    if (taskSource === 'github' || taskSource === 'gitlab') {
+      return taskSourceAvailabilityNoticeByProvider[taskSource] ?? null
+    }
     const providerLabel =
       sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
     return getTaskSourceAvailabilityNotice({
       providerLabel,
-      sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
-          ? 1
-          : Math.max(1, taskSourceRepoContexts.length),
-      hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
-          ? accountBackedTaskSourceHostAvailability
-          : taskSourceHostAvailability,
+      sourceCount: 1,
+      hostAvailability: accountBackedTaskSourceHostAvailability,
       hostLabelById
     })
   }, [
@@ -166,16 +168,16 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     hostLabelById,
     sourceOptions,
     taskSource,
-    taskSourceHostAvailability,
-    taskSourceRepoContexts.length
+    taskSourceAvailabilityNoticeByProvider
   ])
   const githubEmptyState = useMemo(
     () =>
       getRepoBackedTaskEmptyState({
         provider: 'github',
-        selectedRepoCount: selectedRepos.length
+        selectedRepoCount: selectedRepos.length,
+        sourceRepoCount: githubTaskRepos.length
       }),
-    [selectedRepos.length]
+    [githubTaskRepos.length, selectedRepos.length]
   )
   const nextModel = model as typeof model & {
     taskSourceAvailabilityNoticeByProvider: typeof taskSourceAvailabilityNoticeByProvider

@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetailModel) {
   const {
-    selectedRepos,
+    githubTaskRepos,
     taskSource,
     githubMode,
     setTasksRefreshing,
@@ -57,14 +57,14 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
   // Why: the per-repo issue-source indicator and retry banner both derive from the same workItemsCache entry, so no extra IPC.
   // Why: subscribe only to entries this page renders; the selector returns entry refs so shallow equality filters unrelated cache writes.
   const perRepoSourceState = useMemo<TaskPageRepoSourceState[]>(
-    () => buildTaskPageRepoSourceState(selectedRepos, selectedWorkItemsCacheEntries),
-    [selectedRepos, selectedWorkItemsCacheEntries]
+    () => buildTaskPageRepoSourceState(githubTaskRepos, selectedWorkItemsCacheEntries),
+    [githubTaskRepos, selectedWorkItemsCacheEntries]
   )
 
   // Why: repos that fetched but resolved no GitHub source (#9660) show empty like a genuine zero-result; surface them explicitly with Retry.
   const unresolvedSourceRepos = useMemo(
-    () => selectTaskPageUnresolvedSourceRepos(selectedRepos, perRepoSourceState),
-    [selectedRepos, perRepoSourceState]
+    () => selectTaskPageUnresolvedSourceRepos(githubTaskRepos, perRepoSourceState),
+    [githubTaskRepos, perRepoSourceState]
   )
   useEffect(() => {
     if (taskSource !== 'github' || githubMode !== 'items') {
@@ -87,7 +87,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
     if (taskSource !== 'github') {
       return
     }
-    for (const [index, r] of selectedRepos.entries()) {
+    for (const [index, r] of githubTaskRepos.entries()) {
       const entry = selectedWorkItemsCacheEntries[index]
       if (!entry?.issueSourceFellBack) {
         continue
@@ -109,7 +109,7 @@ export function useTaskPageGitHubCacheReconciliation(model: TaskPageGitHubDetail
       )
       fellBackToastedRef.current.add(r.id)
     }
-  }, [selectedRepos, selectedWorkItemsCacheEntries, taskSource])
+  }, [githubTaskRepos, selectedWorkItemsCacheEntries, taskSource])
 
   // Why: partial-failure retry leaves the cache populated so tasksLoading never flips, giving no feedback; track retry-in-flight per source so only the clicked banner shows "Retrying…".
   const [retryingSourceKeys, setRetryingSourceKeys] = useState<ReadonlySet<string>>(() => new Set())

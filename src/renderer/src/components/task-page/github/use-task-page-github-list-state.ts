@@ -20,8 +20,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     pageData,
     getCachedWorkItems,
     workItemsInvalidationNonce,
-    selectedRepos,
-    selectedReposKey,
+    githubTaskRepos,
+    githubTaskReposKey,
     defaultTaskViewPreset,
     initialTaskQuery,
     taskSource,
@@ -58,13 +58,13 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
   // Why: split the display budget across repos so one provider page maps to one UI page without truncating rows later pages can't return.
   const githubPerRepoPageLimit = getTaskPagePerRepoLimit(
-    selectedRepos.length,
+    githubTaskRepos.length,
     PER_REPO_FETCH_LIMIT,
     CROSS_REPO_DISPLAY_LIMIT
   )
-  const githubPageSize = githubPerRepoPageLimit * Math.max(1, selectedRepos.length)
+  const githubPageSize = githubPerRepoPageLimit * Math.max(1, githubTaskRepos.length)
   const githubResumeContextKey = buildTaskPageGitHubResumeContextKey({
-    selectedReposKey,
+    selectedReposKey: githubTaskReposKey,
     query: appliedTaskSearch.trim(),
     pageSize: githubPageSize
   })
@@ -72,7 +72,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
-    for (const r of selectedRepos) {
+    for (const r of githubTaskRepos) {
       const cached = getCachedWorkItems(
         r.id,
         githubPerRepoPageLimit,
@@ -159,7 +159,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     []
   )
 
-  // Why: keyed on selectedReposKey, not the selectedRepos array — a background
+  // Why: keyed on githubTaskReposKey, not the githubTaskRepos array — a background
   // repos:changed refresh mid-flight would otherwise bump the generation and
   // silently discard the user's page navigation (#11485). Mirrors every dep of
   // the fetch effect that resets page state, so a reset always invalidates
@@ -169,7 +169,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     setPaginationLoading(false)
     setLoadingTargetPage(null)
   }, [
-    selectedReposKey,
+    githubTaskReposKey,
     appliedTaskSearch,
     workItemsInvalidationNonce,
     taskRefreshNonce,

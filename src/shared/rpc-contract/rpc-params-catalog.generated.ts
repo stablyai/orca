@@ -1059,6 +1059,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.createIssue': CreateIssueOfGitlabParams,
   'gitlab.diagnoseAuth': EmptyParams,
   'gitlab.jobTrace': JobTrace,
+  'gitlab.knownHosts': RepoSelectorOfGitlabParams,
   'gitlab.listAssignableUsers': RepoSelectorOfGitlabParams,
   'gitlab.listIssues': IssuesListOfGitlabParams,
   'gitlab.listLabels': RepoSelectorOfGitlabParams,

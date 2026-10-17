@@ -2621,7 +2621,9 @@
         "jiraColumnStoryPoints": "Points",
         "jiraColumnOriginalEstimate": "Estimation",
         "jiraColumnRemainingEstimate": "Restant",
-        "jiraBoardEmptyColumn": "Aucune issue"
+        "jiraBoardEmptyColumn": "Aucune issue",
+        "skippedReposHostedOnGitLab": "Ignorés — hébergés sur GitLab ({{value0}})",
+        "skippedReposHostedOnGitHub": "Ignorés — hébergés sur GitHub ({{value0}})"
       },
       "Terminal": {
         "73768427cf": "Fermer",
@@ -18132,7 +18134,11 @@
         "noGitLabMrsTitle": "Aucune merge request GitLab",
         "noGitLabMrsDescription": "Aucune MR GitLab ne correspond à ce filtre.",
         "noGitLabWorkTitle": "Aucun travail GitLab",
-        "noGitLabWorkDescription": "Aucun work GitLab ne correspond à ce filtre."
+        "noGitLabWorkDescription": "Aucun work GitLab ne correspond à ce filtre.",
+        "noGitHubProjectsTitle": "Aucun projet GitHub sélectionné",
+        "noGitHubProjectsDescription": "Les projets sélectionnés sont hébergés sur GitLab. Sélectionnez un projet hébergé sur GitHub.",
+        "noGitLabProjectsTitle": "Aucun projet GitLab sélectionné",
+        "noGitLabProjectsDescription": "Les projets sélectionnés sont hébergés sur GitHub. Sélectionnez un projet hébergé sur GitLab."
       },
       "taskSourceContextSummary": {
         "sourceUnavailable": "Source {{value0}} indisponible : {{value1}}",

@@ -24,7 +24,7 @@ export function TaskPageGitHubFilters({
   const {
     setTaskResumeState,
     setIssueSourcePreference,
-    selectedRepos,
+    githubTaskRepos,
     taskSearchInput,
     setTaskSearchInput,
     appliedTaskSearch,
@@ -154,7 +154,7 @@ export function TaskPageGitHubFilters({
                   // Why: restore a non-empty draft (accidental dismissal recoverable); empty default guards a stale draft after a repo change.
                   const seed = resolveNewIssueOpenSeed({
                     draft: useAppStore.getState().newIssueDraft,
-                    selectedRepoIds: selectedRepos.map((r) => r.id)
+                    selectedRepoIds: githubTaskRepos.map((r) => r.id)
                   })
                   setNewIssueTitle(seed.title)
                   setNewIssueBody(seed.body)
@@ -217,8 +217,10 @@ export function TaskPageGitHubFilters({
           <div className="flex flex-wrap items-center gap-2">
             {rows.map((s) => {
               // Why the host: a twin's rows share the id (and maybe the path); each row has its own preference.
-              const repo = selectedRepos.find((r) => repoMatchesHostIdentity(r, s.repoId, s.hostId))
-              const showRepoBadgeLabel = selectedRepos.length > 1 && repo
+              const repo = githubTaskRepos.find((r) =>
+                repoMatchesHostIdentity(r, s.repoId, s.hostId)
+              )
+              const showRepoBadgeLabel = githubTaskRepos.length > 1 && repo
               const selectorRenderable = hasUpstreamCandidateDivergence(s)
               // Why: render the indicator standalone — it has its own chip styles, so nesting it in our chip would double-border it.
               if (!selectorRenderable && hasDivergentSources(s)) {

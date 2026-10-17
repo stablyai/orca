@@ -40,9 +40,9 @@ describe('useTaskPageGitLabLoading', () => {
     const setGitlabError = vi.fn()
     renderHook(() =>
       useTaskPageGitLabLoading({
-        selectedRepos: [serverRepo],
-        selectedReposKey: 'server-repo',
-        primaryRepo: serverRepo,
+        gitlabTaskRepos: [serverRepo],
+        gitlabTaskReposKey: 'server-repo',
+        gitlabPrimaryRepo: serverRepo,
         taskSource: 'gitlab',
         setGitlabItems,
         setGitlabLoading: vi.fn(),
@@ -81,9 +81,9 @@ describe('useTaskPageGitLabLoading', () => {
   function renderIssuesHook(repos: Repo[], setGitlabItems = vi.fn()) {
     return renderHook(() =>
       useTaskPageGitLabLoading({
-        selectedRepos: repos,
-        selectedReposKey: repos.map((repo) => repo.id).join(','),
-        primaryRepo: repos[0],
+        gitlabTaskRepos: repos,
+        gitlabTaskReposKey: repos.map((repo) => repo.id).join(','),
+        gitlabPrimaryRepo: repos[0],
         taskSource: 'gitlab',
         setGitlabItems,
         setGitlabLoading: vi.fn(),

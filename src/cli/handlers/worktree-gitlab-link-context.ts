@@ -1,4 +1,4 @@
-import { parseRemoteProjectRefCandidate } from '../../main/gitlab/project-ref-parser'
+import { parseRemoteProjectRefCandidate } from '../../shared/gitlab-project-ref-parser'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../shared/new-workspace/gitlab-links'

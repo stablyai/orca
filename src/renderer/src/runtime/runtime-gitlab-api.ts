@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../preload/api-types'
+import { DEFAULT_GITLAB_HOSTS } from '../../../shared/gitlab-project-ref-parser'
 import {
+  GITLAB_KNOWN_HOSTS_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE,
   type RuntimeCapability
@@ -59,6 +61,11 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
         throw error
       }),
     todos: (args) => route<GitLabApiResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
+    // Why: an older server cannot list glab's hosts; gitlab.com alone leaves self-hosted repos undecided.
+    knownHosts: async (args) =>
+      (await transport.supportsCapability(GITLAB_KNOWN_HOSTS_RUNTIME_CAPABILITY))
+        ? route<GitLabApiResult<'knownHosts'>>(GITLAB_WEB_RPC_METHODS.knownHosts, args)
+        : [...DEFAULT_GITLAB_HOSTS],
     // Why: the owner guard names a host as this client sees it; the server resolves the repo itself.
     workItemDetails: ({ repoOwnerExecutionHostId: _owner, ...args }) =>
       route<GitLabApiResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),

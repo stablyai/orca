@@ -15,6 +15,7 @@ import {
   getTaskSourceCacheScope
 } from '../../../shared/task-source-context'
 import { useTaskPageSourceSummary } from './use-task-page-source-summary'
+import { useTaskPageSourceRepoScope } from './use-task-page-source-repo-scope'
 export type TaskPageSourceAvailabilityPreludeModel = ReturnType<
   typeof useTaskPageSourceAvailabilityPrelude
 >
@@ -173,7 +174,9 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   return nextModel
 }
 export function useTaskPageSourceAvailability(model: TaskPageRuntimeHostsModel) {
-  const preludeModel = useTaskPageSourceAvailabilityPrelude(model)
-  return useTaskPageSourceSummary(preludeModel)
+  // Why: one expression, so the focus-read ratchet still traces the prelude's settings read.
+  return useTaskPageSourceSummary(
+    useTaskPageSourceRepoScope(useTaskPageSourceAvailabilityPrelude(model))
+  )
 }
 export type TaskPageSourceAvailabilityModel = ReturnType<typeof useTaskPageSourceAvailability>

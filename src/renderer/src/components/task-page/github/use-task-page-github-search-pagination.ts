@@ -16,7 +16,7 @@ import { getTaskPageRepoSourceContext } from '../../task-page-source-context'
 export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
   const {
     setTaskResumeState,
-    selectedRepos,
+    githubTaskRepos,
     githubSearchPersistReadyRef,
     taskResumeApplied,
     taskSearchInput,
@@ -44,11 +44,11 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
   // Why: load only the clicked page so a high-page jump doesn't exhaust GitHub's Search API rate bucket.
   const handleLoadNextPage = useCallback(
     async (targetPage?: number) => {
-      if (paginationLoading || selectedRepos.length === 0) {
+      if (paginationLoading || githubTaskRepos.length === 0) {
         return
       }
       const q = stripRepoQualifiers(appliedTaskSearch.trim())
-      const repoArgs = selectedRepos.map((r) => ({
+      const repoArgs = githubTaskRepos.map((r) => ({
         repoId: r.id,
         path: r.path,
         executionHostId: r.executionHostId,
@@ -157,7 +157,7 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
     },
     [
       paginationLoading,
-      selectedRepos,
+      githubTaskRepos,
       currentPage,
       appliedTaskSearch,
       fetchWorkItemsNextPage,
