@@ -170,6 +170,7 @@ export function useEditorPanelDiffContentLoader({
             kind: 'text',
             originalContent: '',
             modifiedContent: `Error loading diff: ${String(err)}`,
+            loadError: true,
             originalIsBinary: false,
             modifiedIsBinary: false
           }

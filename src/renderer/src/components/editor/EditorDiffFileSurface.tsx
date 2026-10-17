@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { DiffContent } from './editor-panel-content-types'
 import { getDiffContentSignature } from './diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
@@ -28,7 +28,7 @@ export function EditorDiffFileSurface({
   reloadContent
 }: {
   activeFile: OpenFile
-  diffContent: GitDiffResult | undefined
+  diffContent: DiffContent | undefined
   editBuffer: string | undefined
   resolvedLanguage: string
   sideBySide: boolean
@@ -52,7 +52,9 @@ export function EditorDiffFileSurface({
     )
   }
 
-  const isEditable = activeFile.diffSource === 'unstaged'
+  const isEditable =
+    activeFile.diffSource === 'unstaged' &&
+    (diffContent.loadError !== true || editBuffer !== undefined)
   if (diffContent.kind === 'binary') {
     if (diffContent.isImage) {
       return (

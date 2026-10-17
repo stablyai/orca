@@ -150,7 +150,8 @@ export function useEditorPanelExternalContentEvents({
         if (!existing || existing.kind !== 'text') {
           return prev
         }
-        return { ...prev, [file.id]: { ...existing, modifiedContent: detail.content } }
+        const { loadError: _loadError, ...savedContent } = existing
+        return { ...prev, [file.id]: { ...savedContent, modifiedContent: detail.content } }
       })
     }
     window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, handler as EventListener)
