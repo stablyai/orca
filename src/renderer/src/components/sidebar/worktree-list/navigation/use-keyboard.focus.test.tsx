@@ -8,8 +8,16 @@ import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import type { KeybindingOverrides } from '../../../../../../shared/keybindings'
 
-const state = {
+const state: {
+  keybindings: KeybindingOverrides | undefined
+  activeView: string
+  activeTabType: string
+  activeWorktreeId: string
+  activeTabId: string
+  tabsByWorktree: Record<string, { id: string }[]>
+} = {
   keybindings: undefined,
   activeView: 'terminal',
   activeTabType: 'terminal',
@@ -105,6 +113,7 @@ function press(key: string, init: KeyboardEventInit = {}, target: HTMLElement = 
 
 beforeEach(() => {
   Object.assign(state, {
+    keybindings: undefined,
     activeView: 'terminal',
     activeTabType: 'terminal',
     activeWorktreeId: 'a',
@@ -201,6 +210,64 @@ describe('workspace list focus ownership', () => {
       expect(document.activeElement).toBe(textarea)
     }
   )
+
+  it.each(['Mac', 'Windows', 'Linux'])(
+    'leaves a text field its own chords but takes ones it ignores on %s',
+    (platform) => {
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+      const composer = document.createElement('div')
+      composer.setAttribute('contenteditable', 'true')
+      document.body.append(composer)
+      const mod = getShortcutPlatform() === 'darwin' ? { metaKey: true } : { ctrlKey: true }
+      press('ArrowDown', { ...mod, shiftKey: true }, composer)
+      expect(activate).not.toHaveBeenCalled()
+
+      state.keybindings = { 'worktree.navigateDown': ['Ctrl+Alt+ArrowDown'] }
+      act(() => root.render(<Probe />))
+      press('ArrowDown', { ctrlKey: true, altKey: true }, composer)
+      expect(activate.mock.calls.map(([id]) => id)).toEqual(['b'])
+    }
+  )
+
+  it.each(['monaco', 'select', 'file-search', 'number'])(
+    'leaves an ignored chord with a %s field that owns its own arrows',
+    (kind) => {
+      const field =
+        kind === 'select'
+          ? document.createElement('select')
+          : kind === 'monaco'
+            ? document.createElement('textarea')
+            : document.createElement('input')
+      if (kind === 'monaco') {
+        const editor = document.createElement('div')
+        editor.className = 'monaco-editor'
+        editor.append(field)
+        document.body.append(editor)
+      } else {
+        document.body.append(field)
+      }
+      if (kind === 'file-search') {
+        field.setAttribute('data-file-search-input', 'true')
+      }
+      if (field instanceof HTMLInputElement && kind === 'number') {
+        field.type = 'number'
+      }
+      state.keybindings = { 'worktree.navigateDown': ['Ctrl+Alt+ArrowDown'] }
+      act(() => root.render(<Probe />))
+      press('ArrowDown', { ctrlKey: true, altKey: true }, field)
+      expect(activate).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not move focus to the list from a text field on an ignored chord', () => {
+    const input = document.createElement('textarea')
+    document.body.append(input)
+    input.focus()
+    state.keybindings = { 'sidebar.focusWorktreeList': ['Ctrl+Alt+ArrowUp'] }
+    act(() => root.render(<Probe />))
+    press('ArrowUp', { ctrlKey: true, altKey: true }, input)
+    expect(document.activeElement).toBe(input)
+  })
 
   it('does not navigate while an application modal is active', () => {
     modal = 'settings'

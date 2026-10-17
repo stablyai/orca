@@ -8,6 +8,7 @@ import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-regi
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { textFieldReleasesArrowChord } from '@/lib/text-field-arrow-chords'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
@@ -95,17 +96,17 @@ export function useWorktreeListKeyboardNavigation(args: {
       scrollRef.current?.removeAttribute('data-keyboard-navigation')
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.defaultPrevented ||
-        e.isComposing ||
-        activeModal !== 'none' ||
-        fileSearchClaimsTextKey(e)
-      ) {
+      if (e.defaultPrevented || e.isComposing || activeModal !== 'none') {
+        return
+      }
+      const textFieldOwnsKey = fileSearchClaimsTextKey(e)
+      if (textFieldOwnsKey && !textFieldReleasesArrowChord(e)) {
         return
       }
 
       const platform = getShortcutPlatform()
       if (
+        !textFieldOwnsKey &&
         keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
         !hasVisibleOverlay()
       ) {
