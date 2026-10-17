@@ -3,18 +3,13 @@ import { createElement } from 'react'
 import { screenMount } from '../mounted-screen-tree'
 import { performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
-import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
-import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
+import { loadHostClientContext } from '../host-client-context-exposure'
+import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
 import type { HostStatusGates } from '../../../transport/host-status-gates'
 
 const HOST = 'host-1'
-
-/** The screen-root hook reads its client through the context handle `client-context.tsx` keeps. */
-export const tasksRouteScreenMountExposures: readonly OperationExposure[] = [
-  hostClientContextExposure
-]
 
 /** The tasks screen root: the repo list its pickers and its create form are hydrated from. */
 export function tasksRouteScreenMountAdapters(
