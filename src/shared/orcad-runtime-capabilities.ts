@@ -20,8 +20,14 @@ export const ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY = 'orcad.migration-
 // WSL host's) pushes them only to a host advertising this.
 export const HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY = 'accounts.host-launch-env.v1' as const
 
+// Why: an older server ignores `closeAdmissionForMs` and keeps admitting terminals; a client
+// treats the census as fenced only when this is advertised and the answer says so.
+export const ORCAD_TERMINAL_ADMISSION_FENCE_RUNTIME_CAPABILITY =
+  'orcad.terminal-admission-fence.v1' as const
+
 export const ORCAD_RUNTIME_CAPABILITIES = [
   ORCAD_TERMINAL_CENSUS_RUNTIME_CAPABILITY,
+  ORCAD_TERMINAL_ADMISSION_FENCE_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY,
   HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY
 ] as const

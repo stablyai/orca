@@ -6,7 +6,10 @@
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/pairing'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../shared/orcad-managed-runtime'
-import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
+import {
+  ORCAD_UPDATE_ADMISSION_FENCE_MS,
+  type OrcadTerminalCensus
+} from '../../shared/orcad-terminal-census'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { probeActiveOrcadReadiness } from '../ssh/orcad-active-readiness'
 import { orcadBoundPort } from '../ssh/orcad-managed-bound-port'
@@ -26,8 +29,13 @@ export type WslOrcadIncumbent = {
   census: OrcadTerminalCensus
   /** The incumbent's proven readiness; null when it could not be started or proven. */
   readiness: ServeReadiness | null
-  /** Counts again (no wake) just before activation stops the incumbent; null without readiness. */
+  /**
+   * Counts again (no wake) just before activation stops the incumbent, closing its terminal
+   * admission first (R32); null without readiness.
+   */
   recount: (() => Promise<OrcadTerminalCensus>) | null
+  /** Reopens the admission `recount` closed, when the incumbent keeps running. */
+  releaseAdmission: (() => Promise<void>) | null
 }
 
 const UNVERIFIABLE: OrcadTerminalCensus = {
@@ -76,7 +84,7 @@ export async function readWslOrcadIncumbent(
   const record = args.context.activationRecord
   const activatedAt = record.activatedAt ? Date.parse(record.activatedAt) : Number.NaN
   if (!record.active || !Number.isFinite(activatedAt) || activatedAt < 0) {
-    return { census: UNVERIFIABLE, readiness: null, recount: null }
+    return { census: UNVERIFIABLE, readiness: null, recount: null, releaseAdmission: null }
   }
   let readiness: ServeReadiness
   try {
@@ -93,21 +101,29 @@ export async function readWslOrcadIncumbent(
         }
       )
     } else {
-      return { census: UNVERIFIABLE, readiness: null, recount: null }
+      return { census: UNVERIFIABLE, readiness: null, recount: null, releaseAdmission: null }
     }
   } catch {
-    return { census: UNVERIFIABLE, readiness: null, recount: null }
+    return { census: UNVERIFIABLE, readiness: null, recount: null, releaseAdmission: null }
   }
-  const recount = (): Promise<OrcadTerminalCensus> =>
-    countIncumbentTerminals(args, readiness, activatedAt, dependencies)
-  return { census: await recount(), readiness, recount }
+  const count = (closeAdmissionForMs?: number): Promise<OrcadTerminalCensus> =>
+    countIncumbentTerminals(args, readiness, activatedAt, dependencies, closeAdmissionForMs)
+  return {
+    census: await count(),
+    readiness,
+    recount: () => count(ORCAD_UPDATE_ADMISSION_FENCE_MS),
+    releaseAdmission: async () => {
+      await count(0)
+    }
+  }
 }
 
 async function countIncumbentTerminals(
   args: { context: OrcadRemoteContext<WslOrcadHostTarget>; slot: OrcadSlotOptions },
   readiness: ServeReadiness,
   activatedAt: number,
-  dependencies: WslOrcadIncumbentDependencies
+  dependencies: WslOrcadIncumbentDependencies,
+  closeAdmissionForMs?: number
 ): Promise<OrcadTerminalCensus> {
   let forward: StartedPortForward | null = null
   try {
@@ -125,7 +141,10 @@ async function countIncumbentTerminals(
       pairedRuntimeConnectionFromOffer(offer),
       activatedAt,
       undefined,
-      { releaseFinishedAutomationTerminals: true }
+      {
+        releaseFinishedAutomationTerminals: true,
+        ...(closeAdmissionForMs === undefined ? {} : { closeAdmissionForMs })
+      }
     )
   } catch {
     return UNVERIFIABLE

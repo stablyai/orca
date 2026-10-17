@@ -641,10 +641,19 @@ describe('deployOrcad', () => {
       startedSinceActivation: 1,
       daemonProtocolVersion: 3
     }))
+    const releaseIncumbentAdmission = vi.fn(async () => {})
     expect(
-      await deployOrcad(options({ censusRecord: JSON.parse(ACTIVE_OLD), recountCensus }))
+      await deployOrcad(
+        options({
+          censusRecord: JSON.parse(ACTIVE_OLD),
+          recountCensus,
+          releaseIncumbentAdmission
+        })
+      )
     ).toMatchObject({ outcome: 'installed-not-activated', code: 'orcad_update_terminals_running' })
     expect(recountCensus).toHaveBeenCalledTimes(1)
+    // The recount closed the incumbent's admission; a deferred update must reopen it (R32).
+    expect(releaseIncumbentAdmission).toHaveBeenCalledTimes(1)
     expect(script.log).toEqual(['preflight'])
   })
 

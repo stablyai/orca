@@ -38,6 +38,7 @@ import {
 import type { OrcadRemoteContext } from './orcad-remote-context'
 import { readRemoteOrcadBuildHash } from './orcad-remote-build-hash'
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
+import { sshUpdateAdmissionFence } from './orcad-update-admission-fence'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from './orcad-installed-activation'
 import { pruneManagedOrcadVersions } from './orcad-managed-version-gc'
 import { rollbackOrcad } from './orcad-remote-rollback'
@@ -120,6 +121,7 @@ export async function runManagedOrcadUpdate(
     target: context.serverTarget,
     census,
     censusRecord: context.activationRecord,
+    ...sshUpdateAdmissionFence(userDataPath, environment, context.activationRecord, census),
     force: args.force,
     appVersion: getAppEnvironment().getVersion(),
     ...(args.admitRecord ? { admitRecord: args.admitRecord } : {})

@@ -71,6 +71,11 @@ const UNVERIFIABLE_CENSUS: OrcadTerminalCensus = {
   daemonProtocolVersion: null
 }
 
+/** A failed reopen leaves the fence to lapse on its own; it never changes the outcome. */
+async function reopenIncumbentAdmission(options: OrcadDeployOptions): Promise<void> {
+  await options.releaseIncumbentAdmission?.().catch(() => {})
+}
+
 function countedLockedRecord(options: OrcadDeployOptions, record: OrcadActivationRecord): boolean {
   const counted = options.censusRecord
   return (
@@ -173,6 +178,7 @@ export async function activateInstalledOrcad(
       ...(options.force !== undefined ? { force: options.force } : {})
     })
     if (recount.action === 'defer') {
+      await reopenIncumbentAdmission(options)
       return notActivated(recount.code, recount.reason)
     }
   }
@@ -193,6 +199,7 @@ export async function activateInstalledOrcad(
 
   const unstopped = incumbent ? await stopTransactionIncumbent(options, incumbent, lock) : null
   if (unstopped) {
+    await reopenIncumbentAdmission(options)
     return notActivated(
       'orcad_outgoing_stop_incomplete',
       `${unstopped} No snapshot was taken and the candidate was not started. Orca requires ` +

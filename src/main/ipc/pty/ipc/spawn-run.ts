@@ -13,6 +13,8 @@ import { assemblePtyIpcSpawnEnv } from './spawn-env'
 import { preparePtyIpcQoderCommand } from './spawn-qoder-command'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
 import { executePtyIpcSpawn } from './spawn-execute'
+import { runAdmittedTerminalSpawn } from '../../../runtime/terminal-admission-fence'
+import { assertTerminalAdmissionOpen } from '../host-env/spawn-cwd'
 import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
@@ -83,7 +85,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
     }
     // Right before the provider spawn, with nothing awaited in between: a closed pane starts nothing.
     ctx.paneAgentLaunch?.refuseIfClosed()
-    await executePtyIpcSpawn(ctx)
+    await runAdmittedTerminalSpawn(
+      () => assertTerminalAdmissionOpen(ctx.args.sessionId),
+      () => executePtyIpcSpawn(ctx)
+    )
     const committed = await commitPtyIpcSpawn(ctx)
     endPaneAgentLaunch(
       ctx,

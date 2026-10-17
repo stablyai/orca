@@ -62,6 +62,11 @@ export type OrcadDeployOptions = {
    * the upload still defers the update. Called only while the incumbent is the one counted.
    */
   recountCensus?: () => Promise<OrcadTerminalCensus>
+  /**
+   * Reopens the incumbent's terminal admission, which the recount closes (R32), when the update
+   * then leaves the incumbent running. Best effort: the fence also lapses on its own.
+   */
+  releaseIncumbentAdmission?: () => Promise<void>
   force?: boolean
   /** The Orca app version activating, recorded so an older client never downgrades the host. */
   appVersion?: string

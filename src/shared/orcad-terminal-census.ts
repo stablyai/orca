@@ -18,10 +18,21 @@ export const OrcadTerminalCensusSchema = z.object({
    * Of `liveSessions`, how many run inside orcad itself (a degraded daemon's fallback). Unlike
    * daemon sessions these end with any orcad restart. Absent from hosts that predate it.
    */
-  inProcessSessions: CountSchema.optional()
+  inProcessSessions: CountSchema.optional(),
+  /**
+   * Epoch ms until which the server refuses new terminals, when the request asked it to close
+   * admission; 0 once released. Absent from servers that cannot fence, so never assume a fence.
+   */
+  admissionClosedUntil: z.number().finite().nonnegative().optional()
 })
 
 export type OrcadTerminalCensus = z.infer<typeof OrcadTerminalCensusSchema>
+
+/** The longest a census may close terminal admission; the stop that follows takes seconds. */
+export const ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS = 5 * 60_000
+
+/** What an update's last census asks for; it lapses on its own if the desktop never comes back. */
+export const ORCAD_UPDATE_ADMISSION_FENCE_MS = 60_000
 
 /** RPC a managed orcad answers with its census; clients call it only when advertised. */
 export const ORCAD_TERMINAL_CENSUS_METHOD = 'orcad.terminalCensus'
@@ -33,5 +44,10 @@ export const OrcadTerminalCensusParamsSchema = z.object({
    * An update or rollback is about to restart the server: first close completed automation run
    * terminals no client used. Optional; an older server ignores it and counts them as before.
    */
-  releaseFinishedAutomationTerminals: z.literal(true).optional()
+  releaseFinishedAutomationTerminals: z.literal(true).optional(),
+  /**
+   * An update is about to stop the server: refuse new terminals for this long before counting, so
+   * none starts between this census and the stop; 0 reopens. Sent only where advertised.
+   */
+  closeAdmissionForMs: z.number().int().min(0).max(ORCAD_TERMINAL_ADMISSION_MAX_FENCE_MS).optional()
 })

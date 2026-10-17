@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
+import { ORCAD_UPDATE_ADMISSION_FENCE_MS } from '../../shared/orcad-terminal-census'
 import { emptyOrcadActivationRecord } from '../ssh/orcad-activation-record'
 import type { OrcadHostTransport } from '../ssh/orcad-host-transport'
 import type { OrcadRemoteContext } from '../ssh/orcad-remote-context'
@@ -124,6 +125,19 @@ describe('readWslOrcadIncumbent', () => {
     expect(deps.wake).toHaveBeenCalledTimes(1)
     expect(deps.listen).toHaveBeenCalledTimes(2)
     expect(close).toHaveBeenCalledTimes(2)
+    // Only the last count closes admission (R32); the first one must not refuse the user's terminals.
+    expect(vi.mocked(deps.census).mock.calls.map((call) => call[3])).toEqual([
+      { releaseFinishedAutomationTerminals: true },
+      {
+        releaseFinishedAutomationTerminals: true,
+        closeAdmissionForMs: ORCAD_UPDATE_ADMISSION_FENCE_MS
+      }
+    ])
+    await incumbent.releaseAdmission?.()
+    expect(vi.mocked(deps.census).mock.calls[2]?.[3]).toEqual({
+      releaseFinishedAutomationTerminals: true,
+      closeAdmissionForMs: 0
+    })
   })
 
   // After a reboot the woken incumbent's daemon starts empty, so the census proves zero.
@@ -153,7 +167,8 @@ describe('readWslOrcadIncumbent', () => {
     await expect(readWslOrcadIncumbent({ context: context(), slot }, deps)).resolves.toEqual({
       census: UNVERIFIABLE,
       readiness: null,
-      recount: null
+      recount: null,
+      releaseAdmission: null
     })
     expect(deps.listen).not.toHaveBeenCalled()
   })
@@ -176,7 +191,8 @@ describe('readWslOrcadIncumbent', () => {
     await expect(readWslOrcadIncumbent({ context: context(null), slot }, deps)).resolves.toEqual({
       census: UNVERIFIABLE,
       readiness: null,
-      recount: null
+      recount: null,
+      releaseAdmission: null
     })
     expect(deps.wake).not.toHaveBeenCalled()
   })

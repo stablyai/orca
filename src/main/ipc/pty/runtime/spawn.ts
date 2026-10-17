@@ -14,6 +14,8 @@ import { adoptMaterializedRuntimePtySpawn } from './spawn-early'
 import { prepareRuntimePtySpawn } from './spawn-preflight'
 import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { executeRuntimePtySpawn } from './spawn-execute'
+import { runAdmittedTerminalSpawn } from '../../../runtime/terminal-admission-fence'
+import { assertTerminalAdmissionOpen } from '../host-env/spawn-cwd'
 import { commitRuntimePtySpawn } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
 import {
@@ -98,7 +100,12 @@ export async function spawnPtyFromRuntimeController(
     if (earlyReserved) {
       return toRuntimeSpawnReply(earlyReserved)
     }
-    await executeRuntimePtySpawn(ctx)
+    // An update's census may have closed admission since preflight (R32).
+    await runAdmittedTerminalSpawn(
+      () =>
+        ctx.preAdoptedStablePane ? undefined : assertTerminalAdmissionOpen(ctx.args.sessionId),
+      () => executeRuntimePtySpawn(ctx)
+    )
     const committed = await commitRuntimePtySpawn(ctx)
     commitRuntimeSpawnHiddenDelivery(ctx)
     return toRuntimeSpawnReply(committed)
