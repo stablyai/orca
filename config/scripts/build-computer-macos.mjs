@@ -17,7 +17,6 @@ const entitlementsPath = path.join(
 const bundleId = process.env.ORCA_COMPUTER_MACOS_BUNDLE_ID ?? 'com.stablyai.orca.computer-use'
 const displayName = 'Orca Computer Use'
 const signingIdentity = resolveSigningIdentity()
-const universalTriples = ['arm64-apple-macosx', 'x86_64-apple-macosx']
 
 if (process.platform !== 'darwin') {
   process.exit(0)
@@ -27,13 +26,20 @@ buildUniversalBinary()
 chmodSync(binaryPath, 0o755)
 createHelperApp()
 
+// Repeated --arch yields one universal binary at --show-bin-path (.build/release);
+// per-triple builds land outside that path under SwiftPM's current build system.
 function buildUniversalBinary() {
-  const builtBinaries = universalTriples.map((triple) => {
-    run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
-    return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
-  })
-  mkdirSync(path.dirname(binaryPath), { recursive: true })
-  run('lipo', ['-create', ...builtBinaries, '-output', binaryPath])
+  run('swift', [
+    'build',
+    '-c',
+    'release',
+    '--package-path',
+    packagePath,
+    '--arch',
+    'arm64',
+    '--arch',
+    'x86_64'
+  ])
 }
 
 function createHelperApp() {
