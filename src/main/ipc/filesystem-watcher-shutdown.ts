@@ -19,6 +19,7 @@ export async function closeAllWatchers(): Promise<void> {
     retry.cancelWait()
   }
   watcherLifecycleState.pendingLocalCapacityRetries.clear()
+  watcherLifecycleState.localWatcherRearmBackoff.clear()
 
   // Cancel any pending grace-period teardowns — we're tearing down everything.
   for (const timer of watcherLifecycleState.pendingTeardowns.values()) {

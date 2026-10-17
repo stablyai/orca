@@ -15,11 +15,12 @@ import {
   createWatcherProcessEventDeliveryQueue,
   type WatcherProcessEventDeliveryQueue
 } from './parcel-watcher-event-delivery'
-import type {
-  HostToWatcherMessage,
-  WatcherProcessDeliveryOptions,
-  WatcherProcessSubscribeOptions,
-  WatcherToHostMessage
+import {
+  WATCHER_ROOT_DELETED_MESSAGE,
+  type HostToWatcherMessage,
+  type WatcherProcessDeliveryOptions,
+  type WatcherProcessSubscribeOptions,
+  type WatcherToHostMessage
 } from './parcel-watcher-process-protocol'
 import { errorMessage } from '../../shared/error-message'
 
@@ -228,7 +229,7 @@ function main(): void {
                 void eventDelivery
                   .flush()
                   .then(() =>
-                    send({ op: 'watch-error', id, message: 'File watcher root was deleted' })
+                    send({ op: 'watch-error', id, message: WATCHER_ROOT_DELETED_MESSAGE })
                   )
               }
             },

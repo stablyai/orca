@@ -42,6 +42,7 @@ export async function closeLocalWatcherForWorktreePath(
     watcherLifecycleState.suspendedLocalWatcherListeners.set(rootKey, suspended)
   }
   clearLocalCapacityRetry(rootKey)
+  watcherLifecycleState.localWatcherRearmBackoff.delete(rootKey)
   const pendingTeardown = watcherLifecycleState.pendingTeardowns.get(rootKey)
   if (pendingTeardown) {
     clearTimeout(pendingTeardown)

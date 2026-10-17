@@ -60,6 +60,8 @@ export const REMOTE_WATCH_RESYNC_COALESCE_MS = 5_000
 // calls in the first hour and 2/hour after, which a flapping link can absorb.
 export const REMOTE_WATCH_DORMANT_RETRY_MS = 60_000
 export const REMOTE_WATCH_DORMANT_RETRY_MAX_MS = 30 * 60_000
+export const LOCAL_WATCH_REARM_MS = 1000
+export const LOCAL_WATCH_REARM_MAX_MS = 30_000
 
 export const watcherLifecycleState = {
   watchedRoots: new Map<string, WatchedRoot>(),
@@ -86,6 +88,7 @@ export const watcherLifecycleState = {
   inFlightLocalInstalls: new Map<string, LocalWatcherInstallToken>(),
   pendingLocalInstallPromises: new Map<string, Promise<LocalWatcherInstallResult>>(),
   pendingLocalCapacityRetries: new Map<string, LocalWatcherCapacityRetry>(),
+  localWatcherRearmBackoff: new Map<string, { delayMs: number; erroredAt: number }>(),
   // Remote watcher state
   // Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
   remoteWatchers: new Map<string, RemoteWatcherState>(),

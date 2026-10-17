@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises'
+import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../shared/filesystem-entry-types'
 import {
@@ -10,6 +11,7 @@ import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-wat
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
+import { WATCHER_ROOT_DELETED_MESSAGE } from './parcel-watcher-process-protocol'
 import { normalizeWatcherEventPath } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import {
@@ -89,16 +91,18 @@ async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined
 
 // ── Flush and emit ───────────────────────────────────────────────────
 
-function emitOverflowPayload(root: WatchedRoot): void {
-  const { rootPath } = root
-  const payload: FsChangedPayload = {
-    worktreePath: rootPath,
-    events: [{ kind: 'overflow', absolutePath: rootPath }]
+export function sendLocalWatcherOverflow(wc: WebContents, rootPath: string): void {
+  if (!wc.isDestroyed()) {
+    wc.send('fs:changed', {
+      worktreePath: rootPath,
+      events: [{ kind: 'overflow', absolutePath: rootPath }]
+    } satisfies FsChangedPayload)
   }
-  for (const [, wc] of root.listeners) {
-    if (!wc.isDestroyed()) {
-      wc.send('fs:changed', payload)
-    }
+}
+
+function emitOverflowPayload(root: WatchedRoot): void {
+  for (const wc of root.listeners.values()) {
+    sendLocalWatcherOverflow(wc, root.rootPath)
   }
 }
 
@@ -229,7 +233,8 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
 export async function createLocalWatcher(
   rootKey: string,
   rootPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onFailure?: (listeners: Map<number, WebContents>) => void
 ): Promise<WatchedRoot> {
   const root: WatchedRoot = {
     subscription: null!,
@@ -271,7 +276,13 @@ export async function createLocalWatcher(
             void trackDetachedLocalUnsubscribe(rootKey, root)
           }
           errorCleanedUp = true
-          watcherLifecycleState.watchedRoots.delete(rootKey)
+          // Why: a stale error from a replaced or torn-down root must not evict its successor or re-arm.
+          if (watcherLifecycleState.watchedRoots.get(rootKey) === root) {
+            watcherLifecycleState.watchedRoots.delete(rootKey)
+            if (err.message !== WATCHER_ROOT_DELETED_MESSAGE) {
+              onFailure?.(new Map(root.listeners))
+            }
+          }
           return
         }
 

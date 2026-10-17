@@ -23,7 +23,8 @@ export async function installLocalWatcher(
   rootPath: string,
   worktreePath: string,
   cancelToken: LocalWatcherInstallToken,
-  scheduleCapacityRetry: (listeners: Map<number, Electron.WebContents>) => void
+  scheduleCapacityRetry: (listeners: Map<number, Electron.WebContents>) => void,
+  onWatcherFailure?: (listeners: Map<number, Electron.WebContents>) => void
 ): Promise<LocalWatcherInstallResult> {
   let root: WatchedRoot
   try {
@@ -53,7 +54,12 @@ export async function installLocalWatcher(
             },
             cancelToken.abortController.signal
           )
-        : await createLocalWatcher(rootKey, rootPath, cancelToken.abortController.signal)
+        : await createLocalWatcher(
+            rootKey,
+            rootPath,
+            cancelToken.abortController.signal,
+            onWatcherFailure
+          )
     } catch (error) {
       // Why: setup can fail after its child misses the exit deadline; retain that owner even when the renderer-facing error is swallowed.
       retainLocalWatcherPhysicalFailure(rootKey, error)

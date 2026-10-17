@@ -18,6 +18,7 @@ import {
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import { scheduleLocalCapacityRetry } from './filesystem-watcher-local-capacity'
 import { installLocalWatcher } from './filesystem-watcher-local-install'
+import { scheduleLocalWatcherRearm } from './filesystem-watcher-local-rearm'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 
 // ── Subscribe / Unsubscribe ──────────────────────────────────────────
@@ -174,7 +175,9 @@ async function subscribeWhileRemovalAllowed(
     worktreePath,
     cancelToken,
     (listeners) =>
-      scheduleLocalCapacityRetry(rootKey, worktreePath, listeners, subscribeLocalWatcher)
+      scheduleLocalCapacityRetry(rootKey, worktreePath, listeners, subscribeLocalWatcher),
+    (listeners) =>
+      scheduleLocalWatcherRearm(rootKey, worktreePath, listeners, subscribeLocalWatcher)
   )
   watcherLifecycleState.pendingLocalInstallPromises.set(rootKey, installPromise)
   try {

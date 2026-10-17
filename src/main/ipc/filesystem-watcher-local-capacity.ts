@@ -14,7 +14,9 @@ export function scheduleLocalCapacityRetry(
   rootKey: string,
   worktreePath: string,
   listeners: Map<number, WebContents>,
-  subscribe: SubscribeLocalWatcher
+  subscribe: SubscribeLocalWatcher,
+  // Why: error re-arm reuses this entry's cancellation paths, waiting on a timer instead of capacity.
+  wait: (onReady: () => void | Promise<void>) => () => void = onWatcherChildCapacityAvailable
 ): void {
   const existing = watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey)
   if (existing) {
@@ -27,7 +29,7 @@ export function scheduleLocalCapacityRetry(
   }
 
   let retry!: LocalWatcherCapacityRetry
-  const cancelWait = onWatcherChildCapacityAvailable(async () => {
+  const cancelWait = wait(async () => {
     if (watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey) !== retry) {
       return
     }

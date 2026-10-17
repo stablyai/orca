@@ -38,3 +38,6 @@ export type WatcherToHostMessage =
   | { op: 'cancel-requires-restart'; id: number }
   | { op: 'unsubscribe-failed'; id: number; message: string }
   | { op: 'unsubscribed'; id: number }
+
+// Why: the host matches this to avoid re-arming a watcher whose root is gone.
+export const WATCHER_ROOT_DELETED_MESSAGE = 'File watcher root was deleted'
