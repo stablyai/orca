@@ -22,6 +22,7 @@ import {
   OPENCODE_MODEL_LISTING_ARGS,
   parseOpenCodeModelListing
 } from '../opencode/opencode-model-catalog-listing'
+import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from '../../shared/omp-model-list-probe'
 import { agentSessionSignInFor } from '../../shared/agent-session-sign-in'
 import {
   loadGrokVisualsSkill,
@@ -209,11 +210,28 @@ const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
   installDirectories: () => [],
   // Stable releases from 17.0.5, the release verified to serve `omp acp`.
   supportsVersion: (version) => isStableCliVersionFrom(version, '17.0.5'),
-  // `omp models --json` lists every model without the `enabledModels` filter a chat applies, so it
-  // could offer models a chat refuses; its chats' own listings fill the catalog instead.
+  // `omp models --json` reads the same provider keys a chat does, so it names exactly the models
+  // this install can launch. Without it the picker stays empty until a chat reports, and a
+  // headless `orca serve` host has no renderer to report from.
   modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'omp has no session-free listing that matches what its chats offer'
+    kind: 'command',
+    args: OMP_MODEL_LIST_ARGS,
+    parse: (stdout) =>
+      parseOmpModelList(stdout).map((model) => ({
+        id: model.id,
+        label: model.label,
+        ...(model.description ? { description: model.description } : {}),
+        // The listing names the account's models, not which one its config picks.
+        isDefault: false,
+        // The listing states each model's own thinking ladder, so the menu offers exactly the
+        // tiers that model runs — never one wider than its ceiling. The listing names no
+        // default tier, so none is claimed; a live chat reports the config's own choice.
+        efforts: (model.thinkingLevels ?? []).map((level) => ({
+          value: level.id,
+          label: level.label
+        }))
+      })),
+    listingNamesConfiguredModel: false
   },
   visualsSkill: loadOmpVisualsSkill,
   compaction: true,

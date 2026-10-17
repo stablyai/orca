@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { checkAgentLaunchModelPreferences } from './agent-launch-model-preferences'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { OMP_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-omp'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
@@ -20,6 +21,8 @@ const LISTING = JSON.stringify({
       selector: 'minimax-cn/MiniMax-M3',
       name: 'MiniMax M3'
     },
+    // A ladder without `high` names the closest tier under OMP's default.
+    { provider: 'acme', id: 'no-high', name: 'No High', thinking: ['minimal', 'low', 'medium'] },
     // A repeat selector is one model, not two rows.
     { provider: 'deepseek', id: 'deepseek-v4-pro', selector: 'deepseek/deepseek-v4-pro' },
     // Older listings without `selector` still name the model by provider + id.
@@ -37,8 +40,27 @@ describe('omp model list probe', () => {
 
   it('parses selectors as ids, names as labels, and providers as descriptions', () => {
     expect(parseOmpModelList(LISTING)).toEqual([
-      { id: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro', description: 'deepseek' },
+      {
+        id: 'deepseek/deepseek-v4-pro',
+        label: 'DeepSeek V4 Pro',
+        description: 'deepseek',
+        thinkingLevels: [
+          { id: 'low', label: 'Low' },
+          { id: 'high', label: 'High' },
+          { id: 'max', label: 'Max' }
+        ]
+      },
       { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', description: 'minimax-cn' },
+      {
+        id: 'acme/no-high',
+        label: 'No High',
+        description: 'acme',
+        thinkingLevels: [
+          { id: 'minimal', label: 'Minimal' },
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' }
+        ]
+      },
       { id: 'openai/gpt-5.5', label: 'Openai GPT 5.5', description: 'openai' }
     ])
   })
@@ -75,6 +97,7 @@ describe('omp model list probe', () => {
     expect(parseOmpModelList(noisy).map(({ id }) => id)).toEqual([
       'deepseek/deepseek-v4-pro',
       'minimax-cn/MiniMax-M3',
+      'acme/no-high',
       'openai/gpt-5.5'
     ])
   })
@@ -122,16 +145,32 @@ describe('omp session option catalog', () => {
   it('discovers models through the same JSON listing the probe parses', () => {
     const listModels = OMP_SESSION_OPTION_CATALOG.listModels!
     expect(listModels.command).toBe('omp models --json')
-    expect(listModels.parse(LISTING)).toEqual([
-      {
-        id: 'deepseek/deepseek-v4-pro',
-        label: 'DeepSeek V4 Pro',
-        description: 'deepseek',
-        options: []
-      },
-      { id: 'minimax-cn/MiniMax-M3', label: 'MiniMax M3', description: 'minimax-cn', options: [] },
-      { id: 'openai/gpt-5.5', label: 'Openai GPT 5.5', description: 'openai', options: [] }
+    const parsed = listModels.parse(LISTING)
+    const effortOf = (id: string) => {
+      const row = parsed.find((candidate) => candidate.id === id)!
+      return row.options.flatMap((option) =>
+        option.kind.type === 'select'
+          ? [
+              {
+                id: option.id,
+                choices: option.kind.choices.map((choice) => choice.value),
+                defaultValue: option.kind.defaultValue
+              }
+            ]
+          : []
+      )
+    }
+    // A listed ladder becomes that model's own launch menu; a row without one stays bare.
+    // A listed model's menu starts where OMP itself would start: `high`, or the closest
+    // lower tier it lists, so picking a model never changes the effort OMP runs.
+    expect(effortOf('deepseek/deepseek-v4-pro')).toEqual([
+      { id: 'effort', choices: ['low', 'high', 'max'], defaultValue: 'high' }
     ])
+    expect(effortOf('acme/no-high')).toEqual([
+      { id: 'effort', choices: ['minimal', 'low', 'medium'], defaultValue: 'medium' }
+    ])
+    expect(effortOf('minimax-cn/MiniMax-M3')).toEqual([])
+    expect(effortOf('openai/gpt-5.5')).toEqual([])
   })
 
   it('launches a picked model with --model <selector>', () => {
@@ -165,5 +204,46 @@ describe('omp session option catalog', () => {
     expect(command).toBe('/orca-model minimax-cn/MiniMax-M3')
     expect(parseBuiltSessionOptionCommand(midSession.build, command)).toBe('minimax-cn/MiniMax-M3')
     expect(parseBuiltSessionOptionCommand(midSession.build, '/orca-model ')).toBeNull()
+  })
+
+  it('launches a requested effort as --thinking for any discovered model', () => {
+    expect(
+      resolveAgentSessionOptionLaunch('omp', {
+        model: 'minimax-cn/MiniMax-M3',
+        effort: 'xhigh'
+      })
+    ).toEqual({
+      args: ['--model', 'minimax-cn/MiniMax-M3', '--thinking', 'xhigh'],
+      appliedValues: { model: 'minimax-cn/MiniMax-M3', effort: 'xhigh' }
+    })
+  })
+
+  it('accepts OMP thinking levels as effort and refuses modes that are not levels', () => {
+    for (const effort of ['minimal', 'low', 'medium', 'high', 'xhigh', 'max']) {
+      expect(
+        checkAgentLaunchModelPreferences({ agent: 'omp', model: 'openai/gpt-5.5', effort })
+      ).toEqual({ preferences: { model: 'openai/gpt-5.5', effort } })
+    }
+    for (const effort of ['off', 'auto', 'inherit', 'ultra']) {
+      expect(
+        checkAgentLaunchModelPreferences({ agent: 'omp', model: 'openai/gpt-5.5', effort })
+      ).toMatchObject({ refusal: { code: 'invalid_argument' } })
+    }
+  })
+
+  it('keeps effort launch-only: omp registered /effort in 18.5.0, past the 17.0.5 floor', () => {
+    const effort = OMP_SESSION_OPTION_CATALOG.unknownModelOptions?.find(
+      (option) => option.id === 'effort'
+    )
+    // A structured chat sets effort through the thought_level config option omp advertises;
+    // a terminal chat names no version to gate a live command on, so none is offered.
+    expect(effort?.apply.midSession).toBeUndefined()
+    expect(effort?.apply.launchArgs?.('xhigh')).toEqual(['--thinking', 'xhigh'])
+    // A listed model's own ladder is launch-only for the same reason.
+    const listed = OMP_SESSION_OPTION_CATALOG.listModels!.parse(LISTING).find(
+      (model) => model.id === 'deepseek/deepseek-v4-pro'
+    )
+    expect(listed?.options[0]?.apply.midSession).toBeUndefined()
+    expect(listed?.options[0]?.apply.launchArgs?.('low')).toEqual(['--thinking', 'low'])
   })
 })

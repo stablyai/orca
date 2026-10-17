@@ -109,7 +109,13 @@ describe('mergeExtraAgentArgs', () => {
       '--model=grok-4.7',
       ['--reasoning-effort', 'low', '--model=grok-4.7']
     ],
-    ['omp', '--model a/b', '--model c/d', ['--model', 'c/d']]
+    ['omp', '--model a/b', '--model c/d', ['--model', 'c/d']],
+    [
+      'omp',
+      '--model a/b --thinking=low',
+      '--thinking high',
+      ['--model', 'a/b', '--thinking', 'high']
+    ]
   ] as const)('%s: %s + %s', (agent, defaults, extras, expected) => {
     expect(merged(agent, defaults, extras)).toEqual(expected)
   })
@@ -179,6 +185,9 @@ describe('parseExtraAgentArgs rejections', () => {
     ['grok', '--effort low --reasoning-effort high', 'effort more than once'],
     ['grok', '--permission-mode bypassPermissions', '"--permission-mode"'],
     ['omp', '--effort high', '"--effort"'],
+    ['omp', '--thinking low --thinking=high', 'effort more than once'],
+    ['omp', '--thinking ultra', 'Allowed values'],
+    ['omp', '--thinking off', 'Allowed values'],
     ['codebuddy', '--add-dir x', '"--add-dir"']
   ] as const)('%s rejects %j', (agent, extras, message) => {
     expect(rejection(agent, extras)).toContain(message)

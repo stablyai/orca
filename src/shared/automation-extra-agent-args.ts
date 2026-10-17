@@ -1,6 +1,7 @@
 import { agentArgTerminatorIndex } from './agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from './agent-session-option-launch'
 import { findOptionOccurrence } from './command-option-occurrence'
+import { OMP_THINKING_TIERS } from './omp-model-list-probe'
 import {
   quoteStartupArg,
   tokenizeStartupCommand,
@@ -22,6 +23,8 @@ type ExtraAgentArgOption = {
   aliases: readonly string[]
   /** Accepts only values with this prefix, e.g. Codex's `-c model_reasoning_effort=`. */
   valuePrefix?: string
+  /** Accepts only these values, e.g. OMP's `--thinking` tiers. */
+  values?: readonly string[]
 }
 
 const MODEL_OPTION = { kind: 'model', aliases: ['--model'] } as const
@@ -43,7 +46,7 @@ const EXTRA_AGENT_ARG_OPTIONS: Partial<Record<TuiAgent, readonly ExtraAgentArgOp
   // Cursor composes effort into the model id, so only the model is a flag.
   cursor: [MODEL_OR_M_OPTION],
   grok: [MODEL_OR_M_OPTION, { kind: 'effort', aliases: ['--effort', '--reasoning-effort'] }],
-  omp: [MODEL_OPTION]
+  omp: [MODEL_OPTION, { kind: 'effort', aliases: ['--thinking'], values: OMP_THINKING_TIERS }]
 }
 
 export function supportsExtraAgentArgs(agent: TuiAgent): boolean {
@@ -171,11 +174,17 @@ export function parseExtraAgentArgs(args: {
     if (!value) {
       return { ok: false, error: `"${name}" needs a value.` }
     }
-    const { kind, valuePrefix } = match.option
+    const { kind, valuePrefix, values } = match.option
     if (valuePrefix && (!value.startsWith(valuePrefix) || value.length === valuePrefix.length)) {
       return {
         ok: false,
         error: `"${name} ${value}" isn't allowed. ${label} extra arguments accept only "${name} ${valuePrefix}<level>".`
+      }
+    }
+    if (values && !values.includes(value)) {
+      return {
+        ok: false,
+        error: `"${name} ${value}" isn't allowed. Allowed values: ${values.join(', ')}.`
       }
     }
     if (kind !== 'repeatable' && kinds.has(kind)) {

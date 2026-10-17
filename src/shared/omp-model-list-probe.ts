@@ -34,6 +34,27 @@ export function ompModelSelector(
   return provider && model ? `${provider}/${model}` : null
 }
 
+/** The names OMP's `thinking` values carry in a picker; an unknown value keeps its own text. */
+const OMP_THINKING_LEVEL_LABELS: Record<string, string> = {
+  off: 'Off',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Max',
+  auto: 'Auto',
+  inherit: 'Inherit'
+}
+
+/** The effort tiers OMP accepts as levels; `off`, `auto`, and `inherit` are modes, not tiers. */
+export const OMP_THINKING_TIERS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+
+/** The picker label for one OMP thinking value; an unknown value keeps its own text. */
+export function ompThinkingLabel(level: string): string {
+  return OMP_THINKING_LEVEL_LABELS[level] ?? level
+}
+
 /** Parses `omp models --json`. Ids are OMP's `provider/model` selector — the form
  *  `--model` and `/model` resolve exactly, unlike a bare model id that several
  *  providers can share. */
@@ -62,6 +83,12 @@ export function parseOmpModelList(stdout: string): CommitMessageModel[] {
       continue
     }
     const name = 'name' in value && typeof value.name === 'string' ? value.name.trim() : ''
+    const thinking =
+      'thinking' in value && Array.isArray(value.thinking)
+        ? value.thinking.flatMap((level) =>
+            typeof level === 'string' && level.trim() ? [level.trim()] : []
+          )
+        : []
     const contextWindow =
       'contextWindow' in value && typeof value.contextWindow === 'number'
         ? value.contextWindow
@@ -72,6 +99,16 @@ export function parseOmpModelList(stdout: string): CommitMessageModel[] {
       // Why: the same model name ships under several providers; the provider is
       // what tells two "DeepSeek V4 Pro" rows apart in the picker.
       ...(provider ? { description: provider } : {}),
+      // Why: `thinking` is the model's own ladder — a chat's effort menu offers exactly
+      // these tiers, never one wider than the model's ceiling.
+      ...(thinking.length > 0
+        ? {
+            thinkingLevels: thinking.map((level) => ({
+              id: level,
+              label: ompThinkingLabel(level)
+            }))
+          }
+        : {}),
       ...(contextWindow !== null && Number.isFinite(contextWindow) && contextWindow > 0
         ? { contextWindowTokens: contextWindow }
         : {})

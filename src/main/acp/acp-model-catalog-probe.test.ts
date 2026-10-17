@@ -19,6 +19,7 @@ const OPENCODE: AcpLaunchSpec = {
     environmentForAccount: () => ({})
   }))
 }
+const OMP = acpLaunchSpecFor('omp')!
 const GROK_HOME = { variable: 'GROK_HOME', path: '/homes/grok-a' }
 
 const MODEL_STATE = {
@@ -175,6 +176,93 @@ describe('ACP model catalog probes', () => {
     )
     expect(success.models).toEqual([
       { id: 'opencode/big-pickle', label: 'opencode/Big Pickle', isDefault: false, efforts: [] }
+    ])
+  })
+
+  it('lists OMP with `models --json` under its account env, with no ACP call', async () => {
+    const runListing = vi.fn(async () =>
+      JSON.stringify({
+        models: [
+          {
+            provider: 'magpie',
+            id: 'deepseek-v4.1-flash',
+            selector: 'magpie/deepseek-v4.1-flash',
+            name: 'DeepSeek v4.1 Flash',
+            contextWindow: 128000,
+            thinking: ['low', 'high', 'max']
+          },
+          {
+            provider: 'magpie',
+            id: 'step-5-preview',
+            selector: 'magpie/step-5-preview',
+            thinking: ['minimal', 'low', 'medium', 'high', 'xhigh']
+          },
+          {
+            provider: 'magpie',
+            id: 'plain-model',
+            selector: 'magpie/plain-model',
+            name: 'Plain Model'
+          }
+        ]
+      })
+    )
+    const connect = vi.fn()
+    const probe = createAcpModelCatalogProbe(OMP, {
+      resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
+      dataDirectory: '/orca-data',
+      resolveCommand: () => '/opt/omp/bin/omp',
+      probeVersion: async () => true,
+      homePath: '/home/user',
+      runListing,
+      connect
+    })
+    const success = await probe({
+      variable: 'PI_CODING_AGENT_DIR',
+      path: '/home/user/.omp/agent'
+    })
+    // Why: the whole point of the command probe is that it needs no session, so a chat can show
+    // its picker before it starts — and a headless host has no renderer to report models from.
+    expect(connect).not.toHaveBeenCalled()
+    expect(runListing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: '/opt/omp/bin/omp',
+        args: ['models', '--json'],
+        env: expect.objectContaining({ PI_CODING_AGENT_DIR: '/home/user/.omp/agent' })
+      }),
+      expect.objectContaining({ site: 'omp-model-catalog-probe' })
+    )
+    expect(success.models).toEqual([
+      {
+        id: 'magpie/deepseek-v4.1-flash',
+        label: 'DeepSeek v4.1 Flash',
+        description: 'magpie',
+        isDefault: false,
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' },
+          { value: 'max', label: 'Max' }
+        ]
+      },
+      {
+        id: 'magpie/step-5-preview',
+        label: 'Magpie Step 5 Preview',
+        description: 'magpie',
+        isDefault: false,
+        efforts: [
+          { value: 'minimal', label: 'Minimal' },
+          { value: 'low', label: 'Low' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'high', label: 'High' },
+          { value: 'xhigh', label: 'Extra high' }
+        ]
+      },
+      {
+        id: 'magpie/plain-model',
+        label: 'Plain Model',
+        description: 'magpie',
+        isDefault: false,
+        efforts: []
+      }
     ])
   })
 
