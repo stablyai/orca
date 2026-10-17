@@ -143,6 +143,18 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'dashboard.openWorktree',
+    title: 'Open Agent Worktree',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'agent', 'dashboard', 'worktree', 'open', 'reveal'],
+    // Why: bound on macOS only — the board claims the chord solely while an agent's
+    // terminal dialog is open, so the terminal keeps Cmd+O otherwise, and Cmd+O never
+    // reaches a PTY. Ctrl+O is a real shell chord, so Linux and Windows stay unbound.
+    defaultBindings: { darwin: ['Mod+O'], linux: [], win32: [] },
+    allowInTerminal: true
+  },
+  {
     id: 'workspace.selectByIndex',
     title: 'Select Workspace 1–9',
     group: 'Global',

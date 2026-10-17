@@ -16,6 +16,13 @@ import {
   type ShortcutRowsByGroup
 } from './ShortcutFilterRail'
 
+// Why: these shortcuts only act on the experimental Agent Dashboard surface, so
+// binding them while the experiment is off would silently do nothing.
+const AGENT_DASHBOARD_SHORTCUT_IDS: ReadonlySet<KeybindingActionId> = new Set([
+  'dashboard.toggle',
+  'dashboard.openWorktree'
+])
+
 export function buildShortcutRowVisibility(options: {
   groups: ShortcutGroup[]
   keybindings: KeybindingOverrides
@@ -41,8 +48,8 @@ export function buildShortcutRowVisibility(options: {
         (item) =>
           (options.managedBrowserCreationEnabled || item.id !== 'tab.newBrowser') &&
           (options.mobileEmulatorCreationEnabled || item.id !== 'tab.newSimulator') &&
-          // Why: the toggle is inert while the experiment is off, so binding it here would silently do nothing.
-          (options.agentDashboardEnabled || item.id !== 'dashboard.toggle')
+          // Why: these shortcuts are inert while the experiment is off, so binding them here would silently do nothing.
+          (options.agentDashboardEnabled || !AGENT_DASHBOARD_SHORTCUT_IDS.has(item.id))
       )
       .map((item) => {
         const effective = getEffectiveKeybindingsForDefinition(

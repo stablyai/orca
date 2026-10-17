@@ -2,13 +2,22 @@
 
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  screen,
+  within
+} from '@testing-library/react'
 import type {
   DashboardCard,
   DashboardFilterOptions,
   DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 import { i18n } from '@/i18n/i18n'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 
@@ -101,8 +110,13 @@ describe('AgentKanbanBoard', () => {
       'matchMedia',
       vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
     )
-    // The board relays seen-acks through the dashboard preload API.
-    ;(window as unknown as { api: unknown }).api = { dashboard: { ackAgent } }
+    // The board relays seen-acks through the dashboard preload API, and the
+    // open-worktree shortcut resolves its platform through the preload stub.
+    ;(window as unknown as { api: unknown }).api = {
+      dashboard: { ackAgent },
+      platform: { get: () => ({ platform: 'darwin' }) }
+    }
+    resetRendererAppPlatformCacheForTests()
   })
   afterEach(() => {
     cleanup()
@@ -372,5 +386,38 @@ describe('AgentKanbanBoard', () => {
       />
     )
     expect(ackAgent.mock.calls).toEqual([['pk-ack', 'view']])
+  })
+
+  it('opens the agent worktree from the keyboard while its dialog is up', () => {
+    const onRevealAgent = vi.fn()
+    const agent = card({ paneKey: 'pk-open', bucket: 'working' })
+    render(
+      <AgentKanbanBoard
+        snapshot={{ generatedAt: 1, cards: [agent] }}
+        onRevealAgent={onRevealAgent}
+      />
+    )
+
+    // No dialog → the chord stays with the terminal instead of being swallowed.
+    const idle = createEvent.keyDown(window, { key: 'o', code: 'KeyO', metaKey: true })
+    fireEvent(window, idle)
+    expect(idle.defaultPrevented).toBe(false)
+    expect(onRevealAgent).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('card'))
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
+
+    // Mirrors the dialog's "Open worktree" button: reveal, then dismiss.
+    const open = createEvent.keyDown(window, { key: 'o', code: 'KeyO', metaKey: true })
+    fireEvent(window, open)
+    expect(open.defaultPrevented).toBe(true)
+    expect(onRevealAgent).toHaveBeenCalledWith({
+      repoId: 'r1',
+      worktreeId: 'w1',
+      executionHostId: undefined,
+      tabId: 'tab1',
+      leafId: 'l1'
+    })
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
   })
 })

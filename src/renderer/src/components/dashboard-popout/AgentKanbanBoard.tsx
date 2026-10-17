@@ -7,12 +7,15 @@ import {
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import type { KeybindingOverrides, TerminalShortcutPolicy } from '../../../../shared/keybindings'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
+import { dashboardOpenWorktreeShortcutMatchesKeydown } from './dashboard-open-worktree-shortcut'
 import {
   EMPTY_DASHBOARD_FILTERS,
   filterDashboardCards,
@@ -135,6 +138,12 @@ type AgentKanbanBoardProps = {
   /** Header controls rendered before the close button. The in-window host
    *  passes its settings menu; the pop-out renderer has no store to drive it. */
   headerActions?: React.ReactNode
+  /** Live keybinding overrides for board-scoped shortcuts (the dialog's "Open
+   *  worktree" chord). The in-window host passes the store's values; the
+   *  pop-out renderer has no store, so it keeps the shipped defaults. */
+  keybindingOverrides?: KeybindingOverrides
+  /** Terminal shortcut policy paired with `keybindingOverrides`. */
+  terminalShortcutPolicy?: TerminalShortcutPolicy
 }
 
 /** The agent board: status columns fed by a snapshot. Shared by the pop-out
@@ -146,7 +155,9 @@ export function AgentKanbanBoard({
   onAckAgent = ackAgentViaPopoutRelay,
   onRevealAgent = revealAgentViaPopoutRelay,
   onClose,
-  headerActions
+  headerActions,
+  keybindingOverrides,
+  terminalShortcutPolicy
 }: AgentKanbanBoardProps): React.JSX.Element {
   const visibleBuckets = useMemo(
     () =>
@@ -224,6 +235,46 @@ export function AgentKanbanBoard({
       setOpenedCard(null)
     }
   }, [])
+
+  // Cmd/Ctrl+O mirrors the dialog's "Open worktree" button. The listener lives
+  // here because the board owns the open card, and it claims the chord only
+  // while that dialog is up, so the terminal keeps the chord otherwise.
+  useEffect(() => {
+    const handleOpenWorktreeShortcut = (event: KeyboardEvent): void => {
+      if (!dialogCard) {
+        return
+      }
+      if (
+        !dashboardOpenWorktreeShortcutMatchesKeydown(event, {
+          platform: getRendererAppPlatform(),
+          keybindings: keybindingOverrides,
+          terminalShortcutPolicy
+        })
+      ) {
+        return
+      }
+      // Capture phase: swallow the chord before xterm's textarea sees it.
+      event.preventDefault()
+      event.stopPropagation()
+      onRevealAgent({
+        repoId: dialogCard.repoId,
+        worktreeId: dialogCard.worktreeId,
+        executionHostId: dialogCard.executionHostId,
+        tabId: dialogCard.tabId,
+        leafId: dialogCard.leafId
+      })
+      handleDialogOpenChange(false)
+    }
+    window.addEventListener('keydown', handleOpenWorktreeShortcut, { capture: true })
+    return () =>
+      window.removeEventListener('keydown', handleOpenWorktreeShortcut, { capture: true })
+  }, [
+    dialogCard,
+    handleDialogOpenChange,
+    keybindingOverrides,
+    onRevealAgent,
+    terminalShortcutPolicy
+  ])
 
   // Seen-state is the app-wide ack map (same signal as the sidebar's bold/mute
   // rows): opening a dialog acks the agent, and the next snapshot comes back
