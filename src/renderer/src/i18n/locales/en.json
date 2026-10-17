@@ -4455,6 +4455,16 @@
           "usageUnitLabel": {
             "used": "Used",
             "remaining": "Remaining"
+          },
+          "usage": {
+            "pace": {
+              "onPace": "On pace",
+              "deficit": "{{value0}}% in deficit",
+              "reserve": "{{value0}}% in reserve",
+              "lasts": "Lasts until reset",
+              "runsOutNow": "Runs out now",
+              "runsOut": "Runs out in {{value0}}"
+            }
           }
         }
       },
