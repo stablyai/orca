@@ -2,7 +2,9 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   newWorkspaceRepoHooksSchema,
-  newWorkspaceUiTrustSchema
+  newWorkspaceUiTrustSchema,
+  repoAddReplySchema,
+  serverDirectoryBrowseReplySchema
 } from './new-workspace-reply-schema'
 
 // The New Workspace drawer's own reads. Its SSH connect, SSH state and agent detection are the
@@ -39,5 +41,27 @@ export const newWorkspaceUiStateRead = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('optional-ui-member', newWorkspaceUiTrustSchema)
+  })
+)
+
+// Why: directory browsing for registering projects from the local or remote server filesystem.
+export const newWorkspaceBrowseServerDirOperation = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.browse-server-dir',
+    method: 'files.browseServerDir',
+    acceptance: 'success-result-or-throw',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('server-directory-browse', serverDirectoryBrowseReplySchema)
+  })
+)
+
+// Why: project registration adding a local or remote directory as an Orca repo.
+export const newWorkspaceAddRepoOperation = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.add',
+    method: 'repo.add',
+    acceptance: 'success-result-or-throw',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('repo-add', repoAddReplySchema)
   })
 )

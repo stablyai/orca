@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { SetupRunPolicy } from '../../../src/shared/orca-yaml-hook-types'
 import { hostUnionArms, salvagedOptional, salvagingRecord } from '../../../src/shared/zod-salvage'
+import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 
 // The New Workspace drawer's own two reads. Checked against `repo.hooks`
 // (src/main/runtime/rpc/methods/repo.ts:190 → runtime.getRepoHooks) and `ui.get`
@@ -100,3 +101,28 @@ export const newWorkspaceUiTrustSchema = z
   .nullish()
   .catch(undefined)
   .transform((reply) => reply?.ui)
+
+// Why: validates host directory listings returned by files.browseServerDir and ssh.browseDir.
+export const serverDirectoryBrowseReplySchema = z.looseObject({
+  resolvedPath: z.string(),
+  entries: z.array(
+    z.looseObject({
+      name: z.string(),
+      isDirectory: z.boolean(),
+      isSymlink: salvagedOptional('isSymlink', z.boolean())
+    })
+  ),
+  pathFlavor: z.enum(['win32', 'posix'])
+})
+
+// Why: validates project registration responses returned by repo.add and repo.addRemote.
+export const repoAddReplySchema: z.ZodType<{ repo: MobileWorkspaceRepo }> = z.looseObject({
+  repo: z
+    .looseObject({
+      id: z.string(),
+      displayName: z.string(),
+      path: z.string()
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Validates required repo properties at the RPC response boundary.
+    .transform((repo) => repo as unknown as MobileWorkspaceRepo)
+})

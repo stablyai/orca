@@ -179,6 +179,11 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             )
           )
         }}
+        onOpenWorktree={(worktreeId, worktreeName, executionHost) => {
+          void catalog.fetchWorktrees({ allowDuringModal: true })
+          const target = `/h/${encodeURIComponent(hostId ?? '')}/session/${encodeURIComponent(worktreeId)}?name=${encodeURIComponent(worktreeName)}`
+          actions.navigateFromHostList(workspaceRouteHref(target, executionHost))
+        }}
         onRouteVisibleChange={actions.setShowNewWorktreeVisible}
       />
     </>

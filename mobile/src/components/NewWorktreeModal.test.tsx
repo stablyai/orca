@@ -93,13 +93,13 @@ function runTargetPicker(renderer: ReactTestRenderer) {
     .find((node) => node.props.title === 'Run on')!
 }
 
-async function flushUpdates(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+const flushUpdates = async () =>
+  act(async () => {
+    for (let i = 0; i < 3; i++) {
+      await Promise.resolve()
+    }
   })
-}
+
 
 describe('NewWorktreeModal project targets', () => {
   let renderer: ReactTestRenderer
@@ -745,3 +745,4 @@ describe('NewWorktreeModal project targets', () => {
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
   })
 })
+

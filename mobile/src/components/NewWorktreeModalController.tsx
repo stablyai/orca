@@ -36,7 +36,8 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
       openExternalUrl,
       onVisibleChange,
       onRouteVisibleChange,
-      onCreated
+      onCreated,
+      onOpenWorktree
     },
     ref
   ) {
@@ -79,6 +80,7 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
         existingWorktrees={existingWorktrees}
         openExternalUrl={openExternalUrl}
         onCreated={onCreated}
+        onOpenWorktree={onOpenWorktree}
         onClose={close}
       />
     )
