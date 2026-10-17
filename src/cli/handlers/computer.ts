@@ -89,6 +89,18 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     assertComputerAppFlag(flags)
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerClickActionFlags(flags)
+    if (actionParams.accessibilityOnly) {
+      const capabilities = await client.call<ComputerProviderCapabilities>(
+        'computer.capabilities',
+        {}
+      )
+      if (capabilities.result.clickAccessibilityOnly !== true) {
+        throw new RuntimeClientError(
+          'unsupported_capability',
+          'This runtime/provider does not support --accessibility-only; update the execution host.'
+        )
+      }
+    }
     const target = await getComputerCommandTarget(flags, cwd, client)
     const result = await client.call<ComputerActionResult>('computer.click', {
       ...target,

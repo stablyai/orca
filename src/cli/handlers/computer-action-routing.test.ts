@@ -80,6 +80,81 @@ describe('orca computer action CLI routing', () => {
     })
   })
 
+  it.each([undefined, false])(
+    'refuses accessibility-only clicks when host support is %s',
+    async (supported) => {
+      queueFixtures(callMock, okFixture('caps', { clickAccessibilityOnly: supported }))
+      await main(
+        [
+          'computer',
+          'click',
+          '--app',
+          'Finder',
+          '--session',
+          'manual',
+          '--element-index',
+          '3',
+          '--accessibility-only',
+          '--json'
+        ],
+        '/tmp'
+      )
+      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['computer.capabilities'])
+      expect(console.log).toHaveBeenCalledWith(
+        expect.stringContaining('does not support --accessibility-only')
+      )
+    }
+  )
+
+  it('preserves the accessibility-only requirement through a supporting host', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('caps', { clickAccessibilityOnly: true }),
+      okFixture('click', sampleSnapshot())
+    )
+    await main(
+      [
+        'computer',
+        'click',
+        '--app',
+        'Finder',
+        '--session',
+        'manual',
+        '--element-index',
+        '3',
+        '--accessibility-only',
+        '--json'
+      ],
+      '/tmp'
+    )
+    expect(callMock).toHaveBeenLastCalledWith(
+      'computer.click',
+      expect.objectContaining({ accessibilityOnly: true, elementIndex: 3, session: 'manual' })
+    )
+  })
+
+  it('rejects accessibility-only coordinate clicks before contacting the host', async () => {
+    await main(
+      [
+        'computer',
+        'click',
+        '--app',
+        'Finder',
+        '--x',
+        '1',
+        '--y',
+        '2',
+        '--accessibility-only',
+        '--json'
+      ],
+      '/tmp'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('--accessibility-only requires --element-index')
+    )
+  })
+
   it('forwards a middle click to the runtime instead of silently downgrading it', async () => {
     queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
 

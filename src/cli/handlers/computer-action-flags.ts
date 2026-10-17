@@ -56,6 +56,7 @@ export function getComputerActionObserveFlags(flags: Map<string, string | boolea
 }
 
 export function getComputerClickActionFlags(flags: Map<string, string | boolean>): {
+  accessibilityOnly?: boolean
   elementIndex?: number
   x?: number
   y?: number
@@ -66,6 +67,7 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
   const rawModifiers = flags.get('modifiers')
   const modifiers = typeof rawModifiers === 'string' ? rawModifiers : undefined
   const result = {
+    ...(flags.has('accessibility-only') ? { accessibilityOnly: true } : {}),
     elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
     x: getOptionalNumberFlag(flags, 'x'),
     y: getOptionalNumberFlag(flags, 'y'),
@@ -74,6 +76,12 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
     modifiers
   }
   validateElementOrCoordinates('Click', result.elementIndex, result.x, result.y)
+  if (result.accessibilityOnly && result.elementIndex === undefined) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--accessibility-only requires --element-index'
+    )
+  }
   validateMouseButton(result.mouseButton)
   if (modifiers !== undefined) {
     const message = computerUseClickModifiersValidationMessage(modifiers)

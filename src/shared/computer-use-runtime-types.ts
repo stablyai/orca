@@ -130,6 +130,7 @@ export type ComputerProviderCapabilities = {
   provider: string
   providerVersion: string
   protocolVersion: number
+  clickAccessibilityOnly?: boolean
   supports: {
     apps: {
       list: boolean
@@ -151,6 +152,7 @@ export type ComputerProviderCapabilities = {
     }
     actions: {
       click: boolean
+      accessibilityOnlyClick?: boolean
       typeText: boolean
       pressKey: boolean
       hotkey: boolean
