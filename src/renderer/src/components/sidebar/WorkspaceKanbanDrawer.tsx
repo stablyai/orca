@@ -16,6 +16,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import WorkspaceKanbanDrawerView from './WorkspaceKanbanDrawerView'
+import { WORKSPACE_BOARD_LANE_GAP } from './workspace-chrome-metrics'
 import { useWorkspaceKanbanBoardProjection } from './use-workspace-kanban-board-projection'
 import { useWorkspaceKanbanNativeDrag } from './use-workspace-kanban-native-drag'
 import { useWorkspaceKanbanRenderLifecycle } from './use-workspace-kanban-render-lifecycle'
@@ -114,8 +115,19 @@ function WorkspaceKanbanDrawerContent({
     selectionAnchorId,
     updateSelectionForArea
   })
-  const { columnWidth, isResizingColumn, onColumnResizeStart, onColumnResizeKeyDown } =
-    useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth)
+  const {
+    columnWidth,
+    columnWidthMax,
+    measureLaneScroller,
+    isResizingColumn,
+    onColumnResizeStart,
+    onColumnResizeKeyDown
+  } = useWorkspaceKanbanColumnResize(workspaceBoardColumnWidth, setWorkspaceBoardColumnWidth, {
+    expand: !sidebarOpen,
+    open,
+    columnCount: workspaceStatuses.length,
+    columnGap: WORKSPACE_BOARD_LANE_GAP
+  })
   const maybeSyncWorkspaceBoardTaskStatuses = useWorkspaceBoardTaskStatusSync({
     enabled: syncTaskStatusFromWorkspaceBoard,
     worktreesById: worktreeById,
@@ -242,6 +254,7 @@ function WorkspaceKanbanDrawerContent({
       onAreaSelectionPointerDown={handleAreaSelectionPointerDown}
       onCardPointerDownCapture={onCardPointerDownCapture}
       onOpenChange={onOpenChange}
+      onLaneScrollerMount={measureLaneScroller}
       onPinDragLeave={handlePinDragLeave}
       onPinDragOver={handlePinDragOver}
       open={open}
@@ -280,6 +293,7 @@ function WorkspaceKanbanDrawerContent({
         repoMap,
         activeWorktreeIdentity,
         columnWidth,
+        columnWidthMax,
         isResizingColumn,
         dragOverStatus,
         renderCards,

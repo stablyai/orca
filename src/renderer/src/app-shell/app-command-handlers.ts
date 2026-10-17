@@ -275,7 +275,6 @@ export function createAppCommandHandlers(
           return false
         }
         return claim('workspace.openBoard', () => {
-          useAppStore.getState().setSidebarOpen(true)
           window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
         })
       }
