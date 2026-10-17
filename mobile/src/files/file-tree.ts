@@ -153,3 +153,7 @@ export function getMobileFileKind(relativePath: string): MobileFileKind {
 export function isMarkdownPath(relativePath: string): boolean {
   return /\.(md|mdx|markdown)$/i.test(relativePath)
 }
+
+export function isSvgPath(relativePath: string): boolean {
+  return /\.svg$/i.test(relativePath)
+}

@@ -1,10 +1,11 @@
 import type { MobileFileMedia } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcFailure } from '../transport/types'
-import { isMarkdownPath } from './file-tree'
+import { isMarkdownPath, isSvgPath } from './file-tree'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 
-export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
+// 'svg' is read as text (RN <Image> cannot decode it) and rendered as an image in a WebView.
+export type MobileFilePreviewTextKind = 'html' | 'svg' | 'markdown' | 'text'
 
 export type MobileFilePreviewResult =
   | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
@@ -160,6 +161,9 @@ function normalizeTextPreviewResult(
 function textKindForPreviewPath(relativePath: string): MobileFilePreviewTextKind {
   if (classifyMobileArtifact(relativePath) === 'html') {
     return 'html'
+  }
+  if (isSvgPath(relativePath)) {
+    return 'svg'
   }
   return isMarkdownPath(relativePath) ? 'markdown' : 'text'
 }

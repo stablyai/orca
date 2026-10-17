@@ -56,6 +56,11 @@ describe('mobile-file-preview-request', () => {
       method: 'files.read',
       params: { worktree: 'id:wt-1', relativePath: 'public/index.html' }
     })
+    // SVG stays on the text read; the preview renders it as an image itself.
+    expect(createMobileFilePreviewRequest('wt-1', 'assets/logo.svg')).toEqual({
+      method: 'files.read',
+      params: { worktree: 'id:wt-1', relativePath: 'assets/logo.svg' }
+    })
   })
 
   it('loads images through readPreview and never calls files.open', async () => {
@@ -633,6 +638,13 @@ describe('mobile-file-preview-request', () => {
         byteLength: 11
       })
     ).toMatchObject({ status: 'ready', kind: 'html' })
+    expect(
+      normalizeMobileFilePreviewResult('assets/logo.svg', {
+        content: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+        truncated: false,
+        byteLength: 41
+      })
+    ).toMatchObject({ status: 'ready', kind: 'svg', truncated: false })
     expect(
       normalizeMobileFilePreviewResult('src/app.ts', {
         content: 'const a = 1',
