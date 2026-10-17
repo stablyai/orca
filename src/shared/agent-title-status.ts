@@ -27,6 +27,7 @@ import {
   isPiTerminalTitle
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
+import { getCodexNativeSessionStatus, isCodexNativeSessionTitle } from './codex-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleTitleSeparatorStatus,
@@ -210,6 +211,9 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
 
   if (isOpenCodeNativeTitle(title)) {
     return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
+  }
+  if (isCodexNativeSessionTitle(title)) {
+    return getCodexNativeSessionStatus(title)
   }
 
   // Why: Pi/OMP's marker is an explicit state protocol, so it wins over the glyph and
