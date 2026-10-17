@@ -8,7 +8,7 @@ import remarkBreaks from 'remark-breaks'
 import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import remarkFrontmatter from 'remark-frontmatter'
 import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
+import { remarkCurrencyMath } from './remark-currency-math'
 import { remarkMarkdownDocLinks } from './markdown-doc-links'
 import {
   GITHUB_CALLOUT_SANITIZE_ATTRIBUTE,
@@ -65,7 +65,7 @@ export const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGitHubCallouts,
   remarkBreaks,
   remarkFrontmatter,
-  remarkMath,
+  remarkCurrencyMath,
   remarkMarkdownDocLinks
 ]
 export const MARKDOWN_REHYPE_NORMALIZATION_PLUGINS: MarkdownPluginList = [
