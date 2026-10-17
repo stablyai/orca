@@ -1,9 +1,13 @@
 import { once } from 'node:events'
-import { resolve } from 'node:path'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { PassThrough } from 'node:stream'
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { createVitest, type PoolOptions, type Vitest } from 'vitest/node'
 import * as processes from '@orca/process-host'
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import { encodeNodeRuntimeMessage } from './vitest-node-runtime-ipc-codec.mjs'
 import { nodeRuntimePool } from './vitest-node-runtime-pool'
 
 let context: Vitest
@@ -99,4 +103,50 @@ it('reports a failed kill within its deadline rather than hanging teardown', asy
   expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   expect(child.listenerCount('exit')).toBe(0)
   expect(output.getMaxListeners()).toBe(before)
+})
+
+it('decodes Error payloads from the worker with their name, stack, and cause', () => {
+  const worker = nodeRuntimePool.createPoolWorker(options())
+  const cause = new RangeError('inner')
+  const error = new TypeError('outer', { cause })
+  error.name = 'CustomLoadError'
+  const decoded = worker.deserialize(encodeNodeRuntimeMessage({ e: error, filter: /a+/g }))
+  expect(decoded).toMatchObject({ e: { name: 'CustomLoadError', message: 'outer' }, filter: /a+/g })
+  const revived = typeof decoded === 'object' && decoded && 'e' in decoded ? decoded.e : undefined
+  if (!(revived instanceof Error)) {
+    throw new Error('Expected the worker payload to decode as an Error')
+  }
+  expect(revived.stack).toBe(error.stack)
+  expect(revived.cause).toBeInstanceOf(Error)
+  expect(revived.cause).toMatchObject({ name: 'RangeError', message: 'inner' })
+})
+
+it('reports a test file that fails to load as a failed file instead of crashing the run', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orca-node-runtime-pool-'))
+  await writeFile(join(dir, 'load-failure.test.ts'), "import './orca-missing-module'\n")
+  const nested = await createVitest(
+    'test',
+    {
+      config: false,
+      watch: false,
+      dir,
+      include: ['**/*.test.ts'],
+      pool: 'node-runtime',
+      poolRunner: nodeRuntimePool,
+      reporters: [],
+      env: { ORCA_TEST_NODE_EXECUTABLE: process.execPath }
+    },
+    {},
+    { stdout: new PassThrough(), stderr: new PassThrough() }
+  )
+  try {
+    await nested.start()
+    const [file] = nested.state.getFiles()
+    expect(file.result?.state).toBe('fail')
+    expect(file.result?.errors?.[0]?.message).toContain('orca-missing-module')
+    expect(nested.state.getUnhandledErrors()).toEqual([])
+  } finally {
+    await nested.close()
+    await rm(dir, { recursive: true, force: true })
+  }
 })
