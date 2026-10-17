@@ -24,6 +24,7 @@ import {
   hostAccountsManagedByDesktopMessage,
   type HostAccountLaunchEnv
 } from '../../shared/host-account-launch-env'
+import { FirstHostLaunchEnvGate } from './first-host-launch-env-gate'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -57,6 +58,8 @@ export class RuntimeAccountController {
   /** Pushed by the desktop that owns this host's accounts; held in memory, re-pushed on connect. */
   private hostLaunchEnv: HostAccountLaunchEnv | null = null
   private persistHostLaunchEnv: ((launchEnv: HostAccountLaunchEnv) => void) | null = null
+  private readonly firstHostLaunchEnv = new FirstHostLaunchEnvGate()
+  private refreshClaudeProfile: ((launchEnv: HostAccountLaunchEnv) => Promise<void>) | null = null
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -70,17 +73,24 @@ export class RuntimeAccountController {
     if (this.commitMessageAgentEnvironment) {
       return this.commitMessageAgentEnvironment
     }
-    const hostLaunchEnv = this.hostLaunchEnv
-    if (!hostLaunchEnv) {
+    if (!this.hostLaunchEnv && !this.firstHostLaunchEnv.armed) {
       return undefined
     }
+    const currentHostLaunchEnv = async (agent: string): Promise<HostAccountLaunchEnv | null> => {
+      await this.prepareHostAgentLaunch(agent)
+      return this.hostLaunchEnv
+    }
     return {
-      prepareForCodexLaunch: () => hostLaunchEnv.terminal.CODEX_HOME ?? null,
-      prepareForClaudeLaunch: async () => ({
-        configDir: hostLaunchEnv.claude.CLAUDE_CONFIG_DIR ?? '',
-        envPatch: { ...hostLaunchEnv.claude },
-        provenance: 'desktop-host-launch-env'
-      })
+      prepareForCodexLaunch: async () =>
+        (await currentHostLaunchEnv('codex'))?.terminal.CODEX_HOME ?? null,
+      prepareForClaudeLaunch: async () => {
+        const claude = (await currentHostLaunchEnv('claude'))?.claude ?? {}
+        return {
+          configDir: claude.CLAUDE_CONFIG_DIR ?? '',
+          envPatch: { ...claude },
+          provenance: 'desktop-host-launch-env'
+        }
+      }
     }
   }
 
@@ -90,6 +100,7 @@ export class RuntimeAccountController {
       throw new Error('This host manages its own provider accounts.')
     }
     this.hostLaunchEnv = launchEnv
+    this.firstHostLaunchEnv.settle()
     try {
       this.persistHostLaunchEnv?.(launchEnv)
     } catch (error) {
@@ -101,11 +112,40 @@ export class RuntimeAccountController {
   /** orcad's store: starts from the last pushed env, so launches before a reconnect keep it. */
   restoreHostLaunchEnv(
     saved: HostAccountLaunchEnv | null,
-    persist: (launchEnv: HostAccountLaunchEnv) => void
+    persist: (launchEnv: HostAccountLaunchEnv) => void,
+    options: {
+      expectDesktopPush?: boolean
+      refreshClaudeProfile?: (launchEnv: HostAccountLaunchEnv) => Promise<void>
+    } = {}
   ): void {
     this.persistHostLaunchEnv = persist
-    if (saved && !this.services) {
+    if (this.services) {
+      return
+    }
+    this.refreshClaudeProfile = options.refreshClaudeProfile ?? null
+    if (saved) {
       this.hostLaunchEnv = saved
+      return
+    }
+    if (options.expectDesktopPush) {
+      this.firstHostLaunchEnv.arm()
+    }
+  }
+
+  /** Before a launch for `agent` this host starts: a fresh WSL host's first account push (once,
+   *  briefly), then a refresh of the selected Claude folder, as the desktop's launches do. */
+  async prepareHostAgentLaunch(agent: string | null | undefined): Promise<void> {
+    await this.firstHostLaunchEnv.wait()
+    if (agent !== 'claude' || !this.refreshClaudeProfile) {
+      return
+    }
+    // Why twice at most: a switch during the refresh would launch on a folder never refreshed.
+    for (let pass = 0, env = this.hostLaunchEnv; env && pass < 2; pass++) {
+      await this.refreshClaudeProfile(env)
+      if (this.hostLaunchEnv === env) {
+        return
+      }
+      env = this.hostLaunchEnv
     }
   }
 

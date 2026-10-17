@@ -149,22 +149,27 @@ async function runCodexLoginProcess(
       }
     }
 
-    // Why its own buffer: a stderr chunk interleaved between two halves of the
-    // link would end the match early, and the published link never changes.
-    let stdoutText = ''
+    // Why both streams: codex 0.163 prints the link on stderr, older builds on stdout.
+    // Why a buffer per stream: a chunk of the other stream interleaved between two
+    // halves of the link would end the match early, and the published link never changes.
     let publishedAuthUrl = false
-    const publishAuthUrl = (chunk: Buffer): void => {
-      if (publishedAuthUrl) {
-        return
-      }
-      stdoutText = `${stdoutText}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
-      const authUrl = parseCodexLoginAuthUrl(stdoutText)
-      if (authUrl) {
-        publishedAuthUrl = true
-        dependencies.onAuthUrl(authUrl)
-        openAuthUrl?.(authUrl)
+    const authUrlWatcher = (): ((chunk: Buffer) => void) => {
+      let text = ''
+      return (chunk) => {
+        if (publishedAuthUrl) {
+          return
+        }
+        text = `${text}${chunk.toString()}`.slice(-MAX_LOGIN_OUTPUT_CHARS)
+        const authUrl = parseCodexLoginAuthUrl(text)
+        if (authUrl) {
+          publishedAuthUrl = true
+          dependencies.onAuthUrl(authUrl)
+          openAuthUrl?.(authUrl)
+        }
       }
     }
+    const publishStdoutAuthUrl = authUrlWatcher()
+    const publishStderrAuthUrl = authUrlWatcher()
 
     let timeout: ReturnType<typeof setTimeout> | null = null
     let authWatchInterval: ReturnType<typeof setInterval> | null = null
@@ -185,7 +190,8 @@ async function runCodexLoginProcess(
         postAuthExitTimeout = null
       }
       child.stdout?.off('data', appendOutput)
-      child.stdout?.off('data', publishAuthUrl)
+      child.stdout?.off('data', publishStdoutAuthUrl)
+      child.stderr?.off('data', publishStderrAuthUrl)
       child.stderr?.off('data', appendOutput)
       child.off('error', onError)
       child.off('close', onClose)
@@ -286,7 +292,8 @@ async function runCodexLoginProcess(
     }
 
     child.stdout?.on('data', appendOutput)
-    child.stdout?.on('data', publishAuthUrl)
+    child.stdout?.on('data', publishStdoutAuthUrl)
+    child.stderr?.on('data', publishStderrAuthUrl)
     child.stderr?.on('data', appendOutput)
     child.on('error', onError)
     child.on('close', onClose)
