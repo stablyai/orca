@@ -15,7 +15,8 @@ export const getChatProvidersSearchEntry = createLocalizedCatalog(
       keywords: [
         ...translateSearchKeyword('accounts.antigravity.keyword.antigravity', 'antigravity'),
         ...translateSearchKeyword('accounts.antigravity.keyword.google', 'google'),
-        ...translateSearchKeyword('auto.components.settings.agents.search.a6d594c17d', 'install')
+        ...translateSearchKeyword('auto.components.settings.agents.search.a6d594c17d', 'install'),
+        ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login')
       ]
     }) satisfies SettingsSearchEntry
 )

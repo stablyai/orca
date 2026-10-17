@@ -39,7 +39,8 @@
       },
       "providers": {
         "title": "Proveedores",
-        "antigravityDescription": "Los chats de Antigravity usan un servidor que Orca descarga en este host, independiente de la CLI de agy."
+        "antigravityDescription": "Los chats de Antigravity usan un servidor que Orca descarga en este host, independiente de la CLI de agy.",
+        "antigravitySignIn": "Los chats usan su propio inicio de sesión de Antigravity, independiente de tu cuenta de agy en la terminal. Inicia sesión una vez en este dispositivo."
       }
     },
     "terminal": {
@@ -19606,6 +19607,27 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
+      "chatTitle": "Chats de Antigravity",
+      "chatDescription": "Los chats usan su propio inicio de sesión de Antigravity, independiente de tu cuenta de agy de arriba. Inicia sesión una vez en este dispositivo.",
+      "chatSignIn": "Iniciar sesión",
+      "chatChangeAccount": "Cambiar de cuenta",
+      "chatRetry": "Reintentar inicio de sesión",
+      "chatCancel": "Cancelar",
+      "chatCopyLink": "Copiar enlace de inicio de sesión",
+      "chatCopyFailed": "No se pudo copiar el enlace.",
+      "chatStarting": "Iniciando sesión…",
+      "chatWaiting": "Termina de iniciar sesión en tu navegador.",
+      "chatOpenFailed": "Copia el enlace y ábrelo en tu navegador.",
+      "chatVerifying": "Finalizando el inicio de sesión…",
+      "chatPasteHelp": "Si la última página después de iniciar sesión no carga, copia su dirección completa desde el navegador y pégala aquí.",
+      "chatContinue": "Continuar",
+      "chatSignedIn": "Sesión iniciada.",
+      "chatCancelled": "Inicio de sesión cancelado.",
+      "chatExpired": "El inicio de sesión caducó. Inténtalo de nuevo.",
+      "chatFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
+      "chatSaved": "Inicio de sesión guardado en {{host}}.",
+      "chatSignedOut": "Inicia sesión en {{host}}.",
+      "chatReadFailed": "No se pudo comprobar el inicio de sesión en {{host}}.",
       "retry": "Reintentar",
       "remove": "Eliminar",
       "usage": "Actualizar uso",

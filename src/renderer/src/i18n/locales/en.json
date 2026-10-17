@@ -207,7 +207,8 @@
       },
       "providers": {
         "title": "Providers",
-        "antigravityDescription": "Antigravity chats run a server Orca downloads to this host, separate from the agy CLI."
+        "antigravityDescription": "Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.",
+        "antigravitySignIn": "Chats use their own Antigravity sign-in, separate from your agy terminal account. Sign in once on this device."
       }
     },
     "terminal": {
@@ -19909,6 +19910,27 @@
       "description": "Agents there use the distro's default Claude and Codex accounts until Orca in WSL is updated."
     },
     "antigravity": {
+      "chatTitle": "Antigravity chats",
+      "chatDescription": "Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.",
+      "chatSignIn": "Sign in",
+      "chatChangeAccount": "Change account",
+      "chatRetry": "Retry sign-in",
+      "chatCancel": "Cancel",
+      "chatCopyLink": "Copy sign-in link",
+      "chatCopyFailed": "Could not copy the link.",
+      "chatStarting": "Starting sign-in…",
+      "chatWaiting": "Finish signing in in your browser.",
+      "chatOpenFailed": "Copy the link and open it in your browser.",
+      "chatVerifying": "Finishing sign-in…",
+      "chatPasteHelp": "If the last page after signing in doesn't load, copy its full address from your browser and paste it here.",
+      "chatContinue": "Continue",
+      "chatSignedIn": "Signed in.",
+      "chatCancelled": "Sign-in cancelled.",
+      "chatExpired": "Sign-in timed out. Try again.",
+      "chatFailed": "Sign-in failed. Try again.",
+      "chatSaved": "Sign-in saved on {{host}}.",
+      "chatSignedOut": "Sign in on {{host}}.",
+      "chatReadFailed": "Could not check the sign-in on {{host}}.",
       "scope": "Manage the native agy account on {{host}}.",
       "signIn": "Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.",
       "docs": "Sign-in instructions",

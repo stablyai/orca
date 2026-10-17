@@ -23,6 +23,8 @@ export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
   surface: ManagedRuntimeInstallSurface
+  /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
+  signInRunning?: boolean
 }): React.JSX.Element {
   const { observation, agentLabel, surface } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -52,6 +54,7 @@ export function ManagedRuntimeInstallRow(props: {
   const alert = refusal ?? view.error
   const { action } = view
   const removable = observation.removable && view.removable
+  const held = pending !== null || props.signInRunning === true
   const primary = (chosen: ManagedRuntimeInstallAction) => () =>
     chosen.kind === 'cancel'
       ? cancelManagedRuntimeInstall(subject, chosen.operationId)
@@ -108,7 +111,7 @@ export function ManagedRuntimeInstallRow(props: {
             <ManagedRuntimeRemoveButton
               agentLabel={agentLabel}
               host={subject.target}
-              disabled={pending !== null}
+              disabled={held}
               onRemove={() => act('remove', () => removeManagedRuntime(subject))}
             />
           ) : null}
@@ -116,7 +119,7 @@ export function ManagedRuntimeInstallRow(props: {
             <Button
               size="xs"
               variant={action.kind === 'cancel' ? 'ghost' : 'outline'}
-              disabled={pending !== null}
+              disabled={action.kind === 'cancel' ? pending !== null : held}
               onClick={() => act(action.kind, primary(action))}
             >
               {action.label}

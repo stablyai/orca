@@ -39,7 +39,8 @@
       },
       "providers": {
         "title": "プロバイダー",
-        "antigravityDescription": "Antigravity チャットは、Orca がこのホストにダウンロードするサーバーで動作します。agy CLI とは別です。"
+        "antigravityDescription": "Antigravity チャットは、Orca がこのホストにダウンロードするサーバーで動作します。agy CLI とは別です。",
+        "antigravitySignIn": "チャットはターミナルの agy アカウントとは別の、独自の Antigravity サインインを使用します。このデバイスで一度サインインしてください。"
       }
     },
     "terminal": {
@@ -19751,6 +19752,27 @@
       "cancel": "キャンセル"
     },
     "antigravity": {
+      "chatTitle": "Antigravity チャット",
+      "chatDescription": "チャットは上の agy アカウントとは別の、独自の Antigravity サインインを使用します。このデバイスで一度サインインしてください。",
+      "chatSignIn": "サインイン",
+      "chatChangeAccount": "アカウントを変更",
+      "chatRetry": "サインインを再試行",
+      "chatCancel": "キャンセル",
+      "chatCopyLink": "サインインリンクをコピー",
+      "chatCopyFailed": "リンクをコピーできませんでした。",
+      "chatStarting": "サインインを開始しています…",
+      "chatWaiting": "ブラウザーでサインインを完了してください。",
+      "chatOpenFailed": "リンクをコピーしてブラウザーで開いてください。",
+      "chatVerifying": "サインインを完了しています…",
+      "chatPasteHelp": "サインイン後の最後のページが読み込まれない場合は、ブラウザーからそのページの完全なアドレスをコピーしてここに貼り付けてください。",
+      "chatContinue": "続行",
+      "chatSignedIn": "サインインしました。",
+      "chatCancelled": "サインインをキャンセルしました。",
+      "chatExpired": "サインインがタイムアウトしました。もう一度お試しください。",
+      "chatFailed": "サインインに失敗しました。もう一度お試しください。",
+      "chatSaved": "{{host}} にサインインが保存されています。",
+      "chatSignedOut": "{{host}} でサインインしてください。",
+      "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
       "scope": "{{host}} でネイティブ agy アカウントを管理します。",
       "signIn": "このホストで agy を起動し、ブラウザのサインインを完了して、現在のアカウントを保存します。別のアカウントを追加するには、agy で /logout を使用し、再度サインインします。",
       "docs": "サインイン手順",

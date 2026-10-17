@@ -39,7 +39,8 @@
       },
       "providers": {
         "title": "提供方",
-        "antigravityDescription": "Antigravity 聊天运行在 Orca 下载到此主机的服务器上，与 agy CLI 相互独立。"
+        "antigravityDescription": "Antigravity 聊天运行在 Orca 下载到此主机的服务器上，与 agy CLI 相互独立。",
+        "antigravitySignIn": "聊天使用自己的 Antigravity 登录，与终端中的 agy 帐户分开。在此设备上登录一次即可。"
       }
     },
     "terminal": {
@@ -19751,6 +19752,27 @@
       "cancel": "取消"
     },
     "antigravity": {
+      "chatTitle": "Antigravity 聊天",
+      "chatDescription": "聊天使用自己的 Antigravity 登录，与上方的 agy 帐户分开。在此设备上登录一次即可。",
+      "chatSignIn": "登录",
+      "chatChangeAccount": "更换帐户",
+      "chatRetry": "重试登录",
+      "chatCancel": "取消",
+      "chatCopyLink": "复制登录链接",
+      "chatCopyFailed": "无法复制链接。",
+      "chatStarting": "正在开始登录…",
+      "chatWaiting": "请在浏览器中完成登录。",
+      "chatOpenFailed": "复制链接并在浏览器中打开。",
+      "chatVerifying": "正在完成登录…",
+      "chatPasteHelp": "如果登录后的最后一个页面无法加载，请从浏览器复制它的完整地址并粘贴到这里。",
+      "chatContinue": "继续",
+      "chatSignedIn": "已登录。",
+      "chatCancelled": "已取消登录。",
+      "chatExpired": "登录超时。请重试。",
+      "chatFailed": "登录失败。请重试。",
+      "chatSaved": "已在 {{host}} 上保存登录。",
+      "chatSignedOut": "在 {{host}} 上登录。",
+      "chatReadFailed": "无法检查 {{host}} 上的登录。",
       "scope": "管理 {{host}} 上的本机 agy 帐户。",
       "signIn": "在此主机上启动 agy 并完成其浏览器登录，然后保存当前帐户。要添加其他帐户，请在 agy 中使用 /logout 并再次登录。",
       "docs": "登录说明",

@@ -16,6 +16,12 @@ import { Badge } from '../ui/badge'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
 import { useAppStore } from '../../store'
 import { getChatProvidersSearchEntry } from './chat-providers-search'
+import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import {
+  AntigravityChatSignInRow,
+  antigravityChatSignInBlocked,
+  useAntigravityChatSignIn
+} from './AntigravityChatSignInRow'
 
 export function AntigravityAccountsSection({
   owner,
@@ -49,6 +55,9 @@ export function AntigravityAccountsSection({
   const nativeChat = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const chats = nativeChat && runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
+  // A remote host's sign-in finishes from the address pasted back into its row.
+  const chatSignIn = chats && chatRuntime.kind === 'active'
+  const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
 
   useEffect(() => {
     mounted.current = true
@@ -297,7 +306,19 @@ export function AntigravityAccountsSection({
             observation={chatRuntime}
             agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
             surface="settings"
+            signInRunning={antigravityChatSignInRunning(signIn.flow)}
           />
+          {chatSignIn ? (
+            <AntigravityChatSignInRow
+              owner={owner}
+              label={label}
+              description={translate(
+                'accounts.antigravity.chatDescription',
+                'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
+              )}
+              disabled={antigravityChatSignInBlocked(chatRuntime)}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>

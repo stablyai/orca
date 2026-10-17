@@ -143,7 +143,8 @@
       },
       "providers": {
         "title": "Fournisseurs",
-        "antigravityDescription": "Les chats Antigravity utilisent un serveur qu’Orca télécharge sur cet hôte, distinct de la CLI agy."
+        "antigravityDescription": "Les chats Antigravity utilisent un serveur qu’Orca télécharge sur cet hôte, distinct de la CLI agy.",
+        "antigravitySignIn": "Les discussions utilisent leur propre connexion Antigravity, distincte de votre compte agy du terminal. Connectez-vous une seule fois sur cet appareil."
       }
     },
     "terminal": {
@@ -19751,6 +19752,27 @@
       "cancel": "Annuler"
     },
     "antigravity": {
+      "chatTitle": "Discussions Antigravity",
+      "chatDescription": "Les discussions utilisent leur propre connexion Antigravity, distincte de votre compte agy ci-dessus. Connectez-vous une seule fois sur cet appareil.",
+      "chatSignIn": "Se connecter",
+      "chatChangeAccount": "Changer de compte",
+      "chatRetry": "Réessayer la connexion",
+      "chatCancel": "Annuler",
+      "chatCopyLink": "Copier le lien de connexion",
+      "chatCopyFailed": "Impossible de copier le lien.",
+      "chatStarting": "Démarrage de la connexion…",
+      "chatWaiting": "Terminez la connexion dans votre navigateur.",
+      "chatOpenFailed": "Copiez le lien et ouvrez-le dans votre navigateur.",
+      "chatVerifying": "Finalisation de la connexion…",
+      "chatPasteHelp": "Si la dernière page après la connexion ne se charge pas, copiez son adresse complète depuis votre navigateur et collez-la ici.",
+      "chatContinue": "Continuer",
+      "chatSignedIn": "Connecté.",
+      "chatCancelled": "Connexion annulée.",
+      "chatExpired": "La connexion a expiré. Réessayez.",
+      "chatFailed": "La connexion a échoué. Réessayez.",
+      "chatSaved": "Connexion enregistrée sur {{host}}.",
+      "chatSignedOut": "Connectez-vous sur {{host}}.",
+      "chatReadFailed": "Impossible de vérifier la connexion sur {{host}}.",
       "scope": "Gérez le compte agy natif sur {{host}}.",
       "signIn": "Démarrez agy sur cet hôte et complétez la connexion au navigateur, puis enregistrez le compte actuel. Pour ajouter un autre compte, utilisez /logout dans agy et reconnectez-vous.",
       "docs": "Instructions de connexion",
