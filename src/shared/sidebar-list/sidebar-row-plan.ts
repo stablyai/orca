@@ -29,6 +29,10 @@ import {
 import { getSidebarLineageChildren } from './pinned-section-worktrees'
 import { emitPinnedGroup } from './pinned-group-rows'
 import {
+  emitNeedsAttentionGroup,
+  planNeedsAttentionOccurrences
+} from './needs-attention-group-rows'
+import {
   appendWorktreeRows,
   buildFolderWorkspaceRow,
   buildPendingCreationRow
@@ -76,6 +80,8 @@ export type SidebarRowPlanInputs = {
   defaultHostId: ExecutionHostId
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   filterRepoIds: readonly string[]
+  /** Workspaces copied into the "Needs you" section; empty when the section is off. */
+  needsAttentionWorktreeIds?: ReadonlySet<string>
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -101,7 +107,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds
+    filterRepoIds,
+    needsAttentionWorktreeIds
   } = inputs
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
@@ -173,6 +180,11 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     .filter((section) => section.key !== PINNED_GROUP_KEY)
     .map((section) => [section.key, section.group])
   const naturalWorktrees = orderedGroups.flatMap(([, group]) => group.items)
+  const needsAttentionWorktrees =
+    needsAttentionWorktreeIds && needsAttentionWorktreeIds.size > 0
+      ? worktrees.filter((worktree) => needsAttentionWorktreeIds.has(worktree.id))
+      : []
+  const needsAttentionPlan = planNeedsAttentionOccurrences(needsAttentionWorktrees)
   const render = (collapsedGroups: Set<string>): Row[] => {
     const result: Row[] = []
     if (groupBy !== 'repo') {
@@ -209,6 +221,15 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       workspaceStatuses,
       projectGrouping
     })
+    emitNeedsAttentionGroup(
+      needsAttentionWorktrees,
+      needsAttentionPlan,
+      repoMap,
+      defaultHostId,
+      collapsedGroups,
+      result,
+      mixedWorktreeHostContextLabels
+    )
     emitPinnedGroup(
       pinnedSectionWorktrees,
       repoMap,

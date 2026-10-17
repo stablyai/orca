@@ -2,6 +2,10 @@ import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import {
+  getHighlightWorkspacesNeedingAttentionEntry,
+  getShowNeedsAttentionSectionEntry
+} from './appearance-sidebar-attention-search'
 
 export const getLeftSidebarAppearanceEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
   title: translate(
@@ -189,5 +193,7 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  getShowNeedsAttentionSectionEntry(),
+  getHighlightWorkspacesNeedingAttentionEntry()
 ])

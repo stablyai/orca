@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
-import { getNaturalWorktreeIds } from './natural-worktree-ids'
+import {
+  NEEDS_ATTENTION_GROUP_KEY,
+  PINNED_GROUP_KEY
+} from '../../../../shared/sidebar-list/group-keys'
+import { getNaturalWorktreeIds, isEchoSectionRow } from './natural-worktree-ids'
 
 const item = (id: string, sectionKey: string) => ({
   type: 'item' as const,
@@ -41,5 +44,24 @@ describe('getNaturalWorktreeIds', () => {
 
   it('returns an empty set for no rows', () => {
     expect(getNaturalWorktreeIds([]).size).toBe(0)
+  })
+})
+
+describe('isEchoSectionRow', () => {
+  it('always treats a Needs you row as a copy, never a drag slot', () => {
+    const rows = [item('a', NEEDS_ATTENTION_GROUP_KEY), item('a', 'group-1')]
+    const natural = getNaturalWorktreeIds(rows)
+
+    expect(natural.has('a')).toBe(true)
+    expect(isEchoSectionRow(rows[0], natural)).toBe(true)
+    expect(isEchoSectionRow(rows[1], natural)).toBe(false)
+  })
+
+  it('treats a Needs you row as a copy even when its workspace lives only in Pinned', () => {
+    const rows = [item('a', NEEDS_ATTENTION_GROUP_KEY), item('a', PINNED_GROUP_KEY)]
+    const natural = getNaturalWorktreeIds(rows)
+
+    expect(isEchoSectionRow(rows[0], natural)).toBe(true)
+    expect(isEchoSectionRow(rows[1], natural)).toBe(false)
   })
 })

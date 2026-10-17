@@ -1,13 +1,18 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
+import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
+import { getWorktreeAttentionTone } from './worktree-attention-tone'
 import { WorktreeCardParentContent } from './worktree-card-parent-content'
 import { buildWorktreeCardPresentation } from './worktree-card-presentation'
 import type { WorktreeCardController } from './use-worktree-card-controller'
+
+const NO_WORKTREE_IDS: readonly string[] = []
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const presentation = buildWorktreeCardPresentation(card)
@@ -42,6 +47,16 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   } = card
   const { titleOnlyCard, cardStyle } = presentation
   const isSleeping = useIsSleepingWorktree(worktree.id)
+  const highlightAttention = useAppStore(
+    (s) => s.settings?.highlightWorkspacesNeedingAttention === true
+  )
+  const tintWorktreeIds = useMemo(
+    () => (highlightAttention && !affiliateListMode ? [worktree.id] : NO_WORKTREE_IDS),
+    [highlightAttention, affiliateListMode, worktree.id]
+  )
+  // Why the list form: with the setting off the card subscribes to no agent status at all.
+  const tintStatus = useWorktreeActivityStatuses(tintWorktreeIds).get(worktree.id)
+  const attentionTone = tintStatus ? getWorktreeAttentionTone(tintStatus, worktree.isUnread) : null
 
   const parentCardContent = <WorktreeCardParentContent card={card} presentation={presentation} />
 
@@ -82,6 +97,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         (isMultiSelected && !isActiveSurface && !isLineageDropTarget) || undefined
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
+      data-worktree-attention={attentionTone ?? undefined}
       onClick={handleClick}
       onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
       draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}

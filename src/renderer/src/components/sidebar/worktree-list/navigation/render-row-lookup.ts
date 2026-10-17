@@ -12,7 +12,7 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { RenderRow } from '../listing/render-row'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
+import { isEchoWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
 
 export function getRenderRowSidebarKey(row: RenderRow): string | null {
   if (row.type === 'header') {
@@ -92,7 +92,7 @@ export function getRenderRowWorktreeItem(
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId) ? row : null
 }
 
-// Prefer the worktree's natural group row over its pinned duplicate when both are rendered.
+// Prefer the worktree's own row over a pinned or "Needs you" copy when both are rendered.
 export function findPreferredRenderRowIndexForWorktree(
   renderRows: readonly RenderRow[],
   worktreeId: string,
@@ -108,7 +108,7 @@ export function findPreferredRenderRowIndexForWorktree(
       fallbackIndex = index
     }
     const itemRow = getRenderRowWorktreeItem(row, worktreeId)
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
+    if (itemRow && !isEchoWorktreeRow(itemRow, pinnedDisplayPolicy)) {
       return index
     }
   }
@@ -146,7 +146,7 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && !isPinnedWorktreeRow(itemRow)) {
+    if (!isEchoWorktreeRow(itemRow, pinnedDisplayPolicy)) {
       return index
     }
   }

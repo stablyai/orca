@@ -18,6 +18,7 @@ export function getPinnedWorktreeDisplayPolicy(
 /** Which glyph a group header draws; each client maps it to its own icon and tone. */
 export type SidebarHeaderIcon =
   | { kind: 'pinned' }
+  | { kind: 'needs-attention' }
   | { kind: 'all' }
   | { kind: 'project' }
   | { kind: 'pr-status'; prGroup: PRGroupKey }

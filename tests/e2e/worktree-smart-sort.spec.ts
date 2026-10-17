@@ -246,4 +246,46 @@ test.describe('Worktree Smart Sort', () => {
     await expect(worktreeRow(orcaPage, blockedId)).toBeVisible()
     await expect(worktreeRow(orcaPage, doneId)).toBeVisible()
   })
+
+  test('lists blocked worktrees under Needs you and tints them when the opt-ins are on', async ({
+    orcaPage
+  }, testInfo) => {
+    const scenario = await seedSmartSortScenario(orcaPage)
+    const { blockedId, doneId } = scenario
+    await orcaPage.evaluate(async () => {
+      const state = window.__store?.getState()
+      if (!state) {
+        throw new Error('window.__store is not available')
+      }
+      state.setGroupBy('repo')
+      await state.updateSettings({
+        showNeedsAttentionSection: true,
+        highlightWorkspacesNeedingAttention: true
+      })
+    })
+
+    const needsYouRow = orcaPage.locator(
+      `[data-worktree-sidebar] [role="option"][data-worktree-section-key="needs-attention"][data-worktree-id="${blockedId}"]`
+    )
+    await expect(needsYouRow).toBeVisible({ timeout: 12_000 })
+    await expect(
+      orcaPage.locator(
+        `[data-worktree-sidebar] [role="option"][data-worktree-section-key="needs-attention"][data-worktree-id="${doneId}"]`
+      )
+    ).toHaveCount(0)
+    // Why: the copy never replaces the worktree's own row in its project group.
+    await expect(
+      orcaPage.locator(
+        `[data-worktree-sidebar] [role="option"][data-worktree-id="${blockedId}"]:not([data-worktree-section-key="needs-attention"])`
+      )
+    ).toHaveCount(1)
+    await expect(
+      needsYouRow.locator('[data-worktree-card-surface][data-worktree-attention="needs-you"]')
+    ).toBeVisible()
+
+    await testInfo.attach('sidebar-needs-you', {
+      body: await orcaPage.locator('[data-worktree-sidebar]').screenshot(),
+      contentType: 'image/png'
+    })
+  })
 })

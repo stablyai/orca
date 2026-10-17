@@ -22,6 +22,7 @@ import {
 } from './appearance-search'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { SidebarAttentionSettings } from './SidebarAttentionSettings'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
@@ -338,6 +339,8 @@ export function AppearanceWindowSidebarSection({
                       }
                     />
                   </SearchableSetting>
+
+                  <SidebarAttentionSettings settings={settings} updateSettings={updateSettings} />
                 </div>
               </div>
             ) : null}

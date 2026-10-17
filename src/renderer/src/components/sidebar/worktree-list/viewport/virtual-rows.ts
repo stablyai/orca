@@ -1,6 +1,7 @@
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
 import {
+  NEEDS_ATTENTION_GROUP_KEY,
   PINNED_GROUP_KEY,
   getWorktreeLineageGroupKey
 } from '../../../../../../shared/sidebar-list/group-keys'
@@ -54,9 +55,11 @@ export function shouldUseHeaderTopSpacing(args: {
   firstHeaderIndex: number
 }): boolean {
   const previousRenderRow = args.rows[args.index - 1]
-  const followsCollapsedPinnedHeader =
-    previousRenderRow?.type === 'header' && previousRenderRow.key === PINNED_GROUP_KEY
-  return args.index !== args.firstHeaderIndex && !followsCollapsedPinnedHeader
+  const followsCollapsedTopSectionHeader =
+    previousRenderRow?.type === 'header' &&
+    (previousRenderRow.key === PINNED_GROUP_KEY ||
+      previousRenderRow.key === NEEDS_ATTENTION_GROUP_KEY)
+  return args.index !== args.firstHeaderIndex && !followsCollapsedTopSectionHeader
 }
 
 export function estimateRenderRowSize(

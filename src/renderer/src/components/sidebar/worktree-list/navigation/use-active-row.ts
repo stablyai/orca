@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
+import { isEchoWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
 
 // A worktree can render in more than one section; the row the user actually clicked owns
 // the primary active surface so its duplicates stay visually secondary.
@@ -60,11 +60,7 @@ export function usePrimaryActiveWorktreeRow(args: {
       if (primaryActiveWorktreeRow?.worktreeIdentity === rowIdentity) {
         return primaryActiveWorktreeRow.rowKey === row.rowKey ? 'primary' : 'secondary'
       }
-      if (
-        pinnedDisplayPolicy === 'duplicate-in-groups' &&
-        activeWorktreeId === row.worktree.id &&
-        isPinnedWorktreeRow(row)
-      ) {
+      if (activeWorktreeId === row.worktree.id && isEchoWorktreeRow(row, pinnedDisplayPolicy)) {
         return 'secondary'
       }
       return 'primary'

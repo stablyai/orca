@@ -1,6 +1,6 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
-import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
-import { getNaturalWorktreeIds } from './natural-worktree-ids'
+import { ALL_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import { getNaturalWorktreeIds, isEchoSectionRow } from './natural-worktree-ids'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -41,7 +41,7 @@ export function getWorktreeDragUnitGroups(
     ) {
       continue
     }
-    if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {
+    if (isEchoSectionRow(row, naturalWorktreeIds)) {
       continue
     }
     if (!current) {

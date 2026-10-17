@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP } from '../viewport/virtual-rows'
 import { getWorkspaceStatusGroupKey } from '../../workspace-status'
 import { expandDraggedWorktreeIdsForVisibleLineage } from '../../worktree-manual-order'
@@ -24,7 +23,7 @@ import {
 } from '../../worktree-sidebar-drop-preview'
 import { getWorktreeDragGroups, getWorktreeDragIndexes } from './groups'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getNaturalWorktreeIds } from '../../natural-worktree-ids'
+import { getNaturalWorktreeIds, isEchoSectionRow } from '../../natural-worktree-ids'
 
 export type WorktreeStatusDropRequest = {
   pointerY: number
@@ -54,10 +53,7 @@ export function useWorktreeDragSession(args: {
     () =>
       rows
         .filter((row): row is WorktreeItemRow => row.type === 'item')
-        .filter(
-          (row) =>
-            row.sectionKey !== PINNED_GROUP_KEY || !naturalDragWorktreeIds.has(row.worktree.id)
-        )
+        .filter((row) => !isEchoSectionRow(row, naturalDragWorktreeIds))
         .map((row) => ({ worktreeId: row.worktree.id, depth: row.depth })),
     [naturalDragWorktreeIds, rows]
   )

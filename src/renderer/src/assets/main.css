@@ -1507,6 +1507,43 @@ html.native-shell .app-layout {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
 }
 
+/* Why: an opt-in tint so rows that need the user read at a glance. The left bar
+   carries the cue on every row state (active, selected, hover); the wash only
+   paints quiet rows so the active and selected looks stay intact. */
+[data-worktree-card-surface][data-worktree-attention] {
+  --worktree-attention-tone: var(--status-warning);
+}
+
+[data-worktree-card-surface][data-worktree-attention='done'] {
+  --worktree-attention-tone: var(--status-success);
+}
+
+[data-worktree-card-surface][data-worktree-attention='failed'] {
+  --worktree-attention-tone: var(--destructive);
+}
+
+[data-worktree-card-surface][data-worktree-attention]::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 3px;
+  background: var(--worktree-attention-tone);
+  pointer-events: none;
+}
+
+[data-worktree-card-surface][data-worktree-attention]:not([data-worktree-card-active]):not(
+    [data-worktree-card-selected]
+  ):not([data-worktree-lineage-drop-target]) {
+  background: color-mix(in srgb, var(--worktree-attention-tone) 10%, transparent);
+}
+
+[data-worktree-card-surface][data-worktree-attention]:not([data-worktree-card-active]):not(
+    [data-worktree-card-selected]
+  ):not([data-worktree-lineage-drop-target]):hover {
+  background: color-mix(in srgb, var(--worktree-attention-tone) 16%, transparent);
+}
+
 /* Why: a sleeping card dims by mixing the theme's own text tokens toward the
    sidebar surface in oklab, not by painting opacity over whatever is behind it.
    An opacity step shrinks as the surface lightens, so the cue faded on lighter

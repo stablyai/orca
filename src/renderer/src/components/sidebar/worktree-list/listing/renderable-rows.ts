@@ -1,7 +1,9 @@
 import {
+  NEEDS_ATTENTION_GROUP_KEY,
   PINNED_GROUP_KEY,
   getWorktreeLineageGroupKey
 } from '../../../../../../shared/sidebar-list/group-keys'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { RenderRow } from './render-row'
 
@@ -14,6 +16,17 @@ export function isWorktreeItemRow(row: HostSectionRow): row is WorktreeItemRow {
 
 export function isPinnedWorktreeRow(row: WorktreeItemRow): boolean {
   return row.sectionKey === PINNED_GROUP_KEY
+}
+
+/** A copy of a workspace whose own row lives elsewhere; navigation and the primary active surface prefer that row. */
+export function isEchoWorktreeRow(
+  row: Pick<WorktreeItemRow, 'sectionKey'>,
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+): boolean {
+  return (
+    row.sectionKey === NEEDS_ATTENTION_GROUP_KEY ||
+    (pinnedDisplayPolicy === 'duplicate-in-groups' && row.sectionKey === PINNED_GROUP_KEY)
+  )
 }
 
 // Collapse a parent and its visible lineage descendants into one virtual row so the card renders them inline.

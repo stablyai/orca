@@ -14,6 +14,8 @@ export function getProjectGroupHeaderKey(groupId: string | null): string {
 
 export const PINNED_GROUP_KEY = 'pinned'
 
+export const NEEDS_ATTENTION_GROUP_KEY = 'needs-attention'
+
 export const ALL_GROUP_KEY = 'all'
 
 export const LINEAGE_GROUP_PREFIX = 'lineage:'

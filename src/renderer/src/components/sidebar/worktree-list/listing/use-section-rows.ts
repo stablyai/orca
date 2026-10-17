@@ -32,6 +32,7 @@ import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/host-section-order'
 import { buildSidebarHostOptions } from '../../sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import { useNeedsAttentionWorktreeIds } from './use-needs-attention-worktree-ids'
 
 type SectionRowsArgs = {
   agentSendTargetWorktreeId?: string | null
@@ -72,6 +73,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const wslHostServerFilesMissing = useAppStore((s) => s.wslHostServerFiles === 'missing')
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
+  const needsAttentionWorktreeIds = useNeedsAttentionWorktreeIds(
+    args.settings?.showNeedsAttentionSection === true
+  )
 
   // Why: manual header order is bound to state.repos; Recent/Smart derive order from the sorted worktree stream.
   const repoOrder = useMemo(
@@ -166,7 +170,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         hostLabelById,
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        needsAttentionWorktreeIds
       }),
     [
       args.groupBy,
@@ -188,7 +193,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       pendingCreations,
       hostLabelById,
       args.pinnedDisplayPolicy,
-      args.filterRepoIds
+      args.filterRepoIds,
+      needsAttentionWorktreeIds
     ]
   )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({

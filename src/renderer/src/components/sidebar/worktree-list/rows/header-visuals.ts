@@ -1,4 +1,4 @@
-import { CircleX, FolderTree, List, Pin } from 'lucide-react'
+import { BellRing, CircleX, FolderTree, List, Pin } from 'lucide-react'
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
 import type { PRGroupKey } from '../../../../../../shared/workspace-view/workspace-pr-groups'
@@ -62,6 +62,14 @@ const PINNED_GROUP_META = {
   icon: Pin
 } as const
 
+const NEEDS_ATTENTION_GROUP_META = {
+  get label() {
+    return translate('auto.components.sidebar.worktree.list.groups.needsAttention', 'Needs you')
+  },
+  tone: 'text-status-warning',
+  icon: BellRing
+} as const
+
 const ALL_GROUP_META = {
   get label() {
     return translate('auto.components.sidebar.worktree.list.groups.0ed04075b8', 'All')
@@ -73,7 +81,7 @@ const ALL_GROUP_META = {
 type SidebarHeaderVisual = {
   icon: React.ComponentType<{ className?: string }>
   tone: string
-  /** Set for headers the builder leaves unnamed: Pinned, All and the PR lanes. */
+  /** Set for headers the builder leaves unnamed: Pinned, Needs you, All and the PR lanes. */
   label?: string
 }
 
@@ -85,6 +93,8 @@ export function getSidebarHeaderVisual(
   switch (icon.kind) {
     case 'pinned':
       return PINNED_GROUP_META
+    case 'needs-attention':
+      return NEEDS_ATTENTION_GROUP_META
     case 'all':
       return ALL_GROUP_META
     case 'project':

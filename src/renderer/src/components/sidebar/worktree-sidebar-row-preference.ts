@@ -2,7 +2,7 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-w
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
-import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import { isEchoWorktreeRow } from './worktree-list/listing/renderable-rows'
 import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeRow
@@ -12,25 +12,14 @@ export function getPreferredWorktreeRows(
   rows: readonly WorktreeRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): WorktreeRow[] {
-  // Why: duplicated pinned rows represent one workspace to navigation and selection.
-  // Prefer its natural-group copy, falling back to Pinned when that copy is hidden.
-  if (pinnedDisplayPolicy === 'single-location') {
-    const seen = new Set<string>()
-    return rows.filter((row) => {
-      const identity = getWorktreeHostIdentity(row.worktree)
-      if (seen.has(identity)) {
-        return false
-      }
-      seen.add(identity)
-      return true
-    })
-  }
-
+  // Why: a workspace rendered twice is one workspace to navigation and selection. Prefer
+  // its own row over a copy (Needs you, or Pinned when duplicated), falling back to the
+  // copy when that row is hidden.
   const preferredRows: WorktreeRow[] = []
   const seen = new Set<string>()
   for (const row of rows) {
     const identity = getWorktreeHostIdentity(row.worktree)
-    if (row.sectionKey === PINNED_GROUP_KEY || seen.has(identity)) {
+    if (isEchoWorktreeRow(row, pinnedDisplayPolicy) || seen.has(identity)) {
       continue
     }
     preferredRows.push(row)

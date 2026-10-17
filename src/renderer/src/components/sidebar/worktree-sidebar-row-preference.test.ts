@@ -4,7 +4,11 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
-import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
+import { NEEDS_ATTENTION_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import {
+  getPreferredWorktreeRows,
+  getRenderedWorktreesInSidebarOrder
+} from './worktree-sidebar-row-preference'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -100,5 +104,32 @@ describe('getRenderedWorktreesInSidebarOrder', () => {
     expect(
       getRenderedWorktreesInSidebarOrder(rows, 'duplicate-in-groups').map(({ id }) => id)
     ).toEqual(['folder:folder-1', 'pinned', 'after-folder'])
+  })
+
+  it('walks a Needs you workspace at its own row, not at the copy above', () => {
+    const blocked = worktree('blocked')
+    const quiet = worktree('quiet')
+    const rows: HostSectionRow[] = [
+      item(blocked, NEEDS_ATTENTION_GROUP_KEY),
+      item(quiet, 'repo:repo-1'),
+      item(blocked, 'repo:repo-1')
+    ]
+
+    expect(getRenderedWorktreesInSidebarOrder(rows, 'single-location').map(({ id }) => id)).toEqual(
+      ['quiet', 'blocked']
+    )
+  })
+})
+
+describe('getPreferredWorktreeRows', () => {
+  it('falls back to the Needs you copy when the own row is hidden', () => {
+    const blocked = worktree('blocked')
+    const rows = [item(blocked, NEEDS_ATTENTION_GROUP_KEY)].filter(
+      (row): row is Extract<HostSectionRow, { type: 'item' }> => row.type === 'item'
+    )
+
+    expect(getPreferredWorktreeRows(rows, 'single-location').map((row) => row.rowKey)).toEqual([
+      `${NEEDS_ATTENTION_GROUP_KEY}:blocked`
+    ])
   })
 })

@@ -5,7 +5,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { isPinnedWorktreeRow } from '../listing/renderable-rows'
+import { isEchoWorktreeRow } from '../listing/renderable-rows'
 import { getRenderRowWorktreeItem, renderRowContainsWorktree } from './render-row-lookup'
 import { getWorktreeOptionId } from '../rows/option-dom'
 
@@ -89,11 +89,7 @@ export function getActiveDescendantOptionId(args: {
         args.activeWorktreeId,
         args.activeWorkspaceExecutionHostId ?? undefined
       )
-      if (
-        args.pinnedDisplayPolicy === 'duplicate-in-groups' &&
-        itemRow &&
-        !isPinnedWorktreeRow(itemRow)
-      ) {
+      if (itemRow && !isEchoWorktreeRow(itemRow, args.pinnedDisplayPolicy)) {
         return optionId
       }
       fallbackOptionId ??= optionId
