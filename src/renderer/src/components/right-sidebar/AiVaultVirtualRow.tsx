@@ -5,7 +5,6 @@ import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { VaultGroupHeader } from './AiVaultPanelControls'
 import { VaultSessionRow } from './AiVaultSessionRow'
-import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
   aiVaultSessionResumeLabel,
@@ -27,10 +26,9 @@ import { resolveAiVaultSessionRowChatActions } from './ai-vault-session-chat-act
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { canResumeAiVaultSearchHit, hasAiVaultSearchHitPath } from './ai-vault-search-session'
+import { getVaultRowKey, type AiVaultListRow } from './ai-vault-virtual-rows'
 
-export type AiVaultListRow =
-  | { type: 'group'; group: AiVaultSessionGroup }
-  | { type: 'session'; groupKey: string; session: AiVaultSession }
+export type { AiVaultListRow }
 
 export function AiVaultVirtualRow({
   row,
@@ -70,7 +68,7 @@ export function AiVaultVirtualRow({
   index: number
   start: number
   activeStickyHeaderIndex: number | null
-  measureElement: (node: Element | null) => void
+  measureElement: (node: HTMLDivElement | null) => void
   collapsedGroups: ReadonlySet<string>
   expandedSessionIds: ReadonlySet<string>
   vaultScope: AiVaultScope
@@ -182,11 +180,12 @@ export function AiVaultVirtualRow({
     <div
       ref={measureElement}
       data-index={index}
+      data-vault-virtual-row-key={getVaultRowKey(row)}
       className={cn(
         'left-0 w-full',
         isActiveStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
+      style={isActiveStickyHeader ? undefined : { transform: `translateY(${Math.round(start)}px)` }}
     >
       {row.type === 'group' ? (
         <VaultGroupHeader

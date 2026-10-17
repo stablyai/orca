@@ -4,6 +4,30 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+
+const worktrees = [
+  makeWorktree({
+    id: 'workspace-a',
+    repoId: 'repo-1',
+    projectId: 'project-1',
+    path: '/Users/ada/repo'
+  }),
+  makeWorktree({
+    id: 'workspace-b',
+    repoId: 'repo-1',
+    projectId: 'project-1',
+    path: '/Users/ada/other'
+  }),
+  makeWorktree({
+    id: 'workspace-c',
+    repoId: 'repo-2',
+    projectId: 'project-2',
+    path: '/Users/ada/third'
+  })
+]
+let activeWorktree: Worktree | null = null
 
 const mockState: {
   settings: { aiVaultSearch?: { enabled: boolean } }
@@ -31,9 +55,9 @@ vi.mock('@/store', () => ({
 }))
 vi.mock('@/store/selectors', () => ({
   useActiveRepo: () => null,
-  useActiveWorktree: () => null,
-  useActiveWorktreeId: () => null,
-  useAllWorktrees: () => [],
+  useActiveWorktree: () => activeWorktree,
+  useActiveWorktreeId: () => activeWorktree?.id ?? null,
+  useAllWorktrees: () => worktrees,
   useProjectHostSetupProjection: () => ({ projects: [], setups: [] }),
   useRepos: () => []
 }))
@@ -114,6 +138,7 @@ function vaultSession(id: string, title: string): AiVaultSession {
 }
 
 beforeEach(() => {
+  activeWorktree = null
   mockState.settings = {}
   searchSessions.mockReset().mockResolvedValue({
     kind: 'results',
@@ -256,4 +281,67 @@ it('hands the list one untitled group while searching, and titled groups while b
   await waitFor(() =>
     expect(screen.getByRole('list').getAttribute('data-group-labels')).toBe('(untitled)')
   )
+})
+
+it.each([
+  { scope: 'All', target: 1 },
+  { scope: 'All', target: 2 },
+  { scope: 'Project', target: 1 }
+])('preserves the $scope list when switching to workspace $target', async ({ scope, target }) => {
+  activeWorktree = worktrees[0]
+  const { default: AiVaultPanel } = await import('./AiVaultPanel')
+  const { rerender } = render(<AiVaultPanel />)
+  await userEvent.click(screen.getByRole('radio', { name: scope }))
+  const list = screen.getByRole('list')
+  list.scrollTop = 810
+
+  activeWorktree = worktrees[target]
+  rerender(<AiVaultPanel />)
+
+  expect(screen.getByRole('list')).toBe(list)
+  expect(screen.getByRole('list').scrollTop).toBe(810)
+})
+
+it.each(['Workspace', 'Project'])('resets the %s list when its subject changes', async (scope) => {
+  activeWorktree = worktrees[0]
+  const { default: AiVaultPanel } = await import('./AiVaultPanel')
+  const { rerender } = render(<AiVaultPanel />)
+  await userEvent.click(screen.getByRole('radio', { name: scope }))
+  const list = screen.getByRole('list')
+  list.scrollTop = 810
+
+  activeWorktree = scope === 'Workspace' ? worktrees[1] : worktrees[2]
+  rerender(<AiVaultPanel />)
+
+  expect(screen.getByRole('list')).not.toBe(list)
+  expect(screen.getByRole('list').scrollTop).toBe(0)
+})
+
+it('rebuilds the list when switching from All to Workspace', async () => {
+  activeWorktree = worktrees[0]
+  const { default: AiVaultPanel } = await import('./AiVaultPanel')
+  render(<AiVaultPanel />)
+  await userEvent.click(screen.getByRole('radio', { name: 'All' }))
+  const list = screen.getByRole('list')
+  list.scrollTop = 810
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Workspace' }))
+
+  expect(screen.getByRole('list')).not.toBe(list)
+  expect(screen.getByRole('list').scrollTop).toBe(0)
+})
+
+it('rebuilds Project when the same workspace moves to another project', async () => {
+  activeWorktree = worktrees[0]
+  const { default: AiVaultPanel } = await import('./AiVaultPanel')
+  const { rerender } = render(<AiVaultPanel />)
+  await userEvent.click(screen.getByRole('radio', { name: 'Project' }))
+  const list = screen.getByRole('list')
+  list.scrollTop = 810
+
+  activeWorktree = { ...activeWorktree, projectId: 'project-2' }
+  rerender(<AiVaultPanel />)
+
+  expect(screen.getByRole('list')).not.toBe(list)
+  expect(screen.getByRole('list').scrollTop).toBe(0)
 })

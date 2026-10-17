@@ -1,11 +1,18 @@
 import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import {
+  measureElement as measureVirtualElementSize,
+  useVirtualizer
+} from '@tanstack/react-virtual'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
-import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/viewport/virtual-rows'
+import {
+  getActiveStickyHeaderIndexForScroll,
+  getVirtualRowIndex,
+  pruneStaleVirtualRowElementCache
+} from '../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
@@ -15,17 +22,18 @@ import type {
 } from './ai-vault-session-resume'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import {
+  estimateVaultRowSize,
   extractVaultVirtualRowIndexes,
+  getVaultRowKey,
   getVaultStickyHeaderIndexes,
-  VAULT_GROUP_HEADER_ROW_HEIGHT,
-  VAULT_SESSION_ROW_HEIGHT
+  isCurrentVaultVirtualRowElement,
+  VAULT_GROUP_HEADER_ROW_HEIGHT
 } from './ai-vault-virtual-rows'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 
 const VAULT_ROW_OVERSCAN = 8
-const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
 
 export function AiVaultSessionVirtualList({
   groups,
@@ -118,19 +126,45 @@ export function AiVaultSessionVirtualList({
 
   const stickyHeaderIndexes = useMemo(() => getVaultStickyHeaderIndexes(vaultRows), [vaultRows])
 
+  const activeRowKeys = useMemo(
+    () => new Set(vaultRows.map((row) => getVaultRowKey(row))),
+    [vaultRows]
+  )
+
+  const isCurrentVirtualRowElement = useCallback(
+    (element: Element) => isCurrentVaultVirtualRowElement(element, vaultRows),
+    [vaultRows]
+  )
+
+  const measureCurrentVirtualRowElement = useCallback(
+    (
+      element: HTMLDivElement,
+      entry: ResizeObserverEntry | undefined,
+      instance: Parameters<typeof measureVirtualElementSize<HTMLDivElement>>[2]
+    ) => {
+      if (!isCurrentVirtualRowElement(element)) {
+        const index = getVirtualRowIndex(element)
+        const row = index !== null ? vaultRows[index] : undefined
+        // Why: offscreen rows retain measured heights even when absent from the mounted window.
+        return (
+          (row ? instance.itemSizeCache.get(getVaultRowKey(row)) : undefined) ??
+          estimateVaultRowSize(row, expandedSessionIds)
+        )
+      }
+      const index = getVirtualRowIndex(element)
+      if (index !== null && vaultRows[index]?.type === 'group') {
+        return VAULT_GROUP_HEADER_ROW_HEIGHT
+      }
+      return measureVirtualElementSize(element, entry, instance)
+    },
+    [expandedSessionIds, isCurrentVirtualRowElement, vaultRows]
+  )
+
   const virtualizer = useVirtualizer({
     count: vaultRows.length,
     getScrollElement: () => listScrollRef.current,
-    estimateSize: (index) => {
-      const row = vaultRows[index]
-      if (row?.type === 'group') {
-        return VAULT_GROUP_HEADER_ROW_HEIGHT
-      }
-      if (row?.type === 'session' && expandedSessionIds.has(row.session.id)) {
-        return VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT
-      }
-      return VAULT_SESSION_ROW_HEIGHT
-    },
+    estimateSize: (index) => estimateVaultRowSize(vaultRows[index], expandedSessionIds),
+    measureElement: measureCurrentVirtualRowElement,
     overscan: VAULT_ROW_OVERSCAN,
     // Why: keep the active group header mounted so CSS sticky can pin it while
     // its sessions scroll underneath in the virtual list.
@@ -144,11 +178,18 @@ export function AiVaultSessionVirtualList({
     getItemKey: (index) => {
       const row = vaultRows[index]
       if (!row) {
-        return `missing:${index}`
+        return `__stale_${index}`
       }
-      return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
+      return getVaultRowKey(row)
     }
   })
+
+  useLayoutEffect(() => {
+    pruneStaleVirtualRowElementCache({
+      activeRowKeys,
+      virtualizer
+    })
+  }, [activeRowKeys, virtualizer])
 
   const toggleSessionDetails = useCallback((sessionId: string) => {
     setExpandedSessionIds((current) => {

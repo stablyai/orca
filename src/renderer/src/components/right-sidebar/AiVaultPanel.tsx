@@ -72,23 +72,8 @@ export default function AiVaultPanel(): React.JSX.Element {
   const agentCmdOverrides = settings?.agentCmdOverrides
   const paneActions = useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
-  // Why: scope depends on current workspace/project availability, so only stable view options persist.
-  const {
-    agents,
-    sort,
-    searchSort,
-    group,
-    hideEmptySessions,
-    sessionLimit,
-    setSort,
-    setSearchSort,
-    setGroup,
-    setHideEmptySessions,
-    setSessionLimit,
-    setAgentEnabled,
-    setAllAgentsEnabled,
-    resetViewOptions
-  } = usePersistedAiVaultViewOptions()
+  const viewOptions = usePersistedAiVaultViewOptions()
+  const { agents, sort, searchSort, group, hideEmptySessions, sessionLimit } = viewOptions
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const { executionHostScope, onExecutionHostScopeChange, hostScopeOptions } =
     useAiVaultPanelHostScope(activeWorktreeId ?? null, resumeTargetState)
@@ -262,12 +247,12 @@ export default function AiVaultPanel(): React.JSX.Element {
         onQueryChange={setQuery}
         onScopeChange={handleScopeChange}
         onExecutionHostScopeChange={onExecutionHostScopeChange}
-        onAgentEnabledChange={setAgentEnabled}
-        onAllAgentsEnabledChange={setAllAgentsEnabled}
-        onGroupChange={setGroup}
-        onHideEmptySessionsChange={setHideEmptySessions}
-        onSessionLimitChange={setSessionLimit}
-        onReset={resetViewOptions}
+        onAgentEnabledChange={viewOptions.setAgentEnabled}
+        onAllAgentsEnabledChange={viewOptions.setAllAgentsEnabled}
+        onGroupChange={viewOptions.setGroup}
+        onHideEmptySessionsChange={viewOptions.setHideEmptySessions}
+        onSessionLimitChange={viewOptions.setSessionLimit}
+        onReset={viewOptions.resetViewOptions}
         onRefresh={() => (searching ? search.retry() : void refresh({ force: true }))}
       />
 
@@ -294,7 +279,7 @@ export default function AiVaultPanel(): React.JSX.Element {
                 label={aiVaultResultCountLabel(filteredSessions.length)}
                 value={searchSort}
                 menu={aiVaultSearchSortMenu()}
-                onChange={setSearchSort}
+                onChange={viewOptions.setSearchSort}
               />
             )
           : sessions.length > 0 && (
@@ -302,12 +287,16 @@ export default function AiVaultPanel(): React.JSX.Element {
                 label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length)}
                 value={sort}
                 menu={aiVaultBrowseSortMenu()}
-                onChange={setSort}
+                onChange={viewOptions.setSort}
               />
             )}
         {(!searching || sessions.length > 0 || search.loading) && (
           <AiVaultSessionVirtualList
-            key={searching ? search.resetKey : 'history'}
+            key={
+              searching
+                ? search.resetKey
+                : JSON.stringify(['history', executionHostScope, scope, group, searchWithin])
+            }
             searchHits={searching ? searchHits : undefined}
             groups={groups}
             collapsedGroups={collapsedGroups}
@@ -360,7 +349,7 @@ export default function AiVaultPanel(): React.JSX.Element {
             loadedSessionLimit={loadedSessionLimit}
             loading={loading}
             sessionLimit={sessionLimit}
-            onSessionLimitChange={setSessionLimit}
+            onSessionLimitChange={viewOptions.setSessionLimit}
           />
         )}
       </AiVaultPanelSearch>

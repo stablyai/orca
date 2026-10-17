@@ -208,3 +208,122 @@ describe('AiVaultVirtualRow Resume in New CLI', () => {
     expect(screen.queryByRole('menuitem', { name: 'Resume in New CLI' })).toBeNull()
   })
 })
+
+describe('AiVaultVirtualRow layout and identity', () => {
+  it('stamps data-vault-virtual-row-key and rounds translateY positioning', () => {
+    const { container } = render(
+      <TooltipProvider>
+        <AiVaultVirtualRow
+          row={{ type: 'session', groupKey: 'today', session: cliSession }}
+          index={2}
+          start={123.6}
+          activeStickyHeaderIndex={null}
+          measureElement={vi.fn()}
+          collapsedGroups={new Set()}
+          expandedSessionIds={new Set()}
+          vaultScope="all"
+          buildResumeStartup={() => ({ command: '' })}
+          getOriginalPaneTarget={() => null}
+          isStructuredSessionOpen={() => false}
+          getSessionLiveState={() => null}
+          getWorktreeInfo={() => null}
+          getSessionResumeState={() => ({
+            blocked: false,
+            worktreeId: 'worktree-1',
+            usesSessionWorktree: false
+          })}
+          getSessionResumeActions={() => ({
+            worktree: { worktreeId: null, disabled: true },
+            newTab: { worktreeId: null, disabled: true }
+          })}
+          getSessionResumeInChat={() => ({ available: false, reason: 'already-structured' })}
+          onToggleGroup={vi.fn()}
+          onToggleSessionDetails={vi.fn()}
+          onJumpToOriginalPane={vi.fn()}
+          onJumpToWorktree={vi.fn()}
+          onResume={vi.fn()}
+          onContinueInNewSession={vi.fn()}
+          onResumeInNewChat={vi.fn()}
+          onResumeInNewCli={vi.fn()}
+          onCopyResume={vi.fn()}
+          onCopyId={vi.fn()}
+          onCopyPath={vi.fn()}
+          onOpenLog={vi.fn()}
+          onRevealLog={vi.fn()}
+          onOpenCwd={vi.fn()}
+          onRequestDelete={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    const rowElement = container.firstElementChild
+    expect(rowElement).toBeInstanceOf(HTMLElement)
+    if (!(rowElement instanceof HTMLElement)) {
+      throw new Error('Expected HTMLElement')
+    }
+    expect(rowElement.getAttribute('data-vault-virtual-row-key')).toBe(
+      'session:local:codex:session-1:/tmp/session-1.jsonl'
+    )
+    expect(rowElement.getAttribute('data-index')).toBe('2')
+    expect(rowElement.style.transform).toBe('translateY(124px)')
+  })
+
+  it('renders sticky header without transform when activeStickyHeaderIndex matches', () => {
+    const { container } = render(
+      <TooltipProvider>
+        <AiVaultVirtualRow
+          row={{
+            type: 'group',
+            group: { key: 'folder:/repo', label: 'repo', sessions: [cliSession] }
+          }}
+          index={0}
+          start={0}
+          activeStickyHeaderIndex={0}
+          measureElement={vi.fn()}
+          collapsedGroups={new Set()}
+          expandedSessionIds={new Set()}
+          vaultScope="all"
+          buildResumeStartup={() => ({ command: '' })}
+          getOriginalPaneTarget={() => null}
+          isStructuredSessionOpen={() => false}
+          getSessionLiveState={() => null}
+          getWorktreeInfo={() => null}
+          getSessionResumeState={() => ({
+            blocked: false,
+            worktreeId: 'worktree-1',
+            usesSessionWorktree: false
+          })}
+          getSessionResumeActions={() => ({
+            worktree: { worktreeId: null, disabled: true },
+            newTab: { worktreeId: null, disabled: true }
+          })}
+          getSessionResumeInChat={() => ({ available: false, reason: 'already-structured' })}
+          onToggleGroup={vi.fn()}
+          onToggleSessionDetails={vi.fn()}
+          onJumpToOriginalPane={vi.fn()}
+          onJumpToWorktree={vi.fn()}
+          onResume={vi.fn()}
+          onContinueInNewSession={vi.fn()}
+          onResumeInNewChat={vi.fn()}
+          onResumeInNewCli={vi.fn()}
+          onCopyResume={vi.fn()}
+          onCopyId={vi.fn()}
+          onCopyPath={vi.fn()}
+          onOpenLog={vi.fn()}
+          onRevealLog={vi.fn()}
+          onOpenCwd={vi.fn()}
+          onRequestDelete={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    const rowElement = container.firstElementChild
+    expect(rowElement).toBeInstanceOf(HTMLElement)
+    if (!(rowElement instanceof HTMLElement)) {
+      throw new Error('Expected HTMLElement')
+    }
+    expect(rowElement.getAttribute('data-vault-virtual-row-key')).toBe('group:folder:/repo')
+    expect(rowElement.className).toContain('sticky top-0')
+    expect(rowElement.style.transform).toBe('')
+  })
+})
