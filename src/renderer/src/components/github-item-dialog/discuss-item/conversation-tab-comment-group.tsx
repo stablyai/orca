@@ -72,7 +72,7 @@ export function ConversationTabCommentGroup({
 }: { group: PRCommentGroup } & Omit<
   ConversationTabCommentCardProps,
   'comment' | 'isReply'
->): React.JSX.Element {
+> & { onJumpToFile?: (path: string) => void }): React.JSX.Element {
   const cards =
     group.kind === 'thread'
       ? [
