@@ -21,6 +21,7 @@ import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
 import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
+import { installDiscordPresence } from '../discord-presence/install-discord-presence'
 import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessObservers(): void {
@@ -56,6 +57,9 @@ export function initializeMainProcessObservers(): void {
     unsubscribeStatusChanges()
     unsubscribeStatusFreshness()
     uninstallHookStatusRepublish()
+  }
+  if (!state.isServeMode) {
+    state.uninstallDiscordPresence = installDiscordPresence(store)
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)

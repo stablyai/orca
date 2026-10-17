@@ -1,8 +1,9 @@
 import { translate } from '@/i18n/i18n'
+import type { SettingsSearchEntry } from './settings-search'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
+const getProviderIntegrationSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
       'auto.components.settings.integrations.search.f16e41cc72',
@@ -223,3 +224,40 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+const getDiscordPresenceSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.integrations.search.discordTitle', 'Discord'),
+    description: translate(
+      'auto.components.settings.integrations.search.discordDescription',
+      'Show agent activity on your Discord profile.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.discordKeyword',
+        'discord'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.richPresenceKeyword',
+        'rich presence'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.activityStatusKeyword',
+        'activity status'
+      )
+    ]
+  }
+])
+
+type IntegrationsPaneSearchOptions = {
+  includeDiscordPresence?: boolean
+}
+
+export function getIntegrationsPaneSearchEntries(
+  options: IntegrationsPaneSearchOptions = {}
+): SettingsSearchEntry[] {
+  return [
+    ...getProviderIntegrationSearchEntries(),
+    ...(options.includeDiscordPresence === false ? [] : getDiscordPresenceSearchEntries())
+  ]
+}
