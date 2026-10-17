@@ -207,6 +207,48 @@ describe('agent-session create operation ledger', () => {
       }
     }
   )
+  it('hands the caller env to the host plan on create and merges it under the resume env', async () => {
+    const runtime = createRuntime()
+    Object.assign(runtime, {
+      store: {
+        getSettings: () => ({
+          disabledTuiAgents: [],
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: { codex: { HOST_OWNED: 'host' } }
+        })
+      }
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    await runtime.createAgentSession(
+      CreateAgentSessionParams.parse(
+        request(operationId(), { env: { HTTP_PROXY: 'http://host:3128', HOST_OWNED: 'client' } })
+      )
+    )
+    await runtime.ensureAgentSession(
+      EnsureAgentSessionParams.parse({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        env: { HTTPS_PROXY: 'http://host:3128' }
+      })
+    )
+    expect(createTerminal).toHaveBeenCalledTimes(2)
+    // Why `callerPlanEnv`, not `env`: the host plans this launch itself, and an `env` alongside
+    // `startupAgent` is refused as a caller-supplied launch. The planner lays it under its own env.
+    expect(createTerminal.mock.calls[0]?.[1]?.callerPlanEnv).toEqual({
+      HTTP_PROXY: 'http://host:3128',
+      HOST_OWNED: 'client'
+    })
+    expect(createTerminal.mock.calls[0]?.[1]?.env).toBeUndefined()
+    expect(createTerminal.mock.calls[1]?.[1]?.env).toMatchObject({
+      HTTPS_PROXY: 'http://host:3128',
+      // The host-built resume env wins, so a caller cannot replace a host-owned variable.
+      HOST_OWNED: 'host'
+    })
+  })
+
   it('refuses a changed keyboard capability under the same create operation', async () => {
     const runtime = createRuntime()
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())

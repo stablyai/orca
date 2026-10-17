@@ -79,6 +79,38 @@ describe('host agent planner', () => {
     })
   })
 
+  // A caller's own env is a plan input, never the launch: it rides under the plan's env so the plan
+  // keeps every variable it owns, and the desktop's account env still rides over both.
+  it('lays the caller env under the plan env, and the account env over both', async () => {
+    const store = {
+      getSettings: () => ({
+        terminalWindowsShell: 'cmd.exe',
+        agentDefaultEnv: { claude: { SHARED: 'host', HOST_OWNED: 'host' } }
+      })
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the planner reads only getSettings here.
+    const planHost = { ...host, store: store as never }
+    const callerPlanEnv = { HTTP_PROXY: 'http://proxy.lan:3128', SHARED: 'caller' }
+
+    const planned = await resolveAgentTerminalCreateOptions(
+      workspace,
+      { startupAgent: 'claude', callerPlanEnv },
+      planHost
+    )
+    expect(planned.env).toMatchObject({ HTTP_PROXY: 'http://proxy.lan:3128', SHARED: 'host' })
+
+    const accounted = await resolveAgentTerminalCreateOptions(
+      workspace,
+      {
+        startupAgent: 'claude',
+        callerPlanEnv,
+        accountEnv: { ACCOUNT_HOME: '/account', SHARED: 'account' }
+      },
+      planHost
+    )
+    expect(accounted.env).toMatchObject({ ACCOUNT_HOME: '/account', SHARED: 'account' })
+  })
+
   // A `\\wsl$` cwd runs in WSL whatever the project says, so a WSL shell is what this agent gets.
   it('applies --shell wsl.exe for an agent in a WSL-share repo set to Windows host', async () => {
     const repo = { id: 'r', path: '\\\\wsl$\\Ubuntu\\r' }

@@ -231,8 +231,12 @@ async function buildRuntimeAgentTerminalStartupOptions(
     opts.onStartupPromptCarry?.(promptCarried)
   }
 
-  // Account routing rides over the plan's own env, as a local launch's auth patch does.
-  const env = opts.accountEnv ? { ...startupPlan.env, ...opts.accountEnv } : startupPlan.env
+  // Account routing rides over the plan's own env, as a local launch's auth patch does; the
+  // caller's own env sits under both, so the plan keeps any variable it owns.
+  const env =
+    opts.accountEnv || opts.callerPlanEnv
+      ? { ...opts.callerPlanEnv, ...startupPlan.env, ...opts.accountEnv }
+      : startupPlan.env
   return {
     ...opts,
     command: startupPlan.launchCommand,

@@ -93,6 +93,9 @@ export const OmpResumeFilePath = z
     'Invalid OMP resume path'
   )
 
+/** The caller's own environment for the agent it asks the host to spawn; mirrors terminal.create. */
+export const AgentSessionEnv = z.record(z.string(), z.string())
+
 export const ProviderSession = z
   .object({
     key: z.enum(['session_id', 'conversation_id']),
@@ -136,6 +139,7 @@ export const ExplicitEnsure = z
     terminalKittyKeyboardProtocol: z.boolean().optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    env: AgentSessionEnv.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
     spawnIntent: SpawnIntentParam.optional(),
@@ -184,6 +188,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     promptDelivery: PromptDelivery.optional(),
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
+    env: AgentSessionEnv.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),

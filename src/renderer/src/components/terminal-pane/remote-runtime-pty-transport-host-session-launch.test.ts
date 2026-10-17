@@ -24,6 +24,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()
+  const sshListTargets = vi.fn()
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -40,6 +41,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     vi.resetModules()
     runtimeCall.mockReset()
     runtimeSubscribe.mockReset()
+    sshListTargets.mockReset()
+    sshListTargets.mockResolvedValue([])
     subscriptionCallbacks = null
     unsubscribeFn = vi.fn<() => void>()
     unsubscribe = {
@@ -87,7 +90,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
     )
 
-    ;(globalThis as { window: typeof window }).window = {
+    vi.stubGlobal('window', {
       ...originalWindow,
       api: {
         ...originalWindow?.api,
@@ -95,17 +98,17 @@ describe('createRemoteRuntimePtyTransport', () => {
           ...originalWindow?.api?.runtimeEnvironments,
           call: runtimeCall,
           subscribe: runtimeSubscribe
+        },
+        ssh: {
+          ...originalWindow?.api?.ssh,
+          listTargets: sshListTargets
         }
       }
-    } as unknown as typeof window
+    })
   })
 
   afterEach(() => {
-    if (originalWindow) {
-      ;(globalThis as { window: typeof window }).window = originalWindow
-    } else {
-      delete (globalThis as { window?: typeof window }).window
-    }
+    vi.unstubAllGlobals()
   })
 
   function latestRemoteSubscribePayload(): { streamId: number } {
@@ -207,6 +210,44 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onReplayData).toHaveBeenCalledWith('hello', { carriesNormalBuffer: true })
     expect(onConnect).toHaveBeenCalled()
     expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
+  })
+
+  it('sends the SSH host own proxy env on the create call', async () => {
+    sshListTargets.mockResolvedValue([
+      { id: 'target-1', httpProxyUrl: 'http://proxy.lan:3128', httpProxyBypassRules: 'localhost' }
+    ])
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      env: { ORCA_TAB_ID: 'tab-1', HTTP_PROXY: 'http://stale:1' },
+      executionHostId: 'ssh:target-1',
+      // What the pane layer resolves for this host; the transport reads no app store itself.
+      sshHostTargetId: 'target-1',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(sshListTargets).toHaveBeenCalled()
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create',
+        params: expect.objectContaining({
+          env: {
+            ORCA_TAB_ID: 'tab-1',
+            HTTP_PROXY: 'http://proxy.lan:3128',
+            HTTPS_PROXY: 'http://proxy.lan:3128',
+            ALL_PROXY: 'http://proxy.lan:3128',
+            http_proxy: 'http://proxy.lan:3128',
+            https_proxy: 'http://proxy.lan:3128',
+            all_proxy: 'http://proxy.lan:3128',
+            NO_PROXY: 'localhost',
+            no_proxy: 'localhost'
+          }
+        })
+      })
+    )
   })
 
   it('reports a host stable-pane adoption as reattach without fresh-spawn ownership', async () => {

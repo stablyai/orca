@@ -1,6 +1,6 @@
 import { readTerminalSpawnDeferral } from '../../../../shared/host-spawn-admission'
 import { remoteRestoreSpawnIntentParams } from '../../runtime/remote-restore-spawn-intent'
-import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { createAgentSessionLaunchOptions } from '@/runtime/agent-session-launch-options'
 import { createRemoteRuntimeDisconnectedInputGrace } from './remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
@@ -47,6 +47,7 @@ import type {
 } from './pty-transport-types'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
+import { resolveSshHostProxyEnvForTarget, withSshHostProxyEnv } from '@/lib/ssh-host-proxy-env'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
 import {
   getRemoteRuntimePtyEnvironmentId,
@@ -215,6 +216,7 @@ export function createRemoteRuntimePtyTransport(
     agentLaunchPreferences,
     worktreeId,
     executionHostId,
+    sshHostTargetId,
     tabId,
     leafId,
     activate,
@@ -535,7 +537,10 @@ export function createRemoteRuntimePtyTransport(
   // Why: reconnect retries must replay one host operation instead of creating
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
-  const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
+  const agentLaunchOptions = createAgentSessionLaunchOptions(
+    terminalKittyKeyboardProtocol,
+    sshHostTargetId
+  )
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -3073,7 +3078,16 @@ export function createRemoteRuntimePtyTransport(
 
       const commandToSend = options.command ?? command
       const startupCommandDeliveryToSend = options.startupCommandDelivery ?? startupCommandDelivery
-      const envToSend = options.env ?? env
+      // Why per create: the host's own proxy settings must reach its next terminal without a
+      // reconnect, and this create call is the client's only env channel to the host.
+      const paneEnvToSend = options.env ?? env
+      const hostProxyEnv = sshHostTargetId
+        ? await resolveSshHostProxyEnvForTarget({
+            targetId: sshHostTargetId,
+            listTargets: () => window.api.ssh.listTargets()
+          })
+        : {}
+      const envToSend = withSshHostProxyEnv(paneEnvToSend, hostProxyEnv)
       const envToDeleteToSend = options.envToDelete ?? envToDelete
       const launchConfigToSend = options.launchConfig ?? launchConfig
       const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
@@ -3129,7 +3143,7 @@ export function createRemoteRuntimePtyTransport(
           connectLifecycleEpoch
         )
       const hostAuthorityCreate = async () => {
-        const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+        const keyboardOptions = await agentLaunchOptions(createEnvironmentId)
         return createWithUnknownOutcomeRecovery(
           'agent-session',
           (timeoutMs) =>

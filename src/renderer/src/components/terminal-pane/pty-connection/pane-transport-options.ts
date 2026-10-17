@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { sshTargetIdForExecutionHostFromStore } from '@/lib/ssh-host-proxy-env'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
 import type { IpcPtyTransportOptions } from '../pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -31,6 +32,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       ? undefined
       : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
+    // Why resolved here, not in the transport: a transport must not read the app store, and which
+    // SSH host owns this execution host changes only when the pane reconnects anyway.
+    sshHostTargetId: sshTargetIdForExecutionHostFromStore(session.executionHostId),
     worktreeId: session.deps.worktreeId,
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
     // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before

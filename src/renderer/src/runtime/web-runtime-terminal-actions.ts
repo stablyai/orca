@@ -5,6 +5,11 @@ import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { PaneLayoutEditIntent } from '../../../shared/rpc-contract/session-tabs-schemas-params'
 import { runtimeEnvironmentIdUnlessTwin } from '../lib/resolve-owner'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import {
+  resolveSshHostProxyEnvForExecutionHost,
+  withSshHostProxyEnv
+} from '../lib/ssh-host-proxy-env'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
@@ -55,18 +60,22 @@ export function splitWebRuntimeTerminal(
   const focusRequest = source
     ? beginWebRuntimeSplitFocusRequest(intentOwner, source.worktreeId)
     : null
-  void captureRuntimeEnvironmentCall(
-    environmentId,
-    intentOwner.pairingRevision
-  )({
-    method: 'terminal.split',
-    params: {
-      terminal: remote.handle,
-      direction,
-      telemetrySource
-    },
-    timeoutMs: 15_000
-  })
+  const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
+  // Why: the host spawns the split pane, and it cannot read this client's per-host proxy setting.
+  void resolveSshHostProxyEnvForExecutionHost(toRuntimeExecutionHostId(environmentId))
+    .then((hostProxyEnv) => {
+      const splitEnv = withSshHostProxyEnv(undefined, hostProxyEnv)
+      return callEnvironment({
+        method: 'terminal.split',
+        params: {
+          terminal: remote.handle,
+          direction,
+          telemetrySource,
+          ...(splitEnv ? { env: splitEnv } : {})
+        },
+        timeoutMs: 15_000
+      })
+    })
     .then(async (response) => {
       const result = unwrapRuntimeRpcResult(
         response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>

@@ -1,5 +1,5 @@
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
+import { createAgentSessionLaunchOptions } from '@/runtime/agent-session-launch-options'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
@@ -11,6 +11,12 @@ import {
   withAgentSessionCreateOperationId
 } from '@/runtime/agent-session-create-operation'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  resolveSshHostProxyEnvForExecutionHost,
+  sshTargetIdForExecutionHostFromStore,
+  withSshHostProxyEnv
+} from '@/lib/ssh-host-proxy-env'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
 
@@ -32,9 +38,17 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   }
 }): Promise<{ terminal: RuntimeTerminalCreate }> {
   const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
-  const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
+  const keyboardOptions = createAgentSessionLaunchOptions(
+    keyboardProtocol,
+    sshTargetIdForExecutionHostFromStore(toRuntimeExecutionHostId(args.environmentId))
+  )
   const operation = createAgentSessionCreateOperation()
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
+  // Why: the host spawns this PTY, and it cannot read this client's per-host proxy setting.
+  const hostProxyEnv = await resolveSshHostProxyEnvForExecutionHost(
+    toRuntimeExecutionHostId(args.environmentId)
+  )
+  const legacyEnv = withSshHostProxyEnv(args.legacy.env, hostProxyEnv) ?? {}
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
     hostAuthority: () =>
@@ -71,7 +85,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           ...(args.legacy.startupCommandDelivery
             ? { startupCommandDelivery: args.legacy.startupCommandDelivery }
             : {}),
-          env: args.legacy.env,
+          env: legacyEnv,
           launchConfig: args.legacy.launchConfig,
           launchToken: args.legacy.launchToken,
           launchAgent: args.agent,

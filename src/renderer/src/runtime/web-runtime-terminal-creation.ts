@@ -10,6 +10,43 @@ import type {
   CreateWebRuntimeSessionTerminalArgs,
   WebRuntimeTerminalCreateOutcome
 } from './web-runtime-session-types'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import {
+  resolveSshHostProxyEnvForTarget,
+  sshTargetIdForExecutionHost,
+  withSshHostProxyEnv
+} from '../lib/ssh-host-proxy-env'
+import { useAppStore } from '../store'
+import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
+
+/**
+ * Why: the host spawns these PTYs and cannot read this client's per-host proxy setting, so every
+ * host-side create has to carry it down. The target gate stays synchronous so hosts that are not one
+ * of this client's SSH hosts keep the exact create sequencing they had before.
+ */
+async function createHostTerminal(args: CreateWebRuntimeSessionTerminalArgs) {
+  const environmentId = resolveWebRuntimeSessionEnvironmentId(
+    args.environmentId,
+    useAppStore.getState().settings?.activeRuntimeEnvironmentId
+  )
+  const sshHostTargetId = environmentId
+    ? sshTargetIdForExecutionHost(
+        toRuntimeExecutionHostId(environmentId),
+        useAppStore.getState().runtimeEnvironments
+      )
+    : null
+  if (!sshHostTargetId) {
+    return await createWebRuntimeSessionTerminalResult(args)
+  }
+  const hostProxyEnv = await resolveSshHostProxyEnvForTarget({
+    targetId: sshHostTargetId,
+    listTargets: () => window.api.ssh.listTargets()
+  })
+  return await createWebRuntimeSessionTerminalResult({
+    ...args,
+    env: withSshHostProxyEnv(args.env, hostProxyEnv)
+  })
+}
 
 /**
  * A host-side failure is toasted here because the host never mirrors a tab for it, so no pane
@@ -19,7 +56,7 @@ export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs,
   options: { notifyFailure?: boolean } = {}
 ): Promise<WebRuntimeTerminalCreateOutcome> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
+  const created = await createHostTerminal(args)
   if (
     created.hostFailed &&
     created.outcome.status === 'failed' &&
@@ -44,7 +81,7 @@ export async function createWebRuntimeAgentSessionTerminal(
   outcome: WebRuntimeTerminalCreateOutcome
   promptDelivered: boolean
 }> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
+  const created = await createHostTerminal(args)
   if (created.outcome.status === 'failed' || !created.hostTabId) {
     return { outcome: created.outcome, promptDelivered: false }
   }
@@ -70,7 +107,7 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
     launchDraft: string
   }
 ): Promise<WebRuntimeTerminalCreateOutcome> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
+  const created = await createHostTerminal(args)
   if (created.outcome.status !== 'failed' && created.hostTabId) {
     seedNativeChatLaunchDraftForAgentTab({
       tabId: toWebTerminalSurfaceTabId(created.hostTabId),

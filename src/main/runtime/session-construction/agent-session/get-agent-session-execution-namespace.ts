@@ -158,7 +158,12 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     }
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
       command: startup.launchCommand,
-      env: withAgentSessionAccountEnv(startup.env, request.accountEnv),
+      // Why: host-built startup vars win, so a caller can add to an agent's env but not replace it;
+      // a desktop-prepared account env is host-owned too, so it layers over both.
+      env: withAgentSessionAccountEnv(
+        request.env ? { ...request.env, ...startup.env } : startup.env,
+        request.accountEnv
+      ),
       launchConfig: startup.launchConfig,
       startupCommandDelivery: startup.startupCommandDelivery,
       launchAgent: request.agent,
