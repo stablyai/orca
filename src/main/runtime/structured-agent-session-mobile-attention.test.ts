@@ -58,6 +58,7 @@ function settings(overrides: Partial<NotificationSettings> = {}): NotificationSe
     agentTaskComplete: true,
     terminalBell: true,
     suppressWhenFocused: false,
+    suppressWhileMicActive: false,
     customSoundId: 'system',
     customSoundPath: null,
     customSoundVolume: 1,

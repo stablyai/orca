@@ -27,7 +27,9 @@ export function deliverAgentAttentionNotification(
     .dispatch(request)
     .then((result) => {
       if (result.delivered) {
-        void playDesktopNotificationSound(sound.customSoundId, sound.customSoundVolume)
+        if (!result.soundSuppressed) {
+          void playDesktopNotificationSound(sound.customSoundId, sound.customSoundVolume)
+        }
         return
       }
       // Why: macOS is silently swallowing notifications (permission off or prompt unanswered) —

@@ -8163,7 +8163,10 @@
           "274af61bc0": "system",
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
-          "d3756cf5bc": "disabled"
+          "d3756cf5bc": "disabled",
+          "suppressMicActiveLabel": "Suppress While Mic Active",
+          "suppressMicActiveUnsupportedDescription": "Skip the notification sound while your mic is in use (e.g. on a call). macOS only.",
+          "suppressMicActiveDescription": "Skip the notification sound while your mic is in use (e.g. on a call)."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -10637,7 +10640,13 @@
             "host": "host",
             "remote": "remote",
             "ssh": "ssh",
-            "mute": "mute"
+            "mute": "mute",
+            "suppressMicActiveTitle": "Suppress While Mic Active",
+            "suppressMicActiveDescription": "Avoid playing the notification sound while the microphone is actively in use.",
+            "mic": "mic",
+            "microphone": "microphone",
+            "call": "call",
+            "zoom": "zoom"
           }
         },
         "orchestration": {

@@ -11,6 +11,7 @@ import type {
 } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
+import { readMicActiveStatus } from './mic-active-status'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
@@ -29,6 +30,30 @@ import {
   recordNotificationDeliveryOutcome,
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
+
+// Why: the mic-status helper can take up to its own 4s timeout to resolve
+// (or hang) — bound how long we'll block banner delivery on it and fall
+// back to "not active" rather than delaying the notification.
+const MIC_STATUS_GATING_DEADLINE_MS = 500
+
+function readMicActiveStatusBeforeDeadline(): Promise<boolean | null> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        resolve(null)
+      }
+    }, MIC_STATUS_GATING_DEADLINE_MS)
+    readMicActiveStatus().then((micActive) => {
+      if (!settled) {
+        settled = true
+        clearTimeout(timer)
+        resolve(micActive)
+      }
+    })
+  })
+}
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
@@ -157,6 +182,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       ? (payload) => runtime.dispatchMobileNotification(payload)
       : null,
     readAuthorizationStatus: readNotificationAuthorizationStatus,
+    readMicActiveStatus: readMicActiveStatusBeforeDeadline,
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
     deliverNative: deliverNativeNotification,
     platform: process.platform,
@@ -174,7 +200,11 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     'notifications:settleStructuredPrompts',
     (_event, scope: unknown, sessionId: unknown): void => {
       if (isAgentSessionExecutionLocation(scope) && typeof sessionId === 'string' && sessionId) {
-        runtime?.reconcileStructuredPromptAttention({ scope, sessionId, pendingPromptIds: [] })
+        runtime?.reconcileStructuredPromptAttention({
+          scope,
+          sessionId,
+          pendingPromptIds: []
+        })
       }
     }
   )
