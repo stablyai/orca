@@ -15,6 +15,7 @@ import {
 } from '../sidebar/workspace-chrome-metrics'
 import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
+import { applyDashboardLaneActionToStore } from './apply-dashboard-lane-action'
 import { translate } from '@/i18n/i18n'
 
 // Why: Escape should dismiss interactive nested overlays (e.g. the terminal
@@ -69,6 +70,7 @@ function AgentDashboardDrawerBody({
       containerClassName="h-full w-full bg-transparent"
       onAckAgent={handleAckAgent}
       onRevealAgent={handleRevealAgent}
+      onLaneAction={applyDashboardLaneActionToStore}
       onClose={onClose}
       headerActions={
         <AgentDashboardSettingsMenu

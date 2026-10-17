@@ -19,6 +19,10 @@ import {
   isDashboardWorkspaceList
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
+import {
+  isDashboardCustomLanes,
+  isOptionalDashboardLaneId
+} from './dashboard-lane-payload-validation'
 export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
@@ -108,6 +112,7 @@ export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot 
     snapshot.cards.every(isDashboardCard) &&
     isDashboardWorkspaceList(snapshot.workspaces) &&
     (snapshot.showIdle === undefined || typeof snapshot.showIdle === 'boolean') &&
+    isDashboardCustomLanes(snapshot.customLanes) &&
     isDashboardFilterOptions(snapshot.filterOptions) &&
     isDashboardLaunchOptions(snapshot.launchableAgentsByWorktreeId) &&
     isDashboardRepoIcons(snapshot.repoIconsByRepoId)
@@ -139,6 +144,7 @@ export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmissi
     snapshot.cards.length > MAX_DASHBOARD_CARDS ||
     workspaces === null ||
     (snapshot.showIdle !== undefined && typeof snapshot.showIdle !== 'boolean') ||
+    !isDashboardCustomLanes(snapshot.customLanes) ||
     !isDashboardFilterOptions(snapshot.filterOptions) ||
     !isDashboardLaunchOptions(snapshot.launchableAgentsByWorktreeId) ||
     !isDashboardRepoIcons(snapshot.repoIconsByRepoId)
@@ -255,6 +261,7 @@ function isDashboardCard(value: unknown): boolean {
     isBoundedString(card.agentType, AGENT_TYPE_MAX_LENGTH) &&
     typeof card.bucket === 'string' &&
     DASHBOARD_BUCKETS.has(card.bucket) &&
+    isOptionalDashboardLaneId(card.laneId) &&
     typeof card.dotState === 'string' &&
     DASHBOARD_DOT_STATES.has(card.dotState) &&
     (card.workingMode === undefined ||

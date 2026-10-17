@@ -19,6 +19,7 @@ import {
   isDashboardSleepWorkspaceArgs,
   isDashboardSpawnAgentArgs
 } from './dashboard-payload-validation'
+import { isDashboardLaneAction } from './dashboard-lane-payload-validation'
 
 // The most recent snapshot the main renderer published, replayed to the popout
 // the instant it mounts so the board paints without waiting for the next tick.
@@ -41,6 +42,7 @@ export function registerDashboardPopoutHandlers(
   ipcMain.removeHandler('dashboardPopout:ackAgent')
   ipcMain.removeHandler('dashboardPopout:spawnAgent')
   ipcMain.removeHandler('dashboardPopout:sleepWorkspace')
+  ipcMain.removeHandler('dashboardPopout:laneAction')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -161,6 +163,19 @@ export function registerDashboardPopoutHandlers(
       return
     }
     sendToTrustedUIRenderer('ui:spawnDashboardAgent', args)
+  })
+
+  // Lane edits and card drags: settings are written by the main renderer, which
+  // can tell which panes are still alive when pruning stale placements.
+  ipcMain.handle('dashboardPopout:laneAction', (event, args: unknown): void => {
+    if (
+      !isDashboardPopoutRenderer(event.sender) ||
+      !isDashboardEnabled(store) ||
+      !isDashboardLaneAction(args)
+    ) {
+      return
+    }
+    sendToTrustedUIRenderer('ui:dashboardLaneAction', args)
   })
 
   ipcMain.handle('dashboardPopout:sleepWorkspace', (event, args: unknown): void => {
