@@ -167,6 +167,49 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('retains credit balances through live posts and refreshes them on cadence', async () => {
+    vi.useFakeTimers()
+    const service = new RateLimitService()
+    try {
+      const withBalance = (balance: number): ProviderRateLimits => ({
+        ...okProvider('claude', 40),
+        extraUsage: {
+          balance,
+          unit: 'currency',
+          currencyCode: 'USD',
+          enabled: true,
+          disabledReason: null,
+          resetsAt: null,
+          spent: null,
+          spendLimit: null,
+          spentPercent: null
+        }
+      })
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => withBalance(12))
+        .mockImplementation(async () => withBalance(9))
+      mockFreshBackgroundProviderFetches()
+      service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
+      service.start({ fetchImmediately: false })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(service.getState().claude?.extraUsage?.balance).toBe(12)
+      for (let minute = 0; minute < 15; minute += 1) {
+        service.ingestLiveClaudeRateLimits({
+          configDir: null,
+          fiveHour: { used_percentage: 50 + minute },
+          sevenDay: null
+        })
+        expect(service.getState().claude?.extraUsage?.balance).toBe(12)
+        await vi.advanceTimersByTimeAsync(60 * 1000)
+      }
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.extraUsage?.balance).toBe(9)
+    } finally {
+      service.stop()
+      vi.useRealTimers()
+    }
+  })
+
   it('honours a Retry-After that lands while the live feed is fresh', async () => {
     vi.useFakeTimers()
     try {
