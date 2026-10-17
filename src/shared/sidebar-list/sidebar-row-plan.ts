@@ -9,11 +9,13 @@ import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
 import type { SectionAppendContext } from './group-sections'
 import {
+  getLaneHostCountedWorkspaceIds,
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
   getMixedWorktreeHostContextLabels,
   getNoticeHostContextLabels
 } from './host-labels'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
 import { buildProjectGroupingIndex, getProjectGroupingForRepo } from '../project-section-grouping'
 import {
   buildWorktreeOccurrencePlan,
@@ -241,7 +243,19 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
             repoOf,
             defaultHostId
           ),
-          worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
+          worktreeIds: naturalWorktrees.map((worktree) => worktree.id),
+          countedWorkspaceIds: [
+            ...naturalWorktrees.map(getWorktreeHostIdentity),
+            ...renderableFolderWorkspaces.map((pair) =>
+              getFolderWorkspaceHostIdentity(pair.folderWorkspace)
+            )
+          ],
+          hostCountedWorkspaceIds: getLaneHostCountedWorkspaceIds(
+            naturalWorktrees,
+            renderableFolderWorkspaces,
+            repoOf,
+            defaultHostId
+          )
         })
         if (!collapsedGroups.has(ALL_GROUP_KEY)) {
           appendWorktreeRows(result, repoOf, occurrencePlan, {

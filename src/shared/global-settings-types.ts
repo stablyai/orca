@@ -27,6 +27,7 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from './managed-account-types'
 import type { NotificationSettings } from './notification-settings-types'
+import type { SidebarGroupGlobalSettings } from './sidebar-group-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
@@ -257,8 +258,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
-  /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
-  showPinnedWorktreesInGroups?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
   /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */
@@ -495,7 +494,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   voice?: VoiceSettings
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
-}
+} & SidebarGroupGlobalSettings
 
 // Retain one import entry point while keeping feature shapes separate from the max-lines-limited settings module.
 export type { GhosttyImportPreview } from './ghostty-import-preview'

@@ -70,25 +70,13 @@ export function buildTitleDerivedAgentRows(args: {
         : []
 
     if (paneTitleEntries.length > 0) {
-      // Why: hoisted per tab — the leaf lists are layout-derived, not pane-derived.
-      const leafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
-      const liveSlotIds = paneTitleEntries
-        .map(([paneId]) => Number(paneId))
-        .filter((paneId) => paneId >= FIRST_PANE_ID)
-      // Only dense live IDs retain mount/replay creation order; closing a pane makes IDs sparse.
-      const liveSlotsAreDense =
-        liveSlotIds.length === leafIds.length &&
-        liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+      const resolveLeafId = createTitleFallbackLeafResolver(
+        layout,
+        ptyIdsByTabId[tab.id] ?? [],
+        paneTitleEntries
+      )
       for (const [paneId, title] of paneTitleEntries) {
-        const leafId = resolveLeafIdForTitleFallback({
-          layout,
-          leafIds,
-          ptyIds: ptyIdsByTabId[tab.id] ?? [],
-          liveSlotIds,
-          liveSlotsAreDense,
-          paneId: Number(paneId),
-          title
-        })
+        const leafId = resolveLeafId(Number(paneId), title)
         if (!leafId) {
           continue
         }
@@ -248,7 +236,7 @@ export function resolveAgentTypeFromTerminalTitle(
     : null
 }
 
-function titleStatusToRowState(
+export function titleStatusToRowState(
   status: 'working' | 'permission' | 'idle'
 ): AgentStatusState | 'idle' {
   if (status === 'permission') {
@@ -260,6 +248,34 @@ function titleStatusToRowState(
   return 'idle'
 }
 
+/** Map one tab's runtime pane-title slots to layout leaves; `allowPositional` false answers null instead of guessing by slot position. */
+export function createTitleFallbackLeafResolver(
+  layout: TerminalLayoutSnapshot | undefined,
+  ptyIds: string[],
+  paneTitleEntries: [string, string][],
+  allowPositional = true
+): (paneId: number, title: string) => string | null {
+  const leafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
+  const liveSlotIds = paneTitleEntries
+    .map(([paneId]) => Number(paneId))
+    .filter((paneId) => paneId >= FIRST_PANE_ID)
+  // Only dense live IDs retain mount/replay creation order; closing a pane makes IDs sparse.
+  const liveSlotsAreDense =
+    liveSlotIds.length === leafIds.length &&
+    liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+  return (paneId, title) =>
+    resolveLeafIdForTitleFallback({
+      layout,
+      leafIds,
+      ptyIds,
+      liveSlotIds,
+      liveSlotsAreDense,
+      allowPositional,
+      paneId,
+      title
+    })
+}
+
 /** Map negative parked slots by leaf traversal and live IDs by creation/PTY bindings; sorting both together misattributes sibling titles. */
 function resolveLeafIdForTitleFallback(args: {
   layout: TerminalLayoutSnapshot | undefined
@@ -267,6 +283,7 @@ function resolveLeafIdForTitleFallback(args: {
   ptyIds: string[]
   liveSlotIds: number[]
   liveSlotsAreDense: boolean
+  allowPositional: boolean
   paneId: number
   title: string
 }): string | null {
@@ -305,6 +322,9 @@ function resolveLeafIdForTitleFallback(args: {
     return matchingTitleLeafIds[0]
   }
 
+  if (!args.allowPositional) {
+    return null
+  }
   // Fallback indexing uses only live slots; parked slots belong to a separate ID space.
   const paneIndex = args.liveSlotIds.indexOf(args.paneId)
   return paneIndex !== -1 ? (args.leafIds[paneIndex] ?? null) : null

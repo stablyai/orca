@@ -13,6 +13,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
+import { DEFAULT_COLLAPSED_GROUP_COUNT_BADGE_MODE } from './collapsed-group-count-badge'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 
@@ -156,6 +157,7 @@ export function buildDefaultSettings(args: {
     showSkillsButton: false,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
+    collapsedGroupCountBadge: DEFAULT_COLLAPSED_GROUP_COUNT_BADGE_MODE,
     ctrlTabOrderMode: 'mru',
     // Why: Orca-first keeps core shortcuts working from a focused terminal; TUI-ownership users opt in.
     terminalShortcutPolicy: 'orca-first',

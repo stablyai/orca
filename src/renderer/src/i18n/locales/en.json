@@ -7071,7 +7071,11 @@
           "outsideDistro": "Pick a folder inside {{value0}}.",
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Folders on a Windows drive stay on this computer. Choose this computer as the host to add one."
-        }
+        },
+        "sectionWorkspaceCount_one": "{{count}} workspace",
+        "sectionWorkspaceCount_other": "{{count}} workspaces",
+        "sectionAttentionCount_one": "{{count}} waiting on you",
+        "sectionAttentionCount_other": "{{count}} waiting on you"
       },
       "shared": {
         "useDaemonActions": {
@@ -7482,6 +7486,11 @@
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
+          },
+          "collapsedGroupCountBadge": {
+            "off": "Off",
+            "attention": "Needs you",
+            "all": "All"
           }
         },
         "AutoRenameBranchFromWorkSetting": {
@@ -10037,6 +10046,17 @@
               "kw": {
                 "cursor": "cursor"
               }
+            },
+            "collapsedGroupCountBadge": {
+              "title": "Collapsed Group Count",
+              "description": "Collapsed sidebar groups can show no count, only workspaces waiting on you, or the total with the waiting count.",
+              "collapsed": "collapsed",
+              "count": "count",
+              "badge": "badge",
+              "attention": "attention",
+              "needsYou": "needs you",
+              "project": "project",
+              "workspace": "workspace"
             }
           }
         },
