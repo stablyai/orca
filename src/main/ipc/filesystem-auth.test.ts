@@ -377,9 +377,18 @@ describe('filesystem-auth path containment', () => {
 
   it('allows git-relative files under dotdot-prefixed child directories', () => {
     expect(validateGitRelativeFilePath(resolve('/workspace/repo'), '..fixtures/file.ts')).toBe(
-      join('..fixtures', 'file.ts')
+      '..fixtures/file.ts'
     )
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a backslash on POSIX, where it is a filename character',
+    () => {
+      expect(validateGitRelativeFilePath(resolve('/workspace/repo'), 'tests/a\\b.ts')).toBe(
+        'tests/a\\b.ts'
+      )
+    }
+  )
 
   it('still rejects parent-directory escapes', () => {
     const root = resolve('/workspace/repo')
@@ -418,6 +427,38 @@ describe('filesystem-auth path containment', () => {
     } finally {
       vi.doUnmock('path')
       vi.doUnmock('../repo-worktrees')
+      vi.resetModules()
+    }
+  })
+
+  // #28422: a `\\wsl.localhost` worktree runs Linux Git even when the project's runtime says Windows.
+  it('spells Windows git-relative paths with forward slashes', async () => {
+    vi.resetModules()
+    vi.doMock('path', async () => {
+      const path = await vi.importActual<typeof NodePath>('node:path')
+      return {
+        ...path.win32,
+        default: path.win32
+      }
+    })
+
+    try {
+      const { validateGitRelativeFilePath: validateWithWinPath } =
+        await import('./filesystem-path-containment')
+
+      for (const host of ['wsl.localhost', 'wsl$']) {
+        expect(
+          validateWithWinPath(
+            String.raw`\\${host}\Ubuntu-24.04\home\dev\repo`,
+            String.raw`.claude\settings.json`
+          )
+        ).toBe('.claude/settings.json')
+      }
+      expect(validateWithWinPath(String.raw`C:\repo`, String.raw`src\.\nested\app.ts`)).toBe(
+        'src/nested/app.ts'
+      )
+    } finally {
+      vi.doUnmock('path')
       vi.resetModules()
     }
   })

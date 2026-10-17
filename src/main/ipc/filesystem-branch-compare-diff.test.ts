@@ -226,15 +226,13 @@ describe('registerFilesystemHandlers', () => {
       oldPath: 'src/old-file.ts'
     })
 
-    // Why: validateGitRelativeFilePath uses path.relative() which produces
-    // platform-specific separators (backslashes on Windows).
     expect(getBranchDiffMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       {
         headOid: 'head-oid',
         mergeBase: 'merge-base-oid',
-        filePath: path.join('src', 'file.ts'),
-        oldPath: path.join('src', 'old-file.ts')
+        filePath: 'src/file.ts',
+        oldPath: 'src/old-file.ts'
       },
       { admissionTier: 'interactive' }
     )

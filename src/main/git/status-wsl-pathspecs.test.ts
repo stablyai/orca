@@ -24,7 +24,7 @@ import {
 } from './status'
 
 const worktreePath = path.resolve('repo')
-const windowsRelativePath = 'tests\\breakgit'
+const gitRelativePath = 'tests/breakgit'
 const wslOptions = { wslDistro: 'Ubuntu' }
 
 describe('WSL git pathspecs', () => {
@@ -33,13 +33,13 @@ describe('WSL git pathspecs', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'tests/breakgit\0', stderr: '' })
   })
 
-  it('uses POSIX separators for tracked file mutations executed inside WSL', async () => {
-    await stageFile(worktreePath, windowsRelativePath, wslOptions)
-    await unstageFile(worktreePath, windowsRelativePath, wslOptions)
-    await bulkStageFiles(worktreePath, [windowsRelativePath], wslOptions)
-    await bulkUnstageFiles(worktreePath, [windowsRelativePath], wslOptions)
-    await discardChanges(worktreePath, windowsRelativePath, wslOptions)
-    await bulkDiscardChanges(worktreePath, [windowsRelativePath], wslOptions)
+  it('passes Git-spelled paths to tracked file mutations executed inside WSL', async () => {
+    await stageFile(worktreePath, gitRelativePath, wslOptions)
+    await unstageFile(worktreePath, gitRelativePath, wslOptions)
+    await bulkStageFiles(worktreePath, [gitRelativePath], wslOptions)
+    await bulkUnstageFiles(worktreePath, [gitRelativePath], wslOptions)
+    await discardChanges(worktreePath, gitRelativePath, wslOptions)
+    await bulkDiscardChanges(worktreePath, [gitRelativePath], wslOptions)
 
     const pathspecs = gitExecFileAsyncMock.mock.calls.flatMap(([args]) =>
       (args as string[]).filter((arg) => arg.startsWith(':(literal)'))
@@ -51,9 +51,9 @@ describe('WSL git pathspecs', () => {
     expect(inputs).toEqual(Array(3).fill(':(literal)tests/breakgit\0'))
   })
 
-  it('uses POSIX separators when discarding untracked files inside WSL', async () => {
+  it('passes Git-spelled paths when discarding untracked files inside WSL', async () => {
     const repo = await mkdtemp(path.join(tmpdir(), 'orca-wsl-pathspec-'))
-    const targetPath = path.resolve(repo, windowsRelativePath)
+    const targetPath = path.resolve(repo, gitRelativePath)
     await mkdir(path.dirname(targetPath), { recursive: true })
     await writeFile(targetPath, 'untracked')
 
@@ -61,7 +61,7 @@ describe('WSL git pathspecs', () => {
       gitExecFileAsyncMock
         .mockRejectedValueOnce(new Error('not tracked'))
         .mockResolvedValue({ stdout: '', stderr: '' })
-      await discardChanges(repo, windowsRelativePath, wslOptions)
+      await discardChanges(repo, gitRelativePath, wslOptions)
 
       expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
         ['ls-files', '--error-unmatch', '--', ':(literal)tests/breakgit'],
@@ -70,7 +70,7 @@ describe('WSL git pathspecs', () => {
 
       gitExecFileAsyncMock.mockReset()
       gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-      await bulkDiscardChanges(repo, [windowsRelativePath], wslOptions)
+      await bulkDiscardChanges(repo, [gitRelativePath], wslOptions)
 
       expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
         ['ls-files', '-z', '--', ':(literal)tests/breakgit'],
@@ -81,11 +81,15 @@ describe('WSL git pathspecs', () => {
     }
   })
 
-  it('preserves backslashes for host Git where they can be literal filename characters', async () => {
-    await stageFile(worktreePath, windowsRelativePath)
+  it.each([
+    ['host Git', {}],
+    ['WSL Git', wslOptions]
+  ])('keeps a backslash literal for %s, where it is a filename character', async (_, options) => {
+    await stageFile(worktreePath, 'tests\\breakgit', options)
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['add', '--', ':(literal)tests\\breakgit'], {
-      cwd: worktreePath
-    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['add', '--', ':(literal)tests\\breakgit'],
+      expect.anything()
+    )
   })
 })

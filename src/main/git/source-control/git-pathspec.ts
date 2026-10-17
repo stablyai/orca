@@ -17,10 +17,9 @@ const BULK_CHUNK_SIZE = 100
  */
 const POSIX_COMMAND_LINE_BUDGET = 128_000
 
-export function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
-  // Why: Git inside WSL needs POSIX paths, but host paths must stay literal, so convert backslashes only for WSL.
-  const runtimePath = options.wslDistro ? filePath.replace(/\\/g, '/') : filePath
-  return `:(literal)${runtimePath}`
+// Why no separator rewrite: callers pass Git-spelled paths, so a `\` here is a POSIX filename character.
+export function literalPathspec(filePath: string): string {
+  return `:(literal)${filePath}`
 }
 
 /**
@@ -76,7 +75,7 @@ export function bulkPathspecCommands(
   let pathspecs: string[] = []
   let length = baseLength
   for (const filePath of filePaths) {
-    const pathspec = literalPathspec(filePath, options)
+    const pathspec = literalPathspec(filePath)
     const cost =
       finishedCommandLineLength([...leadingArgs, pathspec], worktreePath, options) - baseLength
     if (pathspecs.length > 0 && (pathspecs.length >= BULK_CHUNK_SIZE || length + cost > budget)) {

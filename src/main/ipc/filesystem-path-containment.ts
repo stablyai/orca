@@ -134,6 +134,7 @@ export async function normalizeExistingPath(resolvedPath: string): Promise<strin
   }
 }
 
+/** A worktree-relative path as Git spells it: `/`-separated on every host. */
 export function validateGitRelativeFilePath(worktreePath: string, filePath: string): string {
   if (!filePath || filePath.includes('\0') || resolve(filePath) === filePath) {
     throw new Error('Access denied: invalid git file path')
@@ -149,7 +150,9 @@ export function validateGitRelativeFilePath(worktreePath: string, filePath: stri
     throw new Error('Access denied: invalid git file path')
   }
 
-  return normalizedRelativePath
+  // Why: a `\\wsl.localhost` worktree runs Linux Git whatever the project's runtime setting, and
+  // Linux Git reads `\` as a filename character. On Windows `\` can only be a separator.
+  return normalizedRelativePath.split(sep).join('/')
 }
 
 export function validateFullGitObjectId(value: string, label: string): string {

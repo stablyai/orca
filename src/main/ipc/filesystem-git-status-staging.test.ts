@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   handlers,
@@ -86,9 +85,8 @@ describe('registerFilesystemHandlers', () => {
       filePath: './src/../src/file.ts'
     })
 
-    // Why: validateGitRelativeFilePath uses path.relative() which produces
-    // platform-specific separators (backslashes on Windows).
-    expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, path.join('src', 'file.ts'), {
+    // Why: Git spells paths with `/` on every host, so Windows separators must not leak through.
+    expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'src/file.ts', {
       admissionTier: 'interactive'
     })
   })
@@ -297,7 +295,7 @@ describe('registerFilesystemHandlers', () => {
 
     expect(checkIgnoredPathsMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
-      [path.join('dist', 'bundle.js'), path.join('src', 'index.ts')],
+      ['dist/bundle.js', 'src/index.ts'],
       {}
     )
   })
@@ -380,7 +378,7 @@ describe('registerFilesystemHandlers', () => {
 
     expect(bulkStageFilesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
-      [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      ['src/file.ts', 'nested/child.ts'],
       { admissionTier: 'interactive' }
     )
   })
@@ -438,7 +436,7 @@ describe('registerFilesystemHandlers', () => {
 
     expect(bulkDiscardChangesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
-      [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      ['src/file.ts', 'nested/child.ts'],
       { admissionTier: 'interactive' }
     )
   })
