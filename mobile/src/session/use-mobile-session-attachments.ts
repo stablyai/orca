@@ -4,7 +4,9 @@ import { useClipboardReader } from '../platform/clipboard'
 import { triggerSelection, triggerError } from '../platform/haptics'
 import {
   hostRefusesOtherRuntimeWorkspace,
+  hostScopesAgentDetection,
   loadMobileNewTabAgentOptions,
+  MobileAgentDetectionNeedsHostUpdateError,
   MobileWorkspaceOnOtherRuntimeError
 } from './mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
@@ -126,6 +128,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
   }, [clipboardContents, selectModeActive, setCanPaste])
 
   const hostRefusesOtherRuntime = hostRefusesOtherRuntimeWorkspace(hostCapabilities)
+  const hostScopesDetection = hostScopesAgentDetection(hostCapabilities)
   useEffect(() => {
     const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
     if (!shouldLoadAgentOptions) {
@@ -147,7 +150,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       const options = await loadMobileNewTabAgentOptions({
         client,
         worktreeId,
-        hostRefusesOtherRuntime
+        hostRefusesOtherRuntime,
+        hostScopesDetection
       })
       if (stale) {
         return
@@ -158,7 +162,11 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       if (!stale) {
         setCreateTabAgentOptions([])
         setCreateTabAgentLoadState(
-          error instanceof MobileWorkspaceOnOtherRuntimeError ? 'other-runtime' : 'error'
+          error instanceof MobileWorkspaceOnOtherRuntimeError
+            ? 'other-runtime'
+            : error instanceof MobileAgentDetectionNeedsHostUpdateError
+              ? 'host-update'
+              : 'error'
         )
       }
     })
@@ -170,6 +178,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     client,
     connState,
     hostRefusesOtherRuntime,
+    hostScopesDetection,
     pendingDiffNotesDelivery,
     showCreateTabDrawer,
     worktreeId

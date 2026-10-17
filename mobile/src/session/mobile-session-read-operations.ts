@@ -2,7 +2,11 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-o
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   detectedAgentsSchema,
+  folderWorkspacePlacementListSchema,
+  hostStatusSchema,
   markdownTabDocumentSchema,
+  projectGroupPlacementListSchema,
+  repoPlacementListSchema,
   runtimeRepoListSchema,
   sessionForwardedReplySchema,
   sessionTerminalInventorySchema,
@@ -97,6 +101,51 @@ export const preflightDetectRemoteAgentsRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('detected-agents', detectedAgentsSchema)
+  })
+)
+
+/**
+ * What the agent loader checks a folder workspace against on a host too old to resolve it: the
+ * repos, folders and project groups, unsalvaged, and the host's platform. Each skips on refusal,
+ * because the loader then asks for a desktop update rather than guessing.
+ */
+export const newTabRepoPlacementListRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'repo.list-placements-for-new-tab-or-skip',
+    method: 'repo.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('repo-placements', repoPlacementListSchema)
+  })
+)
+
+export const newTabFolderWorkspaceListRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'folderWorkspace.list-for-new-tab-or-skip',
+    method: 'folderWorkspace.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('folder-workspace-placements', folderWorkspacePlacementListSchema)
+  })
+)
+
+export const newTabProjectGroupListRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'projectGroup.list-for-new-tab-or-skip',
+    method: 'projectGroup.list',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('project-group-placements', projectGroupPlacementListSchema)
+  })
+)
+
+export const newTabHostStatusRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'status.for-new-tab-or-skip',
+    method: 'status.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('host-status', hostStatusSchema)
   })
 )
 
