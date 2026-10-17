@@ -98,6 +98,7 @@ export class JournalRowWriter {
       // sequence the table already holds. The ledger first: it cannot throw, the fold can.
       receipt?.committed()
       this.deps.commit([row], savedAt)
+      this.deps.database().journalAppended(this.deps.sessionId)
       return row
     })
   }
@@ -146,6 +147,7 @@ export class JournalRowWriter {
     }
     receipt?.committed()
     this.deps.commit(rows, ts)
+    this.deps.database().journalAppended(this.deps.sessionId)
     return rows
   }
 

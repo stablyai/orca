@@ -104,6 +104,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
   'src/main/native-chat/agent-session-journal/journal-database-schema.ts': 'agent-session-journal',
   'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
+  'src/main/native-chat/agent-session-journal/journal-prune-state.ts': 'agent-session-journal',
   'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
@@ -155,6 +156,11 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         52,
         'Native chat journal: chats stay local on the desktop (owner decision C), never moved.'
       )
+    ),
+    ...tables(
+      'agent-session-journal',
+      ['${PROGRESS}', '${WORK}'],
+      notApplicableDisposition(52, 'Journal cleanup progress; a moved journal is rescanned once.')
     ),
     ...tables(
       'orchestration',
