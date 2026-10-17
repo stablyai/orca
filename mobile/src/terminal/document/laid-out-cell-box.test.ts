@@ -220,6 +220,21 @@ describe('a started document', () => {
     }
   })
 
+  it("labels init's ready, which follows the replay, apart from resize's synchronous one", async () => {
+    const { scope, posted, init } = started()
+    try {
+      init()
+      await untilReady(posted)
+      handleMsg(scope, { type: 'resize', cols: 50, rows: 40 })
+      expect(posted.filter((m) => m.type === 'ready').map((m) => m.source)).toEqual([
+        'init',
+        'resize'
+      ])
+    } finally {
+      stopTerminalDocument(scope)
+    }
+  })
+
   it('reports a paused renderer at ready, before ready itself', async () => {
     const { scope, cell, posted, init } = started()
     try {
