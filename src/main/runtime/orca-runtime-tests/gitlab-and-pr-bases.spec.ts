@@ -244,7 +244,20 @@ describe('OrcaRuntimeService', () => {
       'mr',
       'origin',
       'ssh-1',
-      undefined
+      undefined,
+      {},
+      { includeReviewDetails: undefined }
+    )
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      '/remote/repo',
+      8,
+      'mr',
+      'origin',
+      'ssh-1',
+      undefined,
+      {},
+      { includeReviewDetails: false }
     )
     expect(updateGitLabMRReviewersMock).toHaveBeenCalledWith(
       '/remote/repo',
@@ -440,7 +453,19 @@ describe('OrcaRuntimeService', () => {
       undefined,
       null,
       undefined,
-      localGitOptions
+      localGitOptions,
+      { includeReviewDetails: undefined }
+    )
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      TEST_REPO_PATH,
+      8,
+      'mr',
+      undefined,
+      null,
+      undefined,
+      localGitOptions,
+      { includeReviewDetails: false }
     )
     expect(updateGitLabMRMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
