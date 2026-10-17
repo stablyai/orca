@@ -11,6 +11,7 @@ import {
 } from './orcad-stdio-bridge-script'
 import { OrcadStdioBridgeDecoder, type OrcadStdioBridgeSignal } from './orcad-stdio-bridge-stream'
 import { isWslOrcadHostTarget, type OrcadHostTransport } from './orcad-host-transport'
+import { isWslDistroRunning } from '../wsl-background-distro-gate'
 import type { RemoteCommandChannel } from './remote-install-transport'
 import { isWindowsRemoteHost } from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
@@ -30,17 +31,17 @@ export async function resolveOrcadStdioBridge(
   conn: OrcadHostTransport,
   port: number
 ): Promise<OrcadStdioBridge> {
+  const target = conn.getTarget()
+  // Resolving a retained WSL listener must not probe (and potentially boot) the guest.
+  if (isWslOrcadHostTarget(target)) {
+    return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
+  }
   const host = await detectRemoteHostPlatform(conn)
   if (!host) {
     throw new OrcadHostUnsupportedError('This SSH host platform is not supported by managed orcad.')
   }
   if (!isWindowsRemoteHost(host)) {
     return { command: orcadPosixStdioBridgeCommand(port), mode: 'raw', wrapCommand: true }
-  }
-  const target = conn.getTarget()
-  // A WSL distro is a Linux host, so a Windows answer from it is not one this path can serve.
-  if (isWslOrcadHostTarget(target)) {
-    throw new OrcadHostUnsupportedError('This WSL distro reported a Windows host platform.')
   }
   // Stages this client's pinned node.exe and host script, which an app update may have changed.
   const context = await resolveOrcadRemoteContext(target, conn, undefined, host)
@@ -51,10 +52,15 @@ export async function resolveOrcadStdioBridge(
   }
 }
 
-export function openOrcadStdioBridgeChannel(
+export async function openOrcadStdioBridgeChannel(
   conn: OrcadHostTransport,
   bridge: OrcadStdioBridge
 ): Promise<RemoteCommandChannel> {
+  const target = conn.getTarget()
+  // Passive socket reconnects must not boot WSL; the demand path starts the holder first.
+  if (isWslOrcadHostTarget(target) && !(await isWslDistroRunning(target.distro))) {
+    throw new Error(`WSL distro ${target.distro} is not confirmed running`)
+  }
   return conn.exec(bridge.command, { wrapCommand: bridge.wrapCommand })
 }
 

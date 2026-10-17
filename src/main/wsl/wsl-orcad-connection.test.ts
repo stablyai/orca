@@ -18,6 +18,8 @@ import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 import { wslOrcadHostDistro } from './wsl-orcad-host-environments'
 
+vi.mock('../wsl-background-distro-gate', () => ({ isWslDistroRunning: async () => true }))
+
 let first: { server: Server; port: number }
 let second: { server: Server; port: number }
 const managers: WslOrcadConnectionManager[] = []

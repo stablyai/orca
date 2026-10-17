@@ -71,8 +71,11 @@ function posixHome(withRuntime: boolean): string {
 }
 
 function connectionRunning(channel: () => RemoteCommandChannel): OrcadHostTransport {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check calls only exec.
-  return { exec: async () => channel() } as unknown as OrcadHostTransport
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check calls only getTarget and exec.
+  return {
+    getTarget: () => ({ host: 'test' }),
+    exec: async () => channel()
+  } as unknown as OrcadHostTransport
 }
 
 const posixBridge = (port: number): OrcadStdioBridge => ({

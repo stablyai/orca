@@ -1,9 +1,11 @@
 import { createServer, type Server, type Socket } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openOrcadStdioBridgeChannel } from '../ssh/orcad-stdio-bridge'
 import { fakeWslBridgeChildren, posixOrcadStdioBridge } from './wsl-orcad-bridge-test-child'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { watchChannel } from './wsl-orcad-watch'
+
+vi.mock('../wsl-background-distro-gate', () => ({ isWslDistroRunning: async () => true }))
 
 const servers: Server[] = []
 

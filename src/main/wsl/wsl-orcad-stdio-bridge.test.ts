@@ -1,12 +1,23 @@
 import { connect, type Server, type Socket } from 'node:net'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../ssh/orcad-stdio-bridge'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  checkOrcadStdioBridge,
+  openOrcadStdioBridgeChannel,
+  resolveOrcadStdioBridge
+} from '../ssh/orcad-stdio-bridge'
 import { ORCAD_STDIO_BRIDGE_MAX_CHANNELS } from '../ssh/orcad-stdio-bridge-listener'
 import { startEchoServer } from '../ssh/orcad-stdio-bridge-test-channel'
 import type { StartedPortForward } from '../ssh/ssh-port-forward-provider'
-import { fakeWslBridgeChildren, posixOrcadStdioBridge } from './wsl-orcad-bridge-test-child'
+import { fakeWslBridgeChildren } from './wsl-orcad-bridge-test-child'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
+
+const running = vi.hoisted(() => vi.fn(async () => true))
+vi.mock('../wsl-background-distro-gate', () => ({ isWslDistroRunning: running }))
+
+beforeEach(() => {
+  running.mockResolvedValue(true)
+})
 
 let echo: { server: Server; port: number }
 const started: StartedPortForward[] = []
@@ -37,7 +48,7 @@ async function startBridge(remotePort = echo.port) {
     transport,
     { environmentId: 'wsl:ubuntu', remotePort, localPort: 0, label: 'Ubuntu' },
     {
-      resolveBridge: async (_conn, port) => posixOrcadStdioBridge(port),
+      resolveBridge: resolveOrcadStdioBridge,
       checkBridge: checkOrcadStdioBridge,
       openChannel: openOrcadStdioBridgeChannel
     }
@@ -77,7 +88,7 @@ async function until(condition: () => boolean): Promise<void> {
 }
 
 describe('listenWslOrcadStdioBridge (real listener, fake wsl.exe echo children)', () => {
-  it('rides each accepted socket on its own wsl.exe bridge child', async () => {
+  it('opens bridge children only while the distro is confirmed running, retaining the listener', async () => {
     const { forward, children } = await startBridge()
     // The up-front check is one child; it has already exited.
     expect(children.commands).toHaveLength(1)
@@ -93,6 +104,15 @@ describe('listenWslOrcadStdioBridge (real listener, fake wsl.exe echo children)'
       expect(command).toContain("'.orca-remote/runtimes/node-'*'/bin/node'")
       expect(command).toContain(` ${echo.port}; fi; done;`)
     }
+    running.mockResolvedValue(false)
+    const refused = await dial(forward.entry.localPort)
+    await new Promise((resolve) => refused.once('close', resolve))
+    expect(children.commands).toHaveLength(3)
+    expect(running).toHaveBeenLastCalledWith('Ubuntu')
+    running.mockResolvedValue(true)
+    const resumed = await dial(forward.entry.localPort)
+    expect(await echoOf(resumed, 'resumed')).toBe('resumed')
+    expect(children.commands).toHaveLength(4)
   })
 
   it(`queues past ${ORCAD_STDIO_BRIDGE_MAX_CHANNELS} sockets and reuses freed slots`, async () => {
