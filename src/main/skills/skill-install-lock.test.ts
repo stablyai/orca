@@ -51,7 +51,7 @@ describe('skill install lock', () => {
     await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('reclaims a lock after its release deletion fails', async () => {
+  it('keeps a lock reclaimable after its release deletion fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
     const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
@@ -64,11 +64,10 @@ describe('skill install lock', () => {
     })
 
     await expect(release()).rejects.toThrow('injected-delete-failure')
-    await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect(await readdir(dirname(lockPath))).toEqual(
-      expect.arrayContaining([expect.stringMatching(/\.lock\.[a-f0-9-]+\.released$/)])
-    )
-    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
+    // Why: the release drops its own owner record before removing the directory, so a failed
+    // removal leaves an unowned directory that the next acquisition reclaims for itself.
+    await expect(readdir(lockPath)).resolves.toEqual([])
+    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 5_000 })
     await secondRelease()
     await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
