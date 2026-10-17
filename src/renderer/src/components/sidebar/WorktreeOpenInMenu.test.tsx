@@ -27,7 +27,8 @@ const {
     settings: {
       activeRuntimeEnvironmentId: null as string | null,
       openInApplications: [] as { id: string; label: string; command: string }[]
-    }
+    },
+    runtimeEnvironments: new Array<{ id: string; sshAccess?: Record<string, number | string> }>()
   },
   openInExternalEditorMock: vi.fn(),
   openInFileManagerMock: vi.fn(),
@@ -44,11 +45,15 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/store', () => {
   const useAppStore = Object.assign(
-    (selector: (state: { settings: typeof mockState.settings }) => unknown) =>
-      selector({ settings: mockState.settings }),
+    (selector: (state: typeof mockState) => unknown) =>
+      selector({
+        settings: mockState.settings,
+        runtimeEnvironments: mockState.runtimeEnvironments
+      }),
     {
       getState: () => ({
         settings: mockState.settings,
+        runtimeEnvironments: mockState.runtimeEnvironments,
         openSettingsPage: openSettingsPageMock,
         openSettingsTarget: openSettingsTargetMock
       })
@@ -88,6 +93,7 @@ function findByType(node: unknown, type: unknown): ReactElementLike {
 describe('WorktreeOpenInMenu', () => {
   beforeEach(() => {
     mockState.settings = { activeRuntimeEnvironmentId: null, openInApplications: [] }
+    mockState.runtimeEnvironments = []
     toastErrorMock.mockReset()
     openInFileManagerMock.mockReset()
     openInExternalEditorMock.mockReset()
@@ -289,6 +295,43 @@ describe('WorktreeOpenInMenu', () => {
       command: 'code',
       connectionId: 'ssh-1',
       ownerHostId: 'ssh:ssh-1'
+    })
+  })
+
+  it('forwards a managed server owner that is reached over SSH', async () => {
+    mockState.runtimeEnvironments = [
+      {
+        id: 'env-1',
+        sshAccess: { sshTargetId: 'ssh-1', sshTargetGeneration: 1, localPort: 1, remotePort: 2 }
+      }
+    ]
+    await openWorktreePath({
+      target: 'external-editor',
+      worktreePath: '/home/coder/orca',
+      runtimeEnvironmentId: 'env-1',
+      command: 'code'
+    })
+
+    expect(openInExternalEditorMock).toHaveBeenCalledWith({
+      path: '/home/coder/orca',
+      command: 'code',
+      connectionId: undefined,
+      ownerHostId: 'runtime:env-1'
+    })
+  })
+
+  it('marks the VS Code entry of an SSH-reached managed server as Remote SSH', () => {
+    const entries = getWorktreeOpenInEntries(
+      [{ id: 'vscode', label: 'VS Code', command: 'code' }],
+      'Finder'
+    )
+    expect(getOpenInEntryAvailability(entries[0], null, 'env-1', false, true)).toEqual({
+      disabled: false,
+      metadata: 'Remote SSH'
+    })
+    expect(getOpenInEntryAvailability(entries[0], null, 'env-1', false, false)).toEqual({
+      disabled: true,
+      metadata: 'Local only'
     })
   })
 

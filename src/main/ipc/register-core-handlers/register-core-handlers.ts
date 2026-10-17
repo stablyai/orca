@@ -55,6 +55,7 @@ import { registerAutomationHandlers } from '../automations'
 import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
 import { registerShellHandlers } from '../shell'
+import { getRuntimeEnvironmentSshTargetId } from '../../ssh/runtime-environment-ssh-target-id'
 import { registerPetHandlers } from '../pet'
 import { registerPluginHandlers } from '../plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
@@ -233,7 +234,9 @@ export function registerCoreHandlers(
     onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
   })
   registerBrowserHandlers()
-  registerShellHandlers(store)
+  registerShellHandlers(store, (environmentId) =>
+    getRuntimeEnvironmentSshTargetId(app.getPath('userData'), environmentId)
+  )
   registerPetHandlers()
   registerSessionHandlers(store, runtime)
   registerUIHandlers(store, { isDashboardPopoutRenderer })

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { getExternalEditorOpenCapability } from './external-editor-open-capability'
+import {
+  getExternalEditorOpenCapability,
+  runtimeEnvironmentHasSshAccess
+} from './external-editor-open-capability'
 
 describe('getExternalEditorOpenCapability', () => {
   it('allows every configured launcher for local paths', () => {
@@ -42,4 +45,43 @@ describe('getExternalEditorOpenCapability', () => {
       ).toEqual({ allowed: false, reason: 'remote-runtime' })
     }
   )
+
+  it('allows VS Code for a managed server reached over SSH, and no other editor', () => {
+    const context = { connectionId: null, runtimeEnvironmentId: 'env-1', runtimeSshAccess: true }
+    expect(getExternalEditorOpenCapability({ ...context, command: 'code' })).toEqual({
+      allowed: true,
+      remote: true
+    })
+    expect(getExternalEditorOpenCapability({ ...context, command: 'cursor' })).toEqual({
+      allowed: false,
+      reason: 'local-only-editor'
+    })
+  })
+
+  it('still refuses an unresolved owner that claims SSH access', () => {
+    expect(
+      getExternalEditorOpenCapability({
+        command: 'code',
+        runtimeEnvironmentId: 'env-1',
+        runtimeSshAccess: true,
+        ownerUnresolved: true
+      })
+    ).toEqual({ allowed: false, reason: 'remote-runtime' })
+  })
+
+  it('reads SSH access from the environment list', () => {
+    const link = {
+      sshTargetId: 'ssh-1',
+      sshTargetGeneration: 1,
+      localPort: 1234,
+      remotePort: 6768,
+      endpointId: 'tunnel',
+      previousPreferredEndpointId: 'direct'
+    }
+    const environments = [{ id: 'env-1', sshAccess: link }, { id: 'env-2' }]
+    expect(runtimeEnvironmentHasSshAccess(environments, 'env-1')).toBe(true)
+    expect(runtimeEnvironmentHasSshAccess(environments, 'env-2')).toBe(false)
+    expect(runtimeEnvironmentHasSshAccess(environments, 'missing')).toBe(false)
+    expect(runtimeEnvironmentHasSshAccess(environments, null)).toBe(false)
+  })
 })

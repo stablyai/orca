@@ -17,7 +17,7 @@ import {
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import { parseRoutableExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isLocallyOwned,
   pathExists,
@@ -49,8 +49,44 @@ async function openInFileManager(
   }
 }
 
+async function openOverVsCodeRemoteSsh(
+  store: Pick<Store, 'getSshTarget'>,
+  connectionId: string,
+  request: ShellOpenExternalEditorRequest
+): Promise<ShellOpenExternalEditorResult> {
+  const sshTarget = store.getSshTarget(connectionId)
+  if (!sshTarget) {
+    return { ok: false, reason: 'ssh-target-not-found' }
+  }
+  if (sshTarget.owner?.type === 'on-demand-runtime') {
+    return { ok: false, reason: 'remote-runtime-unsupported' }
+  }
+  if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
+    return { ok: false, reason: 'not-absolute' }
+  }
+  const authority = resolveVsCodeSshAuthority(sshTarget)
+  if (!authority.ok) {
+    return authority
+  }
+  const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
+    request.command,
+    request.path,
+    authority.authority
+  )
+  if (!launchSpec) {
+    return { ok: false, reason: 'remote-editor-unsupported' }
+  }
+  try {
+    await launchExternalEditor(launchSpec)
+    return { ok: true }
+  } catch {
+    return { ok: false, reason: 'launch-failed' }
+  }
+}
+
 async function openInExternalEditor(
   store: Pick<Store, 'getSshTarget'>,
+  getRuntimeSshTargetId: RuntimeSshTargetIdResolver,
   request: ShellOpenExternalEditorRequest
 ): Promise<ShellOpenExternalEditorResult> {
   const connectionId = request.connectionId?.trim()
@@ -58,34 +94,16 @@ async function openInExternalEditor(
     if (request.ownerHostId !== toSshExecutionHostId(connectionId)) {
       return { ok: false, reason: 'remote-runtime-unsupported' }
     }
-    const sshTarget = store.getSshTarget(connectionId)
-    if (!sshTarget) {
-      return { ok: false, reason: 'ssh-target-not-found' }
-    }
-    if (sshTarget.owner?.type === 'on-demand-runtime') {
-      return { ok: false, reason: 'remote-runtime-unsupported' }
-    }
-    if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
-      return { ok: false, reason: 'not-absolute' }
-    }
-    const authority = resolveVsCodeSshAuthority(sshTarget)
-    if (!authority.ok) {
-      return authority
-    }
-    const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
-      request.command,
-      request.path,
-      authority.authority
-    )
-    if (!launchSpec) {
-      return { ok: false, reason: 'remote-editor-unsupported' }
-    }
-    try {
-      await launchExternalEditor(launchSpec)
-      return { ok: true }
-    } catch {
-      return { ok: false, reason: 'launch-failed' }
-    }
+    return openOverVsCodeRemoteSsh(store, connectionId, request)
+  }
+
+  // Why: a managed server reached over SSH opens through that same SSH host; WSL and other
+  // runtimes have no SSH link and fall through to the local-path rules below.
+  const owner = parseRoutableExecutionHostId(request.ownerHostId)
+  const runtimeSshTargetId =
+    owner?.kind === 'runtime' ? getRuntimeSshTargetId(owner.environmentId) : null
+  if (runtimeSshTargetId) {
+    return openOverVsCodeRemoteSsh(store, runtimeSshTargetId, request)
   }
 
   const target = await resolveOwnedPathTarget(request.path, request.ownerHostId)
@@ -117,7 +135,12 @@ async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): P
   }
 }
 
-export function registerShellHandlers(store: Pick<Store, 'getSshTarget'>): void {
+type RuntimeSshTargetIdResolver = (environmentId: string) => string | null
+
+export function registerShellHandlers(
+  store: Pick<Store, 'getSshTarget'>,
+  getRuntimeSshTargetId: RuntimeSshTargetIdResolver = () => null
+): void {
   ipcMain.handle(
     'shell:openPath',
     async (_event, path: string, ownerHostId: unknown): Promise<void> => {
@@ -136,7 +159,7 @@ export function registerShellHandlers(store: Pick<Store, 'getSshTarget'>): void 
   ipcMain.handle(
     'shell:openInExternalEditor',
     (_event, request: ShellOpenExternalEditorRequest): Promise<ShellOpenExternalEditorResult> =>
-      openInExternalEditor(store, request)
+      openInExternalEditor(store, getRuntimeSshTargetId, request)
   )
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {

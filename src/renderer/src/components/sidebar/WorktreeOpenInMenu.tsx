@@ -15,7 +15,10 @@ import {
 } from '@/lib/local-path-open-guard'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { getExternalEditorOpenCapability } from '@/lib/external-editor-open-capability'
+import {
+  getExternalEditorOpenCapability,
+  runtimeEnvironmentHasSshAccess
+} from '@/lib/external-editor-open-capability'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import { showOpenFailureToast } from './worktree-open-failure-toast'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
@@ -58,7 +61,8 @@ export function getOpenInEntryAvailability(
   entry: OpenInMenuEntry,
   connectionId?: string | null,
   runtimeEnvironmentId?: string | null,
-  ownerUnresolved?: boolean
+  ownerUnresolved?: boolean,
+  runtimeSshAccess?: boolean
 ): { disabled: boolean; metadata?: string } {
   if (entry.target === 'file-manager') {
     const disabled = isRevealOrEditorOpenBlocked(
@@ -75,6 +79,7 @@ export function getOpenInEntryAvailability(
     connectionId,
     command: entry.command,
     runtimeEnvironmentId,
+    runtimeSshAccess,
     ownerUnresolved
   })
   if (!capability.allowed) {
@@ -134,6 +139,10 @@ export async function openWorktreePath(args: {
       connectionId: args.connectionId,
       command: args.command,
       runtimeEnvironmentId: args.runtimeEnvironmentId,
+      runtimeSshAccess: runtimeEnvironmentHasSshAccess(
+        useAppStore.getState().runtimeEnvironments,
+        args.runtimeEnvironmentId
+      ),
       ownerUnresolved: args.ownerUnresolved
     })
     if (!capability.allowed) {
@@ -205,6 +214,9 @@ export function WorktreeOpenInMenuItems({
   const openInApplications = useAppStore(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
+  const runtimeSshAccess = useAppStore((s) =>
+    runtimeEnvironmentHasSshAccess(s.runtimeEnvironments, runtimeEnvironmentId)
+  )
   const fileManagerLabel = getLocalFileManagerLabel()
   const entries = getWorktreeOpenInEntries(openInApplications, fileManagerLabel)
 
@@ -215,7 +227,8 @@ export function WorktreeOpenInMenuItems({
           entry,
           connectionId,
           runtimeEnvironmentId,
-          ownerUnresolved
+          ownerUnresolved,
+          runtimeSshAccess
         )
         return (
           <DropdownMenuItem
