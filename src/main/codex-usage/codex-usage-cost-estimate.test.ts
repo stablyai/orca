@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { estimateCostUsd, type CodexBillableTokens } from './codex-usage-cost-estimate'
 
+/** Builds totals whose requests all remain below the long-context threshold. */
 function shortContext(
   inputTokens: number,
   cachedInputTokens: number,
@@ -16,6 +17,7 @@ function shortContext(
   }
 }
 
+/** Marks every token as belonging to requests above the long-context threshold. */
 function longContext(
   inputTokens: number,
   cachedInputTokens: number,
@@ -32,6 +34,40 @@ function longContext(
 }
 
 describe('estimateCostUsd', () => {
+  it.each([
+    'gpt-6.1-sol',
+    'gpt-6.1-sol-high',
+    'gpt-6.1-sol(max)',
+    'gpt-6.1-sol-2026-09-29',
+    'gpt-6.1-sol-2026-09-29-xhigh',
+    ' GPT-6.1-SOL '
+  ])('prices %s with the GPT-6.1 Sol cached-input rate', (model) => {
+    expect(estimateCostUsd(model, shortContext(2_000_000, 1_000_000, 1_000_000))).toBeCloseTo(
+      12.1,
+      9
+    )
+  })
+
+  it('prices a whole GPT-6.1 Sol long-context request at its long-context rates', () => {
+    expect(estimateCostUsd('gpt-6.1-sol', longContext(300_000, 150_000, 100_000))).toBeCloseTo(
+      2.13,
+      9
+    )
+  })
+
+  it('combines GPT-6.1 Sol short and long requests without double billing cached input', () => {
+    expect(
+      estimateCostUsd('gpt-6.1-sol', {
+        inputTokens: 2_300_000,
+        cachedInputTokens: 1_150_000,
+        outputTokens: 200_000,
+        longContextInputTokens: 300_000,
+        longContextCachedInputTokens: 150_000,
+        longContextOutputTokens: 100_000
+      })
+    ).toBeCloseTo(5.23, 9)
+  })
+
   it('bills a whole long-context request at the long-context rates', () => {
     // gpt-6-astra long rates $20 / $2 / $75: 0.15M*20 + 0.15M*2 + 0.1M*75.
     expect(estimateCostUsd('gpt-6-astra', longContext(300_000, 150_000, 100_000))).toBeCloseTo(
@@ -71,5 +107,6 @@ describe('estimateCostUsd', () => {
 
   it('returns null for an unpriced model', () => {
     expect(estimateCostUsd('gpt-7-unreleased', shortContext(1, 0, 1))).toBeNull()
+    expect(estimateCostUsd('gpt-6.2-sol', shortContext(1, 0, 1))).toBeNull()
   })
 })
