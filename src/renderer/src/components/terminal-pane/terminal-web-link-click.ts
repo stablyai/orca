@@ -1,6 +1,9 @@
 import type { Terminal } from '@xterm/xterm'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
-import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
+import {
+  isTerminalLinkDirectActivation,
+  isTerminalOwnedLinkGesture
+} from './terminal-link-activation'
 import { handleOscLink } from './terminal-osc-link-routing'
 import {
   findHttpLinkAtTerminalMouseEvent,
@@ -10,6 +13,7 @@ import {
 } from './terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
+import { classifyExternalAppUrl } from '../../../../shared/external-app-url'
 
 type TerminalWebLinkClickDeps = Pick<
   LinkHandlerDeps,
@@ -27,7 +31,24 @@ export function handleTerminalWebLinkClick(
   event: MouseEvent | undefined,
   deps: TerminalWebLinkClickDeps
 ): boolean {
-  if (!event || !isTerminalOwnedLinkGesture(event)) {
+  if (!event) {
+    return false
+  }
+
+  // Why: custom OS handoff is Mod/Ctrl only. Plain click stays on the HTTP action
+  // menu path and must not open a confirm dialog (#13225).
+  const classified = classifyExternalAppUrl(url)
+  if (classified.ok && classified.kind === 'custom') {
+    if (!isTerminalLinkDirectActivation(event)) {
+      return false
+    }
+    event.preventDefault()
+    void Promise.resolve(window.api.shell.openUrl(classified.url)).catch(() => undefined)
+    deps.terminal?.clearSelection()
+    return true
+  }
+
+  if (!isTerminalOwnedLinkGesture(event)) {
     return false
   }
 

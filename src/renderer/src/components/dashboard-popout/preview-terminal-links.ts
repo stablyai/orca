@@ -2,6 +2,11 @@ import type { Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
 import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/terminal-http-link-activation'
+import { isTerminalLinkDirectActivation } from '@/components/terminal-pane/terminal-link-activation'
+import {
+  classifyExternalAppUrl,
+  TERMINAL_WEB_AND_APP_URL_REGEX
+} from '../../../../shared/external-app-url'
 
 /**
  * Makes URLs in the preview clickable under the same Mod+click gesture a pane
@@ -14,13 +19,26 @@ export function installPreviewTerminalLinks(terminal: Terminal): void {
   // and kills the renderer — guard before any provider registers.
   installGuardedLinkProviderRegistration(terminal)
   terminal.loadAddon(
-    new WebLinksAddon((event, uri) => {
-      if (!isTerminalHttpLinkActivation(event)) {
-        return
-      }
-      event.preventDefault()
-      void window.api.shell.openUrl(uri).catch(() => undefined)
-      terminal.clearSelection()
-    })
+    new WebLinksAddon(
+      (event, uri) => {
+        const classified = classifyExternalAppUrl(uri)
+        if (classified.ok && classified.kind === 'custom') {
+          if (!isTerminalLinkDirectActivation(event)) {
+            return
+          }
+          event.preventDefault()
+          void window.api.shell.openUrl(classified.url).catch(() => undefined)
+          terminal.clearSelection()
+          return
+        }
+        if (!isTerminalHttpLinkActivation(event)) {
+          return
+        }
+        event.preventDefault()
+        void window.api.shell.openUrl(uri).catch(() => undefined)
+        terminal.clearSelection()
+      },
+      { urlRegex: TERMINAL_WEB_AND_APP_URL_REGEX }
+    )
   )
 }
