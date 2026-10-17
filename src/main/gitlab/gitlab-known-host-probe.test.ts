@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { glabExecFileAsyncMock } = vi.hoisted(() => ({ glabExecFileAsyncMock: vi.fn() }))
 
@@ -12,10 +12,13 @@ import {
   rememberGlabKnownHost,
   rememberGlabKnownHosts
 } from './gitlab-known-host-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 
 describe('getGlabKnownHosts', () => {
   // A locally-keyed probe must never answer from the default WSL distro.
   const LOCAL_PROBE_OPTIONS = { timeout: 10_000, allowDefaultWslFallback: false }
+
+  afterEach(() => vi.restoreAllMocks())
 
   beforeEach(() => {
     glabExecFileAsyncMock.mockReset()
@@ -236,6 +239,7 @@ describe('getGlabKnownHosts', () => {
   })
 
   it('does not permanently cache the failure fallback — a later probe can re-discover hosts', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     glabExecFileAsyncMock
       .mockRejectedValueOnce(new Error('ssh tunnel not ready'))
       .mockResolvedValueOnce({
@@ -243,9 +247,10 @@ describe('getGlabKnownHosts', () => {
         stderr: ''
       })
 
-    // First probe fails → canonical default, NOT cached.
+    // First probe fails → canonical default, cached until the retry window expires.
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual(['gitlab.com'])
-    // Re-probe (e.g. after tunnel comes up) discovers the real host.
+    clock.mockReturnValue(1_000 + NEGATIVE_ENTRY_TTL_MS)
+    // A later probe discovers the recovered host.
     await expect(getGlabKnownHosts('conn-1')).resolves.toEqual([
       'gitlab.com',
       'gitlab.example.com:8080'
@@ -254,6 +259,7 @@ describe('getGlabKnownHosts', () => {
   })
 
   it('removes a timed-out probe from in-flight state so a later call retries', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     let rejectProbe!: (error: Error) => void
     glabExecFileAsyncMock
       .mockImplementationOnce(
@@ -273,6 +279,7 @@ describe('getGlabKnownHosts', () => {
       ['gitlab.com'],
       ['gitlab.com']
     ])
+    clock.mockReturnValue(1_000 + NEGATIVE_ENTRY_TTL_MS)
     await expect(getGlabKnownHosts(undefined, { wslDistro: 'Ubuntu' })).resolves.toEqual([
       'gitlab.com',
       'recovered.test'

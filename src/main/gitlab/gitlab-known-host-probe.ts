@@ -12,7 +12,10 @@ export type LocalGitExecOptions = {
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
 export const KNOWN_HOSTS_CACHE_MAX_ENTRIES = 128
-const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
+const knownHostsCacheByExecutionContext = new Map<
+  string,
+  { hosts: readonly string[]; retryAt?: number }
+>()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
 const unauthenticatedHostExpiries = new Map<string, number>()
 
@@ -117,8 +120,12 @@ export function rememberGlabKnownHosts(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): void {
+  if (hosts.length === 0) {
+    return
+  }
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
-  const cached = knownHostsCacheByExecutionContext.get(key) ?? DEFAULT_GITLAB_HOSTS
+  const entry = knownHostsCacheByExecutionContext.get(key)
+  const cached = entry?.hosts ?? DEFAULT_GITLAB_HOSTS
   const seen = new Set(cached.map(normalizeGitLabHost))
   const additions: string[] = []
   for (const host of hosts) {
@@ -132,10 +139,10 @@ export function rememberGlabKnownHosts(
       unauthenticatedHostKey(normalizedHost, connectionId, localGitOptions)
     )
   }
-  if (additions.length === 0) {
+  if (additions.length === 0 && entry?.retryAt === undefined) {
     return
   }
-  knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
+  knownHostsCacheByExecutionContext.set(key, { hosts: [...cached, ...additions] })
   trimKnownHostsCache()
 }
 
@@ -144,11 +151,15 @@ export async function getGlabKnownHosts(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<readonly string[]> {
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
+  const previous = knownHostsCacheByExecutionContext.get(key)
+  if (previous?.retryAt !== undefined && previous.retryAt <= Date.now()) {
+    knownHostsCacheByExecutionContext.delete(key)
+  }
   const cached = knownHostsCacheByExecutionContext.get(key)
   if (cached) {
     knownHostsCacheByExecutionContext.delete(key)
     knownHostsCacheByExecutionContext.set(key, cached)
-    return cached
+    return cached.hosts
   }
   // Why: only join a probe still young enough to answer, so a wedged one cannot
   // pin every later retry for the life of the process (P1-D).
@@ -178,16 +189,28 @@ async function probeGlabKnownHosts(
       ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
     const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
-    const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
+    const remembered = knownHostsCacheByExecutionContext.get(key)?.hosts ?? []
     const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
     if (ownsKey()) {
-      knownHostsCacheByExecutionContext.set(key, merged)
+      knownHostsCacheByExecutionContext.set(key, { hosts: merged })
       trimKnownHostsCache()
     }
     return merged
   } catch {
-    // Keep failures uncached so auth or tunnel recovery is discovered later.
-    return knownHostsCacheByExecutionContext.get(key) ?? [...DEFAULT_GITLAB_HOSTS]
+    const cached = knownHostsCacheByExecutionContext.get(key)
+    if (cached) {
+      return cached.hosts
+    }
+    const hosts = [...DEFAULT_GITLAB_HOSTS]
+    // Failed keyring/auth probes must not be repeated by every background poll.
+    if (ownsKey()) {
+      knownHostsCacheByExecutionContext.set(key, {
+        hosts,
+        retryAt: Date.now() + NEGATIVE_ENTRY_TTL_MS
+      })
+      trimKnownHostsCache()
+    }
+    return hosts
   }
 }
 
