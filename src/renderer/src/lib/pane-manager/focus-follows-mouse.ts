@@ -5,10 +5,13 @@
  * See docs/focus-follows-mouse-design.md for rationale behind each gate.
  */
 
+export type PaneFocusLocation = 'hovered-pane' | 'other-pane' | 'outside-panes'
+
 export type FocusFollowsMouseInput = {
   featureEnabled: boolean
   activePaneId: number | null
   hoveredPaneId: number
+  focusLocation: PaneFocusLocation // where document.activeElement sits
   mouseButtons: number // MouseEvent.buttons bitmask
   windowHasFocus: boolean // document.hasFocus()
   managerDestroyed: boolean
@@ -22,7 +25,9 @@ export function shouldFollowMouseFocus(input: FocusFollowsMouseInput): boolean {
   if (input.managerDestroyed) {
     return false
   }
-  if (input.activePaneId === input.hoveredPaneId) {
+  // Why other-pane only: activePaneId is per PaneManager, so focus can sit in another
+  // layout's pane (floating vs main) while chat/editor focus must never be stolen.
+  if (input.activePaneId === input.hoveredPaneId && input.focusLocation !== 'other-pane') {
     return false
   }
   // Why mouseButtons !== 0: any held mouse button means a selection or

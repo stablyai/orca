@@ -4,7 +4,7 @@ import type { PaneManagerHost } from './pane-manager-host'
 import { applyPaneOpacity } from './pane-divider'
 import { createPaneDOM, openTerminal } from './pane-lifecycle'
 import { suspendTerminalCursorBlink } from './pane-cursor-blink-suspension'
-import { shouldFollowMouseFocus } from './focus-follows-mouse'
+import { shouldFollowMouseFocus, type PaneFocusLocation } from './focus-follows-mouse'
 import { toPublicPane } from './pane-public-view'
 
 export function createInitialManagedPane(
@@ -83,11 +83,16 @@ function handleManagedPaneMouseEnter(
   paneId: number,
   event: MouseEvent
 ): void {
+  const pane = host.panes.get(paneId)
+  if (!pane) {
+    return
+  }
   if (
     shouldFollowMouseFocus({
       featureEnabled: host.getStyleOptions().focusFollowsMouse ?? false,
       activePaneId: host.getActivePaneId(),
       hoveredPaneId: paneId,
+      focusLocation: getPaneFocusLocation(pane.container),
       mouseButtons: event.buttons,
       windowHasFocus: document.hasFocus(),
       managerDestroyed: host.isDestroyed()
@@ -95,4 +100,13 @@ function handleManagedPaneMouseEnter(
   ) {
     host.setActivePane(paneId, { focus: true })
   }
+}
+
+// Why closest('.pane[data-pane-id]'): it matches panes of every PaneManager (main and floating).
+function getPaneFocusLocation(hoveredContainer: HTMLElement): PaneFocusLocation {
+  const focusedPane = document.activeElement?.closest('.pane[data-pane-id]')
+  if (!focusedPane) {
+    return 'outside-panes'
+  }
+  return focusedPane === hoveredContainer ? 'hovered-pane' : 'other-pane'
 }
