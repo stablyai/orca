@@ -83,23 +83,35 @@ function visibleWithHideDefault(
 }
 
 describe('"Hide default branch" on folder projects', () => {
-  it('hides the root of a non-git folder project and keeps its other workspaces', () => {
+  it.each([
+    { path: '/Users/me/notes' },
+    { path: 'C:\\Users\\me\\notes' },
+    { path: '/srv/notes', connectionId: 'server' }
+  ])('keeps a folder project whose only workspace is its root: %j', (location) => {
+    const repo = { ...makeRepo('notes', location.path, 'folder'), ...location }
+    const { root } = folderProjectRows(repo)
+
+    expect(visibleWithHideDefault([repo], [root])).toEqual([root.id])
+  })
+
+  it('keeps the root of a non-git folder project and its other workspaces', () => {
     const repo = makeRepo('notes', '/Users/me/notes', 'folder')
     const { root, instance } = folderProjectRows(repo)
 
-    expect(isDefaultBranchWorkspace(root, repo)).toBe(true)
+    expect(isDefaultBranchWorkspace(root, repo)).toBe(false)
     expect(isDefaultBranchWorkspace(instance, repo)).toBe(false)
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
+    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([root.id, instance.id])
   })
 
-  it('hides the root of a folder project added from a git subdirectory', () => {
+  it('keeps the root of a folder project added from a git subdirectory', () => {
     const repo = makeRepo('app', '/Users/me/monorepo/packages/app', 'folder')
     const { root, instance } = folderProjectRows(repo)
+    root.branch = 'refs/heads/main'
 
-    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([instance.id])
+    expect(visibleWithHideDefault([repo], [root, instance])).toEqual([root.id, instance.id])
   })
 
-  it('preserves the sidebar hierarchy exception for a folder root with a visible child', () => {
+  it('keeps a folder root with a visible child even without ancestor injection', () => {
     const repo = makeRepo('notes', '/notes', 'folder')
     const rows = folderProjectRows(repo)
     const root = { ...rows.root, instanceId: 'root-instance' }
@@ -119,7 +131,25 @@ describe('"Hide default branch" on folder projects', () => {
       child.id
     ])
     expect(visibleWithHideDefault([repo], [root, child], { [child.id]: lineage }, false)).toEqual([
+      root.id,
       child.id
+    ])
+  })
+
+  it('still hides the main checkout of a git project beside a folder project', () => {
+    const gitRepo = makeRepo('repo', '/code/repo', 'git')
+    const folderRepo = makeRepo('notes', '/notes', 'folder')
+    const main = makeRow(gitRepo, { id: 'repo::/code/repo' })
+    const feature = makeRow(gitRepo, {
+      id: 'repo::/code/feature',
+      branch: 'refs/heads/feature',
+      isMainWorktree: false
+    })
+    const { root } = folderProjectRows(folderRepo)
+
+    expect(visibleWithHideDefault([gitRepo, folderRepo], [main, feature, root])).toEqual([
+      feature.id,
+      root.id
     ])
   })
 
