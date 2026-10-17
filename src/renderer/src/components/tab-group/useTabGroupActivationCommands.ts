@@ -1,3 +1,4 @@
+import { activateWorkspaceTab } from '@/lib/workspace-tab-activation'
 import { useCallback } from 'react'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
@@ -36,8 +37,7 @@ export function useTabGroupActivationCommands({
       if (!item) {
         return
       }
-      focusGroup(worktreeId, groupId)
-      activateTab(item.id)
+      activateWorkspaceTab({ focusGroup, activateTab }, { worktreeId, groupId, tabId: item.id })
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         useAppStore.getState(),
         worktreeId
@@ -94,8 +94,7 @@ export function useTabGroupActivationCommands({
       if (!item) {
         return
       }
-      focusGroup(worktreeId, groupId)
-      activateTab(item.id)
+      activateWorkspaceTab({ focusGroup, activateTab }, { worktreeId, groupId, tabId: item.id })
       if (item.contentType === 'simulator') {
         setActiveTabType('simulator', worktreeId)
         // simulator has no editor file entity
@@ -115,8 +114,7 @@ export function useTabGroupActivationCommands({
       if (!item) {
         return
       }
-      focusGroup(worktreeId, groupId)
-      activateTab(item.id)
+      activateWorkspaceTab({ focusGroup, activateTab }, { worktreeId, groupId, tabId: item.id })
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
         useAppStore.getState(),
         worktreeId
