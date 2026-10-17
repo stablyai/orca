@@ -9,8 +9,9 @@ import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
 } from '../../../../shared/utf8-byte-limits'
+import { mergeMarkdownSourceByLines } from './rich-markdown-line-merge'
 
-// Why: cap document size in UTF-16 code units (`.length`) since re-parse cost scales with length — the per-commit throwaway TipTap safety re-parse (~50-67ms here) must stay under the 300ms serialize debounce so it can't stall the main thread on slow/SSH hosts.
+// Why: cap document size in UTF-16 code units (`.length`) since re-parse cost scales with length — the per-commit throwaway TipTap safety re-parse (~50-67ms here) must stay under the 300ms serialize debounce so it can't stall the main thread on slow/SSH hosts. Above the cap we still reconcile losslessly via the line merge (no re-parse), just skipping the char-level patch.
 const RECONCILE_SIZE_CAP_CODE_UNITS = 50_000
 
 // Why: dmp's default 1s search freezes the renderer on replacement-heavy paths; a coarse timed-out diff is safe since the round-trip proof below rejects bad placements.
@@ -65,18 +66,28 @@ export function reconcileSerializedMarkdown({
     return restoreEol(editedLf + originalTrailingNewlines, eol)
   }
 
-  // Branch 3: oversize → bounded-cost canonical fallback (today's behavior).
+  // Why: when the char-level patch is skipped or unsafe, fall back to a three-way
+  // line merge that keeps untouched lines byte-for-byte (no TipTap re-parse), instead
+  // of re-canonicalizing the whole document and corrupting content the user never
+  // touched (#16469). Canonical `editedLf` is the last resort only if the merge bails.
+  const losslessFallback = (): string => {
+    const merged = mergeMarkdownSourceByLines(originalSourceLf, baseLf, editedLf)
+    return restoreEol(merged ?? editedLf, eol)
+  }
+
+  // Branch 3: oversize → skip the char patch (its safety re-parse is O(n^2)); the line
+  // merge is bounded by the line diff, so it stays lossless without stalling.
   if (
     Math.max(originalSource.length, baseCanonical.length, edited.length) >
     RECONCILE_SIZE_CAP_CODE_UNITS
   ) {
-    return restoreEol(editedLf, eol)
+    return losslessFallback()
   }
 
   // Branch 4: run the divergent-base patch entirely in LF space.
-  // Why: dmp's half-match accelerator ignores the diff deadline (100ms+ on repeated seeds), so bail to canonical for highly repetitive replacements.
+  // Why: dmp's half-match accelerator ignores the diff deadline (100ms+ on repeated seeds), so bail to the line merge for highly repetitive replacements.
   if (hasRepeatedHalfMatchSeed(baseLf, editedLf)) {
-    return restoreEol(editedLf, eol)
+    return losslessFallback()
   }
   let diffs = makeDiff(baseLf, editedLf, {
     checkLines: true,
@@ -99,15 +110,15 @@ export function reconcileSerializedMarkdown({
   }
   const [reconciledLf, results] = applyPatches(patches, originalSourceLf)
 
-  // Branch 5: a hunk failed to locate in the non-canonical source → unreliable fuzzy match, fall back to canonical.
+  // Branch 5: a hunk failed to locate in the non-canonical source → unreliable fuzzy match, fall back to the lossless line merge.
   if (results.some((applied) => !applied)) {
-    return restoreEol(editedLf, eol)
+    return losslessFallback()
   }
 
-  // Branch 6: prove reconciled bytes render-equal the editor's document — any fuzzy misplacement changes canonical output and is caught here → canonical fallback.
+  // Branch 6: prove reconciled bytes render-equal the editor's document — any fuzzy misplacement changes canonical output and is caught here → lossless line merge.
   const reparsed = roundTrip(reconciledLf)
   if (reparsed === null || normalizeForSafety(reparsed) !== normalizeForSafety(editedLf)) {
-    return restoreEol(editedLf, eol)
+    return losslessFallback()
   }
 
   // Restore the detected EOL as the final step so reconciled CRLF stays CRLF.
