@@ -71,7 +71,9 @@ export function installMainWindowShortcutRouting(args: {
     // Why: hold-mode dictation needs renderer keyup events, so main only consumes single-keydown dictation toggles.
     if (action.type === 'dictationKeyDown') {
       const voiceSettings = store?.getSettings().voice
-      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+      // Why: forward the chord even without a selected model — the renderer's
+      // startDictation() is what surfaces the "No speech model selected" toast.
+      if (!voiceSettings?.enabled) {
         return false
       }
       const dictationMode = voiceSettings.dictationMode ?? 'toggle'
