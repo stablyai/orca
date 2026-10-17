@@ -3,6 +3,10 @@ import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
+import {
+  claudeTrustKeysForHostPath,
+  grantClaudeFolderTrust
+} from './claude/claude-folder-trust-file'
 import type { TuiAgentConfig } from '../shared/tui-agent-config'
 
 export type AgentTrustPreset = NonNullable<TuiAgentConfig['preflightTrust']>
@@ -183,6 +187,27 @@ export function markCodexProjectTrusted(
     }
   )
   return write()
+}
+
+/**
+ * BoBot (`@bocloud/bobot-cli`, a Claude Code-compatible fork) keeps per-project
+ * trust in `~/.bobot.json` under `projects[<folder>].hasTrustDialogAccepted`
+ * with Claude's own key normalization (NFC `path.normalize` output, `/`
+ * separators on Windows) — verified against a 0.4.0 install's config file.
+ *
+ * Reuses Claude's config writer so the lock/rename discipline stays identical;
+ * only the target file differs. Never creates the file: a missing config means
+ * BoBot was never launched, and its own first-run init should own that write.
+ */
+export function markBobotWorkspaceTrusted(workspacePath: string, home: string): Promise<void> {
+  const keyStyle = process.platform === 'win32' ? 'win32' : 'posix'
+  const folderKeys = claudeTrustKeysForHostPath(workspacePath, keyStyle)
+  if (folderKeys.length === 0) {
+    return Promise.resolve()
+  }
+  return grantClaudeFolderTrust({ configFile: join(home, '.bobot.json'), folderKeys }).then(
+    () => undefined
+  )
 }
 
 function canonicalize(p: string): string {

@@ -27,6 +27,7 @@ const EXPECTED_REST_SIGNALS: Record<TuiAgent, TuiAgentRestSignal> = {
   // classifier already reads, and this table deliberately trusts a first-party hook `done`
   // only from DSH. Derived, not chosen — getTuiAgentRestSignal('jcode') returns this.
   jcode: 'title',
+  bobot: 'none',
   aider: 'title',
   openclaw: 'title',
   copilot: 'title',

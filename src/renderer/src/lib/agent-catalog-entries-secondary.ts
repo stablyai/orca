@@ -184,6 +184,13 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       cmd: 'jcode',
       faviconDomain: 'jcode.sh',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'bobot',
+      label: translate('auto.lib.agent.catalog.bobot_label', 'BoCoder'),
+      cmd: 'bobot',
+      faviconDomain: 'bocoder.com',
+      homepageUrl: 'https://bocoder.com/vibecoding'
     }
   ]
 }

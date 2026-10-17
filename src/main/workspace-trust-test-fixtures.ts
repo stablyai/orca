@@ -21,6 +21,8 @@ export function workspaceTrustWritten(home: string, preset: AgentTrustPreset): b
       return existsSync(join(home, '.qoder', 'settings.json'))
     case 'antigravity':
       return existsSync(join(home, '.gemini', 'antigravity-cli', 'settings.json'))
+    case 'bobot':
+      return 'projects' in JSON.parse(readFileSync(join(home, '.bobot.json'), 'utf-8'))
   }
 }
 

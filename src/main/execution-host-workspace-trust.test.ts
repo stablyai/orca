@@ -33,10 +33,11 @@ const PRESETS: readonly AgentTrustPreset[] = [
   'cursor',
   'copilot',
   'qoder',
-  'antigravity'
+  'antigravity',
+  'bobot'
 ]
-// Why these three: each accepts trust from any ancestor folder, so trust on a home covers it all.
-const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
+// Why these: each accepts trust from any ancestor folder, so trust on a home covers it all.
+const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder', 'bobot']
 const EXACT_OR_SELF_LIMITING_PRESETS: readonly AgentTrustPreset[] = [
   'codex',
   'cursor',
@@ -50,6 +51,9 @@ beforeEach(() => {
   state.home = join(root, 'home', 'me')
   mkdirSync(state.home, { recursive: true })
   writeFileSync(join(state.home, '.claude.json'), '{}')
+  // Why: the trust writer never creates a config (bobot's own first run owns that
+  // write), so the generic preset coverage needs a pre-existing empty one.
+  writeFileSync(join(state.home, '.bobot.json'), '{}')
 })
 
 afterEach(() => {
