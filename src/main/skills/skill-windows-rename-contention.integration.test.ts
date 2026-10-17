@@ -1,9 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
+import { acquireSkillInstallLock, skillInstallLockPath } from './skill-install-lock'
 
 const RUN_REAL_WINDOWS =
   process.platform === 'win32' && process.env.ORCA_REAL_WINDOWS_SKILL_TEST === '1'
@@ -111,5 +112,26 @@ describe.runIf(RUN_REAL_WINDOWS)('real Windows rename contention', () => {
     await expect(
       renameSkillPathWithWindowsRetry(value.source, value.target)
     ).resolves.toBeUndefined()
+  })
+
+  it('releases an install lock while a contender reads its owner record', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-windows-lock-release-'))
+    roots.push(root)
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
+    const release = await acquireSkillInstallLock({ path: lockPath })
+    const ownerName = (await readdir(lockPath)).find((name) => name.endsWith('.owner'))
+    expect(ownerName).toBeDefined()
+    // Same open a contender's staleness check makes on the owner record.
+    const contender = await open(join(lockPath, String(ownerName)), 'r')
+    const contenderDone = new Promise<void>((resolve) => setTimeout(resolve, 150)).then(() =>
+      contender.close()
+    )
+
+    const [released] = await Promise.allSettled([release(), contenderDone])
+    expect(released).toEqual({ status: 'fulfilled', value: undefined })
+
+    const next = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 1_000 })
+    await next()
+    await expect(stat(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })
