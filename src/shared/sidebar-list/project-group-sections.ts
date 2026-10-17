@@ -105,7 +105,12 @@ export function appendProjectGroupSections(
 
   // Why separate from getProjectGroupSubtreeCount: that count is child projects and folder
   // workspaces, while the header's count badge is about workspaces.
+  const subtreeWorkspaceIdsByGroupId = new Map<string, string[]>()
   const getProjectGroupSubtreeWorkspaceIds = (groupId: string): string[] => {
+    const cached = subtreeWorkspaceIdsByGroupId.get(groupId)
+    if (cached) {
+      return cached
+    }
     const ids: string[] = []
     for (const [, group] of groupByProjectGroupId.get(groupId) ?? []) {
       for (const worktree of group.items) {
@@ -116,8 +121,11 @@ export function appendProjectGroupSections(
       ids.push(getFolderWorkspaceHostIdentity(pair.folderWorkspace))
     }
     for (const child of childGroupsByParentId.get(groupId) ?? []) {
-      ids.push(...getProjectGroupSubtreeWorkspaceIds(child.id))
+      for (const id of getProjectGroupSubtreeWorkspaceIds(child.id)) {
+        ids.push(id)
+      }
     }
+    subtreeWorkspaceIdsByGroupId.set(groupId, ids)
     return ids
   }
 
