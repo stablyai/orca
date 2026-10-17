@@ -116,6 +116,7 @@ function createHarness(): {
     expandedPaneIdRef: { current: null },
     setExpandedPane: vi.fn(),
     restoreExpandedLayout: vi.fn(),
+    readUnexpandedLayout: (find: () => number | null) => find(),
     refreshPaneSizes: vi.fn(),
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),

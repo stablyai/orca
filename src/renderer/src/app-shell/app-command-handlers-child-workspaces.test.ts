@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { dispatchAppCommand, registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import type { AppShortcutState, ShortcutDispatchInput } from './app-command-handlers'
 
 const mocks = vi.hoisted(() => {
@@ -10,6 +11,8 @@ const mocks = vi.hoisted(() => {
     requestScrollAnchor: vi.fn(),
     notifyTerminalCapture: vi.fn(),
     store: {
+      goBackWorktree: vi.fn(),
+      goForwardWorktree: vi.fn(),
       activeModal: 'none',
       collapsedGroups: new Set<string>(),
       setSidebarOpen: vi.fn(),
@@ -160,4 +163,24 @@ describe('child workspaces toggle app command', () => {
       expect.objectContaining({ actionId: 'sidebar.childWorkspaces.toggle' })
     )
   })
+})
+
+describe('history command availability for terminal fallback', () => {
+  it.each([false, true])(
+    'honors creation mode before running history (creating=%s)',
+    (creating) => {
+      mocks.store.goBackWorktree.mockClear()
+      const state = shortcutState()
+      state.creationLayoutActive = creating
+      const unregister = registerAppCommandDispatcher(
+        (actionId) => createAppCommandHandlers(state).get(actionId)?.() ?? false
+      )
+      try {
+        expect(dispatchAppCommand('worktree.history.back', 'terminal-keybinding')).toBe(!creating)
+        expect(mocks.store.goBackWorktree).toHaveBeenCalledTimes(creating ? 0 : 1)
+      } finally {
+        unregister()
+      }
+    }
+  )
 })

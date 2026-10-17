@@ -23,12 +23,14 @@ function dispatchCopy(selection: string, repeat: boolean) {
     getActivePane: () => ({ terminal: { getSelection: () => selection } })
   } as PaneManager
   const context: DispatchContext = {
+    shortcutPlatform: 'linux' as const,
     tabId: 'tab',
     worktreeId: 'workspace',
     fallbackCwd: '',
     expandedPaneIdRef: { current: null },
     setExpandedPane: vi.fn(),
     restoreExpandedLayout: vi.fn(),
+    readUnexpandedLayout: (find: () => number | null) => find(),
     refreshPaneSizes: vi.fn(),
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),

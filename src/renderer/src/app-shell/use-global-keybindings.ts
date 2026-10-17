@@ -25,7 +25,7 @@ import {
   type KeybindingActionId,
   type KeybindingMatchOptions
 } from '../../../shared/keybindings'
-import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/plugin-command-actions'
+import { dispatchGlobalPluginAliasActions } from './global-plugin-alias-dispatch'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -245,10 +245,16 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
-      for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
-        if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
-          return
-        }
+      // The terminal resolves shared chords before history, regardless of listener order.
+      if (
+        dispatchGlobalPluginAliasActions({
+          context,
+          isPhysicalKey: input.doubleTapModifier === undefined,
+          matchShortcut,
+          runAction: (actionId) => handlers.get(actionId)?.() ?? false
+        })
+      ) {
+        return
       }
 
       // Unbound by default, so it runs after the built-in alias handlers above; only consumes the chord when the active worktree has unsent notes.
