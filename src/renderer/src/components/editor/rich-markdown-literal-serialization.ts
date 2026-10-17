@@ -5,6 +5,7 @@ import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 const MAX_LITERAL_BLOCK_CODE_UNITS = 50_000
+const OPTIONAL_LITERAL_ENCODING = /\\[_[\]~`*]|&(?:amp|lt|gt);/
 const LITERAL_BLOCK_TYPES = new Set([
   'paragraph',
   'heading',
@@ -35,7 +36,7 @@ export function preserveLiteralMarkdownSource(
   manager.renderNodeToMarkdown = (node, ...args) => {
     const markdown = render(node, ...args)
     const block = blocks?.get(node)
-    if (!block || !/\\[_[\]~`*]/.test(markdown)) {
+    if (!block || !OPTIONAL_LITERAL_ENCODING.test(markdown)) {
       return markdown
     }
     // Retain existing large paragraph/heading fidelity; cap only the expanded validation.
@@ -50,6 +51,10 @@ export function preserveLiteralMarkdownSource(
     }
     let result = markdown
     const candidates = [
+      (source: string) =>
+        source.replace(/&(?:amp|lt|gt);/g, (entity) =>
+          entity === '&amp;' ? '&' : entity === '&lt;' ? '<' : '>'
+        ),
       withoutOptionalEscapes,
       ...['~', '`', '*'].map(
         (character) => (source: string) =>
@@ -86,7 +91,7 @@ export function preserveLiteralMarkdownSource(
     const document = getRichMarkdownSerializationDocument(editor)
     const json = document.toJSON()
     const markdown = manager.serialize(json)
-    if (!/\\[_[\]~`*]/.test(markdown)) {
+    if (!OPTIONAL_LITERAL_ENCODING.test(markdown)) {
       return markdown
     }
     // Reference definitions can change inline meaning across block boundaries.
