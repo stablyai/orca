@@ -23,7 +23,10 @@ type UseEditorPanelExternalContentEventsParams = {
   invalidateContent: (fileIds: string[]) => void
   invalidateDiffContent: (fileIds: string[]) => void
   isVisibleRef: MutableRefObject<boolean>
-  loadDiffContent: (file: OpenFile | null, options?: EditorPanelContentLoadOptions) => Promise<void>
+  loadDiffContent: (
+    file: OpenFile | null,
+    options?: EditorPanelContentLoadOptions
+  ) => Promise<boolean>
   loadFileContent: (
     filePath: string,
     id: string,
@@ -35,6 +38,7 @@ type UseEditorPanelExternalContentEventsParams = {
   editorViewModeRef: MutableRefObject<EditorViewModeByFile>
   setFileContents: Dispatch<SetStateAction<Record<string, FileContent>>>
   setDiffContents: Dispatch<SetStateAction<Record<string, DiffContent>>>
+  requestDiffContentReload: (fileId: string) => void
 }
 
 const externalEventGenerations = new WeakMap<Event, number>()
@@ -60,9 +64,22 @@ export function useEditorPanelExternalContentEvents({
   openFilesRef,
   editorViewModeRef,
   setFileContents,
-  setDiffContents
+  setDiffContents,
+  requestDiffContentReload
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
+    const reloadDiffContent = (file: OpenFile, eventGeneration: number): void => {
+      // Why: replace the content before rotating the model path so a fresh
+      // model is seeded from the external result, not the stale model.
+      void loadDiffContent(file, {
+        force: true,
+        externalEventGeneration: eventGeneration
+      }).then((replaced) => {
+        if (replaced) {
+          requestDiffContentReload(file.id)
+        }
+      })
+    }
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
       if (!detail) {
@@ -90,18 +107,12 @@ export function useEditorPanelExternalContentEvents({
             externalEventGeneration: eventGeneration
           })
           if (editorViewModeRef.current[file.id] === 'changes') {
-            void loadDiffContent(file, {
-              force: true,
-              externalEventGeneration: eventGeneration
-            })
+            reloadDiffContent(file, eventGeneration)
           } else {
             invalidatedDiffFileIds.push(file.id)
           }
         } else if (isReloadableSingleFileDiffTab(file)) {
-          void loadDiffContent(file, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
+          reloadDiffContent(file, eventGeneration)
         }
       }
       if (invalidatedFileIds.length > 0) {
@@ -122,7 +133,8 @@ export function useEditorPanelExternalContentEvents({
     isVisibleRef,
     loadDiffContent,
     loadFileContent,
-    openFilesRef
+    openFilesRef,
+    requestDiffContentReload
   ])
 
   useEffect(() => {
