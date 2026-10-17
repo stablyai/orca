@@ -23,8 +23,37 @@ import {
   DEFAULT_POLL_MS
 } from './service-types'
 import { readGrokAuthSession } from '../grok-auth'
+import { watchClaudeCredentials } from '../claude-credential-watcher'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 export abstract class RateLimitServiceState {
+  protected credentialWatchingEnabled = false
+  private watchedClaudeConfigDir: string | null = null
+  private stopClaudeCredentialWatch: (() => void) | null = null
+
+  protected abstract refreshAfterClaudeCredentialChange(): void
+
+  protected updateClaudeCredentialWatch(): void {
+    const dir =
+      this.credentialWatchingEnabled &&
+      this.lastClaudeAuthSnapshot &&
+      this.claudeFetchTarget.runtime === 'host'
+        ? (this.lastClaudeAuthSnapshot.credentialsConfigDir ?? join(homedir(), '.claude'))
+        : null
+    if (dir === this.watchedClaudeConfigDir) {
+      return
+    }
+    this.stopClaudeCredentialWatch?.()
+    this.watchedClaudeConfigDir = dir
+    this.stopClaudeCredentialWatch = dir
+      ? watchClaudeCredentials(dir, () => {
+          if (this.watchedClaudeConfigDir === dir) {
+            this.refreshAfterClaudeCredentialChange()
+          }
+        })
+      : null
+  }
   protected state: InternalRateLimitState = {
     claude: null,
     codex: null,
@@ -83,7 +112,11 @@ export abstract class RateLimitServiceState {
   protected codexFetchGeneration = 0
   protected claudeFetchGeneration = 0
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
-  protected lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
+  protected lastClaudeAuthSnapshot: {
+    configDir: string | null
+    provenance: string
+    credentialsConfigDir?: string
+  } | null = null
   protected opencodeFetchGeneration = 0
   protected minimaxFetchGeneration = 0
   protected zcodeFetchGeneration = 0

@@ -11,6 +11,15 @@ import {
 } from './service-types'
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
+  protected refreshAfterClaudeCredentialChange(): void {
+    if (this.state.claude?.status === 'ok' && !this.isFetching) {
+      return
+    }
+    // A new login bypasses failure backoff and fences any old-token result in flight.
+    this.claudeFetchGeneration += 1
+    this.activeFailureStreakByProvider.claude = 0
+    void this.fetchClaudeOnly({ force: true })
+  }
   async refresh(): Promise<RateLimitState> {
     // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
     await this.fetchAll({ force: true })
@@ -165,6 +174,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     this.activeFailureStreakByProvider.claude = 0
     // Why: statusline posts from the outgoing account's sessions must not land on the incoming account's bar mid-switch.
     this.lastClaudeAuthSnapshot = null
+    this.updateClaudeCredentialWatch()
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -183,6 +193,7 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     if (targetChanged) {
       // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
       this.lastClaudeAuthSnapshot = null
+      this.updateClaudeCredentialWatch()
     }
     this.updateState({
       ...this.state,
