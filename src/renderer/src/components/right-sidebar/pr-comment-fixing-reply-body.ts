@@ -22,6 +22,28 @@ export function buildPRCommentConversationReplyBody(
 
 const ACK_SNIPPET_MAX_LENGTH = 72
 
+const INLINE_CODE_SPAN_OR_REFERENCE =
+  /(`+)(?:[^`]|(?!\1)`+)*?\1(?!`)|(^|[^\w`/])(@[a-zA-Z0-9][\w-]*|#\d+(?!\w))/g
+
+/**
+ * Echoing a comment body verbatim makes GitHub re-render its `@handle` mentions and
+ * `#123` references, which re-pings the bots we are only quoting (burning a review
+ * credit) and cross-links unrelated issues. Inline code keeps the text readable and inert.
+ */
+function neutralizePRCommentReferences(line: string): string {
+  // A complete inline-code span is matched first and handed back verbatim: the token
+  // inside it is already inert, and wrapping it again would insert a backtick *inside*
+  // that span, closing it early and pushing the token back out into live markdown.
+  //
+  // `#\d+` must not match the numeric head of a longer word: a hex colour such as
+  // `#123abc` would come back as `` `#123`abc ``. GitHub does not linkify `#123abc`
+  // either, so skipping it loses nothing. The boundary excludes only `\w` — `#123-foo`
+  // *is* linkified by GitHub, so that one still has to be neutralized.
+  return line.replace(INLINE_CODE_SPAN_OR_REFERENCE, (match, _fence, prefix, token) =>
+    token === undefined ? match : `${prefix}\`${token}\``
+  )
+}
+
 /** First readable line of a comment body, minus HTML comments and markdown markers. */
 function summarizePRCommentBody(body: string): string {
   const cleaned = body.replace(/<!--[\s\S]*?-->/g, ' ')
@@ -34,9 +56,11 @@ function summarizePRCommentBody(body: string): string {
       .replace(/\s+/g, ' ')
       .trim()
     if (line) {
-      return line.length > ACK_SNIPPET_MAX_LENGTH
-        ? `${line.slice(0, ACK_SNIPPET_MAX_LENGTH - 1).trimEnd()}…`
-        : line
+      const truncated =
+        line.length > ACK_SNIPPET_MAX_LENGTH
+          ? `${line.slice(0, ACK_SNIPPET_MAX_LENGTH - 1).trimEnd()}…`
+          : line
+      return neutralizePRCommentReferences(truncated)
     }
     if (newline === -1) {
       break
