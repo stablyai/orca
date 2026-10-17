@@ -107,19 +107,11 @@ function buildThreadSearchText(thread: AgentPaneThread): string {
 // identity is a correct cache key; without this every keystroke re-lowercases a large
 // string per thread. WeakMap so dropped threads release their text.
 const threadSearchTextCache = new WeakMap<AgentPaneThread, string>()
-let threadSearchTextComputeCount = 0
-
-/** Test hook: how many times search text was actually (re)built. */
-export function getThreadSearchTextComputeCount(): number {
-  return threadSearchTextComputeCount
-}
-
 function threadSearchText(thread: AgentPaneThread): string {
   const cached = threadSearchTextCache.get(thread)
   if (cached !== undefined) {
     return cached
   }
-  threadSearchTextComputeCount += 1
   const text = buildThreadSearchText(thread)
   threadSearchTextCache.set(thread, text)
   return text

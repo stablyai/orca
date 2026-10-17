@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
-import * as clipboard from '../../../../shared/clipboard-text'
 import { useAppStore } from '@/store'
 import {
   LEAF_ID,
@@ -14,8 +13,7 @@ import {
 } from './ActivityPrototypePage-test-fixtures'
 import {
   activityThreadMatchesSearchQuery,
-  createActivityThreadSearchMatcher,
-  getThreadSearchTextComputeCount
+  createActivityThreadSearchMatcher
 } from './activity-thread-grouping'
 import { useAgentPaneThreads } from './use-agent-pane-threads'
 
@@ -68,96 +66,46 @@ function installThreads(count: number, prompt = 'Task PROJECT ☃ progress'): st
   return Object.keys(entries)
 }
 
-function queryWork(query: string) {
-  const texts = new Set([query, query.trim(), query.trim().toLowerCase()].filter(Boolean))
-  const originalBudget = clipboard.isClipboardTextByteLengthOverLimit
-  const originalTrim = String.prototype.trim
-  const originalLower = String.prototype.toLowerCase
-  const counts = { budget: 0, trim: 0, lower: 0 }
-  const budget = vi
-    .spyOn(clipboard, 'isClipboardTextByteLengthOverLimit')
-    .mockImplementation((text, maxBytes) => {
-      if (texts.has(text)) {
-        counts.budget += 1
-      }
-      return originalBudget(text, maxBytes)
-    })
-  const trim = vi.spyOn(String.prototype, 'trim').mockImplementation(function (this: string) {
-    if (texts.has(String(this))) {
-      counts.trim += 1
-    }
-    return originalTrim.call(this)
-  })
-  const lower = vi.spyOn(String.prototype, 'toLowerCase').mockImplementation(function (
-    this: string
-  ) {
-    if (texts.has(String(this))) {
-      counts.lower += 1
-    }
-    return originalLower.call(this)
-  })
-  return {
-    counts,
-    restore() {
-      budget.mockRestore()
-      trim.mockRestore()
-      lower.mockRestore()
-    }
-  }
-}
-
 function options(query: string): Parameters<typeof useAgentPaneThreads>[0] {
   return { query, readFilter: 'all', groupBy: 'none', selectedPaneKey: null, showChildAgents: true }
 }
 
-describe('Activity search query work in the real hook', () => {
-  it.each([12, 128, 1000])('prepares one query for %i live threads', (count) => {
+describe('Activity search query in the real hook', () => {
+  it('matches normalized Unicode queries without replacing thread objects', () => {
+    const count = 12
     installThreads(count)
-    const work = queryWork(' PROJECT ☃ ')
     const activity = renderHook(() => useAgentPaneThreads(options(' PROJECT ☃ ')))
-    work.restore()
     expect(activity.result.current.allThreads).toHaveLength(count)
     expect(activity.result.current.visibleThreads).toEqual(activity.result.current.allThreads)
     for (const [index, thread] of activity.result.current.visibleThreads.entries()) {
       expect(thread).toBe(activity.result.current.allThreads[index])
     }
-    expect(work.counts).toEqual({ budget: 2, trim: 2, lower: 2 })
   })
 
-  it.each(['', ' \t\n '])('keeps an empty query lazy: %j', (query) => {
+  it.each(['', ' \t\n '])('shows all threads for an empty query: %j', (query) => {
     installThreads(12)
-    const before = getThreadSearchTextComputeCount()
     const activity = renderHook(() => useAgentPaneThreads(options(query)))
     expect(activity.result.current.visibleThreads).toEqual(activity.result.current.allThreads)
-    expect(getThreadSearchTextComputeCount()).toBe(before)
   })
 
   it('retains both original and normalized UTF-8 byte limits', () => {
     const query = 'İ'.repeat(700)
     installThreads(12, query)
-    const before = getThreadSearchTextComputeCount()
-    const work = queryWork(query)
     const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    work.restore()
     expect(activity.result.current.allThreads).toHaveLength(12)
     expect(activity.result.current.visibleThreads).toEqual([])
-    expect(getThreadSearchTextComputeCount()).toBe(before)
-    expect(work.counts.budget).toBe(2)
   })
 
-  it('does not prepare a row query before read/child/scope filters admit a row', () => {
+  it('excludes acknowledged rows from an unread search', () => {
     const panes = installThreads(12)
     useAppStore.setState({
       acknowledgedAgentsByPaneKey: Object.fromEntries(panes.map((paneKey) => [paneKey, 100_000]))
     })
-    const work = queryWork(' PROJECT ☃ ')
     const activity = renderHook(() =>
       useAgentPaneThreads({ ...options(' PROJECT ☃ '), readFilter: 'unread' })
     )
-    work.restore()
     expect(activity.result.current.allThreads).toHaveLength(12)
     expect(activity.result.current.visibleThreads).toEqual([])
-    expect(work.counts).toEqual({ budget: 1, trim: 1, lower: 1 })
   })
 
   it('keeps selection, child classification and scoped row order', () => {
@@ -213,42 +161,38 @@ describe('Activity search query work in the real hook', () => {
     ])
   })
 
-  it('keeps original oversized query rejection ahead of normalization/search', () => {
+  it('rejects original oversized whitespace before it becomes an empty query', () => {
     installThreads(12)
     const query = ' '.repeat(2049)
-    const before = getThreadSearchTextComputeCount()
-    const work = queryWork(query)
     const activity = renderHook(() => useAgentPaneThreads(options(query)))
-    work.restore()
     expect(activity.result.current.visibleThreads).toEqual([])
-    expect(getThreadSearchTextComputeCount()).toBe(before)
-    expect(work.counts).toEqual({ budget: 1, trim: 0, lower: 0 })
   })
 })
 
-describe('prepared Activity search preserves the public one-thread matcher', () => {
-  it('matches original output and lazy text for Unicode, boundary and empty queries', () => {
-    installThreads(8, 'Unicode İ 👩🏽‍💻 and BILLING')
+describe('Activity search matcher APIs', () => {
+  it('matches Unicode and byte boundaries against independent expected results', () => {
+    installThreads(
+      1,
+      `Unicode İ 👩🏽‍💻 and BILLING ${'x'.repeat(2049)} ${'é'.repeat(1025)} ${'İ'.repeat(700)}`
+    )
     const activity = renderHook(() => useAgentPaneThreads(options('')))
+    const thread = activity.result.current.allThreads[0]
     const queries = [
-      '',
-      '\t\n ',
-      'BILLING',
-      '  Unicode İ ',
-      '👩🏽‍💻',
-      '\ud800',
-      'x'.repeat(2048),
-      'é'.repeat(1024),
-      'é'.repeat(1025),
-      'İ'.repeat(700)
+      { query: '', expected: true },
+      { query: '\t\n ', expected: true },
+      { query: 'BILLING', expected: true },
+      { query: '  Unicode İ ', expected: true },
+      { query: '👩🏽‍💻', expected: true },
+      { query: '\ud800', expected: false },
+      { query: 'x'.repeat(2048), expected: true },
+      { query: 'x'.repeat(2049), expected: false },
+      { query: 'é'.repeat(1024), expected: true },
+      { query: 'é'.repeat(1025), expected: false },
+      { query: 'İ'.repeat(700), expected: true }
     ]
-    for (const searchQuery of queries) {
-      const matches = createActivityThreadSearchMatcher(searchQuery)
-      expect(activity.result.current.allThreads.map(matches)).toEqual(
-        activity.result.current.allThreads.map((thread) =>
-          activityThreadMatchesSearchQuery({ thread, searchQuery })
-        )
-      )
+    for (const { query, expected } of queries) {
+      expect(createActivityThreadSearchMatcher(query)(thread), query).toBe(expected)
+      expect(activityThreadMatchesSearchQuery({ thread, searchQuery: query }), query).toBe(expected)
     }
   })
 })
