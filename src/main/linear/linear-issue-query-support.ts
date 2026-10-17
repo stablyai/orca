@@ -57,6 +57,7 @@ export function mapRawIssueForWorkspace(
     branchName: issue.branchName ?? undefined,
     description: issue.description ?? undefined,
     url: issue.url,
+    parent: issue.parent,
     state: {
       name: issue.state?.name ?? '',
       type: issue.state?.type ?? '',

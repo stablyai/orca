@@ -124,6 +124,12 @@ describe('orca linear CLI handlers', () => {
           id: 'issue-1',
           identifier: 'ENG-1',
           title: 'Fix auth',
+          parent: {
+            id: 'parent-id',
+            identifier: 'ENG-2',
+            title: 'Launch',
+            url: 'https://linear.app/acme/issue/ENG-2'
+          },
           url: 'https://linear.app/acme/issue/ENG-1',
           labels: [],
           workspace: { id: 'workspace-1', name: 'Acme' }
@@ -143,6 +149,7 @@ describe('orca linear CLI handlers', () => {
     }
     queueFixtures(callMock, okFixture('req_list', listResult))
     await main(['linear', 'list-issues', '--limit', '1'], '/tmp/repo')
+    expect(vi.mocked(console.log).mock.calls[0][0]).toContain('[parent: ENG-2]')
     expect(vi.mocked(console.log).mock.calls[0][0]).toContain('truncated: showing 1')
     expect(
       vi.mocked(console.error).mock.calls.some((call) => String(call[0]).includes('more results'))
@@ -154,6 +161,7 @@ describe('orca linear CLI handlers', () => {
     await main(['linear', 'list-issues', '--limit', '1', '--json'], '/tmp/repo')
     const jsonOut = String(vi.mocked(console.log).mock.calls[0][0])
     expect(jsonOut).toContain('"truncated": true')
+    expect(JSON.parse(jsonOut).result.issues[0].parent).toEqual(listResult.issues[0].parent)
     expect(vi.mocked(console.error)).not.toHaveBeenCalled()
   })
 

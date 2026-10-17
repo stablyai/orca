@@ -15,6 +15,8 @@ export type LinearIssueSummary = {
   title: string
   url: string
   description?: string | null
+  // Older hosts omit parent; null means Linear returned no parent.
+  parent?: Pick<LinearIssueSummary, 'id' | 'identifier' | 'title' | 'url'> | null
   state?: LinearNamedEntity | null
   team?: (LinearNamedEntity & { key?: string | null }) | null
   project?: LinearNamedEntity | null
@@ -127,6 +129,7 @@ export type LinearSearchIssueSummary = Pick<
   | 'identifier'
   | 'title'
   | 'url'
+  | 'parent'
   | 'state'
   | 'team'
   | 'project'

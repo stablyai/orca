@@ -45,6 +45,12 @@ describe('RuntimeLinearReadCommands', () => {
   })
 
   it('reports issue truncation and priority labels at the top level', async () => {
+    const parent = {
+      id: 'parent-id',
+      identifier: 'ORCA-2',
+      title: 'Launch',
+      url: 'https://linear.app/orca/issue/ORCA-2'
+    }
     mocks.listLinearIssues.mockResolvedValue({
       items: [
         {
@@ -56,6 +62,7 @@ describe('RuntimeLinearReadCommands', () => {
           team: null,
           project: null,
           assignee: null,
+          parent,
           priority: 2,
           estimate: null,
           dueDate: null,
@@ -69,7 +76,7 @@ describe('RuntimeLinearReadCommands', () => {
     })
 
     await expect(createCommands().linearIssueListForAgents({ limit: 1 })).resolves.toMatchObject({
-      issues: [{ identifier: 'ORCA-1', priority: 2, priorityLabel: 'high' }],
+      issues: [{ identifier: 'ORCA-1', priority: 2, priorityLabel: 'high', parent }],
       truncated: true,
       meta: { hasMore: true, returned: 1 }
     })

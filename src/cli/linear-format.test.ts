@@ -9,6 +9,8 @@ import type {
 import {
   formatLinearCreate,
   formatLinearIssue,
+  formatLinearIssueList,
+  formatLinearSearch,
   formatLinearMcpIssueList,
   formatLinearProjectList,
   printLinearMcpIssueListWarnings,
@@ -120,8 +122,17 @@ describe('linear-format', () => {
     expect(output).not.toContain('truncated:')
   })
 
-  it('includes task fields in issue readback text', () => {
-    const result = {
+  it.each([
+    {
+      id: 'parent-id',
+      identifier: 'ENG-1',
+      title: 'Launch',
+      url: 'https://linear.app/acme/issue/ENG-1'
+    },
+    null,
+    undefined
+  ])('formats parent context in issue readback (%j)', (parent) => {
+    const result: LinearIssueContextResult = {
       issue: {
         id: 'issue-1',
         identifier: 'ENG-123',
@@ -131,18 +142,88 @@ describe('linear-format', () => {
         assignee: { displayName: 'Ada' },
         project: null,
         labels: [],
+        parent,
         priority: 2,
         estimate: 5,
         dueDate: '2026-06-30'
       },
       meta: {
+        requested: {
+          current: false,
+          include: {
+            attachments: false,
+            children: false,
+            comments: false,
+            relations: false,
+            activity: false
+          },
+          depth: 0
+        },
+        resolved: {
+          id: 'issue-1',
+          identifier: 'ENG-123',
+          workspaceId: 'workspace-1',
+          workspaceName: 'Acme'
+        },
+        partial: false,
+        includeErrors: [],
         sections: {}
       }
-    } as unknown as LinearIssueContextResult
+    }
 
+    if (parent) {
+      expect(formatLinearIssue(result)).toContain('Parent: ENG-1 Launch')
+    } else {
+      expect(formatLinearIssue(result)).not.toContain('Parent:')
+    }
     expect(formatLinearIssue(result)).toContain('Priority: high')
     expect(formatLinearIssue(result)).toContain('Estimate: 5')
     expect(formatLinearIssue(result)).toContain('Due: 2026-06-30')
+  })
+
+  it.each([
+    {
+      id: 'parent-id',
+      identifier: 'ENG-1',
+      title: 'Launch',
+      url: 'https://linear.app/acme/issue/ENG-1'
+    },
+    null,
+    undefined
+  ])('formats parent context consistently in search and both lists (%j)', (parent) => {
+    const result = {
+      issues: [
+        {
+          id: 'child-id',
+          identifier: 'ENG-2',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-2',
+          parent,
+          labels: [],
+          workspace: { id: 'workspace-1', name: 'Acme' }
+        }
+      ],
+      meta: {
+        query: 'auth',
+        filter: 'all' as const,
+        orderBy: 'updatedAt' as const,
+        limit: 20,
+        returned: 1,
+        hasMore: false,
+        limitReached: false,
+        partial: false,
+        workspaceErrors: []
+      }
+    }
+    for (const format of [formatLinearSearch, formatLinearIssueList, formatLinearMcpIssueList]) {
+      const output = format(result)
+      expect(output).toContain('Fix auth')
+      if (parent) {
+        expect(output).toContain('Fix auth [parent: ENG-1]')
+      } else {
+        expect(output).not.toContain('[parent:')
+      }
+    }
   })
 
   it('formats project rows with names, ids, teams, and workspace', () => {
