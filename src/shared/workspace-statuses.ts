@@ -1,4 +1,5 @@
 import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from './worktree/types'
+import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
 import { DEFAULT_STATUS_VISUALS, DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 import {
   isKnownBadPRReorderedDefaultStatusPayload,
@@ -64,7 +65,7 @@ function sanitizeWorkspaceStatusLabel(value: unknown, fallback: string): string 
     return fallback
   }
   const trimmed = value.trim().replace(/\s+/g, ' ')
-  return trimmed ? trimmed.slice(0, MAX_STATUS_LABEL_LENGTH) : fallback
+  return trimmed ? sliceAtCodeUnitLimit(trimmed, MAX_STATUS_LABEL_LENGTH) : fallback
 }
 
 function slugWorkspaceStatusLabel(label: string): string {
