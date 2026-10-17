@@ -144,8 +144,8 @@ export const SendParams = z
      *  older host refuses it: clients send it only when `agent-session.queued-messages.v1` is
      *  advertised. Participates in the operation fingerprint, never the body fingerprint. */
     delivery: z.literal('queue-if-active').optional(),
-    /** The composer's model and effort for the turn this send starts; the host records them on the
-     *  chat. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
+    /** The composer's choices for the turn this message starts, kept with the message until it is
+     *  dispatched. Sent only when `agent-session.send-options.v1` is advertised. Operation fingerprint only. */
     options: AgentSessionOptions.optional(),
     body: SendBody
   })

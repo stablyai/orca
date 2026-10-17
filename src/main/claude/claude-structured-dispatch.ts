@@ -20,6 +20,7 @@ import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-
 import { DISPATCH_REJECTED_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
 import {
   agentSessionFailureFact,
+  providerDiagnostic,
   type SubmissionRejectionFact
 } from '../../shared/agent-session-failure'
 import type { AgentJournalDispatchRejection } from '../../shared/agent-session-failure-words'
@@ -28,6 +29,8 @@ import {
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import { isAgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { ClaudeControlRequestError } from './claude-stream-json-connection'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
@@ -170,6 +173,19 @@ export async function dispatchClaudeTurn(
     if (!replay) {
       if (error instanceof AgentSessionPreDispatchError) {
         throw error
+      }
+      if (isAgentSessionOptionRejectedError(error)) {
+        return {
+          state: 'rejected',
+          ...claudeDispatchRejection(
+            agentSessionFailureFact(
+              'providerRejected',
+              error.cause instanceof ClaudeControlRequestError
+                ? { detail: providerDiagnostic(error.message, 'person') }
+                : {}
+            )
+          )
+        }
       }
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
     }

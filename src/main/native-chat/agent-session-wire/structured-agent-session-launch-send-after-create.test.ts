@@ -23,9 +23,9 @@ let host: StructuredAgentSessionHost
 function modelAdapterLiveness(registerOnAcquire: boolean): void {
   const { acquire, dispatch } = hostTestState()
   const live = new Set<string>()
-  const spawn = acquire.getMockImplementation()!
+  const acquireChild = acquire.getMockImplementation()!
   acquire.mockImplementation(async (input) => {
-    const acquisition = await spawn(input)
+    const acquisition = await acquireChild(input)
     if (registerOnAcquire) {
       live.add(input.identity.sessionId)
     }

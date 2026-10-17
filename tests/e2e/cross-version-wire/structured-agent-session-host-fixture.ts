@@ -185,6 +185,7 @@ export function readyCodexProviderAdapter(input: {
   return startsWhenPublished(
     {
       acquire: async ({ fence }) => ({
+        acquisitionGeneration: `wire-host-${fence}`,
         process: {
           hostId: 'local',
           pid: 4242,

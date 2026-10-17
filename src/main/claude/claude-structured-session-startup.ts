@@ -1,5 +1,5 @@
-// Claude initialize is awaited by the host after process publication. Settings enrichment follows
-// independently; the host owns a failed open and its single close.
+// Claude initialize is awaited by the host after process publication, under its own bound. Settings
+// enrichment follows independently; the host owns a failed open and its single close.
 
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
@@ -21,6 +21,8 @@ import {
   claudeResolvedCatalogListing,
   claudeStructuredSessionOptionsFrom,
   observeClaudeSettingsApplied,
+  observeClaudeSettingsExecutionEffort,
+  readClaudeSettingsApplied,
   readClaudeFastModeFacts,
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
@@ -29,10 +31,6 @@ import type {
   ClaudeSession,
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
-import {
-  admitClaudeStartFastMode,
-  applyClaudeStartFastMode
-} from './claude-structured-start-fast-mode'
 
 export type ClaudeOpenFacts = Pick<
   StructuredAgentSessionProviderOpenResult,
@@ -59,7 +57,10 @@ export type ClaudeStartupFacts = ClaudeInitializeFacts & {
   prepared: ReturnType<typeof prepareClaudeStructuredSessionAcquisitionOptions>
 }
 
-/** Settles on the CLI's initialize answer, or on its exit or a refused proof. */
+/** The CLI's initialize answer is a start step like any other: past this the start fails. */
+export const CLAUDE_INITIALIZE_TIMEOUT_MS = 60_000
+
+/** Settles on the CLI's initialize answer, or on its exit, a refused proof or the bound. */
 export async function readClaudeStartupFacts(input: {
   connection: ClaudeStreamJsonConnection
   initProof: ClaudeInitProof
@@ -70,7 +71,7 @@ export async function readClaudeStartupFacts(input: {
   requestTimeoutMs: number | undefined
   emit: (event: ClaudeStructuredSessionEvent) => void
 }): Promise<ClaudeInitializeFacts> {
-  // The CLI's first answer has no request deadline of its own; the reads after it do.
+  let timer: ReturnType<typeof setTimeout> | undefined
   const initialization = await Promise.race([
     input.connection
       .initializationResult()
@@ -86,8 +87,18 @@ export async function readClaudeStartupFacts(input: {
         }
         return result
       }),
-    input.initProof.promise.then(() => new Promise<never>(() => {}))
-  ])
+    input.initProof.promise.then(() => new Promise<never>(() => {})),
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new Error(`claude did not answer initialize within ${CLAUDE_INITIALIZE_TIMEOUT_MS}ms`)
+          ),
+        CLAUDE_INITIALIZE_TIMEOUT_MS
+      )
+      timer.unref?.()
+    })
+  ]).finally(() => clearTimeout(timer))
   if (input.connection.closed) {
     throw new Error('claude session closed before startup completed')
   }
@@ -109,6 +120,13 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
   const { init, initialization } = facts
   // A turn's own init frame may already have reported the running model.
   if (init?.model && session.reportedOptions.model === undefined) {
+    if (session.optionMutationSequence === 0) {
+      session.reusableOptions.set('model', init.model)
+    } else if (session.reusableOptions.get('model') !== init.model) {
+      session.reusableOptions.delete('model')
+      session.reusableOptions.delete('effort')
+      session.reusableOptions.delete('fastMode')
+    }
     session.reportedOptions.model = init.model
     session.reportedModelMutation = session.optionMutationSequence
   }
@@ -132,6 +150,13 @@ function applyClaudeSettingsFacts(
   const { settings, prepared } = facts
   const effort = readClaudeSettingsEffort(settings)
   const published = claudeStructuredSessionPublicationOptions(prepared)
+  if (!writtenSinceRead) {
+    const applied = readClaudeSettingsApplied(settings)
+    session.configuredDefaults = {
+      ...(!session.options.has('model') && applied?.model ? { model: applied.model } : {}),
+      ...(!session.options.has('effort') && applied?.effort ? { effort: applied.effort } : {})
+    }
+  }
   observeClaudeSettingsApplied(session, settings)
   if (published.fastModePerSessionOptIn !== null) {
     session.fastModePerSessionOptIn = published.fastModePerSessionOptIn
@@ -140,6 +165,7 @@ function applyClaudeSettingsFacts(
     session.events?.publish()
     return
   }
+  observeClaudeSettingsExecutionEffort(session, settings)
   // The readback vouches for a value the child was launched with only when it reports that value.
   const agrees = (key: string, reported: string): boolean =>
     !session.options.has(key) || session.options.get(key) === reported
@@ -155,6 +181,7 @@ function applyClaudeSettingsFacts(
     session.confirmedOptions.add('effort')
   }
   if (published.fastMode !== null) {
+    session.reusableOptions.set('fastMode', String(published.fastMode))
     session.reportedOptions.fastMode = published.fastMode
     if (agrees('fastMode', String(published.fastMode))) {
       session.confirmedOptions.add('fastMode')
@@ -245,7 +272,6 @@ async function settleClaudeStartupSettings(
   input.diagnose(claudeAuthDiagnostic(facts.initialization, facts.init, settings))
   const writtenSinceRead = sequence !== session.optionMutationSequence
   applyClaudeSettingsFacts(session, facts, writtenSinceRead)
-  const startFastMode = writtenSinceRead ? null : admitClaudeStartFastMode(session, facts)
   input.report({
     type: 'options-reported',
     // Open already returned the initialize listing to the host.
@@ -254,7 +280,4 @@ async function settleClaudeStartupSettings(
     // The one report of what the config resolved: the readback just applied it.
     ...claudeResolvedCatalogListing(session, readClaudeModels(facts.initialization))
   })
-  if (startFastMode !== null) {
-    void applyClaudeStartFastMode(session, facts, startFastMode)
-  }
 }

@@ -1,9 +1,7 @@
 // A chat's options, live or at rest.
 //
-// At rest nothing here needs a child. The pick is the record's own `options` — what the next start replays —
-// and the list is the host's model catalog, the same one the picker already reads before a chat
-// exists. A pick made at rest is written to the record as intent, through the same transition a live
-// pick takes, so the next start applies it.
+// The record keeps the next message's choices; the catalog names known defaults. A provider's
+// reports remain execution facts and never replace the saved selection.
 
 import {
   refuse,
@@ -260,26 +258,34 @@ export async function readStructuredAgentSessionOptions(
   const permissionMode = record
     ? await structuredAgentSessionLaunchPermission(context.deps, record)
     : null
-  const saved = record?.options
-  const selected =
-    live && (saved?.model !== undefined || saved?.effort !== undefined)
-      ? await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId, reader)
-      : options
+  const selected = live
+    ? await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId, reader)
+    : options
+  const saved = record?.options ?? {}
+  const model = saved.model ?? (options.current.model || selected.current.model)
   const current = {
+    ...selected.current,
     ...options.current,
-    ...(saved?.model !== undefined ? { model: selected.current.model } : {}),
-    ...(saved?.effort !== undefined ? { effort: selected.current.effort } : {})
+    ...(model !== undefined ? { model } : {}),
+    effort: saved.effort ?? options.current.effort,
+    fastMode:
+      saved.fastMode !== undefined
+        ? selected.current.fastMode
+        : (options.current.fastMode ?? selected.current.fastMode),
+    serviceTier: saved.serviceTier ?? options.current.serviceTier ?? selected.current.serviceTier
   }
-  const confirmed = current.confirmed?.filter((key) =>
-    key === 'model'
-      ? current.model === options.current.model
-      : key !== 'effort' || current.effort === options.current.effort
+  const confirmed = options.current.confirmed?.filter((key) =>
+    key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
+      ? current[key] === options.current[key]
+      : false
   )
   return {
     ...options,
     current: {
       ...current,
-      ...(confirmed ? { confirmed } : {}),
+      confirmed,
+      ...(options.current.fastModeState ? { fastModeState: options.current.fastModeState } : {}),
+      ...(confirmed?.length ? { confirmed } : {}),
       ...(permissionMode ? { permissionMode } : {})
     },
     rewind:

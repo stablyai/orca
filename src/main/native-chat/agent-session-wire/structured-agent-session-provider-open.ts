@@ -17,18 +17,21 @@ export async function openStructuredAgentSessionProviderChild(
   sessionId: string,
   child: StructuredAgentSessionProviderChildIdentity
 ): Promise<void> {
-  const open = context.deps.adapter.open
-  if (!open || !context.runtimeState.startupAttempts.onClock(sessionId, child)) {
+  if (!context.runtimeState.startupAttempts.onClock(sessionId, child)) {
     return
   }
   const attempt = context.runtimeState.acquireAborts.begin(sessionId)
   try {
     attempt.signal.throwIfAborted()
+    const acquisitionGeneration = child.generation
+    if (acquisitionGeneration === null) {
+      throw new Error('An unopened provider child has no acquisition generation')
+    }
     const result = await waitForPromiseWithSignal(
-      open.call(context.deps.adapter, {
+      context.deps.adapter.open({
         sessionId,
         fence: child.fence,
-        acquisitionGeneration: child.generation,
+        acquisitionGeneration,
         signal: attempt.signal
       }),
       attempt.signal
@@ -38,13 +41,7 @@ export async function openStructuredAgentSessionProviderChild(
     }
     await settleStructuredAgentSessionProviderStarted(
       context,
-      {
-        ...result,
-        type: 'started',
-        sessionId,
-        fence: child.fence,
-        acquisitionGeneration: child.generation ?? ''
-      },
+      { ...result, sessionId, fence: child.fence, acquisitionGeneration },
       attempt.signal
     )
   } catch (error) {

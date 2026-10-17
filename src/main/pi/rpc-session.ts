@@ -1,7 +1,8 @@
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionSlashCommand
-} from '../../shared/agent-session-wire'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic,
+  providerDiagnosticOf
+} from '../../shared/agent-session-failure'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionLifecycleEvent,
@@ -15,15 +16,15 @@ import {
   type JsonlRpcAgentConnectionOptions
 } from '../jsonl-rpc/agent-connection'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
+import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import { PiRpcTurns } from './rpc-turns'
 import { PiRpcDialogCallbacks } from './rpc-dialog-callbacks'
-import { piRpcStateSchema } from './rpc-protocol'
-import { applyPiRpcSessionOption, readPiRpcCommands, readPiRpcSessionOptions } from './rpc-options'
-import {
-  unpickedSessionConfiguredChoice,
-  withLiveCatalogListing,
-  type AgentModelCatalogLiveListing
-} from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import { readPiRpcSessionOptions } from './rpc-options'
+import { withLiveCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
+import type { PiRpcResolvedLaunch } from './rpc-launch-resolution'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import { PiRpcSessionStartup } from './rpc-session-startup'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -62,10 +63,10 @@ export class PiRpcSession {
   readonly turns: PiRpcTurns
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
-  private startCatalogListing?: AgentModelCatalogLiveListing
-  readonly skipped: string[] = []
-  commands?: AgentSessionSlashCommand[]
-  options?: AgentSessionOptionsResult
+  readonly optionProof = { current: new Map<string, string>(), writes: new Map<string, symbol>() }
+  readonly startup: PiRpcSessionStartup
+  initialOptions: Readonly<Record<string, string>> = {}
+  openedLink: AgentSessionProviderHandleLink | null = null
   requestedClose = false
   private publishedExit = false
   private failedCause?: Error
@@ -77,6 +78,7 @@ export class PiRpcSession {
     readonly generation: string,
     launch: ProviderProcessLaunch,
     private readonly deps: PiRpcSessionDeps,
+    private readonly resolvedLaunch: PiRpcResolvedLaunch,
     /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
     readonly resolvesConfig = false
   ) {
@@ -125,7 +127,6 @@ export class PiRpcSession {
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))
     )(launch, {
-      ...(input.onOutput ? { onOutput: input.onOutput } : {}),
       onRecord: (frame) =>
         frame.type === 'extension_ui_request'
           ? this.dialogs.receive(frame)
@@ -145,55 +146,36 @@ export class PiRpcSession {
           .finally(() => this.releaseAfterExit?.())
       }
     })
+    this.startup = new PiRpcSessionStartup(
+      input,
+      this.connection,
+      deps,
+      resolvesConfig,
+      (state) => {
+        this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
+      },
+      () => this.failedCause
+    )
   }
 
-  async start(): Promise<string> {
-    const state = piRpcStateSchema.parse(await this.connection.request('get_state'))
-    this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
-    // Keys a restore sent, whether or not Pi took them.
-    const picked = new Set<string>()
-    for (const [key, value] of Object.entries(this.input.options ?? {})) {
-      if (!['model', 'effort'].includes(key)) {
-        this.skipped.push(key)
-        continue
-      }
-      picked.add(key)
-      try {
-        await applyPiRpcSessionOption(this.connection, this.selected, key, value)
-      } catch (error) {
-        this.skipped.push(key)
-        this.deps.logger.warn('Pi rejected a saved option', {
-          scope: 'pi-option-restore',
+  async open(signal: AbortSignal): Promise<StructuredAgentSessionProviderOpenResult> {
+    const result = await this.startup.run(this.resolvedLaunch, signal)
+    this.initialOptions = {
+      ...(result.reportedOptions.model ? { model: result.reportedOptions.model } : {}),
+      ...(result.reportedOptions.effort ? { effort: result.reportedOptions.effort } : {})
+    }
+    this.openedLink = result.link ?? null
+    this.optionProof.current = new Map(Object.entries(this.initialOptions))
+    void this.startup
+      .readAfterOpen(this.generation, result.reportedOptions)
+      .catch((error: unknown) =>
+        this.deps.logger.warn('Pi startup reports failed', {
+          scope: 'pi-startup-reports',
           sessionId: this.input.identity.sessionId,
-          key,
           error
         })
-      }
-    }
-    this.options = await readPiRpcSessionOptions(this.connection)
-    this.startCatalogListing = withLiveCatalogListing(
-      this.options,
-      unpickedSessionConfiguredChoice({
-        resolvesConfig: this.resolvesConfig,
-        picked,
-        ...this.options
-      })
-    ).catalogListing
-    try {
-      this.commands = (await readPiRpcCommands(this.connection)).commands
-    } catch (error) {
-      this.deps.logger.warn('Pi commands could not be read', {
-        scope: 'pi-commands',
-        sessionId: this.input.identity.sessionId,
-        error
-      })
-    }
-    return state.sessionFile
-  }
-
-  /** What this child listed at its start, with what its config resolved; the host saves it once. */
-  get startListing(): AgentModelCatalogLiveListing | undefined {
-    return this.startCatalogListing
+      )
+    return result
   }
 
   /** What the child reports now; only the start says what its config resolved. */
@@ -214,6 +196,9 @@ export class PiRpcSession {
       sessionId: this.input.identity.sessionId,
       error
     })
+    if (!this.openedLink) {
+      return
+    }
     void this.close(false)
       .then((result) => {
         if (result.root !== 'exited') {
@@ -256,6 +241,7 @@ export class PiRpcSession {
       return
     }
     this.publishedExit = true
+    this.failedCause ??= error
     this.dialogs.cancelAll()
     this.turns.end()
     this.lane.finalize()
@@ -281,6 +267,7 @@ export class PiRpcSession {
     } finally {
       clearTimeout(timer)
     }
+    const cause = this.failedCause ?? error
     this.deps.onLifecycle({
       type: 'ended',
       sessionId: this.input.identity.sessionId,
@@ -288,7 +275,15 @@ export class PiRpcSession {
       acquisitionGeneration: this.generation,
       observedAt: Date.now(),
       cause: this.requestedClose ? 'requested-close' : 'unexpected-exit',
-      reason: (this.failedCause ?? error).message
+      reason: cause.message,
+      failure: agentSessionFailureFact('providerExited', {
+        detail:
+          providerDiagnosticOf(cause) ??
+          providerDiagnosticOf(error) ??
+          (cause instanceof JsonlRpcResponseError
+            ? providerDiagnostic(cause.message, 'person')
+            : undefined)
+      })
     })
   }
 

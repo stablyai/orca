@@ -88,13 +88,7 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
           .catch(() => null)
         return catalog.read({ ...params, workspacePath })
       }
-      const answer = await read()
-      // The chat's running agent can say what no listing does: a Pi that started with no model.
-      const started =
-        record?.provider === params.agent
-          ? host.deps.adapter.startUnavailable?.(record.sessionId)
-          : undefined
-      return started && !answer.unavailable ? { ...answer, unavailable: started } : answer
+      return read()
     }
   })
 ]

@@ -10,10 +10,7 @@ import type {
   StructuredAgentSessionProviderChildIdentity
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
-import {
-  settleStructuredAgentSessionOptionsReported,
-  settleStructuredAgentSessionProviderStarted
-} from './structured-agent-session-provider-started'
+import { settleStructuredAgentSessionOptionsReported } from './structured-agent-session-provider-started'
 import {
   endExitedStructuredAgentSessionChildUnderSerialize,
   settleStructuredAgentSessionChildExit,
@@ -67,6 +64,7 @@ export class StructuredAgentSessionEventRecovery {
       ...this.context,
       logger: deps.logger,
       startupAttempts: runtimeState.startupAttempts,
+      startFlights: runtimeState.startFlights,
       holdUnrunSends: async (sessionId, fence, cause) => {
         const journal = this.context.sessions.get(sessionId)?.journal
         if (journal) {
@@ -133,9 +131,6 @@ export class StructuredAgentSessionEventRecovery {
    *  nothing restarts the child. The next send does, through the delivery loop, which also owns any
    *  message still queued. */
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
-    if (event.type === 'started') {
-      return settleStructuredAgentSessionProviderStarted(this.context, event)
-    }
     if (event.type === 'options-reported') {
       return settleStructuredAgentSessionOptionsReported(this.context, event)
     }

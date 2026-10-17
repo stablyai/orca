@@ -287,7 +287,8 @@ async function createSurface(
       agent: intent.agent,
       ...(intent.sessionOptions ? { options: intent.sessionOptions } : {}),
       ...(intent.sessionId ? { sessionId: intent.sessionId } : {}),
-      ...(reservedTabId ? { tabId: reservedTabId } : {})
+      ...(reservedTabId ? { tabId: reservedTabId } : {}),
+      ...(intent.prompt ? {} : { withoutPrompt: true as const })
     })
     return {
       outcome: {

@@ -7,6 +7,7 @@ import {
   AcpRpcError
 } from './acp-errors'
 import { AcpJsonRpcPeer, type AcpPeerOptions, type AcpRequestContext } from './acp-json-rpc-peer'
+import { acpStepBound } from './acp-peer-limits'
 import {
   answerAcpPermission,
   readAcpPermissionRequest,
@@ -263,7 +264,7 @@ export class AcpSessionRuntime {
   }
 
   private async call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T> {
-    const result = await this.peer.request(method, params, { timeoutMs: null }).catch((error) => {
+    const result = await this.peer.request(method, params, acpStepBound(method)).catch((error) => {
       if (error instanceof AcpAgentError && error.code === -32000) {
         throw new AcpAuthRequiredError(error.message, error.data)
       }

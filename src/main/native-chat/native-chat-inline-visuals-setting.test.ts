@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { CLAUDE_PLUGIN_DIR_FLAG, type ClaudeCliFlag } from '../claude/claude-cli-flag-support'
 import {
+  acquireReadyCodexForTest,
   adapterFor,
   fakeCodex,
   identityFor
@@ -99,8 +100,9 @@ describe('inline visuals launch preference', () => {
       prepareVisuals
     })
     const adapter = adapterFor(codex, {}, [], { resolveLaunch })
+    // The thread opens after the acquire returns; each check below reads its `thread/start`.
     const start = (sessionId: string) =>
-      adapter.acquire({
+      acquireReadyCodexForTest(adapter, {
         identity: {
           ...identityFor(sessionId),
           hostId: LOCAL_EXECUTION_HOST_ID,

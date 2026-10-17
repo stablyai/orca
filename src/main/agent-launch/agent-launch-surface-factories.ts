@@ -22,6 +22,9 @@ export type AgentLaunchSurfaceFactory = {
     /** The caller-reserved tab id (the tab half of `paneKey`), so the host records where this chat
      *  is shown; absent records the id clients derive. */
     tabId?: string
+    /** The launch carries no prompt, so a caller that sends the first message itself may get the
+     *  chat at rest, its agent started by that message. */
+    withoutPrompt?: true
   }): Promise<AgentLaunchStructuredSurface>
   createTerminalAgent(args: {
     worktreeId: string

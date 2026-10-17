@@ -69,7 +69,7 @@ export type StructuredAgentSessionChildClose = {
 /** The provider process behind a conversation. Written only in
  *  `structured-agent-session-provider-child`. */
 export type StructuredAgentSessionProviderChild = StructuredAgentSessionProviderChildIdentity & {
-  /** A starting acquisition stays `starting` until the host settles its `started` event; only then is
+  /** Every acquired child is `starting` until the host settles its open result; only then is
    *  it handed input and are its reported options fact. */
   phase: StructuredAgentSessionProviderChildPhase
   /** The queued message whose delivery started this child, fixed when the start is made; absent

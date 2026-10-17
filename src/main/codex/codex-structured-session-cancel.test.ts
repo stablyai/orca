@@ -1,3 +1,4 @@
+import { acquireReadyCodexForTest } from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
 // Every way Orca reads or kills processes, never settling: a Stop that reaches for one hangs.
@@ -128,7 +129,7 @@ async function acquired(
     readProcessStartTime: async () => 1_700_000_000_000,
     ...overrides
   })
-  await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, { identity: identity(), fence: 7, spawnToken: 'spawn-9' })
   return adapter
 }
 

@@ -9,6 +9,7 @@ import {
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { encodeAgentSessionQuestionAnswers } from '../../../shared/agent-session-question-answer'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   openTestJournalHostDatabase,
@@ -130,6 +131,40 @@ function failReceiptWrites(): () => void {
   db.exec(`CREATE TRIGGER fail_prompt_receipt BEFORE INSERT ON agent_session_command_receipts
     BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
   return () => db.exec('DROP TRIGGER fail_prompt_receipt')
+}
+
+const GROUPED_ANSWERS = [
+  { questionId: 'q1', optionIds: ['web', 'mobile'] },
+  { questionId: 'q2', optionIds: [], other: 'SSH host' }
+]
+
+/** A provider question with a multi-select and a free-text part; resolves its item id. */
+async function seedGroupedQuestion(): Promise<string> {
+  const question = { ...PROMPT, ordinal: 100 }
+  acquire.mock.calls.at(-1)?.[0].events?.appendItem(
+    question,
+    {
+      kind: 'question',
+      question: '2 grouped questions',
+      options: [],
+      questions: [
+        {
+          id: 'q1',
+          question: 'Targets',
+          multiSelect: true,
+          options: [
+            { id: 'web', label: 'Web' },
+            { id: 'mobile', label: 'Mobile' }
+          ]
+        },
+        { id: 'q2', question: 'Host', multiSelect: false, options: [], freeTextQuestionId: 'q2' }
+      ],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(SESSION)
+  return agentJournalItemKey(question)
 }
 
 async function resolution(itemId: string) {
@@ -319,43 +354,19 @@ describe('a prompt answer', () => {
 
   it('replays a grouped answer whole after a rewind, free text included', async () => {
     await attach()
-    const question = { ...PROMPT, ordinal: 100 }
-    acquire.mock.calls.at(-1)?.[0].events?.appendItem(
-      question,
-      {
-        kind: 'question',
-        question: '2 grouped questions',
-        options: [],
-        questions: [
-          {
-            id: 'q1',
-            question: 'Targets',
-            multiSelect: true,
-            options: [
-              { id: 'web', label: 'Web' },
-              { id: 'mobile', label: 'Mobile' }
-            ]
-          },
-          { id: 'q2', question: 'Host', multiSelect: false, options: [], freeTextQuestionId: 'q2' }
-        ],
-        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-      },
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    await host.flushStreamedEvents(SESSION)
-    const itemId = agentJournalItemKey(question)
-    const answers = [
-      { questionId: 'q1', optionIds: ['web', 'mobile'] },
-      { questionId: 'q2', optionIds: [], other: 'SSH host' }
-    ]
-    const fields = { itemId, expectedRevision: journal().item(itemId)!.revision, answers }
+    const itemId = await seedGroupedQuestion()
+    const fields = {
+      itemId,
+      expectedRevision: journal().item(itemId)!.revision,
+      answers: GROUPED_ANSWERS
+    }
     const params = {
       envelope: envelope('agentSession.respondTo:question', fields, { clientOperationId: opId() }),
       kind: 'question' as const,
       ...fields
     }
     const first = await host.respondToPrompt(CALLER, params)
-    expect(first).toMatchObject({ ok: true, value: { resolution: { answers } } })
+    expect(first).toMatchObject({ ok: true, value: { resolution: { answers: GROUPED_ANSWERS } } })
     await journal().replaceEpochItems(
       'handle_forked',
       store.getRecord(SESSION)!.lease.runtimeFence,
@@ -367,6 +378,26 @@ describe('a prompt answer', () => {
       cursor: expect.anything()
     })
     expect(answerPrompt).toHaveBeenCalledOnce()
+  })
+
+  it('unpacks the grouped answer an older client packs into its option id', async () => {
+    await attach()
+    const itemId = await seedGroupedQuestion()
+    const optionId = encodeAgentSessionQuestionAnswers(GROUPED_ANSWERS)
+    const fields = { itemId, expectedRevision: journal().item(itemId)!.revision, optionId }
+
+    expect(
+      await host.respondToPrompt(CALLER, {
+        envelope: envelope('agentSession.respondTo:question', fields, {
+          clientOperationId: opId()
+        }),
+        kind: 'question',
+        ...fields
+      })
+    ).toMatchObject({ ok: true, value: { resolution: { answers: GROUPED_ANSWERS } } })
+    expect(answerPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ itemId, response: { kind: 'answers', answers: GROUPED_ANSWERS } })
+    )
   })
 
   it('answers unknown, never success, when acknowledging an answer cannot be recorded', async () => {

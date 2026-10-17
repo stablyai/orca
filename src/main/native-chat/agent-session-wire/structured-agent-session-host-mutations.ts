@@ -7,7 +7,6 @@
 // admitted without the writer lease; the delivery loop starts the provider child a send needs, and
 // an operation only the provider can perform starts it before admission.
 
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../shared/agent-chat-permission-mode'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
@@ -55,9 +54,9 @@ import type { StructuredAgentSessionCaller } from './structured-agent-session-ho
 import {
   readStructuredAgentSessionOptions,
   IN_PROCESS_OPTIONS_READER,
+  recordStructuredAgentSessionOptionIntent,
   type StructuredAgentSessionOptionsReader
 } from './structured-agent-session-options-read'
-import { writeStructuredAgentSessionOption } from './structured-agent-session-message-options'
 import { settleStructuredAgentSessionLateDispatch } from './structured-agent-session-late-dispatch'
 import { releaseStructuredAgentSessionUnansweredDispatches } from './structured-agent-session-unanswered-dispatch-release'
 
@@ -149,12 +148,13 @@ export function cancelStructuredAgentSessionTurn(
   }
   const plan = cancelPlan(params)
   const { prompt } = params
-  if (!prompt && params.turnId === undefined) {
-    abortAcquireForStop(context, caller, params.envelope, plan)
-  }
+  const stoppedPrePrompt =
+    !prompt && params.turnId === undefined
+      ? abortProviderWaitForStop(context, caller, params.envelope, plan)
+      : false
   // A card's Cancel stops whatever the chat has in flight, as the Stop button does; it reaches the
   // Stop only for a card the live turn raised (`cancelStructuredAgentSessionPrompt`).
-  const stopped = prompt ? { envelope: params.envelope } : params
+  const stopped = prompt ? { envelope: params.envelope } : { ...params, stoppedPrePrompt }
   return mutateWithChatStop(context, caller, stopped, plan, (ctx, stop) =>
     prompt
       ? cancelStructuredAgentSessionPrompt(
@@ -170,12 +170,12 @@ export function cancelStructuredAgentSessionTurn(
  *  queue is waiting on stops now, as a close's does, and the Stop's own step then finds no child.
  *  Only a Stop admission would run now; one naming a turn is about a child already gone, so it
  *  leaves a newer start alone. */
-function abortAcquireForStop(
+function abortProviderWaitForStop(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
   plan: MutationPlan<AgentSessionCancelResult>
-): void {
+): boolean {
   const { store } = context.deps
   if (
     !agentSessionMutationAdmitsNow({
@@ -186,9 +186,9 @@ function abortAcquireForStop(
       now: context.now
     })
   ) {
-    return
+    return false
   }
-  context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
+  return context.acquireAborts.abort(envelope.sessionId, 'stopped while starting')
 }
 
 export function respondToStructuredAgentSessionPrompt(
@@ -210,41 +210,17 @@ export async function setStructuredAgentSessionOption(
   caller: StructuredAgentSessionCaller,
   params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
-  const recordOnly = params.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   const plan = setOptionPlan(params)
-  const atRest = () => {
-    const child = context.sessions.get(params.envelope.sessionId)?.child
-    return recordOnly || !child || child.phase === 'starting' || child.close !== undefined
-  }
-  return runWithReadyStructuredAgentSessionOperation(
+  return mutateStructuredAgentSession(
     context,
-    caller.callerKey,
+    caller,
     params.envelope,
-    plan,
-    (selection) =>
-      runStructuredAgentSessionMutation(
-        context,
-        caller,
-        params.envelope,
-        {
-          ...plan,
-          get conversationWrite() {
-            return atRest() ? (true as const) : undefined
-          },
-          run: (ctx) => writeStructuredAgentSessionOption(context, ctx, params)
-        },
-        (ledger) =>
-          atRest()
-            ? openForWrite(context, params.envelope)()
-            : openWithReadyStructuredAgentSessionChild(context, params.envelope, selection)(ledger)
-      ),
     {
-      needsAgent: () => {
-        const child = context.sessions.get(params.envelope.sessionId)?.child
-        return !recordOnly && Boolean(child && !child.close)
-      },
-      runAfterAgentEnds: true
-    }
+      ...plan,
+      conversationWrite: true,
+      run: (ctx) => recordStructuredAgentSessionOptionIntent(context.deps, ctx, params)
+    },
+    openForWrite(context, params.envelope)
   )
 }
 
@@ -264,10 +240,11 @@ export async function changeStructuredAgentSessionThreadGoal(
         context,
         caller,
         params.envelope,
-        plan,
+        threadGoalPlan({ ...params, signal: selection.signal }),
         openWithReadyStructuredAgentSessionChild(context, params.envelope, selection)
       ),
     {
+      goal: true,
       beforeAgent: (record) =>
         refuseThreadGoalUnsupported(context.deps.adapter, context.deps.agents, record?.provider)
     }

@@ -210,12 +210,10 @@ it('holds the created first message until the child proves its start, then hands
   expect(held).toEqual([expect.objectContaining({ clientMessageId: first.clientMessageId })])
   expect(held[0].handedOverAt).toBeUndefined()
 
-  await rig.host.handleAdapterEvent({
-    type: 'started',
+  await rig.proveStart({
     sessionId: SESSION,
     fence: rig.store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
-    acquisitionGeneration: generation,
-    reportedOptions: { model: 'gpt-live' }
+    acquisitionGeneration: generation
   })
 
   await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())

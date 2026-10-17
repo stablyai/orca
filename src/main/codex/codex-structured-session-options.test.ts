@@ -1,8 +1,12 @@
-import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
+import {
+  acquireReadyCodexForTest,
+  USER_MESSAGE,
+  adapterFor,
+  answerWithOpenedTurn,
+  fakeCodex,
+  identityFor
+} from './codex-structured-session-adapter-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { CodexAppServerConnection } from './codex-app-server-connection'
-import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import {
   applyCodexStructuredSessionOption,
   readCodexStructuredSessionOptions,
@@ -10,42 +14,10 @@ import {
   restoredCodexSessionOptions
 } from './codex-structured-session-options'
 import { reportedCodexThreadOptions } from './codex-structured-service-tier'
-import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSession } from './codex-structured-session-state'
 import { startCodexTurn } from './codex-structured-turn-start'
-import {
-  USER_MESSAGE,
-  adapterFor,
-  answerWithOpenedTurn,
-  fakeCodex,
-  identityFor
-} from './codex-structured-session-adapter-fixture'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-
-function optionSession(request: CodexAppServerConnection['request']): CodexSession {
-  return {
-    connection: {
-      pid: 1,
-      closed: false,
-      request,
-      notify: () => {},
-      respond: () => {},
-      respondWithError: () => {},
-      close: async () => true
-    },
-    backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
-    ended: false,
-    fence: 1,
-    acquisitionGeneration: 'generation-1',
-    threadId: 'thread-1',
-    prompts: new CodexAcquisitionWindow().prompts,
-    options: new Map(),
-    reportedOptions: { model: 'gpt-live', effort: 'high' },
-    dispatchEchoes: createCodexDispatchEchoes(),
-    turnOpenWaits: createCodexTurnOpenWaits(),
-    translator: null
-  }
-}
+import { optionSession } from './codex-structured-option-session.test-fixture'
 
 async function primePicker(session: CodexSession): Promise<void> {
   session.catalogAccess = {
@@ -688,7 +660,11 @@ describe('Codex option picks before the model list arrives', () => {
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
-    await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-1'
+    })
     await vi.waitFor(() =>
       expect(codex.connections[0].calls.some((call) => call.method === 'model/list')).toBe(true)
     )
@@ -698,11 +674,6 @@ describe('Codex option picks before the model list arrives', () => {
     await expect(pick('model', 'gpt-next')).resolves.toMatchObject({ model: 'gpt-next' })
     await expect(pick('effort', 'low')).resolves.toMatchObject({ model: 'gpt-next', effort: 'low' })
     await expect(pick('serviceTier', 'priority')).resolves.toEqual({
-      model: 'gpt-next',
-      effort: 'low',
-      serviceTier: 'priority'
-    })
-    expect(adapter.readAcquisitionOptions({ sessionId: 'session-1', fence: 7 })).toEqual({
       model: 'gpt-next',
       effort: 'low',
       serviceTier: 'priority'

@@ -191,6 +191,7 @@ function attachContext(
       adoptEventSink: () => undefined,
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       discardEventSink: () => undefined,
+      startFlights: new Map(),
       acquireAborts: new StructuredAgentSessionAcquireAborts()
     },
     sessions,

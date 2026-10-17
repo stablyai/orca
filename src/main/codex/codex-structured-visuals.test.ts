@@ -7,6 +7,7 @@ import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import { CodexAppServerTimeoutError } from './codex-app-server-session'
 import {
   adapterFor,
+  acquireReadyCodexForTest,
   fakeCodex,
   identityFor,
   THREAD_ID
@@ -192,7 +193,11 @@ async function acquired(
       prepareVisuals: async () => launch.visuals ?? null
     })
   })
-  await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+  await acquireReadyCodexForTest(adapter, {
+    identity: identityFor('session-1'),
+    fence: 7,
+    spawnToken: 'spawn-9'
+  })
 }
 
 describe('a Codex chat acquisition with visuals', () => {
@@ -203,6 +208,7 @@ describe('a Codex chat acquisition with visuals', () => {
       const connection = codex.connections[0]!
       const methods = connection.calls.map((call) => call.method)
       const open = resumeThreadId ? 'thread/resume' : 'thread/start'
+      expect(methods[0]).toBe('initialize')
       expect(methods.indexOf('skills/extraRoots/set')).toBeLessThan(methods.indexOf(open))
       expect(methods.indexOf('config/read')).toBeLessThan(methods.indexOf(open))
       expect(connection.calls.find((call) => call.method === open)?.params).toMatchObject({
@@ -218,9 +224,10 @@ describe('a Codex chat acquisition with visuals', () => {
     await acquired(codex, { env: { [NATIVE_CHAT_SCRATCH_DIR_ENV]: '/other' } })
     const connection = codex.connections[0]!
     const methods = connection.calls.map((call) => call.method)
-    expect(methods[0]).toBe('thread/start')
+    // The adapter sends `initialize` itself now; nothing comes between it and the thread.
+    expect(methods.slice(0, 2)).toEqual(['initialize', 'thread/start'])
     expect(methods).not.toContain('skills/extraRoots/set')
-    expect(connection.calls[0]?.params).not.toHaveProperty('config')
+    expect(connection.calls[1]?.params).not.toHaveProperty('config')
     expect(connection.launch.env).not.toHaveProperty(NATIVE_CHAT_SCRATCH_DIR_ENV)
   })
 })

@@ -6,6 +6,7 @@
 
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
@@ -111,7 +112,7 @@ export class JournalQueuedMessages {
       hostInstance: string
       requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
-      options?: Readonly<Record<string, string>>
+      options?: AgentSessionExecutionOptions
     },
     receipt?: JournalOperationReceipt
   ): Promise<QueuedMessageRow> {

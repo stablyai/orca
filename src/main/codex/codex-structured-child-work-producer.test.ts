@@ -1,3 +1,9 @@
+import {
+  acquireReadyCodexForTest,
+  fakeCodex,
+  identityFor,
+  THREAD_ID
+} from './codex-structured-session-adapter-fixture'
 // A Codex session's frames, through the real adapter, into the host's child records: the order the
 // host receives them in, and the parent row they fold to, written out step by step.
 
@@ -24,7 +30,6 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { fakeCodex, identityFor, THREAD_ID } from './codex-structured-session-adapter-fixture'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 
 const parent = makeStructuredAgentStatusSubject(
@@ -135,7 +140,7 @@ async function producer() {
       moment()
     }
   }
-  await adapter.acquire({
+  await acquireReadyCodexForTest(adapter, {
     identity: identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9',

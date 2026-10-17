@@ -147,8 +147,8 @@ describe('live Codex option reads', () => {
   it('keeps newer saved picks after a cold live listing waits without holding the session lane', async () => {
     const listing = Promise.withResolvers<void>()
     const queue = new StructuredAgentSessionTaskQueue()
+    const record = { ...restingRecord(), options: { model: 'gpt-picked', effort: 'high' } }
     const child = { fence: 7 }
-    const record = restingRecord()
     const apply = vi.fn(() => ({
       models: [{ id: 'gpt-live', label: 'GPT Live', efforts: [] }],
       current: { model: 'gpt-live', effort: 'high', confirmed: ['model', 'effort'] as const }
@@ -175,7 +175,9 @@ describe('live Codex option reads', () => {
       conversation: async () => live
     } as unknown as StructuredAgentSessionMutationContext
 
-    const reading = readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+    const reading = readStructuredAgentSessionOptions(context, SESSION, {
+      readsWithoutModel: false
+    })
     await vi.waitFor(() =>
       expect(prepareReadOptions).toHaveBeenCalledWith({ sessionId: SESSION, fence: 7 })
     )
@@ -186,7 +188,7 @@ describe('live Codex option reads', () => {
     record.options = { model: 'gpt-next', effort: 'low' }
     listing.resolve()
     await expect(reading).resolves.toMatchObject({
-      current: { model: 'gpt-next', effort: 'low', confirmed: [] }
+      current: { model: 'gpt-next', effort: 'low' }
     })
     expect(apply).toHaveBeenCalledOnce()
   })

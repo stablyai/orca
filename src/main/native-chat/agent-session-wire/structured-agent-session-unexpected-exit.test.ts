@@ -439,4 +439,34 @@ describe('provider-exit settlement', () => {
     expect(generationEnded).toHaveBeenLastCalledWith(SESSION, { restate: true })
     expect(log.scopes()).toEqual(['exit-lifecycle-barrier', 'exit-settlement'])
   })
+
+  it('ignores an exit reported for an earlier generation at the same fence', async () => {
+    const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 }))
+    const session: StructuredAgentSessionChildExitSession = {
+      child: { generation: GENERATION, fence: 7, phase: 'ready' },
+      journal: exitJournalDouble({ items: () => [], appendLifecycleBatch })
+    }
+    const { store } = mutableStore()
+    const context: StructuredAgentSessionChildExitContext<typeof session> = {
+      logger: recordingStructuredAgentSessionLogger().logger,
+      store,
+      sessions: new Map([[SESSION, session]]),
+      flushLifecycle: async () => ({ ok: true }),
+      generationEnded: vi.fn(),
+      serialize: async (_sessionId, task) => task(),
+      now: () => 1
+    }
+    await settleStructuredAgentSessionChildExit(context, {
+      type: 'ended',
+      sessionId: SESSION,
+      reason: 'provider exited',
+      cause: 'unexpected-exit',
+      fence: 7,
+      acquisitionGeneration: 'generation-stale'
+    })
+
+    expect(store.getRecord().lease.claimStatus).toBe('live')
+    expect(session.child?.generation).toBe(GENERATION)
+    expect(appendLifecycleBatch).not.toHaveBeenCalled()
+  })
 })

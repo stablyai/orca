@@ -122,16 +122,12 @@ describe('a structured codex session over agentSession.*', () => {
       delta: 'Buffered while the journal opens.'
     })
 
-    let stopped = false
-    const stopping = stopStructuredAgentSessionRuntime().then(() => {
-      stopped = true
-    })
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    const waitedForJournalBind = !stopped
     openGate.resolve()
     await creating
-    await stopping
-    expect(waitedForJournalBind).toBe(true)
+    await vi.waitFor(() =>
+      expect(harness.codex.live().calls.some((entry) => entry.method === 'thread/start')).toBe(true)
+    )
+    await stopStructuredAgentSessionRuntime()
 
     const identity = {
       sessionId: SESSION,

@@ -453,13 +453,15 @@ it('rejects a message whose start meets a close still unverifiable, and starts n
 
 it('saves an option change while the close stays unverifiable without writing to the old child', async () => {
   const connection = await stopWithUnprovenClose(2)
+  const calls = [...connection.calls]
 
   await expect(setModel('claude-opus-5')).resolves.toMatchObject({ ok: true })
   expect(connection.closeCount).toBe(1)
-  expect(connection.calls.some((call) => call.subtype === 'set_model')).toBe(false)
+  expect(connection.calls).toEqual(calls)
 
   // The pick remains saved for a later start while the old child is still unverifiable.
   await expect(setModel('claude-opus-5')).resolves.toMatchObject({ ok: true })
+  expect(connection.calls).toEqual(calls)
   expect(child()?.close).toBeDefined()
   expect(store.getRecord(SESSION)?.options).toMatchObject({ model: 'claude-opus-5' })
 })

@@ -67,7 +67,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     if (await releaseLeaseOfEndedStructuredAgentSessionChild(host.context(), sessionId)) {
       return false
     }
-    const closed = await closeStructuredAgentSessionConversationUnderSerialize(
+    return closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
         closeStatus: (id) => {
@@ -79,7 +79,6 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       sessionId,
       atRest
     )
-    return closed
   }
 
   const hasOpenDispatch = (sessionId: string): boolean => {
@@ -242,6 +241,7 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
       return serialize(sessionId, async () => {
         readRefusals.forget(sessionId)
+        host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
         const session = sessions.get(sessionId)
         if (session) {
           // Settled and marked before the stop, so no start delivers it, and nothing it closed with

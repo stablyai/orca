@@ -108,14 +108,16 @@ export function createIntentParams(): Record<string, unknown> {
 export function sendParams(
   text: string,
   fence: number,
-  sentDelivery?: 'queue-if-active'
+  sentDelivery?: 'queue-if-active',
+  options?: Readonly<Record<string, string>>
 ): Record<string, unknown> {
   return structuredAgentSessionMessageSendMutation({
     sessionId: SESSION,
     clientOperationId: operationId(),
     expectedRuntimeFence: fence,
     body: structuredAgentSessionSendBody(text, []),
-    ...(sentDelivery ? { delivery: sentDelivery } : {})
+    ...(sentDelivery ? { delivery: sentDelivery } : {}),
+    ...(options ? { options } : {})
   })
 }
 

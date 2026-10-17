@@ -49,11 +49,13 @@ function adapter(): StructuredAgentSessionAdapter {
     {
       supportsCreate: (_location, agent) => agent === 'codex',
       supportsLocation: () => true,
+      open: async () => ({
+        reportedOptions: { model: '' }
+      }),
       acquire: async (input) => {
         acquires += 1
         sink = input.events!
         return {
-          providerChildPhase: 'starting' as const,
           process: {
             hostId: 'local',
             pid: 4000 + acquires,

@@ -104,8 +104,11 @@ beforeEach(async () => {
     store,
     adapter: startsWhenPublished(
       {
+        open: async () => ({
+          reportedOptions: { model: '' }
+        }),
         acquire: vi.fn(async ({ fence }) => ({
-          providerChildPhase: 'starting' as const,
+          acquisitionGeneration: globalThis.crypto.randomUUID(),
           process: {
             hostId: 'local',
             pid: 4242,

@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { AcpAuthRequiredError } from './acp-errors'
 import { ACP_LAUNCH_SPECS } from './acp-launch-specs'
@@ -103,13 +101,32 @@ it.each(ACP_LAUNCH_SPECS)(
       spec,
       script: (agent) => agent.on('session/new', (frame) => agent.fail(frame, -32000, detail))
     })
-    const error = await rig.acquire().catch((failure: unknown) => failure)
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionRefusal)
-    expect(error).toMatchObject({ reason: 'notSignedIn' })
-    expect(providerDiagnosticOf(error)).toEqual({ text: detail, audience: 'person' })
-    const fact = providerStartupFailureFact(error)
-    expect(fact.detail?.text).toBe(detail)
+    // The host receives the refusal from open and then closes the child.
+    await rig.acquire()
+    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
+    expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })
+    const fact = agentSessionFailureFact('notSignedIn', {
+      detail: providerDiagnosticOf(rig.openFailure())
+    })
     expect(agentSessionFailureSentence(fact, 'row', { agentName: spec.agent })).toContain(detail)
+  }
+)
+
+it.each(ACP_LAUNCH_SPECS)(
+  "keeps $agent's sign-in words over log lines it wrote before refusing its start",
+  async (spec) => {
+    const detail = 'Sign-in credentials are missing.'
+    const rig = await openAcpAdapterRig({
+      spec,
+      script: (agent) =>
+        agent.on('session/new', (frame) => {
+          rig.child().stderr = 'warn: telemetry endpoint unreachable'
+          agent.fail(frame, -32000, detail)
+        })
+    })
+    await rig.acquire()
+    expect(rig.openFailure()).toMatchObject({ reason: 'notSignedIn' })
+    expect(providerDiagnosticOf(rig.openFailure())).toEqual({ text: detail, audience: 'person' })
   }
 )
 

@@ -131,6 +131,11 @@ export async function setClaudeStructuredOption(
       ? claudeModelFastModeSupport(session, listed, input.value)
       : null
   const modelWasConfirmed = readClaudeCurrentModel(session).confirmed
+  session.reusableOptions.delete(input.key)
+  if (input.key === 'model') {
+    session.reusableOptions.delete('effort')
+    session.reusableOptions.delete('fastMode')
+  }
   const mutationSequence = ++session.optionMutationSequence
   // Read with the fence bump, so a write that lands after an earlier one's bookkeeping compares against it.
   const held = session.options.get(input.key)
@@ -160,6 +165,7 @@ export async function setClaudeStructuredOption(
       if (mutationSequence !== session.optionMutationSequence) {
         return Object.fromEntries(session.options)
       }
+      session.reusableOptions.set('model', input.value)
       session.options.set('model', input.value)
       session.options.set('fastMode', 'false')
       session.confirmedOptions.delete('effort')
@@ -189,6 +195,11 @@ export async function setClaudeStructuredOption(
       : null
   if (mutationSequence !== session.optionMutationSequence) {
     return Object.fromEntries(session.options)
+  }
+  if (input.key === 'model' || (input.key === 'effort' && UNREPORTED_EFFORTS.has(input.value))) {
+    session.reusableOptions.set(input.key, input.value)
+  } else if (adopted !== null) {
+    session.reusableOptions.set(input.key, String(adopted))
   }
   if (input.key === 'fastMode' && typeof adopted === 'boolean') {
     session.reportedOptions.fastMode = adopted

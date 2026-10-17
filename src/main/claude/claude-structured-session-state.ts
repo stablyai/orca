@@ -168,6 +168,8 @@ export type ClaudeSession = {
   /** What `get_settings` says the next request will send, after Claude's own env and settings
    *  precedence: the lowest-ranked answer, unconfirmed until a turn reports it. */
   appliedOptions?: { model?: string; effort?: string }
+  /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
+  configuredDefaults?: { model?: string; effort?: string }
   fastModeState?: AgentSessionFastModeState
   fastModeDisabledReason?: string
   fastModePerSessionOptIn?: boolean
@@ -176,10 +178,11 @@ export type ClaudeSession = {
   reportedModelMutation: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
-  restoreSkippedOptions: Set<string>
+  /** Value-bound execution evidence, revoked before any possible write. */
+  reusableOptions: Map<string, string>
   /** The model the child was launched with, as `--model`; null when it runs the CLI's own. */
   launchedModel: string | null
-  /** The launch left the saved Fast out, so the start applies it once the settings are read. */
+  /** Fast was omitted from launch settings and needs confirmation at message input. */
   fastModeAtStart: boolean
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]

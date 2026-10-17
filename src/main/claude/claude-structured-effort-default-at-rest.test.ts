@@ -17,7 +17,6 @@ import type { StructuredAgentSessionMutationContext } from '../native-chat/agent
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { composeCodexSessionOptionCatalog } from '../codex/codex-structured-model-catalog'
-import { nativeSessionOptionsFromReport } from '../native-chat/agent-session-wire/structured-agent-session-option-restoration'
 import {
   ClaudeStructuredSessionAdapter,
   type ClaudeStructuredSessionEvent
@@ -401,10 +400,7 @@ describe('Claude effort default at rest', () => {
 
     const reported = (await claudeOpened(adapter, SESSION)).reportedOptions
     expect(reported).not.toHaveProperty('effort')
-    // The record the start persists names the listed row the catalog learned under.
-    const record = restingRecord(
-      nativeSessionOptionsFromReport({ reported: reported, restoreSkipped: [] })
-    )
+    const record = restingRecord({ model: 'opus[1m]' })
     expect(record.options).toEqual({ model: 'opus[1m]' })
     expect((await readAtRest(store, record)).current.effort).toBe('medium')
     expect(record.options).toEqual({ model: 'opus[1m]' })

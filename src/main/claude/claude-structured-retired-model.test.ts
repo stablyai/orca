@@ -41,8 +41,7 @@ function modelNotFound(parentToolUseId: string | null = null): Record<string, un
 function sessionLaunchedWith(model: string | null, picked: string | null = model) {
   return {
     launchedModel: model,
-    options: new Map(picked === null ? [] : [['model', picked]]),
-    restoreSkippedOptions: new Set<string>()
+    options: new Map(picked === null ? [] : [['model', picked]])
   }
 }
 
@@ -52,7 +51,6 @@ describe("the CLI's word that a launched model does not exist", () => {
 
     expect(retireClaudeLaunchedModel(session, modelNotFound())).toBe(RETIRED)
     expect(session.options.has('model')).toBe(false)
-    expect([...session.restoreSkippedOptions]).toEqual(['model'])
     expect(retireClaudeLaunchedModel(session, modelNotFound())).toBeNull()
   })
 
@@ -63,7 +61,6 @@ describe("the CLI's word that a launched model does not exist", () => {
     ['a launch that named no model', sessionLaunchedWith(null), modelNotFound()]
   ])('keeps the saved model for %s', (_case, session, message) => {
     expect(retireClaudeLaunchedModel(session, message)).toBeNull()
-    expect([...session.restoreSkippedOptions]).toEqual([])
   })
 })
 

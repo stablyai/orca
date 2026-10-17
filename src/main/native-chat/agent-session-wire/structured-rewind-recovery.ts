@@ -69,6 +69,17 @@ async function settleUnsupportedClaudeRewind(
   }
 }
 
+type RecoveredRewind = Awaited<
+  ReturnType<NonNullable<StructuredAgentSessionAdapter['recoverRewind']>>
+>
+
+/** What the provider says about a rewind in doubt, read with no journal or record write, so a
+ *  caller can read it outside the session's serialize and apply it inside. Null: none in doubt. */
+export type StructuredRewindRecoveryEvidence = {
+  rewind: AgentSessionRewindRecord
+  recovered?: RecoveredRewind
+} | null
+
 /** Recovery observes provider state; it never repeats an ambiguous native mutation. */
 export async function recoverStructuredRewind(
   deps: RewindRecoveryDeps,
@@ -84,11 +95,61 @@ export async function recoverStructuredRewind(
   ) => JournalOperationReceipt,
   signal?: AbortSignal
 ): Promise<void> {
+  const evidence = await readStructuredRewindRecovery(deps, sessionId, fence, adapter, signal)
   signal?.throwIfAborted()
+  await applyStructuredRewindRecovery(deps, sessionId, journal, fence, evidence, now, receipt)
+}
+
+export async function readStructuredRewindRecovery(
+  { store }: RewindRecoveryDeps,
+  sessionId: string,
+  fence: number,
+  adapter?: StructuredAgentSessionAdapter,
+  signal?: AbortSignal
+): Promise<StructuredRewindRecoveryEvidence> {
+  signal?.throwIfAborted()
+  const rewind = store.getRecord(sessionId)?.rewind
+  if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
+    return null
+  }
+  const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
+  if (target?.provider !== 'codex' || rewind.hydrationVerified) {
+    return { rewind }
+  }
+  const read = adapter?.recoverRewind?.({
+    sessionId,
+    fence,
+    beforeTurnId: target.turnId,
+    ...(signal ? { signal } : {})
+  })
+  const recovered = signal
+    ? await waitForPromiseWithSignal(Promise.resolve(read), signal)
+    : await read
+  return recovered ? { rewind, recovered } : { rewind }
+}
+
+/** The journal and record writes the evidence proves; a rewind that moved since the read is not
+ *  this evidence's to settle. */
+export async function applyStructuredRewindRecovery(
+  deps: RewindRecoveryDeps,
+  sessionId: string,
+  journal: AgentSessionJournal,
+  fence: number,
+  evidence: StructuredRewindRecoveryEvidence,
+  now: () => number = Date.now,
+  receipt?: (
+    rewind: AgentSessionRewindRecord,
+    fence: number,
+    cursor: AgentJournalCursor
+  ) => JournalOperationReceipt
+): Promise<void> {
   const { store } = deps
   let rewind = store.getRecord(sessionId)?.rewind
-  if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
+  if (!evidence || (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared')) {
     return
+  }
+  if (!isDeepStrictEqual(rewind, evidence.rewind)) {
+    throw new Error('agent_session_rewind:stale-evidence')
   }
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
   if (target?.provider === 'claude') {
@@ -96,16 +157,7 @@ export async function recoverStructuredRewind(
     return
   }
   if (target?.provider === 'codex' && !rewind.hydrationVerified) {
-    const read = adapter?.recoverRewind?.({
-      sessionId,
-      fence,
-      beforeTurnId: target.turnId,
-      ...(signal ? { signal } : {})
-    })
-    const recovered = signal
-      ? await waitForPromiseWithSignal(Promise.resolve(read), signal)
-      : await read
-    signal?.throwIfAborted()
+    const { recovered } = evidence
     if (!recovered?.ok) {
       // The target is still in the provider's history, and the journal is replaced only once the
       // revert is proven, so both still hold it even when the provider acknowledged the revert.

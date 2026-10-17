@@ -379,7 +379,7 @@ it('refuses the command at handover when the provider opened a turn meanwhile (B
   void state.host['tasks'].serialize(SESSION, () => held.promise)
   const commanded = state.host.conversationCommand(CALLER, params)
   void state.host['tasks'].serialize(SESSION, async () => {
-    events?.appendItem(
+    await events?.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'provider-turn', ordinal: 0 },
       { kind: 'turn', turnId: 'provider-turn', state: 'running' },
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE, lifecycle: true }

@@ -44,8 +44,7 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
  */
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
-  platform: NodeJS.Platform = process.platform,
-  onOutput?: () => void
+  platform: NodeJS.Platform = process.platform
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
@@ -63,8 +62,7 @@ export function createClaudeCodeProcessSpawn(
           inheritedEnv: definedEnv(options.env),
           site: 'claude-stream-json-teardown',
           policy: (supervised) => claudeChildClosePolicy(supervised, platform),
-          acceptClose: claudeChildCloseProven,
-          ...(onOutput ? { onOutput } : {})
+          acceptClose: claudeChildCloseProven
         }
       )
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.

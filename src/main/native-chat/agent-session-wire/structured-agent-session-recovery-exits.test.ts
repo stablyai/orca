@@ -35,7 +35,7 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 const spawnedOwners = new Set<ReturnType<typeof spawnProcess>>()
 const supersededHosts = new Set<StructuredAgentSessionHost>()
 
-async function spawnOwner(spawnToken: string) {
+async function acquireOwner(spawnToken: string) {
   const child = spawnProcess({
     program: process.execPath,
     args: ['-e', 'setInterval(() => {}, 1_000)'],
@@ -73,13 +73,16 @@ async function startAgent(): Promise<void> {
 
 function adapter(): StructuredAgentSessionAdapter {
   return {
+    open: async () => ({
+      reportedOptions: { model: '' }
+    }),
     acquire,
-    releaseAcquisition: vi.fn(async () => undefined),
+    releaseAcquisition: vi.fn(async () => false),
     dispatch: vi.fn(),
     cancelTurn: vi.fn(),
     answerPrompt: vi.fn(),
     setOption: vi.fn()
-  } as unknown as StructuredAgentSessionAdapter
+  }
 }
 
 function openHost(overrides: Partial<StructuredAgentSessionHostDeps> = {}): void {
@@ -105,6 +108,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-recovery-exits-'))
   resetHostTestOperationIds()
   acquire = vi.fn(async ({ fence }) => ({
+    acquisitionGeneration: globalThis.crypto.randomUUID(),
     process: {
       hostId: 'local',
       pid: 4242,
@@ -286,8 +290,9 @@ describe('recovery exits', () => {
   })
 
   it('recovers when the outgoing runtime writes after the replacement probes its dying owner', async () => {
-    const outgoing = await spawnOwner('spawn-a')
+    const outgoing = await acquireOwner('spawn-a')
     acquire.mockResolvedValueOnce({
+      acquisitionGeneration: globalThis.crypto.randomUUID(),
       process: outgoing.process,
       link: {
         linkId: 'link-outgoing',
@@ -331,8 +336,9 @@ describe('recovery exits', () => {
     })
     expect(acquire).toHaveBeenCalledOnce()
 
-    const replacement = await spawnOwner('spawn-b')
+    const replacement = await acquireOwner('spawn-b')
     acquire.mockResolvedValueOnce({
+      acquisitionGeneration: globalThis.crypto.randomUUID(),
       process: replacement.process,
       link: {
         linkId: 'link-replacement',

@@ -214,20 +214,16 @@ export class AgentSessionRecordStore {
     link?: AgentSessionProviderHandleLink
     now: number
     leaseTtlMs?: number
-    options?: Readonly<Record<string, string>>
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => {
-      const proved = proveAgentSessionOwner({
+    return this.mutate(args.sessionId, (record) =>
+      proveAgentSessionOwner({
         record,
         fence: args.fence,
         ...(args.link ? { link: args.link } : {}),
         now: args.now,
         leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
       })
-      return args.options
-        ? replaceAgentSessionRecordOptions(proved, { ...args, options: args.options })
-        : proved
-    })
+    )
   }
 
   /** Settle the failed attach and its reservation in one durable transaction. */
