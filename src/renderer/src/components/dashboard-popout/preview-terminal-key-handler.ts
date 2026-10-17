@@ -14,7 +14,10 @@ import {
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
 import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
-import { isAppOwnedCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
+import {
+  isAppOwnedCopyChord,
+  isMacNativeMenuChord
+} from '@/components/terminal-pane/xterm-bypass-policy'
 
 /**
  * Installs the preview terminal's ONE custom key handler (xterm allows a single
@@ -106,7 +109,7 @@ export function installPreviewTerminalKeyHandler(args: {
         }
         return consumeEvent(event)
       }
-      return true
+      return !isMacNativeMenuChord(event, { isMac: platform === 'darwin' })
     }
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
@@ -166,7 +169,8 @@ export function installPreviewTerminalKeyHandler(args: {
       optionKeyLocations: optionKeyLocations.get()
     })
     if (!action) {
-      return true
+      // Why: xterm's Kitty encoder would preventDefault unbound menu chords, so the native menu role never fires.
+      return !isMacNativeMenuChord(event, { isMac: platform === 'darwin' })
     }
     switch (action.type) {
       case 'sendInput':
