@@ -14,7 +14,13 @@ export type TerminalTabTitleUpdate = { tabId: string; title: string }
 export type GeneratedTabTitleUpdate = {
   paneKey: string
   prompt: string
-  options?: { replaceExistingGeneratedTitle?: boolean }
+  options?: {
+    replaceExistingGeneratedTitle?: boolean
+    /** A provider session replacement (/clear) mints a fresh conversation on this pane; the old
+     *  generated label described a session that no longer exists, and leaving it in place would
+     *  block the new session's first prompt from titling the tab. */
+    clearGeneratedTitle?: boolean
+  }
 }
 
 type TitleState = Pick<
@@ -110,7 +116,7 @@ function updateStageUnifiedLabel(
   stage: OwnerStage,
   tabId: string,
   key: 'generatedLabel' | 'label',
-  value: string
+  value: string | undefined
 ): void {
   const index = stage.unifiedIndexByTabId.get(tabId)
   if (index === undefined || stage.unifiedTabs[index]?.[key] === value) {
@@ -208,25 +214,39 @@ export function applyGeneratedTabTitleUpdates(
   updates: readonly GeneratedTabTitleUpdate[]
 ): TitleUpdateResult {
   const ownerByTabId = getTerminalTabOwners(state.tabsByWorktree)
-  if (state.settings?.tabAutoGenerateTitle !== true) {
-    return { patch: null, runtimeGraphChanged: false }
-  }
   const stages = new Map<string, OwnerStage>()
   for (const { paneKey, prompt, options } of updates) {
     const tabId = getTabIdFromPaneKey(paneKey)
     const ownerWorktreeId = tabId ? ownerByTabId.get(tabId) : undefined
-    if (!tabId || !ownerWorktreeId || prompt.length === 0) {
+    if (!tabId || !ownerWorktreeId) {
+      continue
+    }
+    // Why: prompt-less frames are the high-frequency case, and only a clear signal acts without a
+    // prompt — short-circuit before paying the per-worktree index allocation below.
+    if (prompt.length === 0 && options?.clearGeneratedTitle !== true) {
       continue
     }
     const stage = getOwnerStage(state, stages, ownerWorktreeId)
     const tabIndexes = stage.tabIndexesById.get(tabId)
     const currentTab = tabIndexes ? stage.tabs[tabIndexes[0]] : undefined
-    if (
-      !currentTab ||
-      !tabIndexes ||
-      currentTab.customTitle?.trim() ||
-      currentTab.quickCommandLabel?.trim()
-    ) {
+    if (!currentTab || !tabIndexes) {
+      continue
+    }
+    // Why: a session replacement outranks the custom/quick guards below — those protect the USER's
+    // label, and this only drops the stale generated one so the next prompt can title the tab.
+    if (options?.clearGeneratedTitle === true) {
+      if (currentTab.generatedTitle?.trim()) {
+        updateStageTabs(stage, tabIndexes, (tab) => ({ ...tab, generatedTitle: undefined }))
+        updateStageUnifiedLabel(stage, tabId, 'generatedLabel', undefined)
+      }
+      continue
+    }
+    // Why: generation is gated by the setting, but a clear only drops stale state that would
+    // otherwise reappear if the setting were re-enabled, so it runs regardless.
+    if (state.settings?.tabAutoGenerateTitle !== true) {
+      continue
+    }
+    if (currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
       continue
     }
     const existingGeneratedTitle = currentTab.generatedTitle?.trim()

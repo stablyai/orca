@@ -86,21 +86,30 @@ export function createTerminalTabPresentationActions(
       // Why: setAgentStatus is high-frequency; skip derive/set unless the feature is on and this tab still needs a (re)generated title.
       const state = get()
       const tabId = getTabIdFromPaneKey(paneKey)
-      if (!tabId || prompt.length === 0 || state.settings?.tabAutoGenerateTitle !== true) {
+      if (
+        !tabId ||
+        (options?.clearGeneratedTitle !== true && state.settings?.tabAutoGenerateTitle !== true)
+      ) {
         return
       }
-      const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
-      if (!ownerWorktreeId) {
-        return
-      }
-      const tabs = state.tabsByWorktree[ownerWorktreeId] ?? []
-      const currentTab = tabs.find((tab) => tab.id === tabId)
-      if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
-        return
-      }
-      const existingGeneratedTitle = currentTab.generatedTitle?.trim()
-      if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
-        return
+      // Why: a clear signal carries no prompt and must outrank the has-title guards it exists to undo.
+      if (options?.clearGeneratedTitle !== true) {
+        if (prompt.length === 0) {
+          return
+        }
+        const ownerWorktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+        if (!ownerWorktreeId) {
+          return
+        }
+        const tabs = state.tabsByWorktree[ownerWorktreeId] ?? []
+        const currentTab = tabs.find((tab) => tab.id === tabId)
+        if (!currentTab || currentTab.customTitle?.trim() || currentTab.quickCommandLabel?.trim()) {
+          return
+        }
+        const existingGeneratedTitle = currentTab.generatedTitle?.trim()
+        if (existingGeneratedTitle && options?.replaceExistingGeneratedTitle !== true) {
+          return
+        }
       }
       set((latestState) => {
         const result = applyGeneratedTabTitleUpdates(latestState, [{ paneKey, prompt, options }])
