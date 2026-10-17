@@ -22,6 +22,7 @@ type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
   worktreePath: string | null
   displayRootPath: string | null
+  readOnly?: boolean
   explorerView: RightSidebarExplorerView
   activeFileId: string | null
   hasNameFilter: boolean
@@ -45,6 +46,7 @@ export function FileExplorerFilesTreePane({
   activeRepo,
   worktreePath,
   displayRootPath,
+  readOnly = false,
   explorerView,
   activeFileId,
   hasNameFilter,
@@ -152,18 +154,18 @@ export function FileExplorerFilesTreePane({
       viewportTabIndex={-1}
       viewportClassName="h-full min-h-0 py-2"
       onWheelCapture={handleWheelCapture}
-      onDragOverCapture={rootDragHandlers.onDragOverCapture}
-      onDragOver={rootDragHandlers.onDragOver}
-      onDragEnter={rootDragHandlers.onDragEnter}
-      onDragLeave={rootDragHandlers.onDragLeave}
-      onDrop={rootDragHandlers.onDrop}
+      onDragOverCapture={readOnly ? undefined : rootDragHandlers.onDragOverCapture}
+      onDragOver={readOnly ? undefined : rootDragHandlers.onDragOver}
+      onDragEnter={readOnly ? undefined : rootDragHandlers.onDragEnter}
+      onDragLeave={readOnly ? undefined : rootDragHandlers.onDragLeave}
+      onDrop={readOnly ? undefined : rootDragHandlers.onDrop}
       onDragEnd={() => {
         stopDragEdgeScroll()
         setDropTargetDir(null)
       }}
       viewportProps={{
-        onContextMenuCapture: handleExplorerBackgroundContextMenuCapture,
-        onDoubleClick: handleExplorerBackgroundDoubleClick
+        onContextMenuCapture: readOnly ? undefined : handleExplorerBackgroundContextMenuCapture,
+        onDoubleClick: readOnly ? undefined : handleExplorerBackgroundDoubleClick
       }}
     >
       {treeError !== null &&
@@ -190,6 +192,8 @@ export function FileExplorerFilesTreePane({
       )}
       {showTree && (
         <FileExplorerVirtualRows
+          readOnly={readOnly}
+          worktreePath={worktreePath}
           displayDepthOffset={getExplorerDisplayDepth(worktreePath, displayRootPath)}
           virtualizer={virtualizer}
           inlineInputIndex={inlineInputIndex}

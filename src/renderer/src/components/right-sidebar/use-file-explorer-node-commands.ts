@@ -20,6 +20,7 @@ import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from './file-explorer-types'
 import { useFileDuplicate } from './useFileDuplicate'
 import { useFileExplorerKeys } from './useFileExplorerKeys'
+import { isFileExplorerNodeReadOnly } from './file-explorer-row-action-visibility'
 
 type UseFileExplorerNodeCommandsParams = {
   activeWorktreeId: string | null
@@ -44,6 +45,7 @@ type UseFileExplorerNodeCommandsParams = {
   handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
+  readOnly?: boolean
 }
 
 type UseFileExplorerNodeCommandsResult = {
@@ -76,7 +78,8 @@ export function useFileExplorerNodeCommands({
   refreshDir,
   handleClick,
   toggleDir,
-  scrollToIndex
+  scrollToIndex,
+  readOnly = false
 }: UseFileExplorerNodeCommandsParams): UseFileExplorerNodeCommandsResult {
   const collapseDirSubtree = useAppStore((s) => s.collapseDirSubtree)
   const openModal = useAppStore((s) => s.openModal)
@@ -85,6 +88,10 @@ export function useFileExplorerNodeCommands({
   const selectedNodes = useMemo(
     () => rowProjection.getRowsByPaths(selectedPaths),
     [rowProjection, selectedPaths]
+  )
+  const isReadOnlyNode = useCallback(
+    (node: TreeNode) => isFileExplorerNodeReadOnly(node, worktreePath, readOnly),
+    [readOnly, worktreePath]
   )
 
   // Why: pass a stable activator so arrow-key navigation can hand the same
@@ -101,15 +108,30 @@ export function useFileExplorerNodeCommands({
     rowProjection,
     expandedPaths: rowExpandedPaths,
     canToggleDirectories: true,
+    canMutate: !readOnly,
+    canMutateNode: (node) => !isReadOnlyNode(node),
+    canCopyRelativePathNode: (node) => !isReadOnlyNode(node),
     inlineInput,
     selectedPaths,
     selectedNode,
     activateNode,
     moveSelection,
     toggleDir,
-    startRename,
-    requestDelete,
-    requestDeleteAll,
+    startRename: (node) => {
+      if (!isReadOnlyNode(node)) {
+        startRename(node)
+      }
+    },
+    requestDelete: (node) => {
+      if (!isReadOnlyNode(node)) {
+        requestDelete(node)
+      }
+    },
+    requestDeleteAll: (nodes) => {
+      if (!nodes.some(isReadOnlyNode)) {
+        requestDeleteAll(nodes)
+      }
+    },
     scrollToIndex,
     activeWorktreeId
   })
@@ -119,16 +141,37 @@ export function useFileExplorerNodeCommands({
   // set; otherwise fall through to single-node delete.
   const handleContextMenuDelete = useCallback(
     (node: TreeNode) => {
-      if (selectedPaths.has(node.path) && selectedNodes.length > 1) {
-        requestDeleteAll(selectedNodes)
+      const targets =
+        selectedPaths.has(node.path) && selectedNodes.length > 1 ? selectedNodes : [node]
+      if (targets.some(isReadOnlyNode)) {
+        return
+      }
+      if (targets.length > 1) {
+        requestDeleteAll(targets)
       } else {
         requestDelete(node)
       }
     },
-    [selectedPaths, selectedNodes, requestDelete, requestDeleteAll]
+    [isReadOnlyNode, selectedNodes, selectedPaths, requestDelete, requestDeleteAll]
   )
 
-  const handleDuplicate = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
+  const duplicateFile = useFileDuplicate({ activeWorktreeId, worktreePath, refreshDir })
+  const handleDuplicate = useCallback(
+    (node: TreeNode) => {
+      if (!isReadOnlyNode(node)) {
+        duplicateFile(node)
+      }
+    },
+    [duplicateFile, isReadOnlyNode]
+  )
+  const handleStartRename = useCallback(
+    (node: TreeNode) => {
+      if (!isReadOnlyNode(node)) {
+        startRename(node)
+      }
+    },
+    [isReadOnlyNode, startRename]
+  )
   const handleRowClick = useCallback(
     (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => {
       const dirToggle = resolveDirToggleTiming({
@@ -150,14 +193,14 @@ export function useFileExplorerNodeCommands({
   )
   const handleFindInFolder = useCallback(
     (node: TreeNode) => {
-      if (!activeWorktreeId || !node.isDirectory) {
+      if (isReadOnlyNode(node) || !activeWorktreeId || !node.isDirectory) {
         return
       }
       showRightSidebarSearch({
         includePattern: folderRelativePathToIncludeGlob(node.relativePath)
       })
     },
-    [activeWorktreeId, showRightSidebarSearch]
+    [activeWorktreeId, isReadOnlyNode, showRightSidebarSearch]
   )
 
   const handleAddFolderAsProject = useCallback(
@@ -174,16 +217,16 @@ export function useFileExplorerNodeCommands({
   )
   const handleOpenInTerminal = useCallback(
     (node: TreeNode) => {
-      if (!activeWorktreeId || !node.isDirectory) {
+      if (isReadOnlyNode(node) || !activeWorktreeId || !node.isDirectory) {
         return
       }
       createNewTerminalTab(activeWorktreeId, undefined, { startupCwd: node.path })
     },
-    [activeWorktreeId]
+    [activeWorktreeId, isReadOnlyNode]
   )
 
   return {
-    handleStartRename: startRename,
+    handleStartRename,
     handleContextMenuDelete,
     handleDuplicate,
     handleRowClick,

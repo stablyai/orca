@@ -19,6 +19,8 @@ import { NOT_A_REGULAR_FILE_MESSAGE } from './filesystem/local-regular-file-read
 
 const USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE =
   'Access denied: a file opened by name needs an absolute path.'
+const USER_DIRECTORY_NEEDS_ABSOLUTE_PATH_MESSAGE =
+  'Access denied: a directory opened by name needs an absolute path.'
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 
 const CHAT_IMAGE_TYPE_MESSAGE = 'Access denied: a chat can only show local image files.'
@@ -42,6 +44,21 @@ function resolveUserNamedLocalPath(targetPath: string): string {
     throw new Error(USER_FILE_NEEDS_ABSOLUTE_PATH_MESSAGE)
   }
   return resolve(targetPath)
+}
+
+async function resolveUserNamedDirectoryPath(targetPath: string): Promise<string> {
+  if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
+    throw new Error(USER_DIRECTORY_NEEDS_ABSOLUTE_PATH_MESSAGE)
+  }
+  const resolvedTarget = resolve(targetPath)
+  if (isNetworkSharePath(resolvedTarget) || isRefusedAutomaticLoadPath(resolvedTarget)) {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  const directoryPath = resolve(await realpath(resolvedTarget))
+  if (isNetworkSharePath(directoryPath) || isRefusedAutomaticLoadPath(directoryPath)) {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  return directoryPath
 }
 
 /**
@@ -187,6 +204,9 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
   if (access.kind === 'user-file') {
     return { kind: 'user-file' }
   }
+  if (access.kind === 'user-directory') {
+    return { kind: 'user-directory' }
+  }
   if (access.kind === 'chat-image') {
     return { kind: 'chat-image' }
   }
@@ -208,7 +228,13 @@ function parseLocalFileAccess(access: unknown): LocalFileAccess | undefined {
 }
 
 /** What a desktop request does with its path; each declared kind adds access to only some. */
-export type LocalRequestOperation = 'read' | 'write' | 'rename-from' | 'rename-to' | 'import-into'
+export type LocalRequestOperation =
+  | 'read'
+  | 'read-directory'
+  | 'write'
+  | 'rename-from'
+  | 'rename-to'
+  | 'import-into'
 
 type KindRule = (targetPath: string) => Promise<string>
 
@@ -220,9 +246,11 @@ function declaredKindRule(
   switch (fileAccess.kind) {
     case 'user-file':
       // Why renames: resolveLocalRenamePaths declares this only for the opened document itself.
-      return operation !== 'import-into'
+      return operation !== 'import-into' && operation !== 'read-directory'
         ? async (targetPath) => resolveUserNamedLocalPath(targetPath)
         : undefined
+    case 'user-directory':
+      return operation === 'read-directory' ? resolveUserNamedDirectoryPath : undefined
     case 'document-resource':
       return operation === 'read'
         ? (targetPath) => resolveDocumentResourcePath(targetPath, fileAccess.documentPath)
@@ -256,6 +284,9 @@ export async function resolveLocalRequestPath(
     return resolveDesktopAuthorizedPath(targetPath, store, options)
   }
   if (typeof targetPath !== 'string') {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  if (fileAccess.kind === 'user-directory' && isRefusedAutomaticLoadPath(resolve(targetPath))) {
     throw new Error(PATH_ACCESS_DENIED_MESSAGE)
   }
   // Why device text first: a device is never a file to load, even inside a project.
@@ -305,6 +336,22 @@ export function resolveLocalFileRequestPath(
   store: Store
 ): Promise<string> {
   return resolveLocalRequestPath(targetPath, access, store, 'read')
+}
+
+/** A desktop directory listing; user-directory access adds an absolute local directory. */
+export async function resolveLocalDirectoryListingPath(
+  targetPath: string,
+  access: unknown,
+  store: Store
+): Promise<string> {
+  const directoryPath = await resolveLocalRequestPath(targetPath, access, store, 'read-directory')
+  if (
+    parseLocalFileAccess(access)?.kind === 'user-directory' &&
+    !(await stat(directoryPath)).isDirectory()
+  ) {
+    throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+  }
+  return directoryPath
 }
 
 /** A desktop save; user-file access adds the open file the user named. */

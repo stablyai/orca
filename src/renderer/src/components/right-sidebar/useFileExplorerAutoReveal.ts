@@ -3,6 +3,7 @@ import type { Virtualizer } from '@tanstack/react-virtual'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
+import { isExplorerRootOutsideWorkspace } from './file-explorer-display-root'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 
 type UseFileExplorerAutoRevealParams = {
@@ -61,6 +62,9 @@ export function useFileExplorerAutoReveal({
 
     // Don't override a pending manual reveal (e.g. from Source Control "Reveal in Explorer")
     if (pendingExplorerReveal) {
+      return
+    }
+    if (isExplorerRootOutsideWorkspace(worktreePath, displayRootPath)) {
       return
     }
 

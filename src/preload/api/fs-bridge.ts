@@ -41,6 +41,7 @@ export const fsApi = {
     dirPath: string
     connectionId?: string
     followSymlinks?: boolean
+    access?: LocalFileAccess
   }): Promise<{ name: string; isDirectory: boolean; isSymlink: boolean }[]> =>
     ipcRenderer.invoke('fs:readDir', args),
   readFile: (args: {

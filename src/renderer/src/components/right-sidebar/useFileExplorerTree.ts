@@ -1,7 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DirCache, FileExplorerTreeRefreshOutcome } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 import {
   getFileExplorerOperationOwner,
@@ -23,6 +22,7 @@ import {
   withPendingFileExplorerDirCacheEntries
 } from './file-explorer-dir-load-state'
 import { statUserOpenedPath, type UserOpenedPathStat } from '@/lib/user-opened-local-path'
+import { getExplorerDirectoryDepth } from './file-explorer-display-root'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
@@ -49,9 +49,10 @@ type UseFileExplorerTreeResult = {
 
 /** Owns worktree-addressed directory caches and load tokens; display scoping changes traversal rather than cache identity. */
 export function useFileExplorerTree(
-  worktreePath: string | null,
+  treeRootPath: string | null,
   expanded: Set<string>,
-  activeWorktreeId?: string | null
+  activeWorktreeId?: string | null,
+  worktreePath: string | null = treeRootPath
 ): UseFileExplorerTreeResult {
   const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
   const [loadingDirPaths, setLoadingDirPaths] = useState<ReadonlySet<string>>(
@@ -122,7 +123,7 @@ export function useFileExplorerTree(
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
-        if (depth === -1) {
+        if (dirPath === treeRootPath) {
           setRootError(null)
           setSourceWorkspaceId(activeWorktreeId?.trim() || null)
         }
@@ -143,7 +144,7 @@ export function useFileExplorerTree(
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
-        if (depth === -1) {
+        if (dirPath === treeRootPath) {
           // Why: the old implementation collapsed root read failures into an
           // empty tree, which made authorization/path bugs look like a real
           // empty worktree. Preserve the message so the UI can distinguish
@@ -164,7 +165,7 @@ export function useFileExplorerTree(
         return !options?.failOnError
       }
     },
-    [activeWorktreeId, updateLoadingDirPaths, worktreePath]
+    [activeWorktreeId, treeRootPath, updateLoadingDirPaths, worktreePath]
   )
 
   const markPathAsDirectory = useCallback((path: string) => {
@@ -208,7 +209,7 @@ export function useFileExplorerTree(
   )
 
   const refreshTree = useCallback(async (): Promise<FileExplorerTreeRefreshOutcome> => {
-    if (!worktreePath) {
+    if (!treeRootPath) {
       // Why: not 'root-unreadable' — no read was attempted, and that outcome tells callers to DROP
       // their pending refreshes. Report the refresh as not-done so they keep them instead.
       return 'superseded'
@@ -231,7 +232,7 @@ export function useFileExplorerTree(
       }
     }
     // Why: callers use the latest refreshTree identity, so this closure has the live expanded set.
-    for (const dirPath of collectStaleDirCachePaths(dirCacheRef.current, worktreePath, expanded)) {
+    for (const dirPath of collectStaleDirCachePaths(dirCacheRef.current, treeRootPath, expanded)) {
       staleDirsRef.current.add(dirPath)
     }
     const refreshSession = dirLoadTrackerRef.current.getSession()
@@ -239,7 +240,11 @@ export function useFileExplorerTree(
     // Why: failOnError, else a dead transport reports a completed root read and we fan out one
     // doomed wave per 4 expanded dirs — 200 dirs is ~50 sequential 15s timeouts, and the watch
     // scheduler cannot start another refresh for that entire window.
-    const rootLoadCompleted = await loadDir(worktreePath, -1, { force: true, failOnError: true })
+    const rootLoadCompleted = await loadDir(
+      treeRootPath,
+      getExplorerDirectoryDepth(worktreePath, treeRootPath, treeRootPath),
+      { force: true, failOnError: true }
+    )
     if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
       // Why: the expanded dirs below were never re-read either way, but the two reasons want
       // opposite handling from callers — see FileExplorerTreeRefreshOutcome.
@@ -248,14 +253,14 @@ export function useFileExplorerTree(
     // Why: root (worktreePath) was just force-loaded above; exclude it here so
     // refreshFileExplorerExpandedDirs doesn't queue a duplicate read of root.
     const expandedDirs = Array.from(expanded)
-      .filter((dirPath) => dirPath !== worktreePath)
+      .filter((dirPath) => dirPath !== treeRootPath)
       .map((dirPath) => ({
         dirPath,
-        depth: splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
+        depth: getExplorerDirectoryDepth(worktreePath, treeRootPath, dirPath)
       }))
     const allDirsCommitted = await refreshFileExplorerExpandedDirs({
       dirs: expandedDirs,
-      worktreePath,
+      worktreePath: treeRootPath,
       dirLoadTracker: dirLoadTrackerRef.current,
       setDirCache,
       updateLoadingDirPaths,
@@ -272,25 +277,22 @@ export function useFileExplorerTree(
       }
     })
     return allDirsCommitted ? 'refreshed' : 'superseded'
-  }, [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath])
+  }, [activeWorktreeId, expanded, loadDir, treeRootPath, updateLoadingDirPaths, worktreePath])
 
   const refreshDir = useCallback(
     async (dirPath: string) => {
-      if (!worktreePath) {
+      if (!treeRootPath) {
         return
       }
-      const depth =
-        dirPath === worktreePath
-          ? -1
-          : splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
+      const depth = getExplorerDirectoryDepth(worktreePath, treeRootPath, dirPath)
       await loadDir(dirPath, depth, { force: true })
     },
-    [worktreePath, loadDir]
+    [treeRootPath, worktreePath, loadDir]
   )
 
   const isDirStale = useCallback((dirPath: string) => staleDirsRef.current.has(dirPath), [])
 
-  const rootCache = worktreePath ? dirCache[worktreePath] : undefined
+  const rootCache = treeRootPath ? dirCache[treeRootPath] : undefined
 
   const resetAndLoad = useCallback(() => {
     refreshGenerationRef.current++
@@ -302,10 +304,14 @@ export function useFileExplorerTree(
     setSourceWorkspaceId(null)
     updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
     setRootError(null)
-    if (worktreePath) {
-      void loadDir(worktreePath, -1, { force: true })
+    if (treeRootPath) {
+      void loadDir(
+        treeRootPath,
+        getExplorerDirectoryDepth(worktreePath, treeRootPath, treeRootPath),
+        { force: true }
+      )
     }
-  }, [worktreePath, loadDir, updateLoadingDirPaths])
+  }, [treeRootPath, worktreePath, loadDir, updateLoadingDirPaths])
 
   return {
     dirCache,

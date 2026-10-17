@@ -28,7 +28,9 @@ type UseFileExplorerTreePaneStateParams = {
   activeRepo: Repo | null
   worktreePath: string | null
   visibleFilesWorktreePath: string | null
+  visibleTreeRootPath?: string | null
   displayRootPath: string | null
+  readOnly?: boolean
   effectiveExpanded: Set<string>
   expanded: Set<string>
   activeFileId: string | null
@@ -74,7 +76,9 @@ export function useFileExplorerTreePaneState({
   activeRepo,
   worktreePath,
   visibleFilesWorktreePath,
+  visibleTreeRootPath = visibleFilesWorktreePath,
   displayRootPath,
+  readOnly = false,
   effectiveExpanded,
   expanded,
   activeFileId,
@@ -179,7 +183,8 @@ export function useFileExplorerTreePaneState({
   })
 
   useFileExplorerTreeLoadEffects({
-    visibleFilesWorktreePath,
+    visibleFilesWorktreePath: visibleTreeRootPath,
+    workspacePath: worktreePath,
     displayRootPath,
     expanded: effectiveExpanded,
     dirCache,
@@ -205,7 +210,7 @@ export function useFileExplorerTreePaneState({
   })
 
   useFileExplorerWatch({
-    worktreePath: visibleFilesWorktreePath,
+    worktreePath: readOnly ? null : visibleFilesWorktreePath,
     activeWorktreeId,
     dirCache,
     setDirCache,
@@ -279,7 +284,8 @@ export function useFileExplorerTreePaneState({
     refreshDir,
     handleClick: handlers.handleClick,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
-    scrollToIndex: rowScrolling.scrollToIndex
+    scrollToIndex: rowScrolling.scrollToIndex,
+    readOnly
   })
 
   return {

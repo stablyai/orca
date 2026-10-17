@@ -8,6 +8,7 @@ import type * as RepoWorktrees from '../repo-worktrees'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import {
   resolveDesktopAuthorizedPath,
+  resolveLocalDirectoryListingPath,
   resolveLocalFileRequestPath,
   resolveLocalRenamePaths,
   resolveLocalRequestPath,
@@ -51,6 +52,7 @@ function makeStore({ repoPaths = [], folderPath }: Registration): Store {
 }
 
 const USER_FILE = { kind: 'user-file' } as const
+const USER_DIRECTORY = { kind: 'user-directory' } as const
 const documentResource = (documentPath: string) =>
   ({ kind: 'document-resource', documentPath }) as const
 const documentFolder = (documentPath: string) =>
@@ -129,6 +131,48 @@ describe('user-file requests', () => {
 
     await expect(readLocalFileContent(filePath)).rejects.toThrow(NOT_A_REGULAR_FILE_MESSAGE)
   })
+})
+
+describe('user-directory requests', () => {
+  it('only lists an outside directory with user-directory access', async () => {
+    const store = makeStore({})
+
+    await expect(resolveLocalDirectoryListingPath(outside, USER_FILE, store)).rejects.toThrow(
+      'Access denied'
+    )
+    await expect(resolveLocalDirectoryListingPath(outside, undefined, store)).rejects.toThrow(
+      'Access denied'
+    )
+    await expect(resolveLocalDirectoryListingPath(outside, USER_DIRECTORY, store)).resolves.toBe(
+      outside
+    )
+  })
+
+  it.each(['outside', 'C:outside'])('refuses the non-absolute path %s', async (relative) => {
+    await expect(
+      resolveLocalDirectoryListingPath(relative, USER_DIRECTORY, makeStore({}))
+    ).rejects.toThrow('absolute path')
+  })
+
+  it('refuses a file outside every project', async () => {
+    await expect(
+      resolveLocalDirectoryListingPath(join(outside, 'notes.txt'), USER_DIRECTORY, makeStore({}))
+    ).rejects.toThrow()
+  })
+
+  it.each<LocalRequestOperation>(['read', 'write', 'rename-from', 'rename-to', 'import-into'])(
+    'does not grant %s outside project roots',
+    async (operation) => {
+      await expect(
+        resolveLocalRequestPath(
+          join(outside, 'notes.txt'),
+          USER_DIRECTORY,
+          makeStore({}),
+          operation
+        )
+      ).rejects.toThrow('Access denied')
+    }
+  )
 })
 
 describe('a declared kind never refuses what the default project check allows', () => {

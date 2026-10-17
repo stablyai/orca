@@ -10,7 +10,10 @@ vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved'
 }))
 
-import { readFileExplorerDirectory } from './file-explorer-directory-listing'
+import {
+  fileExplorerEntriesToTreeNodes,
+  readFileExplorerDirectory
+} from './file-explorer-directory-listing'
 
 describe('readFileExplorerDirectory', () => {
   it('re-sorts backend order — remote-runtime and paired-web routes return the host order verbatim', async () => {
@@ -38,4 +41,32 @@ it('preserves the host directory classification with default Quick Open preferen
   const { entries } = await readFileExplorerDirectory('wt-1', '/w', '/w')
   expect(entries).toEqual([{ name: 'linked', isDirectory: true, isSymlink: true }])
   expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', undefined)
+})
+
+it('declares user-directory access only for listings outside the workspace', async () => {
+  readRuntimeDirectory.mockResolvedValue([])
+
+  await readFileExplorerDirectory('wt-1', '/workspace', '/tmp/reference')
+
+  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/tmp/reference', {
+    access: { kind: 'user-directory' }
+  })
+})
+
+it('gives outside nodes absolute identities so workspace git status cannot decorate them', () => {
+  expect(
+    fileExplorerEntriesToTreeNodes(
+      [{ name: 'package.json', isDirectory: false, isSymlink: false }],
+      '/tmp/reference',
+      -1,
+      '/workspace',
+      { kind: 'local' }
+    )
+  ).toEqual([
+    expect.objectContaining({
+      path: '/tmp/reference/package.json',
+      relativePath: '/tmp/reference/package.json',
+      depth: 0
+    })
+  ])
 })

@@ -5,10 +5,11 @@ import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset
 import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
+import { getExplorerDirectoryDepth } from './file-explorer-display-root'
 
 type UseFileExplorerTreeLoadEffectsParams = {
   visibleFilesWorktreePath: string | null
+  workspacePath?: string | null
   displayRootPath?: string | null
   expanded: Set<string>
   dirCache: Record<string, DirCache>
@@ -25,6 +26,7 @@ type UseFileExplorerTreeLoadEffectsParams = {
 /** Reset/retry/stale-dir loads for the currently visible worktree tree. */
 export function useFileExplorerTreeLoadEffects({
   visibleFilesWorktreePath,
+  workspacePath = visibleFilesWorktreePath,
   displayRootPath = visibleFilesWorktreePath,
   expanded,
   dirCache,
@@ -113,10 +115,13 @@ export function useFileExplorerTreeLoadEffects({
     ) {
       return
     }
-    const depth =
-      splitPathSegments(displayRootPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
+    const depth = getExplorerDirectoryDepth(
+      workspacePath,
+      visibleFilesWorktreePath,
+      displayRootPath
+    )
     void loadDir(displayRootPath, depth)
-  }, [visibleFilesWorktreePath, displayRootPath, dirCache, loadingDirPaths, loadDir])
+  }, [visibleFilesWorktreePath, workspacePath, displayRootPath, dirCache, loadingDirPaths, loadDir])
 
   useEffect(() => {
     if (!visibleFilesWorktreePath) {
@@ -137,10 +142,10 @@ export function useFileExplorerTreeLoadEffects({
       if (decision === 'skip') {
         continue
       }
-      const depth = splitPathSegments(dirPath.slice(visibleFilesWorktreePath.length + 1)).length - 1
+      const depth = getExplorerDirectoryDepth(workspacePath, visibleFilesWorktreePath, dirPath)
       void loadDir(dirPath, depth, decision === 'reload' ? { force: true } : undefined)
     }
-  }, [expanded, visibleFilesWorktreePath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [expanded, visibleFilesWorktreePath, workspacePath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (

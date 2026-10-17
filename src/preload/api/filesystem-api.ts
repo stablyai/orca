@@ -60,6 +60,7 @@ export type FilesystemApi = {
       dirPath: string
       connectionId?: string
       followSymlinks?: boolean
+      access?: LocalFileAccess
     }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
