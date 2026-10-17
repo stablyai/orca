@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
@@ -87,6 +88,7 @@ async function probeGuestEnvironment(
   const captured = buildWslCapturedLoginShellCommand(script)
   const result = await runProcess({
     program: resolveWslExecutablePath(),
+    cwd: resolveWslInteropSpawnCwd(),
     args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
     // The runner sets this for every command it launches (#9010); the probe
     // spawns wsl.exe itself, so without it wsl.exe's own errors arrive UTF-16LE

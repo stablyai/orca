@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
@@ -90,6 +91,7 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
       'wsl.exe',
       buildWslExecArgs(distro, ['sh', '-lc', captured.command]),
       {
+        cwd: resolveWslInteropSpawnCwd(),
         encoding: 'utf8',
         maxBuffer: PROBE_MAX_BUFFER,
         timeout: PROBE_TIMEOUT_MS,
