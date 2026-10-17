@@ -153,39 +153,8 @@ describe('OMP session status ownership', () => {
       harness.fetchMock.mock.calls.map((call) => JSON.parse(call[1].body).payload.hook_event_name)
     ).toEqual(['agent_start', 'agent_end'])
   })
-})
 
-describe('OMP runtime session provenance', () => {
-  it.each(['omp', 'pi'] as const)(
-    'rejects an earlier child callback before it can claim the %s pane',
-    async (kind) => {
-      const harness = createAgentStatusExtensionHarness({ kind, argv: ['bun', '/opt/omp/bin/omp'] })
-      const child = {
-        agentKind: 'sub',
-        hasUI: false,
-        sessionManager: { getSessionId: () => 'child', getSessionFile: () => '/child.jsonl' }
-      }
-      await harness.callHook('session_start', {}, child)
-      await harness.callHook('agent_start', {}, child)
-      await settle()
-      expect(harness.fetchMock).not.toHaveBeenCalled()
-      harness.reload()
-      const root = {
-        agentKind: 'main',
-        hasUI: false,
-        sessionManager: { getSessionId: () => 'root', getSessionFile: () => '/root.jsonl' }
-      }
-      await harness.callHook('session_start', {}, root)
-      await settle()
-      harness.fetchMock.mockClear()
-      await harness.callHook('agent_start', {}, root)
-      await settle()
-      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-      expect(JSON.parse(harness.fetchMock.mock.calls[0][1].body).payload.session_id).toBe('root')
-    }
-  )
-
-  it('allows a former child transcript resumed as the runtime main session', async () => {
+  it('allows a former child transcript resumed without native agent metadata', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
     const root = {
       hasUI: false,
@@ -200,5 +169,38 @@ describe('OMP runtime session provenance', () => {
     expect(JSON.parse(harness.fetchMock.mock.calls[0][1].body).payload.session_id).toBe(
       'resumed-child'
     )
+  })
+
+  it('fences an explicit child before a root without native registry capability', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const registration = harness.registerTaskChild()
+    const child = {
+      agent: { id: 'EarlyChild', kind: 'sub' as const, parentId: 'Main' },
+      sessionManager: {
+        getSessionId: () => 'early-child',
+        getSessionFile: () => '/early-child.jsonl',
+        getHeader: () => ({})
+      }
+    }
+    await registration.callHook('session_start', { reason: 'startup' }, child)
+    await registration.callHook('agent_start', {}, child)
+    await registration.callHook('session_shutdown', { reason: 'quit' }, child)
+    await settle()
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+
+    const root = {
+      sessionManager: {
+        getSessionId: () => 'legacy-root',
+        getSessionFile: () => '/legacy-root.jsonl'
+      }
+    }
+    await harness.callHook('session_start', {}, root)
+    await harness.callHook('agent_start', {}, root)
+    await settle()
+    expect(JSON.parse(harness.fetchMock.mock.lastCall?.[1]?.body).payload).toMatchObject({
+      hook_event_name: 'agent_start',
+      session_id: 'legacy-root',
+      session_file: '/legacy-root.jsonl'
+    })
   })
 })

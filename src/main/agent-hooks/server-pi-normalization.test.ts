@@ -288,22 +288,46 @@ const REVIEWER = {
   agentType: 'reviewer',
   description: 'Review the diff'
 }
+const OMP_SESSION = {
+  session_id: 'omp-root',
+  session_file: '/home/dev/.omp/agent/sessions/omp-root.jsonl'
+}
 
 describe('Pi-family child rows through the hook lane', () => {
   let server: AgentHookServer
 
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000_000)
     server = new AgentHookServer()
     await server.start({ env: 'production' })
   })
 
   afterEach(() => {
     server.stop()
+    vi.useRealTimers()
   })
 
-  async function post(source: 'pi' | 'omp', payload: Record<string, unknown>): Promise<void> {
+  async function post(
+    source: 'pi' | 'omp' | 'prime-agent',
+    payload: Record<string, unknown>
+  ): Promise<void> {
     const response = await postHookEvent(server, buildBody(payload), `/hook/${source}`)
     expect(response.status).toBe(204)
+  }
+
+  async function snapshot(
+    ompStatus: unknown,
+    subagents: unknown = [SCOUT],
+    extra: Record<string, unknown> = {}
+  ): Promise<void> {
+    await post('omp', {
+      ...OMP_SESSION,
+      hook_event_name: 'subagents_update',
+      omp_status: ompStatus,
+      subagents,
+      ...extra
+    })
   }
 
   it.each(['pi', 'omp'] as const)(
@@ -349,6 +373,139 @@ describe('Pi-family child rows through the hook lane', () => {
     expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
   })
 
+  it('recovers a root and named children after receiver restart', async () => {
+    await snapshot({
+      state: 'blocked',
+      prompt: 'Recover root',
+      tool_name: 'bash',
+      tool_input: { command: 'pnpm test' },
+      role: 'assistant',
+      text: 'Root approval pending'
+    })
+    expect(server.getStatusSnapshot()).toMatchObject([
+      {
+        agentType: 'omp',
+        state: 'blocked',
+        prompt: 'Recover root',
+        toolName: 'bash',
+        toolInput: 'pnpm test',
+        lastAssistantMessage: 'Root approval pending',
+        subagents: [SCOUT],
+        providerSession: {
+          id: OMP_SESSION.session_id,
+          transcriptPath: OMP_SESSION.session_file
+        }
+      }
+    ])
+    expect(server.getStatusSnapshot()[0]?.providerSessionOnly).toBeUndefined()
+  })
+
+  it('preserves human waits until native input evidence releases them', async () => {
+    await post('omp', {
+      ...OMP_SESSION,
+      hook_event_name: 'before_agent_start',
+      prompt: 'Approve the change'
+    })
+    await post('omp', {
+      ...OMP_SESSION,
+      hook_event_name: 'tool_approval_requested',
+      tool_name: 'bash',
+      reason: 'Critical pattern detected'
+    })
+    const blocked = server.getStatusSnapshot()[0]!
+    vi.setSystemTime(1_010_000)
+    await snapshot(
+      {
+        state: 'working',
+        prompt: 'Unproven busy prompt',
+        tool_name: 'read',
+        tool_input: { path: 'unproven.ts' }
+      },
+      [REVIEWER]
+    )
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'blocked',
+      prompt: 'Approve the change',
+      toolName: 'bash',
+      toolInput: 'Critical pattern detected',
+      mainAgent: { state: 'blocked', stateStartedAt: blocked.stateStartedAt },
+      stateStartedAt: blocked.stateStartedAt,
+      turnStartedAt: blocked.turnStartedAt,
+      subagents: [REVIEWER]
+    })
+    // The resolution hook may have been coalesced away; false is positive release evidence.
+    await snapshot({
+      state: 'working',
+      input_pending: false,
+      tool_name: 'bash',
+      tool_input: null
+    })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'working', stateStartedAt: 1_010_000 }
+    })
+    expect(server.getStatusSnapshot()[0]?.toolInput).toBeUndefined()
+
+    const questions = { questions: [{ question: 'Which path?', options: ['A', 'B'] }] }
+    await snapshot({ state: 'waiting', tool_name: 'ask', tool_input: questions })
+    await snapshot({ state: 'working', input_pending: true, tool_name: 'bash' }, [REVIEWER])
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'waiting',
+      toolName: 'ask',
+      interactivePrompt: JSON.stringify(questions),
+      subagents: [REVIEWER]
+    })
+    await snapshot({ state: 'working', input_pending: false }, [])
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+    expect(server.getStatusSnapshot()[0]?.interactivePrompt).toBeUndefined()
+    expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+  })
+
+  it('requires native boundary proof to rebind and rejects stale snapshots', async () => {
+    await snapshot({ state: 'unknown', prompt: 'Invalid root' })
+    expect(server.getStatusSnapshot()).toEqual([])
+    await snapshot({ state: 'working', prompt: 'Old root' })
+    const before = server.getStatusSnapshot()
+    const replacement = { session_file: '/sessions/replacement.jsonl' }
+    vi.setSystemTime(1_010_000)
+    await snapshot({ state: 'working', prompt: 'Unproven root' }, [REVIEWER], replacement)
+    expect(server.getStatusSnapshot()).toEqual(before)
+    await snapshot({ state: 'unknown' }, [], replacement)
+    expect(server.getStatusSnapshot()).toEqual(before)
+    await snapshot({ state: 'done', session_boundary: true }, [REVIEWER], replacement)
+    const current = server.getStatusSnapshot()
+    expect(current[0]).toMatchObject({
+      state: 'working',
+      prompt: '',
+      providerSession: { id: OMP_SESSION.session_id, transcriptPath: replacement.session_file },
+      mainAgent: { state: 'done', stateStartedAt: 1_010_000 },
+      subagents: [REVIEWER]
+    })
+    expect(current[0]?.turnStartedAt).toBeUndefined()
+    await snapshot({ state: 'working', prompt: 'Delayed old root' })
+    expect(server.getStatusSnapshot()).toEqual(current)
+  })
+
+  it('ignores native OMP root metadata on the legacy Pi lane', async () => {
+    const payload = {
+      ...OMP_SESSION,
+      hook_event_name: 'subagents_update',
+      omp_status: { state: 'blocked', prompt: 'Spoofed native root', session_boundary: true },
+      subagents: [REVIEWER]
+    }
+    await post('pi', payload)
+    expect(server.getStatusSnapshot()).toEqual([])
+    await post('pi', { hook_event_name: 'before_agent_start', prompt: 'Genuine provider root' })
+    await post('pi', payload)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      agentType: 'pi',
+      prompt: 'Genuine provider root',
+      subagents: [REVIEWER]
+    })
+    expect(server.getStatusSnapshot()[0]?.mainAgent).toBeUndefined()
+  })
+
   it('keeps an update from inventing a row or unhiding a resume placeholder', async () => {
     await post('pi', { hook_event_name: 'subagents_update', subagents: [SCOUT] })
     expect(server.getStatusSnapshot()).toEqual([])
@@ -382,6 +539,9 @@ describe('Pi-family child rows through the hook lane', () => {
   it('never lets one agent restate another agent row', async () => {
     await post('pi', { hook_event_name: 'before_agent_start', prompt: 'pi turn' })
     await post('omp', { hook_event_name: 'subagents_update', subagents: [SCOUT] })
+    const before = server.getStatusSnapshot()
+    await snapshot({ state: 'blocked', prompt: 'Spoofed OMP root', session_boundary: true })
+    expect(server.getStatusSnapshot()).toEqual(before)
 
     const [row] = server.getStatusSnapshot()
     expect(row).toMatchObject({ agentType: 'pi', prompt: 'pi turn' })

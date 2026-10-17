@@ -230,65 +230,94 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).not.toHaveBeenCalled()
   })
 
-  it('retires inherited launch authority when the agent command exits', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
-    const retireAuthority = vi.fn()
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      attestAgentHookCompatibilityAuthority: (candidate) => ({
-        paneKey: candidate.paneKey,
-        source: 'current_hook'
-      }),
-      retireAgentHookCompatibilityAuthority: retireAuthority
-    })
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-authority' }),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  it.each(['codex', 'omp'] as const)(
+    'retires %s launch authority only after its command exits',
+    async (agent) => {
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
+      const retireAuthority = vi.fn()
+      let foreground: string | null = agent === 'omp' ? 'omp' : null
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        attestAgentHookCompatibilityAuthority: (candidate) => ({
+          paneKey: candidate.paneKey,
+          source: 'current_hook'
+        }),
+        retireAgentHookCompatibilityAuthority: retireAuthority
+      })
+      const controller = {
+        spawn,
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => foreground
+      }
+      runtime.setPtyController(controller)
+      runtime.setNotifier({
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-authority' }),
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        focusTerminal: vi.fn(),
+        closeTerminal: vi.fn(),
+        sleepWorktree: vi.fn(),
+        terminalFitOverrideChanged: vi.fn(),
+        terminalDriverChanged: vi.fn()
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
-    const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'codex',
-      launchAgent: 'codex',
-      launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
-    })
-    const spawnEnv =
-      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
-    const evidence = {
-      terminalHandle: terminal.handle,
-      paneKey: spawnEnv.ORCA_PANE_KEY,
-      launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
+      const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: agent,
+        launchAgent: agent,
+        launchConfig: { agentCommand: agent, agentArgs: '', agentEnv: {} }
+      })
+      const spawnEnv =
+        (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+      const evidence = {
+        terminalHandle: terminal.handle,
+        paneKey: spawnEnv.ORCA_PANE_KEY,
+        launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
+      }
+
+      expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
+      expect((await runtime.listTerminals()).terminals).toEqual([
+        expect.objectContaining({ handle: terminal.handle, agentIdentity: agent })
+      ])
+      if (agent === 'omp') {
+        // Captured OMP 18.10.4 user-bubble markers; the process is still running.
+        runtime.setPtyController(null)
+        runtime.onPtyData('pty-authority', '\x1b]133;B\x07\x1b]133;C\x07\x1b]133;D;0\x07', 99)
+        runtime.setPtyController(controller)
+        await runtime.ptyForegroundProcessReads.get('pty-authority')?.promise
+        expect(retireAuthority).not.toHaveBeenCalled()
+        expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
+        foreground = null
+        runtime.emitDaemonPtyTransientFact('pty-authority', {
+          kind: 'command-finished',
+          exitCode: 0
+        })
+        await runtime.ptyForegroundProcessReads.get('pty-authority')?.promise
+        expect(retireAuthority).not.toHaveBeenCalled()
+        foreground = 'zsh'
+        runtime.setPtyController(null)
+      }
+
+      runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
+      if (agent === 'omp') {
+        expect(retireAuthority).not.toHaveBeenCalled()
+        runtime.setPtyController(controller)
+      }
+      await runtime.ptyForegroundProcessReads.get('pty-authority')?.promise
+
+      expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
+      expect(retireAuthority).toHaveBeenCalledTimes(1)
+      expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
+      expect((await runtime.listTerminals()).terminals).toEqual([
+        expect.not.objectContaining({ agentIdentity: expect.anything() })
+      ])
     }
-
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
-    expect((await runtime.listTerminals()).terminals).toEqual([
-      expect.objectContaining({ handle: terminal.handle, agentIdentity: 'codex' })
-    ])
-
-    runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
-
-    expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
-    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()
-    expect((await runtime.listTerminals()).terminals).toEqual([
-      expect.not.objectContaining({ agentIdentity: expect.anything() })
-    ])
-  })
+  )
 
   it('retires only receipted restored PTY authority on command completion and exit', () => {
     const retireAuthority = vi.fn()

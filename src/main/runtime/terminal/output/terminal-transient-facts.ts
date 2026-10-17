@@ -7,6 +7,7 @@ import type {
 import {
   detectAgentStatusFromTitle,
   isCursorNativeAgentTitle,
+  isShellProcess,
   normalizeTerminalTitle
 } from '../../../../shared/agent-detection'
 import {
@@ -19,9 +20,26 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../../runtime-terminal-state-records'
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
+import { recognizeAgentProcessFromCommandLine } from '../../../../shared/agent-process-recognition'
+import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { PtyForegroundProcessRead } from '../../runtime-terminal-contracts'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
   protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
+  protected pendingOmpCommandFinishes?: Map<string, () => void>
+  private ompCommandFinishGenerationByPty?: WeakMap<RuntimePtyWorktreeRecord, number>
+
+  override setPtyController(controller: RuntimePtyController | null): void {
+    super.setPtyController(controller)
+    const pending = this.pendingOmpCommandFinishes
+    if (!controller || !pending) {
+      return
+    }
+    this.pendingOmpCommandFinishes = undefined
+    for (const retry of pending.values()) {
+      retry()
+    }
+  }
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -32,12 +50,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        this.retirePtyAgentLaunchAuthority(ptyId)
-        this.recordTerminalSideEffectFact(ptyId, {
-          kind: 'command-finished',
-          exitCode: fact.exitCode
-        })
-        this.openCodeRunLifetime.onCommandFinished(ptyId, fact.exitCode)
+        this.handlePtyCommandFinished(ptyId, fact.exitCode)
         return
       case 'pr-link':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link: fact.link })
@@ -48,6 +61,60 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
       case '2031-unsubscribe':
         this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
     }
+  }
+
+  protected handlePtyCommandFinished(ptyId: string, exitCode: number | null): void {
+    this.pendingOmpCommandFinishes?.delete(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    const isOmp =
+      pty?.launchAgent === 'omp' ||
+      pty?.foregroundAgent === 'omp' ||
+      recognizeAgentProcessFromCommandLine(pty?.launchConfig?.agentCommand)?.agent === 'omp'
+    if (!pty || !isOmp) {
+      this.applyPtyCommandFinished(ptyId, exitCode)
+      return
+    }
+    // Foreground reads are shared; only the newest marker may publish completion.
+    const generations = (this.ompCommandFinishGenerationByPty ??= new WeakMap())
+    const generation = (generations.get(pty) ?? 0) + 1
+    generations.set(pty, generation)
+    // OMP also paints OSC 133;D inside user bubbles; it does not prove process exit.
+    const incarnationId = pty.incarnationId
+    const launchToken = pty.launchToken
+    const titleObservedAt = pty.lastOscTitleAt
+    const finish = (result: PtyForegroundProcessRead): void => {
+      const current = this.ptysById.get(ptyId)
+      if (
+        current !== pty ||
+        generations.get(pty) !== generation ||
+        !current.connected ||
+        current.incarnationId !== incarnationId ||
+        current.launchToken !== launchToken ||
+        result.controller !== this.ptyController ||
+        !result.available ||
+        typeof result.process !== 'string' ||
+        !isShellProcess(result.process) ||
+        (current.lastOscTitleAt !== titleObservedAt && current.lastAgentStatus !== null)
+      ) {
+        return
+      }
+      this.applyPtyCommandFinished(ptyId, exitCode)
+    }
+    const read = this.ptyForegroundAgent.read(ptyId, titleObservedAt ?? 0)
+    if (read) {
+      void read.then(finish)
+    } else {
+      // Retain the original identity fences; attachment is the retry trigger, not a timer.
+      ;(this.pendingOmpCommandFinishes ??= new Map()).set(ptyId, () => {
+        void this.ptyForegroundAgent.read(ptyId, titleObservedAt ?? 0)?.then(finish)
+      })
+    }
+  }
+
+  private applyPtyCommandFinished(ptyId: string, exitCode: number | null): void {
+    this.retirePtyAgentLaunchAuthority(ptyId)
+    this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
+    this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
   }
 
   /** The daemon keep-tail dropped this PTY's oldest undelivered output; the

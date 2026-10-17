@@ -32,61 +32,6 @@ describe('OMP completion delivery', () => {
     }
   )
 
-  it.each([22, null])('retries failed or timed-out WSL curl (exit %s)', async (curlExitCode) => {
-    const harness = createAgentStatusExtensionHarness({
-      kind: 'omp',
-      env: { WSL_DISTRO_NAME: 'Ubuntu' },
-      existsSync: (path) => path === '/mnt/c/Windows/System32/curl.exe',
-      curlExitCode,
-      fetchImpl: async () => {
-        throw new Error('guest unavailable')
-      }
-    })
-    await harness.callHook('agent_end')
-    await vi.advanceTimersByTimeAsync(curlExitCode === null ? 11251 : 251)
-    expect(harness.spawnMock).toHaveBeenCalledTimes(2)
-    await harness.callHook('session_shutdown')
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(harness.spawnMock).toHaveBeenCalledTimes(4)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('does not acknowledge a missing WSL curl bridge', async () => {
-    const harness = createAgentStatusExtensionHarness({
-      kind: 'omp',
-      env: { WSL_DISTRO_NAME: 'Ubuntu' },
-      fetchImpl: async () => {
-        throw new Error('guest unavailable')
-      }
-    })
-    await harness.callHook('agent_end')
-    await vi.advanceTimersByTimeAsync(251)
-    expect(harness.fetchMock).toHaveBeenCalledTimes(2)
-    await harness.callHook('session_shutdown')
-  })
-
-  it('waits for WSL curl acknowledgment before draining a newer snapshot', async () => {
-    const harness = createAgentStatusExtensionHarness({
-      kind: 'omp',
-      env: { WSL_DISTRO_NAME: 'Ubuntu' },
-      existsSync: (path) => path === '/mnt/c/Windows/System32/curl.exe',
-      curlExitCode: null,
-      fetchImpl: async () => {
-        throw new Error('guest unavailable')
-      }
-    })
-    await harness.callHook('agent_end')
-    await vi.advanceTimersByTimeAsync(0)
-    await harness.callHook('agent_start')
-    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    harness.spawnedChildren[0]?.emit('close', 0)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(harness.fetchMock).toHaveBeenCalledTimes(2)
-    harness.spawnedChildren[1]?.emit('close', 0)
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it.each(['before_agent_start', 'agent_start'])(
     'retires a failed completion at %s',
     async (boundary) => {

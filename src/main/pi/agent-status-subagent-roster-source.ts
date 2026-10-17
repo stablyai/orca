@@ -1,26 +1,28 @@
-// Why: Pi settles its own turn while pi-subagents children keep running, so the
-// generated extension holds the pane's completion until every child it saw start is gone.
+// Why: the pane's completion waits for its children. Pi uses witnessed lifecycle
+// events; OMP can recover missed starts from its positively scoped native registry.
 
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { AGENT_STATUS_MAX_SUBAGENTS } from '../../shared/agent-status-types'
+import { getOmpRegistrySnapshotSourceLines } from './agent-status-omp-registry-source'
 
-// Module scope: post() reads the roster when a body is built, so a coalesced or
-// retried post always carries the children live at delivery.
+// Module scope: post() reads the roster when a body is built. Native delivery is
+// fenced after failed/incomplete enumeration rather than renewing cached child proof.
 export function getPiSubagentSnapshotSourceLines(): string[] {
   return [
     'type SubagentDetail = { agentType?: string; description?: string; startedAt: number; workflow?: boolean; parent?: string; registration?: object }',
-    'type SubagentRoster = { active: Set<string>; exited?: Set<string>; details?: Map<string, SubagentDetail>; waiting: boolean; ownsPane?: boolean; runGeneration?: number; endedRunGeneration?: number; completionPostedGeneration?: number; parked?: Map<string, Map<string, SubagentDetail>>; onEvent?: (event: unknown, forcedStatus?: string) => void; listener?: (event: unknown) => void; onRunnerExit?: (event: unknown) => void; runnerExitListener?: (event: unknown) => void; runnerExitCheck?: ReturnType<typeof setTimeout> | null; onRunnerExitSettled?: () => void }',
+    'type SubagentRoster = { active: Set<string>; exited?: Set<string>; details?: Map<string, SubagentDetail>; waiting: boolean; ownsPane?: boolean; runGeneration?: number; endedRunGeneration?: number; completionPostedGeneration?: number; parked?: Map<string, Map<string, SubagentDetail>>; onEvent?: (event: unknown, forcedStatus?: string) => void; listener?: (event: unknown) => void; onRunnerExit?: (event: unknown) => void; runnerExitListener?: (event: unknown) => void; runnerExitCheck?: NodeJS.Timeout | null; onRunnerExitSettled?: () => void; ompRegistryObserver?: OmpRegistryObservation }',
     // Why: interpolated, not re-typed, so the extension cap cannot drift from the host's.
     `const MAX_SUBAGENT_SNAPSHOT = ${AGENT_STATUS_MAX_SUBAGENTS}`,
     'let subagentRoster: SubagentRoster | null = null',
     '',
+    ...getOmpRegistrySnapshotSourceLines(),
     // Why: an exited runner is already gone, and a pi-subagents workflow run is the lead
     // coordinating children that post their own rows; both still hold the pane.
     'function isVisibleSubagent(roster: SubagentRoster, id: string): boolean {',
     '  return roster.active.has(id) && !roster.exited?.has(id) && roster.details?.get(id)?.workflow !== true',
     '}',
     '',
-    'function subagentPayload(): Record<string, unknown> {',
+    'function subagentPayload(hookEventName?: string): Record<string, unknown> {',
     '  if (!subagentRoster) return {}',
     '  const subagents: Record<string, unknown>[] = []',
     '  for (const id of subagentRoster.active) {',
@@ -29,7 +31,8 @@ export function getPiSubagentSnapshotSourceLines(): string[] {
     "    subagents.push({ id, state: 'working', startedAt: detail?.startedAt ?? 0, ...(detail?.agentType ? { agentType: detail.agentType } : {}), ...(detail?.description ? { description: detail.description } : {}) })",
     '    if (subagents.length >= MAX_SUBAGENT_SNAPSHOT) break',
     '  }',
-    '  return subagents.length > 0 ? { subagents } : {}',
+    '  const verifiedNative = isOmpRegistryObserved() && ompRegistryObservation?.verified === true',
+    '  return { ...(subagents.length > 0 || verifiedNative ? { subagents } : {}), ...ompRegistrySnapshotMetadata(hookEventName) }',
     '}',
     ''
   ]
@@ -57,10 +60,10 @@ export function getPiSubagentRosterSetupSourceLines(kind: PiAgentKind): string[]
     '  lifecycleState.runGeneration ??= 0',
     '  lifecycleState.endedRunGeneration ??= 0',
     '  lifecycleState.completionPostedGeneration ??= -1',
-    // Why: an OMP task child runs this factory again on its own bus. Posts keep describing the
-    // lead's children, and the child's own subagents must not settle the lead's pane.
-    '  subagentRoster ??= lifecycleState',
-    '  const ownsPaneRoster = subagentRoster === lifecycleState',
+    // Why: a native child can load first. Only a proven root callback binds the pane's
+    // module roster; each bus may listen for the capability-absent lifecycle fallback.
+    '  if (!isOmpRuntime()) subagentRoster ??= lifecycleState',
+    '  const ownsPaneRoster = isOmpRuntime() || subagentRoster === lifecycleState',
     // Tells the children this registration saw start from the ones a /reload handed it.
     '  const registration = {}',
     '  function resetSubagentRoster(): void {',
@@ -111,7 +114,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     "    const id = typeof record.id === 'string' && record.id ? record.id : typeof record.runId === 'string' ? record.runId : ''",
     '    const status = forcedStatus ?? (event as { status?: unknown }).status',
     '    if (!id) return',
-    '    if (isOmpRuntime() && !lifecycleState.ownsPane) return',
+    '    if (isOmpRuntime() && (!lifecycleState.ownsPane || isOmpRegistryObserved())) return',
     "    if (status === 'started') {",
     '      lifecycleState.active.add(id)',
     // Why: pi-subagents redacts task prompts, so only the agent name, OMP's short label and a
@@ -144,6 +147,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    if (lifecycleState.waiting) postAgentEndOnce()',
     '  }',
     '  lifecycleState.onRunnerExit = (event: unknown): void => {',
+    '    if (isOmpRuntime() && (!lifecycleState.ownsPane || isOmpRegistryObserved())) return',
     "    const runId = event && typeof event === 'object' ? (event as { runId?: unknown }).runId : undefined",
     "    if (typeof runId !== 'string' || !lifecycleState.active.has(runId)) return",
     '    if (!lifecycleState.exited) lifecycleState.exited = new Set<string>()',

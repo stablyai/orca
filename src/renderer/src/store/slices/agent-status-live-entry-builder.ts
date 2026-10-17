@@ -119,11 +119,6 @@ export function buildAgentStatusLiveEntry(
       : existing && existing.state === payload.state
         ? existing.stateStartedAt
         : updatedAt)
-  // Why: a writer with no turn clock (an OSC repaint) keeps the host's stamp only within one state;
-  // a state change it cannot date must not inherit another turn's start.
-  const turnStartedAt =
-    timing?.turnStartedAt ??
-    (existing && existing.state === payload.state ? existing.turnStartedAt : undefined)
   if (
     existing &&
     shouldSuppressInheritedTerminalStatus({
@@ -162,6 +157,23 @@ export function buildAgentStatusLiveEntry(
       metadata?.providerSession,
       existingProviderSession
     )
+  // Full native OMP scope evidence fences fallback clocks, not pane-level rolling history.
+  const currentScopeExisting =
+    identity.agentType === 'omp' &&
+    existing?.agentType === 'omp' &&
+    existing.providerSession?.transcriptPath &&
+    metadata?.providerSession?.transcriptPath &&
+    (existing.providerSession.key !== metadata.providerSession.key ||
+      existing.providerSession.id !== metadata.providerSession.id ||
+      existing.providerSession.transcriptPath !== metadata.providerSession.transcriptPath)
+      ? undefined
+      : existing
+  // An unknown incoming clock may reuse only the same state's current native scope.
+  const turnStartedAt =
+    timing?.turnStartedAt ??
+    (currentScopeExisting && currentScopeExisting.state === payload.state
+      ? currentScopeExisting.turnStartedAt
+      : undefined)
   const statusTabId = routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
   const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
   const registryEntry = state.agentLaunchConfigByPaneKey[paneKey]
@@ -201,7 +213,11 @@ export function buildAgentStatusLiveEntry(
       : undefined) ??
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
-  const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
+  const mainAgent = resolveAgentStatusLiveEntryMainAgent(
+    currentScopeExisting,
+    payload,
+    identity.agentType
+  )
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,

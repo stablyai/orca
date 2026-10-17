@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import * as nodePath from 'node:path'
 import { createContext, runInContext } from 'node:vm'
 // TypeScript 7 is a native CLI; transpile tests still need the legacy JavaScript API.
 import ts from 'typescript-api'
@@ -10,6 +11,7 @@ export type HookContext = {
   hasUI?: boolean
   ui?: { setEditorText?: (text: string) => void; notify?: (message: string, level: string) => void }
   isIdle?: () => boolean
+  agent?: { id: string; kind: 'main' | 'sub' | 'advisor'; parentId?: string; depth?: number }
   model?: { provider?: unknown; id?: unknown } | null
   modelRegistry?: { getAvailable: () => { provider: string; id: string }[] }
   sessionManager?: {
@@ -60,8 +62,10 @@ export type AgentStatusExtensionHarness = {
   // What Pi does for /reload: as above, but the module is evaluated again and `globalThis` survives.
   reloadPi: () => Promise<void>
   // An OMP in-process task child: the same module's factory, run again on the child's own bus.
-  // Returns an emitter for events on that child's bus.
-  registerTaskChild: () => (name: string, event: unknown) => void
+  // Returns an emitter and hook caller for that child's own registration.
+  registerTaskChild: () => ((name: string, event: unknown) => void) & {
+    callHook: AgentStatusExtensionHarness['callHook']
+  }
 }
 
 const BASE_ENV = {
@@ -108,6 +112,8 @@ export function createAgentStatusExtensionHarness(args: {
   statSync?: (path: string) => { mtimeMs: number; size: number; ino: number }
   curlExitCode?: number | null
   fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
+  // OMP exposes its native exports to extensions through `pi.pi`.
+  nativeExtensionNamespace?: Record<string, unknown>
   // Runs before the first registration, to leave state an older build would have put on the bus.
   seedEventBus?: (bus: EventEmitter) => void
   // Pi before 0.84 handed every registration the one shared bus.
@@ -139,20 +145,13 @@ export function createAgentStatusExtensionHarness(args: {
     return child
   })
 
+  const missingFile = (path: string): never => {
+    throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
+  }
   const fsMock = {
     existsSync: vi.fn(args.existsSync ?? (() => false)),
-    statSync: vi.fn(
-      args.statSync ??
-        ((path: string) => {
-          throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
-        })
-    ),
-    readFileSync: vi.fn(
-      args.readFileSync ??
-        ((path: string) => {
-          throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
-        })
-    )
+    statSync: vi.fn(args.statSync ?? missingFile),
+    readFileSync: vi.fn(args.readFileSync ?? missingFile)
   }
 
   const module: {
@@ -165,12 +164,16 @@ export function createAgentStatusExtensionHarness(args: {
         ) => void
         setModel: (model: unknown) => Promise<boolean>
         events?: PiEventBus
+        pi?: Record<string, unknown>
       }) => void
     }
   } = { exports: {} }
   const requireMock = vi.fn((specifier: string) => {
     if (specifier === 'fs') {
       return fsMock
+    }
+    if (specifier === 'path') {
+      return nodePath
     }
     if (specifier === 'child_process') {
       return { spawn: spawnMock }
@@ -243,6 +246,7 @@ export function createAgentStatusExtensionHarness(args: {
       },
       setModel: setModelMock,
       events,
+      ...(args.nativeExtensionNamespace ? { pi: args.nativeExtensionNamespace } : {}),
       on(name: string, handler: HookHandler) {
         target[name] = handler
         ;(handlerLists[name] ??= []).push(handler)
@@ -309,10 +313,18 @@ export function createAgentStatusExtensionHarness(args: {
       const leadHandlerLists = handlerLists
       const childBus = new EventEmitter()
       registerInto({}, childBus)
+      const childHandlerLists = handlerLists
       handlerLists = leadHandlerLists
-      return (name, event) => {
+      const emitOnChildBus = (name: string, event: unknown): void => {
         childBus.emit(name, event)
       }
+      return Object.assign(emitOnChildBus, {
+        callHook: async (name: string, event?: unknown, hookContext?: HookContext) => {
+          for (const handler of childHandlerLists[name] ?? []) {
+            await handler(event, hookContext)
+          }
+        }
+      })
     },
     reloadPi: async () => {
       await callHook('session_shutdown', { reason: 'reload' })

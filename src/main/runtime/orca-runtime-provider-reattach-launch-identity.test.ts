@@ -97,4 +97,46 @@ describe('provider reattach launch identity', () => {
       launchIncarnationId: null
     })
   })
+
+  it.each([false, true])(
+    'keeps only the newest tokenless OMP completion (deferred: %s)',
+    async (deferred) => {
+      const runtime = new OrcaRuntimeService(null)
+      const foreground = Promise.withResolvers<string | null>()
+      const controller = {
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: () => foreground.promise
+      }
+      const completions: (number | null)[] = []
+      runtime.onClientEvent((event) => {
+        if (event.type === 'terminalSideEffects') {
+          for (const fact of event.batch.facts) {
+            if (fact.kind === 'command-finished') {
+              completions.push(fact.exitCode)
+            }
+          }
+        }
+      })
+      const ptyId = 'pty-omp-reattach'
+      runtime.registerPty(ptyId, WORKTREE_ID, null, {
+        tabId: TAB_ID,
+        leafId: LEAF_ID,
+        incarnationId: INCARNATION_ID,
+        providerReattachLaunchIdentity: { incarnationId: INCARNATION_ID, launchAgent: 'omp' }
+      })
+      if (!deferred) {
+        runtime.setPtyController(controller)
+      }
+      runtime.emitDaemonPtyTransientFact(ptyId, { kind: 'command-finished', exitCode: 1 })
+      if (deferred) {
+        runtime.setPtyController(controller)
+      }
+      runtime.emitDaemonPtyTransientFact(ptyId, { kind: 'command-finished', exitCode: 7 })
+      foreground.resolve('zsh')
+      await runtime.ptyForegroundProcessReads.get(ptyId)?.promise
+      expect(completions).toEqual([7])
+      expect(getPty(runtime, ptyId)).toMatchObject({ launchAgent: null, launchToken: null })
+    }
+  )
 })

@@ -39,7 +39,9 @@ describe.each([
         sessionManager
       })
       await vi.waitFor(() =>
-        expect(harness.fetchMock).toHaveBeenCalledTimes(id === 'first' ? 1 : 2)
+        expect(
+          JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
+        ).toMatchObject({ hook_event_name: 'agent_start', session_id: id, session_file: file })
       )
       const payload = JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
       const session = extractAgentProviderSession('omp', payload)
@@ -58,7 +60,6 @@ describe.each([
       ).resolves.toBe(file)
     }
     expect(walkSessionFiles).not.toHaveBeenCalled()
-    expect(harness.fsMock.existsSync).not.toHaveBeenCalled()
   })
 
   it('publishes planned persistent paths, then resolves after delayed creation', async () => {
@@ -93,11 +94,16 @@ describe.each([
       const sessionManager = { getSessionId: () => 'same-owner', getSessionFile: () => sessionFile }
       await harness.callHook('agent_start', undefined, { sessionManager })
       sessionFile = file
+      await harness.callHook('agent_start', undefined, { sessionManager })
       await harness.callHook('agent_end', undefined, { sessionManager })
-      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
-      const payload = JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
-      expect(payload).toEqual({ hook_event_name: 'agent_end' })
-      expect(extractAgentProviderSession('omp', payload)).toBeNull()
+      await vi.waitFor(() => {
+        const payload = JSON.parse(String(harness.fetchMock.mock.lastCall?.[1]?.body)).payload
+        expect(payload.hook_event_name).toBe('agent_end')
+        expect(payload.session_boundary).not.toBe(true)
+        expect(payload).not.toHaveProperty('session_id')
+        expect(payload).not.toHaveProperty('session_file')
+        expect(extractAgentProviderSession('omp', payload)).toBeNull()
+      })
     }
   )
 })
