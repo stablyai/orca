@@ -523,6 +523,33 @@ describe('recordProcessGoneCrash', () => {
       ...overrides
     })
 
+  // Report 7056ae89 (v1.4.200) carried exit -36863 with no decoded attribute at
+  // all, because this short-circuited on win32 the way the report text used to.
+  it('names the decoded Windows status code on the span and keeps the stored code raw', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-win' })
+
+    withStubbedPlatform('win32', () => {
+      recordProcessGoneCrash(
+        { record } as never,
+        nonRecoverableChildExit({ reason: 'crashed', exitCode: -36863 }),
+        new ProcessGoneDedupe()
+      )
+    })
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ exitCode: -36863 }))
+    expect(sink.records).toEqual([
+      expect.objectContaining({
+        name: 'electron.process_gone',
+        attributes: expect.objectContaining({
+          'crash.exit_code': -36863,
+          'crash.exit_code_decoded':
+            '0xFFFF7001, crash handler unreachable; client self-terminated without a minidump'
+        })
+      })
+    ])
+  })
+
   it('names the decoded POSIX wait status on the span and keeps the stored code raw', async () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
 
@@ -547,7 +574,31 @@ describe('recordProcessGoneCrash', () => {
     ])
   })
 
-  it('leaves Windows exit codes and launch-failed codes undecoded', async () => {
+  // The span is the decoder's second consumer, and win32 launch-failed is the first launch-failed
+  // case to produce a value here — so this is where the two could silently drift apart.
+  it('decodes a win32 launch-failed sandbox code onto the span', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+
+    withStubbedPlatform('win32', () => {
+      recordProcessGoneCrash(
+        { record } as never,
+        nonRecoverableChildExit({ reason: 'launch-failed', exitCode: 18 }),
+        new ProcessGoneDedupe()
+      )
+    })
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1))
+    expect(sink.records).toEqual([
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          'crash.exit_code': 18,
+          'crash.exit_code_decoded': 'SBOX_ERROR_CREATE_PROCESS, error in creating process'
+        })
+      })
+    ])
+  })
+
+  it('leaves UNDECODABLE Windows exit codes and OFF-WINDOWS launch-failed codes undecoded', async () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
 
     withStubbedPlatform('win32', () => {

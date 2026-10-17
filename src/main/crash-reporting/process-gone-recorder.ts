@@ -6,7 +6,7 @@ import {
   sanitizeCrashReportString,
   type CrashReportBreadcrumbData
 } from '../../shared/crash-reporting'
-import { decodePosixWaitStatus, describePosixWaitStatus } from '../../shared/posix-wait-status'
+import { decodedExitCodeAttribute } from './process-gone-exit-code-attribute'
 import { rendererCrashBreadcrumbOrigin } from '../../shared/crash-breadcrumb-origin'
 import type { CrashReportStore } from './crash-report-store'
 import { getCrashBreadcrumbSnapshot } from './crash-breadcrumb-store'
@@ -100,17 +100,6 @@ function suppressedProcessGoneCoalesceKey(data: CrashReportBreadcrumbData): stri
     data.name ?? null,
     data.type ?? null
   ])
-}
-
-// Why: POSIX exit codes arrive as raw wait statuses (61696 = exit 241); name the
-// meaning on the span so bundles read without manual decoding. Display-only —
-// the recorded exitCode stays raw. launch-failed codes are not wait statuses.
-function decodedExitCodeAttribute(event: ProcessGoneCrashEvent): Record<string, string> {
-  if (process.platform === 'win32' || event.reason === 'launch-failed' || event.exitCode === null) {
-    return {}
-  }
-  const decoded = decodePosixWaitStatus(event.exitCode)
-  return decoded ? { 'crash.exit_code_decoded': describePosixWaitStatus(decoded) } : {}
 }
 
 function persistFailureData(event: ProcessGoneCrashEvent, error: unknown) {
