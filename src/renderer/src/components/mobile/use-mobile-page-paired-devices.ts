@@ -14,6 +14,7 @@ import {
 } from './paired-mobile-devices'
 import { translate } from '@/i18n/i18n'
 
+/** Paired-device list and pairing-flow stage for the mobile page, including per-device revoke. */
 export function useMobilePagePairedDevices({
   stepIdx,
   setStepIdx
@@ -34,6 +35,7 @@ export function useMobilePagePairedDevices({
   // whether any devices are already paired.
   const [stage, setStage] = useState<FlowStage | null>(null)
   const [revokingDeviceIds, setRevokingDeviceIds] = useState<string[]>([])
+  const revokingDeviceIdsRef = useRef(new Set<string>())
   const [deviceCountAtPairStart, setDeviceCountAtPairStart] = useState<number | null>(null)
   const mountedRef = useMountedRef()
   const stageRef = useRef<FlowStage | null>(null)
@@ -120,21 +122,17 @@ export function useMobilePagePairedDevices({
     }
   }, [loadDevices, showPairedDevices, showStage])
 
+  /** Revokes one device, ignoring repeat clicks while that device's revoke is in flight. */
   const revokeDevice = useCallback(
     async (deviceId: string) => {
       // Dedupe rapid double-clicks: if a revoke for this id is already in
       // flight, bail before issuing a second IPC call.
-      let alreadyRevoking = false
-      setRevokingDeviceIds((prev) => {
-        if (prev.includes(deviceId)) {
-          alreadyRevoking = true
-          return prev
-        }
-        return [...prev, deviceId]
-      })
-      if (alreadyRevoking) {
+      // Why: a ref, not the state updater — React may defer the updater past this check.
+      if (revokingDeviceIdsRef.current.has(deviceId)) {
         return
       }
+      revokingDeviceIdsRef.current.add(deviceId)
+      setRevokingDeviceIds((prev) => [...prev, deviceId])
       try {
         const { revoked } = await window.api.mobile.revokeDevice({ deviceId })
         // Why: the backend can resolve revoked=false without removing anything;
@@ -169,6 +167,7 @@ export function useMobilePagePairedDevices({
           )
         }
       } finally {
+        revokingDeviceIdsRef.current.delete(deviceId)
         if (mountedRef.current) {
           setRevokingDeviceIds((prev) => prev.filter((id) => id !== deviceId))
         }

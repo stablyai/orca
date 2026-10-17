@@ -4,10 +4,12 @@ import { Input } from '../ui/input'
 
 type RepoTextDraft = { repoId: string; text: string }
 
-// Why: updateRepo persists via async IPC before the store value updates, so a
-// store-controlled input resets mid-IME-composition (Hangul decomposes into
-// jamo). Keep keystrokes in local draft state; persist per-keystroke except
-// while an IME composition is active (see composingRef below).
+/**
+ * updateRepo persists via async IPC before the store value updates, so a
+ * store-controlled input resets mid-IME-composition (Hangul decomposes into
+ * jamo). Keep keystrokes in local draft state; persist per-keystroke except
+ * while an IME composition is active (see composingRef below).
+ */
 export function RepoSettingsDraftInput({
   repoId,
   storeValue,
@@ -45,33 +47,40 @@ export function RepoSettingsDraftInput({
     onTextChange(text)
   }
 
+  // Why: decide outside the state updater. React may run an updater twice, and the echo
+  // queue below is consumed, so the kept run would no longer recognise the echo.
+  const draftRef = useRef(draft)
   useEffect(() => {
-    setDraft((current) => {
-      if (current.repoId !== repoId) {
-        pendingStoreEchoesRef.current = []
-        composingRef.current = false
-        skipNextChangeRef.current = null
-        lastPersistedRef.current = storeValue
-        return { repoId, text: storeValue }
-      }
-      if (storeValue === current.text) {
-        pendingStoreEchoesRef.current = []
-        skipNextChangeRef.current = null
-        lastPersistedRef.current = storeValue
-        return current
-      }
-      const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
-      if (pendingEchoIndex !== -1) {
-        // Why: queued updateRepo calls can echo older input text after newer
-        // keystrokes; accepting that echo re-cancels active IME composition.
-        pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
-        return current
-      }
+    draftRef.current = draft
+  }, [draft])
+
+  useEffect(() => {
+    const current = draftRef.current
+    if (current.repoId !== repoId) {
+      pendingStoreEchoesRef.current = []
+      composingRef.current = false
+      skipNextChangeRef.current = null
+      lastPersistedRef.current = storeValue
+      setDraft({ repoId, text: storeValue })
+      return
+    }
+    if (storeValue === current.text) {
       pendingStoreEchoesRef.current = []
       skipNextChangeRef.current = null
       lastPersistedRef.current = storeValue
-      return { repoId, text: storeValue }
-    })
+      return
+    }
+    const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
+    if (pendingEchoIndex !== -1) {
+      // Why: queued updateRepo calls can echo older input text after newer
+      // keystrokes; accepting that echo re-cancels active IME composition.
+      pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
+      return
+    }
+    pendingStoreEchoesRef.current = []
+    skipNextChangeRef.current = null
+    lastPersistedRef.current = storeValue
+    setDraft({ repoId, text: storeValue })
   }, [repoId, storeValue])
 
   const text = draft.repoId === repoId ? draft.text : storeValue
