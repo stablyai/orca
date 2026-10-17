@@ -8,7 +8,6 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../src/shared/agent-session-wire'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -21,7 +20,9 @@ import type { RpcClient } from '../transport/rpc-client'
 import {
   agentSessionReadFailureRefusal,
   agentSessionReadFailureText,
-  callAgentSession
+  callAgentSession,
+  STRUCTURED_SEND_TIMEOUT_MS,
+  timeoutForDeadline
 } from './mobile-structured-agent-session-rpc'
 import {
   reduceMobileQueuePause,
@@ -39,6 +40,8 @@ const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 const MAX_RETAINED_SESSION_STATES = 32
 /** Bounded so a busy stream cannot turn one Load-earlier tap into an endless read chain. */
 const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
+// Large tool results must fit the phone's existing read deadline over SSH.
+const OLDER_PAGE_LIMIT = 40
 /** Bounds the pages one Load-earlier reads past that hold only subagent rows. */
 const OLDER_PAGES_PER_LOAD = 8
 
@@ -210,6 +213,7 @@ export function useMobileStructuredAgentState(args: {
     const isCurrentRead = (): boolean =>
       sessionKeyRef.current === requestSessionKey &&
       streamGenerationRef.current === requestGeneration
+    const deadline = Date.now() + STRUCTURED_SEND_TIMEOUT_MS
     setLoadingOlder(true)
     void (async () => {
       // A live batch can head-trim past the anchor mid-read, and the reducer drops that
@@ -228,16 +232,30 @@ export function useMobileStructuredAgentState(args: {
         }[] = []
         let requestedCursor = cursor
         while (pages.length < OLDER_PAGES_PER_LOAD) {
-          const result = await callAgentSession<AgentSessionHistoryResult>(
-            client,
-            'agentSession.history',
-            {
-              sessionId,
-              direction: 'before',
-              cursor: requestedCursor,
-              limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+          const timeoutMs = timeoutForDeadline(deadline)
+          if (timeoutMs === null) {
+            break
+          }
+          let result: AgentSessionHistoryResult
+          try {
+            result = await callAgentSession<AgentSessionHistoryResult>(
+              client,
+              'agentSession.history',
+              {
+                sessionId,
+                direction: 'before',
+                cursor: requestedCursor,
+                limit: OLDER_PAGE_LIMIT
+              },
+              timeoutMs
+            )
+          } catch (error) {
+            if (Date.now() < deadline || pages.length === 0) {
+              throw error
             }
-          )
+            // Keep contiguous pages already received when the shared deadline expires.
+            break
+          }
           if (!result.ok || !isCurrentRead()) {
             break
           }
