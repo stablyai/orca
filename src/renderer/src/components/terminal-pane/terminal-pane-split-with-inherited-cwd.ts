@@ -3,7 +3,10 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
 import type { PtyTransport } from './pty-transport-types'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
-import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import {
+  recordCreatedTerminalPaneSplit,
+  type TerminalPaneSplitEqualizeTarget
+} from './terminal-pane-split-completion'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { expectPaneToAppear } from '@/runtime/layout-owner-pane-intents'
@@ -41,7 +44,8 @@ export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
     const forget = expectPaneToAppear(newLeafId, {
       tabId: args.tabId,
       ...cwd,
-      telemetry: { source: args.source, direction: args.direction }
+      telemetry: { source: args.source, direction: args.direction },
+      equalizeTarget: equalizeTargetOf(args)
     })
     if (
       sendLayoutCommandToOwner(
@@ -109,6 +113,15 @@ function splitLocally(args: SplitArgs, cwd: () => SplitCwd, leafId?: string): vo
   })
   recordCreatedTerminalPaneSplit(createdPane, {
     source: args.source,
-    direction: args.direction
+    direction: args.direction,
+    equalizeTarget: equalizeTargetOf(args)
   })
+}
+
+function equalizeTargetOf(args: SplitArgs): TerminalPaneSplitEqualizeTarget {
+  return {
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    getManager: args.getManager ?? (() => args.manager)
+  }
 }

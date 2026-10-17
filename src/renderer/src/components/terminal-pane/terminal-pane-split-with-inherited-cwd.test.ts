@@ -41,6 +41,12 @@ vi.mock('./terminal-pane-split-completion', () => ({
   recordCreatedTerminalPaneSplit: mocks.recordCreatedTerminalPaneSplit
 }))
 
+const equalizeTarget = {
+  worktreeId: 'worktree-1',
+  tabId: 'tab-1',
+  getManager: expect.any(Function)
+}
+
 function makeManager(splitPane: ReturnType<typeof vi.fn>): PaneManager {
   // A pane counts as mounted once a split that placed it returned a pane.
   const getNumericIdForLeaf = (leafId: string): number | null =>
@@ -112,7 +118,8 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     expect(splitPane).toHaveBeenCalledWith(1, 'horizontal', { cwd: '/cached' })
     expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(createdPane, {
       source: 'keyboard',
-      direction: 'horizontal'
+      direction: 'horizontal',
+      equalizeTarget
     })
   })
 
@@ -157,7 +164,8 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     expect(liveSplitPane).toHaveBeenCalledWith(1, 'vertical', { cwdPromise: cwd.promise })
     expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(createdPane, {
       source: 'keyboard',
-      direction: 'vertical'
+      direction: 'vertical',
+      equalizeTarget
     })
 
     const spawnHints = liveSplitPane.mock.calls[0]?.[2] as
@@ -292,8 +300,10 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     expect(takePaneAppearIntent('tab-1', newLeafId)).toEqual({
       tabId: 'tab-1',
       cwd: '/cached',
-      telemetry: { source: 'keyboard', direction: 'vertical' }
+      telemetry: { source: 'keyboard', direction: 'vertical' },
+      equalizeTarget
     })
+    expect(mocks.recordCreatedTerminalPaneSplit).not.toHaveBeenCalled()
   })
 
   it('in a layout-owner build, draws main’s pane itself when no frame is coming', () => {
@@ -306,6 +316,12 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
 
     expect(splitPane).toHaveBeenCalledWith(1, 'vertical', { cwd: '/cached', leafId: newLeafId })
     expect(takePaneAppearIntent('tab-1', newLeafId)).toBeNull()
+    // The intent is gone, so a late frame cannot record (and equalize) this split a second time.
+    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledOnce()
+    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(
+      { id: 2 },
+      { source: 'keyboard', direction: 'vertical', equalizeTarget }
+    )
   })
 
   it.each(['unapplied', 'refused'] as const)(
@@ -332,6 +348,11 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     mocks.sendLayoutCommandToOwner.mock.calls[0]?.[2].asToday()
 
     expect(splitPane).toHaveBeenCalledWith(1, 'vertical', { cwd: '/cached' })
+    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledOnce()
+    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(
+      { id: 2 },
+      { source: 'keyboard', direction: 'vertical', equalizeTarget }
+    )
   })
 
   it('in a layout-owner build, splits as today where a paired server owns the layout', () => {

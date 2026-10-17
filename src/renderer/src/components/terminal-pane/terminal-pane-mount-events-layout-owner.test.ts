@@ -23,8 +23,14 @@ vi.mock('@/runtime/layout-apply-send', () => ({
   sendLayoutApply,
   recordLayoutApply: sendLayoutApply
 }))
-const storeState = vi.hoisted(() => ({ recordFeatureInteraction: () => {} }))
+const storeState = vi.hoisted(() => ({
+  recordFeatureInteraction: () => {},
+  settings: { terminalEqualizePanesOnSplit: false },
+  expandedPaneByTabId: {}
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
+const equalizeTerminalPanes = vi.hoisted(() => vi.fn())
+vi.mock('./terminal-pane-layout-owner-commands', () => ({ equalizeTerminalPanes }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 
 const SOURCE = '11111111-1111-4111-8111-111111111111'
@@ -76,6 +82,57 @@ describe('a split main asked for, mounted in a layout-owner build', () => {
     sendLayoutApply.mockReset()
     _resetTerminalPaneSplitRequestRoutingForTests()
     _resetLayoutFramePositionForTests()
+    equalizeTerminalPanes.mockReset()
+    storeState.settings.terminalEqualizePanesOnSplit = false
+  })
+
+  it('equalizes the tab once after a CLI split when the setting is on', () => {
+    storeState.settings.terminalEqualizePanesOnSplit = true
+    const { manager } = mountedTab()
+    const uninstall = install(manager)
+
+    dispatchTerminalPaneSplitRequest({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      paneRuntimeId: 1,
+      sourceLeafId: SOURCE,
+      direction: 'vertical',
+      newLeafId: NEW,
+      command: 'make test'
+    })
+    // A repeat of the same request finds its pane mounted and splits nothing.
+    dispatchTerminalPaneSplitRequest({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      paneRuntimeId: 1,
+      sourceLeafId: SOURCE,
+      direction: 'vertical',
+      newLeafId: NEW
+    })
+
+    expect(equalizeTerminalPanes).toHaveBeenCalledOnce()
+    expect(equalizeTerminalPanes).toHaveBeenCalledWith(
+      { worktreeId: 'wt-1', tabId: 'tab-1', getManager: expect.any(Function) },
+      expect.any(Function)
+    )
+    uninstall()
+  })
+
+  it('leaves a CLI split halved while the setting is off', () => {
+    const { manager } = mountedTab()
+    const uninstall = install(manager)
+
+    dispatchTerminalPaneSplitRequest({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      paneRuntimeId: 1,
+      sourceLeafId: SOURCE,
+      direction: 'vertical',
+      newLeafId: NEW
+    })
+
+    expect(equalizeTerminalPanes).not.toHaveBeenCalled()
+    uninstall()
   })
 
   it('mounts the pane under main’s id and records nothing: main already holds it', () => {

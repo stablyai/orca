@@ -16,6 +16,10 @@ describe('getDefaultSettings', () => {
   it('asks before closing terminals with running processes by default', () => {
     expect(getDefaultSettings('/tmp').skipCloseTerminalWithRunningProcessConfirm).toBe(false)
   })
+
+  it('keeps split halving as the default so deliberately uneven layouts survive', () => {
+    expect(getDefaultSettings('/tmp').terminalEqualizePanesOnSplit).toBe(false)
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

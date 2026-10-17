@@ -97,6 +97,25 @@ describe('reconcileMountedPanesToLayout', () => {
     expect(takePaneAppearIntent(TAB, C)).toBeNull()
   })
 
+  it('hands the split’s equalize target on once, so main’s equalized frame does not re-equalize', () => {
+    const equalizeTarget = { worktreeId: 'wt-1', tabId: TAB, getManager: () => manager }
+    expectPaneToAppear(C, {
+      tabId: TAB,
+      telemetry: { source: 'keyboard', direction: 'vertical' },
+      equalizeTarget
+    })
+
+    reconcile(split('vertical', leaf(A), split('vertical', leaf(B), leaf(C))))
+    // Main's answer to the equalize: same panes, new ratios, and no intent left to take.
+    reconcile(split('vertical', leaf(A), split('vertical', leaf(B), leaf(C)), 1 / 3))
+
+    expect(recordCreatedTerminalPaneSplit).toHaveBeenCalledOnce()
+    expect(recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(
+      expect.objectContaining({ leafId: C }),
+      { source: 'keyboard', direction: 'vertical', equalizeTarget }
+    )
+  })
+
   it('leaves a pane main added without the window’s ask to main’s notice', () => {
     const layout = split('vertical', leaf(A), split('horizontal', leaf(B), leaf(C)))
 

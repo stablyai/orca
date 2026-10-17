@@ -5,12 +5,15 @@
 
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitEqualizeTarget } from '@/components/terminal-pane/terminal-pane-split-completion'
 
 export type PaneAppearIntent = {
   tabId: string
   cwd?: string
   cwdPromise?: Promise<string>
   telemetry: { source: TerminalPaneSplitSource; direction: 'vertical' | 'horizontal' }
+  /** Taken once with the intent, so main's later frames of the equalized tab never equalize again. */
+  equalizeTarget?: TerminalPaneSplitEqualizeTarget
 }
 
 /** Intents outlive their frame only when a tab never mounts again; keep the newest few. */

@@ -51,13 +51,21 @@ export function installTerminalPaneMountEvents(args: {
         ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
+      // Why: every request here is a runtime split (CLI, paired client, agent teams); startup and
+      // restored splits never come through this event, so each one equalizes.
+      const equalizeTarget = {
+        worktreeId: deps.worktreeId,
+        tabId: deps.tabId,
+        getManager: () => deps.managerRef.current
+      }
       if (detail.command) {
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
         recordRuntimeCreatedTerminalPaneSplit(createdPane, {
           source: detail.telemetrySource ?? 'command',
-          direction: detail.direction
+          direction: detail.direction,
+          equalizeTarget
         })
       } else {
         const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
@@ -67,7 +75,8 @@ export function installTerminalPaneMountEvents(args: {
         recordRuntimeCreatedTerminalPaneSplit(createdPane, {
           source: detail.telemetrySource ?? 'command',
           direction: detail.direction,
-          telemetrySuppressed
+          telemetrySuppressed,
+          equalizeTarget
         })
       }
     }

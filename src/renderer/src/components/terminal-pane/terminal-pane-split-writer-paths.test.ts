@@ -5,16 +5,24 @@ import { recordRuntimeCreatedTerminalPaneSplit } from './terminal-pane-lifecycle
 
 const mocks = vi.hoisted(() => ({
   recordFeatureInteraction: vi.fn(),
-  trackTerminalPaneSplit: vi.fn()
+  trackTerminalPaneSplit: vi.fn(),
+  equalizeTerminalPanes: vi.fn(),
+  equalizePanesOnSplit: false
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
       activeContextualTourId: null,
-      recordFeatureInteraction: mocks.recordFeatureInteraction
+      recordFeatureInteraction: mocks.recordFeatureInteraction,
+      settings: { terminalEqualizePanesOnSplit: mocks.equalizePanesOnSplit },
+      expandedPaneByTabId: {}
     })
   }
+}))
+
+vi.mock('./terminal-pane-layout-owner-commands', () => ({
+  equalizeTerminalPanes: mocks.equalizeTerminalPanes
 }))
 
 vi.mock('@/lib/feature-education-telemetry', () => ({
@@ -25,6 +33,8 @@ describe('terminal split writer paths', () => {
   beforeEach(() => {
     mocks.recordFeatureInteraction.mockReset()
     mocks.trackTerminalPaneSplit.mockReset()
+    mocks.equalizeTerminalPanes.mockReset()
+    mocks.equalizePanesOnSplit = false
   })
 
   it('does not record keyboard split completion when the local split fails', () => {
@@ -89,5 +99,18 @@ describe('terminal split writer paths', () => {
 
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledWith('terminal-pane-split')
     expect(mocks.trackTerminalPaneSplit).not.toHaveBeenCalled()
+  })
+
+  it('equalizes a runtime split that carries the tab as its equalize target', () => {
+    mocks.equalizePanesOnSplit = true
+    const equalizeTarget = { worktreeId: 'wt-1', tabId: 'tab-1', getManager: () => null }
+
+    recordRuntimeCreatedTerminalPaneSplit(
+      { id: 2 },
+      { source: 'command', direction: 'vertical', telemetrySuppressed: true, equalizeTarget }
+    )
+
+    expect(mocks.equalizeTerminalPanes).toHaveBeenCalledOnce()
+    expect(mocks.equalizeTerminalPanes).toHaveBeenCalledWith(equalizeTarget, expect.any(Function))
   })
 })
