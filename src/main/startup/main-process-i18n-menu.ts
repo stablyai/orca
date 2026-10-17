@@ -19,6 +19,7 @@ import {
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { logStartupMilestone } from './startup-diagnostics'
+import { registerDockAgentMenu } from '../dock/agent-menu'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store
@@ -99,4 +100,5 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     },
     getKeybindings: () => state.keybindings?.getOverrides()
   })
+  registerDockAgentMenu()
 }

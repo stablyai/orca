@@ -12,8 +12,14 @@ import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
+import type { DashboardRevealAgentArgs } from '../../shared/dashboard-snapshot'
+import type { DockAgentMenuPayload } from '../../shared/dock-agent-menu'
 
 export type AppApi = {
+  /** Publishes active and unread agents to the macOS Dock context menu. */
+  setDockAgentMenu: (payload: DockAgentMenuPayload) => Promise<void>
+  /** Receives a trusted Dock selection and routes it through the existing dashboard activation path. */
+  onOpenDockAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
   /** A local profile storage operation is delayed and holds up subsequent saves. */
   isProfileStateSaveDelayed: () => Promise<boolean>
   onProfileStateSaveDelayChanged: (callback: (delayed: boolean) => void) => () => void
