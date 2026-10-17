@@ -81,27 +81,26 @@ export function appendGitConfigEnv(
 /**
  * Disable interactive Git credential UI while preserving cached credentials
  * and caller-provided askpass programs.
+ *
+ * Why scalar-only: downstream agents scrub credential-shaped env names before
+ * spawning shells (e.g. DSH's bare-substring KEY|PASSWORD|SECRET|TOKEN filter).
+ * A GIT_CONFIG_COUNT left behind without its indexed pairs makes Git refuse to
+ * run at all, while scalar guards merely lose their effect. GCM_INTERACTIVE
+ * 'never' already covers both indexed entries (GCM docs: it disables all
+ * interactivity, GUI prompts included).
  */
 export function gitCredentialPromptGuardEnv(
   env: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  const next = appendGitConfigEnv(
-    {
-      ...env,
-      GIT_TERMINAL_PROMPT: '0',
-      GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-      SSH_ASKPASS: env.SSH_ASKPASS ?? '',
-      // Why: GCM can ignore terminal/askpass guards and open its own GUI.
-      GCM_INTERACTIVE: 'never'
-    },
-    // Why: keep the helper so cached credentials continue to work; disable
-    // only its interactive fallback.
-    [
-      ['credential.interactive', 'false'],
-      ['credential.guiPrompt', 'false']
-    ]
-  )
+  const next: NodeJS.ProcessEnv = {
+    ...env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
+    SSH_ASKPASS: env.SSH_ASKPASS ?? '',
+    // Why: GCM can ignore terminal/askpass guards and open its own GUI.
+    GCM_INTERACTIVE: 'never'
+  }
   if (platform === 'win32') {
     // Why: wsl.exe imports only variables registered in WSLENV. Indexed Git
     // config must cross as a complete set or Git rejects the count.
