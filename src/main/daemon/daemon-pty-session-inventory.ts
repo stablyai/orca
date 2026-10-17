@@ -50,6 +50,14 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
         if (!session.isAlive) {
           continue
         }
+        if (session.pid && typeof session.pid === 'number') {
+          try {
+            process.kill(session.pid, 0)
+          } catch {
+            // Process does not exist or exited; skip rehydrating dead session
+            continue
+          }
+        }
         aliveSessionIds.add(session.sessionId)
         const { worktreeId } = parsePtySessionId(session.sessionId)
         processes.push(
