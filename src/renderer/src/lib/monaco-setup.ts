@@ -12,6 +12,7 @@ import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerJsonlLanguage } from './monaco-languages/register-jsonl'
 import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerQuartoLanguage } from './monaco-languages/register-quarto'
+import { registerFunctionCallHighlighting } from './monaco-languages/register-function-call-highlighting'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerTypstLanguage } from './monaco-languages/register-typst'
@@ -21,6 +22,7 @@ import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-dispo
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
+import { registerEditorThemeCatalog } from './editor-themes'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -87,6 +89,7 @@ runMonacoSetupSteps([
   ['Typst language registration', () => registerTypstLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['Quarto language registration', () => registerQuartoLanguage(monaco)],
+  ['function call highlighting', () => registerFunctionCallHighlighting(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
@@ -94,7 +97,8 @@ runMonacoSetupSteps([
   // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is blocked in
   // Orca's sandboxed renderer. Route it through the trusted IPC bridge so right-click Paste
   // works like Cmd+V (which already works via native events).
-  ['context-menu paste', () => installMonacoContextMenuPaste(monaco)]
+  ['context-menu paste', () => installMonacoContextMenuPaste(monaco)],
+  ['editor theme catalog registration', () => registerEditorThemeCatalog(monaco)]
 ])
 
 // Configure Monaco to use the locally bundled editor instead of CDN

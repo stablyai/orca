@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { i18n } from '@/i18n/i18n'
-import { getFollowSymlinkedDirectoriesEntry, getLanguageEntries } from './appearance-search'
+import {
+  getCodeEditorAppearanceSearchEntries,
+  getFollowSymlinkedDirectoriesEntry,
+  getLanguageEntries
+} from './appearance-search'
+import { getAvailableEditorColorThemeOptions } from '@/lib/editor-theme'
 import { matchesSettingsSearch } from './settings-search'
 
 // Native word for "language" in each supported UI language. These must be
@@ -42,5 +47,14 @@ describe('getLanguageEntries', () => {
   it('matches the French native language name in English UI', async () => {
     await i18n.changeLanguage('en')
     expect(matchesSettingsSearch('Français', getLanguageEntries()[0])).toBe(true)
+  })
+})
+
+describe('getCodeEditorAppearanceSearchEntries', () => {
+  it('finds the Code Editor section by every editor color theme label', () => {
+    const entries = getCodeEditorAppearanceSearchEntries()
+    for (const { label } of getAvailableEditorColorThemeOptions()) {
+      expect(matchesSettingsSearch(label, entries), label).toBe(true)
+    }
   })
 })

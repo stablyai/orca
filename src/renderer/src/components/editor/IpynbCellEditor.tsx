@@ -3,6 +3,7 @@ import type { Components } from 'react-markdown'
 import type { editor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontStack } from '@/lib/editor-font-zoom'
+import { resolveMonacoThemeName } from '@/lib/editor-theme'
 import { useAppStore } from '@/store'
 import { installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { syncContentUpdate } from './monaco-content-sync'
@@ -164,9 +165,10 @@ function IpynbSourceEditor({
     callbacksRef.current = { onChange, onDeactivate }
   }, [onChange, onDeactivate])
 
+  const resolvedTheme = resolveMonacoThemeName(settings?.editorColorTheme, isDark)
   useLayoutEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(resolvedTheme)
+  }, [resolvedTheme])
 
   // Why: created synchronously before paint (not via @monaco-editor/react's async loader), so the
   // swap from the preview never shows a placeholder, an unlaid-out editor or a guessed caret.
