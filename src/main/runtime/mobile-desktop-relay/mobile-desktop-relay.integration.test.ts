@@ -1,3 +1,4 @@
+import '../rpc/unused-default-rpc-methods.test-fixture'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,6 +27,14 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { setRuntimeBrowserCommandsFactory } from '../runtime-browser-commands-factory'
 import { readRuntimeMetadata } from '../runtime-metadata'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import { STATUS_METHODS } from '../rpc/methods/status'
+import { TERMINAL_METHODS } from '../rpc/methods/terminal'
+import { BROWSER_CORE_METHODS } from '../rpc/methods/browser-core'
+import { BROWSER_SCREENCAST_METHODS } from '../rpc/methods/browser-screencast'
+import { SSH_METHODS } from '../rpc/methods/ssh'
+import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../rpc/methods/runtime-client-capabilities'
+import { CLIENT_UI_METHODS } from '../rpc/methods/client-ui'
+import { PAIRING_METHODS } from '../rpc/methods/pairing'
 import { sendRequest } from '../runtime-rpc-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -118,6 +127,16 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
+      methods: [
+        ...STATUS_METHODS,
+        ...TERMINAL_METHODS,
+        ...BROWSER_CORE_METHODS,
+        ...BROWSER_SCREENCAST_METHODS,
+        ...SSH_METHODS,
+        ...RUNTIME_CLIENT_CAPABILITY_METHODS,
+        ...CLIENT_UI_METHODS,
+        ...PAIRING_METHODS
+      ],
       enableWebSocket: true,
       wsPort: 0
     })
