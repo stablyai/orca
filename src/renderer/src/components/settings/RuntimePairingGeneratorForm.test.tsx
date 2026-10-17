@@ -13,14 +13,19 @@ function renderForm(
     address: string
     runtimePairingUrl: string
     webClientUrl: string
-  }
+  },
+  networkInterfaces: { name: string; address: string }[] = [
+    { name: 'tailscale0', address: '100.76.32.125' }
+  ],
+  retainedInterfaceName: string | null = null
 ): string {
   return renderToStaticMarkup(
     <TooltipProvider>
       <RuntimePairingGeneratorForm
         intent={intent}
         loopbackAddress="127.0.0.1"
-        networkInterfaces={[{ name: 'tailscale0', address: '100.76.32.125' }]}
+        networkInterfaces={networkInterfaces}
+        retainedInterfaceName={retainedInterfaceName}
         selectedAddress={selectedAddress}
         refreshingNetworkInterfaces={false}
         isGeneratingPairing={false}
@@ -64,5 +69,25 @@ describe('RuntimePairingGeneratorForm', () => {
 
     expect(markup).toContain('The connection address changed.')
     expect(markup).not.toContain('stale-secret')
+  })
+
+  it('blocks a new link while the remembered interface is missing', () => {
+    const markup = renderForm(
+      'another',
+      '10.99.88.1',
+      undefined,
+      [{ name: 'en0', address: '192.168.4.191' }],
+      'bridge0'
+    )
+
+    expect(markup).toContain('The selected network interface is unavailable.')
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>.*Generate Access Link/s)
+  })
+
+  it('still allows a custom endpoint while no matching interface is listed', () => {
+    const markup = renderForm('custom', '10.99.88.1', undefined, [])
+
+    expect(markup).not.toContain('The selected network interface is unavailable.')
+    expect(markup).not.toContain('disabled=""')
   })
 })

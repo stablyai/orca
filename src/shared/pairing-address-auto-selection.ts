@@ -10,9 +10,16 @@ export type PairingNetworkInterface = {
 // External Switch management adapters are reachable; subnets overlap real corporate LANs.
 const VIRTUAL_BRIDGE_INTERFACE_PATTERN =
   /^(?:docker|br-|virbr|vmnet|vboxnet|veth|lxcbr|cni|flannel|cali|bridge)|VMware Network Adapter|VirtualBox Host-Only/i
+const THUNDERBOLT_BRIDGE_INTERFACE_PATTERN = /^bridge\d+$/i
 const HYPER_V_INTERFACE_PATTERN = /^vEthernet /i
 const HOST_LOCAL_HYPER_V_INTERFACE_PATTERN =
   /^vEthernet \((?:Default Switch|WSL(?: \(Hyper-V firewall\))?)\)$/i
+
+export function isThunderboltBridgeInterface(name: string, platform: NodeJS.Platform): boolean {
+  // Why: Share this host can choose a physical macOS link explicitly; generic pairing still
+  // filters every `bridge*` address so mobile QR defaults do not move onto the cable.
+  return platform === 'darwin' && THUNDERBOLT_BRIDGE_INTERFACE_PATTERN.test(name)
+}
 
 export function isVirtualBridgeInterface(name: string, hasDefaultRoute?: boolean): boolean {
   if (HOST_LOCAL_HYPER_V_INTERFACE_PATTERN.test(name)) {
