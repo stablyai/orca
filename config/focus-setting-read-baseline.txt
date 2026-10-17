@@ -108,6 +108,7 @@
 1 src/renderer/src/components/setup-guide/SetupGuideModal.tsx
 1 src/renderer/src/components/setup-guide/SetupGuideTelemetryObserver.tsx
 2 src/renderer/src/components/setup-guide/use-setup-guide-progress.ts
+2 src/renderer/src/components/sidebar/attention-order-workspaces.ts # host-less rows resolve like the sidebar order they replay
 2 src/renderer/src/components/sidebar/delete-worktree-flow.ts
 1 src/renderer/src/components/sidebar/DeleteWorktreeDialog.tsx
 1 src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts
@@ -208,6 +209,7 @@
 1 src/renderer/src/hooks/editor-external-watch-target-rows.ts
 2 src/renderer/src/hooks/editor-external-watch-targets.ts
 2 src/renderer/src/hooks/ipc-events/app-lifetime-ipc-bridge.ts
+1 src/renderer/src/hooks/ipc-events/next-attention-command.ts # through the attention order, which keys host-less rows like the sidebar
 1 src/renderer/src/hooks/ipc-events/runtime-environment-subscription-selection.ts
 1 src/renderer/src/hooks/ipc-events/settings-sidebar-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/tab-lifecycle-ipc-bridge.ts

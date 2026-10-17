@@ -63,7 +63,9 @@ function seed(overrides: Partial<AppState>): AppState {
 describe('jumpToNextAttentionFromShortcut', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.orderedWorkspaces.mockReturnValue([{ id: 'a', identityHostId: 'local' }])
+    mocks.orderedWorkspaces.mockReturnValue([
+      { id: 'a', identityHostId: 'local', isUnread: false, lastActivityAt: 0 }
+    ])
     mocks.activateAndRevealWorkspace.mockReturnValue({})
   })
 
@@ -160,31 +162,10 @@ describe('jumpToNextAttentionFromShortcut', () => {
   })
 
   it('opens only the workspace for a manual unread flag', () => {
-    const state = seed({
-      worktreesByRepo: {
-        'repo-1': [
-          {
-            id: 'a',
-            repoId: 'repo-1',
-            path: '/tmp/a',
-            branch: 'refs/heads/a',
-            head: 'abc',
-            isBare: false,
-            isMainWorktree: false,
-            linkedIssue: null,
-            linkedPR: null,
-            linkedLinearIssue: null,
-            isArchived: false,
-            comment: '',
-            isUnread: true,
-            isPinned: false,
-            displayName: 'a',
-            sortOrder: 0,
-            lastActivityAt: 0
-          }
-        ]
-      }
-    })
+    mocks.orderedWorkspaces.mockReturnValue([
+      { id: 'a', identityHostId: 'local', isUnread: true, lastActivityAt: 0 }
+    ])
+    const state = seed({})
 
     jumpToNextAttentionFromShortcut(state, NOW)
 
@@ -246,8 +227,8 @@ describe('jumpToNextAttentionFromShortcut', () => {
 
   it('walks on to the next target when one cannot be reached', () => {
     mocks.orderedWorkspaces.mockReturnValue([
-      { id: 'a', identityHostId: 'local' },
-      { id: 'b', identityHostId: 'local' }
+      { id: 'a', identityHostId: 'local', isUnread: false, lastActivityAt: 0 },
+      { id: 'b', identityHostId: 'local', isUnread: false, lastActivityAt: 0 }
     ])
     mocks.activateAndRevealWorkspace.mockImplementation((id: string) => (id === 'a' ? false : {}))
     const state = seed({
@@ -265,8 +246,8 @@ describe('jumpToNextAttentionFromShortcut', () => {
 
   it('tries an unreachable workspace once even when it holds several targets', () => {
     mocks.orderedWorkspaces.mockReturnValue([
-      { id: 'a', identityHostId: 'local' },
-      { id: 'b', identityHostId: 'local' }
+      { id: 'a', identityHostId: 'local', isUnread: false, lastActivityAt: 0 },
+      { id: 'b', identityHostId: 'local', isUnread: false, lastActivityAt: 0 }
     ])
     mocks.activateAndRevealWorkspace.mockImplementation((id: string) => (id === 'a' ? false : {}))
     const state = seed({
@@ -315,8 +296,8 @@ describe('jumpToNextAttentionFromShortcut', () => {
 
   it('steps past the place the user is already at', () => {
     mocks.orderedWorkspaces.mockReturnValue([
-      { id: 'a', identityHostId: 'local' },
-      { id: 'b', identityHostId: 'local' }
+      { id: 'a', identityHostId: 'local', isUnread: false, lastActivityAt: 0 },
+      { id: 'b', identityHostId: 'local', isUnread: false, lastActivityAt: 0 }
     ])
     const state = seed({
       activeWorktreeId: 'a',
