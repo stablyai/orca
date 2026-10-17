@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyAgentPermissionMode,
+  resolveAgentPermissionControlState,
   resolveAgentPermissionModeSummary,
   resolveTuiAgentPermissionMode,
   YOLO_TUI_AGENT_ARGS,
@@ -48,6 +49,27 @@ describe('tui agent permissions', () => {
         agentDefaultEnv: YOLO_TUI_AGENT_ENV
       })
     ).toBe('mixed')
+  })
+
+  it('keeps the global selection when custom agent arguments are preserved', () => {
+    const settings = {
+      agentDefaultArgs: {
+        ...YOLO_TUI_AGENT_ARGS,
+        codex: '--model gpt-5'
+      },
+      agentDefaultEnv: YOLO_TUI_AGENT_ENV
+    }
+
+    expect(resolveAgentPermissionControlState(settings)).toEqual({
+      mode: 'yolo',
+      hasCustomOverrides: true
+    })
+
+    const nextSettings = applyAgentPermissionMode({ mode: 'manual', ...settings })
+    expect(resolveAgentPermissionControlState(nextSettings)).toEqual({
+      mode: 'manual',
+      hasCustomOverrides: true
+    })
   })
 
   it('resolves one Codex yolo launch as yolo', () => {

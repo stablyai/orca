@@ -3,6 +3,11 @@ import type { TuiAgent } from './tui-agent'
 
 export type AgentPermissionMode = 'yolo' | 'manual' | 'mixed'
 
+export type AgentPermissionControlState = {
+  mode: AgentPermissionMode
+  hasCustomOverrides: boolean
+}
+
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   claude: '--dangerously-skip-permissions',
   codebuddy: '--dangerously-skip-permissions',
@@ -138,6 +143,30 @@ export function resolveAgentPermissionModeSummary(args: {
   }
 
   return combinePermissionModes(modes)
+}
+
+/** Resolves the global control without letting per-agent overrides replace its selection. */
+export function resolveAgentPermissionControlState(args: {
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
+}): AgentPermissionControlState {
+  const modes: AgentPermissionMode[] = []
+  let hasCustomOverrides = false
+
+  for (const agent of PERMISSION_AGENT_IDS) {
+    const mode = resolveTuiAgentPermissionMode({
+      agent,
+      agentArgs: args.agentDefaultArgs?.[agent],
+      agentEnv: args.agentDefaultEnv?.[agent]
+    })
+    if (mode === 'mixed') {
+      hasCustomOverrides = true
+      continue
+    }
+    modes.push(mode)
+  }
+
+  return { mode: combinePermissionModes(modes), hasCustomOverrides }
 }
 
 export function applyAgentPermissionMode(args: {

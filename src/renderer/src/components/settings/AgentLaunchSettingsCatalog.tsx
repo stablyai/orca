@@ -23,7 +23,8 @@ import { translate } from '@/i18n/i18n'
 
 export type AgentPermissionsRenderer = (
   mode: AgentPermissionMode,
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
+  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void,
+  hasCustomOverrides: boolean
 ) => React.ReactNode
 
 export function AgentLaunchSettingsCatalog({
@@ -125,7 +126,11 @@ export function AgentLaunchSettingsCatalog({
         )}
         onSetDefault={(agent) => save({ type: 'default', agent })}
       />
-      {renderPermissions(settings.permissionMode, (mode) => save({ type: 'permissions', mode }))}
+      {renderPermissions(
+        settings.permissionMode,
+        (mode) => save({ type: 'permissions', mode }),
+        settings.permissionHasCustomOverrides ?? false
+      )}
       <AgentDetectionCatalog
         detectedAgents={detectedAgents}
         undetectedAgents={undetectedAgents}
