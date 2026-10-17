@@ -14,6 +14,7 @@ import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { addRepoBusyLabels } from './add-repo-busy-labels'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -91,7 +92,11 @@ export function useAddRepoServerPathFlow({
       }
       const gen = ++serverAddGenRef.current
       setIsAddingServerPath(true)
-      setAddProjectBusyLabel(kind === 'git' ? 'Scanning for repositories...' : 'Opening folder...')
+      setAddProjectBusyLabel(
+        kind === 'git'
+          ? addRepoBusyLabels.scanningRepositories()
+          : addRepoBusyLabels.openingFolder()
+      )
       try {
         if (kind === 'git') {
           const attemptId = createNestedRepoTelemetryAttemptId()
@@ -157,7 +162,9 @@ export function useAddRepoServerPathFlow({
             return
           }
         }
-        setAddProjectBusyLabel(kind === 'git' ? 'Opening project...' : 'Opening folder...')
+        setAddProjectBusyLabel(
+          kind === 'git' ? addRepoBusyLabels.openingProject() : addRepoBusyLabels.openingFolder()
+        )
         const repo = await addRepoPath(path, kind, {
           runtimeEnvironmentId: activeRuntimeEnvironmentId
         })

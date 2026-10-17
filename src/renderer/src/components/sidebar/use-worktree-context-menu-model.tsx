@@ -31,6 +31,7 @@ import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-comm
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { translate } from '@/i18n/i18n'
 
 export type WorktreeContextMenuProps = {
   worktree: Worktree
@@ -183,12 +184,35 @@ export function useWorktreeContextMenuModel({
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
   const sleepLabel =
     isMultiContext && sleepableWorktrees.length > 0
-      ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
-      : 'Sleep'
+      ? sleepableWorktrees.length === 1
+        ? translate(
+            'auto.components.sidebar.useWorktreeContextMenuModel.sleepCount_one',
+            'Sleep 1 Workspace',
+            { count: sleepableWorktrees.length }
+          )
+        : translate(
+            'auto.components.sidebar.useWorktreeContextMenuModel.sleepCount_other',
+            'Sleep {{count}} Workspaces',
+            { count: sleepableWorktrees.length }
+          )
+      : translate('auto.components.sidebar.useWorktreeContextMenuModel.sleep', 'Sleep')
   const deleteLabel =
     isMultiContext && batchDeleteWorktrees.length > 0
-      ? `Delete ${batchDeleteWorktrees.length} Workspace${batchDeleteWorktrees.length === 1 ? '' : 's'}`
-      : 'Delete Selected'
+      ? batchDeleteWorktrees.length === 1
+        ? translate(
+            'auto.components.sidebar.useWorktreeContextMenuModel.deleteCount_one',
+            'Delete 1 Workspace',
+            { count: batchDeleteWorktrees.length }
+          )
+        : translate(
+            'auto.components.sidebar.useWorktreeContextMenuModel.deleteCount_other',
+            'Delete {{count}} Workspaces',
+            { count: batchDeleteWorktrees.length }
+          )
+      : translate(
+          'auto.components.sidebar.useWorktreeContextMenuModel.deleteSelected',
+          'Delete Selected'
+        )
   const hasParentLink = hasWorktreeParentLink(
     worktree,
     worktreeLineageById,

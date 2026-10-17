@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
-  IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR,
+  getImportedWorktreesKeepHiddenError,
   keepImportedWorktreesHiddenCard,
   showImportedWorktreesCard,
   type ImportedWorktreeCardActionState
@@ -119,7 +119,7 @@ export function useSidebarExternalWorktreeCards(args: {
         if (!refreshed) {
           setImportedWorktreeCardState(projectId, {
             pending: false,
-            error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+            error: getImportedWorktreesKeepHiddenError()
           })
           return
         }
@@ -128,7 +128,7 @@ export function useSidebarExternalWorktreeCards(args: {
       if (detected?.authoritative !== true) {
         setImportedWorktreeCardState(projectId, {
           pending: false,
-          error: IMPORTED_WORKTREES_KEEP_HIDDEN_ERROR
+          error: getImportedWorktreesKeepHiddenError()
         })
         return
       }
