@@ -1,7 +1,8 @@
 /**
  * Serves this install's mobile web bundle to the paired client over the already-authenticated RPC
  * connection: one call for the manifest, then one call per 48 KiB chunk of each asset, or one per
- * gzipped 384 KiB range for a client that read `rangeBytes` off the manifest reply.
+ * gzipped `MOBILE_WEB_BUNDLE_SERVED_RANGE_BYTES` range for a client that read `rangeBytes` off the
+ * manifest reply.
  *
  * No SSH or relay proxying, ever. The bundle is an artifact of the desktop the phone paired with,
  * not something a remote execution host owns, so a runtime answers only out of its own install and
@@ -14,7 +15,6 @@ import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
-  MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_METHOD,
   MobileWebBundleChunkParamsSchema,
   MobileWebBundleRangeParamsSchema,
@@ -40,6 +40,11 @@ import {
   mobileWebBundleReadBucket
 } from './mobile-web-bundle-read-admission'
 import { encodeMobileWebBundleRange } from './mobile-web-bundle-range-encoding'
+
+/** The range grid this host advertises and serves, under the contract's 384 KiB ceiling. Released
+ *  phones time each of four in-flight windows separately on one ordered socket (#29697); the worst
+ *  four 64 KiB windows of the real bundle are ~173 KB on the wire, inside 30 s down to ~5.8 KB/s. */
+export const MOBILE_WEB_BUNDLE_SERVED_RANGE_BYTES = 64 * 1024
 
 /** The code IS the message: `InvalidArgumentError` carries no data field, so the message is the only
  *  place a stable code can travel, and a client must be able to branch without matching prose. */
@@ -166,7 +171,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     handler: async (): Promise<MobileWebBundleManifestResult> => ({
       manifest: requireBundle().manifest,
       chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-      rangeBytes: MOBILE_WEB_BUNDLE_RANGE_BYTES
+      rangeBytes: MOBILE_WEB_BUNDLE_SERVED_RANGE_BYTES
     })
   }),
   defineMethod({
@@ -184,7 +189,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     permission: 'workspace',
     params: MobileWebBundleRangeParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleRangeResult> =>
-      readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_RANGE_BYTES, async (window) => {
+      readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_SERVED_RANGE_BYTES, async (window) => {
         const encoded = await encodeMobileWebBundleRange(window.data)
         return {
           ...window.header,

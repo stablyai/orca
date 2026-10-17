@@ -16,6 +16,7 @@ import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobil
 import type { RpcResponse } from '../core'
 import type { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from './index'
+import { MOBILE_WEB_BUNDLE_SERVED_RANGE_BYTES as GRID } from './mobile-web-bundle'
 import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
 import { resetMobileWebBundleReadAdmissionForTests } from './mobile-web-bundle-read-admission'
 import {
@@ -53,11 +54,11 @@ function decoded(result: MobileWebBundleRangeResult): Buffer {
 
 // Period-256 filler compresses by two orders of magnitude; random bytes do not compress at all.
 const COMPRESSIBLE: SyntheticAsset = (() => {
-  const bytes = mobileWebBundleFiller(MOBILE_WEB_BUNDLE_RANGE_BYTES * 2 + 777, 11)
+  const bytes = mobileWebBundleFiller(GRID * 2 + 777, 11)
   return { path: `assets/${sha256Hex(bytes)}.js`, bytes, contentType: 'text/javascript' }
 })()
 const INCOMPRESSIBLE: SyntheticAsset = (() => {
-  const bytes = randomBytes(MOBILE_WEB_BUNDLE_RANGE_BYTES + 4096)
+  const bytes = randomBytes(GRID + 4096)
   return { path: `assets/${sha256Hex(bytes)}.bin`, bytes, contentType: 'application/octet-stream' }
 })()
 
@@ -89,7 +90,13 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
   it('names the range grid on the manifest reply', async () => {
     const response = await call('mobileWeb.bundle.manifest')
     const result = MobileWebBundleManifestResultSchema.parse(response.ok && response.result)
-    expect(result.rangeBytes).toBe(MOBILE_WEB_BUNDLE_RANGE_BYTES)
+    expect(result.rangeBytes).toBe(GRID)
+  })
+
+  // Four windows share one ordered socket under per-request timers on released phones (#29697).
+  it('serves a grid below the contract ceiling that released phones accept', () => {
+    expect(GRID).toBe(64 * 1024)
+    expect(GRID).toBeLessThan(MOBILE_WEB_BUNDLE_RANGE_BYTES)
   })
 
   // The manifest field is the phone's only discovery, and a mobile-scoped call to a method this
@@ -107,7 +114,7 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
     for (const asset of bundle.assets) {
       const pieces: Buffer[] = []
       let calls = 0
-      for (let offset = 0; ; offset += MOBILE_WEB_BUNDLE_RANGE_BYTES) {
+      for (let offset = 0; ; offset += GRID) {
         const result = body(await range({ buildId: bundle.buildId, path: asset.path, offset }))
         calls++
         expect(result).toMatchObject({
@@ -117,13 +124,16 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
           assetByteLength: asset.byteLength,
           sha256: asset.sha256
         })
+        // Released phones accept a window only if it fills exactly its slot of the advertised grid.
+        expect(decoded(result).byteLength).toBe(Math.min(GRID, asset.byteLength - offset))
+        expect(result.eof).toBe(offset + GRID >= asset.byteLength)
         pieces.push(decoded(result))
         if (result.eof) {
           break
         }
       }
       expect(sha256Hex(Buffer.concat(pieces))).toBe(asset.sha256)
-      expect(calls).toBe(Math.max(1, Math.ceil(asset.byteLength / MOBILE_WEB_BUNDLE_RANGE_BYTES)))
+      expect(calls).toBe(Math.max(1, Math.ceil(asset.byteLength / GRID)))
     }
   })
 
@@ -132,22 +142,13 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
       await range({
         buildId: bundle.buildId,
         path: COMPRESSIBLE.path,
-        offset: MOBILE_WEB_BUNDLE_RANGE_BYTES
+        offset: GRID
       })
     )
 
     expect(result.encoding).toBe('gzip')
-    expect(Buffer.from(result.dataBase64, 'base64').byteLength).toBeLessThan(
-      MOBILE_WEB_BUNDLE_RANGE_BYTES / 10
-    )
-    expect(
-      decoded(result).equals(
-        COMPRESSIBLE.bytes.subarray(
-          MOBILE_WEB_BUNDLE_RANGE_BYTES,
-          MOBILE_WEB_BUNDLE_RANGE_BYTES * 2
-        )
-      )
-    ).toBe(true)
+    expect(Buffer.from(result.dataBase64, 'base64').byteLength).toBeLessThan(GRID / 10)
+    expect(decoded(result).equals(COMPRESSIBLE.bytes.subarray(GRID, GRID * 2))).toBe(true)
     expect(result.eof).toBe(false)
   })
 
@@ -159,9 +160,7 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
 
     expect(result.encoding).toBe('identity')
     expect(
-      Buffer.from(result.dataBase64, 'base64').equals(
-        INCOMPRESSIBLE.bytes.subarray(0, MOBILE_WEB_BUNDLE_RANGE_BYTES)
-      )
+      Buffer.from(result.dataBase64, 'base64').equals(INCOMPRESSIBLE.bytes.subarray(0, GRID))
     ).toBe(true)
   })
 

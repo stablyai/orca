@@ -6,12 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
-  MOBILE_WEB_BUNDLE_RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_METHOD
 } from '../../../../shared/mobile-web-bundle/bundle-rpc-contract'
 import { resetBundledMobileWebBundleCacheForTests } from '../../bundled-mobile-web-bundle'
 import type { RpcResponse } from '../core'
 import type { RpcDispatcher } from '../dispatcher'
+import { MOBILE_WEB_BUNDLE_SERVED_RANGE_BYTES } from './mobile-web-bundle'
 import { resetMobileWebBundleAssetVerdictsForTests } from './mobile-web-bundle-asset-reader'
 import {
   acquireMobileWebBundleReadSlot,
@@ -53,7 +53,7 @@ afterEach(() => {
 // Both read methods run the same checks in the same order; only the grid differs.
 describe.each([
   { method: MOBILE_WEB_BUNDLE_CHUNK_METHOD, grid: MOBILE_WEB_BUNDLE_CHUNK_BYTES },
-  { method: MOBILE_WEB_BUNDLE_RANGE_METHOD, grid: MOBILE_WEB_BUNDLE_RANGE_BYTES }
+  { method: MOBILE_WEB_BUNDLE_RANGE_METHOD, grid: MOBILE_WEB_BUNDLE_SERVED_RANGE_BYTES }
 ])('$method refusals', ({ method, grid }) => {
   let bundle: SyntheticMobileWebBundle
   let script: SyntheticMobileWebBundle['assets'][number]
