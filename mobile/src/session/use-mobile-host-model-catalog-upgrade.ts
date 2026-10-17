@@ -9,6 +9,7 @@ import {
 } from '../../../src/shared/structured-agent-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { joinHostModelListingWait } from '../../../src/shared/host-model-listing-waits'
 
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000
@@ -30,6 +31,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
   /** Where a new chat runs: the host names no default its config could replace. */
   worktree?: string
   fence: number | null
+  optionStamp?: string
   optionCatalog: AgentSessionOptionCatalog | null
   activeOptionRecordRef: MutableRefObject<NativeChatSessionOptionRecord>
   /** A listing landed after the chat's options were read, which answered without it. */
@@ -47,6 +49,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     newLaunch,
     onListingLanded,
     optionCatalog,
+    optionStamp,
     sessionId,
     updateOptionState,
     worktree
@@ -56,6 +59,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
       return
     }
     let stale = false
+    let leave: (() => void) | undefined
     const params = { agent, sessionId, ...(newLaunch && worktree ? { worktree } : {}) }
     const read = (waitForListing: boolean): Promise<AgentSessionModelCatalogResult> =>
       waitForListing
@@ -89,15 +93,23 @@ export function useMobileHostModelCatalogUpgrade(args: {
     }
     void read(false)
       .then((catalog) => {
-        if (catalog.origin === 'unknown' && catalog.listingInProgress === true && !stale) {
+        if (catalog.listingInProgress === true && !stale) {
           // Usable on the built-in list while the listing runs; it lands in place.
           apply(catalog)
-          return read(true).then((listed) => {
-            apply(listed)
-            if (!stale && listed.origin !== 'unknown') {
-              onListingLanded?.()
-            }
-          })
+          leave = joinHostModelListingWait(
+            `${agent}\u0000${sessionId}\u0000${fence}\u0000${worktree ?? ''}\u0000${optionStamp ?? ''}`,
+            () => read(true),
+            (listed) => {
+              if (!listed) {
+                return settleBuiltin()
+              }
+              apply(listed)
+              if (!stale && listed.origin !== 'unknown') {
+                onListingLanded?.()
+              }
+            },
+            client
+          )
         }
         apply(catalog)
         return undefined
@@ -105,6 +117,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
       .catch(settleBuiltin)
     return () => {
       stale = true
+      leave?.()
     }
   }, [
     activeOptionRecordRef,
@@ -115,6 +128,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     newLaunch,
     onListingLanded,
     optionCatalog,
+    optionStamp,
     sessionId,
     updateOptionState,
     worktree

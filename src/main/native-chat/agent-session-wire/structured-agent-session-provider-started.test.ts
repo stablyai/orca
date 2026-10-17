@@ -103,6 +103,8 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-a',
     modelCatalog: {
       read: async () => ({ origin: 'unknown' }),
+      peek: vi.fn(() => null),
+      processCatalog: vi.fn(() => null),
       retainedLiveModelIds: vi.fn(() => []),
       recordLiveListing: (sessionId, listing) => savedListings.push({ sessionId, listing }),
       prewarm: async () => {},

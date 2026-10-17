@@ -4,7 +4,7 @@ import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-s
 
 const noSubscription = (): (() => void) => () => {}
 
-/** The host status's option values as one stamp; another device's pick moves it, off `enabled` never. */
+/** Options and process readiness share a stamp; disabled panes never subscribe. */
 export function useMobileStructuredSessionOptionStamp(args: {
   client: RpcClient | null
   sessionId: string | null
@@ -18,7 +18,7 @@ export function useMobileStructuredSessionOptionStamp(args: {
   )
   const readStamp = (): string => {
     const summary = feed && sessionId ? feed.getSnapshot().get(sessionId) : undefined
-    return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}`
+    return `${summary?.model ?? ''}|${summary?.permissionMode ?? ''}|${summary?.hostExecutionPhase ?? ''}`
   }
   return useSyncExternalStore(subscribe, readStamp, readStamp)
 }

@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
@@ -22,6 +23,15 @@ export function clientReadsOptionsWithoutModel(
   return (
     context.clientKind === undefined ||
     context.clientCapabilities?.includes(AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY) === true
+  )
+}
+
+export function clientReadsCoherentModelCatalog(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind'>
+): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
   )
 }
 

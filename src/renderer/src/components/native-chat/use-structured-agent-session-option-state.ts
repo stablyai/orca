@@ -1,3 +1,4 @@
+import { invalidateStructuredAgentChoiceCatalog } from '../../../../shared/structured-agent-session-choice-catalog'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session-conversation-command'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
@@ -135,13 +136,19 @@ export function useStructuredAgentSessionOptionState(args: {
           }
         : seeded
     // The chat's own, which a restart for a new mode keeps: the picker never blanks between them.
-    const next = sameSession ? { ...kept, permissionMode: previous.permissionMode } : kept
+    const next = sameSession
+      ? { ...invalidateStructuredAgentChoiceCatalog(kept), permissionMode: previous.permissionMode }
+      : kept
     optionMutationGeneration.current += 1
     pendingOptionsRef.current = {}
     optionStateRef.current = next
     activeOptionRecordRef.current = next.record
     setOptionState(next)
   }, [agent, fence, identity])
+
+  useEffect(() => {
+    updateOptionState(invalidateStructuredAgentChoiceCatalog)
+  }, [providerVisible, providerStarting, updateOptionState])
 
   const optionsReadRef = useRef<CoalescedPollRunner | null>(null)
   // Refresh options each turn to confirm which model the provider actually selected, and once

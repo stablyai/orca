@@ -1,3 +1,4 @@
+import { ageStructuredAgentChoiceCatalog } from '../../../shared/structured-agent-session-choice-catalog'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from './structured-agent-session-client'
@@ -53,9 +54,14 @@ export function readHostModelCatalogSnapshot(
   }
   const exact = entry.byWorktree.get(launch.worktree ?? '')
   if (exact) {
-    return exact
+    return exact.choiceCatalog
+      ? ageStructuredAgentChoiceCatalog(exact, Number.POSITIVE_INFINITY)
+      : exact
   }
   const listed = entry.account ?? entry.byWorktree.values().next().value
+  if (listed?.choiceCatalog) {
+    return undefined
+  }
   if (
     !listed ||
     !launch.newLaunch ||
@@ -75,6 +81,9 @@ export function recordHostModelCatalogSnapshot(
   catalog: AgentSessionModelCatalogResult
 ): void {
   const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
+  if (catalog.choiceCatalog) {
+    catalog = ageStructuredAgentChoiceCatalog(catalog, Number.POSITIVE_INFINITY)
+  }
   if (catalog.origin === 'unknown' || catalog.models.length === 0) {
     // The account a new chat pins has no list: an older answer belongs to another account.
     snapshots.delete(key)

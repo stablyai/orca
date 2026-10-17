@@ -12,7 +12,10 @@ export class AgentModelCatalogListingWaiters {
     private readonly listing: (fingerprint: string) => boolean
   ) {}
 
-  wait(fingerprint: string): Promise<AgentModelCatalogEntry | null> | null {
+  wait(
+    fingerprint: string,
+    after?: AgentModelCatalogEntry | null
+  ): Promise<AgentModelCatalogEntry | null> | null {
     if (!this.listing(fingerprint)) {
       return null
     }
@@ -33,7 +36,7 @@ export class AgentModelCatalogListingWaiters {
       }
       const check = (): void => {
         const entry = this.read(fingerprint)
-        if (entry || !this.listing(fingerprint)) {
+        if ((entry && entry !== after) || !this.listing(fingerprint)) {
           finish(entry)
         }
       }

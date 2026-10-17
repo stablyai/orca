@@ -34,6 +34,8 @@ import type { DeferredStructuredAgentSessionEventSink } from './structured-agent
 import { noteStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
+import { saveStructuredAgentSessionListing } from './structured-agent-session-start-listing'
 import { isStructuredAgentSessionStartupExpired } from './structured-agent-session-startup-attempt'
 import type { StructuredAgentSessionStartupAttempt } from './structured-agent-session-startup-attempt-contract'
 import {
@@ -170,6 +172,7 @@ async function runAttachUnderAbort(
     committed: boolean
     startup: StructuredAgentSessionStartupAttempt | null
   } = { candidate: null, committed: false, startup: null }
+  let startCatalogListing: AgentModelCatalogLiveListing | undefined
   const { startupAttempts } = context.runtimeState
   try {
     const attached = await performAttach({
@@ -199,8 +202,9 @@ async function runAttachUnderAbort(
       now: () => context.now(),
       recordPhase,
       acquireSignal,
-      onStartCatalogListing: (listing) =>
-        context.deps.modelCatalog?.recordLiveListing(sessionId, listing),
+      onStartCatalogListing: (listing) => {
+        startCatalogListing = listing
+      },
       onStartupAttempt: (startup) => {
         attempt.startup = startup
         return startupAttempts.track(sessionId, startup)
@@ -282,6 +286,9 @@ async function runAttachUnderAbort(
       context.runtimeState.adoptEventSink(sessionId, candidate.sink)
       attempt.committed = candidate.sink === attemptSink
       indexProviderChild(conversation, candidate.child)
+      if (startCatalogListing) {
+        saveStructuredAgentSessionListing(context, sessionId, startCatalogListing)
+      }
       if (attempt.startup) {
         startupAttempts.published(sessionId, attempt.startup.attemptId, candidate.child)
         if (candidate.child.phase === 'ready') {

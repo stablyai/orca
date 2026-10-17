@@ -6,6 +6,7 @@ import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-se
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 
 const HOST_LIST: AgentSessionModelCatalogResult = {
   origin: 'probe',
@@ -14,13 +15,17 @@ const HOST_LIST: AgentSessionModelCatalogResult = {
 }
 
 /** Catalog reads take each scripted answer in turn; option reads never answer. */
-function client(catalog: () => Promise<AgentSessionModelCatalogResult>): RpcClient {
+function client(
+  catalog: () => Promise<AgentSessionModelCatalogResult>,
+  options: () => Promise<unknown> = () => new Promise(() => {}),
+  subscribe: RpcClient['subscribe'] = () => () => {}
+): RpcClient {
   return {
     sendRequest: async (method: string) =>
       method === 'agentSession.modelCatalog'
         ? { id: 'rpc-1', ok: true as const, result: await catalog(), _meta: { runtimeId: 'r' } }
-        : new Promise(() => {}),
-    subscribe: () => () => {},
+        : { id: 'rpc-2', ok: true as const, result: await options(), _meta: { runtimeId: 'r' } },
+    subscribe,
     updateTerminalSubscriptionViewport: () => {},
     getState: () => 'connected',
     getReconnectAttempt: () => 0,
@@ -36,19 +41,25 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
   return model?.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
 }
 
-type Props = { rpc: RpcClient; fence: number }
+type Props = { rpc: RpcClient; fence: number; agent?: string }
 
 async function mount(initial: Props) {
   const frames: string[][] = []
   const mutate: StructuredAgentSessionMutate = vi.fn()
   function Probe(props: Props): null {
+    const optionStamp = useMobileStructuredSessionOptionStamp({
+      client: props.rpc,
+      sessionId: 'session-1',
+      enabled: true
+    })
     const options = useMobileStructuredAgentOptions({
-      agent: 'codex',
+      agent: props.agent ?? 'codex',
       client: props.rpc,
       sessionId: 'session-1',
       enabled: true,
       fence: props.fence,
       mutate,
+      optionStamp,
       hostSupport: { sendOptions: true, permissionModes: true }
     })
     frames.push(modelChoices(options.optionSnapshot))
@@ -69,6 +80,83 @@ async function mount(initial: Props) {
 }
 
 describe('the phone picker’s first frame', () => {
+  it.each([true, false])(
+    're-reads same-fence readiness and discards late startup answers (early=%s)',
+    async (early) => {
+      const catalogs: ((answer: AgentSessionModelCatalogResult) => void)[] = []
+      const options: ((answer: unknown) => void)[] = []
+      let status: (frame: unknown) => void = () => {}
+      const rpc = client(
+        () => new Promise((resolve) => catalogs.push(resolve)),
+        () => new Promise((resolve) => options.push(resolve)),
+        (_method, _params, listener) => {
+          status = listener
+          return () => {}
+        }
+      )
+      const harness = await mount({ rpc, fence: 1, agent: 'claude' })
+      const phase = (hostExecutionPhase: string) =>
+        status({
+          type: 'status',
+          session: {
+            sessionId: 'session-1',
+            workspaceId: 'workspace-1',
+            agent: 'claude',
+            status: 'idle',
+            updatedAt: 1,
+            model: 'gpt-host',
+            hostExecutionPhase
+          }
+        })
+      await act(async () => phase('starting'))
+      const empty = {
+        authority: 'session' as const,
+        scopeId: 'process-1',
+        models: [],
+        complete: false,
+        freshForMs: 0
+      }
+      const startup = async () => {
+        for (const answer of catalogs.slice(0, 2)) {
+          answer({ origin: 'unknown', choiceCatalog: empty })
+        }
+        for (const answer of options.slice(0, 2)) {
+          answer({
+            models: [],
+            current: { model: 'gpt-host' },
+            choiceCatalog: empty,
+            choiceAuthority: 'session'
+          })
+        }
+      }
+      if (early) {
+        await act(startup)
+      }
+      await act(async () => phase('ready'))
+      expect(catalogs).toHaveLength(3)
+      expect(options).toHaveLength(3)
+      const ready = {
+        ...empty,
+        complete: true,
+        models: HOST_LIST.origin === 'unknown' ? [] : HOST_LIST.models
+      }
+      await act(async () => {
+        catalogs[2]?.({ ...HOST_LIST, choiceCatalog: ready })
+        options[2]?.({
+          models: ready.models,
+          current: { model: 'gpt-host' },
+          choiceCatalog: ready,
+          choiceAuthority: 'session'
+        })
+      })
+      if (!early) {
+        await act(startup)
+      }
+      expect(harness.frames.at(-1)).toEqual(['gpt-host'])
+      await harness.unmount()
+    }
+  )
+
   it('shows the quiet placeholder, never the built-in list, until the host answers', async () => {
     let answer!: (value: AgentSessionModelCatalogResult) => void
     const rpc = client(() => new Promise((resolve) => (answer = resolve)))

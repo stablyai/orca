@@ -59,7 +59,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   controller: Pick<
     StructuredAgentSessionComposerOptions,
     'snapshot' | 'setOption' | 'invokeAction' | 'conversationCommands'
-  >
+  > & { sendSelection?: () => Record<string, string> | undefined }
   onSendError: MobileNativeChatSendErrorReporter
   /** Each send carries the model and effort the picker shows; an older host takes neither. */
   carriesOptions?: boolean
@@ -147,7 +147,9 @@ export function useMobileStructuredSendWithOutcome(args: {
       // A pick on its way holds the send, so the picker shows what the chat holds.
       const options =
         carriesOptions && agent
-          ? structuredAgentSessionSendSelection(agent, controller.snapshot)
+          ? controller.sendSelection
+            ? controller.sendSelection()
+            : structuredAgentSessionSendSelection(agent, controller.snapshot)
           : undefined
       const outcome = await sendMobileStructuredAgentSessionMessage({
         client,

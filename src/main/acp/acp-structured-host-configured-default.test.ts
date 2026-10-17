@@ -1,7 +1,3 @@
-// Grok's session-free listing can name a model (`initialize`'s currentModelId) other than the one a
-// session runs. The user's case: the listing said Grok 4.7, every chat ran Grok 4.6. Through the
-// real Grok probe, adapter and host, a new chat's first frame names only what a chat ran.
-
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../shared/agent-session-wire'
 import { structuredAgentSessionSeedCatalog } from '../../shared/structured-agent-session-seed-catalog'
@@ -24,11 +20,12 @@ import {
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import { createAcpModelCatalogProbe } from './acp-model-catalog-probe'
 import { AcpScriptedAgent } from './acp-scripted-agent.test-support'
-import { AcpStructuredOptions } from './acp-structured-options'
-import { SessionConfigOptionSchema } from './generated/acp-protocol.generated'
 import { AcpSessionRuntime } from './acp-session-runtime'
 import { GROK, GROK_CONFIG_OPTIONS } from './acp-structured-adapter.test-support'
-import { CALLER } from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+import {
+  CALLER,
+  envelope
+} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
 import { createTestParams } from '../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/structured-agent-session-create'
 import { attachParams, launch, openHostRig } from './acp-structured-host.test-support'
@@ -40,14 +37,6 @@ const EFFORT_META = {
     { id: 'high', value: 'high', default: true },
     { id: 'low', value: 'low' }
   ]
-}
-
-const OTHER_CHAT = 'grok-chat-2'
-
-/** Another Grok chat in the same workspace, as the host's record of it. */
-function otherChat(store: AgentSessionRecordStore | null) {
-  const first = store?.getRecord(SESSION)
-  return first ? { ...first, sessionId: OTHER_CHAT } : undefined
 }
 
 const agents: AcpScriptedAgent[] = []
@@ -104,6 +93,7 @@ function firstFrame(answer: AgentSessionModelCatalogResult) {
     { newLaunch: true }
   )
   const snapshot = structuredAgentSessionOptionSnapshot(state)
+  expect(state.record).toEqual({ agent: 'grok', valuesByModel: {} })
   const select = (id: string) => {
     const entry = snapshot.find((descriptor) => descriptor.id === id)
     return entry?.kind.type === 'select' ? (entry.kind.currentValue ?? null) : null
@@ -115,13 +105,13 @@ function firstFrame(answer: AgentSessionModelCatalogResult) {
  *  `create` founds it with its first message, so only delivery starts the agent. */
 async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMessage) {
   const records: { store: AgentSessionRecordStore | null } = { store: null }
+  let processScope: () => string | null = () => null
   const discovery = GROK.modelDiscovery
   const catalog = createAgentModelCatalogService({
     store: new AgentModelCatalogStore(),
-    getRecord: (sessionId) =>
-      records.store?.getRecord(sessionId) ??
-      (sessionId === OTHER_CHAT ? otherChat(records.store) : undefined),
+    getRecord: (sessionId) => records.store?.getRecord(sessionId) ?? undefined,
     drivesRecord: () => true,
+    processScope: () => processScope(),
     resolveAccountHome: async () => GROK_HOME,
     recordWorkspacePath: async () => '/workspace/project',
     agentReadsProjectModelConfig,
@@ -137,13 +127,22 @@ async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMe
   )
   const rig = await openHostRig({
     modelCatalog: catalog,
-    script: (agent) =>
+    script: (agent) => {
       agent.on('session/new', (frame) =>
         agent.reply(frame, { sessionId: 'acp-session-1', configOptions: opened })
-      ),
+      )
+      agent.on('session/set_config_option', (frame) =>
+        agent.reply(frame, {
+          configOptions: opened.map((option) =>
+            option.id === 'model' ? { ...option, currentValue: 'grok-4.7' } : option
+          )
+        })
+      )
+    },
     deps: { resolveLaunch: launch(() => false) }
   })
   records.store = rig.store
+  processScope = () => rig.host.modelCatalogProcessScope(SESSION)
   const listed = await catalog.read({ agent: 'grok', waitForListing: true })
   const opening = create
     ? rig.host.create(CALLER, createTestParams(create, attachParams()), { firstMessage: create })
@@ -152,59 +151,35 @@ async function openGrokHost(runs: string, create?: StructuredAgentSessionFirstMe
   return { ...rig, catalog, listed }
 }
 
-describe('Grok’s default comes from what a chat with no pick runs', () => {
-  it('names no model before any chat ran, though the listing computed one', async () => {
+describe('Grok process model authority', () => {
+  it('names no configured model from a session-free listing', async () => {
     const { listed } = await openGrokHost('grok-4.6')
     expect(listed).toMatchObject({ origin: 'probe', listingNamesConfiguredModel: false })
     expect(firstFrame(listed)).toEqual({ model: null, effort: null })
   })
 
-  it('names 4.6, the model a chat with no pick ran, never the listing’s 4.7', async () => {
-    const { catalog, host } = await openGrokHost('grok-4.6')
+  it('reports the owning process model rather than initialize currentModelId', async () => {
+    const { host, catalog } = await openGrokHost('grok-4.6')
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
-
-    // The next new chat, in any workspace: Grok reads no project config for its model.
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
-    expect(answer).toMatchObject({
-      listingNamesConfiguredModel: true,
-      defaultHoldsInEveryWorkspace: true
+    const nextComposer = () =>
+      catalog.read({ agent: 'grok', workspacePath: '/workspace/project', savedOnly: true })
+    expect(firstFrame(await nextComposer())).toEqual({ model: 'grok-4.6', effort: 'high' })
+    const fields = { key: 'model', value: 'grok-4.7' }
+    await host.setOption(CALLER, {
+      envelope: envelope('agentSession.setOption', fields),
+      ...fields
     })
-    expect(firstFrame(answer)).toEqual({ model: 'grok-4.6', effort: 'high' })
+    await host.readOptions(SESSION)
+    expect(firstFrame(await nextComposer())).toEqual({ model: 'grok-4.6', effort: 'high' })
   })
 
-  it('learns 4.6 from a chat created with its first message and no pick', async () => {
-    const { catalog, host, rig } = await openGrokHost('grok-4.6', {
+  it('reports the process model when the first message acquires the child', async () => {
+    const { host, rig } = await openGrokHost('grok-4.6', {
       clientMessageId: 'opening',
       body: hostTestMessage('hello')
     })
-    await catalog.read({ agent: 'grok', waitForListing: true })
-    // Delivery started the agent and handed it the opening message; nothing picked a model.
     const prompt = await rig.frame('session/prompt')
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
-    // Learned from the start the delivery made, before any options read.
-    expect(firstFrame(await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' }))).toEqual({
-      model: 'grok-4.6',
-      effort: 'high'
-    })
-
     expect((await host.readOptions(SESSION)).current).toMatchObject({ model: 'grok-4.6' })
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
-    expect(answer).toMatchObject({ listingNamesConfiguredModel: true })
-    expect(firstFrame(answer)).toEqual({ model: 'grok-4.6', effort: 'high' })
-  })
-
-  it('a chat’s later reads teach nothing: a newer chat’s default stands', async () => {
-    const { catalog, host } = await openGrokHost('grok-4.6')
-    // Grok's default moved since: a newer chat with no pick starts on 4.7 and says so at its start.
-    const newer = new AcpStructuredOptions()
-    newer.adoptSession(
-      { configOptions: SessionConfigOptionSchema.array().parse(GROK_CONFIG_OPTIONS) },
-      'new'
-    )
-    catalog.recordLiveListing(OTHER_CHAT, newer.startListing())
-    // The first chat keeps running and reads its options again, as every turn does.
-    await host.readOptions(SESSION)
-    const answer = await catalog.read({ agent: 'grok', workspacePath: '/elsewhere' })
-    expect(firstFrame(answer)).toEqual({ model: 'grok-4.7', effort: 'high' })
   })
 })

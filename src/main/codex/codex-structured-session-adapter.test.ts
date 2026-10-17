@@ -41,10 +41,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       effort: 'low',
       serviceTier: 'priority'
     })
-    expect(codex.connections[0].calls.map((call) => call.method)).toEqual([
-      'thread/start',
-      'model/list'
-    ])
+    expect(codex.connections[0].calls.map((call) => call.method)).toEqual(['thread/start'])
   })
 
   it('persists saved model and effort as the next turn uses them', async () => {
@@ -104,7 +101,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
   })
 
-  it('leaves a rejected listing as a catalog error after the thread opens', async () => {
+  it('reports current options without asking a user session for shared inventory', async () => {
     const codex = fakeCodex({
       'model/list': () => {
         throw new Error('stub model/list rejected')
@@ -118,9 +115,11 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       model: 'gpt-live',
       effort: 'medium'
     })
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).rejects.toThrow(
-      'stub model/list rejected'
-    )
+    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
+      models: [],
+      current: { model: 'gpt-live' }
+    })
+    expect(codex.connections[0].calls.some((call) => call.method === 'model/list')).toBe(false)
     expect(codex.connections[0].closeCount).toBe(0)
   })
 

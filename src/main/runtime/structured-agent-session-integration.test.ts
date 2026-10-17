@@ -47,6 +47,7 @@ import {
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
+import { installScriptedCodexModelCatalog } from './scripted-codex-model-catalog.test-fixture'
 
 const journals = createTrackedJournalOpener()
 
@@ -61,9 +62,8 @@ const JOURNAL_IDENTITY = {
   agent: 'codex' as const,
   providerHandle: codexProviderHandle(THREAD)
 }
-// The capability set the desktop renderer advertises. Without the pending-send
-// one the host holds the reply until the send settles, which is a shim for
-// clients too old to render a pending bubble — not what this suite models.
+// A legacy reader that supports pending sends but requires current.model and reads no coherent
+// catalog envelope. The process must report its current values without discovering inventory.
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
@@ -96,7 +96,7 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
 
 function fakeCodex(): CodexScript {
   const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
+  const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
       handlers,
@@ -108,32 +108,22 @@ function fakeCodex(): CodexScript {
       request: async (method, params) => {
         connection.calls.push({ method, params })
         if (method === 'thread/start') {
-          return { thread: { id: THREAD, path: '/rollouts/integration.jsonl' } }
+          return {
+            thread: { id: THREAD, path: '/rollouts/integration.jsonl' },
+            model: 'gpt-live',
+            reasoningEffort: 'medium'
+          }
         }
         if (method === 'thread/resume') {
           connection.resumedThreadId = (params as { threadId: string }).threadId
-          return { thread: { id: connection.resumedThreadId } }
+          return {
+            thread: { id: connection.resumedThreadId },
+            model: 'gpt-live',
+            reasoningEffort: 'medium'
+          }
         }
         if (method === 'turn/start') {
           return { turn: { id: TURN } }
-        }
-        if (method === 'model/list') {
-          return {
-            data: [
-              {
-                model: 'gpt-live',
-                displayName: 'GPT Live',
-                hidden: false,
-                supportedReasoningEfforts: [
-                  { reasoningEffort: 'medium', description: 'Balanced' },
-                  { reasoningEffort: 'high', description: 'Deep reasoning' }
-                ],
-                defaultReasoningEffort: 'medium',
-                isDefault: true
-              }
-            ],
-            nextCursor: null
-          }
         }
         return {}
       },
@@ -147,7 +137,7 @@ function fakeCodex(): CodexScript {
     }
     connections.push(connection)
     return connection
-  }) as typeof openCodexAppServerConnection
+  }
   const live = (): FakeConnection => {
     const connection = connections.at(-1)
     if (!connection) {
@@ -438,18 +428,26 @@ describe('a structured codex session over agentSession.*', () => {
     // The previous process exits, closing its database.
     await journals.closeAll()
 
-    const created = await ok<{ page: { items: AgentJournalRenderItem[] } }>(
+    const created = await ok<{ fence: number; page: { items: AgentJournalRenderItem[] } }>(
       'agentSession.create',
       createIntentParams()
     )
     expect(created.page.items.map(textOf)).toContain('legacy question')
+    const { probe } = installScriptedCodexModelCatalog(SESSION, root)
     expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
       ok: true,
       result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live' }
+        models: [{ id: 'gpt-live', serviceTiers: [{ value: 'fast' }] }],
+        current: { model: 'gpt-live', effort: 'medium' }
       }
     })
+    const fields = { key: 'fastMode', value: 'true' }
+    await ok('agentSession.setOption', {
+      envelope: envelope('agentSession.setOption', fields, created.fence),
+      ...fields
+    })
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(codex.live().calls.some((entry) => entry.method === 'model/list')).toBe(false)
   })
 
   it('dispatches and streams a plain first send from a fresh session', async () => {
@@ -537,10 +535,11 @@ describe('a structured codex session over agentSession.*', () => {
     expect(options).toMatchObject({
       ok: true,
       result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
-        current: { model: 'gpt-live' }
+        models: [],
+        current: { model: 'gpt-live', effort: 'medium' }
       }
     })
+    expect(codex.live().calls.some((entry) => entry.method === 'model/list')).toBe(false)
     await ok('agentSession.setOption', {
       envelope: envelope('agentSession.setOption', { key: 'model', value: 'gpt-live' }, fence),
       key: 'model',
@@ -699,7 +698,7 @@ describe('a structured codex session over agentSession.*', () => {
     expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
       ok: true,
       result: {
-        models: [{ id: 'gpt-live', defaultEffort: 'medium' }],
+        models: [],
         current: { model: 'gpt-live', effort: 'high' }
       }
     })

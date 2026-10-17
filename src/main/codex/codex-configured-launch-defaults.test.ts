@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
-import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
+import {
+  composeCodexSessionOptionCatalog,
+  fetchCodexModelCatalogListing
+} from './codex-structured-model-catalog'
 
 function modelRow(id: string, isDefault = false): Record<string, unknown> {
   return {
@@ -41,14 +44,19 @@ function defaults(models: { id: string; isDefault: boolean; defaultEffort?: stri
   return models.map(({ id, isDefault, defaultEffort }) => ({ id, isDefault, defaultEffort }))
 }
 
-describe('Codex listing default follows the configured launch model', () => {
-  it('marks the configured model and effort as what a launch runs', async () => {
+describe('Codex raw listing and configured launch intent', () => {
+  it('keeps configured model and effort separate, applying them only to the legacy projection', async () => {
     const listing = await fetchCodexModelCatalogListing({
       connection: connection({
         answer: { config: { model: 'gpt-5.5', model_reasoning_effort: 'xhigh' } }
       })
     })
+    expect(listing.configured).toEqual({ model: 'gpt-5.5', effort: 'xhigh' })
     expect(defaults(listing.models)).toEqual([
+      { id: 'gpt-6-astra', isDefault: true, defaultEffort: 'medium' },
+      { id: 'gpt-5.5', isDefault: false, defaultEffort: 'medium' }
+    ])
+    expect(defaults(composeCodexSessionOptionCatalog(listing, { current: {} }).models)).toEqual([
       { id: 'gpt-6-astra', isDefault: false, defaultEffort: 'medium' },
       { id: 'gpt-5.5', isDefault: true, defaultEffort: 'xhigh' }
     ])
@@ -60,7 +68,8 @@ describe('Codex listing default follows the configured launch model', () => {
         answer: { config: { model: null, model_reasoning_effort: 'high' } }
       })
     })
-    expect(defaults(listing.models)).toEqual([
+    expect(listing.configured).toEqual({ effort: 'high' })
+    expect(defaults(composeCodexSessionOptionCatalog(listing, { current: {} }).models)).toEqual([
       { id: 'gpt-6-astra', isDefault: true, defaultEffort: 'high' },
       { id: 'gpt-5.5', isDefault: false, defaultEffort: 'medium' }
     ])
@@ -72,7 +81,9 @@ describe('Codex listing default follows the configured launch model', () => {
         answer: { config: { model: 'gpt-oss:20b', model_reasoning_effort: 'high' } }
       })
     })
-    expect(defaults(listing.models)).toEqual([
+    expect(listing.configured).toEqual({ model: 'gpt-oss:20b', effort: 'high' })
+    expect(listing.models.find((row) => row.isDefault)?.id).toBe('gpt-6-astra')
+    expect(defaults(composeCodexSessionOptionCatalog(listing, { current: {} }).models)).toEqual([
       { id: 'gpt-6-astra', isDefault: false, defaultEffort: 'medium' },
       { id: 'gpt-5.5', isDefault: false, defaultEffort: 'medium' }
     ])
@@ -82,7 +93,7 @@ describe('Codex listing default follows the configured launch model', () => {
     const listing = await fetchCodexModelCatalogListing({
       connection: connection({ answer: { config: { model: null, model_reasoning_effort: 'max' } } })
     })
-    expect(defaults(listing.models)).toEqual([
+    expect(defaults(composeCodexSessionOptionCatalog(listing, { current: {} }).models)).toEqual([
       { id: 'gpt-6-astra', isDefault: true, defaultEffort: 'medium' },
       { id: 'gpt-5.5', isDefault: false, defaultEffort: 'medium' }
     ])
@@ -92,6 +103,7 @@ describe('Codex listing default follows the configured launch model', () => {
     const rpc = connection({ error: new Error('Method not found: config/read') })
     const listing = await fetchCodexModelCatalogListing({ connection: rpc })
     expect(rpc.request.mock.calls.map(([method]) => method)).toEqual(['model/list', 'config/read'])
+    expect(listing.configured).toBeUndefined()
     expect(defaults(listing.models)).toEqual([
       { id: 'gpt-6-astra', isDefault: true, defaultEffort: 'medium' },
       { id: 'gpt-5.5', isDefault: false, defaultEffort: 'medium' }

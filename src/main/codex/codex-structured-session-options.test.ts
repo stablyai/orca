@@ -20,6 +20,7 @@ import {
   fakeCodex,
   identityFor
 } from './codex-structured-session-adapter-fixture'
+import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 
 function optionSession(request: CodexAppServerConnection['request']): CodexSession {
@@ -53,6 +54,13 @@ async function primePicker(session: CodexSession): Promise<void> {
     fingerprint: 'codex-test-account',
     accountHomePath: '/test-account'
   }
+  const listing = await fetchCodexModelCatalogListing({ connection: session.connection })
+  session.catalogAccess.store.recordSuccess(
+    session.catalogAccess.fingerprint,
+    'codex',
+    { ...listing, origin: 'probe' },
+    'discovery'
+  )
   await readLiveCodexSessionOptions(session, undefined)
 }
 
@@ -378,6 +386,7 @@ describe('structured Codex session options', () => {
       })
     )
     session.options.set('serviceTier', 'priority')
+    await primePicker(session)
 
     await expect(readLiveCodexSessionOptions(session, undefined)).resolves.toMatchObject({
       current: { serviceTier: 'default', fastMode: false }
@@ -681,17 +690,17 @@ describe('Codex reported tier', () => {
 })
 
 describe('Codex option picks before the model list arrives', () => {
-  it('accepts launch-held model, effort and tier picks while its own listing is held', async () => {
-    const pending = Promise.withResolvers<unknown>()
-    const codex = fakeCodex({ 'model/list': () => pending.promise })
+  it('accepts and sends launch-held picks without starting discovery in the user process', async () => {
+    const codex = fakeCodex({
+      'model/list': () => {
+        throw new Error('a user process must not discover models')
+      }
+    })
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
       modelCatalog: new AgentModelCatalogStore()
     })
     await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-1' })
-    await vi.waitFor(() =>
-      expect(codex.connections[0].calls.some((call) => call.method === 'model/list')).toBe(true)
-    )
     const pick = (key: string, value: string) =>
       adapter.setOption({ sessionId: 'session-1', key, value, fence: 7 })
 
@@ -717,8 +726,7 @@ describe('Codex option picks before the model list arrives', () => {
       codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params
     ).toMatchObject({ model: 'gpt-next', effort: 'low', serviceTier: 'priority' })
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
-      1
+      0
     )
-    pending.resolve({ data: [], nextCursor: null })
   })
 })

@@ -12,7 +12,7 @@ import {
 import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
 
 // 3: Codex models carry `serviceTiers`; an older file would offer Fast with no tier to send.
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 const SAVE_COALESCE_MS = 500
 
 export type AgentModelCatalogPersistence = {
@@ -61,9 +61,12 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     : undefined
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
+  const resolvedModel = text(row.resolvedModel)
   return {
     id,
     label,
+    ...(resolvedModel ? { resolvedModel } : {}),
+    ...(row.effortsKnown === false ? { effortsKnown: false as const } : {}),
     ...(description ? { description } : {}),
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
@@ -107,47 +110,48 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
         }
       : {}),
     origin: row.origin,
-    at: row.at
+    at: row.at,
+    complete: row.complete === true,
+    ...(asRecord(row.configured) ? { configured: parseConfigured(row.configured) } : {})
   }
 }
 
-/** Checked reconstruction rather than trust: a field a future schema drops or
- *  reshapes loads as "no entry", never as a corrupt catalog. */
+function parseConfigured(value: unknown): { model?: string; effort?: string } {
+  const row = asRecord(value)
+  const model = text(row?.model)
+  const effort = text(row?.effort)
+  return { ...(model ? { model } : {}), ...(effort ? { effort } : {}) }
+}
+
 function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   const row = asRecord(value)
   if (!row || !isStructuredAgentId(row.agent) || typeof row.fingerprint !== 'string') {
     return null
   }
-  const configured = asRecord(row.configured)
-  const configuredModelId = text(configured?.modelId)
-  const configuredEffort = text(configured?.effort)
-  const sameModelIds = Array.isArray(configured?.sameModelIds)
-    ? configured.sameModelIds.filter((id): id is string => typeof id === 'string')
-    : []
-  return agentModelCatalogEntry(
-    row.agent,
-    row.fingerprint,
-    parseListing(row.discovered),
-    parseListing(row.live),
-    configuredModelId && typeof configured?.at === 'number'
-      ? {
-          modelId: configuredModelId,
-          ...(sameModelIds.length > 0 ? { sameModelIds } : {}),
-          ...(configuredEffort ? { effort: configuredEffort } : {}),
-          at: configured.at
-        }
-      : null
-  )
+  // Old digests remain legacy identities, never inferred exact launch scopes.
+  const legacyLive = parseListing(row.live)
+  const legacyProbe = parseListing(row.discovered)
+  const observation = parseListing(row.observation) ?? legacyLive ?? legacyProbe
+  if (!observation) {
+    return null
+  }
+  const source =
+    row.source === 'discovery' ||
+    row.source === 'session-advisory' ||
+    row.source === 'probe-advisory'
+      ? row.source
+      : legacyLive
+        ? 'session-advisory'
+        : 'probe-advisory'
+  return agentModelCatalogEntry(row.agent, row.fingerprint, observation, source)
 }
 
-/** Only the two listings and the configured default are written; the merged view is derived again on load. */
 function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   return {
     agent: entry.agent,
     fingerprint: entry.fingerprint,
-    discovered: entry.discovered,
-    live: entry.live,
-    ...(entry.configured ? { configured: entry.configured } : {})
+    observation: entry.observation,
+    source: entry.source
   }
 }
 
@@ -196,7 +200,11 @@ export function createAgentModelCatalogFilePersistence(
       try {
         const parsed: unknown = JSON.parse(await readFile(filePath, 'utf8'))
         const root = asRecord(parsed)
-        if (!root || root.version !== SCHEMA_VERSION || !Array.isArray(root.entries)) {
+        if (
+          !root ||
+          (root.version !== SCHEMA_VERSION && root.version !== 3) ||
+          !Array.isArray(root.entries)
+        ) {
           return []
         }
         return root.entries

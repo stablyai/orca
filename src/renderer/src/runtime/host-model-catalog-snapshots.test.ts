@@ -77,6 +77,30 @@ describe('host model catalog snapshots', () => {
     expect(readHostModelCatalogSnapshot(PAIRED, 'codex', NEW_CHAT)).toBeUndefined()
   })
 
+  it('replays exact-scope modern rows without freshness proof', () => {
+    const answer = {
+      ...list(true),
+      choiceCatalog: {
+        authority: 'discovery' as const,
+        scopeId: 'scope',
+        models: [],
+        complete: true,
+        freshForMs: 120_000,
+        verifiedUntil: performance.now() + 120_000
+      }
+    }
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', answer)
+    const replay = readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)
+    expect(replay?.choiceCatalog?.freshForMs).toBe(0)
+    expect(replay?.choiceCatalog).toHaveProperty('verifiedUntil', expect.any(Number))
+    if (replay?.choiceCatalog && 'verifiedUntil' in replay.choiceCatalog) {
+      expect(replay.choiceCatalog.verifiedUntil).toBeLessThanOrEqual(performance.now())
+    }
+    expect(
+      readHostModelCatalogSnapshot(LOCAL, 'claude', { ...NEW_CHAT, worktree: 'other' })
+    ).toBeUndefined()
+  })
+
   it('drops an agent’s answers when the host says the account has no list', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', list(true))
     recordHostModelCatalogSnapshot(LOCAL, 'codex', 'wt-1', { origin: 'unknown' })

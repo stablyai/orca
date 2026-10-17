@@ -94,8 +94,9 @@ describe('claude model catalog probe', () => {
       const [launch, options] = calls[0]!
       expect(launch).toEqual({
         command: invocation.command,
-        args: [...CLAUDE_MODEL_LIST_ARGS],
-        stdin: CLAUDE_MODEL_LIST_STDIN
+        args: [...CLAUDE_MODEL_LIST_ARGS, '--setting-sources', 'user,project,local'],
+        cwd: process.cwd(),
+        stdin: expect.stringContaining(CLAUDE_MODEL_LIST_STDIN)
       })
       expect(options.inheritedEnv).toEqual(invocation.env)
     }
@@ -125,6 +126,51 @@ describe('claude model catalog probe', () => {
       { id: 'opus[1m]', isDefault: true, supportsAutoMode: true },
       { id: 'haiku', isDefault: false, supportsAutoMode: undefined }
     ])
+  })
+
+  it('executes one resolved launch snapshot and leaves injected-model membership unverified', async () => {
+    let args = ['--model', 'sonnet', '--effort', 'low']
+    const calls: ListingCall[] = []
+    const resolveInheritedEnv = vi.fn(async () => ({ PATH: '/resolved/bin', HOME: '/homes/user' }))
+    const probe = createClaudeModelCatalogProbe({
+      ...probeDeps(),
+      resolveInheritedEnv,
+      resolveLaunchArgs: () => args,
+      runListing: async (...call) => {
+        calls.push(call)
+        return LISTED
+      }
+    })
+    const resolved = await probe.resolve!(HOME('/homes/account-a'), '/project', {
+      model: 'opus',
+      effort: 'high'
+    })
+    args = ['--model', 'haiku']
+    const result = await resolved.run()
+    expect(resolveInheritedEnv).toHaveBeenCalledTimes(1)
+    expect(calls[0]?.[0]).toMatchObject({
+      cwd: '/project',
+      args: expect.arrayContaining(['--model', 'opus', '--effort', 'high'])
+    })
+    expect(calls[0]?.[0].stdin).toContain('get_settings')
+    expect(result.complete).toBe(false)
+  })
+
+  it('keeps partial rows usable without verifying absent models or unknown efforts', async () => {
+    const partial = JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        response: {
+          models: [{ value: 'sonnet', supportsEffort: true }, null]
+        }
+      }
+    })
+    const probe = createClaudeModelCatalogProbe({ ...probeDeps(), runListing: async () => partial })
+    expect(await probe(HOME('/account'))).toMatchObject({
+      complete: false,
+      models: [{ id: 'sonnet', efforts: [], effortsKnown: false }]
+    })
   })
 
   it('pins no CLAUDE_CONFIG_DIR for the CLI default home, exactly as a session spawn does', async () => {
@@ -179,7 +225,7 @@ let input = ''
 process.stdin.on('data', (chunk) => (input += chunk))
 process.stdin.on('end', () => setTimeout(() => {
   require('node:fs').writeFileSync(${JSON.stringify(parentFile)}, String(process.ppid))
-  const request = JSON.parse(input.trim().split('\\n').at(-1))
+  const request = input.trim().split('\\n').map(JSON.parse).find((row) => row.request.subtype === 'list_models')
   if (request.request.subtype !== 'list_models') process.exit(2)
   console.log(JSON.stringify({ type: 'control_response', response: { subtype: 'success',
     request_id: request.request_id, response: { models: [{ value: 'sonnet', displayName: 'Sonnet' }] } } }))

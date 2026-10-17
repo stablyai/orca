@@ -1,41 +1,47 @@
-import { describe, expect, it } from 'vitest'
-import { agentModelCatalogEntry, type AgentModelCatalogListing } from './agent-model-catalog-entry'
+import { expect, it } from 'vitest'
+import { agentModelCatalogEntryWithSuccess } from './agent-model-catalog-entry'
 
-const menu = (...levels: string[]) => levels.map((value) => ({ value, label: value }))
+const listing = (id: string, levels: string[]) => ({
+  models: [
+    { id, label: id, isDefault: true, efforts: levels.map((value) => ({ value, label: value })) }
+  ],
+  origin: 'probe' as const
+})
 
-function listing(
-  origin: AgentModelCatalogListing['origin'],
-  at: number,
-  efforts: ReturnType<typeof menu>
-): AgentModelCatalogListing {
-  return {
-    models: [{ id: 'openai/gpt-6', label: 'GPT-6', isDefault: false, efforts }],
-    origin,
-    at
-  }
-}
-
-const CONFIGURED = { modelId: 'openai/gpt-6', effort: 'xhigh', at: 1 }
-
-function model(discovered: AgentModelCatalogListing, live: AgentModelCatalogListing) {
-  return agentModelCatalogEntry('pi', 'fp', discovered, live, CONFIGURED)?.models[0]
-}
-
-describe('the effort menu of a model whose configured effort one listing lacks', () => {
-  it('keeps the chat’s own menu when a newer probe’s coarser menu lacks the effort it ran', () => {
-    const chat = listing('live-session', 1, menu('off', 'high', 'xhigh'))
-    const probe = listing('probe', 2, menu('off', 'high'))
-    expect(model(probe, chat)).toMatchObject({
-      efforts: menu('off', 'high', 'xhigh'),
-      defaultEffort: 'xhigh'
-    })
-  })
-
-  it('never brings back an older probe’s menu over the chat’s own newer one', () => {
-    const probe = listing('probe', 1, menu('off', 'high', 'xhigh'))
-    const chat = listing('live-session', 2, menu('off', 'high'))
-    const merged = model(probe, chat)
-    expect(merged?.efforts).toEqual(menu('off', 'high'))
-    expect(merged).not.toHaveProperty('defaultEffort')
-  })
+it('keeps whole observations by provenance, including known-empty menus', () => {
+  const identity = { agent: 'pi', fingerprint: 'scope' }
+  const process = agentModelCatalogEntryWithSuccess(
+    undefined,
+    identity,
+    listing('pi/model', ['high', 'xhigh']),
+    'live',
+    1
+  )!
+  const advisory = agentModelCatalogEntryWithSuccess(
+    process,
+    identity,
+    { ...listing('other', ['high']), advisory: true },
+    'discovery',
+    2
+  )
+  expect(advisory).toBe(process)
+  const next = agentModelCatalogEntryWithSuccess(
+    process,
+    identity,
+    listing('pi/model', []),
+    'live',
+    3
+  )!
+  expect(next.models[0]?.efforts).toEqual([])
+  const discovery = agentModelCatalogEntryWithSuccess(
+    next,
+    identity,
+    listing('new', ['low']),
+    'discovery',
+    4
+  )!
+  expect(
+    agentModelCatalogEntryWithSuccess(discovery, identity, listing('old', ['max']), 'live', 5)
+  ).toBe(discovery)
+  expect(discovery.models.map((row) => row.id)).toEqual(['new'])
 })

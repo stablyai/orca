@@ -68,6 +68,43 @@ describe('codex model catalog probe', () => {
     }
   )
 
+  it('keeps root arguments and project configuration in one immutable discovery invocation', async () => {
+    let args = ['-c', 'model="configured"']
+    const invocations: CodexAppServerInvocation[] = []
+    const resolveEnvironment = vi.fn(async () => ({ PATH: '/bin' }))
+    const probe = createCodexModelCatalogProbe({
+      resolveEnvironment,
+      resolveCommand: () => '/bin/codex',
+      resolveLaunchArgs: () => args,
+      runSession: async (invocation, body) => {
+        invocations.push(invocation)
+        return body({
+          request: async (method, params) => {
+            if (method === 'config/read') {
+              expect(params).toEqual({ cwd: '/project' })
+              return { config: { model: 'configured', model_reasoning_effort: 'high' } }
+            }
+            return { data: [MODEL_ROW], nextCursor: null }
+          },
+          notify: () => {}
+        })
+      }
+    })
+    const resolved = await probe.resolve!({ variable: 'CODEX_HOME', path: '/account' }, '/project')
+    args = ['-c', 'model="changed"']
+    const result = await resolved.run()
+    expect(resolveEnvironment).toHaveBeenCalledTimes(1)
+    expect(invocations[0]).toMatchObject({
+      cwd: '/project',
+      args: expect.arrayContaining(['-c', 'model="configured"'])
+    })
+    expect(result).toMatchObject({
+      configured: { model: 'configured', effort: 'high' },
+      complete: true
+    })
+    expect(result.models[0]).toMatchObject({ id: 'gpt-live', isDefault: true })
+  })
+
   it('keeps the listing when config/read never answers', async () => {
     const server = String.raw`
       const readline = require('node:readline')

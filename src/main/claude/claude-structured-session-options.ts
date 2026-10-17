@@ -2,6 +2,7 @@ import type { AgentSessionFastModeState } from '../../shared/agent-session-wire'
 import {
   currentModelId,
   listedModels,
+  isCompleteClaudeModelListing,
   matchListedModel,
   record,
   seedModels,
@@ -261,7 +262,7 @@ export function claudeResolvedCatalogListing(
   const listing = claudeCatalogListing(
     session,
     listedModels(catalog ? { models: catalog } : null),
-    { withConfiguredDefault: true }
+    { withConfiguredDefault: true, complete: isCompleteClaudeModelListing({ models: catalog }) }
   )
   return listing ? { catalogListing: listing } : {}
 }
@@ -274,7 +275,9 @@ export function claudeStructuredSessionOptionsFrom(
   readMutationSequence = session.optionMutationSequence
 ): StructuredAgentSessionLiveOptions {
   const discovered = listedModels(catalog ? { models: catalog } : null)
-  const catalogListing = claudeCatalogListing(session, discovered)
+  const catalogListing = claudeCatalogListing(session, discovered, {
+    complete: isCompleteClaudeModelListing({ models: catalog })
+  })
   const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
   const model = currentModelId(listed, current.id)

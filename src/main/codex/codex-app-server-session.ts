@@ -32,6 +32,7 @@ export type CodexAppServerInvocation = {
    * path means nothing. Optional would let a native builder omit it and silently
    * skip the pairing with no type error.
    */
+  cwd?: string
   cliPath: string | null
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */
   env?: Record<string, string>
@@ -117,7 +118,11 @@ export async function runCodexAppServerSession<T>(
     : childEnv
   // The Codex connection's managed process and close policy, so a session closes the same way.
   const managed = spawnManagedProviderProcess(
-    { command: invocation.command, args: invocation.args },
+    {
+      command: invocation.command,
+      args: invocation.args,
+      ...(invocation.cwd ? { cwd: invocation.cwd } : {})
+    },
     {
       site: CODEX_APP_SERVER_KILL_SITE,
       inheritedEnv: pairedEnv,
@@ -125,6 +130,7 @@ export async function runCodexAppServerSession<T>(
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every stdio slot is 'pipe', so stdin, stdout and stderr exist.
         spawnImpl(spec.program, [...(spec.args ?? [])], {
           env: spec.env,
+          ...(spec.cwd ? { cwd: spec.cwd } : {}),
           stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
           ...(spec.detached ? { detached: true } : {})

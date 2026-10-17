@@ -37,6 +37,8 @@ export type WireClaudeModel = AgentSessionOptionsResult['models'][number]
 function wireClaudeModel(entry: ListedModel): WireClaudeModel {
   return {
     id: entry.id,
+    ...(entry.resolvedModel ? { resolvedModel: entry.resolvedModel } : {}),
+    ...(entry.effortsKnown === false ? { effortsKnown: false as const } : {}),
     label: entry.label,
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
@@ -60,7 +62,7 @@ export function claudeCatalogListing(
   discovered: ListedModel[],
   /** `withConfiguredDefault`: only the start's settings readback says what the config resolved;
    *  every later read omits it. */
-  options: { withConfiguredDefault?: boolean } = {}
+  options: { withConfiguredDefault?: boolean; complete?: boolean } = {}
 ): AgentModelCatalogLiveListing | undefined {
   if (discovered.length === 0) {
     return undefined
@@ -75,6 +77,10 @@ export function claudeCatalogListing(
   return {
     // No default effort here: the CLI's effort is a config fact, saved with the configured model.
     models: wireClaudeModels(discovered),
+    complete:
+      options.complete !== false &&
+      session.launchedModel === null &&
+      !session.catalogMembershipUnverified,
     ...(support ? { fastModeSupport: support } : {}),
     ...(launchOnly ? { launchOnlyModelId: launched } : {}),
     ...(configured !== undefined ? { configuredDefault: configured } : {})

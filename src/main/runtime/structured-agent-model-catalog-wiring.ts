@@ -1,3 +1,4 @@
+import { agentSessionPinnedLaunchDirectory } from './agent-session-record-launch-directory'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogFilePersistence } from '../native-chat/agent-model-catalog/agent-model-catalog-persistence'
 import {
@@ -86,8 +87,10 @@ export async function modelCatalogHostDeps(input: {
     getRecord: (sessionId) => input.store.getRecord(sessionId) ?? undefined,
     drivesRecord: (record) => agentDrivesSession(input.agents, record),
     resolveAccountHome: deps.resolveAgentAccountHome,
+    processScope: (sessionId) =>
+      getStructuredAgentSessionHost()?.modelCatalogProcessScope(sessionId) ?? null,
     recordWorkspacePath: async (record) =>
-      record.launchDirectory ??
+      agentSessionPinnedLaunchDirectory(record) ??
       (await deps.resolveWorkspacePath(record.location.workspaceId).catch(() => null)),
     agentReadsProjectModelConfig,
     workspaceMayOverrideDefaultModel,

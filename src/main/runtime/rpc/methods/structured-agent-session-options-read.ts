@@ -21,7 +21,10 @@ import {
 } from './structured-agent-session-schemas'
 import { agentSessionPinnedLaunchDirectory } from '../../agent-session-record-launch-directory'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { clientReadsOptionsWithoutModel } from './structured-agent-session-policy'
+import {
+  clientReadsCoherentModelCatalog,
+  clientReadsOptionsWithoutModel
+} from './structured-agent-session-policy'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
@@ -47,13 +50,20 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
       const readsWithoutModel = clientReadsOptionsWithoutModel(ctx)
       const result = await (
         await requireInstalledStructuredHost(ctx, params.sessionId)
-      ).readOptions(params.sessionId, { readsWithoutModel })
+      ).readOptions(params.sessionId, {
+        readsWithoutModel,
+        readsCoherentCatalog: clientReadsCoherentModelCatalog(ctx)
+      })
       if (result.current.model === undefined && !readsWithoutModel) {
         throw agentSessionRefusalError('structured_agent_session_unsupported', {
           reason: 'clientCapabilityMissing'
         })
       }
-      return result
+      if (clientReadsCoherentModelCatalog(ctx)) {
+        return result
+      }
+      const { choiceCatalog: _catalog, choiceAuthority: _authority, ...legacy } = result
+      return legacy
     }
   }),
   defineMethod({
@@ -94,7 +104,12 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         record?.provider === params.agent
           ? host.deps.adapter.startUnavailable?.(record.sessionId)
           : undefined
-      return started && !answer.unavailable ? { ...answer, unavailable: started } : answer
+      const result = started && !answer.unavailable ? { ...answer, unavailable: started } : answer
+      if (clientReadsCoherentModelCatalog(ctx)) {
+        return result
+      }
+      const { choiceCatalog: _catalog, ...legacy } = result
+      return legacy
     }
   })
 ]

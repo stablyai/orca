@@ -33,6 +33,7 @@ import { useMobileStructuredStopPress } from './use-mobile-structured-stop-press
 import { useMobileStructuredSessionHostStopping } from './use-mobile-structured-session-host-stopping'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredSendController } from './use-mobile-structured-send-controller'
 import { useMobileStructuredSessionOptionStamp } from './use-mobile-structured-session-option-stamp'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import {
@@ -103,18 +104,7 @@ export function useMobileStructuredAgentSession(
     optionStamp,
     hostSupport
   })
-  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
-    options
-  // Stable across renders, or the send callback is rebuilt on every streamed frame.
-  const sendController = useMemo(
-    () => ({
-      snapshot: optionSnapshot,
-      setOption: setStructuredOption,
-      invokeAction: invokeStructuredOption,
-      conversationCommands
-    }),
-    [conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption]
-  )
+  const sendController = useMobileStructuredSendController(options)
 
   const { groupedDraft, respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     stateRef,

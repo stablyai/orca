@@ -11,7 +11,10 @@ import {
 import { AcpStructuredOptions } from '../acp/acp-structured-options'
 import { GROK_ACP_DIALECT } from '../acp/acp-dialects/grok-dialect'
 import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalog'
-import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import {
+  agentModelCatalogFingerprintForRecord,
+  agentModelCatalogScopeFingerprint
+} from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { workspaceMayOverrideDefaultModel } from '../native-chat/agent-model-catalog/agent-project-model-override'
 import {
@@ -69,6 +72,7 @@ function grokRecord(): AgentSessionRecord {
   return {
     sessionId: 'grok-session',
     provider: 'grok',
+    launchDirectory: '/repo',
     accountHome: HOMES.grok,
     location: {
       executionHostId: 'local',
@@ -96,6 +100,9 @@ function service(
     store,
     getRecord: (sessionId) => records.find((record) => record.sessionId === sessionId),
     drivesRecord: () => true,
+    recordWorkspacePath: async (record) => record.launchDirectory ?? null,
+    processScope: (sessionId) =>
+      records.some((record) => record.sessionId === sessionId) ? `${sessionId}:1` : null,
     resolveAccountHome: async (agent) => HOMES[agent]!,
     probes,
     workspaceMayOverrideDefaultModel,
@@ -157,12 +164,13 @@ describe('a new chat’s first frame from the host catalog', () => {
   })
 })
 
-describe('a running chat’s listing, saved for the next chat', () => {
+describe('whole process observations', () => {
   it('keeps a Grok account warm from a live session, without its picks becoming defaults', async () => {
     const store = new AgentModelCatalogStore()
     const record = grokRecord()
     const catalog = service(store, { grok: GROK_LISTING }, [record])
-    await newChatFirstFrame(catalog, 'grok')
+    await newChatFirstFrame(catalog, 'grok', '/repo')
+    await catalog.read({ agent: 'grok', sessionId: record.sessionId, savedOnly: true })
     // The running chat switched to the mini model and reports a list with one more model.
     const options = new AcpStructuredOptions(GROK_ACP_DIALECT)
     options.adoptSession({
@@ -180,7 +188,7 @@ describe('a running chat’s listing, saved for the next chat', () => {
       withLiveCatalogListing(options.read()).catalogListing
     )
 
-    const { host, model, effort } = await newChatFirstFrame(catalog, 'grok')
+    const { host, model, effort } = await newChatFirstFrame(catalog, 'grok', '/repo')
     expect(host.origin).toBe('live-session')
     expect(model?.choices.map((choice) => choice.value)).toEqual([
       'grok-4',
@@ -206,14 +214,16 @@ describe('a running chat’s listing, saved for the next chat', () => {
     ]
     const catalog = service(store, {}, [record])
     store.recordSuccess(
-      agentModelCatalogFingerprintForRecord(record),
+      agentModelCatalogScopeFingerprint(agentModelCatalogFingerprintForRecord(record), '/repo'),
       'opencode',
       {
         models: listed,
-        origin: 'probe'
+        origin: 'probe',
+        advisory: true
       },
       'discovery'
     )
+    await catalog.read({ agent: 'opencode', sessionId: record.sessionId, savedOnly: true })
     catalog.recordLiveListing(record.sessionId, {
       models: [
         { id: 'a', label: 'A', isDefault: false, efforts: [{ value: 'high', label: 'High' }] },
@@ -223,18 +233,21 @@ describe('a running chat’s listing, saved for the next chat', () => {
     const read = await catalog.read({ agent: 'opencode', sessionId: 'oc' })
     expect(read.origin === 'unknown' ? null : read.models.map((m) => m.efforts)).toEqual([
       [{ value: 'high', label: 'High' }],
-      [{ value: 'low', label: 'Low' }]
+      []
     ])
   })
 
-  it('saves a Claude live listing through the same step as every other agent', async () => {
+  it('keeps a Claude process listing separate from shared discovery', async () => {
     const store = new AgentModelCatalogStore()
     const record = { ...grokRecord(), provider: 'claude', accountHome: HOMES.claude! }
     const catalog = service(store, {}, [record])
+    await catalog.read({ agent: 'claude', sessionId: record.sessionId, savedOnly: true })
     catalog.recordLiveListing(record.sessionId, {
       models: [{ id: 'opus', label: 'Opus', isDefault: false, efforts: [] }]
     })
-    const read = await catalog.read({ agent: 'claude', sessionId: record.sessionId })
-    expect(read.origin === 'unknown' ? null : read.models.map((m) => m.id)).toEqual(['opus'])
+    expect(catalog.processCatalog(record.sessionId)?.models.map((model) => model.id)).toEqual([
+      'opus'
+    ])
+    expect(catalog.peek(record.sessionId)).toBeNull()
   })
 })

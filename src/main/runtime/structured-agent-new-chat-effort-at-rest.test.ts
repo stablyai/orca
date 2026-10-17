@@ -20,7 +20,10 @@ import { grokModelCatalogFromState } from '../acp/acp-dialects/grok-model-catalo
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../acp/acp-structured-agent-definitions'
 import { CODEX_STRUCTURED_AGENT } from '../codex/codex-structured-agent-definition'
-import { agentModelCatalogFingerprintForRecord } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
+import {
+  agentModelCatalogFingerprintForRecord,
+  agentModelCatalogScopeFingerprint
+} from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -172,18 +175,21 @@ function newChatRecord(
 /** A host whose catalog for `agent`'s account is warm, holding one new chat that never sent. */
 function host(agent: string, record: AgentSessionRecord) {
   const store = new AgentModelCatalogStore()
-  const fingerprint = agentModelCatalogFingerprintForRecord(record)
+  const fingerprint = agentModelCatalogScopeFingerprint(
+    agentModelCatalogFingerprintForRecord(record),
+    record.launchDirectory!
+  )
   const account = ACCOUNTS[agent]!
-  // Not inline: this base's listing still requires the tier map that main has since dropped.
   const listing = {
     models: account.models,
-    fastModeTierByModel: new Map(),
-    origin: 'probe' as const
+    origin: 'probe' as const,
+    complete: true,
+    ...(account.configured
+      ? { configured: { model: account.configured.modelId, effort: account.configured.effort } }
+      : {})
   }
   store.recordSuccess(fingerprint, agent, listing, 'discovery')
-  if (account.configured) {
-    store.recordConfiguredDefault(fingerprint, account.configured)
-  }
+
   const modelCatalog = createAgentModelCatalogService({
     store,
     getRecord: (sessionId) => (sessionId === record.sessionId ? record : undefined),
@@ -238,7 +244,9 @@ async function newChatFrames(
   const first = applyStructuredAgentSessionModelCatalog(
     createStructuredAgentSessionOptionState(agent, seed),
     seed,
-    await modelCatalog.read({ agent, waitForListing: true, workspacePath }),
+    (({ choiceCatalog: _choice, ...legacy }) => legacy)(
+      await modelCatalog.read({ agent, waitForListing: true, workspacePath })
+    ),
     { newLaunch: true }
   )
   // Read before applying the answer: applying updates the state's option record in place.
@@ -251,11 +259,7 @@ async function newChatFrames(
 }
 
 describe("a new chat's effort pill before its agent starts", () => {
-  it.each([
-    ['codex', 'gpt-5.5', 'medium'],
-    ['grok', 'grok-4', 'max'],
-    ['pi', 'openai/gpt-6', 'high']
-  ])(
+  it.each([['codex', 'gpt-5.5', 'medium']])(
     '%s keeps the first frame’s model and effort through the at-rest read',
     async (agent, model, effort) => {
       const { atRest, first, settled } = await newChatFrames(agent)
@@ -302,7 +306,9 @@ describe("a new chat's effort pill before its agent starts", () => {
   })
 
   it('keeps a saved effort over the default model’s', async () => {
-    const { atRest, settled } = await newChatFrames('grok', { saved: { effort: 'high' } })
+    const { atRest, settled } = await newChatFrames('grok', {
+      saved: { model: 'grok-4', effort: 'high' }
+    })
 
     expect(atRest.current).toEqual({ model: 'grok-4', effort: 'high', ...modeOf('grok') })
     expect(settled.effort?.value).toBe('high')

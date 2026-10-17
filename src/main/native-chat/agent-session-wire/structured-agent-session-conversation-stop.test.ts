@@ -38,7 +38,12 @@ import {
   fakeCodex,
   identityFor
 } from '../../codex/codex-structured-session-adapter-fixture'
-import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
+import {
+  AgentModelCatalogStore,
+  type AgentModelCatalogSuccess
+} from '../agent-model-catalog/agent-model-catalog-store'
+import { agentModelCatalogSessionAccess } from '../agent-model-catalog/agent-model-catalog-fingerprint'
+import { CODEX_STRUCTURED_AGENT } from '../../codex/codex-structured-agent-definition'
 import { CodexAppServerRequestError } from '../../codex/codex-app-server-request-error'
 
 const CALLER = { callerKey: 'client-1' }
@@ -196,12 +201,16 @@ async function statusRows(): Promise<string[]> {
 
 describe('a Stop that names no turn', () => {
   it('does not let a stalled catalog hold an option pick, steer, Stop, or replacement send', async () => {
-    const pending = Promise.withResolvers<unknown>()
-    const codex = fakeCodex({ 'model/list': () => pending.promise })
+    const pending = Promise.withResolvers<AgentModelCatalogSuccess>()
+    const catalog = new AgentModelCatalogStore()
+    const access = agentModelCatalogSessionAccess(catalog, CODEX_STRUCTURED_AGENT, '/codex/home')!
+    const probe = () => pending.promise
+    const listing = catalog.refresh(access.fingerprint, 'codex', probe, probe)
+    const codex = fakeCodex()
     codex.routes['turn/start'] = answerWithOpenedTurn(codex, 'turn-1')
     codex.routes['turn/steer'] = () => ({ turn: { id: 'turn-1' } })
     const adapter = adapterFor(codex, { codexHome: '/codex/home' }, [], {
-      modelCatalog: new AgentModelCatalogStore()
+      modelCatalog: catalog
     })
     await adapter.acquire({
       identity: identityFor(SESSION),
@@ -224,8 +233,9 @@ describe('a Stop that names no turn', () => {
       ok: true,
       value: { options: { model: 'gpt-next' } }
     })
+    expect(catalog.isListing(access.fingerprint)).toBe(true)
     expect(codex.connections[0].calls.filter((call) => call.method === 'model/list')).toHaveLength(
-      1
+      0
     )
 
     const followUp = send('follow-up')
@@ -249,7 +259,8 @@ describe('a Stop that names no turn', () => {
     expect(
       codex.connections[0].calls.filter((call) => call.method === 'turn/start')[1]?.params
     ).toMatchObject({ serviceTier: 'priority' })
-    pending.resolve({ data: [], nextCursor: null })
+    pending.resolve({ origin: 'probe', models: [] })
+    await listing
   })
 
   // Codex can abort a turn before it starts: it answers the interrupt, then ends the turn it never

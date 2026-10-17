@@ -21,6 +21,8 @@ const SESSION = 'session-1'
 function restingRecord(): AgentSessionRecord {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resting read and the catalog key touch only these fields.
   return {
+    sessionId: SESSION,
+    launchDirectory: '/repo',
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/homes/a' },
     location: { executionHostId: 'local', wslDistro: null },
@@ -73,7 +75,7 @@ describe('options at rest', () => {
     expect(read).toHaveBeenLastCalledWith({ agent: 'codex', sessionId: SESSION, savedOnly: true })
   })
 
-  it.each(['codex', 'omp', 'grok', 'opencode'] as const)(
+  it.each(['omp', 'grok', 'opencode'] as const)(
     '%s keeps an unknown model and learns menus from later options',
     async (provider) => {
       const record = { ...restingRecord(), provider }
@@ -82,6 +84,8 @@ describe('options at rest', () => {
         store: new AgentModelCatalogStore(),
         getRecord: () => record,
         drivesRecord: () => true,
+        recordWorkspacePath: async () => '/repo',
+        processScope: () => (live ? `${SESSION}:1` : null),
         resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
         probes: { codex: probe }
       })
@@ -93,6 +97,7 @@ describe('options at rest', () => {
         params: { provider: 'codex' },
         journal: { threadGoal: () => null, context: { floor: () => null } }
       }
+      const running = { ...resting, child: { fence: 7 } }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: options reads touch only these context members.
       const context = {
         deps: {
@@ -102,8 +107,8 @@ describe('options at rest', () => {
           modelCatalog
         },
         serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-        openConversation: async () => (live ? { ...resting, child: { fence: 7 } } : resting),
-        conversation: async () => resting
+        openConversation: async () => (live ? running : resting),
+        conversation: async () => (live ? running : resting)
       } as unknown as StructuredAgentSessionMutationContext
 
       const read = () =>
@@ -113,11 +118,9 @@ describe('options at rest', () => {
       expect(result.models).toEqual([])
       expect(result.current).not.toHaveProperty('model')
       record.options = { model: 'later-model', effort: 'off' }
-      // Only Codex is registered here, and a mode is stated only for a registered agent's chat.
       expect((await read()).current).toEqual({
         model: 'later-model',
-        effort: 'off',
-        ...(provider === 'codex' ? { permissionMode: 'ask' } : {})
+        effort: 'off'
       })
       for (const emptyStart of [false, true]) {
         modelCatalog.recordLiveListing(SESSION, {

@@ -67,7 +67,7 @@ describe("the CLI's word that a launched model does not exist", () => {
   })
 })
 
-describe("the account catalog facts a child's listing hands the host", () => {
+describe("a child's whole advisory observation", () => {
   async function listingOfChildLaunchedWith(model: string) {
     const claude = fakeClaude({
       initModels: [NATIVE_OPUS, LAUNCHED_ROW],
@@ -104,15 +104,16 @@ describe("the account catalog facts a child's listing hands the host", () => {
     return store.get('fp')?.models.map((model) => model.id)
   }
 
-  it('marks the row the launch added for its own model, which the account catalog leaves out', async () => {
+  it('keeps a launch-added row without treating it as membership proof', async () => {
     const listing = await listingOfChildLaunchedWith(RETIRED)
     expect(listing?.launchOnlyModelId).toBe(RETIRED)
-    expect(savedIds(null, listing!)).toEqual(['opus'])
+    expect(listing?.complete).toBe(false)
+    expect(savedIds(null, listing!)).toEqual(['opus', RETIRED])
   })
 
-  it('keeps that row when the account already listed the model', async () => {
+  it('leaves the whole discovery observation intact when a child lists other rows', async () => {
     const listing = await listingOfChildLaunchedWith(RETIRED)
-    expect(savedIds([RETIRED], listing!)).toEqual(['opus', RETIRED])
+    expect(savedIds([RETIRED], listing!)).toEqual([RETIRED])
   })
 
   it('marks nothing for a launched native model, which carries its own display name', async () => {

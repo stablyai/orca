@@ -1,10 +1,15 @@
+import {
+  applyStructuredAgentChoiceCatalog,
+  invalidateStructuredAgentChoiceCatalog
+} from './structured-agent-session-choice-catalog'
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog'
 import { discoveredModel } from './structured-agent-session-discovered-model'
-import {
-  buildNativeChatSessionOptionSnapshot,
-  resolveEffectiveNativeChatModelId,
-  withTrackedNativeChatModel
-} from './native-chat-session-option-snapshot'
+import { resolveEffectiveNativeChatModelId } from './native-chat-session-option-snapshot'
+import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
+export {
+  structuredAgentSessionOptionSnapshot,
+  lockedStructuredAgentSessionOptionSnapshot
+} from './structured-agent-session-option-snapshot'
 import {
   applyNativeChatReportedSessionOptions,
   clearTrackedSessionOption,
@@ -18,9 +23,10 @@ import {
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
 } from './native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
-import { structuredAgentSessionPermissionDescriptor } from './structured-agent-session-permission-option'
-import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat-session-options'
 import type {
+  AgentSessionChoiceCatalog,
+  AgentSessionFastModeSupport,
   AgentSessionModelCatalogResult,
   AgentSessionOptionsResult
 } from './agent-session-wire'
@@ -47,6 +53,8 @@ export function structuredAgentSessionOptionCatalog(
 }
 
 export type StructuredAgentSessionOptionState = {
+  choiceCatalog?: AgentSessionChoiceCatalog & { verifiedUntil: number; newLaunch: boolean }
+  runtimeFastModeSupport?: AgentSessionFastModeSupport
   catalog: AgentSessionOptionCatalog | null
   /** What produced `catalog`; a weaker source never replaces a stronger one. `seed` is the
    *  built-in list before the host answered (shown as the quiet placeholder); `builtin` is the
@@ -84,7 +92,7 @@ export function createStructuredAgentSessionOptionState(
 export function settleStructuredAgentSessionBuiltinCatalog(
   state: StructuredAgentSessionOptionState
 ): StructuredAgentSessionOptionState {
-  const settled = withHostListedModelIds(state, undefined)
+  const settled = withHostListedModelIds(invalidateStructuredAgentChoiceCatalog(state), undefined)
   return settled.catalogSource === 'seed' ? { ...settled, catalogSource: 'builtin' } : settled
 }
 
@@ -135,6 +143,9 @@ export function applyStructuredAgentSessionModelCatalog(
   catalog: AgentSessionModelCatalogResult,
   options: { newLaunch: boolean }
 ): StructuredAgentSessionOptionState {
+  if (catalog.choiceCatalog) {
+    return applyStructuredAgentChoiceCatalog(state, seed, catalog.choiceCatalog, options.newLaunch)
+  }
   const hostListedModelIds = finishedListingIds(catalog)
   if (state.catalogSource === 'live') {
     return withHostListedModelIds(state, hostListedModelIds)
@@ -189,6 +200,23 @@ export function applyStructuredAgentSessionOptions(
     },
     result.current.confirmed ?? []
   )
+  if (result.choiceAuthority) {
+    const choice: AgentSessionChoiceCatalog =
+      result.choiceCatalog ??
+      (result.choiceAuthority === 'discovery' && state.choiceCatalog?.authority === 'discovery'
+        ? state.choiceCatalog
+        : {
+            authority: result.choiceAuthority,
+            scopeId: '',
+            models: [],
+            complete: false,
+            freshForMs: 0
+          })
+    const next = applyStructuredAgentChoiceCatalog(state, seed, choice, undefined, {
+      fastModeSupport: result.fastModeSupport
+    })
+    return { ...next, permissionMode: result.current.permissionMode ?? null }
+  }
   return {
     ...state,
     catalog: structuredAgentSessionOptionCatalog(seed, result),
@@ -196,60 +224,6 @@ export function applyStructuredAgentSessionOptions(
     verifiedModelIds: result.listedModelIds?.length ? result.listedModelIds : undefined,
     permissionMode: result.current.permissionMode ?? null
   }
-}
-
-/** Before the host answers, or an agent with no list reports, the quiet model pill: never
- *  pickable, so displaying it can never become a launch pick. */
-const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
-  id: 'model',
-  label: 'Model',
-  category: 'model',
-  kind: { type: 'select', choices: [] },
-  valueSource: 'unknown',
-  transport: 'agent-session',
-  settable: false,
-  disabledReason: 'available-after-session-start'
-}
-
-export function structuredAgentSessionOptionSnapshot(
-  state: StructuredAgentSessionOptionState
-): SessionOptionDescriptor[] {
-  const permission = structuredAgentSessionPermissionDescriptor(state)
-  const options = modelOptionSnapshot(state)
-  return permission ? [...options, permission] : options
-}
-
-function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionOptionDescriptor[] {
-  if (!state.catalog) {
-    return []
-  }
-  // Until the host answers, the built-in list would paint a label its list may replace.
-  if (state.catalogSource === 'seed') {
-    return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
-  }
-  const snapshot = buildNativeChatSessionOptionSnapshot({
-    catalog: state.catalog,
-    // A seeded default can name a model the static seed does not list yet.
-    models: withTrackedNativeChatModel(state.catalog, state.catalog.models, state.record),
-    record: state.record,
-    mode: 'live',
-    modelLabel: 'Model',
-    liveTransport: 'agent-session'
-  })
-  return snapshot.length > 0 || state.catalogSource === 'live'
-    ? snapshot
-    : [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
-}
-
-/** No launch holds a pick and no fence can carry one yet, so the picker only shows. */
-export function lockedStructuredAgentSessionOptionSnapshot(
-  snapshot: readonly SessionOptionDescriptor[]
-): SessionOptionDescriptor[] {
-  return snapshot.map((descriptor) => ({
-    ...descriptor,
-    settable: false,
-    disabledReason: 'available-after-session-start'
-  }))
 }
 
 export function canSetStructuredAgentSessionOption(

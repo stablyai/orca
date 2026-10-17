@@ -1,6 +1,10 @@
+import { homedir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
-import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
+import {
+  agentModelCatalogFingerprint,
+  agentModelCatalogScopeFingerprint
+} from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
   agentsWithChangedLaunchSettings,
@@ -22,12 +26,15 @@ import type { AgentSessionAccountHome } from '../../../shared/agent-session-acco
 
 const HOME = '/homes/selected'
 const ACCOUNT_HOME = { variable: 'CODEX_HOME', path: HOME } as const
-const FINGERPRINT = agentModelCatalogFingerprint({
-  agent: 'codex',
-  accountHomeVariable: 'CODEX_HOME',
-  accountHomePath: HOME,
-  wslDistro: null
-})
+const FINGERPRINT = agentModelCatalogScopeFingerprint(
+  agentModelCatalogFingerprint({
+    agent: 'codex',
+    accountHomeVariable: 'CODEX_HOME',
+    accountHomePath: HOME,
+    wslDistro: null
+  }),
+  homedir()
+)
 const SIGNED_OUT = { reason: 'notSignedIn', account: 'system' } as const
 
 function listing(id: string, origin: AgentModelCatalogSuccess['origin']): AgentModelCatalogSuccess {
@@ -83,14 +90,12 @@ function unavailableOf(result: AgentSessionModelCatalogResult) {
 
 describe('a reason the probe found', () => {
   it("survives the chat's own listing, success or failure; only a probe success clears it", async () => {
-    const { store, chat, probed, answerWith, service } = rig()
+    const { store, probed, answerWith, service } = rig()
     await probed()
     // A signed-out Codex still answers model/list for a live chat.
-    await store.refresh(FINGERPRINT, 'codex', chat, async () => listing('gpt-live', 'live-session'))
+    store.recordSuccess(FINGERPRINT, 'codex', listing('gpt-live', 'live-session'), 'live')
     expect(unavailableOf(await service.read({ agent: 'codex' }))).toEqual(SIGNED_OUT)
-    await store.refresh(FINGERPRINT, 'codex', { ...chat }, () =>
-      Promise.reject(new Error('401 Unauthorized'))
-    )
+    store.recordFailure(FINGERPRINT, '401 Unauthorized')
     store.recordFailure(FINGERPRINT, 'codex model listing failed')
     expect(unavailableOf(await service.read({ agent: 'codex' }))).toEqual(SIGNED_OUT)
 
@@ -149,7 +154,9 @@ describe('a chat that starts under the account', () => {
   it('makes a held reason due, so the next read re-probes instead of trusting it', async () => {
     const { store, probe, probed, answerWith, service } = rig()
     await probed()
+    await service.read({ agent: 'codex', sessionId: 'session-started', savedOnly: true })
     service.providerStarted({
+      sessionId: 'session-started',
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: HOME },
       location: {
@@ -185,7 +192,7 @@ describe('a catalog read that finds a held reason', () => {
   it('serves it from memory inside the TTL, with no new probe', async () => {
     const { probe, probed, service } = rig()
     await probed()
-    expect(await service.read({ agent: 'codex', waitForListing: true })).toEqual({
+    expect(await service.read({ agent: 'codex', waitForListing: true })).toMatchObject({
       origin: 'unknown',
       unavailable: SIGNED_OUT
     })
@@ -241,7 +248,7 @@ describe('a catalog read that finds a held reason', () => {
     await probed()
     pastTtl()
     answerWith(() => new Promise<AgentModelCatalogSuccess>(() => {}))
-    expect(await service.read({ agent: 'codex' })).toEqual({
+    expect(await service.read({ agent: 'codex' })).toMatchObject({
       origin: 'unknown',
       listingInProgress: true,
       unavailable: SIGNED_OUT
@@ -275,14 +282,21 @@ describe('a prewarm probe', () => {
       unavailable: SIGNED_OUT
     }))
     // A saved catalog marks the agent as used here.
-    store.recordSuccess(FINGERPRINT, 'codex', listing('gpt-live', 'live-session'), 'live')
+    store.recordSuccess(
+      agentModelCatalogFingerprint({ agent: 'codex', accountHome: ACCOUNT_HOME, wslDistro: null }),
+      'codex',
+      listing('gpt-live', 'live-session'),
+      'live'
+    )
     await service.prewarm()
     expect(store.failure(FINGERPRINT)?.unavailable).toEqual(SIGNED_OUT)
     answerWith(async () => listing('gpt-probe', 'probe'))
     await service.prewarm()
     expect(probe).toHaveBeenCalledTimes(1)
     pastTtl()
-    expect(store.isStale(store.get(FINGERPRINT)!)).toBe(false)
+    expect(
+      (await service.read({ agent: 'codex', savedOnly: true })).choiceCatalog?.freshForMs
+    ).toBe(0)
     await service.prewarm()
     expect(probe).toHaveBeenCalledTimes(2)
     expect(store.failure(FINGERPRINT)).toBeNull()
@@ -296,7 +310,7 @@ describe("an agent's command or environment change", () => {
     )
     store.recordSuccess(FINGERPRINT, 'codex', listing('gpt-saved', 'probe'), 'discovery')
     await probed()
-    expect(store.failure(FINGERPRINT)?.unavailable).toEqual({ reason: 'cliMissing' })
+    expect(store.failure(FINGERPRINT)?.unavailable).toMatchObject({ reason: 'cliMissing' })
     await service.prewarm()
     expect(probe).toHaveBeenCalledTimes(1)
     const expire = createAgentModelCatalogSettingsExpiry(store, { agentCmdOverrides: {} })

@@ -70,7 +70,11 @@ function structuredLaunchCreateOptions(
   )
   const options = {
     ...selection.held,
-    ...structuredAgentSessionSendSelection(intent.agent, structuredAgentSessionOptionSnapshot(view))
+    ...structuredAgentSessionSendSelection(
+      intent.agent,
+      structuredAgentSessionOptionSnapshot(view),
+      view.choiceCatalog !== undefined
+    )
   }
   return Object.keys(options).length ? options : undefined
 }

@@ -31,6 +31,7 @@ export function codexModelCatalogDiscovery({
     listingNamesConfiguredModel: true,
     probe: createCodexModelCatalogProbe({
       resolveAccountKind: deps.resolveCodexAccountKind,
+      resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
         : {}),
@@ -62,7 +63,10 @@ export function claudeModelCatalogDiscovery(
     kind: 'probe',
     // Claude's settings or env can pick a model other than the one its listing recommends.
     listingNamesConfiguredModel: false,
-    probe: createClaudeModelCatalogProbe(claudeListingDeps(context))
+    probe: createClaudeModelCatalogProbe({
+      ...claudeListingDeps(context),
+      resolveLaunchArgs: () => context.deps.resolveLaunchArgs('claude')
+    })
   }
 }
 

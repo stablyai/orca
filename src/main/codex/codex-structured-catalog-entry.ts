@@ -4,7 +4,9 @@ import type { CodexModelCatalogListing } from './codex-structured-model-catalog'
 
 export function listingFromEntry(entry: AgentModelCatalogEntry): CodexModelCatalogListing {
   return {
-    models: entry.models.map((model) => ({ ...model }))
+    models: entry.models.map((model) => ({ ...model })),
+    complete: entry.observation.complete,
+    ...(entry.observation.configured ? { configured: entry.observation.configured } : {})
   }
 }
 
@@ -12,6 +14,8 @@ export function listingFromEntry(entry: AgentModelCatalogEntry): CodexModelCatal
 export function codexAcquireCatalogListing(
   catalogAccess: CodexSessionCatalogAccess | undefined
 ): CodexModelCatalogListing | null {
-  const entry = catalogAccess?.store.get(catalogAccess.fingerprint)
+  const entry = catalogAccess?.read
+    ? catalogAccess.read()
+    : catalogAccess?.store.get(catalogAccess.fingerprint)
   return entry ? listingFromEntry(entry) : null
 }

@@ -35,7 +35,7 @@ describe('ACP session options', () => {
     const { models, current } = options.read()
     // The effort menu belongs to the model running now; nothing is anyone's default.
     expect(models).toEqual([
-      { id: 'model-a', label: 'Model A', isDefault: false, efforts: [] },
+      { id: 'model-a', label: 'Model A', isDefault: false, efforts: [], effortsKnown: false },
       {
         id: 'model-b',
         label: 'Model B',
@@ -47,6 +47,27 @@ describe('ACP session options', () => {
       }
     ])
     expect(current).toEqual({ model: 'model-b', effort: 'high', confirmed: ['model', 'effort'] })
+  })
+
+  it('retains exact observed menus only within the owning process generation', () => {
+    const options = new AcpStructuredOptions()
+    options.adoptSession({ configOptions })
+    options.adoptConfigOptions(
+      configOptions.map((option) =>
+        option.category === 'model'
+          ? { ...option, currentValue: 'model-a' }
+          : { ...option, options: [] }
+      )
+    )
+    expect(options.read().models.map((model) => model.efforts)).toEqual([
+      [],
+      [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' }
+      ]
+    ])
+    options.adoptSession({ configOptions: [configOptions[0]!] })
+    expect(options.read().models.every((model) => model.effortsKnown === false)).toBe(true)
   })
 
   it('reads each model’s own menu where the agent advertises one', () => {
@@ -98,7 +119,7 @@ describe('ACP session options', () => {
     expect(options.reported()).toEqual({ model: 'model-b', effort: 'high' })
   })
 
-  it('keeps the session’s effort menu for the running model when its advertised one is empty', () => {
+  it('preserves an advertised empty effort menu', () => {
     const options = new AcpStructuredOptions(GROK_ACP_DIALECT)
     options.adoptSession({
       configOptions,
@@ -112,10 +133,7 @@ describe('ACP session options', () => {
     })
     const [modelA, modelB] = options.read().models
     expect(modelA?.efforts).toEqual([])
-    expect(modelB?.efforts).toEqual([
-      { value: 'low', label: 'Low' },
-      { value: 'high', label: 'High' }
-    ])
+    expect(modelB?.efforts).toEqual([])
     expect(modelB?.defaultEffort).toBeUndefined()
   })
 })
@@ -130,6 +148,13 @@ describe('what a new session with no pick says about the configured default', ()
     const options = new AcpStructuredOptions()
     options.adoptSession({ configOptions }, 'new')
     expect(options.configuredDefault()).toEqual({ modelId: 'model-b', effort: 'high' })
+    options.startListing()
+    expect(options.readWithCatalogListing().catalogListing.configuredDefault).toEqual({
+      modelId: 'model-b',
+      effort: 'high'
+    })
+    options.adoptSession({ configOptions })
+    expect(options.readWithCatalogListing().catalogListing).not.toHaveProperty('configuredDefault')
   })
 
   it('says nothing of a loaded session, which keeps the model it ran', () => {

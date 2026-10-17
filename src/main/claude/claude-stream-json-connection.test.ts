@@ -568,6 +568,7 @@ describe('Claude stream-json connection', () => {
     // both can only have come from the child.
     expect(options.models).toContainEqual({
       id: 'opus',
+      resolvedModel: 'claude-opus-5',
       label: 'Opus 5',
       description: 'The live row, not the seed',
       isDefault: true,

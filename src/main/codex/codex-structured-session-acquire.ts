@@ -29,7 +29,6 @@ import {
   handleCodexSessionExit
 } from './codex-structured-session-close'
 import { restoredCodexSessionOptions } from './codex-structured-session-options'
-import { startBackgroundCodexCatalogRefresh } from './codex-structured-background-catalog'
 import { codexAcquireCatalogAccess } from './codex-structured-acquire-catalog'
 import { reportedCodexThreadOptions } from './codex-structured-service-tier'
 import {
@@ -220,7 +219,7 @@ export async function acquireCodexStructuredSession(input: {
     assertCodexConnectionOpen(connection, sessionId)
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
-    const catalogAccess = codexAcquireCatalogAccess(deps, launch)
+    const catalogAccess = codexAcquireCatalogAccess(deps, launch, sessionId)
     acquisitions.assertCurrent(sessionId, attempt)
     assertCodexConnectionOpen(connection, sessionId)
     acquisitions.deleteIfCurrent(sessionId, attempt)
@@ -254,13 +253,6 @@ export async function acquireCodexStructuredSession(input: {
     for (const event of acquisition.drain()) {
       event()
     }
-    startBackgroundCodexCatalogRefresh({
-      session,
-      sessionId,
-      sessions,
-      timeoutMs: deps.requestTimeoutMs,
-      logger: deps.logger
-    })
     return acquired
   } catch (error) {
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {

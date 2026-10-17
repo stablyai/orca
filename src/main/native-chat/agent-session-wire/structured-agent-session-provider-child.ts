@@ -113,6 +113,19 @@ export function recordProviderChildEnd(
   return true
 }
 
+/** Root exit ends process-owned facts before tail draining removes the child handle. */
+export function providerChildRootExited(
+  session: Pick<ChildBearer, 'child' | 'lastEndedChild'> | undefined,
+  fence = session?.child?.fence ?? session?.lastEndedChild?.fence
+): boolean {
+  const ended = session?.lastEndedChild
+  return (
+    ended?.rootGone === true &&
+    ended.fence === fence &&
+    (!session?.child || sameProviderChild(session.child, ended))
+  )
+}
+
 /** The conversation's last start died before it proved itself, and nothing started since. Only a
  *  send retries it: a view or an exit recovery would respawn into the same failure, adding a row. */
 export function failedProviderChildStart(

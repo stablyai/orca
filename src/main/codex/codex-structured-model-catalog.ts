@@ -75,6 +75,10 @@ function modelOption(value: unknown): AgentSessionModelOption | null {
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
     efforts,
+    ...(!Array.isArray(row.supportedReasoningEfforts) ||
+    efforts.length !== row.supportedReasoningEfforts.length
+      ? { effortsKnown: false as const }
+      : {}),
     ...(serviceTiers
       ? { serviceTiers, supportsFastMode: codexFastServiceTier({ serviceTiers }) !== undefined }
       : {})
@@ -85,6 +89,8 @@ export type CodexSessionOptionCatalog = AgentSessionOptionsResult & { current: {
 
 export type CodexModelCatalogListing = {
   models: AgentSessionModelOption[]
+  complete?: boolean
+  configured?: { model?: string; effort?: string }
 }
 
 /** One paginated `model/list` pass. The provider fetch and the shaping of a
@@ -93,6 +99,7 @@ export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   timeoutMs?: number
   deadlineMs?: number
+  cwd?: string
 }): Promise<CodexModelCatalogListing> {
   const deadline = input.deadlineMs === undefined ? null : Date.now() + input.deadlineMs
   const remainingTimeout = (): number | undefined => {
@@ -107,6 +114,7 @@ export async function fetchCodexModelCatalogListing(input: {
   }
   const parsedModels: AgentSessionModelOption[] = []
   let cursor: string | null = null
+  let complete = true
   for (let page = 0; page < MAX_MODEL_PAGES; page += 1) {
     const response = record(
       await input.connection.request(
@@ -115,21 +123,47 @@ export async function fetchCodexModelCatalogListing(input: {
         { timeoutMs: remainingTimeout() }
       )
     )
+    if (!Array.isArray(response?.data)) {
+      complete = false
+    }
     const rows = Array.isArray(response?.data) ? response.data : []
     for (const row of rows) {
       const parsed = modelOption(row)
+      if (!parsed && record(row)?.hidden !== true) {
+        complete = false
+      }
       if (parsed && !parsedModels.some((model) => model.id === parsed.id)) {
         parsedModels.push(parsed)
       }
+    }
+    if (
+      response?.nextCursor !== null &&
+      response?.nextCursor !== undefined &&
+      !text(response.nextCursor)
+    ) {
+      complete = false
     }
     cursor = text(response?.nextCursor)
     if (!cursor) {
       break
     }
   }
-  const configured = await readCodexConfiguredLaunchDefaults(input.connection, remainingTimeout())
+  const configured = await readCodexConfiguredLaunchDefaults(
+    input.connection,
+    remainingTimeout(),
+    input.cwd
+  )
   return {
-    models: applyCodexConfiguredLaunchDefaults(parsedModels, configured)
+    models: parsedModels,
+    complete: complete && cursor === null,
+    ...(configured
+      ? {
+          configured: {
+            ...(configured.model ? { model: configured.model } : {}),
+            ...(configured.effort ? { effort: configured.effort } : {})
+          }
+        }
+      : {})
   }
 }
 
@@ -143,7 +177,12 @@ export function composeCodexSessionOptionCatalog(
   }
 ): CodexSessionOptionCatalog {
   const models = structuredAgentSessionOptionModels(
-    listing.models.map((entry) => ({ ...entry })),
+    applyCodexConfiguredLaunchDefaults(
+      listing.models,
+      listing.configured
+        ? { model: listing.configured.model ?? null, effort: listing.configured.effort ?? null }
+        : null
+    ).map((entry) => ({ ...entry })),
     input.current.model,
     (row) => row
   )

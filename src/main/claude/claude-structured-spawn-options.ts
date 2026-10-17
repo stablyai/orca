@@ -100,10 +100,19 @@ export function claudeStructuredSpawnOptions(input: {
 export function adoptClaudeStructuredSpawnOptions(
   session: Pick<
     ClaudeSession,
-    'restoreSkippedOptions' | 'translator' | 'launchedModel' | 'fastModeAtStart'
+    | 'restoreSkippedOptions'
+    | 'translator'
+    | 'launchedModel'
+    | 'fastModeAtStart'
+    | 'catalogMembershipUnverified'
   >,
-  spawn: Pick<ClaudeStructuredSpawnOptions, 'options' | 'skipped' | 'fastModeAtStart'>
+  spawn: Pick<ClaudeStructuredSpawnOptions, 'options' | 'skipped' | 'fastModeAtStart'> &
+    Partial<Pick<ClaudeStructuredSpawnOptions, 'sdkOptions'>>
 ): void {
+  session.catalogMembershipUnverified =
+    spawn.options.has('model') ||
+    Object.hasOwn(spawn.sdkOptions?.extraArgs ?? {}, 'model') ||
+    spawn.sdkOptions?.model !== undefined
   session.launchedModel = spawn.options.get('model') ?? null
   session.fastModeAtStart = spawn.fastModeAtStart
   for (const key of spawn.skipped) {

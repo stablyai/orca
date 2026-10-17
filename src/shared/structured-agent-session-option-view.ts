@@ -118,10 +118,17 @@ export function structuredAgentSessionListedPicks(
   const model = held.model ?? (typeof tracked === 'string' ? tracked : seed?.model)
   // Only the listing proves a row: the session's own unlisted model is shown but never listed. An
   // older host's answer proves none, so only its own default may stand in, where the host lists it.
-  const verified = own ?? state.hostListedModelIds ?? []
+  const coherent = state.choiceCatalog
+  if (coherent && (!coherent.complete || performance.now() >= coherent.verifiedUntil)) {
+    return null
+  }
+  const verified = coherent
+    ? coherent.models.map((row) => row.id)
+    : (own ?? state.hostListedModelIds ?? [])
   const rows =
     catalog?.models.filter(
-      (row) => verified.includes(row.id) && (own !== undefined || row.isDefault)
+      (row) =>
+        verified.includes(row.id) && (coherent !== undefined || own !== undefined || row.isDefault)
     ) ?? []
   if (
     record.agent !== 'claude' ||
@@ -136,7 +143,10 @@ export function structuredAgentSessionListedPicks(
   const effort =
     held.effort ??
     (typeof recorded === 'string' ? recorded : seed?.model === model ? seed.effort : undefined)
-  const target = rows.find((row) => row.isDefault) ?? rows[0]!
+  const defaultId = coherent?.models.find((row) => row.isDefault)?.id
+  const target = coherent
+    ? (rows.find((row) => row.id === defaultId) ?? rows[0]!)
+    : (rows.find((row) => row.isDefault) ?? rows[0]!)
   const levels = target.options.find((option) => option.id === 'effort')?.kind
   const carried =
     effort && levels?.type === 'select'
@@ -151,13 +161,18 @@ export function structuredAgentSessionListedPicks(
 /** The Claude model and effort the composer shows (`snapshot`), which every send carries. */
 export function structuredAgentSessionSendSelection(
   agent: string,
-  snapshot: readonly SessionOptionDescriptor[]
+  snapshot: readonly SessionOptionDescriptor[],
+  omitProvisional = false
 ): Record<string, string> | undefined {
   if (agent !== 'claude') {
     return undefined
   }
   const shown = (id: string): string | undefined => {
-    const kind = snapshot.find((descriptor) => descriptor.id === id)?.kind
+    const descriptor = snapshot.find((entry) => entry.id === id)
+    if (omitProvisional && descriptor?.valueSource === 'default') {
+      return undefined
+    }
+    const kind = descriptor?.kind
     return kind?.type === 'select' ? kind.currentValue : undefined
   }
   const model = shown('model')

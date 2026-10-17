@@ -41,51 +41,70 @@ export function createAcpModelCatalogProbe(
   spec: AcpLaunchSpec,
   deps: AcpModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
-  return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
+  const resolve: NonNullable<AgentModelCatalogProbe['resolve']> = async (accountHome, cwd) => {
     const discovery = spec.modelDiscovery
     // Registered as unavailable instead (`acpModelCatalogDiscovery`); never built for one.
     if (discovery.kind === 'unavailable') {
       throw new Error(discovery.reason)
     }
     // A listing reads no workspace: the catalog is the account's, whichever chat asks.
-    const cwd = deps.homePath ?? homedir()
     const { command, env, envToDelete } = await resolveAcpLaunchInvocation(spec, accountHome, {
       ...deps,
       resolveWorkingDirectory: () => cwd
     })
-    if (
-      !(await acpLaunchVersionSupported(
-        spec,
-        { command, cwd, env },
-        deps.probeVersion ?? probeAgentCliVersion
-      ))
-    ) {
-      throw new Error(`${spec.agent} at ${command} does not run structured chats`)
+    const identity = {
+      command,
+      env,
+      envToDelete,
+      cwd,
+      args:
+        discovery.kind === 'command'
+          ? discovery.args
+          : spec.args({ fullAccess: false, pluginDir: null })
     }
-    let models: AgentSessionModelOption[]
-    if (discovery.kind === 'command') {
-      const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
-        { command, args: [...discovery.args], cwd, env, envToDelete },
-        { site: `${spec.agent}-model-catalog-probe`, signal: options?.signal }
-      )
-      models = discovery.parse(stdout)
-    } else {
-      const launch = {
-        command,
-        args: spec.args({ fullAccess: false, pluginDir: null }),
-        cwd,
-        env,
-        envToDelete
+    return {
+      identity,
+      run: async (signal): Promise<AgentModelCatalogSuccess> => {
+        if (
+          !(await acpLaunchVersionSupported(
+            spec,
+            { command, cwd, env },
+            deps.probeVersion ?? probeAgentCliVersion
+          ))
+        ) {
+          throw new Error(`${spec.agent} at ${command} does not run structured chats`)
+        }
+        let models: AgentSessionModelOption[]
+        if (discovery.kind === 'command') {
+          const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
+            { command, args: [...discovery.args], cwd, env, envToDelete },
+            { site: `${spec.agent}-model-catalog-probe`, signal }
+          )
+          models = discovery.parse(stdout)
+        } else {
+          const launch = {
+            command,
+            args: spec.args({ fullAccess: false, pluginDir: null }),
+            cwd,
+            env,
+            envToDelete
+          }
+          models = await runAgentModelCatalogSession(
+            () => (deps.connect ?? createAcpAgentConnection)(launch),
+            async (connection) => discovery.read(await connection.initialize(), connection),
+            { label: spec.agent, signal }
+          )
+        }
+        if (models.length === 0) {
+          throw new Error(`${spec.agent} listed no models`)
+        }
+        return { models, origin: 'probe', advisory: true }
       }
-      models = await runAgentModelCatalogSession(
-        () => (deps.connect ?? createAcpAgentConnection)(launch),
-        async (connection) => discovery.read(await connection.initialize(), connection),
-        { label: spec.agent, signal: options?.signal }
-      )
     }
-    if (models.length === 0) {
-      throw new Error(`${spec.agent} listed no models`)
-    }
-    return { models, origin: 'probe' }
   }
+  return Object.assign<AgentModelCatalogProbe, Pick<AgentModelCatalogProbe, 'resolve'>>(
+    async (home, options) =>
+      (await resolve(home, options?.cwd ?? deps.homePath ?? homedir())).run(options?.signal),
+    { resolve }
+  )
 }

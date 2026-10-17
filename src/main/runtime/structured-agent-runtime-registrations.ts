@@ -62,6 +62,10 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
     ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore,
+    readModelCatalog: (sessionId) => host()?.deps.modelCatalog?.peek(sessionId) ?? null,
+    demandModelCatalog: async (sessionId) => {
+      await host()?.deps.modelCatalog?.read({ agent: 'codex', sessionId, waitForListing: true })
+    },
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onDispatchSettledLate: followUps.onDispatchSettledLate,

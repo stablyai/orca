@@ -197,6 +197,29 @@ describe('host model catalog read', () => {
     unmount()
   })
 
+  it('spaces pending follow-ups and cancels them when the picker closes', async () => {
+    vi.useFakeTimers()
+    try {
+      answerCatalog([
+        () => Promise.resolve(LISTING),
+        () => Promise.resolve(LISTING),
+        () => Promise.resolve(LISTING)
+      ])
+      const { unmount } = renderOptions()
+      await flush()
+      expect(catalogReads()).toHaveLength(2)
+      await act(async () => vi.advanceTimersByTimeAsync(999))
+      expect(catalogReads()).toHaveLength(2)
+      await act(async () => vi.advanceTimersByTimeAsync(1))
+      expect(catalogReads()).toHaveLength(3)
+      unmount()
+      await act(async () => vi.advanceTimersByTimeAsync(60_000))
+      expect(catalogReads()).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('the running provider list wins over a host listing that lands later', async () => {
     const live = deferred()
     const waited = deferred()
@@ -219,15 +242,19 @@ describe('host model catalog read', () => {
     unmount()
   })
 
-  it('joins the wait already in flight through attach', async () => {
+  it('discards the pre-attach wait when a new process generation starts', async () => {
     const waited = deferred()
-    answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
+    const attached = deferred()
+    answerCatalog([() => Promise.resolve(LISTING), () => waited.promise, () => attached.promise])
     const { result, rerender, unmount } = renderOptions()
     await flush()
     rerender({ attached: true })
     await flush()
-    expect(catalogReads()).toHaveLength(2)
+    expect(catalogReads()).toHaveLength(3)
     waited.resolve(HOST_CATALOG)
+    await flush()
+    expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
+    attached.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
     unmount()

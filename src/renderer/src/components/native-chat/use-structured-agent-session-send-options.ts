@@ -28,7 +28,8 @@ export function useStructuredAgentSessionSendOptions(
     })
     return structuredAgentSessionSendSelection(
       view.record.agent,
-      structuredAgentSessionOptionSnapshot(view)
+      structuredAgentSessionOptionSnapshot(view),
+      view.choiceCatalog !== undefined
     )
   }, [launch, optionStateRef, optionView, pendingOptionsRef, sessionId, takesSendOptions])
 }

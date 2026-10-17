@@ -1,13 +1,21 @@
 import {
   CLAUDE_MODEL_LIST_ARGS,
-  CLAUDE_MODEL_LIST_STDIN,
-  parseClaudeModelList
+  CLAUDE_MODEL_LIST_STDIN
 } from '../../shared/claude-model-list-probe'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { parseClaudeModels } from '../../shared/commit-message-model-parsers'
+import {
+  isCompleteClaudeModelListing,
+  listedModels,
+  record
+} from './claude-structured-model-catalog'
+import { wireClaudeModels } from './claude-structured-catalog-listing'
+import { readClaudeSettingsApplied } from './claude-structured-session-options'
+import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+import { claudeStructuredSpawnOptions } from './claude-structured-spawn-options'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import {
+  CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,
   type ClaudeStructuredLaunchPartDeps
 } from './claude-structured-launch-resolution'
@@ -24,6 +32,7 @@ import {
 export type ClaudeModelCatalogProbeDeps = ClaudeEnvDeps &
   Pick<ClaudeStructuredLaunchPartDeps, 'resolveAuthPolicy'> & {
     /** Test seam; production runs the shared supervised listing. */
+    resolveLaunchArgs?: () => Promise<string[]> | string[]
     runListing?: typeof runAgentModelCatalogListing
   }
 
@@ -65,49 +74,100 @@ export async function runClaudeListing(
 export function createClaudeModelCatalogProbe(
   deps: ClaudeModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
-  return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
-    const stdout = await runClaudeListing(deps, {
-      accountHomePath: requireLegacyAgentSessionAccountHome(accountHome).path,
-      args: CLAUDE_MODEL_LIST_ARGS,
-      stdin: CLAUDE_MODEL_LIST_STDIN,
-      site: 'claude-model-catalog-probe',
-      ...(options?.signal ? { signal: options.signal } : {})
-    }).catch((error: unknown) => {
-      // Claude has no pre-send sign-in verdict; a missing CLI is the one this probe can find.
-      if (error instanceof AgentModelCatalogProbeError && error.executableMissing) {
-        throw new AgentModelCatalogUnavailableError({ reason: 'cliMissing' })
-      }
-      throw error
+  const resolve: NonNullable<AgentModelCatalogProbe['resolve']> = async (
+    accountHome,
+    cwd,
+    saved
+  ) => {
+    const configuredArgs = claudeStructuredLaunchArgs((await deps.resolveLaunchArgs?.()) ?? [])
+    const { sdkOptions } = claudeStructuredSpawnOptions({
+      launch: { options: configuredArgs, resumesTranscript: false },
+      saved
     })
-    // A CLI that predates the request answers a control error: no models, so no catalog.
-    const listed = parseClaudeModels(stdout)
-    if (listed.length === 0) {
-      throw new Error('claude listed no models')
+    const effectiveArgs = {
+      ...sdkOptions.extraArgs,
+      ...(sdkOptions.model !== undefined ? { model: sdkOptions.model } : {}),
+      ...(sdkOptions.effort !== undefined ? { effort: sdkOptions.effort } : {}),
+      ...(sdkOptions.settings ? { settings: JSON.stringify(sdkOptions.settings) } : {})
     }
-    // Only the catalog marks the CLI default; the commit-message parse keeps its own default.
-    const runsDefault = new Set(
-      parseClaudeModelList(stdout).flatMap((model) => (model.isDefault ? [model.id] : []))
+    const args = [
+      ...CLAUDE_MODEL_LIST_ARGS,
+      '--setting-sources',
+      CLAUDE_DEFAULT_SETTING_SOURCES.join(','),
+      ...Object.entries(effectiveArgs).flatMap(([key, value]) =>
+        value === null ? [`--${key}`] : [`--${key}`, value]
+      ),
+      ...configuredArgs.additionalDirectories.flatMap((directory) => ['--add-dir', directory])
+    ]
+    const { command, env } = await resolveClaudeStructuredInvocation(
+      { ...deps, resolveWorkingDirectory: () => cwd },
+      (base) => ({
+        ...base,
+        ...claudeConfigDirEnvPatch(requireLegacyAgentSessionAccountHome(accountHome).path, {
+          env: base
+        })
+      })
     )
+    const launch = { command, args, cwd, env }
     return {
-      models: listed.map((model) => ({
-        id: model.id,
-        label: model.label,
-        ...(model.description ? { description: model.description } : {}),
-        isDefault: runsDefault.has(model.id),
-        // No defaultEffort: the parser's thinking default is the commit-message generator's
-        // choice, not the effort Claude runs; the store keeps the one a live child reported.
-        efforts: (model.thinkingLevels ?? []).map((level) => ({
-          value: level.id,
-          label: level.label
-        })),
-        ...(model.supportsFastMode !== undefined
-          ? { supportsFastMode: model.supportsFastMode }
-          : {}),
-        ...(model.supportsAutoMode !== undefined
-          ? { supportsAutoMode: model.supportsAutoMode }
-          : {})
-      })),
-      origin: 'probe'
+      identity: launch,
+      run: async (signal): Promise<AgentModelCatalogSuccess> => {
+        const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
+          {
+            command,
+            args,
+            cwd,
+            stdin: `${
+              CLAUDE_MODEL_LIST_STDIN +
+              JSON.stringify({
+                type: 'control_request',
+                request_id: 'orca-model-settings',
+                request: { subtype: 'get_settings' }
+              })
+            }\n`
+          },
+          { site: 'claude-model-catalog-probe', inheritedEnv: env, signal }
+        ).catch((error: unknown) => {
+          if (error instanceof AgentModelCatalogProbeError && error.executableMissing) {
+            throw new AgentModelCatalogUnavailableError({ reason: 'cliMissing' })
+          }
+          throw error
+        })
+        let models: AgentModelCatalogSuccess['models'] = []
+        let complete = false
+        let configured: AgentModelCatalogSuccess['configured']
+        for (const line of stdout.split(/\r?\n/)) {
+          try {
+            const response = record(record(JSON.parse(line))?.response)
+            if (response?.subtype !== 'success') {
+              continue
+            }
+            const body = response.response
+            const listed = listedModels(body)
+            if (listed.length > 0) {
+              models = wireClaudeModels(listed)
+              complete = isCompleteClaudeModelListing(body)
+            }
+            configured = readClaudeSettingsApplied(body) ?? configured
+          } catch {
+            /* Non-JSON diagnostic output carries no catalog facts. */
+          }
+        }
+        if (models.length === 0) {
+          throw new Error('claude listed no models')
+        }
+        return {
+          models,
+          origin: 'probe',
+          complete: complete && !Object.hasOwn(effectiveArgs, 'model'),
+          ...(configured ? { configured } : {})
+        }
+      }
     }
   }
+  return Object.assign<AgentModelCatalogProbe, Pick<AgentModelCatalogProbe, 'resolve'>>(
+    async (home, options) =>
+      (await resolve(home, options?.cwd ?? process.cwd())).run(options?.signal),
+    { resolve }
+  )
 }

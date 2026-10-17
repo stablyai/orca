@@ -19,7 +19,7 @@ import type { NativeChatSessionOptionRecord } from '../../../../shared/native-ch
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
-} from './host-model-listing-waits'
+} from '../../../../shared/host-model-listing-waits'
 
 /**
  * Replaces the quiet placeholder with the host's stored catalog without waiting on
@@ -28,8 +28,8 @@ import {
  * during create. An older host answers `forbidden` or `method_not_found` — both mean
  * "no such surface" — and the built-in list becomes usable until the live read lands.
  *
- * When the host says its first listing for the account is running, one more
- * read waits for it — one per chat, joined by every later run and remount —
+ * When the host says its first listing for the account is running, joined bounded
+ * reads follow it — one per chat, shared by every later run and remount —
  * so the list updates in place. The picker never waits on it: it stays usable
  * on the built-in list meanwhile, naming no model, and a pick made then stays
  * an intent the session checks.
@@ -79,7 +79,7 @@ export function useHostModelCatalogUpgrade(args: {
     updateOptionState,
     worktree
   } = args
-  const waitKey = `${structuredAgentSessionHostKey(target)}\u0000${agent}\u0000${sessionId}`
+  const waitKey = `${structuredAgentSessionHostKey(target)}\u0000${agent}\u0000${sessionId}\u0000${fence}\u0000${args.providerRunning === true}\u0000${worktree ?? ''}`
   const [verdict, setVerdict] = useState<{
     key: string
     unavailable: AgentSessionUnavailable | null
@@ -114,6 +114,9 @@ export function useHostModelCatalogUpgrade(args: {
         waitForListing ? { ...params, waitForListing } : params
       )
     const apply = (catalog: AgentSessionModelCatalogResult | null): void => {
+      if (stale) {
+        return
+      }
       const next = readAgentSessionUnavailable(catalog?.unavailable)
       setVerdict((current) => {
         const shown = current?.key === waitKey ? current.unavailable : null

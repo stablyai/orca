@@ -14,6 +14,9 @@ export type AgentModelCatalogSuccess = {
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
+  complete?: boolean
+  configured?: { model?: string; effort?: string }
+  advisory?: true
   /** A row only this session's launch added (its own `--model`): kept only once the account's
    *  catalog already lists that model. */
   launchOnlyModelId?: string
@@ -27,11 +30,14 @@ export type AgentModelCatalogListing = {
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
   at: number
+  complete: boolean
+  configured?: { model?: string; effort?: string }
 }
 
 /** What a running session listed, as its adapter hands it to the host. Kept here, apart from the
  *  store, so the session wire types don't pull the store's Node-only persistence into clients. */
 export type AgentModelCatalogLiveListing = {
+  complete?: boolean
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
   /** A row only this session's launch added (its own `--model`): kept only once the account's
@@ -52,13 +58,24 @@ export type AgentModelCatalogConfiguredChoice = {
   effort?: string | null
 }
 
-/** The account's configured default as an agent's CLI resolved it for a chat with no model pick,
- *  in a workspace with no config of its own; for agents whose listing names none. */
-export type AgentModelCatalogConfiguredDefault = {
-  modelId: string
-  sameModelIds?: string[]
-  effort?: string
-  at: number
+export function agentModelCatalogSessionObservation(
+  listing: AgentModelCatalogLiveListing
+): AgentModelCatalogSuccess {
+  const configured = listing.configuredDefault
+  return {
+    models: listing.models,
+    origin: 'live-session',
+    complete: false,
+    ...(configured
+      ? {
+          configured: {
+            model: configured.modelId,
+            ...(configured.effort ? { effort: configured.effort } : {})
+          }
+        }
+      : {}),
+    ...(listing.fastModeSupport ? { fastModeSupport: listing.fastModeSupport } : {})
+  }
 }
 
 /** What a session that resolves its agent's own config reports as that scope's configured default:
@@ -111,14 +128,30 @@ export function withLiveCatalogListing<
 export type AgentModelCatalogEntry = {
   agent: string
   fingerprint: string
-  discovered: AgentModelCatalogListing | null
-  live: AgentModelCatalogListing | null
-  configured: AgentModelCatalogConfiguredDefault | null
-  // The merged view every reader uses, derived from the two listings above.
+  observation: AgentModelCatalogListing
+  source: 'discovery' | 'probe-advisory' | 'session-advisory'
   models: AgentSessionModelOption[]
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
   fetchedAt: number
+}
+
+export function agentModelCatalogEntry(
+  agent: string,
+  fingerprint: string,
+  observation: AgentModelCatalogListing,
+  source: AgentModelCatalogEntry['source']
+): AgentModelCatalogEntry {
+  return {
+    agent,
+    fingerprint,
+    observation,
+    source,
+    models: observation.models,
+    ...(observation.fastModeSupport ? { fastModeSupport: observation.fastModeSupport } : {}),
+    origin: observation.origin,
+    fetchedAt: observation.at
+  }
 }
 
 export function agentModelCatalogResultFromEntry(
@@ -126,90 +159,31 @@ export function agentModelCatalogResultFromEntry(
   namesDefault: boolean,
   listingNamesConfiguredModel: boolean
 ): Exclude<AgentSessionModelCatalogResult, { origin: 'unknown' }> {
-  // A CLI-resolved default names the configured model even where the listing names none.
-  const namesConfigured = listingNamesConfiguredModel || entry.configured !== null
+  const configured = entry.observation.configured
+  const configuredRow = configured?.model
+    ? entry.models.find(
+        (row) => row.id === configured.model || row.resolvedModel === configured.model
+      )
+    : undefined
   return {
     origin: entry.origin,
-    // Without a default the picker names nothing until the chat reports its model.
-    models: entry.models.map((model) =>
-      namesDefault ? { ...model } : { ...model, isDefault: false }
-    ),
+    models: entry.models.map((row) => ({
+      ...row,
+      isDefault: namesDefault && (configured?.model ? row === configuredRow : row.isDefault),
+      ...(configured?.effort &&
+      (row === configuredRow || (!configured?.model && row.isDefault)) &&
+      row.efforts.some((effort) => effort.value === configured.effort)
+        ? { defaultEffort: configured.effort }
+        : {})
+    })),
     ...(entry.fastModeSupport ? { fastModeSupport: entry.fastModeSupport } : {}),
     fetchedAt: entry.fetchedAt,
-    listingNamesConfiguredModel: namesDefault && namesConfigured
+    listingNamesConfiguredModel:
+      namesDefault && (listingNamesConfiguredModel || configuredRow !== undefined)
   }
 }
 
-/** Which models exist and their menus follow the newer listing; the default model and effort are
- *  the CLI-resolved configured default's, else discovery's, else what a live child reported while
- *  its model offers it. */
-function mergedModels(
-  discovered: AgentModelCatalogListing | null,
-  live: AgentModelCatalogListing | null,
-  configured: AgentModelCatalogConfiguredDefault | null
-): AgentSessionModelOption[] {
-  const liveIsNewer = live !== null && (discovered === null || live.at >= discovered.at)
-  const newer = liveIsNewer ? live : discovered
-  const older = liveIsNewer ? discovered : live
-  return (newer?.models ?? []).map((model) => {
-    const listed = discovered?.models.find((entry) => entry.id === model.id)
-    const reported = live?.models.find((entry) => entry.id === model.id)
-    const olderEfforts = older?.models.find((entry) => entry.id === model.id)?.efforts ?? []
-    const runsConfigured =
-      configured?.modelId === model.id || configured?.sameModelIds?.includes(model.id) === true
-    const configuredEffort = runsConfigured ? configured?.effort : undefined
-    const offersConfigured = (menu: AgentSessionModelOption['efforts']): boolean =>
-      menu.some((choice) => choice.value === configuredEffort)
-    // A coarser newer probe menu (Pi's stops at high) must not drop the effort a chat ran; only the
-    // chat's own menu is trusted over it, never an older probe's.
-    const keepsChatMenu =
-      older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
-    const efforts = model.efforts.length > 0 && !keepsChatMenu ? model.efforts : olderEfforts
-    const defaultEffort = [configuredEffort, listed?.defaultEffort, reported?.defaultEffort].find(
-      (effort) => effort !== undefined && efforts.some((choice) => choice.value === effort)
-    )
-    const { defaultEffort: _own, ...rest } = model
-    return {
-      ...rest,
-      // A session names no default; without any discovery its own flags are all there is.
-      isDefault: configured
-        ? model.id === configured.modelId
-        : discovered
-          ? listed?.isDefault === true
-          : model.isDefault,
-      efforts,
-      ...(defaultEffort ? { defaultEffort } : {})
-    }
-  })
-}
-
-export function agentModelCatalogEntry(
-  agent: string,
-  fingerprint: string,
-  discovered: AgentModelCatalogListing | null,
-  live: AgentModelCatalogListing | null,
-  configured: AgentModelCatalogConfiguredDefault | null
-): AgentModelCatalogEntry | null {
-  const newer = live && (!discovered || live.at >= discovered.at) ? live : discovered
-  if (!newer) {
-    return null
-  }
-  const older = newer === live ? discovered : live
-  const fastModeSupport = newer.fastModeSupport ?? older?.fastModeSupport
-  return {
-    agent,
-    fingerprint,
-    discovered,
-    live,
-    configured,
-    models: mergedModels(discovered, live, configured),
-    ...(fastModeSupport ? { fastModeSupport } : {}),
-    origin: newer.origin,
-    fetchedAt: newer.at
-  }
-}
-
-/** Only a launch-added row needs independent account membership; ordinary incoming rows stand. */
+/** Legacy launch-only filtering; this heuristic is not modern membership proof. */
 export function retainedAgentModelCatalogModels(
   previous: Pick<AgentModelCatalogEntry, 'models'> | null | undefined,
   listing: AgentModelCatalogLiveListing
@@ -220,7 +194,6 @@ export function retainedAgentModelCatalogModels(
     : listing.models
 }
 
-/** The entry `success` makes of `previous`, replacing only the listing of its source. */
 export function agentModelCatalogEntryWithSuccess(
   previous: AgentModelCatalogEntry | undefined,
   identity: { agent: string; fingerprint: string },
@@ -228,72 +201,34 @@ export function agentModelCatalogEntryWithSuccess(
   source: AgentModelCatalogSource,
   at: number
 ): AgentModelCatalogEntry | null {
-  const models = retainedAgentModelCatalogModels(previous, success)
-  if (models.length === 0) {
-    // An empty list identifies no model; it is doubt, not a catalog.
+  if (success.models.length === 0) {
     return null
   }
-  const listing: AgentModelCatalogListing = {
-    models: models.map((model) => ({ ...model })),
-    ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {}),
-    origin: success.origin,
-    at
-  }
-  const { agent, fingerprint } = identity
-  const configured = previous?.configured ?? null
-  return source === 'discovery'
-    ? agentModelCatalogEntry(agent, fingerprint, listing, previous?.live ?? null, configured)
-    : agentModelCatalogEntry(agent, fingerprint, previous?.discovered ?? null, listing, configured)
-}
-
-/** A choice as the store keeps it: one that says nothing of effort keeps the saved effort of the
- *  same model, since only the session's own pick hid it. */
-function configuredDefaultFacts(
-  choice: AgentModelCatalogConfiguredChoice | null,
-  previous: AgentModelCatalogConfiguredDefault | null = null
-): Omit<AgentModelCatalogConfiguredDefault, 'at'> | null {
-  if (!choice) {
-    return null
-  }
-  const effort =
-    choice.effort === undefined
-      ? previous?.modelId === choice.modelId
-        ? previous.effort
-        : undefined
-      : (choice.effort ?? undefined)
-  return {
-    modelId: choice.modelId,
-    ...(choice.sameModelIds?.length ? { sameModelIds: [...choice.sameModelIds] } : {}),
-    ...(effort ? { effort } : {})
-  }
-}
-
-/** `entry` with `choice` as its configured default (null forgets it); null when nothing changes. */
-export function entryWithConfiguredDefault(
-  entry: AgentModelCatalogEntry,
-  choice: AgentModelCatalogConfiguredChoice | null,
-  at: number
-): AgentModelCatalogEntry | null {
-  const next = configuredDefaultFacts(choice, entry.configured)
-  if (JSON.stringify(next) === JSON.stringify(configuredDefaultFacts(entry.configured))) {
-    return null
+  const provenance =
+    source === 'live' ? 'session-advisory' : success.advisory ? 'probe-advisory' : 'discovery'
+  if (
+    previous &&
+    ((previous.source === 'discovery' && provenance !== 'discovery') ||
+      (previous.source === 'session-advisory' && provenance === 'probe-advisory'))
+  ) {
+    return previous
   }
   return agentModelCatalogEntry(
-    entry.agent,
-    entry.fingerprint,
-    entry.discovered,
-    entry.live,
-    next && { ...next, at }
+    identity.agent,
+    identity.fingerprint,
+    {
+      models: success.models.map((model) => ({ ...model })),
+      origin: success.origin,
+      at,
+      complete: success.complete !== false,
+      ...(success.configured ? { configured: success.configured } : {}),
+      ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {})
+    },
+    provenance
   )
 }
 
-/** What a saved entry says, without its clocks: an unchanged key needs no write to disk. */
 export function agentModelCatalogListingKey(entry: AgentModelCatalogEntry): string {
-  const facts = (listing: AgentModelCatalogListing | null): unknown =>
-    listing && [listing.origin, listing.models, listing.fastModeSupport ?? null]
-  return JSON.stringify([
-    facts(entry.discovered),
-    facts(entry.live),
-    configuredDefaultFacts(entry.configured)
-  ])
+  const { at: _at, ...observation } = entry.observation
+  return JSON.stringify([entry.source, observation])
 }

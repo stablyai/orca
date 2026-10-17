@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useState, type RefObject } from 'react'
-import { structuredAgentSessionShownSnapshot } from '../../../src/shared/structured-agent-session-option-view'
+import {
+  structuredAgentSessionShownSnapshot,
+  structuredAgentSessionSendSelection
+} from '../../../src/shared/structured-agent-session-option-view'
 import type { StructuredAgentSessionOptionState } from '../../../src/shared/structured-agent-session-options'
 import type {
   SessionOptionDescriptor,
@@ -52,5 +55,15 @@ export function useMobileStructuredOptionSurface(args: {
     [optionSnapshot, setOption]
   )
 
-  return { optionPickerRequest, invokeStructuredOption, optionSurface }
+  const sendSelection = useCallback(
+    () =>
+      structuredAgentSessionSendSelection(
+        optionStateRef.current.record.agent,
+        structuredAgentSessionShownSnapshot(optionStateRef.current, takesSendOptions),
+        optionStateRef.current.choiceCatalog !== undefined
+      ),
+    [optionStateRef, takesSendOptions]
+  )
+
+  return { optionPickerRequest, invokeStructuredOption, optionSurface, sendSelection }
 }

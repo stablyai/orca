@@ -40,8 +40,7 @@ export function piModelCatalogFromListing(stdout: string): AgentModelCatalogSucc
 
 /** Lists Pi's models with `pi --list-models`, under the binary and environment its chats run. */
 export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentModelCatalogProbe {
-  return async (accountHome, options): Promise<AgentModelCatalogSuccess> => {
-    const cwd = deps.homePath ?? homedir()
+  const resolve: NonNullable<AgentModelCatalogProbe['resolve']> = async (accountHome, cwd) => {
     const { env, command } = await resolvePiRpcInvocation({
       accountDir: requireLegacyAgentSessionAccountHome(accountHome).path,
       resolveEnvironment: deps.resolveEnvironment,
@@ -50,24 +49,35 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
       refreshEnvironmentAfterMiss: deps.refreshEnvironmentAfterMiss,
       resolveWorkingDirectory: () => cwd
     })
-    if (!(await piRpcVersionSupported({ command, cwd, env }, deps.probeVersion))) {
-      throw new Error(`pi at ${command} does not run structured chats`)
+    const identity = { command, env, cwd, args: ['--list-models'] }
+    return {
+      identity,
+      run: async (signal): Promise<AgentModelCatalogSuccess> => {
+        if (!(await piRpcVersionSupported({ command, cwd, env }, deps.probeVersion))) {
+          throw new Error(`pi at ${command} does not run structured chats`)
+        }
+        // The chat launch's own env rules; only the arguments differ.
+        const launch = buildPiRpcLaunch({
+          command,
+          cwd,
+          ...piRpcSessionlessEnvironment(env),
+          fullAccess: true
+        })
+        const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
+          { ...launch, args: ['--list-models'] },
+          { site: 'pi-model-catalog-probe', signal }
+        )
+        const models = piModelCatalogFromListing(stdout)
+        if (models.length === 0) {
+          throw new Error('pi listed no models')
+        }
+        return { models, origin: 'probe', advisory: true }
+      }
     }
-    // The chat launch's own env rules; only the arguments differ.
-    const launch = buildPiRpcLaunch({
-      command,
-      cwd,
-      ...piRpcSessionlessEnvironment(env),
-      fullAccess: true
-    })
-    const stdout = await (deps.runListing ?? runAgentModelCatalogListing)(
-      { ...launch, args: ['--list-models'] },
-      { site: 'pi-model-catalog-probe', signal: options?.signal }
-    )
-    const models = piModelCatalogFromListing(stdout)
-    if (models.length === 0) {
-      throw new Error('pi listed no models')
-    }
-    return { models, origin: 'probe' }
   }
+  return Object.assign<AgentModelCatalogProbe, Pick<AgentModelCatalogProbe, 'resolve'>>(
+    async (home, options) =>
+      (await resolve(home, options?.cwd ?? deps.homePath ?? homedir())).run(options?.signal),
+    { resolve }
+  )
 }

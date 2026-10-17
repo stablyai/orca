@@ -7,6 +7,7 @@ import type { AgentSessionUnavailable } from '../../../../shared/agent-session-a
 import type { AgentSessionRecord } from '../../../../shared/agent-session-record'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
 import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
@@ -25,7 +26,7 @@ afterEach(() => {
 })
 
 describe('agentSession.modelCatalog', () => {
-  const read = vi.fn(async () => ({ origin: 'unknown' as const }))
+  const read = vi.fn(async (): Promise<AgentSessionModelCatalogResult> => ({ origin: 'unknown' }))
   let record: AgentSessionRecord | null = null
 
   beforeEach(() => {
@@ -37,6 +38,39 @@ describe('agentSession.modelCatalog', () => {
       })
     )
   })
+
+  it.each(['runtime', 'mobile'] as const)(
+    'negotiates the response-only catalog envelope for %s',
+    async (clientKind) => {
+      const choiceCatalog = {
+        authority: 'discovery' as const,
+        scopeId: 'scope',
+        models: [],
+        complete: false,
+        freshForMs: 0
+      }
+      read.mockResolvedValueOnce({ origin: 'unknown', choiceCatalog })
+      const oldClient = { ...STRUCTURED_CLIENT, clientKind }
+      const old = await call('agentSession.modelCatalog', { agent: 'codex' }, oldClient)
+      expect(old).toMatchObject({ ok: true, result: { origin: 'unknown' } })
+      expect(old).not.toMatchObject({ result: { choiceCatalog: expect.anything() } })
+      const modern = {
+        ...oldClient,
+        clientCapabilities: [
+          ...oldClient.clientCapabilities,
+          AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
+        ]
+      }
+      read.mockResolvedValueOnce({ origin: 'unknown', choiceCatalog })
+      expect(await call('agentSession.modelCatalog', { agent: 'codex' }, modern)).toMatchObject({
+        ok: true,
+        result: { choiceCatalog }
+      })
+      expect(
+        await call('agentSession.modelCatalog', { agent: 'codex', projection: 'coherent' }, modern)
+      ).toMatchObject({ ok: false })
+    }
+  )
 
   it("reads a floating chat's catalog in the folder it was created in", async () => {
     const fixture = agentSessionRecordFixture()

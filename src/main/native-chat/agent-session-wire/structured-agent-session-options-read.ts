@@ -1,3 +1,4 @@
+import { providerChildRootExited } from './structured-agent-session-provider-child'
 // A chat's options, live or at rest.
 //
 // At rest nothing here needs a child. The pick is the record's own `options` — what the next start replays —
@@ -5,11 +6,9 @@
 // exists. A pick made at rest is written to the record as intent, through the same transition a live
 // pick takes, so the next start applies it.
 
-import {
-  refuse,
-  type AgentSessionModelCatalogResult,
-  type AgentSessionOptionResult,
-  type AgentSessionOptionsResult
+import type {
+  AgentSessionModelCatalogResult,
+  AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
@@ -18,11 +17,6 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { decodeStructuredAgentSessionOptionValue } from '../../../shared/structured-agent-session-option-codec'
 import { finishedListingIds } from '../../../shared/structured-agent-session-options'
-import {
-  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
-  agentChatPermissionModes
-} from '../../../shared/agent-chat-permission-mode'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalOpenReadRefusal } from '../agent-session-journal/journal-open-failure'
 import type { StructuredAgentDefinition } from './structured-agent-definition'
 import type { StructuredAgentRegistry } from './structured-agent-registry'
@@ -32,52 +26,27 @@ import { saveStructuredAgentSessionListing } from './structured-agent-session-st
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import { structuredAgentSessionOptionModels } from './structured-agent-session-option-models'
 import { structuredAgentSessionLaunchPermission } from './structured-agent-session-launch-permission'
-import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
+export {
+  recordStructuredAgentSessionOptionIntent,
+  structuredAgentSessionOptionOverridesRefusal
+} from './structured-agent-session-option-intent'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 
 type RestingOptions = Pick<
   AgentSessionOptionsResult,
-  'models' | 'listedModelIds' | 'fastModeSupport' | 'current'
+  'models' | 'listedModelIds' | 'fastModeSupport' | 'current' | 'choiceCatalog' | 'choiceAuthority'
 >
 
 /** What the asking client takes: whether it reads an answer that names no model. */
-export type StructuredAgentSessionOptionsReader = { readsWithoutModel: boolean }
+export type StructuredAgentSessionOptionsReader = {
+  readsWithoutModel: boolean
+  readsCoherentCatalog?: boolean
+}
 
 /** A same-build caller in this process reads as the RPC gate treats one: it takes no model. */
 export const IN_PROCESS_OPTIONS_READER: StructuredAgentSessionOptionsReader = {
-  readsWithoutModel: true
-}
-
-/** Whether the agent takes this pick: a permission mode it offers, or an option key it names. */
-function acceptsOptionPick(
-  agents: Pick<StructuredAgentRegistry, 'definition'>,
-  provider: string,
-  key: string,
-  value: string
-): boolean {
-  const definition = agents.definition(provider)
-  return key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
-    ? definition !== null &&
-        agentChatPermissionModes(provider)?.modes.some((mode) => mode === value) === true
-    : definition?.restingOptions.acceptsKey(key) === true
-}
-
-/** Initial explicit picks follow the same rules as a pick made while the chat is at rest. */
-export function structuredAgentSessionOptionOverridesRefusal(
-  agents: Pick<StructuredAgentRegistry, 'definition'>,
-  provider: string,
-  options: Readonly<Record<string, string>>
-) {
-  const key = Object.keys(options).find(
-    (key) => !acceptsOptionPick(agents, provider, key, options[key] ?? '')
-  )
-  return key === undefined
-    ? null
-    : refuse(
-        'agent_session_operation_invalid',
-        { reason: 'optionRejected' },
-        `${provider} has no session option named ${key}`
-      )
+  readsWithoutModel: true,
+  readsCoherentCatalog: true
 }
 
 /** The at-rest rules of the record's agent, as this runtime registered it; null for any other. */
@@ -106,7 +75,9 @@ async function readStructuredAgentSessionOptionsAtRest(
         agent: record.provider,
         sessionId,
         savedOnly: true,
-        ...(inSessionWorkspace ? { inSessionWorkspace: true as const } : {})
+        ...(inSessionWorkspace
+          ? { inSessionWorkspace: true as const }
+          : { accountDefault: true as const })
       })
       .catch(() => null)) ?? { origin: 'unknown' }
   const saved = record.options ?? {}
@@ -134,7 +105,9 @@ async function readStructuredAgentSessionOptionsAtRest(
   // account's default; a built-in list's default is a guess, so with none the client keeps its own.
   const model =
     saved.model ??
-    (catalog.origin === 'unknown' ? undefined : models.find((entry) => entry.isDefault)?.id)
+    (reader.readsCoherentCatalog || catalog.origin === 'unknown'
+      ? undefined
+      : models.find((entry) => entry.isDefault)?.id)
   // The pick, else the model's default where a live child reports that, or where the chat's folder
   // names that model as what it runs, as its first frame showed.
   const effort =
@@ -143,6 +116,9 @@ async function readStructuredAgentSessionOptionsAtRest(
       ? models.find((entry) => entry.id === model)?.defaultEffort
       : undefined)
   return {
+    ...(reader.readsCoherentCatalog && catalog.choiceCatalog
+      ? { choiceCatalog: catalog.choiceCatalog, choiceAuthority: catalog.choiceCatalog.authority }
+      : {}),
     models: listed ? structuredAgentSessionOptionModels(listed, model, (row) => row) : [],
     ...(listedModelIds ? { listedModelIds } : {}),
     ...(catalog.origin !== 'unknown' && catalog.fastModeSupport
@@ -155,40 +131,6 @@ async function readStructuredAgentSessionOptionsAtRest(
       ...(saved.serviceTier ? { serviceTier: saved.serviceTier } : {})
     }
   }
-}
-
-/** Records a pick for the next start. Only a key the provider would accept is kept. */
-export async function recordStructuredAgentSessionOptionIntent(
-  deps: {
-    store: Pick<AgentSessionRecordStore, 'getRecord' | 'replaceSessionOptions'>
-    agents: Pick<StructuredAgentRegistry, 'definition'>
-  },
-  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'fence' | 'persistOptions' | 'publish' | 'now'>,
-  input: { key: string; value: string }
-): Promise<TurnOutcome<AgentSessionOptionResult>> {
-  const record = deps.store.getRecord(ctx.sessionId)
-  if (!record || !acceptsOptionPick(deps.agents, record.provider, input.key, input.value)) {
-    return {
-      ok: false,
-      refusal: refuse(
-        'agent_session_operation_invalid',
-        { reason: 'optionRejected' },
-        `${record?.provider ?? 'This session'} has no session option named ${input.key}`
-      )
-    }
-  }
-  const options = { ...record.options, [input.key]: input.value }
-  // The answer still names the mode among the options, as the wire always has.
-  await (input.key === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
-    ? deps.store.replaceSessionOptions({
-        sessionId: ctx.sessionId,
-        fence: ctx.fence,
-        permissionMode: input.value,
-        now: ctx.now()
-      })
-    : ctx.persistOptions(options))
-  ctx.publish()
-  return { ok: true, value: { ...input, options } }
 }
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
@@ -207,7 +149,7 @@ export async function readStructuredAgentSessionOptions(
     })
     const child = session?.child
     // A starting child is asked nothing: the answer is the saved intent and the catalog.
-    if (!child || child.phase === 'starting') {
+    if (!child || child.phase === 'starting' || providerChildRootExited(session)) {
       return { kind: 'rest' as const }
     }
     const prepared = adapter.prepareReadOptions?.({ sessionId, fence: child.fence })
@@ -219,10 +161,11 @@ export async function readStructuredAgentSessionOptions(
     }
     return {
       kind: 'live' as const,
+      child,
       options: await adapter.readOptions({ sessionId, fence: child.fence })
     }
   })
-  const live: StructuredAgentSessionLiveOptions | null =
+  let live: StructuredAgentSessionLiveOptions | null =
     started.kind === 'live'
       ? started.options
       : started.kind === 'prepared'
@@ -233,10 +176,20 @@ export async function readStructuredAgentSessionOptions(
             })
           )
         : null
+  const activeSession = await context.conversation(sessionId)
+  if (
+    started.kind !== 'rest' &&
+    (activeSession.child !== started.child || providerChildRootExited(activeSession))
+  ) {
+    live = null
+  }
   let options: Omit<AgentSessionOptionsResult, 'rewind'>
   if (live) {
     const { catalogListing, ...answer } = live
     options = answer
+    if (!catalogListing) {
+      context.deps.modelCatalog?.recordLiveListing(sessionId, { models: [], complete: false })
+    }
     if (catalogListing) {
       // Check prior membership before saving: a launch-added row cannot verify itself.
       const listedModelIds = context.deps.modelCatalog
@@ -247,6 +200,14 @@ export async function readStructuredAgentSessionOptions(
     }
   } else {
     options = await readStructuredAgentSessionOptionsAtRest(context.deps, sessionId, reader)
+  }
+  if (live && reader.readsCoherentCatalog) {
+    const process = context.deps.modelCatalog?.processCatalog(sessionId)
+    options = {
+      ...options,
+      choiceAuthority: process ? 'session' : 'discovery',
+      ...(process ? { choiceCatalog: process } : {})
+    }
   }
   // Re-acquired after the reads above: the handle they saw may have closed and reopened since.
   const session = await context.conversation(sessionId)

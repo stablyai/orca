@@ -30,6 +30,15 @@ function listedEfforts(row: Record<string, unknown>): AgentSessionOptionChoice[]
     : []
 }
 
+export function isCompleteClaudeModelListing(value: unknown): boolean {
+  const rows = record(value)?.models
+  return (
+    Array.isArray(rows) &&
+    rows.length > 0 &&
+    rows.every((value) => text(record(value)?.value) !== null)
+  )
+}
+
 export function listedModels(value: unknown): ListedModel[] {
   const response = record(value)
   const rows = Array.isArray(response?.models)
@@ -40,7 +49,7 @@ export function listedModels(value: unknown): ListedModel[] {
   const seen = new Set<string>()
   return rows.flatMap((row) => {
     const id = text(row.value)
-    if (!id || id === 'default' || seen.has(id)) {
+    if (!id || id === 'default' || row.disabled === true || seen.has(id)) {
       return []
     }
     seen.add(id)
@@ -57,6 +66,12 @@ export function listedModels(value: unknown): ListedModel[] {
         ...(description ? { description } : {}),
         isDefault: resolvedModel !== null && resolvedModel === defaultResolvedModel,
         efforts: listedEfforts(row),
+        ...(row.supportsEffort !== false &&
+        (row.supportsEffort !== true ||
+          !Array.isArray(row.supportedEffortLevels) ||
+          row.supportedEffortLevels.some((value) => text(value) === null))
+          ? { effortsKnown: false as const }
+          : {}),
         ...(supportsFastMode !== undefined ? { supportsFastMode } : {}),
         ...(supportsAutoMode !== undefined ? { supportsAutoMode } : {}),
         resolvedModel

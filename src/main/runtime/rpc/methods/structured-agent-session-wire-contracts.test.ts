@@ -1,6 +1,7 @@
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../shared/agent-session-optional-model-capability'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import {
@@ -41,6 +42,48 @@ import { holdDelivery } from '../../../native-chat/agent-session-wire/structured
 
 beforeEach(installStructuredHostStub)
 afterEach(clearStructuredHostStub)
+
+const coherentCatalog = {
+  authority: 'discovery' as const,
+  scopeId: 'execution-scope',
+  complete: true,
+  freshForMs: 120_000,
+  models: [{ id: 'raw-default', label: 'Raw default', isDefault: true, efforts: [] }]
+}
+
+it.each(['runtime', 'mobile'] as const)(
+  'negotiates coherent options for each %s endpoint without changing requests',
+  async (clientKind) => {
+    const report = {
+      models: coherentCatalog.models,
+      current: { model: 'current' },
+      choiceAuthority: 'discovery' as const,
+      choiceCatalog: coherentCatalog
+    }
+    hostCalls.readOptions.mockResolvedValue(report)
+    const oldClient = { ...STRUCTURED_CLIENT, clientKind }
+    const modern = {
+      ...oldClient,
+      clientCapabilities: [
+        ...oldClient.clientCapabilities,
+        AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY
+      ]
+    }
+    const legacy = await call('agentSession.options', { sessionId: SESSION }, oldClient)
+    expect(legacy).toMatchObject({
+      ok: true,
+      result: { models: coherentCatalog.models, current: report.current }
+    })
+    expect(legacy).not.toMatchObject({ result: { choiceCatalog: expect.anything() } })
+    expect(await call('agentSession.options', { sessionId: SESSION }, modern)).toMatchObject({
+      ok: true,
+      result: { choiceCatalog: coherentCatalog }
+    })
+    expect(
+      await call('agentSession.options', { sessionId: SESSION, projection: 'coherent' }, modern)
+    ).toMatchObject({ ok: false })
+  }
+)
 
 const currentDesktop = {
   ...STRUCTURED_CLIENT,

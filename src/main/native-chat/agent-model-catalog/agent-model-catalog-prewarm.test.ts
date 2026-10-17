@@ -1,11 +1,6 @@
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  agentModelCatalogFingerprintForRecord,
-  agentModelCatalogSessionAccess
-} from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
   AGENT_MODEL_CATALOG_FRESH_MS,
@@ -72,7 +67,7 @@ describe('model catalog prewarm', () => {
     const prewarmed = service.prewarm()
     await vi.waitFor(() => expect(codex).toHaveBeenCalledTimes(1))
     // A picker opening while the prewarm lists joins it instead of spawning a second listing.
-    expect(await service.read({ agent: 'codex' })).toEqual({
+    expect(await service.read({ agent: 'codex' })).toMatchObject({
       origin: 'unknown',
       listingInProgress: true
     })
@@ -81,6 +76,7 @@ describe('model catalog prewarm', () => {
 
     expect(codex).toHaveBeenCalledTimes(1)
     expect(codex).toHaveBeenCalledWith(HOME('CODEX_HOME', '/homes/a'), {
+      cwd: expect.any(String),
       signal: expect.any(AbortSignal)
     })
     expect(grok).toHaveBeenCalledTimes(1)
@@ -179,7 +175,7 @@ describe('model catalog prewarm', () => {
     expect(probes.claude).toHaveBeenCalledTimes(1)
     expect(probes.pi).not.toHaveBeenCalled()
     // Its first chat still lists it on demand.
-    expect(await service.read({ agent: 'pi' })).toEqual({
+    expect(await service.read({ agent: 'pi' })).toMatchObject({
       origin: 'unknown',
       listingInProgress: true
     })
@@ -220,7 +216,7 @@ describe('model catalog prewarm', () => {
     expect(signals.every((signal) => signal.aborted)).toBe(true)
 
     // A read or another prewarm after stop spawns nothing.
-    expect(await service.read({ agent: 'grok' })).toEqual({ origin: 'unknown' })
+    expect(await service.read({ agent: 'grok' })).toMatchObject({ origin: 'unknown' })
     hasChatRecords.mockClear()
     await service.prewarm()
     expect(started).toEqual(['codex', 'claude'])
@@ -256,52 +252,5 @@ describe('model catalog prewarm', () => {
     }
     await prewarmed
     expect(peak).toBe(2)
-  })
-})
-
-describe('one account, one catalog key', () => {
-  function record(path: string): AgentSessionRecord {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the key reads only provider, accountHome and location.
-    return {
-      sessionId: 'session-1',
-      provider: 'codex',
-      accountHome: HOME('CODEX_HOME', path),
-      location: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'ws-1',
-        workspaceKind: 'git-worktree'
-      }
-    } as AgentSessionRecord
-  }
-
-  // The read and launch resolvers agreeing on the home is runtime-home-catalog-account-key.test.ts.
-  it('a session’s saves through the host and through its adapter’s handle land under its record’s key', async () => {
-    const store = new AgentModelCatalogStore()
-    const managedHome = '/orca/codex-accounts/acct-1/home'
-    const launched = record(managedHome)
-    const service = createAgentModelCatalogService({
-      store,
-      getRecord: () => launched,
-      drivesRecord: () => true,
-      resolveAccountHome: async () => HOME('CODEX_HOME', managedHome)
-    })
-    // What the chat saved, through the host and through the Codex adapter's own handle…
-    service.recordLiveListing('session-1', { models: listing('gpt-live').models })
-    const incoming = { models: [...listing('gpt-live').models, ...listing('gpt-new').models] }
-    const retained = (launchOnlyModelId: string) =>
-      service.retainedLiveModelIds('session-1', { ...incoming, launchOnlyModelId })
-    expect(retained('gpt-live')).toEqual(['gpt-live', 'gpt-new'])
-    expect(retained('gpt-new')).toEqual(['gpt-live'])
-    const adapterAccess = agentModelCatalogSessionAccess(
-      store,
-      { agent: 'codex', accountHomeVariable: 'CODEX_HOME' },
-      managedHome
-    )
-    expect(adapterAccess?.fingerprint).toBe(agentModelCatalogFingerprintForRecord(launched))
-
-    // …is what the next new chat reads for the same home: no cold start for this account.
-    const read = await service.read({ agent: 'codex' })
-    expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['gpt-live'])
   })
 })

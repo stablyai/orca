@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from './structured-agent-session-surface-capabilities'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from './terminal-image-viewer-capability'
 import {
@@ -35,6 +36,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY,
+  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
   // Same renderer: its queued cards show their images, and Edit keeps them.
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   // Same renderer: it reads each host's `agentSession.agents` and renders any agent listed there.
