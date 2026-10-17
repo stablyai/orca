@@ -8,6 +8,7 @@ import {
   type SkillDeleteRequestDependencies
 } from '../../../skills/skill-delete/request-service'
 import type { SkillDiscoveryTargetSchema } from '../../../../shared/skills'
+import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import {
   SkillInstallPreviewRequestSchema,
   SkillInstallRequestSchema,
@@ -45,10 +46,17 @@ export function resolveDiscoveryTarget(
   params: z.infer<typeof SkillDiscoveryTargetSchema>,
   runtime: Pick<OrcaRuntimeService, 'resolveProjectRuntimeForWorktree'>
 ) {
+  // Why: plugin enablement lives in the worktree's own .claude/settings.json,
+  // so a caller that knows only the worktree id (a paired phone) still needs
+  // the scan to see project plugin roots — recover the cwd the id carries.
+  const cwd =
+    params.cwd ??
+    (params.worktreeId ? splitWorktreeIdForFilesystem(params.worktreeId)?.worktreePath : undefined)
   const target = params.projectRuntime
-    ? params
+    ? { ...params, cwd }
     : {
         ...params,
+        cwd,
         projectRuntime: runtime.resolveProjectRuntimeForWorktree(params.worktreeId)
       }
   return resolveSkillDiscoveryTarget(target)
