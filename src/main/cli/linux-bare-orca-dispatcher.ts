@@ -17,6 +17,7 @@ import { resolveGenerationStableLauncherPath } from './appimage-generation-stabl
 import { withAppImageRegistrationLock } from './appimage-registration-lock'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { quoteShell } from './cli-install-path-format'
+import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
 
 // Why: marks a dispatcher this function wrote so repeat serve starts overwrite
 // our own file idempotently but never clobber a user's own ~/.local/bin/orca.
@@ -60,7 +61,13 @@ export async function installLinuxBareOrcaDispatcher(
   options: LinuxBareOrcaDispatcherOptions
 ): Promise<LinuxBareOrcaDispatcherResult> {
   const dispatcherPath = join(options.homePath ?? homedir(), '.local', 'bin', 'orca')
-  if (existsSync(dispatcherPath) && !(await isOwnedDispatcher(dispatcherPath))) {
+  const trustedAppImagePath = trustedLegacyAppImagePath(options)
+  // Why: the pre-rename AppImage wrapper is ours. Leaving it in place execs the
+  // AppImage, and AppRun injects `--no-sandbox` into node mode (#18985).
+  if (
+    existsSync(dispatcherPath) &&
+    !(await isReplaceableDispatcher(dispatcherPath, trustedAppImagePath))
+  ) {
     return { state: 'skipped-foreign', dispatcherPath, target: null }
   }
 
@@ -71,7 +78,8 @@ export async function installLinuxBareOrcaDispatcher(
 
   const installed = await publishDispatcher(
     dispatcherPath,
-    insertDispatcherMarker(buildBareOrcaCliScript(launcher))
+    insertDispatcherMarker(buildBareOrcaCliScript(launcher)),
+    trustedAppImagePath
   )
   return installed
     ? { state: 'installed', dispatcherPath, target: launcher }
@@ -147,7 +155,45 @@ async function isOwnedDispatcher(dispatcherPath: string): Promise<boolean> {
   }
 }
 
-async function publishDispatcher(dispatcherPath: string, content: string): Promise<boolean> {
+function trustedLegacyAppImagePath(options: LinuxBareOrcaDispatcherOptions): string | null {
+  if (Object.hasOwn(options, 'appImagePath')) {
+    return options.appImagePath ?? null
+  }
+  return (
+    resolveAppImageRuntimeIdentity({ resourcesPath: options.resourcesPath })?.appImagePath ?? null
+  )
+}
+
+// A user's own `orca` script must stay. Only the exact wrapper this app wrote
+// before the `orca-ide` rename is safe to replace.
+async function isReplaceableDispatcher(
+  dispatcherPath: string,
+  trustedAppImagePath: string | null
+): Promise<boolean> {
+  if (await isOwnedDispatcher(dispatcherPath)) {
+    return true
+  }
+  try {
+    if (!(await lstat(dispatcherPath)).isFile()) {
+      return false
+    }
+    const target = extractLegacyAppImageCliWrapperTarget(await readFile(dispatcherPath, 'utf8'))
+    // Why: a packaged serve must not rebuild "the wrapper we wrote" from the
+    // APPIMAGE= line inside the file. A path the user changed is their script.
+    if (!target) {
+      return false
+    }
+    return trustedAppImagePath === null || target === trustedAppImagePath
+  } catch {
+    return false
+  }
+}
+
+async function publishDispatcher(
+  dispatcherPath: string,
+  content: string,
+  trustedAppImagePath: string | null
+): Promise<boolean> {
   const directoryPath = dirname(dispatcherPath)
   const temporaryPath = join(directoryPath, `.orca-dispatcher-${process.pid}-${randomUUID()}`)
   await mkdir(directoryPath, { recursive: true })
@@ -170,7 +216,7 @@ async function publishDispatcher(dispatcherPath: string, content: string): Promi
       return await publishIfVacant(temporaryPath, dispatcherPath)
     }
 
-    if (!(await isOwnedDispatcher(displacedPath))) {
+    if (!(await isReplaceableDispatcher(displacedPath, trustedAppImagePath))) {
       await restoreDisplacedDispatcher(displacedPath, dispatcherPath)
       return false
     }
