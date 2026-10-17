@@ -10,6 +10,11 @@ import {
 } from './gl-utils'
 import { withProjectRef } from './merge-request-project-resolution'
 
+// Why: glab's MRCheckErrors refuses a no-op state change with these texts; any other failure,
+// including its "has already been merged" refusal, must surface.
+const GLAB_MR_ALREADY_CLOSED = /\bthis merge request has been closed\b/i
+const GLAB_MR_ALREADY_OPEN = /\bthis merge request is already open\b/i
+
 export async function closeMR(
   repoPath: string,
   iid: number,
@@ -33,8 +38,7 @@ export async function closeMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        // Why: glab exits non-zero when the MR is already closed — treat as success.
-        if (msg.toLowerCase().includes('already')) {
+        if (GLAB_MR_ALREADY_CLOSED.test(msg)) {
           return { ok: true }
         }
         return { ok: false, error: msg }
@@ -70,7 +74,7 @@ export async function reopenMR(
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        if (msg.toLowerCase().includes('already')) {
+        if (GLAB_MR_ALREADY_OPEN.test(msg)) {
           return { ok: true }
         }
         return { ok: false, error: msg }

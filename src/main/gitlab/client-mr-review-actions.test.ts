@@ -516,4 +516,42 @@ describe('gitlab client — MR operations', () => {
       expect(options.env).toBeUndefined()
     })
   })
+
+  // Why: glab refuses a no-op close/reopen with fixed texts (a trailing period on some
+  // releases); only those mean the MR is already in the requested state.
+  describe('MR close and reopen refusals from glab', () => {
+    const projectRef = { host: 'gitlab.com', path: 'g/p' }
+
+    it.each(['this merge request has been closed', 'this merge request has been closed.'])(
+      'treats "%s" on close as already closed',
+      async (message) => {
+        glabExecFileAsyncMock.mockRejectedValueOnce(new Error(message))
+
+        await expect(closeMR('/repo', 6, undefined, null, projectRef)).resolves.toEqual({
+          ok: true
+        })
+      }
+    )
+
+    it('treats "is already open" on reopen as already open', async () => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('this merge request is already open.'))
+
+      await expect(reopenMR('/repo', 6, undefined, null, projectRef)).resolves.toEqual({
+        ok: true
+      })
+    })
+
+    it.each([
+      ['close', closeMR],
+      ['reopen', reopenMR]
+    ])('reports a %s refused because the MR is merged', async (_name, mutate) => {
+      const message = 'this merge request has already been merged.'
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error(message))
+
+      await expect(mutate('/repo', 6, undefined, null, projectRef)).resolves.toEqual({
+        ok: false,
+        error: message
+      })
+    })
+  })
 })

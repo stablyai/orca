@@ -541,4 +541,17 @@ describe('issue source operations', () => {
       { cwd: '/repo-root', host: 'github.com' }
     )
   })
+
+  // Why: gh exits 0 for an already-closed issue, so a failure mentioning "already" is a real one.
+  it('reports a GraphQL rate limit on close instead of reading "already" as a no-op', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(
+      new Error('GraphQL: API rate limit already exceeded for user ID 1775218.')
+    )
+
+    await expect(updateIssue('/repo-root', 924, { state: 'closed' })).resolves.toEqual({
+      ok: false,
+      error: 'GitHub rate limit hit. Try again in a few minutes.'
+    })
+  })
 })
