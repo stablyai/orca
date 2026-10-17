@@ -12,6 +12,12 @@ import {
   type TerminalShortcutSpecialKey
 } from '../terminal/terminal-accessory-keys'
 import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
+import {
+  customKeyEditDraft,
+  customKeyModalTitle,
+  customKeySaveLabel,
+  replaceCustomKeyPreservingId
+} from './custom-key-edit'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
@@ -64,6 +70,7 @@ type Props = {
   onClose: () => void
   onKeysChanged: (keys: CustomKey[]) => void
   onManageShortcuts?: () => void
+  editingKey?: CustomKey | null
 }
 
 export async function loadCustomKeys(): Promise<CustomKey[]> {
@@ -82,13 +89,22 @@ export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
   await persistMirrored(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
 }
 
-export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
-  const [step, setStep] = useState<Step>('choose-type')
-  const [shortcutKey, setShortcutKey] = useState('c')
-  const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
-  const [macroLabel, setMacroLabel] = useState('')
-  const [macroText, setMacroText] = useState('')
-  const [macroEnter, setMacroEnter] = useState(true)
+export function CustomKeyModal({
+  visible,
+  onClose,
+  onKeysChanged,
+  onManageShortcuts,
+  editingKey = null
+}: Props) {
+  const openingDraft = customKeyEditDraft(editingKey)
+  const [step, setStep] = useState<Step>(openingDraft.step)
+  const [shortcutKey, setShortcutKey] = useState(openingDraft.shortcutKey)
+  const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(
+    openingDraft.shortcutModifiers
+  )
+  const [macroLabel, setMacroLabel] = useState(openingDraft.macroLabel)
+  const [macroText, setMacroText] = useState(openingDraft.macroText)
+  const [macroEnter, setMacroEnter] = useState(openingDraft.macroEnter)
   const [previousVisible, setPreviousVisible] = useState(visible)
 
   // Why: reset before the opening commit so the drawer does not flash the last
@@ -96,20 +112,22 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
   if (visible !== previousVisible) {
     setPreviousVisible(visible)
     if (visible) {
-      setStep('choose-type')
-      setShortcutKey('c')
-      setShortcutModifiers(['ctrl'])
-      setMacroLabel('')
-      setMacroText('')
-      setMacroEnter(true)
+      const draft = customKeyEditDraft(editingKey)
+      setStep(draft.step)
+      setShortcutKey(draft.shortcutKey)
+      setShortcutModifiers(draft.shortcutModifiers)
+      setMacroLabel(draft.macroLabel)
+      setMacroText(draft.macroText)
+      setMacroEnter(draft.macroEnter)
     }
   }
 
   const addKey = useCallback(
     async (key: Omit<CustomKey, 'id'>) => {
       const existing = await loadCustomKeys()
-      const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
-      const updated = [...existing, newKey]
+      const updated = editingKey
+        ? replaceCustomKeyPreservingId(existing, { ...key, id: editingKey.id })
+        : [...existing, { ...key, id: `custom-${Date.now()}` }]
       // Caught here because both callers are `void addKey(...)`, which leaves a rejection nowhere
       // to go. On the page this key is allowlisted and its write rejects for size — the contract
       // `page-async-storage` states, and the one ruling 33.6 extends to a key `init` could not
@@ -127,7 +145,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
       onKeysChanged(updated)
       onClose()
     },
-    [onClose, onKeysChanged]
+    [editingKey, onClose, onKeysChanged]
   )
 
   const shortcutPreview = useMemo(
@@ -216,12 +234,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
         ) : (
           <View style={styles.backSpacer} />
         )}
-        <Text style={styles.title}>
-          {step === 'choose-type' && 'Add Shortcut'}
-          {step === 'shortcut-combo' && 'Shortcut Combo'}
-          {step === 'special-keys' && 'Pick a key'}
-          {step === 'text-macro' && 'Text Macro'}
-        </Text>
+        <Text style={styles.title}>{customKeyModalTitle(step, editingKey != null)}</Text>
         <View style={styles.backSpacer} />
       </View>
 
@@ -335,7 +348,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
             <Text
               style={[styles.saveButtonText, !shortcutPreview && styles.saveButtonTextDisabled]}
             >
-              Add
+              {customKeySaveLabel(editingKey != null, 'combo')}
             </Text>
           </Pressable>
         </View>
@@ -419,7 +432,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               <Text
                 style={[styles.saveButtonText, !macroText.trim() && styles.saveButtonTextDisabled]}
               >
-                Add Shortcut
+                {customKeySaveLabel(editingKey != null, 'macro')}
               </Text>
             </Pressable>
           </View>

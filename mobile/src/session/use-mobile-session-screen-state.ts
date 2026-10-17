@@ -4,7 +4,10 @@ import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
-  getVisibleTerminalAccessoryKeys
+  getDefaultTerminalAccessoryLayout,
+  getVisibleTerminalAccessoryKeys,
+  getVisibleTerminalAccessoryRows,
+  type TerminalAccessoryLayout
 } from '../terminal/terminal-accessory-layout'
 import type { CustomKey } from '../components/CustomKeyModal'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
@@ -100,6 +103,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  const [shortcutLayout, setShortcutLayout] = useState<TerminalAccessoryLayout>(
+    getDefaultTerminalAccessoryLayout
+  )
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
@@ -108,6 +114,10 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const visibleBuiltInAccessoryKeys = useMemo(
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
+  )
+  const visibleAccessoryRows = useMemo(
+    () => getVisibleTerminalAccessoryRows(shortcutLayout, customKeys),
+    [shortcutLayout, customKeys]
   )
   // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY.
   const [keyboardHeight, setKeyboardHeight] = useState(0)
@@ -212,6 +222,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setRenameTarget,
     customKeys,
     setCustomKeys,
+    shortcutLayout,
+    setShortcutLayout,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
     showCustomKeyModal,
@@ -219,6 +231,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     deleteKeyTarget,
     setDeleteKeyTarget,
     visibleBuiltInAccessoryKeys,
+    visibleAccessoryRows,
     keyboardHeight,
     setKeyboardHeight,
     terminalModes,

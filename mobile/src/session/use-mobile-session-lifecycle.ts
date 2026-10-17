@@ -15,6 +15,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     hostId,
     connState,
     setCustomKeys,
+    setShortcutLayout,
     setVisibleBuiltInIds,
     setHostEndpoint,
     connStateRef,
@@ -54,7 +55,13 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       let stale = false
       void loadTerminalAccessoryLayout().then((layout) => {
         if (!stale) {
+          setShortcutLayout(layout)
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
+        }
+      })
+      void loadCustomKeys().then((keys) => {
+        if (!stale) {
+          setCustomKeys(keys)
         }
       })
       return () => {
@@ -68,7 +75,13 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     const refresh = () => {
       void loadTerminalAccessoryLayout().then((layout) => {
         if (mounted) {
+          setShortcutLayout(layout)
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
+        }
+      })
+      void loadCustomKeys().then((keys) => {
+        if (mounted) {
+          setCustomKeys(keys)
         }
       })
     }

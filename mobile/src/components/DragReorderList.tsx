@@ -48,6 +48,7 @@ export type DragReorderListProps<ItemT> = {
   itemKey: (item: ItemT) => string
   rowHeight: number
   renderRow: (item: ItemT) => ReactNode
+  isItemDraggable?: (item: ItemT) => boolean
   /** Called with every item key in the new order after a drop changes it. */
   onReorder: (orderedKeys: string[]) => void
   /** Lets the owning screen disable its ScrollView while a row is held. */
@@ -62,6 +63,7 @@ export function DragReorderList<ItemT>({
   itemKey,
   rowHeight,
   renderRow,
+  isItemDraggable,
   onReorder,
   onDragActiveChange,
   scrollRef,
@@ -192,6 +194,7 @@ export function DragReorderList<ItemT>({
           key={itemKey(item)}
           rowKey={itemKey(item)}
           rowHeight={rowHeight}
+          draggable={isItemDraggable ? isItemDraggable(item) : true}
           shared={shared}
           scrollOffsetY={scrollOffsetY}
           updateDragPosition={updateDragPosition}
@@ -209,6 +212,7 @@ export function DragReorderList<ItemT>({
 function DragReorderRow({
   rowKey,
   rowHeight,
+  draggable,
   shared,
   scrollOffsetY,
   updateDragPosition,
@@ -219,6 +223,7 @@ function DragReorderRow({
 }: {
   rowKey: string
   rowHeight: number
+  draggable: boolean
   shared: DragSharedState
   scrollOffsetY: SharedValue<number>
   updateDragPosition: (key: string) => void
@@ -291,29 +296,31 @@ function DragReorderRow({
   return (
     <Animated.View style={[styles.row, { height: rowHeight }, rowStyle]}>
       <View style={styles.rowContent}>{children}</View>
-      <GestureDetector gesture={pan}>
-        <Animated.View
-          style={styles.handle}
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel="Drag to reorder"
-          accessibilityHint="Use the move up and move down actions to reorder without dragging"
-          accessibilityActions={[
-            { name: 'moveUp', label: 'Move up' },
-            { name: 'moveDown', label: 'Move down' }
-          ]}
-          onAccessibilityAction={(event) => {
-            if (event.nativeEvent.actionName === 'moveUp') {
-              onAccessibilityMove(rowKey, -1)
-            } else if (event.nativeEvent.actionName === 'moveDown') {
-              onAccessibilityMove(rowKey, 1)
-            }
-          }}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <GripVertical size={18} color={colors.textMuted} />
-        </Animated.View>
-      </GestureDetector>
+      {draggable ? (
+        <GestureDetector gesture={pan}>
+          <Animated.View
+            style={styles.handle}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="Drag to reorder"
+            accessibilityHint="Use the move up and move down actions to reorder without dragging"
+            accessibilityActions={[
+              { name: 'moveUp', label: 'Move up' },
+              { name: 'moveDown', label: 'Move down' }
+            ]}
+            onAccessibilityAction={(event) => {
+              if (event.nativeEvent.actionName === 'moveUp') {
+                onAccessibilityMove(rowKey, -1)
+              } else if (event.nativeEvent.actionName === 'moveDown') {
+                onAccessibilityMove(rowKey, 1)
+              }
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <GripVertical size={18} color={colors.textMuted} />
+          </Animated.View>
+        </GestureDetector>
+      ) : null}
       <View style={styles.rowSeparator} />
     </Animated.View>
   )

@@ -50,6 +50,8 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
   const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Why: tracks whether a hold-repeat cycle fired during the current press so onPress can skip a duplicate tap on release.
+  const didRepeatRef = useRef<boolean>(false)
   // Why: ref keeps repeat firing the current callback; else a mid-hold tab switch/reconnect routes bytes to a stale terminal.
   const handleAccessoryKeyRef = useRef(handleAccessoryKey)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
@@ -67,7 +69,10 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   const startAccessoryRepeat = useCallback(
     (input: ReturnType<typeof createTerminalLiveAccessoryInput>) => {
       stopAccessoryRepeat()
+      didRepeatRef.current = false
       repeatTimeoutRef.current = setTimeout(() => {
+        didRepeatRef.current = true
+        void handleAccessoryKeyRef.current(input)
         repeatIntervalRef.current = setInterval(() => {
           void handleAccessoryKeyRef.current(input)
         }, 45)
@@ -75,6 +80,11 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     },
     [stopAccessoryRepeat]
   )
+  const consumeAccessoryRepeatHandled = useCallback((): boolean => {
+    const didRepeat = didRepeatRef.current
+    didRepeatRef.current = false
+    return didRepeat
+  }, [])
   const setMobileSessionRootRef = useCallback(
     (node: View | null): void => {
       if (node !== null) {
@@ -207,9 +217,11 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   return {
     repeatTimeoutRef,
     repeatIntervalRef,
+    didRepeatRef,
     handleAccessoryKeyRef,
     stopAccessoryRepeat,
     startAccessoryRepeat,
+    consumeAccessoryRepeatHandled,
     setMobileSessionRootRef,
     handleSelectionMode,
     handleSelectionCopy,
