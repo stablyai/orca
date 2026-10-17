@@ -29,7 +29,8 @@ export function nextPetDragAnimation(
 
 export type PetAnimationInput = {
   entries: AgentStatusEntry[]
-  retainedCount: number
+  retainedAgentsByPaneKey: Record<string, { entry: AgentStatusEntry }>
+  acknowledgedAgentsByPaneKey: Record<string, number>
   dragging: boolean
   dragAnimation: PetDragAnimation
   hovering: boolean
@@ -37,9 +38,20 @@ export type PetAnimationInput = {
   staleAfterMs: number
 }
 
+// Why: same read rule as the Activity badge and dashboard: an ack at or after the
+// turn's start means the user has seen this completion, so it is not left to review.
+function isAcknowledged(
+  paneKey: string,
+  entry: AgentStatusEntry,
+  acknowledgedAgentsByPaneKey: Record<string, number>
+): boolean {
+  return (acknowledgedAgentsByPaneKey[paneKey] ?? 0) >= entry.stateStartedAt
+}
+
 function agentStateAnimation(
   entries: AgentStatusEntry[],
-  retainedCount: number,
+  retainedAgentsByPaneKey: Record<string, { entry: AgentStatusEntry }>,
+  acknowledgedAgentsByPaneKey: Record<string, number>,
   now: number,
   staleAfterMs: number
 ): PetAnimationName {
@@ -55,7 +67,10 @@ function agentStateAnimation(
     }
     if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
-    } else if (entry.state === 'done') {
+    } else if (
+      entry.state === 'done' &&
+      !isAcknowledged(entry.paneKey, entry, acknowledgedAgentsByPaneKey)
+    ) {
       hasDone = true
     }
   }
@@ -63,7 +78,10 @@ function agentStateAnimation(
   if (hasWorking) {
     return 'running'
   }
-  if (hasDone || retainedCount > 0) {
+  const hasUnreadRetained = Object.entries(retainedAgentsByPaneKey).some(
+    ([paneKey, retained]) => !isAcknowledged(paneKey, retained.entry, acknowledgedAgentsByPaneKey)
+  )
+  if (hasDone || hasUnreadRetained) {
     return 'review'
   }
   return 'idle'
@@ -71,14 +89,21 @@ function agentStateAnimation(
 
 export function selectPetAnimationName({
   entries,
-  retainedCount,
+  retainedAgentsByPaneKey,
+  acknowledgedAgentsByPaneKey,
   dragging,
   dragAnimation,
   hovering,
   now,
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
-  const base = agentStateAnimation(entries, retainedCount, now, staleAfterMs)
+  const base = agentStateAnimation(
+    entries,
+    retainedAgentsByPaneKey,
+    acknowledgedAgentsByPaneKey,
+    now,
+    staleAfterMs
+  )
   // Why: aligned with Codex. A horizontal drag runs toward the pointer,
   // grab-and-hold keeps the live agent state, and only a plain hover jumps.
   if (dragging) {

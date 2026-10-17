@@ -20,13 +20,18 @@ function entry(
   }
 }
 
+function retained(overrides: Partial<AgentStatusEntry> = {}): { entry: AgentStatusEntry } {
+  return { entry: entry('done', overrides) }
+}
+
 function select(
   entries: AgentStatusEntry[],
   options: Partial<Parameters<typeof selectPetAnimationName>[0]> = {}
 ) {
   return selectPetAnimationName({
     entries,
-    retainedCount: 0,
+    retainedAgentsByPaneKey: {},
+    acknowledgedAgentsByPaneKey: {},
     dragging: false,
     dragAnimation: null,
     hovering: false,
@@ -65,7 +70,46 @@ describe('selectPetAnimationName', () => {
 
   it('maps completed live or retained work to review', () => {
     expect(select([entry('done')])).toBe('review')
-    expect(select([], { retainedCount: 1 })).toBe('review')
+    expect(select([], { retainedAgentsByPaneKey: { 'tab:retained': retained() } })).toBe('review')
+  })
+
+  it('returns to idle once the done agent has been acknowledged', () => {
+    const done = entry('done', { paneKey: 'tab:P', stateStartedAt: NOW - 100 })
+
+    expect(select([done], { acknowledgedAgentsByPaneKey: { 'tab:P': NOW - 50 } })).toBe('idle')
+    expect(select([done], { acknowledgedAgentsByPaneKey: { 'tab:P': NOW - 100 } })).toBe('idle')
+    // An ack from before this completion does not cover it.
+    expect(select([done], { acknowledgedAgentsByPaneKey: { 'tab:P': NOW - 101 } })).toBe('review')
+    // An ack for another pane does not cover it.
+    expect(select([done], { acknowledgedAgentsByPaneKey: { 'tab:Q': NOW } })).toBe('review')
+  })
+
+  it('returns to idle once the retained agent has been acknowledged', () => {
+    const retainedAgentsByPaneKey = { 'tab:P': retained({ stateStartedAt: NOW - 100 }) }
+
+    expect(
+      select([], { retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey: { 'tab:P': NOW - 50 } })
+    ).toBe('idle')
+    expect(
+      select([], { retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey: { 'tab:P': NOW - 101 } })
+    ).toBe('review')
+  })
+
+  it('keeps review while any done or retained agent is still unacknowledged', () => {
+    const acked = entry('done', { paneKey: 'tab:P', stateStartedAt: NOW - 100 })
+    const unacked = entry('done', { paneKey: 'tab:Q', stateStartedAt: NOW - 100 })
+    const acknowledgedAgentsByPaneKey = { 'tab:P': NOW, 'tab:R': NOW }
+
+    expect(select([acked, unacked], { acknowledgedAgentsByPaneKey })).toBe('review')
+    expect(
+      select([acked], {
+        acknowledgedAgentsByPaneKey,
+        retainedAgentsByPaneKey: {
+          'tab:R': retained({ stateStartedAt: NOW - 100 }),
+          'tab:S': retained({ stateStartedAt: NOW - 100 })
+        }
+      })
+    ).toBe('review')
   })
 
   it('maps interrupted completion to review because Orca does not expose failure as a state', () => {
