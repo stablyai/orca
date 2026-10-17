@@ -20,15 +20,26 @@ vi.mock('./CacheTimer', () => ({
 function makeAgent({
   stateStartedAt,
   lastAssistantMessage,
+  model,
   state = 'working'
 }: {
   stateStartedAt: number
   lastAssistantMessage?: string
-  state?: string
+  model?: string
+  state?: DashboardAgentRowData['entry']['state']
 }): DashboardAgentRowData {
   return {
     paneKey: 'tab-1:leaf-1',
-    tab: { id: 'tab-1' },
+    tab: {
+      id: 'tab-1',
+      ptyId: null,
+      worktreeId: 'wt-1',
+      title: 'Contributor',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 500
+    },
     agentType: 'claude',
     state,
     startedAt: 500,
@@ -37,10 +48,12 @@ function makeAgent({
       state,
       stateStartedAt,
       lastAssistantMessage,
+      model,
       paneKey: 'tab-1:leaf-1',
-      updatedAt: stateStartedAt
+      updatedAt: stateStartedAt,
+      stateHistory: []
     }
-  } as unknown as DashboardAgentRowData
+  }
 }
 
 let root: Root | undefined
@@ -64,11 +77,11 @@ function renderRow(agent: DashboardAgentRowData): HTMLElement {
   return container
 }
 
-function rerenderRow(agent: DashboardAgentRowData): void {
+function rerenderRow(agent: DashboardAgentRowData, showModel?: boolean): void {
   act(() => {
     root!.render(
       <TooltipProvider>
-        <CompactAgentRow agent={agent} now={2000} onActivate={() => {}} />
+        <CompactAgentRow agent={agent} now={2000} onActivate={() => {}} showModel={showModel} />
       </TooltipProvider>
     )
   })
@@ -108,5 +121,24 @@ describe('CompactAgentRow stable assistant message', () => {
     rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'done' }))
     rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'working' }))
     expect(container.textContent).not.toContain('First reply')
+  })
+})
+
+describe('CompactAgentRow model visibility', () => {
+  it('hides and restores the model while preserving the agent name and current activity', () => {
+    const agent = makeAgent({
+      stateStartedAt: 1000,
+      lastAssistantMessage: 'Checking settings',
+      model: 'gpt-6-astra'
+    })
+    const container = renderRow(agent)
+    expect(container.textContent).toContain('gpt-6-astra')
+    rerenderRow(agent, false)
+    expect(container.querySelector('[title="gpt-6-astra"]')).toBeNull()
+    expect(container.textContent).not.toContain('gpt-6-astra')
+    expect(container.textContent).toContain('do the task')
+    expect(container.textContent).toContain('Checking settings')
+    rerenderRow(agent, true)
+    expect(container.textContent).toContain('gpt-6-astra')
   })
 })

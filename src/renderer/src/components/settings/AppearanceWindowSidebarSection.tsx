@@ -25,6 +25,7 @@ import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
+  getShowSidebarAgentModelsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { translate } from '@/i18n/i18n'
@@ -78,6 +79,7 @@ export function AppearanceWindowSidebarSection({
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
+  const agentModelsEntry = getShowSidebarAgentModelsEntry()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
   const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry()
@@ -308,6 +310,20 @@ export function AppearanceWindowSidebarSection({
                       checked={settings.showMobileButton !== false}
                       onChange={() =>
                         updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
+                      }
+                    />
+                  </SearchableSetting>
+
+                  <SearchableSetting {...agentModelsEntry}>
+                    <SettingsSwitchRow
+                      label={agentModelsEntry.title}
+                      description={agentModelsEntry.description}
+                      ariaLabel={agentModelsEntry.title}
+                      checked={settings.showSidebarAgentModels !== false}
+                      onChange={() =>
+                        updateSettings({
+                          showSidebarAgentModels: settings.showSidebarAgentModels === false
+                        })
                       }
                     />
                   </SearchableSetting>
