@@ -24,6 +24,8 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   codebuddy: isCodebuddyNonInteractiveCommand,
   trae: isPrintModeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,
+  // Why: OmO shares Prime Agent's Pi-derived `--print` / `--mode json|rpc` contract.
+  omo: isPrimeAgentHeadlessOneShotCommand,
   ante: isAnteHeadlessOneShotCommand,
   muse: isMuseHeadlessOneShotCommand,
   zcode: isZCodeHeadlessOneShotCommand,

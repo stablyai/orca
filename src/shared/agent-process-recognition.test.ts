@@ -500,6 +500,33 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('recognizes OmO by its binary and versioned runtime path', () => {
+    expect(recognizeAgentProcess('omo')).toEqual({ agent: 'omo', processName: 'omo' })
+    expect(recognizeAgentProcess('/Users/dev/.omo/binary-runtime/5.1.33/omo')).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
+    expect(recognizeAgentProcessFromCommandLine('omo -- "--print the release notes"')).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
+  })
+
+  it('does not recognize OmO headless runs as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('omo -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('omo --mode rpc')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('omo --mode json')).toBeNull()
+  })
+
+  it('recognizes the senpi build as OmO and filters its headless runs', () => {
+    expect(recognizeAgentProcess('senpi')).toEqual({ agent: 'omo', processName: 'senpi' })
+    expect(recognizeAgentProcessFromCommandLine('senpi -- "fix the build"')).toEqual({
+      agent: 'omo',
+      processName: 'senpi'
+    })
+    expect(recognizeAgentProcessFromCommandLine('senpi -p "summarize this diff"')).toBeNull()
+  })
+
   it('recognizes only the agent subcommand of the generic Orca CLI', () => {
     expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
       agent: 'claude-agent-teams',

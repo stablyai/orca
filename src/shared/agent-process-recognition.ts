@@ -41,7 +41,9 @@ const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packa
 const PROCESS_TO_AGENT = new Map<string, TerminalAgent>([
   ['dsb', 'dsb'],
   ['deepseek-build', 'dsb'],
-  ['deepseek-build-agent', 'dsb']
+  ['deepseek-build-agent', 'dsb'],
+  // Why: `senpi` is OmO's npm build; recognize it as OmO without making it a detect/launch command.
+  ['senpi', 'omo']
 ])
 const AGENT_TYPE_IDS = new Set<string>(['dsb'])
 
