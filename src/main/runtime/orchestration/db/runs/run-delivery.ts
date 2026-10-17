@@ -12,7 +12,7 @@ export function requireCurrentConsumer(
   if (!run || run.legacy === 1 || run.consumer_generation !== consumerGeneration) {
     throw new OrchestrationError(
       'consumer_fenced',
-      'This mailbox consumer has been replaced. Rebind with orchestration run-use.'
+      `Another session now coordinates Run ${runId}; stop reading this mailbox.`
     )
   }
   return run

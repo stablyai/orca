@@ -126,6 +126,33 @@ describe('adopted Run binding without --takeover-legacy', () => {
     })
   })
 
+  it('does not offer a legacy takeover command to a worker from another Run', () => {
+    const { db, adoptedRunId } = createAdoptedFixture({ settleWork: false })
+    const home = db.createRun({
+      objective: 'worker home',
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+    })
+    createRootDispatch(
+      db,
+      db.createTask({ runId: home.id, spec: 'worker' }).id,
+      'term_foreign_worker',
+      'tab_foreign:22222222-2222-4222-8222-222222222222'
+    )
+    try {
+      db.bindRun({
+        runId: adoptedRunId,
+        coordinatorHandle: 'term_foreign_worker',
+        coordinatorPaneKey: 'tab_foreign:22222222-2222-4222-8222-222222222222'
+      })
+      throw new Error('Expected the legacy bind to be fenced')
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'consumer_fenced', data: { effectsApplied: false } })
+      expect(JSON.stringify(error)).not.toContain('run-use')
+    }
+    expect(db.getRun(adoptedRunId)?.coordinator_handle).toBeNull()
+  })
+
   it('claims the settled adopted Run and inherits its recovered task graph', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: true })
 

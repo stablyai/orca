@@ -62,7 +62,7 @@ export function recordedCreatorIdentity(creator: DispatchCreator): {
  * terminal. Nothing was delegated, so it is not a nesting parent. Rows written before v37 record
  * no creator and keep counting, which is the pre-v37 answer and fails closed.
  */
-function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
+export function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
   if (row.creator_pane_key && row.assignee_pane_key) {
     return isEquivalentPaneKey(row.creator_pane_key, row.assignee_pane_key)
   }

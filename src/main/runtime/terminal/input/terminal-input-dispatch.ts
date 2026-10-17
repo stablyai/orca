@@ -66,6 +66,11 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     )
   }
 
+  /** Hook-proven agent presence in a coordinator's pane; null when no hook identified an owner. */
+  coordinatorAgentPresence(paneKey: string): Promise<'live' | 'unverifiable' | 'exited' | null> {
+    return this.checkHookAgentPresenceFn?.(paneKey) ?? Promise.resolve(null)
+  }
+
   protected controllerKnowsPtyIsLive(ptyId: string): boolean {
     try {
       return this.ptyController?.hasPty?.(ptyId) === true

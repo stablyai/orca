@@ -1,0 +1,164 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import {
+  createSessionCallerHarness,
+  idOf,
+  orchestrationRequest,
+  resultOf,
+  SESSION_X,
+  SESSION_Y,
+  WORKER_HANDLE,
+  type SessionCallerHarness
+} from '../../../orchestration-session-caller-test-fixture'
+
+const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
+vi.mock('../../../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+  getStructuredAgentSessionHost: () => hostRef.current
+}))
+
+const COORD_PANE = 'tab_coord:12121212-1212-4212-8212-121212121212'
+
+describe('run-use against a Run whose coordinator is still running', () => {
+  let h: SessionCallerHarness
+
+  beforeEach(() => {
+    h = createSessionCallerHarness(hostRef)
+  })
+  afterEach(() => {
+    h.close()
+    vi.restoreAllMocks()
+  })
+
+  const as = (sessionId: string | undefined, method: string, params: Record<string, unknown>) =>
+    h.dispatch(orchestrationRequest(method, params, { sessionId }))
+  async function chatRun(): Promise<string> {
+    return idOf(resultOf(await as(SESSION_X, 'orchestration.runCreate', { objective: 'o' })).run)
+  }
+
+  it('refuses a second chat until it passes --takeover, then fences the first', async () => {
+    const runId = await chatRun()
+    const before = h.db.getRunRaw(runId)
+
+    const refused = await as(SESSION_Y, 'orchestration.runUse', { id: runId })
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { code: 'run_coordinator_live', data: { effectsApplied: false } }
+    })
+    expect(JSON.stringify(refused)).toMatch(
+      /the chat in tree-x \(orca_session_id:[^)]+\), which is still open/
+    )
+    expect(h.db.getRunRaw(runId)).toEqual(before)
+
+    resultOf(await as(SESSION_Y, 'orchestration.runUse', { id: runId, takeover: true }))
+    expect(await as(SESSION_X, 'orchestration.check', { run: runId })).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced' }
+    })
+  })
+
+  it.each([
+    ['its chat was closed', 'closed'],
+    ['its terminal agent exited', 'exited'],
+    ['no hook identifies its terminal agent', null]
+  ] as const)('hands the Run over without a flag when %s', async (_label, state) => {
+    let runId: string
+    if (state === 'closed') {
+      runId = await chatRun()
+      hostRef.current = {
+        deps: {
+          store: {
+            getRecord: (id: string) => h.records.get(id) ?? null,
+            listRecords: () => [...h.records.values()],
+            getVisibleSessionTabIndex: () => ({ present: true, sessionIds: [SESSION_Y] })
+          }
+        }
+      }
+    } else {
+      runId = h.db.createRun({
+        objective: 'o',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: COORD_PANE
+      }).id
+      vi.spyOn(h.runtime, 'coordinatorAgentPresence').mockResolvedValue(state)
+    }
+
+    resultOf(await as(SESSION_Y, 'orchestration.runUse', { id: runId }))
+    expect(h.db.getRunRaw(runId)?.coordinator_orca_session_id).toBe(SESSION_Y)
+  })
+
+  it('lets a worker resume a separate Run with plain run-use, never by takeover', async () => {
+    const stranger = h.db.createRun({
+      objective: 'predecessor sub-Run',
+      coordinatorHandle: 'term_previous',
+      coordinatorPaneKey: COORD_PANE
+    })
+    const presence = vi.spyOn(h.runtime, 'coordinatorAgentPresence').mockResolvedValue('live')
+    const home = h.db.createRun({
+      objective: 'home',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    createRootDispatch(h.db, h.db.createTask({ spec: 'w', runId: home.id }).id, WORKER_HANDLE)
+    const runUse = (id: string, takeover: boolean) =>
+      as(undefined, 'orchestration.runUse', { id, from: WORKER_HANDLE, takeover })
+    const sub = idOf(
+      resultOf(
+        await as(undefined, 'orchestration.runCreate', { objective: 's', from: WORKER_HANDLE })
+      ).run
+    )
+    resultOf(
+      await as(undefined, 'orchestration.runCreate', { objective: 's2', from: WORKER_HANDLE })
+    )
+
+    expect(await runUse(home.id, false)).toMatchObject({
+      ok: false,
+      error: { code: 'worker_cannot_coordinate_own_run' }
+    })
+    expect(await runUse(stranger.id, true)).toMatchObject({
+      ok: false,
+      error: { code: 'worker_cannot_take_over_run' }
+    })
+    const foreignRead = await as(undefined, 'orchestration.check', {
+      run: stranger.id,
+      terminal: WORKER_HANDLE,
+      peek: true
+    })
+    expect(foreignRead).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
+    expect(JSON.stringify(foreignRead)).not.toContain('run-use')
+    const liveRefusal = await runUse(stranger.id, false)
+    expect(liveRefusal).toMatchObject({ ok: false, error: { code: 'run_coordinator_live' } })
+    expect(JSON.stringify(liveRefusal)).not.toContain('run-use --id')
+    presence.mockResolvedValue('exited')
+    resultOf(await runUse(stranger.id, false))
+    expect(await runUse(sub, true)).toMatchObject({
+      error: { code: 'worker_cannot_take_over_run' }
+    })
+    resultOf(await runUse(sub, false))
+    resultOf(await runUse(sub, true))
+  })
+
+  it('re-probes when the binding moves under it, then refuses rather than bind blindly', async () => {
+    const runId = h.db.createRun({
+      objective: 'o',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: COORD_PANE
+    }).id
+    let racers = 0
+    const probe = vi.spyOn(h.runtime, 'coordinatorAgentPresence').mockImplementation(async () => {
+      racers += 1
+      h.db.bindRun({
+        runId,
+        coordinatorHandle: `term_racer${racers}`,
+        coordinatorPaneKey: `tab_r:0000000${racers}-0000-4000-8000-000000000000`
+      })
+      return 'exited'
+    })
+
+    expect(await as(SESSION_Y, 'orchestration.runUse', { id: runId })).toMatchObject({
+      ok: false,
+      error: { code: 'run_binding_changed', data: { effectsApplied: false, retryable: true } }
+    })
+    expect(probe).toHaveBeenCalledTimes(3)
+    expect(h.db.getRunRaw(runId)?.coordinator_handle).toBe('term_racer3')
+  })
+})
