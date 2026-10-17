@@ -6,6 +6,7 @@ import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 import { KIRO_FIXTURE_SESSION_ID } from './session-scanner-kiro-fixtures'
+import { DSH_FIXTURE_SESSION_ID } from './session-scanner-dsh-fixtures'
 import { writeEveryAgentVault } from './session-scanner-every-agent-fixture'
 
 // Why: the SQLite worker bundle does not exist in the test runtime; route the
@@ -458,6 +459,9 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('muse')).toBe("cd '/tmp/muse' && muse resume 'muse-session'")
+    expect(commandByAgent.get('dsh')).toBe(
+      `cd '/tmp/dsh' && dsh-tui --backend=dsh --resume '${DSH_FIXTURE_SESSION_ID}'`
+    )
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )

@@ -226,6 +226,11 @@ function buildAgentResumeInvocation(
     // so the cwd prefix from buildAiVaultResumeCommand is required).
     case 'muse':
       return `${baseCommand} resume ${sessionArg}`
+    // Why: dsh-tui remembers its last backend; pinning `dsh` keeps a DSH session
+    // from being handed to another backend that cannot open it. Joined so dsh-tui < 0.14,
+    // which lacks the flag, skips it instead of reading `dsh` as a prompt.
+    case 'dsh':
+      return `${baseCommand} --backend=dsh --resume ${sessionArg}`
     case 'cline':
       return `${baseCommand} --id ${sessionArg}`
     case 'qoder':

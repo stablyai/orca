@@ -86,6 +86,9 @@ function resumableStateFactoryFor(
     case 'kimi':
     case 'kiro':
     case 'muse':
+    // Compressed frames cannot resume from a byte offset; the whole file is re-read on change.
+    // falls through
+    case 'dsh':
     case 'opencode':
     case 'opencode2':
     case 'zcode':

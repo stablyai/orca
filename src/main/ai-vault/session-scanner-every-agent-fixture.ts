@@ -5,6 +5,7 @@ import {
   writeOpenCode2SqliteFixture
 } from './session-scanner-test-fixtures'
 import { writeKiroSessionFixture } from './session-scanner-kiro-fixtures'
+import { writeDshScannerFixture } from './session-scanner-dsh-fixtures'
 import { writeDocumentAgentFixtures } from './session-scanner-document-agent-fixtures'
 import { writeLogAgentFixtures } from './session-scanner-log-agent-fixtures'
 import { writeOpenCodeSqliteDatabase } from './session-scanner-opencode-sqlite-fixture'
@@ -36,6 +37,7 @@ export async function writeEveryAgentVault(root: string): Promise<EveryAgentVaul
   const { ompSessionFile, primeAgentSessionFile } = await writeLogAgentFixtures(roots)
   await writeDocumentAgentFixtures(root, roots, antigravitySessionId)
   await writeMuseScannerFixture(roots.museSessionsDir)
+  await writeDshScannerFixture(roots.dshSessionsDir)
   await writeJcodeSessionFixture(roots)
   await writeKiroSessionFixture(roots)
   roots.opencodeDbPaths = [await writeOpenCode2SqliteFixture(root)]
