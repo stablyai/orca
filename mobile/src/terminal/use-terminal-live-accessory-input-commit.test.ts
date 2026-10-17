@@ -4,6 +4,7 @@ import type { TextInput } from 'react-native'
 import { describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import type { TerminalLiveInputSelection } from './terminal-live-text-commit'
 import {
   getTerminalLiveAccessoryInactiveInputCommitResult,
   useTerminalLiveAccessoryInputCommit,
@@ -33,6 +34,8 @@ type AccessoryInputCommitHarnessOptions = {
   readonly sendResult?: boolean
   readonly flushResult?: boolean
   readonly waitResult?: boolean
+  readonly fieldText?: string
+  readonly selection?: TerminalLiveInputSelection
 }
 
 type AccessoryInputCommitHarness = {
@@ -43,9 +46,11 @@ type AccessoryInputCommitHarness = {
   readonly applyLiveInputMirror: ReturnType<typeof vi.fn>
   readonly flushPendingLiveInputText: ReturnType<typeof vi.fn>
   readonly waitForPendingLiveInputFlush: ReturnType<typeof vi.fn>
+  readonly setLiveInputCapture: ReturnType<typeof vi.fn>
   readonly unmount: () => void
 }
 
+/** Separates native selection from mirrored text so accessory edits can exercise either state. */
 function createAccessoryInputCommitHarness({
   composing,
   heldText = '',
@@ -53,7 +58,9 @@ function createAccessoryInputCommitHarness({
   pendingHandle = null,
   sendResult = true,
   flushResult = true,
-  waitResult = true
+  waitResult = true,
+  fieldText,
+  selection
 }: AccessoryInputCommitHarnessOptions = {}): AccessoryInputCommitHarness {
   const activeHandle = 'terminal-a'
   const heldLiveInputTextRef: RefObject<string> = { current: heldText }
@@ -61,6 +68,13 @@ function createAccessoryInputCommitHarness({
   const sentLiveInputTextRef: RefObject<string> = { current: sentText }
   const pendingLiveInputHandleRef: RefObject<string | null> = { current: pendingHandle }
   const liveInputRef: RefObject<TextInput | null> = { current: null }
+  const liveInputTextRef: RefObject<string> = { current: fieldText ?? sentText + heldText }
+  const liveInputSelectionRef: RefObject<TerminalLiveInputSelection | null> = {
+    current: selection ?? {
+      start: liveInputTextRef.current.length,
+      end: liveInputTextRef.current.length
+    }
+  }
   const liveInputTerminalHandles = new Set([activeHandle])
   const sent: string[] = []
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
@@ -80,6 +94,7 @@ function createAccessoryInputCommitHarness({
   let commit: AccessoryInputCommitHarness['commit'] | null = null
   let renderer: ReactTestRenderer | null = null
 
+  /** Mounts the real hook in React so callback dependencies follow the production lifecycle. */
   function Harness(): null {
     commit = useTerminalLiveAccessoryInputCommit({
       activeHandle,
@@ -89,6 +104,8 @@ function createAccessoryInputCommitHarness({
       heldLiveInputTextRef,
       liveInputComposingRef,
       liveInputRef,
+      liveInputTextRef,
+      liveInputSelectionRef,
       liveInputTerminalHandles,
       onInteraction: vi.fn(),
       pendingLiveInputHandleRef,
@@ -113,6 +130,7 @@ function createAccessoryInputCommitHarness({
     applyLiveInputMirror,
     flushPendingLiveInputText,
     waitForPendingLiveInputFlush,
+    setLiveInputCapture,
     unmount: () => {
       act(() => renderer?.unmount())
     }
@@ -288,5 +306,45 @@ describe('terminal live accessory input commit hook', () => {
     // Then
     expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', 'a', false)
     expect(result).toEqual({ kind: 'handled' })
+  })
+
+  it.each([
+    ['backspace', { start: 2, end: 2 }, '可你好'],
+    ['delete', { start: 2, end: 2 }, '可是好'],
+    ['backspace', { start: 1, end: 3 }, '可好'],
+    ['delete', { start: 1, end: 3 }, '可好']
+  ] as const)(
+    'edits %s at the native selection instead of the field end',
+    async (localEdit, selection, expected) => {
+      const harness = createAccessoryInputCommitHarness({
+        composing: false,
+        sentText: '可是你好',
+        pendingHandle: 'terminal-a',
+        selection
+      })
+
+      const result = await harness.commit({ bytes: '\x7f', localEdit })
+
+      expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', expected, false)
+      expect(harness.sent).toEqual([])
+      expect(result).toEqual({ kind: 'handled' })
+      harness.unmount()
+    }
+  )
+
+  it('keeps raw smart punctuation in the field and normalizes only the mirror', async () => {
+    const harness = createAccessoryInputCommitHarness({
+      composing: false,
+      fieldText: 'a—b',
+      sentText: 'a--b',
+      pendingHandle: 'terminal-a',
+      selection: { start: 0, end: 0 }
+    })
+
+    await harness.commit({ bytes: '\x1b[3~', localEdit: 'delete' })
+
+    expect(harness.setLiveInputCapture).toHaveBeenCalledWith('—b')
+    expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', '--b', false)
+    harness.unmount()
   })
 })
