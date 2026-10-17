@@ -18,23 +18,41 @@ import type { WorktreeCardController } from './use-worktree-card-controller'
 // Why: pinned repo icon and compact inline badge share this chip shell so both repo cues read as the same affordance.
 function RepoIdentityChip({
   repo,
+  showName = false,
   children
 }: {
   repo: Repo
+  showName?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55"
+          className={cn(
+            'inline-flex shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55',
+            showName ? 'h-4 max-w-24 gap-0.5 px-0.5' : 'size-4'
+          )}
           aria-label={translate(
             'auto.components.sidebar.WorktreeCard.35ccfe2475',
             'Project {{value0}}',
             { value0: repo.displayName }
           )}
         >
-          {children}
+          <span
+            className={cn(
+              'inline-flex shrink-0 items-center justify-center',
+              showName ? 'size-3' : 'size-full'
+            )}
+          >
+            {children}
+          </span>
+          {/* Why: this chip is the only project cue on compact and new cards. */}
+          {showName ? (
+            <span className="min-w-0 truncate text-3xs font-semibold leading-none text-foreground">
+              {repo.displayName}
+            </span>
+          ) : null}
         </span>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
@@ -156,7 +174,7 @@ export function WorktreeCardHeader({
         )}
 
         {showInlineRepoBadge && (
-          <RepoIdentityChip repo={repo!}>
+          <RepoIdentityChip repo={repo!} showName>
             <RepoIconGlyph
               repoIcon={repo!.repoIcon}
               color={resolveRepoHeaderColor(repo!.badgeColor)}
