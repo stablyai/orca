@@ -10,6 +10,7 @@ import {
   type HostAccountLaunchEnv
 } from '../../shared/host-account-launch-env'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 
 const FILE_NAME = 'host-account-launch-env.json'
 
@@ -45,9 +46,13 @@ export function writeOrcadHostAccountLaunchEnv(
 
 export function restoreOrcadHostAccountLaunchEnv(
   runtime: Pick<OrcaRuntimeService, 'restoreHostAccountLaunchEnv'>,
-  userDataPath: string
+  userDataPath: string,
+  isWslHost: () => boolean = isWslHostOrcadProcess
 ): void {
-  runtime.restoreHostAccountLaunchEnv(readOrcadHostAccountLaunchEnv(userDataPath), (launchEnv) =>
-    writeOrcadHostAccountLaunchEnv(userDataPath, launchEnv)
+  runtime.restoreHostAccountLaunchEnv(
+    readOrcadHostAccountLaunchEnv(userDataPath),
+    (launchEnv) => writeOrcadHostAccountLaunchEnv(userDataPath, launchEnv),
+    // Why only a WSL host: only there does a desktop push accounts, so only there can one be awaited.
+    { expectDesktopPush: isWslHost() }
   )
 }
