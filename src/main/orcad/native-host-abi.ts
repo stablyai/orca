@@ -163,6 +163,11 @@ export function parseMissingSharedLibrary(loaderError: string): string | null {
   if (elf) {
     return elf[1]
   }
+  // musl's loader (Alpine) words it differently.
+  const musl = loaderError.match(/Error loading shared library ([\w.+-]+\.so[\w.]*)/)
+  if (musl) {
+    return musl[1]
+  }
   const machO = loaderError.match(/Library not loaded:\s*(\S+)/)
   return machO ? machO[1] : null
 }
