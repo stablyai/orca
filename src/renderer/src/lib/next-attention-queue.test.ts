@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import type { AttentionOrderWorkspace } from '@/components/sidebar/attention-order-workspaces'
 import { buildAttentionQueue, type AttentionTarget } from './next-attention-queue'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
@@ -116,7 +116,14 @@ function brief(queue: AttentionTarget[]): string[] {
   )
 }
 
-const order = (...ids: string[]) => ids.map((id) => ({ id, identityHostId: 'local' as const }))
+function workspace(
+  id: string,
+  overrides: Partial<AttentionOrderWorkspace> = {}
+): AttentionOrderWorkspace {
+  return { id, identityHostId: 'local', isUnread: false, lastActivityAt: 0, ...overrides }
+}
+
+const order = (...ids: string[]) => ids.map((id) => workspace(id))
 
 describe('buildAttentionQueue', () => {
   it('lists workspaces in sidebar order and panes in layout order', () => {
@@ -212,37 +219,16 @@ describe('buildAttentionQueue', () => {
     expect(brief(buildAttentionQueue(state, order('a'), NOW))).toEqual([`a/pane/ta/${LEAF_2}`])
   })
 
-  it('reads the unread flag of the folder workspace on the matching host', () => {
-    const folder = (
-      id: string,
-      executionHostId: FolderWorkspace['executionHostId'],
-      isUnread: boolean
-    ): FolderWorkspace => ({
-      id,
-      projectGroupId: 'g',
-      name: id,
-      folderPath: `/tmp/${id}`,
-      connectionId: null,
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread,
-      isPinned: false,
-      sortOrder: 0,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1,
-      ...(executionHostId ? { executionHostId } : {})
-    })
-    const state = makeState({
-      folderWorkspaces: [folder('f', undefined, false), folder('f', 'runtime:box', true)]
-    })
-
+  it('reads the unread flag of the ordered row on its own host', () => {
     const queue = buildAttentionQueue(
-      state,
+      makeState({}),
       [
-        { id: 'folder:f', identityHostId: 'local', executionHostId: 'local' },
-        { id: 'folder:f', identityHostId: 'runtime:box', executionHostId: 'runtime:box' }
+        workspace('folder:f', { executionHostId: 'local' }),
+        workspace('folder:f', {
+          identityHostId: 'runtime:box',
+          executionHostId: 'runtime:box',
+          isUnread: true
+        })
       ],
       NOW
     )
@@ -334,15 +320,14 @@ describe('buildAttentionQueue', () => {
 
   it('falls back to the workspace for a manual unread flag only when nothing finer exists', () => {
     const state = makeState({
-      worktreesByRepo: {
-        'repo-1': [worktree('a', { isUnread: true }), worktree('b', { isUnread: true })]
-      },
+      worktreesByRepo: { 'repo-1': [worktree('a'), worktree('b')] },
       tabsByWorktree: { b: [terminalTab('tb', 'b')] },
       terminalLayoutsByTabId: { tb: split() },
       unreadAgentCompletionPanes: { [`tb:${LEAF_1}`]: 'agent-completion' }
     })
+    const unread = [workspace('a', { isUnread: true }), workspace('b', { isUnread: true })]
 
-    expect(brief(buildAttentionQueue(state, order('a', 'b'), NOW))).toEqual([
+    expect(brief(buildAttentionQueue(state, unread, NOW))).toEqual([
       'a/workspace',
       `b/pane/tb/${LEAF_1}`
     ])
@@ -360,33 +345,18 @@ describe('buildAttentionQueue', () => {
     ])
   })
 
-  it('finds the unread flag of a host-less workspace when a runtime host is focused', () => {
-    const state = makeState({
-      worktreesByRepo: { 'repo-1': [worktree('a', { isUnread: true })] },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host focus reads only this setting.
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
-    })
-
-    const queue = buildAttentionQueue(state, [{ id: 'a', identityHostId: 'runtime:env-1' }], NOW)
-
-    expect(brief(queue)).toEqual(['a/workspace'])
-  })
-
   it('keeps same-id workspaces on two hosts apart', () => {
     const state = makeState({
       worktreesByRepo: {
-        'repo-1': [
-          worktree('a', { hostId: 'local', isUnread: true }),
-          worktree('a', { hostId: 'ssh:box', isUnread: true })
-        ]
+        'repo-1': [worktree('a', { hostId: 'local' }), worktree('a', { hostId: 'ssh:box' })]
       }
     })
 
     const queue = buildAttentionQueue(
       state,
       [
-        { id: 'a', identityHostId: 'local', executionHostId: 'local' },
-        { id: 'a', identityHostId: 'ssh:box', executionHostId: 'ssh:box' }
+        workspace('a', { executionHostId: 'local', isUnread: true }),
+        workspace('a', { identityHostId: 'ssh:box', executionHostId: 'ssh:box', isUnread: true })
       ],
       NOW
     )
@@ -406,8 +376,8 @@ describe('buildAttentionQueue', () => {
     const queue = buildAttentionQueue(
       state,
       [
-        { id: 'a', identityHostId: 'local', executionHostId: 'local' },
-        { id: 'a', identityHostId: 'ssh:box', executionHostId: 'ssh:box' }
+        workspace('a', { executionHostId: 'local' }),
+        workspace('a', { identityHostId: 'ssh:box', executionHostId: 'ssh:box' })
       ],
       NOW
     )
