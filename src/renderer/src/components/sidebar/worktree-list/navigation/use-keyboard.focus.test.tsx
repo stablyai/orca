@@ -10,6 +10,8 @@ import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-foc
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
 const state = {
+  clearPendingRevealSidebarRow: vi.fn(),
+  clearPendingRevealWorktreeId: vi.fn(),
   keybindings: undefined,
   activeView: 'terminal',
   activeTabType: 'terminal',

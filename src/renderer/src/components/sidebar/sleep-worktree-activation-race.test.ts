@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const state = {
     activeWorktreeId: null as string | null,
+    clearPendingRevealSidebarRow: vi.fn(),
+    clearPendingRevealWorktreeId: vi.fn(),
     setActiveWorktree: vi.fn((worktreeId: string | null) => {
       state.activeWorktreeId = worktreeId
     }),

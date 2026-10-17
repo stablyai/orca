@@ -2,7 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
-  activateAndRevealWorktree: vi.fn()
+  activateAndRevealWorktree: vi.fn(),
+  clearPendingRevealSidebarRow: vi.fn(),
+  clearPendingRevealWorktreeId: vi.fn()
+}))
+
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({
+      clearPendingRevealSidebarRow: mocks.clearPendingRevealSidebarRow,
+      clearPendingRevealWorktreeId: mocks.clearPendingRevealWorktreeId
+    })
+  }
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -16,6 +27,8 @@ describe('sidebar worktree activation', () => {
   beforeEach(() => {
     mocks.activateAndRevealWorktree.mockClear()
     mocks.activateAndRevealFolderWorkspace.mockClear()
+    mocks.clearPendingRevealSidebarRow.mockClear()
+    mocks.clearPendingRevealWorktreeId.mockClear()
   })
 
   afterEach(() => {
@@ -30,6 +43,19 @@ describe('sidebar worktree activation', () => {
       revealInSidebar: false
     })
     expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
+  })
+
+  it('cancels pending sidebar reveals before activating the selected workspace', async () => {
+    await activateWorktreeFromSidebar('wt-pinned')
+
+    expect(mocks.clearPendingRevealWorktreeId).toHaveBeenCalledOnce()
+    expect(mocks.clearPendingRevealSidebarRow).toHaveBeenCalledOnce()
+    expect(mocks.clearPendingRevealWorktreeId.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateAndRevealWorktree.mock.invocationCallOrder[0]
+    )
+    expect(mocks.clearPendingRevealSidebarRow.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateAndRevealWorktree.mock.invocationCallOrder[0]
+    )
   })
 
   it('does not defer non-VM slept worktree selection behind terminal wake work', async () => {
@@ -72,7 +98,8 @@ describe('sidebar worktree activation', () => {
     await activateWorktreeFromSidebar('folder:folder-workspace-1')
 
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
-      navigationIntent: 'user-open'
+      navigationIntent: 'user-open',
+      revealInSidebar: false
     })
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
