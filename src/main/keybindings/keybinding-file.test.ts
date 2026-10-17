@@ -2,7 +2,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { LEGACY_TAB_SWITCH_BINDINGS } from '../../shared/keybindings'
+import {
+  getEffectiveKeybindingsForAction,
+  LEGACY_TAB_SWITCH_BINDINGS
+} from '../../shared/keybindings'
 import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
@@ -90,6 +93,110 @@ describe('keybinding-file', () => {
       },
       diagnostics: []
     })
+  })
+
+  describe.each(['darwin', 'linux', 'win32'] as const)(
+    'command palette defaults on %s',
+    (platform) => {
+      it.each(['root', 'common', 'platform'] as const)(
+        'preserves an existing F1 shortcut in the %s section without rewriting the file',
+        (section) => {
+          const bindings = { 'editor.nextChange': ['f1'] }
+          const documents = {
+            root: bindings,
+            common: { keybindings: bindings },
+            platform: { platforms: { [platform]: bindings } }
+          }
+          const contents = JSON.stringify(documents[section])
+          writeFileSync(filePath, contents, 'utf8')
+
+          const snapshot = readKeybindingFile(filePath, platform)
+
+          expect(snapshot.overrides).toEqual({ 'editor.nextChange': ['F1'] })
+          expect(snapshot.diagnostics).toEqual([])
+          expect(
+            getEffectiveKeybindingsForAction('editor.commandPalette', platform, snapshot.overrides)
+          ).toEqual([])
+          expect(readFileSync(filePath, 'utf8')).toBe(contents)
+        }
+      )
+
+      it('allows assigning F1 in Settings and restores the palette default after reset', () => {
+        const assigned = writeKeybindingOverride(filePath, platform, 'editor.nextChange', ['F1'])
+
+        expect(assigned.overrides).toEqual({ 'editor.nextChange': ['F1'] })
+        expect(assigned.diagnostics).toEqual([])
+        expect(
+          getEffectiveKeybindingsForAction('editor.commandPalette', platform, assigned.overrides)
+        ).toEqual([])
+
+        const reset = writeKeybindingOverride(filePath, platform, 'editor.nextChange', null)
+
+        expect(reset.overrides).toEqual({})
+        expect(reset.diagnostics).toEqual([])
+        expect(
+          getEffectiveKeybindingsForAction('editor.commandPalette', platform, reset.overrides)
+        ).toEqual(['F1'])
+      })
+
+      it.each([{ bindings: [] }, { bindings: ['F2'] }])(
+        'preserves an explicit palette binding of $bindings alongside an editor F1 shortcut',
+        ({ bindings }) => {
+          writeKeybindingOverride(filePath, platform, 'editor.commandPalette', bindings)
+          const snapshot = writeKeybindingOverride(filePath, platform, 'editor.nextChange', ['F1'])
+
+          expect(snapshot.diagnostics).toEqual([])
+          expect(snapshot.overrides['editor.nextChange']).toEqual(['F1'])
+          expect(
+            getEffectiveKeybindingsForAction('editor.commandPalette', platform, snapshot.overrides)
+          ).toEqual(bindings)
+        }
+      )
+
+      it('still rejects a conflict when the user explicitly assigns F1 to the palette', () => {
+        writeKeybindingOverride(filePath, platform, 'editor.commandPalette', ['F1'])
+
+        expect(() =>
+          writeKeybindingOverride(filePath, platform, 'editor.nextChange', ['F1'])
+        ).toThrow('conflicts with another shortcut')
+      })
+
+      it.each([
+        { actionId: 'fileExplorer.delete', binding: 'F1' },
+        { actionId: 'editor.previousChange', binding: 'Shift+F1' }
+      ] as const)('keeps palette F1 when $actionId uses $binding', ({ actionId, binding }) => {
+        const snapshot = writeKeybindingOverride(filePath, platform, actionId, [binding])
+
+        expect(snapshot.diagnostics).toEqual([])
+        expect(snapshot.overrides[actionId]).toEqual([binding])
+        expect(
+          getEffectiveKeybindingsForAction('editor.commandPalette', platform, snapshot.overrides)
+        ).toEqual(['F1'])
+      })
+    }
+  )
+
+  it('uses the active platform override when deciding whether editor F1 is available', () => {
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        keybindings: { 'editor.nextChange': ['F1'] },
+        platforms: { linux: { 'editor.nextChange': ['F2'] } }
+      }),
+      'utf8'
+    )
+
+    const linux = readKeybindingFile(filePath, 'linux')
+    const darwin = readKeybindingFile(filePath, 'darwin')
+
+    expect(linux.overrides).toEqual({ 'editor.nextChange': ['F2'] })
+    expect(darwin.overrides).toEqual({ 'editor.nextChange': ['F1'] })
+    expect(
+      getEffectiveKeybindingsForAction('editor.commandPalette', 'linux', linux.overrides)
+    ).toEqual(['F1'])
+    expect(
+      getEffectiveKeybindingsForAction('editor.commandPalette', 'darwin', darwin.overrides)
+    ).toEqual([])
   })
 
   it('preserves valid plugin overrides while rejecting malformed plugin action IDs', () => {
