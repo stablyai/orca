@@ -1,5 +1,6 @@
 import type { Worker } from 'node:worker_threads'
 import type { SttEvent } from './stt-service'
+import { describeSttNativeLoadError } from './stt-native-load-error'
 
 export function waitForSttWorkerReady(worker: Worker, timeoutMs: number): Promise<void> {
   const { promise, resolve, reject } = Promise.withResolvers<void>()
@@ -31,7 +32,9 @@ export function waitForSttWorkerReady(worker: Worker, timeoutMs: number): Promis
       cleanup()
       resolve()
     } else if (message.type === 'error') {
-      failStartup(new Error(message.error ?? 'Speech worker failed to initialize'))
+      failStartup(
+        new Error(describeSttNativeLoadError(message.error ?? 'Speech worker failed to initialize'))
+      )
     }
   }
   const onStartupError = (error: Error): void => failStartup(error)
