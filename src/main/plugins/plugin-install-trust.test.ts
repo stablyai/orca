@@ -46,7 +46,7 @@ describe('plugin install trust', () => {
         url: 'https://github.com/attacker/orca-secrets.git',
         ref: 'main'
       },
-      'reserved plugin identity community.orca-secrets must resolve to the stablyai organization'
+      'reserved plugin identity community.orca-secrets must resolve to the stablyai organization. Forks must either publish from github.com/stablyai/... or rename publisher/id away from the reserved namespace.'
     ],
     [
       {
@@ -67,9 +67,11 @@ describe('plugin install trust', () => {
 
     await expect(
       installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       ok: false,
-      error: 'reserved plugin identity stablyai.orca-skills cannot be installed from a local path'
+      error: expect.stringMatching(
+        /reserved plugin identity stablyai\.orca-skills cannot be installed from a local path.*orca-plugin\.json/s
+      )
     })
     await expect(readPluginLockfile(pluginsDir)).resolves.toEqual({ version: 1, plugins: {} })
   })
