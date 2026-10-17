@@ -10,6 +10,12 @@ import ProjectRoadmap from './ProjectRoadmap'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { ProjectMissingRepoDialog } from './ProjectMissingRepoDialog'
 import { ProjectViewToolbar } from './ProjectViewToolbar'
+import { ProjectViewMenu } from './ProjectViewMenu'
+import {
+  applyProjectViewLayoutOverrides,
+  projectViewLayoutScopeKey,
+  useProjectViewLayoutOverrides
+} from './project-view-layout-overrides'
 import {
   ProjectTableSkeleton,
   ProjectViewErrorState,
@@ -39,6 +45,14 @@ export default function ProjectViewWrapper({
     [sourceHostId]
   )
   const tableState = useProjectViewTable(selectedRepoIds, sourceTarget)
+  const { visibleTable } = tableState
+  const layout = useProjectViewLayoutOverrides(
+    visibleTable ? projectViewLayoutScopeKey(visibleTable) : null
+  )
+  const effectiveTable = useMemo(
+    () => (visibleTable ? applyProjectViewLayoutOverrides(visibleTable, layout.overrides) : null),
+    [visibleTable, layout.overrides]
+  )
   const rowActions = useProjectRowActions({
     table: tableState.table,
     currentCacheKey: tableState.currentCacheKey,
@@ -55,7 +69,20 @@ export default function ProjectViewWrapper({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <ProjectViewToolbar tableState={tableState} />
+      <ProjectViewToolbar
+        tableState={tableState}
+        viewMenu={
+          visibleTable && effectiveTable ? (
+            <ProjectViewMenu
+              table={visibleTable}
+              effectiveTable={effectiveTable}
+              overrides={layout.overrides}
+              onChange={layout.update}
+              onReset={layout.reset}
+            />
+          ) : null
+        }
+      />
       {tableState.activeProject ? (
         <ProjectViewTabStrip
           views={tableState.views}
@@ -63,7 +90,11 @@ export default function ProjectViewWrapper({
           onPick={(viewId) => void tableState.switchView(viewId)}
         />
       ) : null}
-      <ProjectViewBody tableState={tableState} rowActions={rowActions} />
+      <ProjectViewBody
+        tableState={tableState}
+        effectiveTable={effectiveTable}
+        rowActions={rowActions}
+      />
       <ProjectItemSlugDialog
         projectOrigin={slugOrigin}
         sourceTarget={slugSourceTarget ?? tableState.sourceTarget}
@@ -80,12 +111,15 @@ export default function ProjectViewWrapper({
 
 function ProjectViewBody({
   tableState,
+  effectiveTable,
   rowActions
 }: {
   tableState: ReturnType<typeof useProjectViewTable>
+  /** The visible table with the View menu's local overrides applied. */
+  effectiveTable: ReturnType<typeof useProjectViewTable>['visibleTable']
   rowActions: ReturnType<typeof useProjectRowActions>
 }): React.JSX.Element | null {
-  const { activeProject, error, loading, table, visibleTable } = tableState
+  const { activeProject, error, loading, table } = tableState
   // Keep the board's document drop subscription stable across wrapper renders.
   const { editField } = rowActions
   const onEditField = useCallback(
@@ -122,7 +156,7 @@ function ProjectViewBody({
       />
     )
   }
-  if (visibleTable && rowActions.resolvedDialogRepoItem) {
+  if (effectiveTable && rowActions.resolvedDialogRepoItem) {
     const dialogItem = rowActions.resolvedDialogRepoItem
     return (
       <GitHubItemDialog
@@ -154,12 +188,12 @@ function ProjectViewBody({
       />
     )
   }
-  if (!visibleTable) {
+  if (!effectiveTable) {
     return null
   }
   const list = (
     <ProjectViewList
-      table={visibleTable}
+      table={effectiveTable}
       onOpenDialog={rowActions.openDialog}
       onEditField={onEditField}
       onEditAssignees={(row, add, remove) => void rowActions.editAssignees(row, add, remove)}
@@ -174,17 +208,18 @@ function ProjectViewBody({
       sourceTarget={tableState.sourceTarget}
     />
   )
-  if (visibleTable.selectedView.layout === 'ROADMAP_LAYOUT') {
+  if (effectiveTable.selectedView.layout === 'ROADMAP_LAYOUT') {
     return (
-      <ProjectRoadmap table={visibleTable} onOpenDialog={rowActions.openDialog} fallback={list} />
+      <ProjectRoadmap table={effectiveTable} onOpenDialog={rowActions.openDialog} fallback={list} />
     )
   }
-  if (visibleTable.selectedView.layout === 'BOARD_LAYOUT') {
+  if (effectiveTable.selectedView.layout === 'BOARD_LAYOUT') {
     return (
       <ProjectBoard
-        table={visibleTable}
+        table={effectiveTable}
         onOpenDialog={rowActions.openDialog}
         onEditField={onEditField}
+        sourceTarget={tableState.sourceTarget}
         fallback={list}
       />
     )

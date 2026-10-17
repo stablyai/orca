@@ -33,6 +33,7 @@ function page(views: RawProjectView[], hasNextPage = false) {
   return {
     ok: true as const,
     project: { id: 'project', title: 'Plan', url: 'https://github.acme.test/orgs/acme/projects/1' },
+    projectFields: [],
     views,
     hasNextPage,
     endCursor: hasNextPage ? 'next' : null
@@ -51,6 +52,27 @@ beforeEach(() => {
 })
 
 describe('project view layout selection', () => {
+  it('passes project-level fields through so the View menu can offer hidden fields', async () => {
+    const sprint = {
+      kind: 'iteration' as const,
+      id: 'f_sprint',
+      name: 'Sprint',
+      dataType: 'ITERATION' as const,
+      iterations: []
+    }
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue({
+      ...page([view('board', 'BOARD_LAYOUT')]),
+      projectFields: [sprint]
+    })
+    const result = await getProjectViewTable({ ...args, viewId: 'board' })
+    expect(result).toMatchObject({ ok: true, data: { projectFields: [sprint] } })
+    expect(fetchProjectViewsPage).toHaveBeenCalledWith({
+      ...args,
+      after: null,
+      includeProjectFields: true
+    })
+  })
+
   it('fetches roadmap items with the selected host and filter', async () => {
     vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('roadmap', 'ROADMAP_LAYOUT')]))
     const result = await getProjectViewTable({ ...args, viewId: 'roadmap' })

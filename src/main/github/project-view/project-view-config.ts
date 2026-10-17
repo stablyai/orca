@@ -21,6 +21,7 @@ type RawProjectConfig = {
   id?: string
   title?: string
   url?: string
+  fields?: { nodes?: (RawProjectV2Field | null)[] }
   views?: {
     pageInfo?: { hasNextPage?: boolean; endCursor?: string | null }
     nodes?: (RawProjectView | null)[]
@@ -79,10 +80,14 @@ export async function fetchProjectViewsPage(args: {
   projectNumber: number
   host?: string
   after: string | null
+  /** Project fields are page-independent, so only the first table page asks for them. */
+  includeProjectFields?: boolean
 }): Promise<
   | {
       ok: true
       project: { id: string; title: string; url: string }
+      /** Every project field, including ones the views hide. */
+      projectFields: GitHubProjectField[]
       views: RawProjectView[]
       hasNextPage: boolean
       endCursor: string | null
@@ -92,11 +97,15 @@ export async function fetchProjectViewsPage(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
+  const projectFieldsSelection = args.includeProjectFields
+    ? `fields(first:${FIELDS_PAGE_SIZE}) { nodes { ...FieldConfig } }`
+    : ''
   const buildQuery = (): string => `
     query(${afterVar}$owner:String!, $num:Int!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
           id title url
+          ${projectFieldsSelection}
           views(first:${VIEWS_PAGE_SIZE}${afterArg}) {
             pageInfo { hasNextPage endCursor }
             nodes {
@@ -144,9 +153,17 @@ export async function fetchProjectViewsPage(args: {
   }
   const pageInfo = project.views?.pageInfo
   const views = (project.views?.nodes ?? []).filter((v): v is RawProjectView => v !== null)
+  const projectFields: GitHubProjectField[] = []
+  for (const f of project.fields?.nodes ?? []) {
+    const n = normalizeField(f)
+    if (n) {
+      projectFields.push(n)
+    }
+  }
   return {
     ok: true,
     project: { id: project.id, title: project.title ?? '', url: project.url ?? '' },
+    projectFields,
     views,
     hasNextPage: pageInfo?.hasNextPage === true,
     endCursor: pageInfo?.endCursor ?? null

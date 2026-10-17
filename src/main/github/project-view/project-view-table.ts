@@ -1,6 +1,6 @@
 import type { GetProjectViewTableArgs } from '../../../shared/github/project-request-types'
 import type { GetProjectViewTableResult } from '../../../shared/github/project-result-types'
-import type { GitHubProjectTable } from '../../../shared/github/project-types'
+import type { GitHubProjectField, GitHubProjectTable } from '../../../shared/github/project-types'
 import { githubProjectHost } from '../../../shared/github/project-identity'
 import { isRenderableProjectViewLayout } from '../../../shared/github/project-types'
 import { assertPositiveInt, assertSlug } from './internals'
@@ -37,6 +37,7 @@ export async function getProjectViewTable(
   // Paginate views until a match is found.
   let cursor: string | null = null
   let project: { id: string; title: string; url: string } | null = null
+  let projectFields: GitHubProjectField[] = []
   let selectedRaw: RawProjectView | null = null
   let matchStrength: 'id' | 'number' | 'name' | 'default' | null = null
   const viewsSeen: RawProjectView[] = []
@@ -46,12 +47,16 @@ export async function getProjectViewTable(
       ownerType: args.ownerType,
       projectNumber: args.projectNumber,
       host: args.host,
-      after: cursor
+      after: cursor,
+      ...(cursor === null ? { includeProjectFields: true } : {})
     })
     if (!page.ok) {
       return { ok: false, error: page.error }
     }
     project = page.project
+    if (projectFields.length === 0) {
+      projectFields = page.projectFields
+    }
     for (const v of page.views) {
       viewsSeen.push(v)
       const m = matchesSelector(v, {
@@ -171,6 +176,7 @@ export async function getProjectViewTable(
       url: project.url
     },
     selectedView,
+    ...(projectFields.length > 0 ? { projectFields } : {}),
     rows: items.rows,
     totalCount: items.totalCount,
     parentFieldDropped: items.parentFieldDropped

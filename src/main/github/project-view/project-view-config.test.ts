@@ -140,6 +140,47 @@ describe('verticalGroupByFields capability fallback', () => {
   })
 })
 
+describe('project-level fields', () => {
+  it('queries and normalizes every project field, skipping unreadable nodes', async () => {
+    const page = okPage()
+    vi.mocked(runGraphql).mockResolvedValueOnce({
+      ...page,
+      data: {
+        organization: {
+          projectV2: {
+            ...page.data.organization.projectV2,
+            fields: {
+              nodes: [
+                null,
+                {
+                  __typename: 'ProjectV2SingleSelectField',
+                  id: 'f_priority',
+                  name: 'Priority',
+                  dataType: 'SINGLE_SELECT',
+                  options: [{ id: 'p_high', name: 'High', color: 'RED' }]
+                }
+              ]
+            }
+          }
+        }
+      }
+    })
+    const result = await fetchProjectViewsPage({ ...args, includeProjectFields: true })
+    expect(vi.mocked(runGraphql).mock.calls[0]?.[0]).toMatch(/id title url\s+fields\(first:50\)/)
+    expect(result).toMatchObject({
+      ok: true,
+      projectFields: [{ kind: 'single-select', id: 'f_priority', name: 'Priority' }]
+    })
+  })
+
+  it('leaves project fields out of the query unless asked, as the view tab listing does', async () => {
+    vi.mocked(runGraphql).mockResolvedValueOnce(okPage())
+    const result = await fetchProjectViewsPage(args)
+    expect(vi.mocked(runGraphql).mock.calls[0]?.[0]).not.toMatch(/id title url\s+fields\(/)
+    expect(result).toMatchObject({ ok: true, projectFields: [] })
+  })
+})
+
 describe('finalizeView verticalGroupByFields normalization', () => {
   const base: RawProjectView = {
     id: 'PVTV_1',
