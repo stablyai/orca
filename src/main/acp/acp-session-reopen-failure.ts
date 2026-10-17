@@ -1,18 +1,16 @@
 // What takes over when an ACP agent cannot reopen the session a chat proved. A session this chat
-// created and never exchanged a turn on, which the agent says it does not hold, is superseded:
-// there was nothing to remember. Any other is replaced by a new session that names it, and the
-// chat says once that the agent forgot: the row names the lost conversation, so a later start
-// can tell whether it was ever written.
+// created and never exchanged a turn on is superseded, whatever the load error: there was nothing
+// to remember. Any other is replaced by a new session that names it, and the chat says once that
+// the agent forgot: the row names the lost conversation, so a later start can tell whether it was
+// ever written.
 
 import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import { AcpAuthRequiredError, AcpRpcError } from './acp-errors'
+import { AcpAuthRequiredError } from './acp-errors'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 
-/** ACP's "resource not found": the agent holds no session under the id this chat proved. */
-const ACP_RESOURCE_NOT_FOUND = -32002
 export const ACP_REOPEN_FAILED = 'ACP agent could not reopen its saved session; starting a new one'
 
 /** The fields the new session's link carries; rethrows `error` when the start must fail instead. */
@@ -25,11 +23,8 @@ export function acpReopenTakeover(
   if (error instanceof AcpAuthRequiredError || start.over) {
     throw error
   }
-  if (
-    error instanceof AcpRpcError &&
-    error.code === ACP_RESOURCE_NOT_FOUND &&
-    resume.mayBeUnsaved()
-  ) {
+  // Why: any error, or an agent whose load always fails would grow the chain on every start.
+  if (resume.mayBeUnsaved()) {
     return { supersedesKey: resume.key }
   }
   start.warn({ scope: 'acp-restore-failed', error })

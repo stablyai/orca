@@ -22,6 +22,7 @@ import { AGENT_SESSION_CLAIM_KEY_RETENTION_MS } from './agent-session-claim-key-
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 import {
+  agentSessionProviderHandleKey,
   claudeProviderHandle,
   codexProviderHandle
 } from '../../shared/agent-session-provider-handle-encoding'
@@ -108,7 +109,8 @@ async function open(hostId = 'local'): Promise<AgentSessionRecordStore> {
 /** Reserve, observe the spawn, prove the handle — the full path to an admitted writer. */
 async function establishOwner(
   store: AgentSessionRecordStore,
-  overrides: Partial<AgentSessionReserveRequest> = {}
+  overrides: Partial<AgentSessionReserveRequest> = {},
+  link: (fence: number) => Partial<AgentSessionProviderHandleLink> = () => ({})
 ): Promise<AgentSessionRecord> {
   const reserved = await store.reserveOwner(reserveRequest(overrides))
   const fence = reserved.record.lease.runtimeFence
@@ -122,7 +124,7 @@ async function establishOwner(
   return store.proveOwner({
     sessionId,
     fence,
-    link: handleLink({ mintedAtFence: fence }),
+    link: handleLink({ mintedAtFence: fence, ...link(fence) }),
     now: NOW
   })
 }
@@ -793,4 +795,47 @@ describe('claim keys and unreadable rows', () => {
       }
     })
   })
+})
+
+describe('reopening a chat many times', () => {
+  const grok = (nativeId: string) => ({ transport: 'acp' as const, agent: 'grok', nativeId })
+
+  /** One open of the chat: its last owner has exited, and a new process proves `nativeId`. */
+  async function reopen(store: AgentSessionRecordStore, nativeId: string, lost?: string) {
+    const fence = store.getRecord('session-alpha')?.lease.runtimeFence ?? null
+    const reserve: Partial<AgentSessionReserveRequest> = {
+      provider: 'grok',
+      accountHome: { variable: 'GROK_HOME', path: '/home/dev/.grok' },
+      expectedFence: fence,
+      probe: { outcome: 'exit-observed' },
+      spawnToken: `spawn-${fence}`,
+      operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: `fp-${fence}` }
+    }
+    return establishOwner(store, reserve, (minted) => ({
+      linkId: `link-${minted}`,
+      handle: grok(nativeId),
+      origin: fence === null || lost ? 'created' : 'resumed',
+      ...(lost ? { replaces: { key: lost, reason: 'restore-failed', replacedAt: NOW } } : {})
+    }))
+  }
+
+  // Why: each reopen used to append a link, so a chat opened 256 times could never open again.
+  it('still opens past the old 256-link limit, and after a fresh session replaces a lost one', async () => {
+    const store = await open()
+    for (let opened = 0; opened <= 300; opened += 1) {
+      await reopen(store, 's-1')
+    }
+    await reopen(store, 's-2', agentSessionProviderHandleKey(grok('s-1')))
+    const record = await reopen(store, 's-2')
+
+    expect(record.providerHandleChain.map((link) => [link.handle.nativeId, link.origin])).toEqual([
+      ['s-1', 'created'],
+      ['s-1', 'resumed'],
+      ['s-2', 'created'],
+      ['s-2', 'resumed']
+    ])
+    expect((await open()).getRecord('session-alpha')?.providerHandleChain).toEqual(
+      record.providerHandleChain
+    )
+  }, 60_000)
 })

@@ -126,6 +126,7 @@ describe('a saved Grok session Grok cannot reopen', () => {
     )
 
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+    await exchange('remember 42', 'noted', PROVIDER_SESSION)
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
 
@@ -227,8 +228,9 @@ describe('a created Grok session Grok reports missing on the first reopen', () =
 describe('the warning row of a replacement whose attach failed', () => {
   async function replaceThenFailAttach() {
     const opened = await openRestoreRig(-32603, 'session file is corrupt')
-    const { host, store, fence, warnings } = opened
+    const { host, store, fence, warnings, exchange } = opened
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+    await exchange('remember 42', 'noted', PROVIDER_SESSION)
     await host.close(SESSION, 'user-close')
     // The journal's open fails after the fresh session's link is durable, before its row is written.
     vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
@@ -285,20 +287,23 @@ describe('the warning row of a replacement whose attach failed', () => {
 
 describe('a replacement Grok never saved, superseded after its row was written', () => {
   it('keeps the one row: the conversation lost is still the first one', async () => {
-    const { host, fence, loads, lost, warnings } = await openRestoreRig(
+    const { host, store, fence, loads, lost, warnings, exchange } = await openRestoreRig(
       -32603,
       'session file is corrupt'
     )
     expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
+    await exchange('remember 42', 'noted', PROVIDER_SESSION)
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     expect(await warnings()).toHaveLength(1)
     await host.close(SESSION, 'user-close')
-    lost.set(FRESH, { code: -32002, message: 'Resource not found' })
+    // Not "not found": an unused session is superseded whatever the load error.
+    lost.set(FRESH, { code: -32603, message: 'session file is corrupt' })
 
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })
     expect(loads).toEqual([PROVIDER_SESSION, FRESH])
     expect(await warnings()).toHaveLength(1)
+    expect(store.getRecord(SESSION)?.providerHandleChain).toHaveLength(2)
     // The newer session carries the same loss, so reopening it says nothing new.
     await host.close(SESSION, 'user-close')
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({ ok: true })

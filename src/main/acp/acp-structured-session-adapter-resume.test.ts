@@ -348,7 +348,6 @@ describe('reattaching a Grok chat the journal holds', () => {
 
   it.each([
     ['a saved session', false, -32603, 'session file is corrupt'],
-    ['a created session that fails for another reason', true, -32603, 'session file is corrupt'],
     ['a saved session the agent reports missing', false, -32002, 'Resource not found']
   ])(
     'continues %s it cannot reopen in a new one, says so once, and keeps working',
