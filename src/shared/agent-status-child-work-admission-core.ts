@@ -208,7 +208,11 @@ function mergeObservationFacts(
     name: said.name ?? prior?.name,
     description: said.description ?? prior?.description,
     agentType: said.agentType ?? prior?.agentType,
-    model: said.model ?? prior?.model,
+    model:
+      said.model ??
+      (said.agentType === undefined || said.agentType === prior?.agentType
+        ? prior?.model
+        : undefined),
     residency: said.residency ?? prior?.residency,
     // Cumulative, so a late or duplicate frame never shrinks it.
     totalTokens:
