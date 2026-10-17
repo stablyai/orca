@@ -73,6 +73,20 @@ describe('ModelManager', () => {
     }
   })
 
+  it('does not report x64-only local model states on Windows ARM64', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-arm64-'))
+    try {
+      const manager = new ModelManager(dir)
+      const states = await manager.getModelStates('win32', 'arm64')
+
+      expect(states.map((state) => state.id)).toEqual(
+        SPEECH_MODEL_CATALOG.filter((model) => model.provider === 'openai').map((model) => model.id)
+      )
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('verifies downloaded model file hashes before installation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
@@ -125,7 +139,8 @@ describe('ModelManager', () => {
         })
       const verifyMock = vi.spyOn(internals, 'verifyFileSha256').mockResolvedValue()
 
-      await manager.downloadModel(manifest.id)
+      // Why: exercise installation independently of the ARM64 platform guard.
+      await manager.downloadModel(manifest.id, 'win32', 'x64')
 
       const modelDir = manager.getModelDir(manifest.id)
       expect(downloadMock).toHaveBeenCalledTimes(manifest.downloadFiles?.length ?? 0)
@@ -262,7 +277,8 @@ describe('ModelManager', () => {
       netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir)
 
-      const download = manager.downloadModel(manifest.id)
+      // Why: pin x64 so cancellation is tested even on Windows ARM64 hosts.
+      const download = manager.downloadModel(manifest.id, 'win32', 'x64')
       manager.cancelDownload(manifest.id)
       await expect(download).resolves.toBeUndefined()
 

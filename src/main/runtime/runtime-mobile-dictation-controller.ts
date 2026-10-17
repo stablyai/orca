@@ -1,5 +1,7 @@
 import { getDefaultVoiceSettings } from '../../shared/constants'
+import { getCatalogModel, isLocalSpeechModel } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import { assertLocalSpeechRecognitionSupported } from '../speech/speech-platform-support'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type MobileDictationSession = {
@@ -32,6 +34,13 @@ export class RuntimeMobileDictationController {
     const modelId = params.modelId || voice.sttModel
     if (!modelId) {
       throw new Error('voice_model_not_selected')
+    }
+    const manifest = getCatalogModel(modelId)
+    if (!manifest) {
+      throw new Error('voice_model_unknown')
+    }
+    if (isLocalSpeechModel(manifest)) {
+      assertLocalSpeechRecognitionSupported()
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
     if (modelState.status !== 'ready') {
