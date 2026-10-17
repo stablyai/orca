@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-16T17:54:19.281Z",
+  "platform": "linux",
+  "command": ["claude", "--model", "haiku", "--settings", "{\"disableAllHooks\":true}"],
+  "cols": 100,
+  "rows": 30,
+  "note": "Claude Code 2.1.301; one submitted turn, then idle at an empty input line; workspace path redacted to ~/Code/example",
+  "exitCode": 129
+}

@@ -34,15 +34,19 @@ export function nativeChatLaunchDraftTurnBaseline(
 // host's JSONL clock can trail the renderer's. Only a turn whose own timestamp
 // puts it before the seed by more than the cross-host slack is treated as
 // pre-existing history (a resumed session, or a `load earlier` page).
+// A draft read off the input line can follow any number of turns, so only the baseline applies.
 export function launchDraftResolvedByTranscript(
-  entry: Pick<NativeChatLaunchDraft, 'createdAt'>,
+  entry: Pick<NativeChatLaunchDraft, 'createdAt' | 'fromTerminal'>,
   messages: NativeChatMessage[],
   baseline?: NativeChatLaunchDraftTurnBaseline | null
 ): boolean {
   const provablyOlder = (message: NativeChatMessage): boolean =>
     message.timestamp !== null &&
     message.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS < entry.createdAt
-  if (messages.some((message) => message.role === 'user' && !provablyOlder(message))) {
+  if (
+    !entry.fromTerminal &&
+    messages.some((message) => message.role === 'user' && !provablyOlder(message))
+  ) {
     return true
   }
   // Backstop for host clock skew wider than the slack: the transcript grew a new

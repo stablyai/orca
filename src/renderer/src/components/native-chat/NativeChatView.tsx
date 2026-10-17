@@ -42,6 +42,7 @@ function NativeChatBridgeView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
+  readTerminalDraft,
   contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
@@ -70,6 +71,7 @@ function NativeChatBridgeView({
             ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
             onSwitchToTerminal={onSwitchToTerminal}
             readTerminalScreen={readTerminalScreen}
+            readTerminalDraft={readTerminalDraft}
             contextMenuActions={contextMenuActions}
           />
         </NativeChatFileLinkExistenceProvider>

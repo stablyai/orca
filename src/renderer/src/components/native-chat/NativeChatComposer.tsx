@@ -90,6 +90,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       launchDraft: launchSeed?.launchDraft,
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
       ownsTabWideLaunchDraft: launchSeed?.ownsTabWideLaunchDraft === true,
+      readTerminalDraft: launchSeed?.readTerminalDraft,
       draft,
       setDraft,
       setCaret

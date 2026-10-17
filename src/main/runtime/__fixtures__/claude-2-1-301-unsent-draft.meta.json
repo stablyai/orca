@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-16T17:40:21.698Z",
+  "platform": "linux",
+  "command": ["claude"],
+  "cols": 100,
+  "rows": 30,
+  "note": "Claude Code 2.1.301; one long line typed into the input box and left unsent, wrapping at 100 cols; workspace path redacted to ~/Code/example",
+  "exitCode": 129
+}

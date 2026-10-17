@@ -15,6 +15,8 @@ import {
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
+import { agentInputLineText } from '../native-chat/native-chat-terminal-draft-pickup'
+import { readTerminalCursorLineContext } from '../../../../shared/terminal-cursor-line-context'
 
 export function useTerminalPaneChatState(controller: TerminalPaneTitleController) {
   const {
@@ -247,6 +249,20 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     return pane?.serializeAddon.serialize({ scrollback: 0 }) ?? null
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- managerRef is a stable ref container.
   }, [chatLeafId])
+  const readNativeChatTerminalDraft = useCallback((): string | null => {
+    if (!chatLeafId) {
+      return null
+    }
+    const pane = managerRef.current?.getPanes().find((candidate) => candidate.leafId === chatLeafId)
+    if (!pane) {
+      return null
+    }
+    return agentInputLineText(
+      readTerminalCursorLineContext(pane.terminal, pane.terminal.rows),
+      pane.serializeAddon.serialize({ scrollback: 0 })
+    )
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- managerRef is a stable ref container.
+  }, [chatLeafId])
 
   return {
     setTabPaneExpanded,
@@ -276,7 +292,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     handleToggleNativeChat,
     applyNativeChatLeafRoute,
     switchNativeChatToTerminal,
-    readNativeChatTerminalScreen
+    readNativeChatTerminalScreen,
+    readNativeChatTerminalDraft
   }
 }
 

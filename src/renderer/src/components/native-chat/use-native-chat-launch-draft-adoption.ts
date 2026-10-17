@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
 } from './native-chat-launch-draft-resolution'
+import { planNativeChatTerminalDraftPickup } from './native-chat-terminal-draft-pickup'
 
 /** Select the pane's launch draft and whether the transcript has resolved it. */
 export function useNativeChatLaunchDraftSignal(args: {
@@ -70,7 +72,8 @@ export function useNativeChatLaunchDraftSignal(args: {
  *
  * State machine per seeded draft:
  * - unadopted + not the owning pane → ignore (the seed is keyed by tab; #16695)
- * - unadopted + composer empty      → copy text into the composer, mark adopted
+ * - unadopted + composer empty, or holding the copy this seed replaces
+ *                                   → copy text into the composer, mark adopted
  * - unadopted + composer in use     → mark adopted without copying (never stomp)
  * - resolved by transcript          → clear the composer copy while it is still
  *                                     the untouched seed text, and drop the seed
@@ -86,7 +89,9 @@ export function useNativeChatLaunchDraftAdoption(args: {
   /** This pane is the tab-wide evidence's owner (`nativeChatLeafOwnsTabWideEvidence`).
    *  Splitting drops it for every pane, so it gates pickup, never cleanup. */
   ownsTabWideLaunchDraft: boolean
+  readTerminalDraft?: () => string | null
 }): void {
+  useNativeChatTerminalDraftPickup(args)
   const {
     terminalTabId,
     agent,
@@ -127,7 +132,7 @@ export function useNativeChatLaunchDraftAdoption(args: {
     // Mark adopted before copying so a composer that already holds user text
     // declines the seed permanently instead of resurrecting it on a later clear.
     useAppStore.getState().markNativeChatLaunchDraftAdopted(terminalTabId)
-    if (draft === '') {
+    if (draft === '' || draft === launchDraft.replacesText) {
       // Not saved untouched: after a reload no seed is left to replace the copy in the input line.
       setDraft(launchDraft.text, { unsaved: true })
       setCaret(launchDraft.text.length)
@@ -142,4 +147,37 @@ export function useNativeChatLaunchDraftAdoption(args: {
     setDraft,
     terminalTabId
   ])
+}
+
+/**
+ * Seed text the user left unsent on the agent's input line as the tab's launch draft, so the
+ * composer shows it and a send replaces it instead of gluing onto it (#29775).
+ */
+export function useNativeChatTerminalDraftPickup(args: {
+  terminalTabId: string
+  agent: string
+  ownsTabWideLaunchDraft: boolean
+  readTerminalDraft?: () => string | null
+}): void {
+  useEffect(() => {
+    const { terminalTabId, agent, readTerminalDraft } = args
+    // The seed is keyed by tab, so only its owning pane may read one into it (#16695).
+    if (!args.ownsTabWideLaunchDraft || !readTerminalDraft || !isTuiAgent(agent)) {
+      return
+    }
+    const state = useAppStore.getState()
+    const plan = planNativeChatTerminalDraftPickup({
+      tabId: terminalTabId,
+      agent,
+      current: state.nativeChatLaunchDraftByTabId[terminalTabId] ?? null,
+      terminalText: readTerminalDraft(),
+      now: Date.now()
+    })
+    if (plan.kind === 'seed') {
+      state.seedNativeChatLaunchDraft(plan.draft)
+    } else if (plan.kind === 'resolve') {
+      state.resolveNativeChatLaunchDraft(terminalTabId, plan.draft)
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Once on entering chat view: a later read could catch a send's own body mid-paste.
+  }, [])
 }
