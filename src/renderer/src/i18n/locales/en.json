@@ -450,7 +450,8 @@
       "port": "Port",
       "pr": "PR",
       "task": "Task",
-      "automation": "Run"
+      "automation": "Run",
+      "repository": "Repository"
     },
     "linearIssue": {
       "createLabel": "Create worktree from Linear issue {{value0}}: {{value1}}",

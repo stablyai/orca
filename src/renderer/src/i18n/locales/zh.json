@@ -270,7 +270,8 @@
       "port": "端口",
       "pr": "PR",
       "task": "任务",
-      "automation": "运行"
+      "automation": "运行",
+      "repository": "仓库"
     },
     "filter": {
       "emptyTitle": "没有结果符合当前筛选条件",

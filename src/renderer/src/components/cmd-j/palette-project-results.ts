@@ -7,6 +7,7 @@ import {
   uniqueNormalizedCmdJPaletteKeywords
 } from './palette-query-tokens'
 import type { PaletteResultQualityClass } from '@/lib/palette-match/match-quality'
+import { getRemoteRepositoryName } from '@/lib/remote-repository-name'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -30,6 +31,8 @@ export type CmdJProjectResult = {
   kind: 'project'
   title: string
   description: string
+  /** Shown on the row so a match on it is explainable; empty when the repo has no remote. */
+  remoteName: string
   rowKey: string
   repo: Repo
   order: number
@@ -106,17 +109,20 @@ function buildCmdJProjectSearchCandidates({
       return
     }
     seenRowKeys.add(target.key)
+    const remoteName = getRemoteRepositoryName(repo)
     candidates.push({
       id: `project:${target.key}`,
       kind: 'project',
       title: target.label,
       description: translate('auto.components.cmd.j.palette.project.results.project', 'Project'),
+      remoteName,
       rowKey: target.key,
       repo: target.repo,
       order: projectGroups.length + repoIndex,
       keywords: uniqueNormalizedCmdJPaletteKeywords([
         target.label,
         repo.displayName,
+        remoteName,
         ...PROJECT_ALIASES
       ])
     })

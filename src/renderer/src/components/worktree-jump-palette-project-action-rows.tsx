@@ -60,6 +60,16 @@ export function WorktreeJumpPaletteProjectRow({
                 {badgeLabel}
               </span>
             </div>
+            {result.kind === 'project' &&
+            result.remoteName &&
+            result.remoteName.toLowerCase() !== result.title.toLowerCase() ? (
+              <div
+                className="mt-1 truncate text-[12px] leading-5 text-muted-foreground/88"
+                title={result.remoteName}
+              >
+                {result.remoteName}
+              </div>
+            ) : null}
           </div>
           {isProject ? (
             <div className="flex shrink-0 items-center gap-1.5">

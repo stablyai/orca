@@ -270,7 +270,8 @@
       "port": "Puerto",
       "pr": "PR",
       "task": "Tarea",
-      "automation": "Corrida"
+      "automation": "Corrida",
+      "repository": "Repositorio"
     },
     "filter": {
       "emptyTitle": "Ningún resultado coincide con el filtro activo",

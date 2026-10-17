@@ -270,7 +270,8 @@
       "port": "ポート",
       "pr": "PR",
       "automation": "実行",
-      "task": "タスク"
+      "task": "タスク",
+      "repository": "リポジトリ"
     },
     "filter": {
       "emptyTitle": "有効なフィルターに一致する結果がありません",

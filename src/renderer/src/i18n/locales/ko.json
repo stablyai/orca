@@ -270,7 +270,8 @@
       "port": "포트",
       "pr": "PR",
       "task": "작업",
-      "automation": "실행"
+      "automation": "실행",
+      "repository": "리포지토리"
     },
     "filter": {
       "emptyTitle": "활성 필터와 일치하는 결과가 없습니다",

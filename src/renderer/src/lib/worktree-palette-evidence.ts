@@ -4,7 +4,9 @@ import {
 } from './palette-match/evidence-composer'
 import { extractWorktreePaletteCommentSnippet } from './worktree-palette-comment-snippet'
 import type { MatchRange } from './palette-match/normalized-text'
+import { getRemoteRepositoryName } from './remote-repository-name'
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
+import type { Repo } from '../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../shared/worktree/types'
 
 /** Chip label kinds the worktree row can render for a supporting-evidence unit. */
@@ -16,6 +18,7 @@ export type PaletteSupportingKind =
   | 'port'
   | 'task'
   | 'automation'
+  | 'repository'
 
 export type WorktreePaletteReviewSource = {
   provider: HostedReviewInfo['provider']
@@ -199,6 +202,18 @@ export function buildWorktreePortEvidence(
       },
       { key: 'process', text: port.processName ?? '', profile: 'structured-label' }
     ]
+  })
+}
+
+/** The project's name on its remote, which its display name need not match. */
+export function buildWorktreeRepositoryEvidence(
+  repo: Pick<Repo, 'gitRemoteIdentity'> | undefined
+): PaletteComposedEvidence | null {
+  return composePaletteEvidence({
+    id: 'repository',
+    kind: 'repository',
+    accessibilityLabel: 'Remote repository',
+    parts: [{ key: 'name', text: getRemoteRepositoryName(repo), profile: 'path' }]
   })
 }
 

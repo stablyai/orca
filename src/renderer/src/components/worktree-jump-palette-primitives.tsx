@@ -330,5 +330,7 @@ export function getPaletteSupportingTextLabel(
       return translate('worktreeJumpPalette.matchLabel.task', 'Task')
     case 'automation':
       return translate('worktreeJumpPalette.matchLabel.automation', 'Automation')
+    case 'repository':
+      return translate('worktreeJumpPalette.matchLabel.repository', 'Repository')
   }
 }
