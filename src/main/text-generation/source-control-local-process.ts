@@ -13,8 +13,9 @@ import {
   setLocalGenerationCancelToken
 } from './source-control-generation-lanes'
 import {
+  generationTimedOutError,
   MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
-  SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+  sourceControlGenerationTimeoutMs
 } from './source-control-generation-limits'
 import type {
   InternalTextGenerationResult,
@@ -173,13 +174,11 @@ export function runLocalSourceControlPlan(input: {
       finalize({ success: false, error: 'Generation canceled.', canceled: true })
     }
     setLocalGenerationCancelToken(laneKey, cancel)
+    const timeoutMs = sourceControlGenerationTimeoutMs(operation)
     timer = setTimeout(() => {
       startTermination()
-      finalize({
-        success: false,
-        error: `Generation timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
-      })
-    }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+      finalize({ success: false, error: generationTimedOutError(plan.label, timeoutMs) })
+    }, timeoutMs)
 
     const onStdoutData = (chunk: Buffer): void => {
       stdoutBytes += chunk.byteLength
