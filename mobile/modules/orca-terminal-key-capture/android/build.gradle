@@ -1,0 +1,19 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcaterminalkeycapture'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcaterminalkeycapture'
+}
+
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+}

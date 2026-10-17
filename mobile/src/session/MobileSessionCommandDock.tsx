@@ -15,6 +15,7 @@ import {
   getTerminalCommandKeyboardType,
   getTerminalLiveInputKeyboardType
 } from '../terminal/terminal-keyboard-type'
+import { TerminalHardwareKeyCapture } from '../terminal/TerminalHardwareKeyCapture'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
@@ -40,6 +41,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     dictationMode,
     bindCommandField,
     handleLiveInputChange,
+    handleLiveInputHardwareKey,
     handleLiveInputKeyPress,
     bindLiveInputField,
     submitLiveInput,
@@ -293,27 +295,32 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               onDictationPressOut={handleDictationPressOut}
               onDictationCancel={cancelDictation}
             />
-            <TextInput
-              ref={bindLiveInputField}
+            <TerminalHardwareKeyCapture
               style={styles.liveInputCapture}
-              value={liveInputCapture}
-              onChange={handleLiveInputChange}
-              onKeyPress={handleLiveInputKeyPress}
-              onSubmitEditing={submitLiveInput}
-              placeholder=""
-              showSoftInputOnFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              smartInsertDelete={false}
-              // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
-              autoComplete="off"
-              keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
-              returnKeyType="default"
-              blurOnSubmit={false}
-              editable={canSend}
-              importantForAutofill="no"
-            />
+              onTerminalKey={handleLiveInputHardwareKey}
+            >
+              <TextInput
+                ref={bindLiveInputField}
+                style={styles.liveInputCapture}
+                value={liveInputCapture}
+                onChange={handleLiveInputChange}
+                onKeyPress={handleLiveInputKeyPress}
+                onSubmitEditing={submitLiveInput}
+                placeholder=""
+                showSoftInputOnFocus
+                autoCapitalize="none"
+                autoCorrect={false}
+                spellCheck={false}
+                smartInsertDelete={false}
+                // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
+                autoComplete="off"
+                keyboardType={getTerminalLiveInputKeyboardType(hostOs())}
+                returnKeyType="default"
+                blurOnSubmit={false}
+                editable={canSend}
+                importantForAutofill="no"
+              />
+            </TerminalHardwareKeyCapture>
           </View>
         ) : (
           <View style={styles.inputBar}>

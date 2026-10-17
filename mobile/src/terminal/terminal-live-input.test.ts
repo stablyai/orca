@@ -67,6 +67,23 @@ describe('terminal live input', () => {
     expect(getTerminalLiveSpecialKeyBytes('a')).toBeNull()
   })
 
+  it.each([
+    ['c', ['ctrl'], '\x03'],
+    ['C', ['ctrl', 'shift'], '\x03'],
+    [' ', ['ctrl'], '\x00'],
+    ['[', ['ctrl'], '\x1b'],
+    ['b', ['alt'], '\x1bb'],
+    ['b', ['alt', 'shift'], '\x1bB'],
+    ['ArrowLeft', ['ctrl'], '\x1b[1;5D'],
+    ['Tab', ['shift'], '\x1b[Z']
+  ] as const)('maps %s with %j to terminal PTY bytes', (key, modifiers, bytes) => {
+    expect(getTerminalLiveSpecialKeyBytes(key, modifiers)).toBe(bytes)
+  })
+
+  it('leaves a printable key with only Shift to the field', () => {
+    expect(getTerminalLiveSpecialKeyBytes('a', ['shift'])).toBeNull()
+  })
+
   it('ignores object prototype names from native key events', () => {
     expect(getTerminalLiveSpecialKeyBytes('constructor')).toBeNull()
     expect(getTerminalLiveSpecialKeyBytes('toString')).toBeNull()
