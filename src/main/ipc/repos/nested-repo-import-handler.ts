@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import { randomUUID } from 'node:crypto'
+import { resolveRepoIdForExistingFolder } from '../../repo-registration-id'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import type { ProjectGroupImportResult } from '../../../shared/project-group-types'
@@ -114,7 +114,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             executionHostId: LOCAL_EXECUTION_HOST_ID
           })
           const repo: Repo = {
-            id: randomUUID(),
+            id: resolveRepoIdForExistingFolder(store, { path: importRepoPath }),
             path: importRepoPath,
             displayName: getRepoName(importRepoPath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,

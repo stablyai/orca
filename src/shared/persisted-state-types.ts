@@ -54,6 +54,14 @@ export type PersistedMobileClientTabSelections = Record<
 >
 
 // ─── Persistence shape ──────────────────────────────────────────────
+export type RemovedRepoIdTombstone = {
+  repoId: string
+  hostId: ExecutionHostId
+  /** `normalizeRuntimePathForComparison` of the repo path at removal. */
+  pathKey: string
+  removedAt: number
+}
+
 export type PersistedState = {
   schemaVersion: number
   repos: Repo[]
@@ -81,6 +89,8 @@ export type PersistedState = {
   retiredWorktreeNamesByRepo?: Record<string, RetiredNameRegistry>
   /** Compacted remote cwd tombstones outlive repo ids, so remove/re-add cannot reissue a path. */
   retiredWorktreeNamesByNamespace?: Record<string, RetiredNameRegistry>
+  /** Ids of removed repos by host + path, so registering the same folder again keeps its id. */
+  removedRepoIdTombstones?: RemovedRepoIdTombstone[]
   /** Per paired device last tab selection by worktree; keeps mobile navigation across host restarts. */
   mobileClientTabSelectionsByDeviceId?: PersistedMobileClientTabSelections
   worktreeMeta: Record<string, WorktreeMeta>

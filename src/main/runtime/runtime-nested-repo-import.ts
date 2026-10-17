@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { resolveRepoIdForExistingFolder } from '../repo-registration-id'
 import { isAbsolute } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
@@ -105,7 +105,7 @@ export class RuntimeNestedRepoImport {
           continue
         }
         const repo: Repo = {
-          id: randomUUID(),
+          id: resolveRepoIdForExistingFolder(store, { path: importRepoPath }),
           path: importRepoPath,
           displayName: getRepoName(importRepoPath),
           badgeColor: DEFAULT_REPO_BADGE_COLOR,

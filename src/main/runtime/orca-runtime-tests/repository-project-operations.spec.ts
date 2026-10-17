@@ -18,6 +18,7 @@ import {
   writeFile
 } from '../orca-runtime-test-mocks.spec'
 import { store } from '../orca-runtime-test-fixtures.spec'
+import type { Repo } from '../../../shared/repo-types'
 
 describe('OrcaRuntimeService', () => {
   it('deduplicates runtime repo paths with Windows/UNC comparison semantics', async () => {
@@ -100,6 +101,55 @@ describe('OrcaRuntimeService', () => {
 
     expect(repo.badgeColor).toBe(DEFAULT_REPO_BADGE_COLOR)
     expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+  })
+
+  it('gives a re-added folder the repo id it had before it was removed', async () => {
+    const added: Repo[] = []
+    const claimRemovedRepoId = vi.fn(() => 'id-before-removal')
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...added],
+      addRepo: (repo: Repo) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id),
+      claimRemovedRepoId
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store stubs only the methods repo registration calls.
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const repo = await runtime.addRepo('/tmp/runtime-readd', 'folder', 'runtime:env-1')
+
+    expect(claimRemovedRepoId).toHaveBeenCalledWith({
+      path: '/tmp/runtime-readd',
+      executionHostId: 'runtime:env-1'
+    })
+    expect(repo.id).toBe('id-before-removal')
+  })
+
+  it('returns the row it added when a readopted id also lives on another host', async () => {
+    const repos: Repo[] = [
+      { id: 'shared-id', path: '/elsewhere', displayName: 'elsewhere', badgeColor: '', addedAt: 1 }
+    ]
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos],
+      addRepo: (repo: Repo) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      claimRemovedRepoId: () => 'shared-id'
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture store stubs only the methods repo registration calls.
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const repo = await runtime.addRepo('/tmp/runtime-readd', 'folder', 'runtime:env-1')
+
+    expect(repo).toMatchObject({
+      id: 'shared-id',
+      path: '/tmp/runtime-readd',
+      executionHostId: 'runtime:env-1'
+    })
   })
 
   it('prepares the runtime worktree root when adding a repo', async () => {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { resolveRepoIdForExistingFolder } from '../repo-registration-id'
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
@@ -6,7 +7,8 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  type ExecutionHostId
+  type ExecutionHostId,
+  getRepoExecutionHostId
 } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
@@ -81,7 +83,7 @@ export class RuntimeRepositoryRegistrationController {
       executionHostId: LOCAL_EXECUTION_HOST_ID
     })
     const repo: Repo = {
-      id: randomUUID(),
+      id: resolveRepoIdForExistingFolder(store, { path, executionHostId }),
       path,
       displayName: displayName?.trim() || getRepoName(path),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
@@ -94,7 +96,15 @@ export class RuntimeRepositoryRegistrationController {
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     this.invalidate(repo.id)
-    return store.getRepo(repo.id) ?? repo
+    // Why not getRepo: a readopted id can also live on another host, and getRepo returns the first.
+    const hostId = getRepoExecutionHostId(repo)
+    return (
+      store
+        .getRepos()
+        .find(
+          (candidate) => candidate.id === repo.id && getRepoExecutionHostId(candidate) === hostId
+        ) ?? repo
+    )
   }
 
   async create(

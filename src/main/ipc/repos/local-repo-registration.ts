@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { resolveRepoIdForExistingFolder } from '../../repo-registration-id'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -106,7 +106,7 @@ export async function addLocalRepoFromPath(
     return { repo: raceWinner, alreadyExisted: true }
   }
   const repo: Repo = {
-    id: randomUUID(),
+    id: resolveRepoIdForExistingFolder(store, { path: resolvedPath }),
     path: resolvedPath,
     displayName: displayName?.trim() || getRepoName(resolvedPath),
     badgeColor: DEFAULT_REPO_BADGE_COLOR,

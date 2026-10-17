@@ -118,6 +118,20 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('repo.path', '/tmp/from-add')
   })
 
+  it('gives a re-added folder the repo id it had before it was removed', async () => {
+    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+    mockStore.claimRemovedRepoId.mockReturnValue('id-before-removal')
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add/packages/web',
+      kind: 'git'
+    })
+
+    // Why the root: removal recorded the stored path, which is the git root, not the picked folder.
+    expect(mockStore.claimRemovedRepoId).toHaveBeenCalledWith({ path: '/tmp/from-add' })
+    expect(result).toHaveProperty('repo.id', 'id-before-removal')
+  })
+
   it('dedupes local git repos:add after canonical root resolution', async () => {
     const existing = {
       id: 'repo-add-existing-root',

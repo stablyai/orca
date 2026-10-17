@@ -166,6 +166,26 @@ describe('projectGroups IPC validation', () => {
     })
   })
 
+  it('gives a re-imported nested repo the id it had before it was removed', async () => {
+    mockStore.createProjectGroup.mockReturnValue(group)
+    await withNestedTree(['service-01'], async (root) => {
+      const repoPath = join(root, 'service-01')
+      mockStore.claimRemovedRepoId.mockReturnValue('id-before-removal')
+
+      await handlers.get('projectGroups:importNested')!(null, {
+        parentPath: root,
+        groupName: 'Platform',
+        projectPaths: [repoPath],
+        mode: 'group'
+      })
+
+      expect(mockStore.claimRemovedRepoId).toHaveBeenCalledWith({ path: repoPath })
+      expect(mockStore.addRepo).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'id-before-removal', path: repoPath })
+      )
+    })
+  })
+
   it('imports selected local linked worktrees as one project rooted at the main worktree', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-nested-linked-worktrees-'))
     try {

@@ -15,6 +15,10 @@ import { mergeProjectHostSetupCompatibilityState } from '../tracking-repos/proje
 import { RepoOrderPersistenceOperations } from '../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../tracking-repos/repo-worktree-pruning'
 import { collectDeregisteredRepoIds } from '../tracking-repos/deregistered-repo-residue'
+import {
+  claimRemovedRepoIdTombstone,
+  recordRemovedRepoIdTombstone
+} from '../tracking-repos/removed-repo-id-tombstones'
 import { retireLocalWorktreeMetadataPruneStateForRepo } from '../../local-worktree-metadata-prune-gate'
 import { hydrateRepo as hydrateRepoOperation } from '../tracking-repos/repo-hydration'
 import { RepoUpdatePersistenceOperations } from '../tracking-repos/repo-update-operations'
@@ -77,10 +81,38 @@ export class RepoLifecycleOperations {
     return getRepoOrderOperations(this).reorderReposForHost(orderedIds, hostId)
   }
 
+  /** Why: clients key saved workspaces by repo id, so a re-registered folder must get its old one. */
+  claimRemovedRepoId(
+    target: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>
+  ): string | null {
+    const state = this[repoLifecycleOperationsContext].runtime.state
+    const claim = claimRemovedRepoIdTombstone(state.removedRepoIdTombstones ?? [], target)
+    if (!claim) {
+      return null
+    }
+    const hostId = getRepoExecutionHostId(target)
+    // Why: an id is unique per host; the tombstone stays so the id can return once it is free.
+    if (state.repos.some((r) => r.id === claim.repoId && getRepoExecutionHostId(r) === hostId)) {
+      return null
+    }
+    state.removedRepoIdTombstones = claim.remaining
+    scheduleSave(this[repoLifecycleOperationsContext].scheduling)
+    return claim.repoId
+  }
+
   removeProjectForHost(id: string, hostId: ExecutionHostId): void {
-    const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
+    const removedRepos = this[repoLifecycleOperationsContext].runtime.state.repos.filter(
       (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
     )
+    const repoRemoved = removedRepos.length > 0
+    for (const removedRepo of removedRepos) {
+      this[repoLifecycleOperationsContext].runtime.state.removedRepoIdTombstones =
+        recordRemovedRepoIdTombstone(
+          this[repoLifecycleOperationsContext].runtime.state.removedRepoIdTombstones ?? [],
+          removedRepo,
+          Date.now()
+        )
+    }
     this[repoLifecycleOperationsContext].runtime.state.repos = this[
       repoLifecycleOperationsContext
     ].runtime.state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))

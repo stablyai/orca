@@ -28,6 +28,7 @@ import {
   normalizeLoadedProjectCatalog
 } from './normalize-loaded-state-collections'
 import { normalizeRetiredNameRegistryMap } from './retired-name-registry-normalization'
+import { normalizeRemovedRepoIdTombstones } from '../tracking-repos/removed-repo-id-tombstones'
 import { hydrateWorktreeMetaAliasProjection } from './worktree-meta-alias-projection'
 
 export function normalizeLoadedProfileState(
@@ -102,6 +103,7 @@ export function normalizeLoadedProfileState(
     retiredWorktreeNamesByNamespace: normalizeRetiredNameRegistryMap(
       parsed.retiredWorktreeNamesByNamespace
     ),
+    removedRepoIdTombstones: normalizeRemovedRepoIdTombstones(parsed.removedRepoIdTombstones),
     sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
       .map(normalizeSshRemotePtyLease)
       .filter((lease): lease is SshRemotePtyLease => lease !== null),
