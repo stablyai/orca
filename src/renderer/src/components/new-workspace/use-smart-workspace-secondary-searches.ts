@@ -150,10 +150,13 @@ export function useSmartWorkspaceSecondarySearches({
   ])
 
   useEffect(() => {
-    if (disabled || !shouldQueryLinear || !linearConnected) {
+    // Why: a saved credential that cannot be decrypted stays connected, but another
+    // search only repeats the failure. Settle a URL read so the row is not left loading.
+    const credentialError = linearStatusRef.current.credentialError
+    if (disabled || !shouldQueryLinear || !linearConnected || Boolean(credentialError)) {
       setLinearIssues([])
       setLinearLoading(false)
-      setSettledLinearUrlQuery(null)
+      setSettledLinearUrlQuery(credentialError && linearUrlIntent ? linearQuery.trim() : null)
       return
     }
     let stale = false

@@ -47,6 +47,9 @@ export type ComposerSourceState = {
   >
   composerNavigationActions: Pick<
     ComposerModel,
-    'handleOpenAgentSettings' | 'handleOpenJiraSettings' | 'folderCreateDisabled'
+    | 'handleOpenAgentSettings'
+    | 'handleOpenJiraSettings'
+    | 'handleOpenLinearSettings'
+    | 'folderCreateDisabled'
   >
 }

@@ -87,6 +87,29 @@ describe('createLinearSlice caching', () => {
     expect(linearStatus).toHaveBeenCalled()
   })
 
+  it('records the Linear decrypt message before status refresh resolves', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+    })
+    linearSearchIssues.mockRejectedValueOnce(error)
+    let credentialErrorWhenStatusRefreshStarted: string | undefined
+    linearStatus.mockImplementation(async () => {
+      credentialErrorWhenStatusRefreshStarted = store.getState().linearStatus.credentialError
+      return {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: error.message
+      }
+    })
+
+    await expect(store.getState().searchLinearIssues('5743', 20)).resolves.toEqual([])
+    expect(credentialErrorWhenStatusRefreshStarted).toBe(error.message)
+    expect(store.getState().linearStatus.connected).toBe(true)
+  })
+
   it('returns an empty list and refreshes status on Linear decrypt errors during searches', async () => {
     const store = createTestStore()
     const error = new Error(credentialDecryptionMessage('Linear'))

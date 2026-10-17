@@ -15,6 +15,7 @@ type ComposerNavigationActionsInput = Pick<
 >
 
 import { useCallback } from 'react'
+import { openLinearIntegrationSettings } from '@/components/new-workspace/open-linear-integration-settings'
 import { getTaskSourceRuntimeSettings } from '../../../../shared/task-source-context'
 
 export function useComposerNavigationActions(input: ComposerNavigationActionsInput) {
@@ -58,6 +59,26 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
     smartNameJiraSourceContext
   ])
 
+  const handleOpenLinearSettings = useCallback((): void => {
+    // Why: the composer dialog covers Settings, so close it after the Linear card opens.
+    void openLinearIntegrationSettings({
+      sourceContext: smartNameJiraSourceContext,
+      setActiveRuntimeEnvironmentPreference,
+      openSettingsTarget,
+      openSettingsPage
+    }).then((opened) => {
+      if (opened) {
+        closeModal()
+      }
+    })
+  }, [
+    closeModal,
+    openSettingsPage,
+    openSettingsTarget,
+    setActiveRuntimeEnvironmentPreference,
+    smartNameJiraSourceContext
+  ])
+
   const folderCreateDisabled =
     creating ||
     sourceIntentBlocksCreate ||
@@ -68,6 +89,7 @@ export function useComposerNavigationActions(input: ComposerNavigationActionsInp
   return {
     handleOpenAgentSettings,
     handleOpenJiraSettings,
+    handleOpenLinearSettings,
     folderCreateDisabled
   }
 }

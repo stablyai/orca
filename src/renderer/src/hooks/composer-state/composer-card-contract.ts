@@ -76,6 +76,7 @@ export type ComposerCardActionProps = {
   onSmartLinearIssueSelect: ComposerModel['handleSmartLinearIssueSelect']
   onSmartJiraIssueSelect: ComposerModel['handleSmartJiraIssueSelect']
   onOpenJiraSettings: ComposerModel['handleOpenJiraSettings']
+  onOpenLinearSettings: ComposerModel['handleOpenLinearSettings']
   smartNameGitHubSourceContext?: ComposerModel['selectedRepoGitHubSourceContext']
   smartNameJiraSourceContext?: ComposerModel['smartNameJiraSourceContext']
   onBaseBranchMrSelect?: ComposerModel['handleBaseBranchMrSelect']

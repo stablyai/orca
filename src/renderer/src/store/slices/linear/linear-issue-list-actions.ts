@@ -24,6 +24,7 @@ import {
   looksLikeAuthError,
   shouldRefreshStatusAfterRead
 } from './linear-cache'
+import { rememberLinearCredentialDecryptionError } from './linear-credential-read-failure'
 import {
   getLinearCacheGeneration,
   getLinearMutationGeneration,
@@ -102,6 +103,7 @@ export function createLinearIssueListActions(
               scope.explicitSource
             )
           ) {
+            rememberLinearCredentialDecryptionError(set, get, error)
             if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
               void get().checkLinearConnection(true)
             }
@@ -214,6 +216,7 @@ export function createLinearIssueListActions(
               scope.explicitSource
             )
           ) {
+            rememberLinearCredentialDecryptionError(set, get, error)
             if (!shouldRefreshStatusAfterRead(workspaceId, get().linearStatus)) {
               void get().checkLinearConnection(true)
             }

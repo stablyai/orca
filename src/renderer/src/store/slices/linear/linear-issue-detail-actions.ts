@@ -24,6 +24,7 @@ import {
   looksLikeAuthError,
   shouldRefreshStatusAfterRead
 } from './linear-cache'
+import { rememberLinearCredentialDecryptionError } from './linear-credential-read-failure'
 import type { InflightLinearIssueRequest } from './linear-slice-request-state'
 
 export function createLinearIssueDetailActions(
@@ -92,6 +93,7 @@ export function createLinearIssueDetailActions(
               scope.explicitSource
             )
           ) {
+            rememberLinearCredentialDecryptionError(set, get, error)
             void get().checkLinearConnection(true)
           }
           return null

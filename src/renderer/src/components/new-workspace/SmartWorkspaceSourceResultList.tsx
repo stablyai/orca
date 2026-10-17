@@ -1,9 +1,11 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
+import { openLinearIntegrationSettings } from './open-linear-integration-settings'
 import { getRowItemClassName, RowIcon, RowLabel } from './smart-workspace-source-row-content'
 import type { RowEntry } from './smart-workspace-name-field-model'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
@@ -14,7 +16,8 @@ export function SmartWorkspaceSourceResultList({
   isLinked,
   beforeResults,
   emptyHint,
-  isRowDisabled
+  isRowDisabled,
+  onOpenLinearSettings
 }: {
   model: Pick<
     WorkItemSourceSearch,
@@ -28,6 +31,7 @@ export function SmartWorkspaceSourceResultList({
     | 'searchResultRows'
     | 'linearStatusChecked'
     | 'linearStatus'
+    | 'linearSourceContext'
     | 'showJiraSiteContext'
     | 'jiraConnectionStatus'
     | 'reserveLinearLoadingResults'
@@ -38,6 +42,7 @@ export function SmartWorkspaceSourceResultList({
   beforeResults?: React.ReactNode
   emptyHint?: string
   isRowDisabled?: (row: RowEntry) => boolean
+  onOpenLinearSettings?: () => void
 }): React.JSX.Element {
   const {
     mode,
@@ -53,8 +58,28 @@ export function SmartWorkspaceSourceResultList({
     showJiraSiteContext,
     jiraConnectionStatus,
     reserveLinearLoadingResults,
-    showLinearUrlLoadingFeedback
+    showLinearUrlLoadingFeedback,
+    linearSourceContext
   } = model
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const setActiveRuntimeEnvironmentPreference = useAppStore(
+    (state) => state.setActiveRuntimeEnvironmentPreference
+  )
+  const linearCredentialError =
+    mode === 'linear' && linearStatusChecked ? (linearStatus.credentialError?.trim() ?? '') : ''
+  const openLinearSettings = (): void => {
+    if (onOpenLinearSettings) {
+      onOpenLinearSettings()
+      return
+    }
+    void openLinearIntegrationSettings({
+      sourceContext: linearSourceContext,
+      setActiveRuntimeEnvironmentPreference,
+      openSettingsTarget,
+      openSettingsPage
+    })
+  }
   return (
     <>
       {mode === 'gitlab' ? (
@@ -117,16 +142,32 @@ export function SmartWorkspaceSourceResultList({
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
           </div>
-        ) : searchResultRows.length === 0 && !typedTextActionRow ? (
+        ) : searchResultRows.length === 0 && (linearCredentialError || !typedTextActionRow) ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {jiraSource.intent
-              ? null
-              : mode === 'linear' && linearStatusChecked && !linearStatus.connected
-                ? translate(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
-                    'Connect Linear in Settings to search issues.'
-                  )
-                : (emptyHint ?? getSmartWorkspaceEmptyHint(mode))}
+            {jiraSource.intent ? null : linearCredentialError ? (
+              <div className="space-y-2">
+                <p className="text-destructive">{linearCredentialError}</p>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="xs"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={openLinearSettings}
+                >
+                  {translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.openSettings',
+                    'Settings'
+                  )}
+                </Button>
+              </div>
+            ) : mode === 'linear' && linearStatusChecked && !linearStatus.connected ? (
+              translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
+                'Connect Linear in Settings to search issues.'
+              )
+            ) : (
+              (emptyHint ?? getSmartWorkspaceEmptyHint(mode))
+            )}
           </div>
         ) : searchResultRows.length > 0 ? (
           <CommandGroup className="p-1">

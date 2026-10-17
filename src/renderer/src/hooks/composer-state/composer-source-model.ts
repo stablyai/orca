@@ -42,6 +42,7 @@ export type ComposerSourceModel = {
   handleNameValueChange: (nextName: string) => void
   handleOpenAgentSettings: () => void
   handleOpenJiraSettings: () => void
+  handleOpenLinearSettings: () => void
   handleProjectChange: (projectId: string) => void
   handleProjectHostSetupChange: (setupId: string) => void
   handleRemoveLinkedWorkItem: () => void
