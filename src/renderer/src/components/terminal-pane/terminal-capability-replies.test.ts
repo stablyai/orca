@@ -5,6 +5,7 @@ import {
   DEFAULT_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers,
+  rescalePixelMouseReport,
   sendTerminalOscColorQueryReplies,
   withSixelDa1Attribute
 } from './terminal-capability-replies'
@@ -492,5 +493,151 @@ describe('installTerminalCapabilityReplyHandlers', () => {
       disposable.dispose()
       term.dispose()
     }
+  })
+})
+
+describe('rescalePixelMouseReport', () => {
+  // Measured on a MacBook Retina display (devicePixelRatio 2, 2.63 at UI zoom 1.5), D2Coding 17.
+  const ZOOM_15 = { cols: 80, rows: 41, screenWidth: 80 * 8.362, screenHeight: 41 * 18.268 }
+  const ZOOM_0 = { cols: 127, rows: 56, screenWidth: 127 * 8.504, screenHeight: 56 * 18 }
+
+  function createPixelMouseTerminal(
+    geometry: typeof ZOOM_15,
+    activeEncoding = 'SGR_PIXELS'
+  ): {
+    cols: number
+    rows: number
+    element: HTMLElement
+    _core: { mouseStateService: { activeEncoding: string } }
+  } {
+    return {
+      cols: geometry.cols,
+      rows: geometry.rows,
+      element: createElement(geometry.screenWidth, geometry.screenHeight),
+      _core: { mouseStateService: { activeEncoding } }
+    }
+  }
+
+  // The cell an app computes from a pixel report, given the cell size it was told (1-based).
+  function cellFromPixelReport(report: string, cellWidth: number, cellHeight: number): number[] {
+    const [, x, y] = report.slice(3, -1).split(';').map(Number)
+    return [Math.floor(y / cellHeight) + 1, Math.floor(x / cellWidth) + 1]
+  }
+
+  it('maps the reported zoom 1.5 clicks back onto the rows and columns that were clicked', () => {
+    const terminal = createPixelMouseTerminal(ZOOM_15)
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    createTerminalPixelSizeQueryResponder(terminal, sendInput)('\x1b[16t')
+    expect(sendInput).toHaveBeenCalledWith('\x1b[6;18;8t')
+
+    // Row 35, column 10: unscaled, 630 / 18 reads as row 36.
+    expect(rescalePixelMouseReport(terminal, '\x1b[<0;79;630M')).toBe('\x1b[<0;75;620M')
+    expect(cellFromPixelReport('\x1b[<0;75;620M', 8, 18)).toEqual([35, 10])
+    // Row 40, column 70: unscaled, it reads as row 41, column 73.
+    expect(rescalePixelMouseReport(terminal, '\x1b[<0;580;721M')).toBe('\x1b[<0;554;710M')
+    expect(cellFromPixelReport('\x1b[<0;554;710M', 8, 18)).toEqual([40, 70])
+  })
+
+  it.each([
+    { zoom: '1.5', geometry: ZOOM_15, cellWidth: 8, cellHeight: 18 },
+    { zoom: '0', geometry: ZOOM_0, cellWidth: 9, cellHeight: 18 }
+  ])(
+    'lands every pixel on the cell it was drawn in at UI zoom $zoom',
+    ({ geometry, cellWidth, cellHeight }) => {
+      const terminal = createPixelMouseTerminal(geometry)
+      createTerminalPixelSizeQueryResponder(terminal, () => true)('\x1b[16t')
+      const cssCellWidth = geometry.screenWidth / geometry.cols
+      const cssCellHeight = geometry.screenHeight / geometry.rows
+
+      // xterm floors the pointer offset and clamps it to the last pixel of the screen.
+      for (let x = 0; x <= geometry.screenWidth - 1; x++) {
+        const report = rescalePixelMouseReport(terminal, `\x1b[<0;${x};0M`)
+        expect(cellFromPixelReport(report, cellWidth, cellHeight)[1]).toBe(
+          Math.floor(x / cssCellWidth) + 1
+        )
+      }
+      for (let y = 0; y <= geometry.screenHeight - 1; y++) {
+        const report = rescalePixelMouseReport(terminal, `\x1b[<0;0;${y}M`)
+        expect(cellFromPixelReport(report, cellWidth, cellHeight)[0]).toBe(
+          Math.floor(y / cssCellHeight) + 1
+        )
+      }
+    }
+  )
+
+  it('leaves reports alone when the cell is already a whole number of px', () => {
+    // e.g. 100% display scaling: 9 x 22 px cells are replied as 9 x 22.
+    const terminal = createPixelMouseTerminal({
+      cols: 80,
+      rows: 24,
+      screenWidth: 80 * 9,
+      screenHeight: 24 * 22
+    })
+    createTerminalPixelSizeQueryResponder(terminal, () => true)('\x1b[16t')
+
+    for (let x = 0; x < 80 * 9; x++) {
+      expect(rescalePixelMouseReport(terminal, `\x1b[<0;${x};15M`)).toBe(`\x1b[<0;${x};15M`)
+    }
+    for (let y = 0; y < 24 * 22; y++) {
+      expect(rescalePixelMouseReport(terminal, `\x1b[<0;15;${y}M`)).toBe(`\x1b[<0;15;${y}M`)
+    }
+  })
+
+  it('keeps the button code and the press or release final byte', () => {
+    const terminal = createPixelMouseTerminal(ZOOM_15)
+    createTerminalPixelSizeQueryResponder(terminal, () => true)('\x1b[14t')
+
+    expect(rescalePixelMouseReport(terminal, '\x1b[<32;79;630M')).toBe('\x1b[<32;75;620M')
+    expect(rescalePixelMouseReport(terminal, '\x1b[<0;79;630m')).toBe('\x1b[<0;75;620m')
+    expect(rescalePixelMouseReport(terminal, '\x1b[<65;79;630M')).toBe('\x1b[<65;75;620M')
+  })
+
+  it('keeps using the size the app was told until it asks again', () => {
+    const terminal = createPixelMouseTerminal(ZOOM_0)
+    const observe = createTerminalPixelSizeQueryResponder(terminal, () => true)
+    observe('\x1b[16t')
+    // The cell becomes 8.362 x 18.268 px; the app still converts with 9 x 18.
+    terminal.element = createElement(ZOOM_0.cols * 8.362, ZOOM_0.rows * 18.268)
+
+    expect(
+      cellFromPixelReport(rescalePixelMouseReport(terminal, '\x1b[<0;79;630M'), 9, 18)
+    ).toEqual([35, 10])
+
+    observe('\x1b[16t')
+    expect(
+      cellFromPixelReport(rescalePixelMouseReport(terminal, '\x1b[<0;79;630M'), 8, 18)
+    ).toEqual([35, 10])
+  })
+
+  it('uses the size it would answer now when this terminal was never asked', () => {
+    // A remounted pane's app was answered by the xterm this one replaced.
+    const remounted = createPixelMouseTerminal(ZOOM_15)
+    expect(rescalePixelMouseReport(remounted, '\x1b[<0;79;630M')).toBe('\x1b[<0;75;620M')
+  })
+
+  it('ignores a cell size reply that never reached the app', () => {
+    const terminal = createPixelMouseTerminal(ZOOM_0)
+    const sendInput = vi.fn<(data: string) => boolean>()
+    sendInput.mockReturnValueOnce(true).mockReturnValueOnce(false)
+    const observe = createTerminalPixelSizeQueryResponder(terminal, sendInput)
+    observe('\x1b[16t')
+    terminal.element = createElement(ZOOM_0.cols * 8.362, ZOOM_0.rows * 18.268)
+    observe('\x1b[16t')
+
+    expect(
+      cellFromPixelReport(rescalePixelMouseReport(terminal, '\x1b[<0;79;630M'), 9, 18)
+    ).toEqual([35, 10])
+  })
+
+  it('leaves cell reports and other input alone', () => {
+    const cellMode = createPixelMouseTerminal(ZOOM_15, 'SGR')
+    createTerminalPixelSizeQueryResponder(cellMode, () => true)('\x1b[16t')
+    expect(rescalePixelMouseReport(cellMode, '\x1b[<0;10;35M')).toBe('\x1b[<0;10;35M')
+
+    const pixelMode = createPixelMouseTerminal(ZOOM_15)
+    createTerminalPixelSizeQueryResponder(pixelMode, () => true)('\x1b[16t')
+    expect(rescalePixelMouseReport(pixelMode, 'a')).toBe('a')
+    expect(rescalePixelMouseReport(pixelMode, '\x1b[A')).toBe('\x1b[A')
+    expect(rescalePixelMouseReport(pixelMode, '\x1b[<0;79;630Mx')).toBe('\x1b[<0;79;630Mx')
   })
 })

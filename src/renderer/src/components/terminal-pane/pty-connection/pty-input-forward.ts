@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
-import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
+import { subscribeToTerminalPtyInputData } from '../terminal-pty-input-data'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -171,7 +171,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   // this is the per-keystroke hot path, so no closure allocation per onData event.
   const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
-  session.onDataDisposable = subscribeToTerminalInputData(
+  session.onDataDisposable = subscribeToTerminalPtyInputData(
     session.pane.terminal,
     (data, wasUserInput) => {
       const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
