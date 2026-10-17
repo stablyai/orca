@@ -192,6 +192,22 @@ describe('account RPC methods', () => {
     expect(selectCodexAccountForTarget).toHaveBeenCalledWith(null, params.target)
   })
 
+  it('turns automatic Claude switching on for the server that owns the accounts', async () => {
+    const state = { accounts: [], activeAccountId: null, autoSwitchEnabled: true }
+    const setClaudeAutoSwitch = vi.fn().mockReturnValue(state)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler only calls setClaudeAutoSwitch.
+    const runtime = { setClaudeAutoSwitch } as unknown as OrcaRuntimeService
+    const set = method('accounts.setClaudeAutoSwitch')
+    if (isStreamingMethod(set)) {
+      throw new Error('accounts.setClaudeAutoSwitch must be a request method')
+    }
+
+    expect(set.permission).toBe('accounts-admin')
+    expect(() => set.params?.parse({ enabled: 'yes' })).toThrow()
+    await expect(set.handler({ enabled: true }, { runtime })).resolves.toEqual(state)
+    expect(setClaudeAutoSwitch).toHaveBeenCalledWith(true)
+  })
+
   it('uses a stale-aware refresh when a connection replays the subscription', async () => {
     const snapshot = { claude: null, codex: null }
     let cleanup: (() => void) | undefined
