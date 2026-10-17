@@ -60,8 +60,17 @@ describe('normalizeGitErrorMessage', () => {
       ].join('\n')
     )
 
-    expect(normalizeGitErrorMessage(error, 'push')).toBe(
-      "error: failed to push some refs to 'origin'"
+    const message = normalizeGitErrorMessage(error, 'push')
+
+    // Not routed through the pre-push-hook branch, which keeps the `Command failed:` argv line.
+    expect(message).not.toContain('Command failed:')
+    // The server's reason survives alongside git's closing line instead of being cut down to it.
+    expect(message).toBe(
+      [
+        'remote: pre-receive hook declined',
+        'remote: eslint failed in hosted checks',
+        "error: failed to push some refs to 'origin'"
+      ].join('\n')
     )
   })
 
@@ -79,13 +88,38 @@ describe('normalizeGitErrorMessage', () => {
     )
   })
 
-  it('uses the tail diagnostic from newline-heavy failures without line-array splitting', () => {
+  it('says something when git said nothing, instead of handing on Orca\u2019s argv', () => {
+    const error = new Error(
+      'Command failed: git -C /Users/example/repo fetch --prune\n'
+    ) as Error & {
+      stderr: string
+    }
+    error.stderr = ''
+
+    const message = normalizeGitErrorMessage(error, 'fetch')
+
+    expect(message).toBe('Git remote operation failed.')
+    // The argv is Orca's, not git's, and it names a local path.
+    expect(message).not.toContain('Command failed:')
+    expect(message).not.toContain('/Users/example')
+  })
+
+  it('bounds a newline-heavy failure from both ends without line-array splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
     const error = new Error(
       `Command failed: git fetch\r\n${'remote: progress update\r\n'.repeat(10_000)}remote side closed connection\r\n`
     )
 
-    expect(normalizeGitErrorMessage(error, 'fetch')).toBe('remote side closed connection')
+    const message = normalizeGitErrorMessage(error, 'fetch')
+
+    // Both ends survive the cap: whatever git said first, and its closing diagnostic.
+    expect(message.startsWith('remote: progress update')).toBe(true)
+    expect(message.endsWith('remote side closed connection')).toBe(true)
+    expect(message).toContain('[\u2026]')
+    // The argv line is not part of git's output and must not reach the renderer.
+    expect(message).not.toContain('Command failed:')
+    // Bounded so a multi-megabyte hook transcript cannot ride the IPC reply.
+    expect(message.length).toBeLessThanOrEqual(4_100)
 
     const usedLineSplit = splitSpy.mock.calls.some(
       ([separator]) =>
