@@ -133,6 +133,7 @@ function SessionOptionPopover(props: {
   /** Only the descriptor being saved holds its write controls. */
   pendingIds: ReadonlySet<string>
   request: NativeChatOptionPickerRequest | null
+  onOpen?: () => void
   onSet: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
   onAction: (descriptor: SessionOptionDescriptor) => void
   focusComposer?: () => void
@@ -143,10 +144,18 @@ function SessionOptionPopover(props: {
   const [seenRequest, setSeenRequest] = useState<NativeChatOptionPickerRequest | null>(null)
   // The option a slash command asked for, focused in place of the search by that opening only.
   const [requestedOptionId, setRequestedOptionId] = useState<string | null>(null)
+
+  const updateOpen = (nextOpen: boolean): void => {
+    setOpen(nextOpen)
+    if (nextOpen) {
+      props.onOpen?.()
+    }
+  }
+
   if (props.request !== seenRequest) {
     setSeenRequest(props.request)
     if (props.request) {
-      setOpen(true)
+      updateOpen(true)
       setRequestedOptionId(props.request.id === model.id ? null : props.request.id)
     }
   }
@@ -170,7 +179,7 @@ function SessionOptionPopover(props: {
     focusReturn.notePick()
     // Why: effort is the last thing set before typing, so its level closes the picker.
     if (descriptor.id === 'effort') {
-      setOpen(false)
+      updateOpen(false)
     }
     if (descriptor.kind.currentValue !== value) {
       props.onSet(descriptor, value)
@@ -184,12 +193,12 @@ function SessionOptionPopover(props: {
     if (descriptor.action?.type !== 'agent-picker') {
       focusReturn.notePick()
     }
-    setOpen(false)
+    updateOpen(false)
     props.onAction(descriptor)
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={updateOpen}>
       <PickerTrigger
         modelLabel={modelLabel}
         optionsLabel={optionsLabel}
@@ -208,7 +217,7 @@ function SessionOptionPopover(props: {
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown') {
             event.preventDefault()
-            setOpen(true)
+            updateOpen(true)
           }
         }}
       />
@@ -325,6 +334,7 @@ function NativeChatSessionOptionPickersInner({
         isWorking={isWorking}
         pendingIds={new Set(pending.keys())}
         request={pickerRequest ?? null}
+        onOpen={() => surface.refresh?.()}
         onSet={(descriptor, value) =>
           runSessionOptionSurfaceCall(
             { id: descriptor.id, value },

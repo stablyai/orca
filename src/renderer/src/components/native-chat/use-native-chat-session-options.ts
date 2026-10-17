@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   getAgentSessionOptionCatalog,
@@ -96,6 +96,17 @@ export function useNativeChatSessionOptions(args: {
     () => resolveNativeChatModelDiscoveryContext(terminalTabId),
     [terminalTabId]
   )
+  const refreshModels = useCallback(() => {
+    if (!discoveryContext) {
+      return
+    }
+    ensureNativeChatModelEnrichment({
+      agent,
+      hostKey: discoveryContext.hostKey,
+      discover: () =>
+        discoverNativeChatCatalogModels(agent, discoveryContext.runtime, discoveryContext.hostKey)
+    })
+  }, [agent, discoveryContext])
   const surface = useMemo(() => {
     // Why: native chat currently attaches only after startup is already queued;
     // exposing a draft picker here would claim it can still mutate that command.
@@ -117,13 +128,12 @@ export function useNativeChatSessionOptions(args: {
       agent,
       scopeKey,
       ...(targetPtyId ? { fallbackScopeKey: terminalTabId } : {}),
-      // Why: the catalog seed carries version-neutral family labels, so it is
-      // safe on every host while the once-per-host probe runs or after it fails
-      // — without it the whole picker would pop in late or never appear.
+      // Seed the picker immediately while this host's model list is discovered.
       ...(discoveryContext ? { initialModels: discoveredModels ?? undefined } : {}),
       mode: targetPtyId ? 'live' : 'draft',
       reportedValues,
       dispatchCommand,
+      refresh: refreshModels,
       canSwitchOmpModel,
       onAgentPicker,
       persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
@@ -141,6 +151,7 @@ export function useNativeChatSessionOptions(args: {
     discoveryContext,
     onAgentPicker,
     readTerminalScreen,
+    refreshModels,
     targetPtyId,
     terminalTabId
   ])
@@ -250,14 +261,9 @@ export function useNativeChatSessionOptions(args: {
     if (cached) {
       void retirePersistedModelMissingFromDiscovery(agent, cached).catch(() => undefined)
     }
-    ensureNativeChatModelEnrichment({
-      agent,
-      hostKey: discoveryContext.hostKey,
-      discover: () =>
-        discoverNativeChatCatalogModels(agent, discoveryContext.runtime, discoveryContext.hostKey)
-    })
+    refreshModels()
     return unsubscribe
-  }, [agent, discoveryContext, surface])
+  }, [agent, discoveryContext, refreshModels, surface])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,

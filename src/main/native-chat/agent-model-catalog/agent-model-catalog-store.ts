@@ -30,7 +30,10 @@ import {
   AgentModelCatalogListingWaiters
 } from './agent-model-catalog-listing-waiters'
 
+import { AGENT_MODEL_CATALOG_FRESH_MS } from '../../../shared/agent-model-catalog-refresh-policy'
+
 export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, AGENT_MODEL_CATALOG_PICKER_WAIT_MS }
+export { AGENT_MODEL_CATALOG_FRESH_MS }
 export type { AgentModelCatalogFailure }
 
 // The execution host's one model catalog per (agent, launch fingerprint):
@@ -45,7 +48,6 @@ export type { AgentModelCatalogFailure }
 // picker opens does not hammer a dead binary, then dies on its own (see
 // `AgentModelCatalogFailures`, which also holds why no chat can start under the account).
 
-export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
 /** Lists an agent's models without a session, under the account a launch would pin. `signal`

@@ -130,4 +130,6 @@ export type SessionOptionsSurface = {
   /** Invoke the value-less action exposed by the current descriptor. */
   invokeAction(id: string): Promise<SessionOptionSetResult>
   subscribe(listener: (snapshot: SessionOptionDescriptor[]) => void): () => void
+  /** Refresh models from discovery when opening the picker. */
+  refresh?: () => void
 }

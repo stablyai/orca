@@ -5,7 +5,8 @@ import { AgentModelCatalogUnavailableError } from './agent-model-catalog-unavail
 // dead binary. A probe failure may also say why no chat can start under the account (not signed
 // in, no CLI); only a later probe answers that again, so a chat's own listing never replaces it.
 
-export const AGENT_MODEL_CATALOG_FAILURE_TTL_MS = 30_000
+import { AGENT_MODEL_CATALOG_FAILURE_TTL_MS } from '../../../shared/agent-model-catalog-refresh-policy'
+export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS }
 
 /** A probe the host stopped (it is going away): says nothing about the account, so it is not held. */
 export class AgentModelCatalogListingStoppedError extends Error {}
