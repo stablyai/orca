@@ -27,6 +27,7 @@ import type { SettingsNavigationBuildOptions } from './settings-navigation-build
 
 export function buildCapabilitySettingsSections({
   isLocalWindowsHost,
+  isMac,
   isWebClient,
   isLinearConnected
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
@@ -44,7 +45,8 @@ export function buildCapabilitySettingsSections({
         includeAgentAwake: !isWebClient,
         includeAgentRuntime: isLocalWindowsHost,
         includeAgentWorkspaceTrust: !isWebClient,
-        includeCodexTerminalServerIsolation: !isWebClient
+        includeCodexTerminalServerIsolation: !isWebClient,
+        includeKeepDisplayAwake: isMac
       }),
       group: 'capabilities'
     },
