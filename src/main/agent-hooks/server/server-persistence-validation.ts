@@ -2,6 +2,7 @@ import { readAgentProcessPresence } from '../../../shared/agent-process-presence
 import { createHash } from 'node:crypto'
 
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { readAgentRunAccount } from '../../../shared/agent-run-account'
 import {
   normalizeAgentStatusPayload,
   type AgentMainAgentStatus,
@@ -151,6 +152,8 @@ export function sanitizeHydratedEntry(
       ? record.compactTrigger
       : undefined
   const turnStartedAt = record.turnStartedAt
+  // Why local only: a facet describes this host's accounts and never rides a relay row.
+  const runAccount = connectionId === null ? readAgentRunAccount(record.runAccount) : undefined
   return {
     paneKey,
     agentPresence: readAgentProcessPresence(record.agentPresence),
@@ -176,7 +179,8 @@ export function sanitizeHydratedEntry(
     stateStartedAt,
     ...(typeof turnStartedAt === 'number' && Number.isFinite(turnStartedAt) && turnStartedAt > 0
       ? { turnStartedAt }
-      : {})
+      : {}),
+    ...(runAccount ? { runAccount } : {})
   }
 }
 

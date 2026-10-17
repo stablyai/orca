@@ -30,7 +30,9 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       observation,
       isReplay,
       authorityRestartId,
-      structuredHost
+      structuredHost,
+      runAccount,
+      runAccountOnly
     }) => {
       if (state.mainWindow?.isDestroyed()) {
         return
@@ -54,6 +56,9 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
           stateStartedAt,
           ...(providerSession ? { providerSession } : {}),
           ...(observation ? { observation } : {}),
+          // Why: an identity row is where a kept agent's facet lives once its terminal is gone,
+          // and the tab menu un-keeps it from there.
+          ...(runAccount !== undefined ? { runAccount } : {}),
           providerSessionOnly: true
         })
         return
@@ -80,10 +85,14 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {}),
         // Why: reconnect replays re-send cached rows; the renderer must not treat them as fresh completions.
-        ...(isReplay === true ? { isReplay: true } : {})
+        ...(isReplay === true ? { isReplay: true } : {}),
+        ...(runAccount !== undefined ? { runAccount } : {})
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
       getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+      if (runAccountOnly) {
+        return
+      }
       options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
     }
   )

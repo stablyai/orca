@@ -7,6 +7,7 @@ import { basename } from '@/lib/path'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
+import { TabAgentAccountLines } from './TabAgentAccountLines'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
@@ -383,6 +384,7 @@ export default function SortableTab({
                   ? basename(shellForIcon)
                   : translate('tabHoverCard.terminal', 'Terminal')
             }
+            details={<TabAgentAccountLines tabId={tab.id} />}
             icon={
               <TerminalTabLeadingIcon
                 agent={tabAgent}

@@ -22,6 +22,8 @@ Orca reads your local `~/.claude` usage state and shows current usage plus rate-
 
 Orca supports multiple Claude accounts and can swap between them in one click, matching the Codex flow. Switching accounts works even with live Claude sessions running — Orca holds the in-progress switch behind a guard so you don't trigger overlapping auth refreshes. See [Hot-swap Codex accounts](/docs/agents/codex-hot-swap) — the Claude flow is identical in shape.
 
+You can also keep one Claude agent on its account from its tab's right-click menu, so switching moves the others but not it: when Orca offers to restart Claude sessions still running on the old account, it leaves kept agents out. Orca then starts that conversation on the kept account whenever it restores, wakes or resumes it. If you keep an agent after it started, a `claude` you type again in that same terminal still follows the selected account; the tab's hover card says "Kept on this account from its next start" until Orca starts it again.
+
 ## Subagents and teams
 
 Background subagents and Agent Teams teammates can show as expandable child rows under the lead agent in the worktree agent list and [Agent Dashboard](/docs/model/agents-sessions#agent-dashboard). Selecting a child focuses the lead terminal.

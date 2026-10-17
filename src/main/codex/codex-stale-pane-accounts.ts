@@ -2,7 +2,10 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
 import {
   forgetCodexPaneAccount,
-  listRecordedCodexPaneAccounts
+  getCodexPaneAccount,
+  listRecordedCodexPaneAccounts,
+  setCodexPaneKept,
+  type CodexPaneAccountRecord
 } from './codex-pane-account-registry'
 
 export type StaleCodexPane = {
@@ -24,7 +27,8 @@ export function listStaleCodexPanes(args: {
   const records = listRecordedCodexPaneAccounts(args.ptyIds)
   for (const ptyId of args.ptyIds) {
     const record = records.get(ptyId)
-    if (!record) {
+    // Why: a kept pane stays on its account by choice, so it is never stale.
+    if (!record || record.kept) {
       continue
     }
     const activeAccountId = getSelectedCodexAccountIdForTarget(
@@ -49,6 +53,28 @@ export function forgetStaleCodexPanes(ptyIds: readonly string[]): void {
   for (const ptyId of ptyIds) {
     forgetCodexPaneAccount(ptyId)
   }
+}
+
+/** Only a pane's own home can stay on its account; the shared home mirrors the selection, WSL's the distro's. */
+export function isCodexPaneKeepable(record: CodexPaneAccountRecord): boolean {
+  return (
+    record.selectionKey === 'host' &&
+    (record.homeRoute === 'account-home' || record.homeRoute === 'real-home')
+  )
+}
+
+/** "Keep old account": keeps each keepable pane and forgets the rest as before; returns the kept ids. */
+export function keepStaleCodexPanes(ptyIds: readonly string[]): string[] {
+  const kept: string[] = []
+  for (const ptyId of ptyIds) {
+    const record = getCodexPaneAccount(ptyId)
+    if (record && isCodexPaneKeepable(record) && setCodexPaneKept(ptyId, true) === 'kept') {
+      kept.push(ptyId)
+      continue
+    }
+    forgetStaleCodexPanes([ptyId])
+  }
+  return kept
 }
 
 function parseSelectionLaneKey(selectionKey: string): {

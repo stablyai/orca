@@ -41,6 +41,7 @@ export const setMigrationUnsupportedPtyMock: Mock = vi.fn()
 export const clearMigrationUnsupportedPtyMock: Mock = vi.fn()
 export const clearMigrationUnsupportedPtysForPaneKeyMock: Mock = vi.fn()
 export const clearPaneKeyAliasesForPtyMock: Mock = vi.fn()
+export const recordLaunchResumeIdentityMock: Mock = vi.fn()
 export const recordCodexPaneAccountMock: Mock = vi.fn()
 export const forgetCodexPaneAccountMock: Mock = vi.fn()
 export const getCodexPaneAccountMock: Mock = vi.fn()
@@ -134,7 +135,9 @@ export const agentHookServerModuleMock = () => ({
     buildPtyEnv: buildAgentHookEnvMock,
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
-    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
+    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock,
+    // Why: a resume spawn seeds its provider session into the hook store at commit.
+    recordLaunchResumeIdentity: recordLaunchResumeIdentityMock
   }
 })
 

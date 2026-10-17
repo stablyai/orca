@@ -1,4 +1,5 @@
 import type { AgentStatusMetadata } from '../../store/slices/agent-status-contract'
+import { readAgentRunAccount } from '../../../../shared/agent-run-account'
 import {
   normalizeAgentStatusPayload,
   type AgentStatusIpcPayload,
@@ -31,12 +32,19 @@ export function normalizeAgentStatusMetadata(
   data: AgentStatusIpcPayload,
   authorityRestartId?: string
 ): AgentStatusMetadata | undefined {
-  if (!data.providerSession && !data.launchToken && !authorityRestartId) {
+  const runAccount = data.runAccount === null ? null : readAgentRunAccount(data.runAccount)
+  if (
+    !data.providerSession &&
+    !data.launchToken &&
+    !authorityRestartId &&
+    runAccount === undefined
+  ) {
     return undefined
   }
   return {
     ...(authorityRestartId ? { authorityRestartId } : {}),
     ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-    ...(data.launchToken ? { launchToken: data.launchToken } : {})
+    ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+    ...(runAccount !== undefined ? { runAccount } : {})
   }
 }

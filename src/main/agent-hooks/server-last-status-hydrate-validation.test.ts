@@ -435,6 +435,48 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('hydrates a valid run-account facet and drops an invalid or relay one', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const row = (paneKey: string, tabId: string, extra: Record<string, unknown>) => ({
+      paneKey,
+      tabId,
+      receivedAt,
+      stateStartedAt: receivedAt,
+      payload: { state: 'done', prompt: 'kept', agentType: 'codex' },
+      ...extra
+    })
+    const facet = { provider: 'codex', lane: 'host', accountId: 'account-a', mode: 'kept' }
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: row(PANE, 'tab-1', { runAccount: facet }),
+          [GOOD_PANE]: row(GOOD_PANE, 'tab-good', { runAccount: { ...facet, mode: 'pinned' } }),
+          [OLD_PANE]: row(OLD_PANE, 'tab-old', { runAccount: { ...facet, accountId: '../x' } }),
+          [FRESH_PANE]: row(FRESH_PANE, 'tab-fresh', {
+            connectionId: 'ssh-1',
+            runAccount: facet
+          })
+        }
+      }),
+      'utf8'
+    )
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const byPane = new Map(server.getStatusSnapshot().map((entry) => [entry.paneKey, entry]))
+      expect(byPane.get(PANE)?.runAccount).toEqual(facet)
+      for (const paneKey of [GOOD_PANE, OLD_PANE, FRESH_PANE]) {
+        expect(byPane.get(paneKey)).toBeDefined()
+        expect(byPane.get(paneKey)).not.toHaveProperty('runAccount')
+      }
+    } finally {
+      server.stop()
+    }
+  })
+
   it('stop() flushes pending debounced writes synchronously', async () => {
     const server = new AgentHookServer()
     await server.start({

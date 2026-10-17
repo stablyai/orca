@@ -5,6 +5,7 @@
 
 import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentRunAccount } from './agent-run-account'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
   AgentStatusExecutionId,
@@ -72,6 +73,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Present on rows the structured session host projects; `owned` keeps them fresh past the
    *  staleness window because the host still runs the provider child. */
   structuredHost?: StructuredHostStatus
+  /** The account a local agent runs on, from the host; `null` withdraws an earlier facet.
+   *  Not part of ParsedAgentStatusPayload, so paired-client projections never carry it. */
+  runAccount?: AgentRunAccount | null
 } & WithAgentStatusObservation
 
 /** Identity used by UI-only cleanup to evict exactly the status it cleared.

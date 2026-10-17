@@ -1,6 +1,7 @@
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { codexKeptAccountArg } from '../host-env/agent-account-launch'
 
 export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -25,6 +26,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     callerNamedSession: args.sessionId !== undefined,
     mintedSessionId: ctx.isMintedSessionId,
     resumeOnSelectedAccount: Boolean(args.replacesPtyId),
+    ...codexKeptAccountArg(ctx.accountLaunch),
     emptySessionIdSkipsHostEnv: false,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,

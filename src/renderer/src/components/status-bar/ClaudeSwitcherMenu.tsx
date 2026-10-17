@@ -47,6 +47,7 @@ import {
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
+import { AccountAgentCount } from './AccountAgentCount'
 
 // Exported so its account-switch/reset logic is preserved for row drill-in even
 // though the footer now opens the consolidated UsageRosterPanel first.
@@ -352,6 +353,11 @@ export function ClaudeSwitcherMenu({
                   <div className="flex w-full flex-col gap-0.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                      <AccountAgentCount
+                        provider="claude"
+                        accountId={target.id}
+                        enabled={selectedGroup.key === 'host' && !hasActiveRuntimeEnvironment}
+                      />
                       {target.active ? (
                         <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
                           {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}

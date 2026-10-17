@@ -40,6 +40,7 @@ import {
   type ClaudeFolderLogin
 } from './claude-account-folder'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
+import { ClaudeAccountPointers } from './claude-profile-account-pointers'
 
 const REFRESH_WAIT_MS = 5_000
 
@@ -60,7 +61,8 @@ export class ClaudeProfileRouter {
   readonly pointerPath: string
   private readonly setups = new Map<string, Promise<ClaudeProfileSetupReport>>()
   private env: NodeJS.ProcessEnv
-  private readonly envReady: Promise<unknown>
+  readonly envReady: Promise<unknown>
+  readonly accountPointers: ClaudeAccountPointers
   private envResolved: boolean
   constructor(
     private readonly args: {
@@ -76,6 +78,7 @@ export class ClaudeProfileRouter {
     }
   ) {
     this.pointerPath = join(args.dataRoot, 'claude-profiles', 'selected-host')
+    this.accountPointers = new ClaudeAccountPointers(args.dataRoot, this, args.getSettings)
     this.env = args.env ?? process.env
     // Why the login shell's: a Dock launch lacks the CLAUDE_CONFIG_DIR an rc exports. Chats share it.
     this.envResolved = Boolean(args.env)
@@ -170,6 +173,7 @@ export class ClaudeProfileRouter {
       mkdirSync(dirname(this.pointerPath), { recursive: true, mode: 0o700 })
       writeFileAtomically(this.pointerPath, home, { mode: 0o600 })
     }
+    this.accountPointers.refreshExisting()
     return true
   }
 

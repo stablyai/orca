@@ -88,6 +88,7 @@ export abstract class CodexRuntimeHomeState {
   abstract getHostCodexHomePathsForSessionDiscovery(): string[]
   abstract getSelectedHostAccountCodexHomePath(): string | null
   abstract resolveSelectedHostAccountCodexHomePathForResume(): string | null
+  abstract resolveHostAccountCodexHomePathForKeptResume(accountId: string): string
   abstract resolveCodexManagedAccountHomeForInactiveFetch(
     account: CodexManagedAccount
   ): { kind: 'ready'; homePath: string } | { kind: 'skip' }

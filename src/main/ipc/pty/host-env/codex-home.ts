@@ -12,6 +12,7 @@ import {
   type CodexPaneHomeRoute
 } from '../../../codex/codex-pane-account-registry'
 import { resolveCodexPaneLaunchAccount } from '../../../codex/codex-pane-launch-account'
+import { isCodexPaneKeepable } from '../../../codex/codex-stale-pane-accounts'
 import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../../pty/codex-home-wsl-env'
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
@@ -214,6 +215,8 @@ export function recordCodexPaneAccountForSpawn(args: {
   launchCodexHomePath: string | null
   target: CodexAccountSelectionTarget
   settings: GlobalSettings | undefined
+  /** The spawn resumed a conversation a person kept; its pane stays kept too. */
+  kept?: boolean
 }): void {
   if (!args.ptyId || !args.isDaemonHostSpawn || args.isReattach) {
     return
@@ -231,7 +234,10 @@ export function recordCodexPaneAccountForSpawn(args: {
     forgetCodexPaneAccount(args.ptyId)
     return
   }
-  recordCodexPaneAccount(args.ptyId, record)
+  recordCodexPaneAccount(
+    args.ptyId,
+    args.kept && isCodexPaneKeepable(record) ? { ...record, kept: true } : record
+  )
 }
 
 export function snapshotCodexPaneHomeRoutes(

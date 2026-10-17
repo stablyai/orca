@@ -66,6 +66,10 @@ vi.mock('react', async () => {
 vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: () => null
 }))
+// Likewise the account items, which read a store this file's stand-in React cannot subscribe to.
+vi.mock('./TabAgentAccountMenuItems', () => ({
+  TabAgentAccountMenuItems: () => null
+}))
 
 vi.mock('./use-tab-strip-slot-props', () => ({
   useTabStripSlotProps: () => ({ className: '', 'data-tab-strip-slot': '' })

@@ -21,6 +21,7 @@ import {
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
 import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
+import { carriedRunAccount } from './server-run-account-carry'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
@@ -270,7 +271,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
     const enriched = {
       ...this.attachStatusTiming(pairedPayload, now, observedAt),
-      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
+      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now),
+      ...carriedRunAccount(previous, pairedPayload)
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&

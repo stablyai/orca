@@ -30,6 +30,8 @@ function semanticRow(row: EnrichedAgentHookEventPayload): Record<string, unknown
     observation: _observation,
     launchToken: _launchToken,
     promptInteractionKey: _promptInteractionKey,
+    // Why: paired clients never receive the facet, so it must not republish their projection.
+    runAccount: _runAccount,
     ...semantic
   } = toAgentStatusIpcPayload(row)
   return semantic

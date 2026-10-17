@@ -64,6 +64,7 @@ import { registerSpeechHandlers } from '../speech'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../orca-profiles'
 import { registerCodexAccountHandlers } from '../codex-accounts'
+import { registerAgentAccountKeepHandlers } from '../agent-account-keep'
 import { registerAgentHookHandlers } from '../agent-hooks'
 import { registerCodexConfigSyncHandlers } from '../codex-config-sync'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
@@ -175,6 +176,7 @@ export function registerCoreHandlers(
   registerPreflightHandlers()
   registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage, museUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
+  registerAgentAccountKeepHandlers()
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerClaudeAccountHandlers(claudeAccounts)

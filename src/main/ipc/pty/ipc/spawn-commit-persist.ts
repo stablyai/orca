@@ -15,6 +15,7 @@ import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { codexKeptAccountArg } from '../host-env/agent-account-launch'
 import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
 
 export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<PtyGrid> {
@@ -96,7 +97,8 @@ export function publishPtyIpcSpawnCommit(ctx: PtyIpcSpawnState, committedSize: P
     pinnedByResume: ctx.codexResumeHomeSelected,
     launchCodexHomePath: ctx.selectedCodexHomePath,
     target: ctx.codexSelectionTarget,
-    settings: ctx.deps.getSettings?.()
+    settings: ctx.deps.getSettings?.(),
+    kept: codexKeptAccountArg(ctx.accountLaunch).keptAccount !== undefined
   })
   ptyOwnership.set(ctx.result.id, LOCAL_EXECUTION_HOST_ID)
   if (ctx.result.incarnationId) {

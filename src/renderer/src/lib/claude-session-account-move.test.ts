@@ -18,8 +18,17 @@ import {
   isClaudePaneMidTurn,
   resolveClaudeSessionAccountId
 } from './claude-session-account-move'
+import {
+  answerClaudeAccountSwitchPrompt,
+  getClaudeAccountSwitchPrompt,
+  handleRunningClaudeSessionsAfterSwitch,
+  resetClaudeAccountSwitchSessionsForTests
+} from './claude-account-switch-sessions'
 
 const laneByPtyId: Record<string, string> = {}
+const toastSuccess = vi.hoisted(() => vi.fn())
+
+vi.mock('sonner', () => ({ toast: { success: toastSuccess } }))
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(),
@@ -64,6 +73,8 @@ type SeededPane = {
   sessionId?: string | null
   /** Folder Claude writes this session's transcript under; null leaves it unreported. */
   configDir?: string | null
+  /** The account facet the host published for this agent; absent publishes none. */
+  runAccount?: 'kept' | 'follow' | 'kept-elsewhere'
 }
 
 const tabId = (n: number): string => `tab-${n}`
@@ -107,7 +118,19 @@ function seedPanes(panes: SeededPane[]): void {
       stateStartedAt: 1,
       stateHistory: [],
       agentType: pane.agentType,
-      ...(pane.sessionId === null ? {} : { providerSession: providerSession(pane) })
+      ...(pane.sessionId === null ? {} : { providerSession: providerSession(pane) }),
+      ...(pane.runAccount
+        ? {
+            runAccount: {
+              provider: 'claude' as const,
+              lane: 'host',
+              accountId: 'acct-a',
+              mode: pane.runAccount === 'kept' ? ('kept' as const) : ('follow' as const),
+              // Why: the conversation is kept on another account than this agent runs on.
+              ...(pane.runAccount === 'kept-elsewhere' ? { keptElsewhere: true as const } : {})
+            }
+          }
+        : {})
     }
   }
   useAppStore.setState({
@@ -209,6 +232,25 @@ describe('findMovableClaudeSessions', () => {
     expect(await movable()).toEqual([])
   })
 
+  it('leaves out an agent kept on its account, and still offers agents that follow', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', runAccount: 'kept' },
+      { n: 2, agentType: 'claude', runAccount: 'follow' },
+      { n: 3, agentType: 'claude' }
+    ])
+
+    expect(await movable()).toEqual([ptyId(2), ptyId(3)])
+  })
+
+  it('leaves out an agent whose conversation is kept on another account than it runs on', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', runAccount: 'kept-elsewhere' },
+      { n: 2, agentType: 'claude', runAccount: 'follow' }
+    ])
+
+    expect(await movable()).toEqual([ptyId(2)])
+  })
+
   it('skips a pane where Claude has exited to the shell', async () => {
     seedPanes([{ n: 1, agentType: 'claude' }])
     vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
@@ -293,5 +335,90 @@ describe('claudeLaunchAccountId', () => {
     expect(claudeLaunchAccountId({ accounts: [covered, own] }, 'acct-a')).toBeNull()
     expect(claudeLaunchAccountId({ accounts: [covered, own] }, 'acct-b')).toBe('acct-b')
     expect(claudeLaunchAccountId({ accounts: [covered, own] }, null)).toBeNull()
+  })
+})
+
+describe('a Claude account switch with agents kept on the outgoing account', () => {
+  const summary = (id: string) => ({
+    id,
+    email: `${id}@example.com`,
+    authMethod: 'subscription-oauth' as const,
+    createdAt: 1,
+    updatedAt: 1,
+    lastAuthenticatedAt: 1
+  })
+  const roster = { accounts: [summary('acct-a'), summary('acct-b')] }
+  const switchToB = () =>
+    handleRunningClaudeSessionsAfterSwitch({
+      owner: LOCAL,
+      target: HOST,
+      before: { state: roster, accountId: 'acct-a' },
+      after: { state: roster, accountId: 'acct-b' }
+    })
+  const setPolicy = (policy: 'ask' | 'restart'): void => {
+    const settings = useAppStore.getState().settings!
+    useAppStore.setState({ settings: { ...settings, claudeAccountSwitchRunningSessions: policy } })
+  }
+
+  beforeEach(() => {
+    toastSuccess.mockClear()
+    resetClaudeAccountSwitchSessionsForTests()
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('claude')
+  })
+
+  it.each(['ask', 'restart'] as const)(
+    'neither asks nor restarts when only kept agents run there: %s',
+    async (policy) => {
+      seedPanes([
+        { n: 1, agentType: 'claude', runAccount: 'kept' },
+        { n: 2, agentType: 'claude', runAccount: 'kept-elsewhere' }
+      ])
+      setPolicy(policy)
+
+      expect(await switchToB()).toBe('show-confirmation')
+      expect(getClaudeAccountSwitchPrompt()).toBeNull()
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      expect(toastSuccess).not.toHaveBeenCalled()
+    }
+  )
+
+  it('counts and restarts only the sessions that are not kept', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', runAccount: 'kept' },
+      { n: 2, agentType: 'claude', runAccount: 'follow' },
+      { n: 3, agentType: 'claude' },
+      { n: 4, agentType: 'claude', runAccount: 'kept-elsewhere' }
+    ])
+    setPolicy('ask')
+
+    expect(await switchToB()).toBe('handled')
+    expect(getClaudeAccountSwitchPrompt()?.sessions.map((session) => session.ptyId)).toEqual([
+      ptyId(2),
+      ptyId(3)
+    ])
+    answerClaudeAccountSwitchPrompt('restart')
+
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({
+      [ptyId(2)]: 'claude',
+      [ptyId(3)]: 'claude'
+    })
+  })
+
+  it('always restart moves only the sessions that are not kept', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', runAccount: 'kept' },
+      { n: 2, agentType: 'claude', runAccount: 'follow' },
+      { n: 3, agentType: 'claude', runAccount: 'kept-elsewhere' }
+    ])
+    setPolicy('restart')
+
+    expect(await switchToB()).toBe('handled')
+    expect(getClaudeAccountSwitchPrompt()).toBeNull()
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [ptyId(2)]: 'claude' })
+    expect(toastSuccess).toHaveBeenCalledWith('Restarting 1 Claude session on acct-b@example.com')
   })
 })

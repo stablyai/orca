@@ -18993,6 +18993,23 @@
           "copied": "Tab ID copied",
           "failed": "Could not copy tab ID",
           "copy": "Copy Tab ID"
+        },
+        "TabAgentAccountMenuItems": {
+          "keepAgentOn": "Keep {{value0}} on {{value1}}",
+          "keepOn": "Keep on {{value0}}",
+          "noSession": "Available once the agent reports its session",
+          "customCodexHome": "Not available while CODEX_HOME is set",
+          "readOnly": "A newer version of Orca saved the list of kept agents, so this version cannot change it.",
+          "unavailable": "Orca could not save this right now. Try again in a moment.",
+          "failed": "This agent cannot be kept on its account right now."
+        },
+        "tabAgentAccounts": {
+          "systemDefault": "System default",
+          "removedAccount": "Removed account",
+          "keptFromNextStart": "Kept on this account from its next start",
+          "kept": "Kept on this account",
+          "follows": "Follows the selected account",
+          "followsFromNextStart": "Follows the selected account from its next start"
         }
       }
     },
@@ -19288,6 +19305,10 @@
       "bar": {
         "workspaceSpace": {
           "otherTopLevelItems": "Other top-level items ({{value0}})"
+        },
+        "AccountAgentCount": {
+          "one": "1 terminal agent",
+          "other": "{{value0}} terminal agents"
         }
       }
     },
@@ -19342,6 +19363,12 @@
         "shellEnvSearchVariables": "environment variables",
         "shellEnvSearchPath": "PATH",
         "shellEnvSearchProxy": "proxy"
+      },
+      "accountsPaneRemoval": {
+        "keptAgentsOne": "1 terminal agent is kept on this account. After removal it follows the selected account from its next start.",
+        "keptAgentsOther": "{{value0}} terminal agents are kept on this account. After removal they follow the selected account from their next start.",
+        "keptClaudeAgentsOne": "1 terminal agent is kept on this account. After removal, Orca starts it on the selected account, but claude typed in its open terminal will not run.",
+        "keptClaudeAgentsOther": "{{value0}} terminal agents are kept on this account. After removal, Orca starts them on the selected account, but claude typed in their open terminals will not run."
       }
     },
     "agentChildRow": {

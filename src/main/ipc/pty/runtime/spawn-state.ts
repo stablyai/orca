@@ -8,6 +8,7 @@ import type {
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
+import type { SpawnAccountLaunch } from '../host-env/agent-account-launch'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { AdoptStablePaneResult } from '../ipc/spawn-types'
@@ -61,6 +62,8 @@ export type RuntimePtySpawnState = {
   selectedCodexHomePath: string | null
   codexResumeHomeSelected: boolean
   codexResumeArgvDropped: boolean
+  /** Kept agents run on their account; everything else follows the selection. */
+  accountLaunch: SpawnAccountLaunch
   skipCodexHomeEnv: boolean
   stripInheritedOrcaCodexHome: boolean
   spawnOptions: PtySpawnOptions
@@ -177,6 +180,7 @@ export function createRuntimePtySpawnState(
     selectedCodexHomePath: null,
     codexResumeHomeSelected: false,
     codexResumeArgvDropped: false,
+    accountLaunch: { kind: 'follow' },
     skipCodexHomeEnv: false,
     stripInheritedOrcaCodexHome: false,
     spawnOptions: { cols: args.cols, rows: args.rows },

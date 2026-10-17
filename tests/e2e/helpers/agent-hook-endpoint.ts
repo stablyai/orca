@@ -96,6 +96,35 @@ export async function emitCodexHookStatus(
   }
 }
 
+export async function emitClaudeHookStatus(
+  endpoint: AgentHookEndpoint,
+  status: { paneKey: string; worktreeId: string; prompt: string; sessionId: string }
+): Promise<void> {
+  const [tabId] = status.paneKey.split(':')
+  const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/claude`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Orca-Agent-Hook-Token': endpoint.token
+    },
+    body: JSON.stringify({
+      paneKey: status.paneKey,
+      tabId,
+      worktreeId: status.worktreeId,
+      env: endpoint.env,
+      version: endpoint.version,
+      payload: {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: status.prompt,
+        session_id: status.sessionId
+      }
+    })
+  })
+  if (response.status !== 204) {
+    throw new Error(`Claude hook POST returned ${response.status}`)
+  }
+}
+
 export async function emitGrokHookPayload(
   endpoint: AgentHookEndpoint,
   event: {

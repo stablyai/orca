@@ -18,6 +18,7 @@ import { prewarmStructuredAgentModelCatalogs } from '../runtime/structured-agent
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { createAgentModelCatalogSettingsExpiry } from '../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { mainProcessState as state } from './main-process-state'
+import { startAgentRunAccounts } from './main-process-agent-run-accounts'
 
 // Settings that change which account or binary a new chat's agent runs under.
 const MODEL_CATALOG_ACCOUNT_SETTINGS = [
@@ -67,6 +68,12 @@ export function initializeMainProcessAccountServices(): void {
   // Why: migrate historical shared-home sessions after startup; compatibility
   // launches re-arm the non-destructive pass for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
+  startAgentRunAccounts({
+    server: agentHookServer,
+    getSettings: () => store.getSettings(),
+    onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+    claudeRouter: services.claudeRuntimeAuth.router
+  })
   const expireModelCatalogs = createAgentModelCatalogSettingsExpiry(
     agentModelCatalogStore,
     store.getSettings()

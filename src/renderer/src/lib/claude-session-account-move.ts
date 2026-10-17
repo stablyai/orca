@@ -23,7 +23,7 @@ import type {
   ClaudeRateLimitAccountsState
 } from '../../../shared/managed-account-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import { resolveAgentAccountRestartResumeStartup } from './agent-account-restart-startup'
+import { buildPaneAccountRestartStartup } from './agent-account-restart-startup'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
   getCodexAccountSwitchLaneMatcher,
@@ -192,7 +192,9 @@ export async function findMovableClaudeSessions(args: {
     if (pane.accountId !== args.fromAccountId) {
       continue
     }
-    const resumeStartup = resolveAgentAccountRestartResumeStartup('claude', {
+    // Why the restart's own startup: a pane it would skip, such as an agent kept on its account,
+    // is not offered either.
+    const resumeStartup = buildPaneAccountRestartStartup('claude', {
       tabId: pane.tab.id,
       leafId: pane.leafId,
       worktreeId: pane.worktreeId,

@@ -13,6 +13,7 @@ import {
 } from '../host-env/codex-home'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
+import { codexKeptAccountArg, noteSpawnAccountLaunch } from '../host-env/agent-account-launch'
 import {
   pendingByPaneKey,
   pendingPtyIdBySerializerGeneration,
@@ -221,7 +222,8 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     pinnedByResume: ctx.codexResumeHomeSelected,
     launchCodexHomePath: ctx.selectedCodexHomePath,
     target: ctx.codexSelectionTarget,
-    settings: ctx.deps.getSettings?.()
+    settings: ctx.deps.getSettings?.(),
+    kept: codexKeptAccountArg(ctx.accountLaunch).keptAccount !== undefined
   })
   // Why: runtime-controller creates (headless serve, CLI, splits) adopt surviving daemon sessions too; without this seed their records stay blank.
   seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
@@ -234,6 +236,13 @@ async function commitReservedRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   }
   // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
   const paneKey = rememberPaneKeyForPty(ctx.result.id, ctx.env?.ORCA_PANE_KEY)
+  noteSpawnAccountLaunch({
+    paneKey,
+    target: ctx.codexSelectionTarget,
+    isReattach: ctx.result.isReattach,
+    account: ctx.accountLaunch,
+    resumeProviderSession: args.resumeProviderSession
+  })
   const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
   const inheritRendererReadiness =
     ctx.result.isReattach === true &&

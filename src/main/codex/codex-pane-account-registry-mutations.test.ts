@@ -81,6 +81,26 @@ describe('CodexPaneAccountRegistryMutations', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('writes when only the kept flag changes', () => {
+    let persisted = JSON.stringify({ version: 2, panes: { existing: EXISTING } })
+    const write = vi.fn((registry: CodexPaneAccountRegistryFile) => {
+      persisted = JSON.stringify(registry)
+      return true
+    })
+    const mutations = new CodexPaneAccountRegistryMutations({
+      read: () => parseRegistry(persisted),
+      write
+    })
+
+    mutations.record('existing', { ...EXISTING, kept: true })
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(parseRegistry(persisted).panes.existing).toEqual({ ...EXISTING, kept: true })
+
+    mutations.record('existing', EXISTING)
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(parseRegistry(persisted).panes.existing).toEqual(EXISTING)
+  })
+
   it('retries a failed reconciliation write without a pending pane mutation', async () => {
     const registry = parseRegistry(JSON.stringify({ version: 2, panes: { existing: EXISTING } }))
     const write = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)

@@ -1,4 +1,5 @@
 import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { AgentRunAccount } from '../../../shared/agent-run-account'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
@@ -29,6 +30,11 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
   retainedForLiveness?: true
+  /** The account a local agent runs on; only the host's run-account producer writes it.
+   *  `null` = a facet the host published was withdrawn. */
+  runAccount?: AgentRunAccount | null
+  /** Only on a facet restatement handed to the window listener; never stored. */
+  runAccountOnly?: true
 }
 
 // `claudeRunningNonAgentTask` is persisted on purpose: it is the one child-work fact the row's

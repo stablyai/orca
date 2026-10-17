@@ -11,13 +11,16 @@ export function TabHoverCard({
   title,
   icon,
   programName,
-  description
+  description,
+  details
 }: {
   children: ReactNode
   title: string
   icon: ReactNode
   programName: string
   description?: string
+  /** Rendered under the program line; mounted only while the card is open. */
+  details?: ReactNode
 }): React.JSX.Element {
   const placement = useContext(TabCardPlacementContext)
   const content = useRef<HTMLDivElement>(null)
@@ -129,6 +132,7 @@ export function TabHoverCard({
             </span>
             <span className="min-w-0 break-all">{programName}</span>
           </div>
+          {details}
         </div>
       </TooltipContent>
     </Tooltip>

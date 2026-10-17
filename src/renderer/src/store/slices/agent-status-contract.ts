@@ -15,6 +15,7 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { AgentRunAccount } from '../../../../shared/agent-run-account'
 
 export type RetainedAgentEntry = {
   entry: AgentStatusEntry
@@ -109,6 +110,8 @@ export type AgentStatusMetadata = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   terminalResumeEligible?: false
+  /** Host-published account facet; `null` = the host withdrew it, absent = not a host row. */
+  runAccount?: AgentRunAccount | null
 }
 
 export type AgentStatusUpdate = {

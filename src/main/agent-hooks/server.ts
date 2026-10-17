@@ -4,7 +4,7 @@ import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { parseFormEncodedBody } from '../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { AgentHookServerAgentPresence } from './server/server-agent-presence'
+import { AgentHookServerRunAccount } from './server/server-run-account'
 import { isValidPaneKey } from './server/server-status-identity'
 
 export type {
@@ -17,6 +17,7 @@ export type {
   EnrichedAgentHookEventPayload
 } from './server/server-types'
 export type { AgentHookSource }
+export type { AgentRunAccountRow } from './server/server-run-account'
 export {
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   CLOSED_AGENT_STATUS_PANE_KEYS_MAX,
@@ -26,7 +27,7 @@ export {
 export { isValidPaneKey }
 
 /** Public composition seam for the loopback hook listener and relay status adapter. */
-export class AgentHookServer extends AgentHookServerAgentPresence {}
+export class AgentHookServer extends AgentHookServerRunAccount {}
 
 export const agentHookServer = new AgentHookServer()
 

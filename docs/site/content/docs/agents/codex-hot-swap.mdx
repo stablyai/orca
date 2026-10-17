@@ -15,6 +15,14 @@ Running multiple Codex accounts to maximize tokens is common. Orca lets you hot-
 
 Click the Codex chip in the status bar to open the account switcher. Pick an account; any new Codex session launched after that uses it. Sessions already running keep their original account until restarted.
 
+## Keep an agent on its account
+
+Hover a Codex or Claude tab to see which account each agent in it runs on. To keep one agent on its account while you switch the others, right-click its tab and check **Keep on** followed by the account's name (a split tab has one item per agent). Answering the **Account switched** prompt with **Keep old account** does the same.
+
+A kept agent stays on its account when you switch accounts, and every start Orca makes of its conversation — after a restart of Orca, when the agent wakes, or when you resume it from Session History — runs on that account. Agents you don't keep follow the selected account exactly as before. The account switcher shows how many terminal agents run on each account.
+
+Uncheck the item to let the agent follow the selected account again; this also works for an agent Orca refused to start on its kept account. Removing an account releases the agents kept on it. A `claude` you type in a Claude terminal kept on a removed account does not run; open a new terminal instead.
+
 ## System default
 
 The **System default** row is your current host Codex login under `~/.codex`. Managed accounts (added in Orca) do not rewrite that login; they run in isolated homes. Select System default when you want launches to match a terminal `codex` outside Orca.
@@ -29,6 +37,7 @@ For managed Codex accounts, Orca mirrors settings from your real `~/.codex/confi
 - Existing Codex processes keep their current account until restart.
 - Usage readouts in the status bar follow the currently-active account.
 - The restart chip preserves the active account at the time of restart.
+- Keep is not offered for a Codex agent started while `CODEX_HOME` was set, or for terminals in WSL or on a remote host.
 
 ## Claude Code accounts
 

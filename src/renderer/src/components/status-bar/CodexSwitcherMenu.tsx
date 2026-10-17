@@ -27,6 +27,7 @@ import {
 } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
+import { AccountAgentCount } from './AccountAgentCount'
 
 export function CodexSwitcherMenu({
   codex,
@@ -242,6 +243,11 @@ export function CodexSwitcherMenu({
                           <span className="min-w-0 flex-1 whitespace-normal break-words">
                             {target.label}
                           </span>
+                          <AccountAgentCount
+                            provider="codex"
+                            accountId={target.id}
+                            enabled={selectedGroup.key === 'host' && !hasActiveRuntimeEnvironment}
+                          />
                           {target.active ? (
                             <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
                               {translate(

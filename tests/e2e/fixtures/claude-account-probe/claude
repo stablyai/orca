@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stands in for `claude`: prints which account folder and pointer file this launch reads.
+account=none
+if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
+  account=$(basename "$(dirname "$CLAUDE_CONFIG_DIR")")
+fi
+pointer=none
+if [ -n "${ORCA_CLAUDE_PROFILE_POINTER:-}" ]; then
+  pointer=$(basename "$ORCA_CLAUDE_PROFILE_POINTER")
+fi
+printf 'CLAUDE_ACCOUNT_PROBE %s %s\n' "$account" "$pointer"

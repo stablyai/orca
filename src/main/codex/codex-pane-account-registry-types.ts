@@ -7,6 +7,8 @@ export type CodexPaneAccountRecord = {
   accountId: string | null
   /** Absent only on records written before route provenance was introduced. */
   homeRoute?: CodexPaneHomeRoute
+  /** A person kept this pane on accountId; the restart prompt never offers to move it. */
+  kept?: true
 }
 
 export type CodexPaneAccountRegistryFile = {

@@ -3,6 +3,7 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentRunAccount } from './agent-run-account'
 import type { AgentMainAgentStatus } from './main-agent-status'
 import type { AgentStateHistoryEntry } from './agent-state-history'
 import { isAgentTurnOutcome } from './agent-turn-outcome'
@@ -163,6 +164,8 @@ export type AgentStatusEntry = {
    *  the transition may have been missed while no receiver was up, so freshness gates
    *  treat the row as stale immediately. Cleared by any accepted live event. */
   restoredUnconfirmed?: boolean
+  /** The account a local agent runs on, as its execution host published it. */
+  runAccount?: AgentRunAccount
 } & AgentStatusRowFacets
 
 // ─── Agent status payload shape (what hook receivers send via IPC) ──────────

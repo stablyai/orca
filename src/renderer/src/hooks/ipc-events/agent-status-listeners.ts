@@ -8,6 +8,8 @@ import {
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
+import { forgetIdentityRowRunAccount } from '@/store/agent-identity-row-run-accounts'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import { resolvePaneKey } from './agent-status-routing'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
@@ -81,6 +83,7 @@ export function registerAgentStatusListeners(args: {
           pendingAgentStatusEvents.splice(index, 1)
         }
       }
+      forgetIdentityRowRunAccount(resolveAgentPaneAuthorityKey(data.paneKey))
       const store = useAppStore.getState()
       if (
         data.statusUnavailable !== true &&

@@ -84,6 +84,8 @@ type PtySpawnHostEnvArgs = {
   mintedSessionId: boolean
   /** An account-switch restart resumes onto the selected account; only the window has one. */
   resumeOnSelectedAccount: boolean
+  /** A person kept this conversation on an account; its resume goes there, over the selection. */
+  keptAccount?: { accountId: string | null }
   /** TEMPORARY (row 7 removes it): the host builds no host env for an empty id; the window refuses it. */
   emptySessionIdSkipsHostEnv: boolean
   requestedAgentTeamsPath: string | undefined
@@ -106,7 +108,8 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
         target,
         // Why: a host runtime skips resume prep for a launch whose env names a client-sent CODEX_HOME.
         launchEnv: args.env,
-        ...(args.resumeOnSelectedAccount ? { useSelectedAccount: true } : {})
+        ...(args.resumeOnSelectedAccount ? { useSelectedAccount: true } : {}),
+        ...(args.keptAccount ? { keptAccount: args.keptAccount } : {})
       })
   const codexResumeLaunch = codexResumePreparation
     ? await deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)

@@ -2,6 +2,9 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-type
 import { syncAgentHookCompletionNotificationsForStoreUpdate } from '../agent-hook-completion-notifications'
 import { registerAgentStatusListeners } from './agent-status-listeners'
 import { useAppStore } from '../../store'
+import { noteHostRowRunAccount } from '@/store/agent-identity-row-run-accounts'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { isAgentStatusForRecentlyClosedTab } from './agent-status-routing'
 import {
   createAgentStatusPaneRoutingIndex,
   resolvePaneKeyFromRoutingIndex
@@ -101,11 +104,20 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
     }
   }
 
-  const applyAgentStatus = createAgentStatusEventApplicator({
+  const applyStatusEntry = createAgentStatusEventApplicator({
     pendingAgentStatusEvents,
     transientClearWatermarkByConnectionId,
     enqueuePendingAgentStatus
   })
+  // Why ahead of the applicator's gates: an identity row never becomes a status entry, yet once a
+  // kept agent's terminal is gone its facet is the only account the tab menu can un-keep it from.
+  const applyAgentStatus: typeof applyStatusEntry = (data, options) => {
+    const store = options?.batch?.transaction.getState() ?? useAppStore.getState()
+    if (store.workspaceSessionReady && !isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
+      noteHostRowRunAccount(resolveAgentPaneAuthorityKey(data.paneKey), data)
+    }
+    return applyStatusEntry(data, options)
+  }
   const startupSnapshot = registerAgentStatusStartupSnapshot()
   let snapshotRequestedForReadyWindow = false
   let snapshotRequestId = 0

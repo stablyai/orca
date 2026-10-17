@@ -1,4 +1,9 @@
-import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
+import {
+  codexKeptAccountArg,
+  prepareSpawnClaudeAuth,
+  resolveSpawnAccountLaunch,
+  withSpawnClaudeTerminalEnv
+} from '../host-env/agent-account-launch'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -71,11 +76,24 @@ export async function prepareRuntimePtySpawn(
   ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
   ctx.expectedWslDistro = target.expectedWslDistro
   ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
+  ctx.accountLaunch = ctx.preAdoptedStablePane
+    ? { kind: 'follow' }
+    : resolveSpawnAccountLaunch({
+        connectionId: args.connectionId,
+        launchAgent: args.launchAgent,
+        resumeProviderSession: args.resumeProviderSession,
+        target: ctx.codexSelectionTarget,
+        settings: ctx.deps.getSettings?.()
+      })
+  args.env = withSpawnClaudeTerminalEnv(args.env, ctx.accountLaunch, ctx.codexSelectionTarget)
+  const claudeAuth = ctx.isClaudeLaunch
+    ? prepareSpawnClaudeAuth(
+        ctx.accountLaunch,
+        ctx.codexSelectionTarget,
+        ctx.deps.prepareClaudeAuth
+      )
+    : null
+  ctx.claudeAuth = claudeAuth ? await claudeAuth : null
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {
@@ -122,6 +140,7 @@ export async function prepareRuntimePtySpawn(
     callerNamedSession: ctx.callerRequestedSessionId !== undefined,
     mintedSessionId: ctx.requestedSessionId === undefined,
     resumeOnSelectedAccount: false,
+    ...codexKeptAccountArg(ctx.accountLaunch),
     emptySessionIdSkipsHostEnv: true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,

@@ -9,6 +9,7 @@ import {
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
 import { rememberPaneKeyForPty } from '../pane/key-state'
+import { noteSpawnAccountLaunch } from '../host-env/agent-account-launch'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
 import { seedResumeLaunchIdentityFromSpawn } from '../pane/resume-launch-identity'
@@ -152,6 +153,14 @@ async function commitReservedPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpaw
       clearMigrationUnsupportedPtysForPaneKey(ctx.validatedPaneKey)
     }
   }
+  // Why before the identity seed: that row must be read against this launch, not the pane's last one.
+  noteSpawnAccountLaunch({
+    paneKey: rememberedPaneKey,
+    target: ctx.codexSelectionTarget,
+    isReattach: ctx.result.isReattach,
+    account: ctx.accountLaunch,
+    resumeProviderSession: args.resumeProviderSession
+  })
   // Why after commit: a spawn rejected above must not leave a published identity behind.
   seedResumeLaunchIdentityFromSpawn({
     paneKey: ctx.validatedPaneKey,

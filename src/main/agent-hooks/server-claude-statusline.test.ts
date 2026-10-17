@@ -74,4 +74,35 @@ describe('AgentHookServer /statusline/claude', () => {
 
     expect(events).toEqual([])
   })
+
+  it('tells pane listeners which folder a pane reports from, alias-resolved, usage or not', async () => {
+    const physical = 'tab-old:11111111-1111-4111-8111-111111111111'
+    const stable = 'tab-new:22222222-2222-4222-8222-222222222222'
+    server.transferPaneAuthority(physical, stable, 'pty-1')
+    const panes: { paneKey: string; configDir: string | null }[] = []
+    const usage: ClaudeStatusLineRateLimits[] = []
+    server.subscribeClaudeStatusLinePanes((event) => panes.push(event))
+    server.setClaudeStatusLineListener((event) => usage.push(event))
+
+    const withUsage = new URLSearchParams({
+      paneKey: physical,
+      configDir: '/home/dev/managed',
+      payload: JSON.stringify({ rate_limits: { five_hour: { used_percentage: 1 } } })
+    }).toString()
+    const withoutUsage = new URLSearchParams({
+      paneKey: stable,
+      configDir: '',
+      payload: JSON.stringify({ context_window: { used_percentage: 8 } })
+    }).toString()
+    await expect(post(withUsage)).resolves.toMatchObject({ status: 204 })
+    await expect(post(withoutUsage)).resolves.toMatchObject({ status: 204 })
+    await expect(post('paneKey=not-a-pane-key&payload={}')).resolves.toMatchObject({ status: 204 })
+
+    expect(panes).toEqual([
+      { paneKey: stable, configDir: '/home/dev/managed' },
+      { paneKey: stable, configDir: null }
+    ])
+    expect(usage).toHaveLength(1)
+    expect(usage[0]).not.toHaveProperty('paneKey')
+  })
 })

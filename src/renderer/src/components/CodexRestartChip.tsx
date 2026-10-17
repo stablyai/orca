@@ -18,11 +18,14 @@ type RestartNotice = {
 export default function CodexRestartChip({
   isVisible = true,
   ptyId,
+  paneKey,
   onReturnFocus,
   shouldFocus = false
 }: {
   isVisible?: boolean
   ptyId: string
+  /** Lets the host keep this pane's conversation, not just its terminal. */
+  paneKey?: string
   onReturnFocus: () => void
   shouldFocus?: boolean
 }): React.JSX.Element | null {
@@ -38,11 +41,22 @@ export default function CodexRestartChip({
     onReturnFocus()
   }
 
+  // Why: notices are renderer-only, so each answer is persisted on the host or
+  // the startup sweep re-raises the answered prompt.
+  const handleKeep = (): void => {
+    useAppStore.getState().dismissCodexRestartNotices([ptyId])
+    onReturnFocus()
+    void window.api.codexAccounts
+      .keepStalePanes({ panes: [{ ptyId, ...(paneKey ? { paneKey } : {}) }] })
+      .catch((err: unknown) => {
+        console.warn('Failed to keep Codex pane on its account:', err)
+      })
+  }
+
+  // Why not a keep: Escape and a backdrop click are too easy to send by accident to pin a conversation.
   const handleDismiss = (): void => {
     useAppStore.getState().dismissCodexRestartNotices([ptyId])
     onReturnFocus()
-    // Why: notices are renderer-only, so the persisted launch record must be
-    // cleared for this pane or the startup sweep re-raises its answered prompt.
     void window.api.codexAccounts.forgetStalePanes({ ptyIds: [ptyId] }).catch((err: unknown) => {
       console.warn('Failed to forget dismissed Codex pane account:', err)
     })
@@ -55,6 +69,7 @@ export default function CodexRestartChip({
       restartNotice={restartNotice}
       shouldFocus={shouldFocus}
       onDismiss={handleDismiss}
+      onKeep={handleKeep}
       onRestart={handleRestart}
     />
   )
@@ -66,6 +81,7 @@ function LoudRestartOverlay({
   restartNotice,
   shouldFocus,
   onDismiss,
+  onKeep,
   onRestart
 }: {
   isVisible: boolean
@@ -73,6 +89,7 @@ function LoudRestartOverlay({
   restartNotice: RestartNotice
   shouldFocus: boolean
   onDismiss: () => void
+  onKeep: () => void
   onRestart: () => void
 }): React.JSX.Element {
   const titleId = useId()
@@ -154,7 +171,7 @@ function LoudRestartOverlay({
           )}
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
+          <Button type="button" variant="outline" size="sm" onClick={onKeep}>
             {translate('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
           </Button>
           <Button type="button" variant="default" size="sm" onClick={onRestart}>

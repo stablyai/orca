@@ -10,6 +10,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runt
 import type { PtySpawnTiming } from '../../pty-spawn-timing'
 import { createPtySpawnTiming } from '../../pty-spawn-timing'
 import { noCodexResumeLaunch, type CodexResumeLaunch } from '../host-env/codex-resume'
+import type { SpawnAccountLaunch } from '../host-env/agent-account-launch'
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { ReplacedPaneOwner } from '../pane/pane-owner-replacement'
@@ -80,6 +81,8 @@ export type PtyIpcSpawnState = {
   nativeWindowsConptySpawn: boolean
   codexSelectionTarget: CodexAccountSelectionTarget
   codexResumeLaunch: CodexResumeLaunch
+  /** Kept agents run on their account; everything else follows the selection. */
+  accountLaunch: SpawnAccountLaunch
   launchCommand: string | undefined
   env: Record<string, string> | undefined
   selectedCodexHomePath: string | null
@@ -156,6 +159,7 @@ export function createPtyIpcSpawnState(
     nativeWindowsConptySpawn: false,
     codexSelectionTarget: { runtime: 'host' },
     codexResumeLaunch: noCodexResumeLaunch(undefined),
+    accountLaunch: { kind: 'follow' },
     launchCommand: undefined,
     env: undefined,
     selectedCodexHomePath: null,

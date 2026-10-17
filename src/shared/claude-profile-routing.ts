@@ -7,6 +7,9 @@ export const CLAUDE_INJECTED_CONFIG_DIR_ENV = 'ORCA_CLAUDE_INJECTED_CONFIG_DIR'
 /** The user's own CLAUDE_CONFIG_DIR an injected value replaced; System default restores it. */
 export const CLAUDE_USER_CONFIG_DIR_ENV = 'ORCA_CLAUDE_USER_CONFIG_DIR'
 
+/** A removed account's pointer content: not a folder, so the `claude` function starts nothing. */
+export const CLAUDE_REMOVED_ACCOUNT_POINTER = 'removed-account'
+
 export const CLAUDE_PROFILE_MISSING_MESSAGE =
   "The selected Claude account's folder is missing. Sign in to it again or choose another account."
 

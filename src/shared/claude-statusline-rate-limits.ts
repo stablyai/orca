@@ -2,6 +2,8 @@
 // turn — piggybacked on Messages API responses, so reading it costs no usage-endpoint
 // budget (the endpoint 429s under Orca's polling; see rate-limits/service.ts).
 
+import { parsePaneKey } from './stable-pane-id'
+
 export const CLAUDE_STATUSLINE_PATHNAME = '/statusline/claude'
 
 // Why: the statusline ticks ~3x/sec while streaming and the service drops same-value posts
@@ -85,4 +87,24 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
   }
   const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
   return { configDir: configDir || null, fiveHour, sevenDay }
+}
+
+export type ClaudeStatusLinePane = {
+  paneKey: string
+  /** CLAUDE_CONFIG_DIR of the reporting session; null for system-default sessions. */
+  configDir: string | null
+}
+
+/** Which folder a pane's Claude reports from; independent of whether the post carries usage. */
+export function parseClaudeStatusLinePane(body: unknown): ClaudeStatusLinePane | null {
+  if (typeof body !== 'object' || body === null) {
+    return null
+  }
+  const paneKey = 'paneKey' in body && typeof body.paneKey === 'string' ? body.paneKey.trim() : ''
+  if (paneKey.length > 256 || parsePaneKey(paneKey) === null) {
+    return null
+  }
+  const configDir =
+    'configDir' in body && typeof body.configDir === 'string' ? body.configDir.trim() : ''
+  return { paneKey, configDir: configDir || null }
 }

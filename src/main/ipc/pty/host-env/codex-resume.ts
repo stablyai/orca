@@ -31,6 +31,8 @@ export type PrepareCodexResumeHomeArgs = {
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   useSelectedAccount?: boolean
+  /** A person kept this conversation on an account; wins over useSelectedAccount. */
+  keptAccount?: { accountId: string | null }
 }
 
 export function prepareCodexResumeHome(
@@ -50,7 +52,11 @@ export function prepareCodexResumeHome(
       providerSession,
       target: args.target,
       launchEnv: args.launchEnv,
-      ...(args.useSelectedAccount ? { useSelectedAccount: true } : {})
+      ...(args.keptAccount
+        ? { keptAccount: args.keptAccount }
+        : args.useSelectedAccount
+          ? { useSelectedAccount: true }
+          : {})
     })
   }
 }

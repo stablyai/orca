@@ -14,7 +14,7 @@ const NEW_PTY = 'wt1@@new'
 const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
 
 function seedClaudePane(
-  overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession'>> = {}
+  overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession' | 'runAccount'>> = {}
 ): void {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
   useAppStore.setState({
@@ -139,6 +139,51 @@ describe('detached Claude account-move restart', () => {
     } finally {
       uninstall()
     }
+  })
+
+  it('drops a queued restart of an agent kept on its account instead of relaunching it', async () => {
+    seedClaudePane({
+      runAccount: { provider: 'claude', lane: 'host', accountId: 'acct-a', mode: 'kept' }
+    })
+    useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+
+    await sweepUnclaimedCodexPaneRestarts()
+
+    expect(window.api.pty.spawn).not.toHaveBeenCalled()
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+    expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({
+      [LEAF_ID]: OLD_PTY
+    })
+  })
+
+  it('drops a queued restart of an agent whose conversation is kept on another account', async () => {
+    seedClaudePane({
+      runAccount: {
+        provider: 'claude',
+        lane: 'host',
+        accountId: 'acct-b',
+        mode: 'follow',
+        keptElsewhere: true
+      }
+    })
+    useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+
+    await sweepUnclaimedCodexPaneRestarts()
+
+    expect(window.api.pty.spawn).not.toHaveBeenCalled()
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+  })
+
+  it('still relaunches an agent that follows the selected account', async () => {
+    seedClaudePane({
+      runAccount: { provider: 'claude', lane: 'host', accountId: 'acct-a', mode: 'follow' }
+    })
+    useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+
+    await sweepUnclaimedCodexPaneRestarts()
+
+    expect(window.api.pty.spawn).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   })
 
   it('skips a pane whose session can no longer be resumed instead of starting a fresh Claude', async () => {

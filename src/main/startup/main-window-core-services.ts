@@ -5,6 +5,7 @@ import { initTccPromptNotice } from '../macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../updater'
 import { mainProcessState as state } from './main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../codex/codex-ai-vault-session-resume'
+import { resolveKeptCodexHomeForSession } from '../agent-accounts/kept-codex-home'
 import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
 import { preserveAgentAuthBeforeRestart } from '../agent-auth-restart-preservation'
 import { preserveStateBeforeUpdateRestart } from '../update-restart-preservation'
@@ -89,7 +90,9 @@ export function attachMainWindowCoreServices(
         prepareCodexAiVaultSessionResume(args, {
           runtimeHome: codexRuntimeHome,
           systemCodexHomePath: resolveHostCodexSessionSourceHome(store.getSettings()),
-          preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home)
+          preparePinnedLaunchHome: (home) => prepareCodexPinnedLaunchHome(home),
+          resolveKeptCodexHome: (sessionId) =>
+            resolveKeptCodexHomeForSession(sessionId, codexRuntimeHome)
         }),
       onBeforeRelaunch: async () => {
         state.isQuitting = true

@@ -1,4 +1,5 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import type { SetAgentKeptRequest, SetAgentKeptResult } from '../../shared/agent-run-account'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -38,8 +39,15 @@ export type CodexAccountsApi = {
   >
   /** The selection lane each PTY launched from, keyed by pty id; unrecorded panes are absent. */
   listRecordedPaneLanes: (args: { ptyIds: string[] }) => Promise<Record<string, string>>
-  /** Drops launch records so a dismissed prompt stays dismissed across restarts. */
+  /** Dismissing the prompt: forgets each pane's launch record, so the prompt stays answered. */
   forgetStalePanes: (args: { ptyIds: string[] }) => Promise<void>
+  /** "Keep old account": keeps each pane on its launch account, so the prompt stays answered. */
+  keepStalePanes: (args: { panes: { ptyId: string; paneKey?: string }[] }) => Promise<void>
+}
+
+/** Keeping a local terminal agent on the account it runs on. */
+export type AgentAccountKeepApi = {
+  setKept: (args: SetAgentKeptRequest) => Promise<SetAgentKeptResult>
 }
 
 export type ClaudeAccountsApi = {

@@ -1,5 +1,6 @@
 import type {
   ClaudeAccountsApi,
+  AgentAccountKeepApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
   CursorAccountsApi,
@@ -106,6 +107,7 @@ export type PreloadApi = {
   localhostWorktreeLabels: LocalhostWorktreeLabelsApi
   keybindings: KeybindingsApi
   codexAccounts: CodexAccountsApi
+  agentAccounts: AgentAccountKeepApi
   claudeAccounts: ClaudeAccountsApi
   cli: CliApi
   codexConfigSync: CodexConfigSyncApi

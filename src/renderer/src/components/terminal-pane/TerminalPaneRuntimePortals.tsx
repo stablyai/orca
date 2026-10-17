@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import CodexRestartChip from '../CodexRestartChip'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { CodexSharedServerBanner } from './CodexSharedServerBanner'
 import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
@@ -46,6 +47,7 @@ export function TerminalPaneCodexRestartPortals({
               key={`codex-restart-${pane.id}-${ptyId}`}
               isVisible={isVisible}
               ptyId={ptyId}
+              paneKey={makePaneKey(tabId, pane.leafId)}
               onReturnFocus={() => {
                 managerRef.current?.setActivePane(pane.id, { focus: false })
                 focusTerminalTabSurface(tabId, pane.leafId)

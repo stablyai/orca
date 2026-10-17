@@ -13,6 +13,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import type { AccountsPaneSectionModel, RemoveAccountTarget } from './accounts-pane-types'
+import { KeptAgentsRemovalNote } from './KeptAgentsRemovalNote'
 
 export function renderAccountsRemovalDialogs(
   model: AccountsPaneSectionModel,
@@ -26,6 +27,8 @@ export function renderAccountsRemovalDialogs(
     setRemoveCodexTarget,
     accountOwner
   } = model
+  const localHostAccount = (target: RemoveAccountTarget): boolean =>
+    accountOwner.kind === 'local' && target.runtime.runtime === 'host'
   return (
     <>
       <Dialog
@@ -46,6 +49,13 @@ export function renderAccountsRemovalDialogs(
                 'Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.'
               )}
             </DialogDescription>
+            {removeCodexTarget ? (
+              <KeptAgentsRemovalNote
+                provider="codex"
+                accountId={removeCodexTarget.id}
+                enabled={localHostAccount(removeCodexTarget)}
+              />
+            ) : null}
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveCodexTarget(null)}>
@@ -89,6 +99,13 @@ export function renderAccountsRemovalDialogs(
                 "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
               )}
             </DialogDescription>
+            {removeClaudeTarget ? (
+              <KeptAgentsRemovalNote
+                provider="claude"
+                accountId={removeClaudeTarget.id}
+                enabled={localHostAccount(removeClaudeTarget)}
+              />
+            ) : null}
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveClaudeTarget(null)}>

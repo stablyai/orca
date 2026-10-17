@@ -10,6 +10,7 @@ import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server'
 const hooks = vi.hoisted(() => ({
   listener: null as ((payload: EnrichedAgentHookEventPayload) => void) | null
 }))
+const record = vi.fn()
 
 vi.mock('electron', () => ({
   app: { getPath: () => '', on: vi.fn(), isReady: () => true }
@@ -62,9 +63,10 @@ beforeEach(() => {
       send: (channel: string, event: { paneKey: string }) => sent.push({ channel, event })
     }
   } as unknown as typeof mainProcessState.mainWindow
+  record.mockReset()
   installMainWindowAgentStatusListeners({
     window: mainProcessState.mainWindow!,
-    onRecordAgentState: vi.fn()
+    onRecordAgentState: record
   })
 })
 
@@ -107,4 +109,36 @@ it('marks replayed rows so the renderer can skip their completion notification',
   hooks.listener!(statusPayload({ payload: { state: 'done', prompt: 'ship it' }, isReplay: true }))
   expect(sent[0].event).not.toHaveProperty('isReplay')
   expect(sent[1].event).toHaveProperty('isReplay', true)
+})
+
+it('forwards the host account facet, including a withdrawal, and nothing when absent', () => {
+  const facet = { provider: 'codex', lane: 'host', accountId: 'a', mode: 'kept' } as const
+  hooks.listener!(statusPayload({ paneKey: 'kept', runAccount: facet }))
+  hooks.listener!(statusPayload({ paneKey: 'withdrawn', runAccount: null }))
+  hooks.listener!(statusPayload({ paneKey: 'plain' }))
+
+  const byPane = new Map(sent.map((entry) => [entry.event.paneKey, entry.event]))
+  expect(byPane.get('kept')).toMatchObject({ runAccount: facet })
+  expect(byPane.get('withdrawn')).toMatchObject({ runAccount: null })
+  expect(byPane.get('plain')).not.toHaveProperty('runAccount')
+})
+
+// Titles and first-work renames hang off the hook subscription, which a facet restatement never
+// reaches (server-run-account.test.ts); this listener must still skip telemetry and stay a replay.
+it('forwards a facet-only restatement as a replay without recording telemetry', () => {
+  const facet = { provider: 'codex', lane: 'host', accountId: 'a', mode: 'kept' } as const
+  const waiting = { state: 'waiting', prompt: '', agentType: 'codex' } as const
+  hooks.listener!(statusPayload({ payload: waiting, runAccount: facet, isReplay: true }))
+  expect(record).toHaveBeenCalledOnce()
+  record.mockClear()
+  sent.length = 0
+
+  hooks.listener!(
+    statusPayload({ payload: waiting, runAccount: facet, isReplay: true, runAccountOnly: true })
+  )
+
+  expect(sent.map((entry) => entry.event)).toEqual([
+    expect.objectContaining({ paneKey: 'pane-1', runAccount: facet, isReplay: true })
+  ])
+  expect(record).not.toHaveBeenCalled()
 })

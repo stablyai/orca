@@ -180,6 +180,7 @@ export function createCodexAccountsApi(): PreloadApi['codexAccounts'] {
     // Why empty rather than absent: the same host owns both records, so a web
     // client has no recorded lane to offer and every pane falls to derivation.
     listRecordedPaneLanes: () => Promise.resolve({}),
-    forgetStalePanes: () => Promise.resolve()
+    forgetStalePanes: () => Promise.resolve(),
+    keepStalePanes: () => Promise.resolve()
   }
 }

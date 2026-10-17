@@ -30,6 +30,7 @@ import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pan
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
+import { resolveLiveEntryRunAccount } from './agent-status-live-entry-run-account'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
@@ -202,6 +203,7 @@ export function buildAgentStatusLiveEntry(
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
+  const runAccount = resolveLiveEntryRunAccount(existing, metadata, identity.agentType)
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -248,6 +250,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(runAccount ? { runAccount } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),

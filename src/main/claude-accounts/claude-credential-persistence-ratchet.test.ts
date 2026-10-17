@@ -39,6 +39,8 @@ const fsAllowances: Record<string, readonly string[]> = {
   'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
   // The which-account file.
   'claude-accounts/claude-profile-router.ts': ['mkdirSync', 'rmSync', 'writeFileAtomically'],
+  // One which-account file per account, for agents kept on it; it names a folder, never a login.
+  'claude-accounts/claude-profile-account-pointers.ts': ['mkdirSync', 'writeFileAtomically'],
   // Removing an account deletes its folder, links first.
   'claude-accounts/claude-account-folder.ts': ['rmSync', 'rmdirSync', 'unlinkSync'],
   'claude-accounts/claude-profile-prompt-history.ts': [

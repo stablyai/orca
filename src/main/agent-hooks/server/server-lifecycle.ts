@@ -28,6 +28,9 @@ type HookServerStartOptions = {
 export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
   private readonly startup = new AgentHookStartup()
 
+  /** Which account folder a pane's Claude reports from; the run-account layer listens. */
+  protected noteClaudeStatusLinePane(_body: unknown): void {}
+
   /** Start the loopback listener after hydration and spool replay have settled. */
   start(options?: HookServerStartOptions): Promise<void> {
     return this.startup.start((isCurrent) => this.startListener(options, isCurrent))
@@ -118,6 +121,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           if (statusLineEvent) {
             this.onClaudeStatusLine?.(statusLineEvent)
           }
+          this.noteClaudeStatusLinePane(body)
           res.writeHead(204)
           res.end()
           return
