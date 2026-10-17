@@ -7,6 +7,7 @@ import {
 import {
   GIT_HISTORY_DEFAULT_LIMIT,
   GIT_HISTORY_MAX_LIMIT,
+  GIT_HISTORY_MAX_REVISIONS,
   type GitHistoryExecutor,
   type GitHistoryItemRef,
   type GitHistoryOptions,
@@ -15,13 +16,15 @@ import {
 
 export type {
   GitHistoryExecutor,
+  GitHistoryCursor,
   GitHistoryGraphColorId,
   GitHistoryItem,
   GitHistoryItemRef,
   GitHistoryItemStatistics,
   GitHistoryOptions,
   GitHistoryRefCategory,
-  GitHistoryResult
+  GitHistoryResult,
+  GitHistoryScope
 } from './git-history-types'
 export {
   GIT_HISTORY_BASE_REF_COLOR,
@@ -170,6 +173,25 @@ export async function loadGitHistoryFromExecutor(
   options: GitHistoryOptions = {}
 ): Promise<GitHistoryResult> {
   const limit = clampHistoryLimit(options.limit)
+  if (options.cursor) {
+    const { revisions, offset, order } = options.cursor
+    if (
+      !Array.isArray(revisions) ||
+      revisions.length < 1 ||
+      revisions.length > GIT_HISTORY_MAX_REVISIONS ||
+      revisions.some((revision) => !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(revision)) ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      (order !== undefined && order !== 'date')
+    ) {
+      throw new Error('Invalid git history cursor')
+    }
+    return {
+      ...(await loadHistoryPage(git, cwd, revisions, offset, limit, order)),
+      hasIncomingChanges: false,
+      hasOutgoingChanges: false
+    }
+  }
   const headOid = await resolveCommit(git, cwd, 'HEAD')
   if (!headOid) {
     return {
@@ -192,9 +214,37 @@ export async function loadGitHistoryFromExecutor(
       ? rawBaseRef
       : undefined
 
-  // Why: this panel is scoped to the active workspace. Upstream and base refs
-  // stay as comparison metadata so old workspaces do not list newly fetched upstream/base commits.
-  const historyRevisions = [headOid]
+  let branchRevisions: string[] = []
+  if (options.scope === 'all') {
+    const { stdout } = await git(
+      [
+        'for-each-ref',
+        `--count=${GIT_HISTORY_MAX_REVISIONS + 1}`,
+        '--format=%(objectname)',
+        'refs/heads/',
+        'refs/remotes/'
+      ],
+      cwd
+    )
+    branchRevisions = stdout.trim().split(/\r?\n/).filter(Boolean)
+    if (branchRevisions.length > GIT_HISTORY_MAX_REVISIONS) {
+      throw new Error('Too many branch refs to display safely. Select Current branch.')
+    }
+  }
+  const historyRevisions = [
+    ...new Set([
+      headOid,
+      ...branchRevisions,
+      ...(options.scope !== 'current' && options.includeRelatedRefs
+        ? [remoteRef?.revision, baseRef?.revision].filter((revision): revision is string =>
+            Boolean(revision)
+          )
+        : [])
+    ])
+  ]
+  if (historyRevisions.length > GIT_HISTORY_MAX_REVISIONS) {
+    throw new Error('Too many branch refs to display safely. Select Current branch.')
+  }
 
   let mergeBase: string | undefined
   if (remoteRef?.revision && currentRef.revision && remoteRef.revision !== currentRef.revision) {
@@ -206,22 +256,14 @@ export async function loadGitHistoryFromExecutor(
     }
   }
 
-  const { stdout } = await git(
-    [
-      'log',
-      '--no-show-signature',
-      '--no-color',
-      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
-      '-z',
-      '--topo-order',
-      '--decorate=full',
-      `-n${limit + 1}`,
-      ...historyRevisions
-    ],
-    cwd
+  const page = await loadHistoryPage(
+    git,
+    cwd,
+    historyRevisions,
+    0,
+    limit,
+    options.scope ? 'date' : undefined
   )
-  const parsed = parseGitHistoryLog(stdout)
-  const items = parsed.slice(0, limit)
   const hasIncomingChanges =
     Boolean(remoteRef?.revision && mergeBase) && remoteRef?.revision !== mergeBase
   const hasOutgoingChanges =
@@ -229,14 +271,51 @@ export async function loadGitHistoryFromExecutor(
     currentRef.revision !== mergeBase
 
   return {
-    items,
+    ...page,
+    ...(options.scope ? { scope: options.scope } : {}),
     currentRef,
     remoteRef,
     baseRef,
     mergeBase,
     hasIncomingChanges,
-    hasOutgoingChanges,
-    hasMore: parsed.length > limit,
-    limit
+    hasOutgoingChanges
+  }
+}
+
+async function loadHistoryPage(
+  git: GitHistoryExecutor,
+  cwd: string,
+  revisions: string[],
+  offset: number,
+  limit: number,
+  order?: 'date'
+): Promise<Pick<GitHistoryResult, 'items' | 'hasMore' | 'limit' | 'nextCursor'>> {
+  const { stdout } = await git(
+    [
+      'log',
+      '--no-show-signature',
+      '--no-color',
+      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
+      '-z',
+      order === 'date' ? '--date-order' : '--topo-order',
+      '--decorate=full',
+      `-n${limit + 1}`,
+      ...(offset ? [`--skip=${offset}`] : []),
+      ...(revisions.length > 3 ? ['--stdin'] : revisions),
+      '--'
+    ],
+    cwd,
+    ...(revisions.length > 3 ? [`${revisions.join('\n')}\n`] : [])
+  )
+  const parsed = parseGitHistoryLog(stdout)
+  const items = parsed.slice(0, limit)
+  const hasMore = parsed.length > limit
+  return {
+    items,
+    hasMore,
+    limit,
+    ...(hasMore
+      ? { nextCursor: { revisions, offset: offset + items.length, ...(order ? { order } : {}) } }
+      : {})
   }
 }

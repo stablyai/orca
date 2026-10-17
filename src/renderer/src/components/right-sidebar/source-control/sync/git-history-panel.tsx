@@ -3,26 +3,20 @@ import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import type { GitHistoryItem, GitHistoryResult } from '../../../../../../shared/git-history'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitHistoryResult, GitHistoryScope } from '../../../../../../shared/git-history'
 import {
   buildDefaultGitHistoryColorMap,
   buildGitHistoryViewModels
 } from '../../../../../../shared/git-history-graph'
-import { GitHistoryRow } from './git-history-row'
-import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './git-history-commit-files'
-import {
-  GitHistoryCommitContextMenu,
-  type GitHistoryCommitAction
-} from './git-history-commit-context-menu'
-import type { SourceControlRowOpenEvent } from '../listing/split-open'
+import { GitHistoryList, type GitHistoryListActions } from './git-history-list'
 import { translate } from '@/i18n/i18n'
+import { GitHistoryScopeMenu } from './git-history-scope-menu'
 
-export type GitHistoryPanelState =
+export type GitHistoryPanelState = (
   | { status: 'idle' | 'loading'; result?: GitHistoryResult; error?: string }
   | { status: 'refreshing' | 'ready'; result: GitHistoryResult; error?: string }
   | { status: 'error'; result?: GitHistoryResult; error: string }
+) & { isLoadingMore?: boolean; loadMoreError?: string }
 
 const DEFAULT_GIT_HISTORY_PANEL_HEIGHT = 256
 const MIN_GIT_HISTORY_PANEL_HEIGHT = 96
@@ -48,20 +42,17 @@ export function GitHistoryPanel({
   onOpenCommit,
   onLoadCommitFiles,
   onOpenCommitFile,
-  onCommitAction
-}: {
+  onCommitAction,
+  onLoadMore,
+  scope = 'all',
+  onScopeChange
+}: GitHistoryListActions & {
   state: GitHistoryPanelState
   collapsed: boolean
   onToggle: () => void
   onRefresh: () => void
-  onOpenCommit?: (item: GitHistoryItem) => void
-  onLoadCommitFiles?: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
-  onOpenCommitFile?: (
-    item: GitHistoryItem,
-    entry: GitBranchChangeEntry,
-    event?: SourceControlRowOpenEvent
-  ) => void
-  onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
+  scope?: GitHistoryScope
+  onScopeChange?: (scope: GitHistoryScope) => void
 }): React.JSX.Element | null {
   const result = state.result
   const viewModels = useMemo(() => {
@@ -74,8 +65,8 @@ export function GitHistoryPanel({
       result.currentRef,
       result.remoteRef,
       result.baseRef,
-      result.hasIncomingChanges,
-      result.hasOutgoingChanges,
+      result.scope === 'all' ? false : result.hasIncomingChanges,
+      result.scope === 'all' ? false : result.hasOutgoingChanges,
       result.mergeBase
     )
   }, [result])
@@ -84,74 +75,6 @@ export function GitHistoryPanel({
   const count = result?.items.length ?? 0
   const [panelHeight, setPanelHeight] = useState(DEFAULT_GIT_HISTORY_PANEL_HEIGHT)
   const resizeSessionRef = useRef<GitHistoryResizeSession | null>(null)
-
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
-  // Tracks commits whose files have been loaded (or are in flight) so re-expanding
-  // never refetches; an entry is cleared on error to allow a retry.
-  const loadedCommitsRef = useRef<{
-    result: GitHistoryResult | undefined
-    ids: Set<string>
-  }>(undefined!)
-  loadedCommitsRef.current ??= { result, ids: new Set() }
-
-  // A new history result can reorder or replace commits, so drop any expansion
-  // and cached file lists rather than risk showing stale files under a row.
-  const [historyResult, setHistoryResult] = useState(result)
-  if (historyResult !== result) {
-    setHistoryResult(result)
-    setExpanded(new Set())
-    setFilesByCommit({})
-  }
-
-  const handleToggleExpand = useCallback(
-    (item: GitHistoryItem): void => {
-      const id = item.id
-      const willExpand = !expanded.has(id)
-      setExpanded((prev) => {
-        const next = new Set(prev)
-        if (willExpand) {
-          next.add(id)
-        } else {
-          next.delete(id)
-        }
-        return next
-      })
-      // Why: clear the in-flight lock in the click handler, not during render —
-      // a new history result can reuse commit ids with different file lists.
-      if (loadedCommitsRef.current.result !== result) {
-        loadedCommitsRef.current = { result, ids: new Set() }
-      }
-      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.ids.has(id)) {
-        return
-      }
-      loadedCommitsRef.current.ids.add(id)
-      setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
-      onLoadCommitFiles(item)
-        .then((entries) => {
-          setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'ready', entries } }))
-        })
-        .catch((error: unknown) => {
-          if (loadedCommitsRef.current.result === result) {
-            loadedCommitsRef.current.ids.delete(id)
-          }
-          setFilesByCommit((prev) => ({
-            ...prev,
-            [id]: {
-              status: 'error',
-              error:
-                error instanceof Error
-                  ? error.message
-                  : translate(
-                      'auto.components.right.sidebar.GitHistoryPanel.6d1e0a7c3b',
-                      'Failed to load commit files'
-                    )
-            }
-          }))
-        })
-    },
-    [expanded, onLoadCommitFiles, result]
-  )
 
   const stopResize = useCallback((): void => {
     const session = resizeSessionRef.current
@@ -261,6 +184,7 @@ export function GitHistoryPanel({
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
+          {onScopeChange && <GitHistoryScopeMenu scope={scope} onChange={onScopeChange} />}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -351,47 +275,36 @@ export function GitHistoryPanel({
           {translate('auto.components.right.sidebar.GitHistoryPanel.cf7cad58d2', 'No commits yet')}
         </div>
       )}
-      {!collapsed && viewModels.length > 0 && (
-        <div className={expandedBodyClassName} style={expandedBodyStyle}>
-          {viewModels.map((viewModel) => {
-            const item = viewModel.historyItem
-            const isBoundaryNode =
-              viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
-            const canExpand =
-              !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
-            const isExpanded = canExpand && expanded.has(item.id)
-            const row = (
-              <GitHistoryRow
-                viewModel={viewModel}
-                expanded={isExpanded}
-                preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
-                onOpenCommit={onOpenCommit}
-                onToggleExpand={canExpand ? handleToggleExpand : undefined}
-              />
-            )
-            return (
-              <React.Fragment key={`${viewModel.kind}:${item.id}`}>
-                {onCommitAction && !isBoundaryNode ? (
-                  <ContextMenu>
-                    <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-                    <GitHistoryCommitContextMenu item={item} onAction={onCommitAction} />
-                  </ContextMenu>
-                ) : (
-                  row
-                )}
-                {isExpanded && (
-                  <GitHistoryCommitFiles
-                    state={filesByCommit[item.id] ?? { status: 'loading' }}
-                    author={item.author}
-                    timestamp={item.timestamp}
-                    onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
-                    onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
-                  />
-                )}
-              </React.Fragment>
-            )
-          })}
-        </div>
+      {!collapsed && result && viewModels.length > 0 && (
+        <>
+          {scope === 'all' && result.scope !== 'all' && onScopeChange && !loading && (
+            <p role="status" className="px-3 py-1 text-xs text-muted-foreground">
+              {translate(
+                'source-control.history.unsupported-scope',
+                'Restart Orca or update the execution host to display all branches.'
+              )}
+            </p>
+          )}
+          {state.status === 'error' && (
+            <p role="alert" className="px-3 py-1 text-xs text-destructive">
+              {state.error}
+            </p>
+          )}
+          <GitHistoryList
+            result={result}
+            viewModels={viewModels}
+            height={expandedBodyStyle.height}
+            isLoadingMore={state.isLoadingMore}
+            loadMoreError={state.loadMoreError}
+            refreshing={loading}
+            paginationPaused={state.status === 'error'}
+            onLoadMore={onLoadMore}
+            onOpenCommit={onOpenCommit}
+            onLoadCommitFiles={onLoadCommitFiles}
+            onOpenCommitFile={onOpenCommitFile}
+            onCommitAction={onCommitAction}
+          />
+        </>
       )}
     </div>
   )

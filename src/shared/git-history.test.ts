@@ -179,6 +179,73 @@ describe('git history parsing', () => {
 })
 
 describe('git history loader', () => {
+  it('snapshots branch namespaces and sends many tips over stdin, not the Windows command line', async () => {
+    const tips = ['a', 'b', 'c', 'd', 'e'].map((value) => value.repeat(40))
+    const { executor: base } = createHistoryExecutor(3)
+    const executor = vi.fn(async (args: string[], cwd: string, stdin?: string) => {
+      if (args[0] === 'for-each-ref' && args.includes('--format=%(objectname)')) {
+        return { stdout: [...tips, tips[0]].join('\n') }
+      }
+      if (args[0] === 'log') {
+        expect(args).toEqual(expect.arrayContaining(['--date-order', '--stdin', '-n3']))
+        expect(args).not.toContain('--all')
+        expect(stdin).toBe(`${tips.join('\n')}\n`)
+      }
+      return base(args, cwd)
+    })
+    const first = await loadGitHistoryFromExecutor(executor, '/repo', { scope: 'all', limit: 2 })
+    expect(first.scope).toBe('all')
+    expect(first.nextCursor).toEqual({ revisions: tips, offset: 2, order: 'date' })
+    expect(executor.mock.calls.filter(([args]) => args[0] === 'log')).toHaveLength(1)
+    expect(
+      executor.mock.calls.find(([args]) => args.includes('--format=%(objectname)'))?.[0]
+    ).toEqual(expect.arrayContaining(['refs/heads/', 'refs/remotes/']))
+    executor.mockClear()
+    await loadGitHistoryFromExecutor(executor, '/repo', { cursor: first.nextCursor, limit: 2 })
+    expect(executor.mock.calls).toHaveLength(1)
+    expect(executor.mock.calls[0]?.[0]).toContain('--skip=2')
+  })
+
+  it('keeps Current branch restricted to HEAD even when comparison refs are supplied', async () => {
+    const { executor, calls } = createHistoryExecutor()
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      scope: 'current',
+      includeRelatedRefs: true
+    })
+    expect(result.scope).toBe('current')
+    expect(calls.find((args) => args[0] === 'log')).not.toContain(REMOTE_OID)
+    expect(calls.find((args) => args[0] === 'log')).toContain('--date-order')
+    expect(calls.some((args) => args.includes('--format=%(objectname)'))).toBe(false)
+  })
+
+  it('includes comparison branch tips only when requested', async () => {
+    const { executor, calls } = createHistoryExecutor(3)
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 2,
+      includeRelatedRefs: true
+    })
+    expect(calls.find((args) => args[0] === 'log')).toContain(REMOTE_OID)
+    expect(result.nextCursor).toEqual({ revisions: [HEAD_OID, REMOTE_OID], offset: 2 })
+    calls.length = 0
+    await loadGitHistoryFromExecutor(executor, '/repo', { limit: 2, cursor: result.nextCursor })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toEqual(expect.arrayContaining(['--skip=2', '-n3', HEAD_OID, REMOTE_OID]))
+  })
+
+  it.each([
+    { revisions: ['--all'], offset: 50 },
+    { revisions: [], offset: 50 },
+    { revisions: [HEAD_OID], offset: -1 },
+    { revisions: [HEAD_OID], offset: 0.5 },
+    { revisions: [HEAD_OID], offset: Number.MAX_SAFE_INTEGER + 1 }
+  ])('rejects an invalid cursor without executing git: %j', async (cursor) => {
+    const executor = vi.fn()
+    await expect(loadGitHistoryFromExecutor(executor, '/repo', { cursor })).rejects.toThrow(
+      'Invalid git history cursor'
+    )
+    expect(executor).not.toHaveBeenCalled()
+  })
+
   it('uses one bounded topo-order log query for the graph data', async () => {
     const { executor, calls } = createHistoryExecutor()
 

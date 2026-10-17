@@ -76,6 +76,114 @@ afterEach(() => {
 })
 
 describe('useSourceControlGitHistory stale completion', () => {
+  it('defaults to all branches and discards pending pages when switching to Current branch', async () => {
+    const page = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory
+      .mockResolvedValueOnce(firstPage())
+      .mockReturnValueOnce(page.promise)
+      .mockResolvedValueOnce(historyResult('current-only'))
+    await mount()
+    await flush()
+    expect(latest?.gitHistoryScope).toBe('all')
+    expect(mocks.getRuntimeGitHistory.mock.calls[0]?.[1]).toMatchObject({ scope: 'all' })
+    void latest?.loadMoreGitHistory()
+    await flush()
+    await act(async () => {
+      latest?.setGitHistoryScope('current')
+    })
+    await flush()
+    expect(mocks.getRuntimeGitHistory.mock.calls[2]?.[1]).toMatchObject({
+      scope: 'current',
+      includeRelatedRefs: false
+    })
+    await act(async () => {
+      page.resolve(historyResult('stale-all-branch-page'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState.result?.items.map((item) => item.id)).toEqual(['current-only'])
+  })
+
+  function firstPage(): GitHistoryResult {
+    return {
+      ...historyResult('first'),
+      hasMore: true,
+      nextCursor: { revisions: ['a'.repeat(40)], offset: 1 }
+    }
+  }
+
+  it('appends older commits, retains graph metadata and deduplicates concurrent requests', async () => {
+    const page = deferred<GitHistoryResult>()
+    const first = { ...firstPage(), currentRef: { id: 'refs/heads/main', name: 'main' } }
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(first).mockReturnValueOnce(page.promise)
+    await mount()
+    await flush()
+    void latest?.loadMoreGitHistory()
+    void latest?.loadMoreGitHistory()
+    await flush()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
+    expect(latest?.gitHistoryState.isLoadingMore).toBe(true)
+    expect(mocks.getRuntimeGitHistory.mock.calls[1]?.[1]).toEqual({
+      limit: 50,
+      cursor: first.nextCursor
+    })
+    await act(async () => {
+      page.resolve(historyResult('second'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState.result?.items.map((item) => item.id)).toEqual([
+      'first',
+      'second'
+    ])
+    expect(latest?.gitHistoryState.result?.currentRef).toEqual(first.currentRef)
+    expect(latest?.gitHistoryState.result?.hasMore).toBe(false)
+  })
+
+  it('keeps earlier commits on page failure and supports retry', async () => {
+    mocks.getRuntimeGitHistory
+      .mockResolvedValueOnce(firstPage())
+      .mockRejectedValueOnce(new Error('Offline'))
+      .mockResolvedValueOnce(historyResult('older'))
+    await mount()
+    await flush()
+    await act(async () => {
+      await latest?.loadMoreGitHistory()
+    })
+    expect(latest?.gitHistoryState.loadMoreError).toBe('Offline')
+    expect(latest?.gitHistoryState.result?.items).toEqual(firstPage().items)
+    await act(async () => {
+      await latest?.loadMoreGitHistory()
+    })
+    expect(latest?.gitHistoryState.result?.items).toHaveLength(2)
+  })
+
+  it('does not append a stale page after refresh', async () => {
+    const page = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory
+      .mockResolvedValueOnce(firstPage())
+      .mockReturnValueOnce(page.promise)
+      .mockResolvedValueOnce(historyResult('fresh'))
+    await mount()
+    await flush()
+    void latest?.loadMoreGitHistory()
+    await flush()
+    await act(async () => {
+      await latest?.refreshGitHistory()
+    })
+    await act(async () => {
+      page.resolve(historyResult('stale'))
+    })
+    await flush()
+    expect(latest?.gitHistoryState.result?.items.map((item) => item.id)).toEqual(['fresh'])
+  })
+
+  it('does not repeatedly request the first page from an older execution host', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValue({ ...historyResult('old-host'), hasMore: true })
+    await mount()
+    await flush()
+    await latest?.loadMoreGitHistory()
+    expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(1)
+  })
+
   it('drops a stale response for a worktree the user already left and returned to', async () => {
     const firstA = deferred<GitHistoryResult>()
     const b = deferred<GitHistoryResult>()
@@ -223,7 +331,7 @@ describe('useSourceControlGitHistory stale completion', () => {
     await flush()
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(
       expect.objectContaining({ worktreeId: 'A', worktreePath: '/a' }),
-      { limit: 50, baseRef: 'origin/main' }
+      { limit: 50, baseRef: 'origin/main', includeRelatedRefs: true, scope: 'all' }
     )
 
     await act(async () => {
@@ -233,7 +341,9 @@ describe('useSourceControlGitHistory stale completion', () => {
     expect(mocks.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
     expect(mocks.getRuntimeGitHistory).toHaveBeenLastCalledWith(expect.anything(), {
       limit: 50,
-      baseRef: 'origin/dev'
+      baseRef: 'origin/dev',
+      includeRelatedRefs: true,
+      scope: 'all'
     })
   })
 

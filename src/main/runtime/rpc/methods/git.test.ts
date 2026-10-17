@@ -243,6 +243,37 @@ describe('git RPC methods', () => {
       baseRef: 'origin/main'
     })
     expect(response).toMatchObject({ ok: true, result: history })
+
+    const cursor = {
+      revisions: ['a'.repeat(40), 'b'.repeat(40), 'c'.repeat(40), 'd'.repeat(40)],
+      offset: 50,
+      order: 'date'
+    }
+    const nextPage = await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        limit: 50,
+        includeRelatedRefs: true,
+        scope: 'all',
+        cursor
+      })
+    )
+    expect(runtime.getRuntimeGitHistory).toHaveBeenLastCalledWith('id:wt-1', {
+      limit: 50,
+      baseRef: undefined,
+      includeRelatedRefs: true,
+      scope: 'all',
+      cursor
+    })
+    expect(nextPage).toMatchObject({ ok: true, result: history })
+    const invalid = await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        cursor: { revisions: ['--all'], offset: 0 }
+      })
+    )
+    expect(invalid.ok).toBe(false)
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledTimes(2)
   })
 
   it('routes common mutations to the runtime', async () => {

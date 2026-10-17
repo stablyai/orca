@@ -236,11 +236,17 @@ export function getGitHistoryMergeParentLaneIndex(
 }
 
 export function buildDefaultGitHistoryColorMap(input: {
+  items?: GitHistoryItem[]
   currentRef?: GitHistoryItemRef
   remoteRef?: GitHistoryItemRef
   baseRef?: GitHistoryItemRef
 }): Map<string, GitHistoryGraphColorId | undefined> {
   const colorMap = new Map<string, GitHistoryGraphColorId | undefined>()
+  for (const item of input.items ?? []) {
+    for (const ref of item.references ?? []) {
+      colorMap.set(ref.id, undefined)
+    }
+  }
   if (input.currentRef) {
     colorMap.set(input.currentRef.id, GIT_HISTORY_REF_COLOR)
   }
