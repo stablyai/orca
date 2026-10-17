@@ -38,7 +38,8 @@ describe('ZCode CLI-owned sign-in setup', () => {
     render(<ZcodeCliSetupSection />)
     expect(screen.queryByTestId('setup-terminal')).not.toBeInTheDocument()
     expect(screen.getByText(/ZCode’s masked API-key setup/)).toBeInTheDocument()
-    expect(screen.getByText(/use \/model to choose a GLM model/)).toBeInTheDocument()
+    expect(screen.getByText(/types \/model into that ZCode session/)).toBeInTheDocument()
+    expect(screen.getByText(/does not add a launch flag/)).toBeInTheDocument()
   })
 
   it.each([

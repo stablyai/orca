@@ -39,7 +39,7 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
       <p className="text-xs text-muted-foreground">
         {translate(
           'auto.components.settings.ZcodeCliSetupSection.help',
-          'Choose browser sign-in for your plan site, or use ZCode’s masked API-key setup. After signing in, start ZCode and use /model to choose a GLM model.'
+          'Choose browser sign-in for your plan site, or use ZCode’s masked API-key setup. After signing in, choose a GLM model in Orca’s model menu. Orca types /model into that ZCode session and does not add a launch flag.'
         )}
       </p>
       <div className="flex flex-wrap gap-2">
