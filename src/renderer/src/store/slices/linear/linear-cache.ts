@@ -13,6 +13,8 @@ import { linearIssueAttributeFilterSignature } from '../../../../../shared/linea
 export const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
 export const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.
 export const MAX_CACHE_ENTRIES = 500
+/** Longer than every read TTL (incl. TEAM_CACHE_TTL) so eviction never drops what a reader would still accept, while bounding stale-fallback retention. */
+export const CACHE_EVICTION_MAX_AGE = 15 * 60_000
 
 export function isFresh<T>(
   entry: CacheEntry<T> | undefined,
@@ -23,15 +25,18 @@ export function isFresh<T>(
 
 export function evictStaleEntries<T>(
   cache: Record<string, CacheEntry<T>>,
-  maxEntries = MAX_CACHE_ENTRIES
+  maxEntries = MAX_CACHE_ENTRIES,
+  maxAgeMs = CACHE_EVICTION_MAX_AGE
 ): Record<string, CacheEntry<T>> {
+  const now = Date.now()
   const keys = Object.keys(cache)
-  if (keys.length <= maxEntries) {
-    return cache
+  const live = keys.filter((key) => now - (cache[key]?.fetchedAt ?? 0) < maxAgeMs)
+  if (live.length === keys.length && keys.length <= maxEntries) {
+    return cache // no allocation when nothing ages out; callers already pass a fresh object
   }
-  const sorted = keys.sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
+  const sorted = live.sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
   const pruned: Record<string, CacheEntry<T>> = {}
-  for (const key of sorted.slice(sorted.length - maxEntries)) {
+  for (const key of sorted.slice(Math.max(0, sorted.length - maxEntries))) {
     pruned[key] = cache[key]
   }
   return pruned
