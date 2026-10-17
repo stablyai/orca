@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, Switch, Text, View } from 'react-native'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import { colors } from '../theme/mobile-theme'
@@ -21,6 +22,8 @@ export function NewWorkspaceSetupScriptField({
   onDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
 }) {
+  useMobileTheme()
+
   return (
     <View style={styles.field}>
       <View style={styles.setupHeader}>

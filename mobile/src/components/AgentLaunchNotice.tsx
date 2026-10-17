@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
@@ -29,6 +31,8 @@ export function AgentLaunchNotice({
   undeliveredPrompt,
   errorStyle
 }: Props) {
+  useMobileTheme()
+
   const clipboard = useClipboardWriter()
   const [copyState, setCopyState] = useState<{ prompt: string; label: string } | null>(null)
   const availabilityMessage =
@@ -69,21 +73,23 @@ export function AgentLaunchNotice({
   )
 }
 
-const styles = StyleSheet.create({
-  notice: {
-    gap: spacing.xs
-  },
-  successText: {
-    color: colors.statusGreen,
-    fontSize: typography.metaSize
-  },
-  warningText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  copyText: {
-    color: colors.accentBlue,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    notice: {
+      gap: spacing.xs
+    },
+    successText: {
+      color: colors.statusGreen,
+      fontSize: typography.metaSize
+    },
+    warningText: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize
+    },
+    copyText: {
+      color: colors.accentBlue,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    }
+  })
+)

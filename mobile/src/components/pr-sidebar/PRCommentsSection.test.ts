@@ -35,7 +35,10 @@ vi.mock('./PRCommentCard', () => ({ PRCommentCard: 'PRCommentCard' }))
 vi.mock('./PRCommentComposer', () => ({ PRCommentComposer: 'PRCommentComposer' }))
 vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: {} }))
 vi.mock('./mobile-pr-sidebar-styles', () => ({ mobilePrSidebarStyles: {} }))
-vi.mock('../../theme/mobile-theme', () => ({ colors: { textSecondary: '#999' } }))
+vi.mock('../../theme/mobile-theme', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../theme/mobile-theme')>()),
+  colors: { textSecondary: '#999' }
+}))
 
 function comment(id: number): PRComment {
   return {

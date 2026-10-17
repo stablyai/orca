@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../../theme/mobile-themed-styles'
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/mobile-theme'
@@ -35,6 +37,8 @@ export function MobilePrViewPanelBody({
   controller,
   workspaceLabel
 }: Props) {
+  useMobileTheme()
+
   const insets = useSafeAreaInsets()
 
   const sidebarState = !branchContextLoaded
@@ -72,9 +76,11 @@ export function MobilePrViewPanelBody({
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgBase
+    }
+  })
+)

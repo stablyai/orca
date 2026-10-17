@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, Text, View } from 'react-native'
 import {
   workspaceOptionsAccessibilityLabel,
@@ -25,6 +26,8 @@ function isErrorVerdict(v: ConnectionVerdict): boolean {
 }
 
 export function HostScreenHeader({ controller }: { controller: HostScreenController }) {
+  useMobileTheme()
+
   const {
     actions,
     connState,

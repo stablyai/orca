@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../navigation/route-param-reader'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
@@ -12,6 +13,8 @@ import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
  * replaces expo-router's Unmatched for every `/h/<id>/…` path on the page.
  */
 export default function MobileWebPageCatchAllScreen() {
+  useMobileTheme()
+
   const params = useLocalSearchParams<{ hostId?: string | string[] }>()
   return <PageRouteUnavailableScreen hostId={firstParam(params.hostId)} />
 }

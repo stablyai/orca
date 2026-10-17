@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
@@ -63,6 +64,8 @@ export function PRCommentsSection({
   actions,
   botAuthorOverrides
 }: Props) {
+  useMobileTheme()
+
   // details is null while phase 2 (the heavy comments/body payload) is still loading.
   // A synthetic placeholder means phase 2 failed — do not paint that as empty success.
   const loadingDetails = details === null
@@ -239,6 +242,8 @@ function CommentGroupView({
   actions?: PRCommentCardActions
   now: number
 }) {
+  useMobileTheme()
+
   const [expanded, setExpanded] = useState(false)
   const cards =
     group.kind === 'thread'

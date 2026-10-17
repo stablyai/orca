@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, Text, View } from 'react-native'
 import {
   SOURCE_CONTROL_HUB_TABS,
@@ -14,6 +15,8 @@ type Props = {
 // The hub's top-level lens switcher. Switching is local state (no route push) so
 // scroll position and the shared branch card persist across Changes/PR/History.
 export function MobileSourceControlSegments({ active, onSelect }: Props) {
+  useMobileTheme()
+
   return (
     <View style={hubStyles.segments} accessibilityRole="tablist">
       {SOURCE_CONTROL_HUB_TABS.map((tab) => {

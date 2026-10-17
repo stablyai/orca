@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -10,6 +12,8 @@ import {
 import { retryPendingHostCredentialCleanup } from '../transport/host-store'
 
 export function PendingCredentialCleanupCard() {
+  useMobileTheme()
+
   const [pendingCredentialIds, setPendingCredentialIds] = useState<string[]>([])
   const [credentialStorageUnreadable, setCredentialStorageUnreadable] = useState(false)
   const [retryingCredentialCleanup, setRetryingCredentialCleanup] = useState(false)
@@ -110,50 +114,52 @@ export function PendingCredentialCleanupCard() {
   )
 }
 
-const styles = StyleSheet.create({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  sectionSpacer: {
-    marginTop: spacing.md
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  credentialCleanupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  credentialCleanupCopy: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  credentialCleanupTitle: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowHint: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    lineHeight: 17
-  },
-  retryButton: {
-    width: 72,
-    height: 32,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  retryButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    section: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden'
+    },
+    sectionSpacer: {
+      marginTop: spacing.md
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    credentialCleanupRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    credentialCleanupCopy: {
+      flex: 1,
+      gap: spacing.xs
+    },
+    credentialCleanupTitle: {
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    rowHint: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary,
+      lineHeight: 17
+    },
+    retryButton: {
+      width: 72,
+      height: 32,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    retryButtonText: {
+      fontSize: typography.metaSize,
+      fontWeight: '600',
+      color: colors.textPrimary
+    }
+  })
+)

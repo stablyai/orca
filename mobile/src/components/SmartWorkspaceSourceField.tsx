@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import {
   CircleDot,
@@ -27,6 +29,8 @@ type Props = {
 }
 
 function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
+  useMobileTheme()
+
   if (kind === 'github-pr') {
     return <GitPullRequest size={15} color={colors.textSecondary} />
   }
@@ -51,6 +55,8 @@ export function SmartWorkspaceSourceField({
   onBeforeOpen,
   onOpenDrawer
 }: Props) {
+  useMobileTheme()
+
   const selection = composer.smartNameSelection
 
   function openDrawer(): void {
@@ -114,47 +120,49 @@ export function SmartWorkspaceSourceField({
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  labelHint: {
-    fontWeight: '400',
-    color: colors.textMuted
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    color: colors.textPrimary
-  },
-  disabled: {
-    opacity: 0.55
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  pillLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    field: {
+      marginBottom: spacing.md
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textSecondary,
+      marginBottom: spacing.xs
+    },
+    labelHint: {
+      fontWeight: '400',
+      color: colors.textMuted
+    },
+    input: {
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      fontSize: TEXT_INPUT_FONT_SIZE,
+      color: colors.textPrimary
+    },
+    disabled: {
+      opacity: 0.55
+    },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    pillLabel: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      color: colors.textPrimary
+    }
+  })
+)

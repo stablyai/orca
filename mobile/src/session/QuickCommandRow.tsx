@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
@@ -34,6 +36,8 @@ export function QuickCommandRow({
   onDelete,
   disabled
 }: QuickCommandRowProps) {
+  useMobileTheme()
+
   const clipboard = useClipboardWriter()
   const isAgent = isAgentQuickCommand(command)
   const body = getTerminalQuickCommandBody(command)
@@ -176,31 +180,33 @@ export function QuickCommandRow({
   )
 }
 
-const styles = StyleSheet.create({
-  pressed: { backgroundColor: colors.bgRaised },
-  disabled: { opacity: 0.45 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-  rowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.md,
-    minWidth: 0
-  },
-  rowIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  rowText: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  mono: { fontFamily: typography.monoFamily },
-  rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    pressed: { backgroundColor: colors.bgRaised },
+    disabled: { opacity: 0.45 },
+    row: { flexDirection: 'row', alignItems: 'center' },
+    rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
+    rowMain: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      paddingLeft: spacing.md,
+      minWidth: 0
+    },
+    rowIcon: {
+      width: 26,
+      height: 26,
+      borderRadius: 6,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    rowText: { flex: 1, minWidth: 0 },
+    rowLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+    rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+    mono: { fontFamily: typography.monoFamily },
+    rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }
+  })
+)

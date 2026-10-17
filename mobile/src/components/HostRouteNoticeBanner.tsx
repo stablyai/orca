@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -24,6 +26,8 @@ export function HostRouteNoticeBanner({
   tone?: 'notice' | 'failure'
   onDismiss: () => void
 }) {
+  useMobileTheme()
+
   return (
     <View
       style={[styles.banner, tone === 'failure' && styles.failure]}
@@ -44,18 +48,20 @@ export function HostRouteNoticeBanner({
   )
 }
 
-const styles = StyleSheet.create({
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.bgPanel,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  failure: { borderBottomColor: colors.statusRed },
-  text: { flex: 1, color: colors.textSecondary, fontSize: 13 },
-  dismiss: { padding: spacing.xs }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    banner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: colors.bgPanel,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderSubtle
+    },
+    failure: { borderBottomColor: colors.statusRed },
+    text: { flex: 1, color: colors.textSecondary, fontSize: 13 },
+    dismiss: { padding: spacing.xs }
+  })
+)

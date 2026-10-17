@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import {
@@ -5,7 +7,7 @@ import {
   nativeChatUserMessageFolds
 } from '../../../src/shared/native-chat-user-message-fold'
 import { styles as markdownStyles } from '../components/mobile-markdown-styles'
-import { onBrightColors, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
 import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
 
 const FOLDED_HEIGHT =
@@ -29,6 +31,7 @@ export function MobileNativeChatUserMessageFold({
   onToggle: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  useMobileTheme()
   const longText = useMemo(() => nativeChatUserMessageFolds(text), [text])
   // The text rule can pick a message that already fits the fold; that one gets no toggle.
   const [height, setHeight] = useState<number | null>(null)
@@ -59,14 +62,16 @@ export function MobileNativeChatUserMessageFold({
   )
 }
 
-const styles = StyleSheet.create({
-  toggle: {
-    alignSelf: 'flex-end',
-    paddingTop: spacing.xs
-  },
-  toggleText: {
-    color: onBrightColors.secondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    toggle: {
+      alignSelf: 'flex-end',
+      paddingTop: spacing.xs
+    },
+    toggleText: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    }
+  })
+)

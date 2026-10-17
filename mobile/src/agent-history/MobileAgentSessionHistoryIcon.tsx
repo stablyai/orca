@@ -1,3 +1,5 @@
+import { colors } from '../theme/mobile-theme'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import Svg, { Path } from 'react-native-svg'
 
 type MobileAgentSessionHistoryIconProps = {
@@ -8,9 +10,11 @@ type MobileAgentSessionHistoryIconProps = {
 
 export function MobileAgentSessionHistoryIcon({
   size = 18,
-  color = '#000000',
+  color = colors.textPrimary,
   strokeWidth = 2
 }: MobileAgentSessionHistoryIconProps) {
+  useMobileTheme()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* Why: desktop uses Tabler's category glyph for Agent Session History. */}

@@ -1,9 +1,12 @@
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
 import { NotificationDisplayTest } from '../src/settings/notification-display-test'
 import { NativeNotificationDeliverySettings } from '../src/settings/native-notification-delivery-settings'
 import { useRouter } from 'expo-router'
 import NotificationsScreen from '../src/settings/notification-settings-screen'
 import { nativeNotificationSettingsOperations } from '../src/settings/native-notification-settings-operations'
 export default function NativeNotificationsRoute() {
+  useMobileTheme()
+
   const router = useRouter()
   return (
     <NotificationsScreen

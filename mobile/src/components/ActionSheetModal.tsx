@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
@@ -45,6 +47,7 @@ type ContentProps = {
 }
 
 export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
+  useMobileTheme()
   return (
     <>
       {(title || message) && (
@@ -112,6 +115,8 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
 }
 
 export function ActionSheetModal({ visible, title, message, actions, onClose }: Props) {
+  useMobileTheme()
+
   const pendingActionRef = useRef<(() => void) | null>(null)
   const sequencedActions = actions.map((action) =>
     action.closeBeforePress
@@ -147,62 +152,64 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
   )
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  message: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  actionDisabled: {
-    opacity: 0.58
-  },
-  actionPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  actionTextBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  actionText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  actionTextDisabled: {
-    color: colors.textSecondary
-  },
-  actionTextDestructive: {
-    color: colors.statusRed
-  },
-  actionHint: {
-    marginTop: 2,
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    title: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textMuted
+    },
+    message: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 2
+    },
+    actionGroup: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden'
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    },
+    action: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    actionDisabled: {
+      opacity: 0.58
+    },
+    actionPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    actionTextBlock: {
+      flex: 1,
+      minWidth: 0
+    },
+    actionText: {
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    actionTextDisabled: {
+      color: colors.textSecondary
+    },
+    actionTextDestructive: {
+      color: colors.statusRed
+    },
+    actionHint: {
+      marginTop: 2,
+      fontSize: typography.metaSize,
+      color: colors.textMuted
+    }
+  })
+)

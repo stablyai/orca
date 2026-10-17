@@ -1,4 +1,4 @@
-import { colors } from '../../theme/mobile-theme'
+import { darkColors as colors } from '../../theme/mobile-dark-colors'
 import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
 
 /** The page background before a theme arrives, and the fallback when a theme omits one. */

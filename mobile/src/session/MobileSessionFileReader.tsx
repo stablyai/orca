@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { MobileFileMediaPreview } from '../files/MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from '../files/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo } from 'react'
@@ -50,6 +51,8 @@ export function FileReader({
   language?: string
   diffCommentActions?: DiffCommentActions
 }) {
+  useMobileTheme()
+
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]

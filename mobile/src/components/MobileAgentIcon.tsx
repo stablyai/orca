@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { ImageSourcePropType } from 'react-native'
 import { Terminal } from 'lucide-react-native'
@@ -12,6 +14,8 @@ import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
 // mobile lets users choose the agent that will own a workspace.
 
 function PiIcon({ size = 16 }: { size?: number }) {
+  useMobileTheme()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 800 800">
       <Path
@@ -25,6 +29,8 @@ function PiIcon({ size = 16 }: { size?: number }) {
 }
 
 function OmpIcon({ size = 16 }: { size?: number }) {
+  useMobileTheme()
+
   // SVG sourced from omp.sh's transparent homepage mark. Why: react-native-svg
   // does not support the homepage's CSS oklch stops, so use its favicon hex stops.
   return (
@@ -42,6 +48,8 @@ function OmpIcon({ size = 16 }: { size?: number }) {
 }
 
 function AiderIcon({ size = 16 }: { size?: number }) {
+  useMobileTheme()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 436 436">
       <G transform="translate(0,436) scale(0.1,-0.1)" fill={colors.textPrimary} stroke="none">
@@ -53,10 +61,14 @@ function AiderIcon({ size = 16 }: { size?: number }) {
 }
 
 function BundledIcon({ source, size = 16 }: { source: ImageSourcePropType; size?: number }) {
+  useMobileTheme()
+
   return <Image source={source} style={{ width: size, height: size, borderRadius: 2 }} />
 }
 
 function FaviconIcon({ domain, size = 16 }: { domain: string; size?: number }) {
+  useMobileTheme()
+
   return (
     <Image
       source={{ uri: `https://www.google.com/s2/favicons?domain=${domain}&sz=64` }}
@@ -66,6 +78,8 @@ function FaviconIcon({ domain, size = 16 }: { domain: string; size?: number }) {
 }
 
 function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number }) {
+  useMobileTheme()
+
   return (
     <View
       style={[
@@ -86,6 +100,8 @@ function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number 
 }
 
 export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
+  useMobileTheme()
+
   if (agentId === 'claude' || agentId === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }
@@ -119,12 +135,14 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
   return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
 }
 
-const styles = StyleSheet.create({
-  letterIcon: {
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  letterIconText: {
-    fontWeight: '700'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    letterIcon: {
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    letterIconText: {
+      fontWeight: '700'
+    }
+  })
+)

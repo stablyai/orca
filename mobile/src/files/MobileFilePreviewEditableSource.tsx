@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useState } from 'react'
 import { Text, TextInput, View } from 'react-native'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
@@ -19,6 +20,8 @@ export function MobileFilePreviewEditableSource({
   saveError,
   onDraftChange
 }: Props) {
+  useMobileTheme()
+
   const selectionTargetKey = lineColumn
     ? `${title}:${lineColumn.line}:${lineColumn.column ?? ''}`
     : ''

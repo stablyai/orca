@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useState } from 'react'
 import { Pressable, Text, View, type LayoutRectangle } from 'react-native'
 import {
@@ -36,6 +37,7 @@ export function MobileQueuedMessageCardRow({
   onEditorLayout,
   ...actions
 }: QueuedMessageCardRowProps): React.JSX.Element {
+  useMobileTheme()
   if (editor) {
     // The editor's own head line stands in for the icon, the actions and the caption.
     return (
@@ -60,6 +62,7 @@ function QueuedMessageCardContents({
   onDelete,
   onMore
 }: Omit<QueuedMessageCardRowProps, 'editor' | 'onEditorLayout'>): React.JSX.Element {
+  useMobileTheme()
   const [expanded, setExpanded] = useState(false)
   const returned = card.state === 'returned'
   // "Steer" submits beside the running turn, the paused queue's cards too; a card whose own send

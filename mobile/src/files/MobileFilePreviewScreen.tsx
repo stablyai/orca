@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaFrame } from 'react-native-safe-area-context'
@@ -36,6 +37,8 @@ type Props = {
 }
 
 export function MobileFilePreviewScreen({ route }: Props) {
+  useMobileTheme()
+
   // Why: every workspace screen uses the handoff so it shares the route chunk; else the bundle overruns its asset budget.
   const router = useWorkspaceRouteHandoff()
   const previewParams = route.ok ? route.params : null

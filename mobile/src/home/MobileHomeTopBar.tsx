@@ -1,9 +1,13 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Settings } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/OrcaLogo'
 import { colors, spacing } from '../theme/mobile-theme'
 
 export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => void }) {
+  useMobileTheme()
+
   return (
     <View style={styles.topBar}>
       <View style={styles.brandLockup}>
@@ -13,6 +17,8 @@ export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => voi
         <Text style={styles.brandName}>Orca</Text>
       </View>
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Settings"
         style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
         onPress={onOpenSettings}
       >
@@ -22,24 +28,26 @@ export function MobileHomeTopBar({ onOpenSettings }: { onOpenSettings: () => voi
   )
 }
 
-const styles = StyleSheet.create({
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md
-  },
-  brandLockup: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
-  logoMark: { marginRight: spacing.sm },
-  brandName: { color: colors.textPrimary, fontSize: 17, fontWeight: '700' },
-  iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  iconButtonPressed: { backgroundColor: colors.bgRaised }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.md
+    },
+    brandLockup: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+    logoMark: { marginRight: spacing.sm },
+    brandName: { color: colors.textPrimary, fontSize: 17, fontWeight: '700' },
+    iconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    iconButtonPressed: { backgroundColor: colors.bgRaised }
+  })
+)

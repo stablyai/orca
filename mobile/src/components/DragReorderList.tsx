@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useEffect, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -68,6 +70,8 @@ export function DragReorderList<ItemT>({
   scrollOffsetY,
   scrollContentHeight
 }: DragReorderListProps<ItemT>): React.JSX.Element {
+  useMobileTheme()
+
   const keys = items.map(itemKey)
   const count = keys.length
   const positions = useSharedValue<DragReorderPositions>(dragReorderPositionsFromKeys(keys))
@@ -227,6 +231,8 @@ function DragReorderRow({
   onAccessibilityMove: (key: string, delta: number) => void
   children: ReactNode
 }): React.JSX.Element {
+  useMobileTheme()
+
   const {
     positions,
     activeKey,
@@ -319,31 +325,33 @@ function DragReorderRow({
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8
-  },
-  rowContent: {
-    flex: 1
-  },
-  handle: {
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
-  },
-  rowSeparator: {
-    position: 'absolute',
-    bottom: 0,
-    left: spacing.md,
-    right: spacing.md,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    row: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 8
+    },
+    rowContent: {
+      flex: 1
+    },
+    handle: {
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md
+    },
+    rowSeparator: {
+      position: 'absolute',
+      bottom: 0,
+      left: spacing.md,
+      right: spacing.md,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle
+    }
+  })
+)

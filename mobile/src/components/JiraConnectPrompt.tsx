@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { TaskProviderLogo } from './TaskProviderLogo'
@@ -16,6 +18,8 @@ export function JiraConnectPrompt({
   disabled,
   onCheckAgain
 }: Props) {
+  useMobileTheme()
+
   return (
     <View style={styles.centered}>
       <TaskProviderLogo provider="jira" size={32} color={colors.textSecondary} />
@@ -43,37 +47,39 @@ export function JiraConnectPrompt({
   )
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  centeredHint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: spacing.sm,
-    maxWidth: 280,
-    textAlign: 'center'
-  },
-  checkAgainButton: {
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    marginTop: spacing.md,
-    minWidth: 160
-  },
-  checkAgainText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    emptyText: {
+      color: colors.textSecondary,
+      fontSize: typography.bodySize
+    },
+    centeredHint: {
+      color: colors.textMuted,
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: spacing.sm,
+      maxWidth: 280,
+      textAlign: 'center'
+    },
+    checkAgainButton: {
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      marginTop: spacing.md,
+      minWidth: 160
+    },
+    checkAgainText: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize
+    }
+  })
+)

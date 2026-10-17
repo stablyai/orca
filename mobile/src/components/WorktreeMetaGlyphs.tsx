@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { CalendarClock, CircleDot, GitMerge, SquareTerminal, StickyNote } from 'lucide-react-native'
 import { StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
@@ -16,6 +18,7 @@ export function prStateColor(state: string): string {
 // Presence glyphs in the desktop WorktreeCardMetaBadges order. Mobile shows presence only; the
 // full detail (title/state/labels) is a follow-up detail sheet.
 export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPresence }) {
+  useMobileTheme()
   if (!Object.values(presence).some(Boolean)) {
     return null
   }
@@ -32,16 +35,18 @@ export function WorktreeMetaGlyphs({ presence }: { presence: WorktreeMetaGlyphPr
   )
 }
 
-const styles = StyleSheet.create({
-  metaGlyphs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginLeft: 2
-  },
-  linearGlyph: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    metaGlyphs: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginLeft: 2
+    },
+    linearGlyph: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: colors.textMuted
+    }
+  })
+)

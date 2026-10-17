@@ -8,7 +8,7 @@ export type TroubleshootSection = {
   steps: string[]
 }
 
-export const troubleshootCommonIssues: TroubleshootSection[] = [
+export const getTroubleshootCommonIssues = (): TroubleshootSection[] => [
   {
     id: 'notifications',
     icon: <Bell size={16} color={colors.textSecondary} />,

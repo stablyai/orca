@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ChevronRight, ListTodo } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
@@ -16,6 +18,8 @@ export function MobileHomeTasksCard(props: {
   providers: TaskProvider[]
   onOpen: (provider?: TaskProvider) => void
 }) {
+  useMobileTheme()
+
   return (
     <Pressable
       disabled={!props.enabled}
@@ -69,51 +73,53 @@ export function MobileHomeTasksCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    minHeight: 72,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12
-  },
-  cardDisabled: { opacity: 0.45 },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  icon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14
-  },
-  main: { flex: 1, minWidth: 0 },
-  title: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
-  trailing: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 0,
-    marginLeft: spacing.sm
-  },
-  providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 2
-  },
-  providerButton: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  providerButtonPressed: { backgroundColor: colors.bgRaised }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.card,
+      minHeight: 72,
+      paddingLeft: spacing.md,
+      paddingRight: spacing.md,
+      paddingVertical: 12
+    },
+    cardDisabled: { opacity: 0.45 },
+    cardPressed: { backgroundColor: colors.bgRaised },
+    icon: {
+      width: 46,
+      height: 46,
+      borderRadius: 13,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 14
+    },
+    main: { flex: 1, minWidth: 0 },
+    title: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+    subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
+    trailing: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexShrink: 0,
+      marginLeft: spacing.sm
+    },
+    providerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: 2
+    },
+    providerButton: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button
+    },
+    providerButtonPressed: { backgroundColor: colors.bgRaised }
+  })
+)

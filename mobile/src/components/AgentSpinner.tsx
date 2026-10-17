@@ -1,3 +1,6 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { colors } from '../theme/mobile-theme'
 import { Activity } from 'lucide-react-native'
 import { Animated, StyleSheet, View } from 'react-native'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
@@ -11,13 +14,13 @@ type WorktreeStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
 // 'working', same emerald dot for 'active'/'done', same neutral-500 @ 40%
 // for 'inactive', same red for 'permission'. Diverging palettes here lose
 // the design intent ('moving' vs 'alive' vs 'completed') the desktop encodes.
-const STATUS_COLORS: Record<WorktreeStatus, string> = {
-  working: '#eab308',
-  active: '#10b981',
-  done: '#10b981',
-  permission: '#ef4444',
-  inactive: 'rgba(115,115,115,0.4)'
-}
+const STATUS_COLORS = createThemedStyles(() => ({
+  working: colors.agentWorking,
+  active: colors.agentDone,
+  done: colors.agentDone,
+  permission: colors.agentAttention,
+  inactive: colors.agentInactive
+})) satisfies Record<WorktreeStatus, string>
 
 export function AgentSpinner({
   status,
@@ -26,6 +29,8 @@ export function AgentSpinner({
   status: WorktreeStatus
   workingMode?: AgentWorkingMode
 }) {
+  useMobileTheme()
+
   const monitoring = status === 'working' && workingMode === 'monitoring'
   const rotate = useWorkingRingRotation(status === 'working' && !monitoring)
 
@@ -54,27 +59,29 @@ export function AgentSpinner({
   )
 }
 
-const styles = StyleSheet.create({
-  // Why: 12x12 wrapper centered around an 8x8 inner glyph mirrors the
-  // desktop's `inline-flex h-3 w-3 ... items-center justify-center` shell
-  // around `size-2` indicator — keeps row height/baseline alignment stable
-  // across status transitions.
-  wrapper: {
-    width: 12,
-    height: 12,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  spinner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderTopColor: 'transparent'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    // Why: 12x12 wrapper centered around an 8x8 inner glyph mirrors the
+    // desktop's `inline-flex h-3 w-3 ... items-center justify-center` shell
+    // around `size-2` indicator — keeps row height/baseline alignment stable
+    // across status transitions.
+    wrapper: {
+      width: 12,
+      height: 12,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4
+    },
+    spinner: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      borderWidth: 2,
+      borderTopColor: 'transparent'
+    }
+  })
+)

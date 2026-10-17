@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import Svg, { Path } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 
@@ -6,6 +7,8 @@ import { colors } from '../theme/mobile-theme'
 // stay visually identical for Claude/Codex branding.
 
 export function ClaudeIcon({ size = 16 }: { size?: number }) {
+  useMobileTheme()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path
@@ -18,6 +21,8 @@ export function ClaudeIcon({ size = 16 }: { size?: number }) {
 }
 
 export function OpenAIIcon({ size = 16, color }: { size?: number; color?: string }) {
+  useMobileTheme()
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path

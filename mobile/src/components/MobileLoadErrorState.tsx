@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
@@ -9,6 +11,8 @@ export function MobileLoadErrorState({
   message: string
   onRetry?: (() => void) | null
 }) {
+  useMobileTheme()
+
   return (
     <View style={styles.state}>
       <Text style={styles.errorText}>{message}</Text>
@@ -21,31 +25,33 @@ export function MobileLoadErrorState({
   )
 }
 
-const styles = StyleSheet.create({
-  state: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    padding: spacing.xl
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center'
-  },
-  retryButton: {
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.lg
-  },
-  retryText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    state: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.md,
+      padding: spacing.xl
+    },
+    errorText: {
+      color: colors.statusRed,
+      fontSize: typography.bodySize,
+      textAlign: 'center'
+    },
+    retryButton: {
+      minHeight: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      paddingHorizontal: spacing.lg
+    },
+    retryText: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    }
+  })
+)

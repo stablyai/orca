@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import type { ReactNode } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -36,6 +37,8 @@ export function ConnectionDiagnosticsView({
   entries: readonly ConnectionLogEntry[]
   onBack: () => void
 }) {
+  useMobileTheme()
+
   const insets = useSafeAreaInsets()
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { View } from 'react-native'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
@@ -26,6 +27,8 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
  */
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
+    useMobileTheme()
+
     const hostRef = useRef<View>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
     // The document reports itself ready from inside the mount call, through the seam below, so the

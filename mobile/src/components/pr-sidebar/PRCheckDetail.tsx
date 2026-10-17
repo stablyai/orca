@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { PRCheckRunDetails } from '../../../../src/shared/github/check-types'
@@ -16,6 +17,8 @@ export type DetailEntry =
 // (parity with the desktop ChecksPanel detail). Muted/monochrome and scrollable
 // so long CI output never breaks the sidebar layout.
 export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined }) {
+  useMobileTheme()
+
   if (!entry || entry.status === 'loading') {
     return (
       <View style={styles.checkDetailArea}>
@@ -93,6 +96,8 @@ export function PRCheckDetailView({ entry }: { entry: DetailEntry | undefined })
 }
 
 function JobRow({ job }: { job: CheckDetailJob }) {
+  useMobileTheme()
+
   return (
     <View>
       <View style={styles.checkDetailStepRow}>

@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { memo } from 'react'
 import { StyleSheet, Text } from 'react-native'
 import {
@@ -17,6 +19,7 @@ export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessage
   timestamp: number | null | undefined
   fontScale: number
 }): React.JSX.Element | null {
+  useMobileTheme()
   const date = timestamp == null ? null : new Date(timestamp)
   if (!date || Number.isNaN(date.getTime())) {
     return null
@@ -35,9 +38,11 @@ export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessage
   )
 })
 
-const styles = StyleSheet.create({
-  time: {
-    color: colors.textMuted,
-    fontVariant: ['tabular-nums']
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    time: {
+      color: colors.textMuted,
+      fontVariant: ['tabular-nums']
+    }
+  })
+)

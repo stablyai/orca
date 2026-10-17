@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { ActivityIndicator, Pressable, StyleSheet } from 'react-native'
 import { Square } from 'lucide-react-native'
 import { NATIVE_CHAT_TURN_STATUS_COPY } from '../../../src/shared/native-chat-turn-status'
@@ -11,6 +13,7 @@ export function MobileNativeChatStopButton({
   onStop?: () => void
   held: boolean
 }): React.JSX.Element {
+  useMobileTheme()
   return (
     <Pressable
       style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
@@ -28,16 +31,18 @@ export function MobileNativeChatStopButton({
   )
 }
 
-const styles = StyleSheet.create({
-  stopButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    stopButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgRaised
+    },
+    pressed: {
+      opacity: 0.7
+    }
+  })
+)

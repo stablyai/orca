@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
@@ -14,11 +15,15 @@ type State = { uri: string } | { error: string } | { bytes: number; total: numbe
 type Props = { media: MobileFileMedia; client: MobileFilePreviewRpcSender | null; title: string }
 
 export function MobileFileMediaPreview(props: Props) {
+  useMobileTheme()
+
   const { worktreeId, relativePath, mimeType } = props.media
   return <MediaDownload key={JSON.stringify([worktreeId, relativePath, mimeType])} {...props} />
 }
 
 function MediaDownload({ media, client, title }: Props) {
+  useMobileTheme()
+
   const { worktreeId, relativePath, mimeType } = media
   const [state, setState] = useState<State>({ bytes: 0, total: 0 })
   const [attempt, setAttempt] = useState(0)

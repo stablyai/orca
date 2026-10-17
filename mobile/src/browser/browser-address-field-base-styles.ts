@@ -1,3 +1,4 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 /**
@@ -7,21 +8,24 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
  * style object is how the two platforms drift apart on everything except the difference that was
  * meant to be between them.
  */
-export const browserAddressFieldBase = {
-  input: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    fontFamily: typography.monoFamily
-  },
-  fileLabel: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily
-  }
-} as const
+export const browserAddressFieldBase = createThemedStyles(
+  () =>
+    ({
+      input: {
+        flex: 1,
+        minWidth: 0,
+        borderRadius: radii.input,
+        backgroundColor: colors.bgRaised,
+        color: colors.textPrimary,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 0,
+        includeFontPadding: false,
+        textAlignVertical: 'center',
+        fontFamily: typography.monoFamily
+      },
+      fileLabel: {
+        color: colors.textPrimary,
+        fontFamily: typography.monoFamily
+      }
+    }) as const
+)

@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAllHostClients } from '../transport/use-all-host-clients'
@@ -7,6 +9,8 @@ import type { RpcFailure } from '../transport/types'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
 export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: () => void }) {
+  useMobileTheme()
+
   const busy = useRef(false)
   const [hostIds, setHostIds] = useState<string[]>([])
   const [sending, setSending] = useState(false)
@@ -104,25 +108,31 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
     </View>
   )
 }
-const styles = StyleSheet.create({
-  container: { marginTop: spacing.xl, gap: spacing.sm },
-  label: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
-  detail: { color: colors.textMuted, fontSize: typography.metaSize, lineHeight: 18 },
-  button: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.bgRaised,
-    borderRadius: 8,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
-  sizingLabel: { opacity: 0 },
-  buttonLabel: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  troubleshootLink: { alignSelf: 'flex-start', paddingVertical: spacing.sm },
-  linkText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    textDecorationLine: 'underline'
-  },
-  pressed: { opacity: 0.6 },
-  buttonText: { color: colors.textPrimary, fontSize: typography.metaSize, fontWeight: '600' }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: { marginTop: spacing.xl, gap: spacing.sm },
+    label: { color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' },
+    detail: { color: colors.textMuted, fontSize: typography.metaSize, lineHeight: 18 },
+    button: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.bgRaised,
+      borderRadius: 8,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md
+    },
+    sizingLabel: { opacity: 0 },
+    buttonLabel: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    troubleshootLink: { alignSelf: 'flex-start', paddingVertical: spacing.sm },
+    linkText: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      textDecorationLine: 'underline'
+    },
+    pressed: { opacity: 0.6 },
+    buttonText: { color: colors.textPrimary, fontSize: typography.metaSize, fontWeight: '600' }
+  })
+)

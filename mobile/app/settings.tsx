@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
 import { Linking } from 'react-native'
 import { useRouter } from 'expo-router'
 import SettingsMenuScreen from '../src/settings/settings-menu-screen'
@@ -5,6 +6,8 @@ import { PendingCredentialCleanupCard } from '../src/settings/pending-credential
 import { SettingsAppUpdateSection } from '../src/settings/settings-app-update-section'
 
 export default function NativeSettingsRoute() {
+  useMobileTheme()
+
   const router = useRouter()
   return (
     <SettingsMenuScreen

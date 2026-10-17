@@ -1,3 +1,5 @@
+import { refreshNativeWindowAppearance } from '../platform/native-window-appearance'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { View, Pressable, useWindowDimensions, ScrollView, Keyboard, Modal } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -63,6 +65,8 @@ export function MountedBottomDrawer({
   zIndex = 1000,
   scrollResetKey = null
 }: MountedBottomDrawerProps) {
+  useMobileTheme()
+
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
@@ -440,7 +444,15 @@ export function MountedBottomDrawer({
   }
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onShow={refreshNativeWindowAppearance}
+      onRequestClose={dismiss}
+    >
       {overlay}
     </Modal>
   )

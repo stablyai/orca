@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { QrCode } from 'lucide-react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
@@ -23,6 +25,8 @@ export function MobileHomeEmptyState(props: {
   isWideLayout: boolean
   onPairDesktop: () => void
 }) {
+  useMobileTheme()
+
   // Scrolls because a phone in landscape is shorter than the hero and the steps together.
   return (
     <ScrollView
@@ -65,74 +69,76 @@ export function MobileHomeEmptyState(props: {
   )
 }
 
-const styles = StyleSheet.create({
-  emptyContainer: { flexGrow: 1 },
-  emptyHero: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingBottom: 40
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 10
-  },
-  emptyBody: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    borderRadius: radii.card
-  },
-  primaryButtonText: { color: colors.bgBase, fontSize: 15, fontWeight: '700' },
-  stepsSection: { paddingHorizontal: spacing.xl },
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    paddingVertical: spacing.lg
-  },
-  stepRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderSubtle },
-  stepNum: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1
-  },
-  stepNumText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
-  stepText: { flex: 1 },
-  stepTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: 3
-  },
-  stepDesc: { fontSize: 12, color: colors.textMuted, lineHeight: 17 }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    emptyContainer: { flexGrow: 1 },
+    emptyHero: {
+      flexGrow: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 32,
+      paddingBottom: 40
+    },
+    emptyTitle: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: 10
+    },
+    emptyBody: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 22,
+      marginBottom: 32
+    },
+    primaryButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.textPrimary,
+      paddingHorizontal: 28,
+      paddingVertical: 14,
+      borderRadius: radii.card
+    },
+    primaryButtonText: { color: colors.bgBase, fontSize: 15, fontWeight: '700' },
+    stepsSection: { paddingHorizontal: spacing.xl },
+    sectionHeading: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.xs
+    },
+    stepRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 14,
+      paddingVertical: spacing.lg
+    },
+    stepRowBorder: { borderTopWidth: 1, borderTopColor: colors.borderSubtle },
+    stepNum: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      backgroundColor: colors.bgRaised,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 1
+    },
+    stepNumText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
+    stepText: { flex: 1 },
+    stepTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      marginBottom: 3
+    },
+    stepDesc: { fontSize: 12, color: colors.textMuted, lineHeight: 17 }
+  })
+)

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { MessageSquare } from 'lucide-react-native'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
@@ -28,6 +29,8 @@ export function MobileOnboardingPage({
   onSessionChoice,
   onNotificationChoice
 }: Props) {
+  useMobileTheme()
+
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 
@@ -52,7 +55,7 @@ export function MobileOnboardingPage({
         </Text>
         <Text style={styles.body}>
           {isSessionView
-            ? 'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
+            ? 'Choose how existing terminal-based sessions open on this device. New supported agents open as Chat with model and session controls. You can change the terminal view later in Settings.'
             : 'Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.'}
         </Text>
       </View>
@@ -92,6 +95,8 @@ function SessionViewChoices({
   disabled: boolean
   onChoice: (view: MobileSessionView) => void
 }) {
+  useMobileTheme()
+
   return (
     <>
       <ChoiceButton
@@ -122,6 +127,8 @@ function NotificationChoices({
   disabled: boolean
   onChoice: (choice: NotificationOnboardingChoice) => void
 }) {
+  useMobileTheme()
+
   return (
     <>
       <ChoiceButton
@@ -158,6 +165,8 @@ function ChoiceButton({
   disabled: boolean
   onPress: () => void
 }) {
+  useMobileTheme()
+
   return (
     <Pressable
       accessibilityRole="button"

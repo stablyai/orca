@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
@@ -16,6 +18,8 @@ type Props = {
 }
 
 export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props) {
+  useMobileTheme()
+
   const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS)
   const hiddenCount = agents.length - visibleAgents.length
   const subject = `${agents.length} agents`
@@ -57,48 +61,50 @@ export function WorktreeAgentSummary({ agents, expanded, now, onToggle }: Props)
   )
 }
 
-const styles = StyleSheet.create({
-  summary: {
-    minHeight: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radii.button
-  },
-  summaryCollapsed: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  summaryPressed: {
-    opacity: 0.72
-  },
-  expandedLabel: {
-    flex: 1,
-    paddingLeft: spacing.xs,
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  agentIcons: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  agentStatus: {
-    height: 19,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 3,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  hiddenCount: {
-    fontSize: 10,
-    color: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    summary: {
+      minHeight: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.xs,
+      borderRadius: radii.button
+    },
+    summaryCollapsed: {
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.bgRaised
+    },
+    summaryPressed: {
+      opacity: 0.72
+    },
+    expandedLabel: {
+      flex: 1,
+      paddingLeft: spacing.xs,
+      fontSize: 11,
+      fontWeight: '500',
+      color: colors.textMuted
+    },
+    agentIcons: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs
+    },
+    agentStatus: {
+      height: 19,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      paddingHorizontal: 3,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgPanel
+    },
+    hiddenCount: {
+      fontSize: 10,
+      color: colors.textMuted
+    }
+  })
+)

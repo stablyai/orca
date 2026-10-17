@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { memo } from 'react'
 import { View, StyleSheet } from 'react-native'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
@@ -34,6 +35,8 @@ export function SessionDockColumn({
   onFileOpenStart,
   onOpenedFileDiff
 }: Props) {
+  useMobileTheme()
+
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
   return (
     <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
@@ -64,6 +67,8 @@ const DockPanelContent = memo(function DockPanelContent({
   onFileOpenStart,
   onOpenedFileDiff
 }: DockPanelContentProps) {
+  useMobileTheme()
+
   // Source Control and Pull Request share one hub instance so swapping dock icons
   // keeps commit draft / visited-tab / scroll state and lands on the right segment
   // (design: PR dock maps to hub + tab=pr).

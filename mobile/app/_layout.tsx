@@ -1,3 +1,6 @@
+import { useMobileAppearance } from '../src/theme/use-mobile-appearance'
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
+import { createThemedStyles } from '../src/theme/mobile-themed-styles'
 import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
@@ -44,6 +47,9 @@ Notifications.setNotificationHandler({
 })
 
 export default function RootLayout() {
+  const colorScheme = useMobileTheme()
+  const appearance = useMobileAppearance()
+
   const router = useRouter()
   const pathname = usePathname()
   const { hostId, worktreeId, executionHost } = useGlobalSearchParams<{
@@ -197,10 +203,13 @@ export default function RootLayout() {
     await SplashScreen.hideAsync()
   }, [])
 
+  if (!appearance.ready) {
+    return null
+  }
   return (
     <RpcClientProvider>
       <View style={styles.root} onLayout={onNavigatorLayout}>
-        <StatusBar style="light" />
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         <SideSafeArea>
           <Stack
             screenOptions={{
@@ -230,6 +239,7 @@ export default function RootLayout() {
               name="mobile-onboarding"
               options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
             />
+            <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
             <Stack.Screen name="settings" options={{ headerShown: false }} />
             <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
             <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
@@ -247,9 +257,11 @@ export default function RootLayout() {
   )
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.bgBase
+    }
+  })
+)

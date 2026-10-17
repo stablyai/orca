@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { StyleSheet, Text, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 
@@ -9,6 +11,8 @@ type Props = {
 
 // The detail sheet owns the surrounding metadata grid.
 export function JiraDetailMeta({ assignee, priorityName, projectName }: Props) {
+  useMobileTheme()
+
   const rows: [string, string | undefined][] = [
     ['Assignee', assignee],
     ['Priority', priorityName],
@@ -28,19 +32,21 @@ export function JiraDetailMeta({ assignee, priorityName, projectName }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  item: {
-    minWidth: 96,
-    flexGrow: 1
-  },
-  label: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginBottom: 2
-  },
-  value: {
-    fontSize: 13,
-    color: colors.textPrimary,
-    fontWeight: '600'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    item: {
+      minWidth: 96,
+      flexGrow: 1
+    },
+    label: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginBottom: 2
+    },
+    value: {
+      fontSize: 13,
+      color: colors.textPrimary,
+      fontWeight: '600'
+    }
+  })
+)

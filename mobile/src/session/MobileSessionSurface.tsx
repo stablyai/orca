@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View } from 'react-native'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -6,6 +7,8 @@ import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSheets } from './MobileSessionSheets'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
+  useMobileTheme()
+
   const { setMobileSessionRootRef } = controller
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>

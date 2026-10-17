@@ -1,11 +1,13 @@
-import { useMemo, useSyncExternalStore } from 'react'
-import { StyleSheet, useWindowDimensions, View } from 'react-native'
+import { createThemedStyles } from '../src/theme/mobile-themed-styles'
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
+import { useLayoutEffect, useMemo, useSyncExternalStore } from 'react'
+import { StyleSheet, useColorScheme, useWindowDimensions, View } from 'react-native'
 import { Slot } from 'expo-router'
 import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-area-context'
 import { ZERO_SAFE_AREA_INSETS } from '../src/mobile-web-shell/bridge/bridge-safe-area-insets'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { usePageBridgeClient } from '../src/transport/client-context.web'
-import { colors } from '../src/theme/mobile-theme'
+import { applyMobileColorScheme, colors } from '../src/theme/mobile-theme'
 
 /**
  * The page's root layout, standing where the native `_layout.tsx` does. Without one expo-router
@@ -14,6 +16,13 @@ import { colors } from '../src/theme/mobile-theme'
  * ExpoRoot's own provider, whose web half reads `env(safe-area-inset-*)`: 0 in both WebViews.
  */
 export default function PageRootLayout() {
+  useMobileTheme()
+  const colorScheme = useColorScheme()
+  // The shell's native appearance already includes the user's device-local override.
+  useLayoutEffect(() => {
+    applyMobileColorScheme(colorScheme === 'dark' ? 'dark' : 'light')
+  }, [colorScheme])
+
   const client = usePageBridgeClient()
   const insets = useSyncExternalStore(
     client.onSafeAreaInsetsUpdate,
@@ -34,9 +43,11 @@ export default function PageRootLayout() {
   )
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.bgBase
+    }
+  })
+)

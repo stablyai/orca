@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { hostStackHostRoute } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -33,6 +35,8 @@ export function PageRouteUnavailableScreen({
   hostId: string
   message?: string
 }) {
+  useMobileTheme()
+
   const router = useRouteHandoff()
   const target = hostId === '' ? '/' : hostStackHostRoute(hostId)
   const label = hostId === '' ? 'Back to hosts' : 'Back to workspaces'
@@ -51,32 +55,34 @@ export function PageRouteUnavailableScreen({
   )
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  message: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
-  button: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
-  },
-  buttonLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgBase,
+      paddingHorizontal: spacing.lg
+    },
+    message: {
+      fontSize: typography.bodySize,
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: spacing.lg
+    },
+    button: {
+      backgroundColor: colors.bgRaised,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radii.button
+    },
+    buttonLabel: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    pressed: {
+      opacity: 0.7
+    }
+  })
+)

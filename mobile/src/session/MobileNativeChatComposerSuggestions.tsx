@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
@@ -26,6 +28,8 @@ export function MobileNativeChatComposerSuggestions({
   suggestions: readonly ComposerSuggestion[]
   onPick: (suggestion: ComposerSuggestion) => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   return (
     <View style={styles.suggestions}>
       <ScrollView keyboardShouldPersistTaps="always" style={styles.suggestionScroll}>
@@ -51,32 +55,34 @@ export function MobileNativeChatComposerSuggestions({
   )
 }
 
-const styles = StyleSheet.create({
-  suggestions: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  suggestionScroll: {
-    maxHeight: 220
-  },
-  suggestion: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    gap: 1
-  },
-  suggestionPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  suggestionText: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize
-  },
-  suggestionDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    suggestions: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel
+    },
+    suggestionScroll: {
+      maxHeight: 220
+    },
+    suggestion: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      gap: 1
+    },
+    suggestionPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    suggestionText: {
+      color: colors.textPrimary,
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize
+    },
+    suggestionDescription: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize
+    }
+  })
+)

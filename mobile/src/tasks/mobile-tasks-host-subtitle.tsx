@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text } from 'react-native'
 import { hostScreenStyles } from '../host-screen/host-screen-styles'
@@ -7,6 +8,7 @@ import { useHostDisplay } from '../transport/use-host-display'
 
 /** The desktop these tasks belong to, in the host screen's subtitle line. */
 export function MobileTasksHostSubtitle({ hostId }: { hostId: string }) {
+  useMobileTheme()
   const [host, setHost] = useState<HostProfile | null>(null)
   useEffect(() => {
     let stale = false

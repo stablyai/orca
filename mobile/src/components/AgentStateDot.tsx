@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { Activity } from 'lucide-react-native'
 import { Animated, StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
@@ -10,20 +12,22 @@ import { useWorkingRingRotation } from './use-working-ring-rotation'
 // ('interrupted'), amber for 'unconfirmed' (desktop's missing-evidence tone), neutral for idle. Distinct from the
 // worktree-level AgentSpinner, which collapses the agent vocabulary into the 5-state
 // rollup the sidebar dot uses.
-const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, string> = {
-  done: '#10b981',
-  blocked: '#ef4444',
-  waiting: '#ef4444',
+const DOT_COLORS = createThemedStyles(() => ({
+  done: colors.agentDone,
+  blocked: colors.agentAttention,
+  waiting: colors.agentAttention,
   interrupted: colors.textMuted,
-  failed: '#ef4444',
+  failed: colors.agentAttention,
   unconfirmed: colors.statusAmber,
-  idle: 'rgba(115,115,115,0.4)'
-}
+  idle: colors.agentInactive
+})) satisfies Record<Exclude<AgentDotState, 'working' | 'monitoring'>, string>
 export const AGENT_WORKING_COLOR = '#eab308'
 
 /** `unverifiable` is a child row's lost contact: desktop's dashed amber ring, a missing-evidence
  *  mark rather than a state claim. */
 export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable' }) {
+  useMobileTheme()
+
   const rotate = useWorkingRingRotation(state === 'working')
 
   if (state === 'working') {
@@ -37,7 +41,7 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   if (state === 'monitoring') {
     return (
       <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
-        <Activity size={10} color={AGENT_WORKING_COLOR} />
+        <Activity size={10} color={colors.agentWorking} />
       </View>
     )
   }
@@ -57,23 +61,25 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   )
 }
 
-const styles = StyleSheet.create({
-  wrapper: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  dashedRing: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: colors.statusAmber
-  },
-  spinner: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    borderWidth: 1.5,
-    borderColor: AGENT_WORKING_COLOR,
-    borderTopColor: 'transparent'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    wrapper: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
+    dot: { width: 6, height: 6, borderRadius: 3 },
+    dashedRing: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      borderWidth: 1.5,
+      borderStyle: 'dashed',
+      borderColor: colors.statusAmber
+    },
+    spinner: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      borderWidth: 1.5,
+      borderColor: colors.agentWorking,
+      borderTopColor: 'transparent'
+    }
+  })
+)

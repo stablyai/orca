@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useRef, useState } from 'react'
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Copy, TextSelect, X } from 'lucide-react-native'
@@ -19,6 +21,8 @@ export function MobileNativeChatMessageActionsSheet({
   message,
   onClose
 }: Props): React.JSX.Element {
+  useMobileTheme()
+
   const clipboard = useClipboardWriter()
   const [sheetVisible, setSheetVisible] = useState(true)
   const [selecting, setSelecting] = useState(false)
@@ -75,6 +79,8 @@ function SelectTextScreen({
   text: string
   onClose: () => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
@@ -111,19 +117,21 @@ function SelectTextScreen({
   )
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bgBase },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  title: { color: colors.textPrimary, fontSize: typography.titleSize, fontWeight: '600' },
-  close: { padding: spacing.xs },
-  body: { padding: spacing.lg },
-  text: { color: colors.textPrimary, fontSize: typography.bodySize, lineHeight: 22 }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    screen: { flex: 1, backgroundColor: colors.bgBase },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle
+    },
+    title: { color: colors.textPrimary, fontSize: typography.titleSize, fontWeight: '600' },
+    close: { padding: spacing.xs },
+    body: { padding: spacing.lg },
+    text: { color: colors.textPrimary, fontSize: typography.bodySize, lineHeight: 22 }
+  })
+)

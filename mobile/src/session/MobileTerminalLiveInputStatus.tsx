@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { StyleSheet, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
 
@@ -18,6 +20,8 @@ export function MobileTerminalLiveInputStatus({
   isAttaching,
   liveInputText
 }: MobileTerminalLiveInputStatusProps) {
+  useMobileTheme()
+
   const title = dictation.isRecording
     ? 'Listening'
     : dictation.isProcessing
@@ -47,19 +51,21 @@ export function MobileTerminalLiveInputStatus({
   )
 }
 
-const styles = StyleSheet.create({
-  status: {
-    flex: 1,
-    gap: 1
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  detail: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    status: {
+      flex: 1,
+      gap: 1
+    },
+    title: {
+      color: colors.textPrimary,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    },
+    detail: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontFamily: typography.monoFamily
+    }
+  })
+)

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
@@ -39,6 +40,8 @@ export function ReviewerPickerDrawer({
   isRequested,
   onToggle
 }: Props) {
+  useMobileTheme()
+
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
@@ -27,6 +28,8 @@ export function PRCommentComposer({
   onCancel,
   autoFocus
 }: Props) {
+  useMobileTheme()
+
   const [body, setBody] = useState(initialBody ?? '')
   // Why: parent `submitting` flips async; a fast double-tap can fire onSubmit
   // twice before it flips, so guard locally in the same synchronous tick.

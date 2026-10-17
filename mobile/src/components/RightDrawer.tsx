@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { View, Pressable, StyleSheet, Platform, Keyboard } from 'react-native'
 import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -36,6 +38,8 @@ type Props = {
 }
 
 export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Props) {
+  useMobileTheme()
+
   const [mounted, setMounted] = useState(visible)
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
@@ -76,6 +80,8 @@ function MountedRightDrawer({
   zIndex = 1000,
   widthPx
 }: MountedRightDrawerProps) {
+  useMobileTheme()
+
   const translateX = useSharedValue(0)
   const progress = useSharedValue(0)
   const { width: screenWidth } = useSafeAreaFrame()
@@ -201,39 +207,41 @@ function MountedRightDrawer({
   )
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000
-  },
-  root: {
-    flex: 1
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)'
-  },
-  anchor: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'flex-end'
-  },
-  drawer: {
-    height: '100%',
-    backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    paddingHorizontal: spacing.md,
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: colors.borderSubtle,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: -2, height: 0 },
-        shadowOpacity: 0.2,
-        shadowRadius: 10
-      },
-      android: { elevation: 8 }
-    })
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 1000
+    },
+    root: {
+      flex: 1
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.5)'
+    },
+    anchor: {
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'flex-end'
+    },
+    drawer: {
+      height: '100%',
+      backgroundColor: colors.bgBase,
+      borderTopLeftRadius: 16,
+      borderBottomLeftRadius: 16,
+      paddingHorizontal: spacing.md,
+      borderLeftWidth: StyleSheet.hairlineWidth,
+      borderLeftColor: colors.borderSubtle,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: -2, height: 0 },
+          shadowOpacity: 0.2,
+          shadowRadius: 10
+        },
+        android: { elevation: 8 }
+      })
+    }
+  })
+)

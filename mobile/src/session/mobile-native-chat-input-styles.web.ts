@@ -1,3 +1,4 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { StyleSheet } from 'react-native'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { mobileNativeChatInputBase } from './mobile-native-chat-input-base-styles'
@@ -11,7 +12,9 @@ import { mobileNativeChatInputBase } from './mobile-native-chat-input-base-style
  * the terminal's own keyboard lift at 0 for the rest of the session — and the terminal's input is
  * a hidden field whose only feedback that it is focused is the lift.
  */
-export const mobileNativeChatInputStyles = StyleSheet.create({
-  input: { ...mobileNativeChatInputBase.input, fontSize: TEXT_INPUT_FONT_SIZE },
-  freeInput: { ...mobileNativeChatInputBase.freeInput, fontSize: TEXT_INPUT_FONT_SIZE }
-})
+export const mobileNativeChatInputStyles = createThemedStyles(() =>
+  StyleSheet.create({
+    input: { ...mobileNativeChatInputBase.input, fontSize: TEXT_INPUT_FONT_SIZE },
+    freeInput: { ...mobileNativeChatInputBase.freeInput, fontSize: TEXT_INPUT_FONT_SIZE }
+  })
+)

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Text } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -12,6 +13,8 @@ import { useRemotePushCapableHosts } from '../notifications/use-remote-push-capa
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
 export function NativeNotificationDeliverySettings({ enabled }: { enabled: boolean }) {
+  useMobileTheme()
+
   const [delivery, setDelivery] = useState(DEFAULT_NOTIFICATION_DELIVERY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
@@ -32,6 +33,8 @@ export function PRSidebarHeader({
   showOpenOnWeb = true,
   bare = false
 }: Props) {
+  useMobileTheme()
+
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -115,6 +118,8 @@ function PRTitle({
   editable: boolean
   titleAction: MobilePrTitleAction
 }) {
+  useMobileTheme()
+
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 

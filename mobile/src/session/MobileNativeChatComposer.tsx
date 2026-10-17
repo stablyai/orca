@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -110,6 +111,7 @@ export function MobileNativeChatComposer({
   onNeedFiles,
   stop = null
 }: Props): React.JSX.Element {
+  useMobileTheme()
   const [cursor, setCursor] = useState(0)
   const fallbackInputRef = useRef<TextInput>(null)
   const fieldRef = inputRef ?? fallbackInputRef

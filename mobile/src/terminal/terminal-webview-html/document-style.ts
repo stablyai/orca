@@ -1,4 +1,4 @@
-import { colors } from '../../theme/mobile-theme'
+import { darkColors as colors } from '../../theme/mobile-dark-colors'
 
 /**
  * The rules that style the document itself, which only the WebView's document may carry.

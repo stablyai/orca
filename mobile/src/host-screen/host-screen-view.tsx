@@ -1,5 +1,6 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { MobileScreenFrame } from '../layout/MobileScreenFrame'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import { HostScreenHeader } from './host-screen-header'
 import { HostScreenOverlays } from './host-screen-overlays'
@@ -7,6 +8,8 @@ import { HostWorkspaceList } from './host-workspace-list'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenView({ controller }: { controller: HostScreenController }) {
+  useMobileTheme()
+
   if (controller.state.error) {
     return (
       <View style={styles.centered}>
@@ -16,10 +19,9 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <HostScreenHeader controller={controller} />
+    <MobileScreenFrame header={<HostScreenHeader controller={controller} />}>
       <HostWorkspaceList controller={controller} />
       <HostScreenOverlays controller={controller} />
-    </SafeAreaView>
+    </MobileScreenFrame>
   )
 }

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
@@ -47,6 +48,8 @@ export function MobileAgentSessionHistoryPanel({
   worktreeId,
   name = ''
 }: MobileAgentSessionHistoryPanelProps) {
+  useMobileTheme()
+
   // Not `useRouter`: inside the shell's page this screen is one document standing in for one
   // screen, and the session it resumes into is a native route the shell has to push.
   const router = useWorkspaceRouteHandoff()

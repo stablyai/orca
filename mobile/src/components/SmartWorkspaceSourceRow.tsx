@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
@@ -70,6 +72,8 @@ function resolveRowContent(row: SourceRow): RowContent {
 }
 
 export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
+  useMobileTheme()
+
   const content = resolveRowContent(row)
   return (
     <Pressable
@@ -98,44 +102,46 @@ export function SmartWorkspaceSourceRow({ row, onPress }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  icon: {
-    width: 18,
-    alignItems: 'center'
-  },
-  copy: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  subtitle: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  pill: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2
-  },
-  pillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textTransform: 'capitalize'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    icon: {
+      width: 18,
+      alignItems: 'center'
+    },
+    copy: {
+      flex: 1,
+      minWidth: 0
+    },
+    title: {
+      fontSize: typography.bodySize,
+      color: colors.textPrimary
+    },
+    subtitle: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 1
+    },
+    pill: {
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.button,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2
+    },
+    pillText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      textTransform: 'capitalize'
+    }
+  })
+)

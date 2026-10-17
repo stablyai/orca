@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../src/theme/mobile-themed-styles'
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -5,6 +7,8 @@ import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 
 export default function PairRedirectScreen() {
+  useMobileTheme()
+
   const router = useRouter()
   const params = useLocalSearchParams<{ code?: string }>()
   const [missingCode, setMissingCode] = useState(false)
@@ -57,31 +61,33 @@ export default function PairRedirectScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    lineHeight: 20,
-    marginBottom: spacing.xl,
-    textAlign: 'center'
-  },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: colors.textPrimary,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm + 2
-  },
-  primaryButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgBase,
+      padding: spacing.lg
+    },
+    errorText: {
+      color: colors.statusRed,
+      fontSize: typography.bodySize,
+      lineHeight: 20,
+      marginBottom: spacing.xl,
+      textAlign: 'center'
+    },
+    primaryButton: {
+      alignItems: 'center',
+      backgroundColor: colors.textPrimary,
+      borderRadius: radii.button,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.sm + 2
+    },
+    primaryButtonText: {
+      color: colors.bgBase,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    }
+  })
+)

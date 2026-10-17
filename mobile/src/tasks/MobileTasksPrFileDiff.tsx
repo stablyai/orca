@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import {
   type GitHubPrFileDiffLine,
   type ReactNode,
@@ -45,6 +46,8 @@ export function GitHubPrFileDiff({
   onCommentDraftChange: (key: string, value: string) => void
   onSubmitComment: (line: number) => void
 }): ReactNode {
+  useMobileTheme()
+
   const diffPreview = useMemo(
     () =>
       buildGitHubPrFileDiffPreview(

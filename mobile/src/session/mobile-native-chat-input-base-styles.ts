@@ -1,3 +1,4 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 
 /**
@@ -8,17 +9,23 @@ import { colors, radii, spacing } from '../theme/mobile-theme'
  * cannot import a value from the file it shadows and two copies of a style object drift apart on
  * everything except the difference that was meant to be between them.
  */
-const chatInputSurface = {
-  minHeight: 40,
-  color: colors.textPrimary,
-  backgroundColor: colors.bgRaised,
-  borderRadius: radii.input,
-  paddingHorizontal: spacing.md,
-  paddingTop: spacing.sm,
-  paddingBottom: spacing.sm
-} as const
+const chatInputSurface = createThemedStyles(
+  () =>
+    ({
+      minHeight: 40,
+      color: colors.textPrimary,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.sm
+    }) as const
+)
 
-export const mobileNativeChatInputBase = {
-  input: { ...chatInputSurface, width: '100%', maxHeight: 140 },
-  freeInput: { ...chatInputSurface, flex: 1, maxHeight: 120 }
-} as const
+export const mobileNativeChatInputBase = createThemedStyles(
+  () =>
+    ({
+      input: { ...chatInputSurface, width: '100%', maxHeight: 140 },
+      freeInput: { ...chatInputSurface, flex: 1, maxHeight: 120 }
+    }) as const
+)

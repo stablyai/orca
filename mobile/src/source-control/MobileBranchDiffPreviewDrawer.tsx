@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -13,6 +14,8 @@ type Props = {
 }
 
 export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Props) {
+  useMobileTheme()
+
   if (!branchDiffPreview) {
     return null
   }

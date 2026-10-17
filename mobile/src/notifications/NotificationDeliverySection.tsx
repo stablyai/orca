@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { StyleSheet, Switch, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { NotificationDeliveryPreferences } from './notification-delivery-preferences'
@@ -9,6 +11,8 @@ type Props = {
 }
 
 export function NotificationDeliverySection({ value, disabled, onChange }: Props) {
+  useMobileTheme()
+
   const row = (key: keyof NotificationDeliveryPreferences, label: string, hint?: string) => {
     return (
       <View key={key} style={[styles.row, disabled && styles.disabled]}>
@@ -51,22 +55,24 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
   )
 }
 
-const styles = StyleSheet.create({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    overflow: 'hidden',
-    marginTop: spacing.md
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
-  labelGroup: { flex: 1, gap: spacing.xs },
-  label: { fontSize: typography.bodySize, fontWeight: '500', color: colors.textPrimary },
-  hint: { fontSize: typography.metaSize, color: colors.textMuted },
-  disabled: { opacity: 0.5 },
-  footer: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.sm
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    section: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.card,
+      overflow: 'hidden',
+      marginTop: spacing.md
+    },
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
+    labelGroup: { flex: 1, gap: spacing.xs },
+    label: { fontSize: typography.bodySize, fontWeight: '500', color: colors.textPrimary },
+    hint: { fontSize: typography.metaSize, color: colors.textMuted },
+    disabled: { opacity: 0.5 },
+    footer: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.sm
+    }
+  })
+)

@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
 import { HostKindIcon } from './HostKindIcon'
@@ -18,6 +20,8 @@ export function NewWorktreeProjectTargetFields({
   onOpenProject: () => void
   onOpenRunTarget: () => void
 }) {
+  useMobileTheme()
+
   return (
     <>
       <View style={styles.field}>
@@ -50,6 +54,8 @@ function SelectionCopy({
   selection: Selection | null
   placeholder: string
 }) {
+  useMobileTheme()
+
   return (
     <View style={styles.fieldButtonCopy}>
       <Text
@@ -67,46 +73,48 @@ function SelectionCopy({
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm
-  },
-  projectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
-  },
-  fieldButtonCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  fieldButtonText: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  fieldButtonDetail: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  fieldButtonPlaceholder: {
-    color: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    field: {
+      marginBottom: spacing.md
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textSecondary,
+      marginBottom: spacing.xs
+    },
+    fieldButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      paddingHorizontal: spacing.md,
+      paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm
+    },
+    projectDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999
+    },
+    fieldButtonCopy: {
+      flex: 1,
+      minWidth: 0
+    },
+    fieldButtonText: {
+      fontSize: typography.bodySize,
+      color: colors.textPrimary
+    },
+    fieldButtonDetail: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      marginTop: 1
+    },
+    fieldButtonPlaceholder: {
+      color: colors.textMuted
+    }
+  })
+)

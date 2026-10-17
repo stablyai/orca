@@ -1,8 +1,10 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { memo, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { buildNativeChatVisualDocument } from '../../../src/shared/native-chat-visual-shell'
 import type { MobileNativeChatVisualHostMode } from './mobile-native-chat-visual-host-document'
-import { MOBILE_NATIVE_CHAT_VISUAL_THEME } from './mobile-native-chat-visual-theme'
+import { getMobileNativeChatVisualTheme } from './mobile-native-chat-visual-theme'
 
 export type MobileNativeChatVisualFrameProps = {
   html: string
@@ -29,15 +31,17 @@ export const MobileNativeChatVisualFrame = memo(function MobileNativeChatVisualF
   title,
   mode
 }: MobileNativeChatVisualFrameProps) {
+  const scheme = useMobileTheme()
+
   // No script runs in this frame, so nothing ever reports on this channel.
   const document = useMemo(
     () =>
       buildNativeChatVisualDocument({
         html,
         channel: 'sealed',
-        theme: MOBILE_NATIVE_CHAT_VISUAL_THEME
+        theme: getMobileNativeChatVisualTheme()
       }),
-    [html]
+    [html, scheme]
   )
   return (
     <View style={mode === 'inline' ? styles.inline : styles.fullscreen}>
@@ -60,7 +64,9 @@ const IFRAME_STYLE = {
   backgroundColor: 'transparent'
 } as const
 
-const styles = StyleSheet.create({
-  inline: { width: '100%', height: SEALED_INLINE_HEIGHT },
-  fullscreen: { flex: 1 }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    inline: { width: '100%', height: SEALED_INLINE_HEIGHT },
+    fullscreen: { flex: 1 }
+  })
+)

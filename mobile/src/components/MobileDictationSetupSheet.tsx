@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
@@ -35,6 +37,8 @@ function formatSize(bytes: number | null | undefined): string {
 // Lets the user enable dictation and download a speech model on the paired
 // desktop, from the phone. Polls while a download is in flight.
 export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
+  useMobileTheme()
+
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -221,58 +225,60 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
   )
 }
 
-const styles = StyleSheet.create({
-  heading: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: spacing.xs,
-    marginBottom: spacing.md
-  },
-  loading: { paddingVertical: spacing.xl, alignItems: 'center' },
-  enableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    marginBottom: spacing.sm
-  },
-  enableLabel: { color: colors.textPrimary, fontSize: typography.bodySize },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  modelInfo: { flex: 1, minWidth: 0 },
-  modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  modelLabel: { color: colors.textPrimary, fontSize: typography.bodySize },
-  recommended: {
-    color: colors.statusGreen,
-    fontSize: 10,
-    fontWeight: '700'
-  },
-  modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
-  modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  actionPressed: { opacity: 0.7 },
-  actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
-  selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
-  error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    heading: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '700'
+    },
+    subtitle: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      marginTop: spacing.xs,
+      marginBottom: spacing.md
+    },
+    loading: { paddingVertical: spacing.xl, alignItems: 'center' },
+    enableRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderSubtle,
+      marginBottom: spacing.sm
+    },
+    enableLabel: { color: colors.textPrimary, fontSize: typography.bodySize },
+    modelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingVertical: spacing.sm
+    },
+    modelInfo: { flex: 1, minWidth: 0 },
+    modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    modelLabel: { color: colors.textPrimary, fontSize: typography.bodySize },
+    recommended: {
+      color: colors.statusGreen,
+      fontSize: 10,
+      fontWeight: '700'
+    },
+    modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
+    modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised
+    },
+    actionPressed: { opacity: 0.7 },
+    actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
+    selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
+    error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md }
+  })
+)

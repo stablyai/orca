@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { memo, useState } from 'react'
 import { Image, Platform, Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
@@ -44,6 +45,8 @@ const REACTION_EMOJI: Record<GitHubReactionContent, string> = {
 }
 
 function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
+  useMobileTheme()
+
   const visible = (reactions ?? []).filter((r) => r.count > 0)
   if (visible.length === 0) {
     return null
@@ -75,6 +78,8 @@ export const PRCommentCard = memo(function PRCommentCard({
   actions?: PRCommentCardActions
   now: number
 }) {
+  useMobileTheme()
+
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)

@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
@@ -68,6 +70,8 @@ export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
  * frame's image despite the attribute, where Chromium sends none.
  */
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
+  useMobileTheme()
+
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
   // The shell's answer for this session, asked once: the page mounts after `init` and a session's
   // grants do not change for the life of the document.
@@ -125,6 +129,8 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
  * the browser parses it inside a frame that can run nothing.
  */
 function PreviewFrame({ html, linksOpen }: { html: string; linksOpen: boolean }) {
+  useMobileTheme()
+
   return (
     <View style={styles.frame}>
       <iframe
@@ -151,30 +157,32 @@ const IFRAME_STYLE = {
   backgroundColor: '#ffffff'
 } as const
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  toolbar: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  toggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised
-  },
-  toggleActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
-  frame: { flex: 1, backgroundColor: '#ffffff' }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: { flex: 1 },
+    toolbar: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderSubtle
+    },
+    toggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: 6,
+      backgroundColor: colors.bgRaised
+    },
+    toggleActive: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
+    frame: { flex: 1, backgroundColor: '#ffffff' }
+  })
+)

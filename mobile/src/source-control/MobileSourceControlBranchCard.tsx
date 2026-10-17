@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, Text, View } from 'react-native'
 import { GitBranch } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -39,6 +40,8 @@ export function MobileSourceControlBranchCard({
   prChip,
   onOpenPr
 }: Props) {
+  useMobileTheme()
+
   const showConflict = conflictOperation !== null && conflictOperation !== 'unknown'
   return (
     <View style={styles.summaryCard}>

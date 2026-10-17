@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../../theme/mobile-themed-styles'
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -18,6 +20,8 @@ type Props = {
 // it can sit inline inside the PR sidebar's ScrollView, mirroring the compose
 // form fix — a BottomDrawer overlay nested in a ScrollView gets clipped.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
+  useMobileTheme()
+
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,47 +93,49 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   )
 }
 
-const styles = StyleSheet.create({
-  headingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  heading: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE
-  },
-  error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md },
-  submit: {
-    marginTop: spacing.lg,
-    minHeight: 46,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  submitDisabled: { opacity: 0.45 },
-  submitPressed: { opacity: 0.8 },
-  submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    headingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm
+    },
+    heading: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '700'
+    },
+    cancelText: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    },
+    label: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      marginTop: spacing.sm,
+      marginBottom: spacing.xs
+    },
+    input: {
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      color: colors.textPrimary,
+      fontSize: TEXT_INPUT_FONT_SIZE
+    },
+    error: { color: colors.statusRed, fontSize: typography.metaSize, marginTop: spacing.md },
+    submit: {
+      marginTop: spacing.lg,
+      minHeight: 46,
+      borderRadius: radii.button,
+      backgroundColor: colors.textPrimary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    submitDisabled: { opacity: 0.45 },
+    submitPressed: { opacity: 0.8 },
+    submitText: { color: colors.bgBase, fontSize: typography.bodySize, fontWeight: '600' }
+  })
+)

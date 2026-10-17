@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Navigator } from 'expo-router'
@@ -12,6 +14,8 @@ import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screen
  * `Navigator`, with a view that keeps a popped screen mounted until it has slid out.
  */
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
+  useMobileTheme()
+
   return (
     <Navigator>
       {HOST_STACK_SCREENS.map(({ name, title }) => (
@@ -67,6 +71,8 @@ function transitionBetween(previous: Shown, next: Routes): Transition | null {
 }
 
 function HostStackView({ animation }: { animation: HostStackAnimation }) {
+  useMobileTheme()
+
   const { state, descriptors } = Navigator.useContext()
   const { routes } = state
   const [shown, setShown] = useState<Shown>({ routes, descriptors, transition: null })
@@ -124,6 +130,8 @@ function StackScreen({
   onSettled: () => void
   children: ReactNode
 }) {
+  useMobileTheme()
+
   const ref = useRef<View>(null)
   // Where an interrupted slide stopped, so a pop during a push leaves from there and not from 0.
   const stoppedAt = useRef<string | null>(null)
@@ -176,16 +184,18 @@ function StackScreen({
   )
 }
 
-const styles = StyleSheet.create({
-  stack: {
-    flex: 1,
-    overflow: 'hidden'
-  },
-  screen: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.bgBase
-  },
-  hidden: {
-    display: 'none'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    stack: {
+      flex: 1,
+      overflow: 'hidden'
+    },
+    screen: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.bgBase
+    },
+    hidden: {
+      display: 'none'
+    }
+  })
+)

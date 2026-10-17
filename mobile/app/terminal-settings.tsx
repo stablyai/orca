@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Pressable, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -105,6 +106,8 @@ function HostFitRow({
   ms: number | null | undefined
   onPress: () => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -122,6 +125,8 @@ function HostFitRow({
 }
 
 export default function TerminalSettingsScreen() {
+  useMobileTheme()
+
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [hosts, setHosts] = useState<HostProfile[]>([])

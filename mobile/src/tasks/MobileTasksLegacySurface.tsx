@@ -1,6 +1,7 @@
+import { MobileScreenFrame } from '../layout/MobileScreenFrame'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import {
-  SafeAreaView,
   View,
   Text,
   Pressable,
@@ -80,6 +81,8 @@ import {
 import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
+  useMobileTheme()
+
   const {
     error,
     githubMode,
@@ -108,9 +111,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     toggleGitLabStatus
   } = model
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {renderMobileTasksChrome(model)}
-
+    <MobileScreenFrame header={renderMobileTasksChrome(model)}>
       {error ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
@@ -385,6 +386,6 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           onCancel={() => setPendingHostedStateChange(null)}
         />
       </BottomDrawerModalHost>
-    </SafeAreaView>
+    </MobileScreenFrame>
   )
 }

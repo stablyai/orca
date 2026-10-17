@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { memo, type ComponentType } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import {
@@ -61,6 +63,8 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   editable: boolean
   onCommand: (command: MobileRichMarkdownCommand) => void
 }) {
+  useMobileTheme()
+
   return (
     <View style={styles.toolbar}>
       <ScrollView
@@ -93,31 +97,33 @@ export const MobileRichMarkdownToolbar = memo(function MobileRichMarkdownToolbar
   )
 })
 
-const styles = StyleSheet.create({
-  toolbar: {
-    minHeight: 42,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  toolbarContent: {
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6
-  },
-  toolbarButton: {
-    minWidth: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.xs
-  },
-  toolbarButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  toolbarButtonDisabled: {
-    opacity: 0.55
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    toolbar: {
+      minHeight: 42,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel
+    },
+    toolbarContent: {
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6
+    },
+    toolbarButton: {
+      minWidth: 30,
+      height: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button,
+      paddingHorizontal: spacing.xs
+    },
+    toolbarButtonPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    toolbarButtonDisabled: {
+      opacity: 0.55
+    }
+  })
+)

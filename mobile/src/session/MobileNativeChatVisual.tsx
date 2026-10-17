@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { memo, useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Maximize2, X } from 'lucide-react-native'
@@ -14,6 +16,8 @@ const DEFAULT_TITLE = 'Visualization'
 
 /** The quiet reserved space a visual takes while it loads. */
 function MobileNativeChatVisualPlaceholder() {
+  useMobileTheme()
+
   return (
     <View style={[styles.frame, styles.placeholder]}>
       <ActivityIndicator size="small" color={colors.textMuted} />
@@ -42,6 +46,8 @@ export const MobileNativeChatVisual = memo(function MobileNativeChatVisual({
   directive: NativeChatVisualDirective
   source: MobileNativeChatVisualSource
 }) {
+  useMobileTheme()
+
   const { state, retry } = useMobileNativeChatVisual(source, directive.file)
   // A frame that navigated away or kept crashing; cleared by the reader's retry.
   const [frameFailed, setFrameFailed] = useState(false)
@@ -113,6 +119,8 @@ function MobileNativeChatVisualFullscreen({
   onClose: () => void
   onFailed: () => void
 }) {
+  useMobileTheme()
+
   const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
@@ -152,48 +160,50 @@ function MobileNativeChatVisualFullscreen({
   )
 }
 
-const styles = StyleSheet.create({
-  frame: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden'
-  },
-  placeholder: {
-    height: MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  unavailable: { marginBottom: spacing.sm, paddingVertical: spacing.xs },
-  unavailableText: { color: colors.textMuted, fontSize: typography.metaSize },
-  openButton: {
-    position: 'absolute',
-    top: spacing.xs,
-    right: spacing.xs,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  sheet: { flex: 1, backgroundColor: colors.bgBase },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  sheetTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  closeButton: { padding: spacing.xs }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    frame: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden'
+    },
+    placeholder: {
+      height: MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    unavailable: { marginBottom: spacing.sm, paddingVertical: spacing.xs },
+    unavailableText: { color: colors.textMuted, fontSize: typography.metaSize },
+    openButton: {
+      position: 'absolute',
+      top: spacing.xs,
+      right: spacing.xs,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgPanel,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle
+    },
+    sheet: { flex: 1, backgroundColor: colors.bgBase },
+    sheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle
+    },
+    sheetTitle: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    },
+    closeButton: { padding: spacing.xs }
+  })
+)

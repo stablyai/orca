@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { memo } from 'react'
 import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -60,6 +62,8 @@ function WorktreeListRowComponent({
   onLongPress,
   onToggleLineage
 }: Props) {
+  useMobileTheme()
+
   const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
   const folderMeta = item.comment?.trim() || item.path || 'Folder'
   const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
@@ -227,156 +231,158 @@ function WorktreeListRowComponent({
 
 export const WorktreeListRow = memo(WorktreeListRowComponent, areStructurallyEqual)
 
-const styles = StyleSheet.create({
-  worktreeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: spacing.sm + 2,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.lg,
-    // Reserve the active accent bar width so active/inactive rows align.
-    borderLeftWidth: 2,
-    borderLeftColor: 'transparent'
-  },
-  worktreeRowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  // Highlight the worktree currently focused on the desktop, mirroring the
-  // desktop sidebar's selected-card treatment (raised fill + left accent).
-  worktreeRowActive: {
-    backgroundColor: colors.bgPanel,
-    // Neutral grey accent, matching the desktop's active-tab indicator rather
-    // than a blue line.
-    borderLeftColor: colors.textSecondary
-  },
-  indicatorCol: {
-    width: 20,
-    alignItems: 'center',
-    paddingTop: 6,
-    marginRight: spacing.sm,
-    gap: 4
-  },
-  unreadBell: {
-    marginTop: 2
-  },
-  worktreeMain: {
-    flex: 1,
-    marginRight: spacing.sm
-  },
-  worktreeNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  worktreeName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    flexShrink: 1
-  },
-  worktreeNameUnread: {
-    fontWeight: '700'
-  },
-  textReadOnly: {
-    opacity: 0.5
-  },
-  prBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4
-  },
-  prNumber: {
-    fontSize: 10,
-    color: colors.textSecondary
-  },
-  // Why: matches the desktop's compact repo chip, a small framed icon ahead of the title.
-  repoChip: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  folderBadge: {
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4
-  },
-  folderBadgeText: {
-    fontSize: 10,
-    color: colors.textSecondary
-  },
-  worktreeMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-    gap: spacing.xs
-  },
-  repoName: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    maxWidth: 100
-  },
-  branchName: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    // Why: path takes only leftover space so badges truncate last.
-    flex: 1
-  },
-  childBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4
-  },
-  childBadgeText: {
-    fontSize: 10,
-    color: colors.textMuted
-  },
-  // Why the cap is on the name, not the badge: a health word after a long name must stay readable.
-  hostBadge: {
-    flexShrink: 1
-  },
-  hostBadgeText: {
-    flexShrink: 1,
-    maxWidth: 100
-  },
-  hostHealthText: {
-    flexShrink: 0
-  },
-  lineageToggle: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.xs,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radii.button
-  },
-  lineageToggleText: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontWeight: '600'
-  },
-  terminalCount: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    minWidth: 16,
-    textAlign: 'right',
-    paddingTop: 3
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    worktreeRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingVertical: spacing.sm + 2,
+      paddingLeft: spacing.lg,
+      paddingRight: spacing.lg,
+      // Reserve the active accent bar width so active/inactive rows align.
+      borderLeftWidth: 2,
+      borderLeftColor: 'transparent'
+    },
+    worktreeRowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    // Highlight the worktree currently focused on the desktop, mirroring the
+    // desktop sidebar's selected-card treatment (raised fill + left accent).
+    worktreeRowActive: {
+      backgroundColor: colors.bgPanel,
+      // Neutral grey accent, matching the desktop's active-tab indicator rather
+      // than a blue line.
+      borderLeftColor: colors.textSecondary
+    },
+    indicatorCol: {
+      width: 20,
+      alignItems: 'center',
+      paddingTop: 6,
+      marginRight: spacing.sm,
+      gap: 4
+    },
+    unreadBell: {
+      marginTop: 2
+    },
+    worktreeMain: {
+      flex: 1,
+      marginRight: spacing.sm
+    },
+    worktreeNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm
+    },
+    worktreeName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      flexShrink: 1
+    },
+    worktreeNameUnread: {
+      fontWeight: '700'
+    },
+    textReadOnly: {
+      opacity: 0.5
+    },
+    prBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    prNumber: {
+      fontSize: 10,
+      color: colors.textSecondary
+    },
+    // Why: matches the desktop's compact repo chip, a small framed icon ahead of the title.
+    repoChip: {
+      width: 16,
+      height: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.bgRaised
+    },
+    folderBadge: {
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    folderBadgeText: {
+      fontSize: 10,
+      color: colors.textSecondary
+    },
+    worktreeMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 2,
+      gap: spacing.xs
+    },
+    repoName: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      maxWidth: 100
+    },
+    branchName: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontFamily: typography.monoFamily,
+      // Why: path takes only leftover space so badges truncate last.
+      flex: 1
+    },
+    childBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderRadius: 4
+    },
+    childBadgeText: {
+      fontSize: 10,
+      color: colors.textMuted
+    },
+    // Why the cap is on the name, not the badge: a health word after a long name must stay readable.
+    hostBadge: {
+      flexShrink: 1
+    },
+    hostBadgeText: {
+      flexShrink: 1,
+      maxWidth: 100
+    },
+    hostHealthText: {
+      flexShrink: 0
+    },
+    lineageToggle: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: spacing.xs,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: radii.button
+    },
+    lineageToggleText: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      fontWeight: '600'
+    },
+    terminalCount: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      minWidth: 16,
+      textAlign: 'right',
+      paddingTop: 3
+    }
+  })
+)

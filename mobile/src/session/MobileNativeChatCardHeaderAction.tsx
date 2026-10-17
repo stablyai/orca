@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Keyboard, Pressable, StyleSheet } from 'react-native'
 import { ChevronDown, X } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -14,6 +15,8 @@ export function MobileNativeChatCardHeaderAction<Prompt>({
   onCollapse?: () => void
   disabled?: boolean
 }): React.JSX.Element | null {
+  useMobileTheme()
+
   if (!onCancel && !onCollapse) {
     return null
   }

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../navigation/route-param-reader'
 import { shellScreenRoute, shellScreenRouteKey } from './shell-screen-route'
@@ -25,6 +26,8 @@ import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
  * arrives as two.
  */
 export default function MobileWebPageCatchAllScreen() {
+  useMobileTheme()
+
   const params = useLocalSearchParams<Record<string, string | string[]>>()
   const hostId = firstParam(params.hostId)
   const segments = Array.isArray(params.page) ? params.page : params.page ? [params.page] : []

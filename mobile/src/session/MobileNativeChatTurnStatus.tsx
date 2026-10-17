@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
@@ -44,6 +46,8 @@ export function MobileNativeChatTurnStatus({
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   const settled = workedSeconds != null
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
   const label = formatNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict })
@@ -75,27 +79,29 @@ export function MobileNativeChatTurnStatus({
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: 28,
-    paddingHorizontal: spacing.md
-  },
-  bar: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  pressed: {
-    opacity: 0.6
-  },
-  label: {
-    color: colors.textMuted,
-    fontSize: typography.bodySize,
-    flexShrink: 1
-  },
-  caretOpen: {
-    transform: [{ rotate: '90deg' }]
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      minHeight: 28,
+      paddingHorizontal: spacing.md
+    },
+    bar: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle
+    },
+    pressed: {
+      opacity: 0.6
+    },
+    label: {
+      color: colors.textMuted,
+      fontSize: typography.bodySize,
+      flexShrink: 1
+    },
+    caretOpen: {
+      transform: [{ rotate: '90deg' }]
+    }
+  })
+)

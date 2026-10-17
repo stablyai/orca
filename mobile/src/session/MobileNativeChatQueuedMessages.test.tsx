@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { applyMobileColorScheme, colors } from '../theme/mobile-theme'
+import { queuedMessageStyles } from './mobile-native-chat-queued-message-styles'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { MobileNativeChatQueuedMessages } from './MobileNativeChatQueuedMessages'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
@@ -52,6 +54,7 @@ describe('MobileNativeChatQueuedMessages', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    applyMobileColorScheme('dark')
   })
 
   async function mount(
@@ -83,6 +86,20 @@ describe('MobileNativeChatQueuedMessages', () => {
   function sheet(mounted: ReactTestRenderer) {
     return mounted.root.find((node) => String(node.type) === 'ActionSheetModal')
   }
+
+  it('repaints a mounted compact queue without resetting its collapsed state', async () => {
+    applyMobileColorScheme('dark')
+    const mounted = await mount({ cards: [card({ messageId: 'a' })] })
+    const toggle = () => mounted.root.findByProps({ accessibilityLabel: 'Queued messages' })
+    act(() => toggle().props.onPress())
+    expect(toggle().props.accessibilityState.expanded).toBe(false)
+    for (const scheme of ['light', 'dark'] as const) {
+      act(() => applyMobileColorScheme(scheme))
+      const box = mounted.root.findByProps({ style: queuedMessageStyles.box })
+      expect(box.props.style.backgroundColor).toBe(colors.bgPanel)
+      expect(toggle().props.accessibilityState.expanded).toBe(false)
+    }
+  })
 
   it('edits in place of the card row with Save and Cancel while keeping another card visible', async () => {
     const change = vi.fn()

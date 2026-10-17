@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import { Bot, ChevronRight } from 'lucide-react-native'
 import {
@@ -62,6 +64,8 @@ export function MobileNativeChatSubagentGroup({
   open: boolean
   onToggle?: (groupId: string) => void
 }): React.JSX.Element | null {
+  useMobileTheme()
+
   const header = nativeChatSubagentGroupHeader(block.agents, say)
   if (header.total === 0) {
     return null
@@ -139,62 +143,64 @@ export function MobileNativeChatSubagentGroup({
   )
 }
 
-const styles = StyleSheet.create({
-  group: {
-    paddingVertical: spacing.xs
-  },
-  header: {
-    minHeight: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  pressed: {
-    opacity: 0.6
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3
-  },
-  headline: {
-    flexShrink: 0,
-    maxWidth: '60%',
-    color: colors.textMuted,
-    fontSize: typography.bodySize
-  },
-  headlineWorking: {
-    color: colors.textPrimary
-  },
-  verdict: {
-    flex: 1,
-    minWidth: 0,
-    textAlign: 'right',
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  entryState: {
-    marginLeft: 'auto',
-    flexShrink: 0,
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  caretOpen: {
-    transform: [{ rotate: '90deg' }]
-  },
-  entry: {
-    minHeight: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingLeft: spacing.lg + spacing.xs
-  },
-  entryLabel: {
-    flexShrink: 1,
-    color: colors.textPrimary,
-    fontSize: typography.metaSize
-  },
-  entryLabelIdle: {
-    color: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    group: {
+      paddingVertical: spacing.xs
+    },
+    header: {
+      minHeight: 28,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm
+    },
+    pressed: {
+      opacity: 0.6
+    },
+    dot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3
+    },
+    headline: {
+      flexShrink: 0,
+      maxWidth: '60%',
+      color: colors.textMuted,
+      fontSize: typography.bodySize
+    },
+    headlineWorking: {
+      color: colors.textPrimary
+    },
+    verdict: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: 'right',
+      color: colors.textMuted,
+      fontSize: typography.metaSize
+    },
+    entryState: {
+      marginLeft: 'auto',
+      flexShrink: 0,
+      color: colors.textMuted,
+      fontSize: typography.metaSize
+    },
+    caretOpen: {
+      transform: [{ rotate: '90deg' }]
+    },
+    entry: {
+      minHeight: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingLeft: spacing.lg + spacing.xs
+    },
+    entryLabel: {
+      flexShrink: 1,
+      color: colors.textPrimary,
+      fontSize: typography.metaSize
+    },
+    entryLabelIdle: {
+      color: colors.textMuted
+    }
+  })
+)

@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { StyleSheet, View } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import { useHostDisplay, type HostDisplaySource } from '../transport/use-host-display'
@@ -19,6 +21,8 @@ export function ShellDownloadProgress({
   /** Null until the stored profile is read, which leaves the caption without a name. */
   host: HostDisplaySource | null
 }) {
+  useMobileTheme()
+
   const fraction = state.totalBytes > 0 ? Math.min(1, state.receivedBytes / state.totalBytes) : 0
   const hostTitle = useHostDisplay(host).title
   const source = host === null ? '' : `from ${hostTitle} · `
@@ -41,16 +45,18 @@ export function ShellDownloadProgress({
   )
 }
 
-const styles = StyleSheet.create({
-  track: {
-    width: 180,
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-    backgroundColor: colors.bgRaised
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: colors.textSecondary
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    track: {
+      width: 180,
+      height: 4,
+      borderRadius: 2,
+      overflow: 'hidden',
+      backgroundColor: colors.bgRaised
+    },
+    fill: {
+      height: '100%',
+      backgroundColor: colors.textSecondary
+    }
+  })
+)

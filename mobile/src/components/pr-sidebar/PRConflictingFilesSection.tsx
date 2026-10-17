@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
@@ -37,6 +38,8 @@ type Props = {
 // list is not yet available. Ports the desktop ConflictingFilesSection +
 // MergeConflictNotice into the mobile card shell.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
+  useMobileTheme()
+
   // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
   // context, which the iOS custom scheme is not and Android's https is.
   const clipboard = useClipboardWriter()

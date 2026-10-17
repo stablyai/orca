@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import { OrcaLogo } from '../components/OrcaLogo'
@@ -22,6 +24,8 @@ type Props = {
 
 /** Decorative banners; the surrounding copy is the accessible explanation. */
 export function NotificationOnboardingPreview({ active }: Props) {
+  useMobileTheme()
+
   const reduceMotion = useReducedMotionEnabled()
   const first = useRef(new Animated.Value(0)).current
   const second = useRef(new Animated.Value(0)).current
@@ -86,6 +90,8 @@ export function NotificationOnboardingPreview({ active }: Props) {
 }
 
 function SampleBanner({ notification }: { notification: (typeof SAMPLE_NOTIFICATIONS)[number] }) {
+  useMobileTheme()
+
   return (
     <View style={styles.card}>
       <View style={styles.appIcon}>
@@ -121,59 +127,61 @@ function bannerMotion(progress: Animated.Value) {
   }
 }
 
-const styles = StyleSheet.create({
-  stack: {
-    width: '100%',
-    maxWidth: 320,
-    gap: spacing.sm,
-    marginBottom: spacing.xl + spacing.lg
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.borderSubtle,
-    borderWidth: 1,
-    borderRadius: radii.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md
-  },
-  appIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.camera,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  cardCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2
-  },
-  appName: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  now: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  cardTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  cardBody: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: 1
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    stack: {
+      width: '100%',
+      maxWidth: 320,
+      gap: spacing.sm,
+      marginBottom: spacing.xl + spacing.lg
+    },
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      backgroundColor: colors.bgPanel,
+      borderColor: colors.borderSubtle,
+      borderWidth: 1,
+      borderRadius: radii.card,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md
+    },
+    appIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: radii.camera,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    cardCopy: {
+      flex: 1,
+      minWidth: 0
+    },
+    cardMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 2
+    },
+    appName: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    },
+    now: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize
+    },
+    cardTitle: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    },
+    cardBody: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      marginTop: 1
+    }
+  })
+)

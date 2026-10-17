@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { memo, useMemo, useState } from 'react'
 import {
   Dimensions,
@@ -45,6 +47,8 @@ import { mobileAgentChildRowName, mobileAgentChildRowText } from './mobile-agent
 type TaskKind = AgentSessionBackgroundTask['kind']
 
 function KindIcon({ kind, size }: { kind: TaskKind; size: number }): React.JSX.Element {
+  useMobileTheme()
+
   const props = { size, color: kindIconColor(kind), strokeWidth: 2 }
   switch (kind) {
     case 'agent':
@@ -84,6 +88,8 @@ function TaskRow({
   stopping: Stopping
   onStop: (taskId: string) => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   const { lead, trail } = mobileAgentChildRowText(row, now)
   const meta = backgroundTaskRowMeta(row, hostNow)
   const stopId = backgroundTaskRowStopId(row, supportsTaskStop)
@@ -150,6 +156,8 @@ function MobileNativeChatBackgroundTasksImpl({
 }: {
   tasks: MobileStructuredBackgroundTasks
 }): React.JSX.Element | null {
+  useMobileTheme()
+
   const { view, rowContext } = tasks
   const [expanded, setExpanded] = useState(false)
   // Before the first layout, the window less the strip's own margins, so it opens in its final form.
@@ -269,132 +277,134 @@ export const MobileNativeChatBackgroundTasks = memo(MobileNativeChatBackgroundTa
 // hitSlop requests 44pt hit rects; compact native parent bounds still limit their reach.
 const MIN_TOUCH_TARGET = 44
 
-const styles = StyleSheet.create({
-  list: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.xs
-  },
-  box: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.row,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden'
-  },
-  header: {
-    minHeight: 36,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
-  headerText: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    overflow: 'hidden'
-  },
-  // Every piece may shrink, so large Dynamic Type ellipsizes the header instead of clipping it.
-  segment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flexShrink: 1,
-    minWidth: 0
-  },
-  separator: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  segmentText: {
-    flexShrink: 1,
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
-  },
-  detail: {
-    flexShrink: 1,
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  dimmed: {
-    opacity: 0.4
-  },
-  caretOpen: {
-    transform: [{ rotate: '180deg' }]
-  },
-  body: {
-    maxHeight: 220,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  group: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs
-  },
-  groupLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.monoFamily,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingBottom: spacing.xs / 2
-  },
-  row: {
-    minHeight: 32,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  owned: {
-    marginLeft: spacing.lg
-  },
-  rowText: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: typography.metaSize
-  },
-  lead: {
-    color: colors.textPrimary,
-    fontWeight: '500'
-  },
-  trail: {
-    color: colors.textMuted
-  },
-  meta: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.monoFamily
-  },
-  unavailable: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    padding: spacing.md
-  },
-  textAction: {
-    minHeight: 32,
-    minWidth: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
-  },
-  stopAll: {
-    alignSelf: 'flex-start',
-    marginHorizontal: spacing.sm
-  },
-  actionLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
-  },
-  pressed: {
-    backgroundColor: colors.bgRaised
-  },
-  disabled: {
-    opacity: 0.5
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    list: {
+      marginHorizontal: spacing.lg,
+      marginVertical: spacing.xs
+    },
+    box: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.row,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      overflow: 'hidden'
+    },
+    header: {
+      minHeight: 36,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md
+    },
+    headerText: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      overflow: 'hidden'
+    },
+    // Every piece may shrink, so large Dynamic Type ellipsizes the header instead of clipping it.
+    segment: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      flexShrink: 1,
+      minWidth: 0
+    },
+    separator: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize
+    },
+    segmentText: {
+      flexShrink: 1,
+      color: colors.textPrimary,
+      fontSize: typography.metaSize,
+      fontWeight: '500'
+    },
+    detail: {
+      flexShrink: 1,
+      color: colors.textMuted,
+      fontSize: typography.metaSize
+    },
+    dimmed: {
+      opacity: 0.4
+    },
+    caretOpen: {
+      transform: [{ rotate: '180deg' }]
+    },
+    body: {
+      maxHeight: 220,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle
+    },
+    group: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.xs
+    },
+    groupLabel: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontFamily: typography.monoFamily,
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      paddingBottom: spacing.xs / 2
+    },
+    row: {
+      minHeight: 32,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm
+    },
+    owned: {
+      marginLeft: spacing.lg
+    },
+    rowText: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: typography.metaSize
+    },
+    lead: {
+      color: colors.textPrimary,
+      fontWeight: '500'
+    },
+    trail: {
+      color: colors.textMuted
+    },
+    meta: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontFamily: typography.monoFamily
+    },
+    unavailable: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      padding: spacing.md
+    },
+    textAction: {
+      minHeight: 32,
+      minWidth: MIN_TOUCH_TARGET,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.sm,
+      borderRadius: radii.button
+    },
+    stopAll: {
+      alignSelf: 'flex-start',
+      marginHorizontal: spacing.sm
+    },
+    actionLabel: {
+      color: colors.textPrimary,
+      fontSize: typography.metaSize,
+      fontWeight: '500'
+    },
+    pressed: {
+      backgroundColor: colors.bgRaised
+    },
+    disabled: {
+      opacity: 0.5
+    }
+  })
+)

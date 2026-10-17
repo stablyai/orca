@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
@@ -56,6 +57,8 @@ export function NewWorktreeFormSheet(props: {
   onRunSetupChange: (run: boolean) => void
   onCreate: () => void
 }) {
+  useMobileTheme()
+
   return (
     <BottomDrawer visible={props.visible} interactive={props.interactive} onClose={props.onClose}>
       <View style={styles.header}>

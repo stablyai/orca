@@ -1,16 +1,18 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View, StyleSheet } from 'react-native'
 import { colors } from '../theme/mobile-theme'
 import type { ConnectionState } from '../transport/types'
 import type { ConnectionVerdict } from '../transport/connection-health'
 
-const stateColors: Record<ConnectionState, string> = {
+const stateColors: Record<ConnectionState, string> = createThemedStyles(() => ({
   connected: colors.statusGreen,
   connecting: colors.statusAmber,
   handshaking: colors.statusAmber,
   reconnecting: colors.statusAmber,
   disconnected: colors.textMuted,
   'auth-failed': colors.statusRed
-}
+}))
 
 export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdict): string {
   if (verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed') {
@@ -34,14 +36,18 @@ export function StatusDot({
   state: ConnectionState
   verdict?: ConnectionVerdict
 }) {
+  useMobileTheme()
+
   const color = statusDotColor(state, verdict)
   return <View style={[styles.dot, { backgroundColor: color }]} />
 }
 
-const styles = StyleSheet.create({
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    dot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4
+    }
+  })
+)

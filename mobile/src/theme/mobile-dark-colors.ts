@@ -1,0 +1,52 @@
+// Stable terminal fallback colors; no app appearance state enters the WebView document.
+export const darkColors = {
+  bgBase: '#111111',
+  bgPanel: '#1a1a1a',
+  bgRaised: '#242424',
+  borderSubtle: '#2a2a2a',
+  editorSurface: '#1e1e1e',
+
+  textPrimary: '#e0e0e0',
+  textSecondary: '#a1a1a1',
+  textMuted: '#8c8c8c',
+
+  // Crisp near-white surface for the single primary action on a screen (the
+  // worktree FAB). Brighter than textPrimary so it reads as a solid button, not
+  // disabled chrome, while staying monochrome (STYLEGUIDE: color is for state).
+  surfaceBright: '#f5f5f5',
+
+  accentBlue: '#3b82f6',
+  // Text/icon color on a filled accent (accentBlue) button, where the muted
+  // textPrimary would lack contrast against the saturated fill.
+  onAccent: '#ffffff',
+
+  statusGreen: '#22c55e',
+  statusAmber: '#f59e0b',
+  statusRed: '#ef4444',
+  // Merge CTA fill + its on-fill text, mirroring the desktop ChecksPanel's
+  // bg-green-600 "Squash and merge" button (green-600 / white).
+  mergeGreen: '#16a34a',
+  onMergeGreen: '#ffffff',
+  // Merged-PR purple, mirroring the desktop ReviewIcon's purple-400/70 tone.
+  statusPurple: '#a78bfa',
+  agentWorking: '#eab308',
+  agentDone: '#10b981',
+  agentAttention: '#ef4444',
+  agentInactive: 'rgba(115,115,115,0.4)',
+  gitDecorationAdded: '#81b88b',
+  gitDecorationDeleted: '#c74e39',
+  diffAddedBg: 'rgba(129, 184, 139, 0.1)',
+  diffDeletedBg: 'rgba(199, 78, 57, 0.11)',
+
+  syntaxComment: '#6a9955',
+  syntaxKeyword: '#569cd6',
+  syntaxString: '#ce9178',
+  syntaxNumber: '#b5cea8',
+  syntaxType: '#4ec9b0',
+  syntaxFunction: '#dcdcaa',
+  syntaxVariable: '#9cdcfe',
+  syntaxMeta: '#c586c0',
+
+  // Terminal WebView background (Tokyonight) — separate from app chrome
+  terminalBg: '#1a1b26'
+} as const

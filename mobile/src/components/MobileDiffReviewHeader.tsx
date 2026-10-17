@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -35,6 +36,8 @@ export function MobileDiffReviewHeader({
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
+  useMobileTheme()
+
   // The dedicated PR icon appears on any GitHub repo in narrow/overlay mode; in wide
   // mode the sidebar is docked, so it is hidden (not disabled).
   const showPRTrigger = shouldShowTrigger({

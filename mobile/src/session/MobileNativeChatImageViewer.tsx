@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
@@ -14,6 +16,7 @@ export function MobileNativeChatImageViewer({
   label: string
   onClose: () => void
 }): React.JSX.Element {
+  useMobileTheme()
   const insets = useWindowSafeAreaInsets()
   return (
     <Modal visible animationType="fade" onRequestClose={onClose}>
@@ -45,23 +48,25 @@ export function MobileNativeChatImageViewer({
   )
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  stage: {
-    flexGrow: 1
-  },
-  image: {
-    flex: 1,
-    width: '100%'
-  },
-  close: {
-    position: 'absolute',
-    right: spacing.lg,
-    padding: spacing.sm,
-    borderRadius: 999,
-    backgroundColor: colors.bgRaised
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: colors.bgBase
+    },
+    stage: {
+      flexGrow: 1
+    },
+    image: {
+      flex: 1,
+      width: '100%'
+    },
+    close: {
+      position: 'absolute',
+      right: spacing.lg,
+      padding: spacing.sm,
+      borderRadius: 999,
+      backgroundColor: colors.bgRaised
+    }
+  })
+)

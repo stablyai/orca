@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useEffect, useState } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, View, type LayoutChangeEvent } from 'react-native'
@@ -20,6 +21,8 @@ type Props = {
 }
 
 export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
+  useMobileTheme()
+
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const [contentRowWidth, setContentRowWidth] = useState(0)

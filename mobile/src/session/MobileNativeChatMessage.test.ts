@@ -568,12 +568,12 @@ describe('MobileNativeChatMessage', () => {
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
   })
 
-  it('draws your message as selectable Markdown in the bubble’s dark-on-light colours', () => {
+  it('draws your message as selectable Markdown on its neutral bubble', () => {
     const tree = render(userMessage([{ type: 'text', text: '**Fix** `src/a.ts`' }]))
     const markdown = tree.root.findByType('MobileMarkdown' as never)
     expect(markdown.props).toMatchObject({
       content: '**Fix** `src/a.ts`',
-      tone: 'onBright',
+      tone: 'default',
       rangeSelectable: true
     })
     expect(markdown.props.renderVisual).toBeUndefined()

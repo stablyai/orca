@@ -33,6 +33,8 @@ vi.mock('./MobileFilePreviewSourceText', () => ({
 }))
 
 vi.mock('../theme/mobile-theme', () => ({
+  subscribeMobileTheme: () => () => {},
+  getMobileColorScheme: () => 'dark',
   colors: { textPrimary: '#fff', textSecondary: '#999' },
   spacing: { xs: 4, sm: 8 },
   radii: { button: 6 },

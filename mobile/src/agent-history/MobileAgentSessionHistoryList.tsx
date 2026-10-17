@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { Play } from 'lucide-react-native'
@@ -33,6 +34,8 @@ export function MobileAgentSessionHistoryList({
   onResume,
   onRefresh
 }: Props) {
+  useMobileTheme()
+
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const toggleExpanded = useCallback((id: string) => {
@@ -104,6 +107,8 @@ function AgentHistoryCardRow({
   onResume?: (session: AiVaultSession) => void | Promise<void>
   onPress: () => void
 }) {
+  useMobileTheme()
+
   const previewTurns = useMemo(
     () => (expanded && session ? recentSessionConversationTurns(session, PREVIEW_TURN_LIMIT) : []),
     [expanded, session]

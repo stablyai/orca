@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ArrowUp, Check, CircleHelp } from 'lucide-react-native'
@@ -29,6 +31,8 @@ export function MobileNativeChatQuestion({
   onCancel,
   onCollapse
 }: Props): React.JSX.Element {
+  useMobileTheme()
+
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
   const [sending, setSending] = useState(false)
@@ -212,108 +216,110 @@ export function MobileNativeChatQuestion({
   )
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  question: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600',
-    lineHeight: typography.bodySize + 7
-  },
-  options: {
-    gap: spacing.xs
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  optionSelected: {
-    borderColor: colors.accentBlue
-  },
-  optionBody: {
-    flex: 1,
-    gap: 2
-  },
-  optionText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1
-  },
-  optionDescription: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + 5
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: radii.button,
-    borderWidth: 1.5,
-    borderColor: colors.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  checkboxOn: {
-    backgroundColor: colors.accentBlue,
-    borderColor: colors.accentBlue
-  },
-  submit: {
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.accentBlue
-  },
-  submitDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  submitText: {
-    color: colors.onMergeGreen,
-    fontSize: typography.bodySize + 1,
-    fontWeight: '600'
-  },
-  submitTextDisabled: {
-    color: colors.textMuted
-  },
-  freeTextRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm
-  },
-  freeSend: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.textPrimary
-  },
-  freeSendDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    card: {
+      marginHorizontal: spacing.lg,
+      marginVertical: spacing.sm,
+      padding: spacing.md,
+      gap: spacing.sm,
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm
+    },
+    question: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: typography.bodySize + 1,
+      fontWeight: '600',
+      lineHeight: typography.bodySize + 7
+    },
+    options: {
+      gap: spacing.xs
+    },
+    option: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 44,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.button,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle
+    },
+    optionSelected: {
+      borderColor: colors.accentBlue
+    },
+    optionBody: {
+      flex: 1,
+      gap: 2
+    },
+    optionText: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize + 1
+    },
+    optionDescription: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      lineHeight: typography.metaSize + 5
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: radii.button,
+      borderWidth: 1.5,
+      borderColor: colors.textMuted,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    checkboxOn: {
+      backgroundColor: colors.accentBlue,
+      borderColor: colors.accentBlue
+    },
+    submit: {
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button,
+      backgroundColor: colors.accentBlue
+    },
+    submitDisabled: {
+      backgroundColor: colors.bgRaised
+    },
+    submitText: {
+      color: colors.onMergeGreen,
+      fontSize: typography.bodySize + 1,
+      fontWeight: '600'
+    },
+    submitTextDisabled: {
+      color: colors.textMuted
+    },
+    freeTextRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: spacing.sm
+    },
+    freeSend: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.textPrimary
+    },
+    freeSendDisabled: {
+      backgroundColor: colors.bgRaised
+    },
+    pressed: {
+      opacity: 0.7
+    }
+  })
+)

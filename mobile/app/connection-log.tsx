@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { View, Text, Pressable } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -28,6 +29,8 @@ const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
 // route also *acquires* the host client — opening it kicks a dial and the
 // log fills live instead of showing a stale tail.
 export default function NativeConnectionLogRoute() {
+  useMobileTheme()
+
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()

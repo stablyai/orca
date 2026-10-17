@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, Keyboard as KeyboardIcon, RefreshCw } from 'lucide-react-native'
@@ -35,6 +36,8 @@ export function MobileMarkdownReader({
   onDiscard,
   keyboardLift
 }: Props) {
+  useMobileTheme()
+
   const editorRef = useRef<MobileRichMarkdownEditorHandle>(null)
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, Text, View } from 'react-native'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -17,6 +18,7 @@ export function MobileNativeChatFloatingControls({
   showJumpToTail: boolean
   onJumpToTail: () => void
 }): React.JSX.Element {
+  useMobileTheme()
   return (
     <View pointerEvents="box-none" style={styles.floatingControls}>
       {toolCallCount > 0 ? (

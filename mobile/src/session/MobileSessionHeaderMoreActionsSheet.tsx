@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ListChecks } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import { ActionSheetModal } from '../components/ActionSheetModal'
@@ -20,6 +21,8 @@ export function MobileSessionHeaderMoreActionsSheet({
   onOpenChecks,
   onClose
 }: Props) {
+  useMobileTheme()
+
   return (
     <ActionSheetModal
       visible={visible}

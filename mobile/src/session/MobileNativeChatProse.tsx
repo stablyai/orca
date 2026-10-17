@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useContext } from 'react'
 import { Image, Pressable, Text } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
@@ -46,6 +47,7 @@ export function Prose({
   /** Android only: routes a long press on a link span to the row's actions sheet. */
   onLongPress?: () => void
 }): React.JSX.Element | null {
+  useMobileTheme()
   if (isTextBlock(block)) {
     // A host line standing in for a message too large to send, on the person's own row.
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
@@ -62,7 +64,7 @@ export function Prose({
       return (
         <MobileMarkdown
           content={text}
-          tone="onBright"
+          tone="default"
           rangeSelectable
           textScale={CHAT_PROSE_SCALE * fontScale}
           onOpenFile={onOpenFile}
@@ -103,6 +105,7 @@ function ImageAttachment({
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
+  useMobileTheme()
   const { openImage } = useContext(MobileNativeChatRowOverlaysContext)
   const uri = block.url ?? block.path
   const label = block.alt ?? 'Attached image'

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { UserPlus, X } from 'lucide-react-native'
@@ -21,6 +22,8 @@ type Props = {
 // Requested reviewers + their latest review status, with a picker to request /
 // remove (optimistic add/remove via the actions hook).
 export function PRReviewersSection({ details, actions, client, worktreeId }: Props) {
+  useMobileTheme()
+
   // details === null means phase 2 (work-item payload) is still in flight — same
   // signal Comments uses. Do not treat that as "no reviewers" or the section goes
   // blank while checks (phase 1) already paint. A synthetic placeholder means

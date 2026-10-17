@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useNavigation, useRouter } from 'expo-router'
@@ -68,10 +70,14 @@ function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
 }
 
 function Centered({ children }: { children: ReactNode }) {
+  useMobileTheme()
+
   return <View style={styles.centered}>{children}</View>
 }
 
 function Waiting({ label }: { label: string }) {
+  useMobileTheme()
+
   return (
     <Centered>
       <ShellWaitingFrame label={label} />
@@ -86,6 +92,8 @@ function Failed({
   state: Extract<MobileWebShellSessionState, { kind: 'failed' }>
   onRetry: () => void
 }) {
+  useMobileTheme()
+
   // No retry for the fence, and none for an unread status: a device whose WebView cannot be
   // isolated will not grow one on a tap, and a retry re-reads the same settled gate it already has.
   const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
@@ -114,6 +122,8 @@ function DevFacts({
   state: Extract<MobileWebShellSessionState, { kind: 'ready' }>
   droppedBinaryFrames: number
 }) {
+  useMobileTheme()
+
   if (!isDevelopmentBuild()) {
     return null
   }
@@ -160,6 +170,8 @@ export function MobileWebShellScreen({
   onRouteParamClear,
   runtime
 }: MobileWebShellScreenProps) {
+  useMobileTheme()
+
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const navigation = useNavigation()
@@ -441,58 +453,60 @@ export function MobileWebShellScreen({
   )
 }
 
-const styles = StyleSheet.create({
-  shellRoot: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  shellView: {
-    flex: 1
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  waitingLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    textAlign: 'center'
-  },
-  failedMessage: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
-  retryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
-  },
-  retryLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  },
-  devFacts: {
-    position: 'absolute',
-    left: spacing.sm,
-    bottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  devFactsText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    shellRoot: {
+      flex: 1,
+      backgroundColor: colors.bgBase
+    },
+    shellView: {
+      flex: 1
+    },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgBase,
+      paddingHorizontal: spacing.lg
+    },
+    waitingLabel: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      marginTop: spacing.md,
+      textAlign: 'center'
+    },
+    failedMessage: {
+      fontSize: typography.bodySize,
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: spacing.lg
+    },
+    retryButton: {
+      backgroundColor: colors.bgRaised,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radii.button
+    },
+    retryLabel: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    pressed: {
+      opacity: 0.7
+    },
+    devFacts: {
+      position: 'absolute',
+      left: spacing.sm,
+      bottom: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgPanel
+    },
+    devFactsText: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted
+    }
+  })
+)

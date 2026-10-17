@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Platform, ScrollView, StyleSheet, View, type LayoutRectangle } from 'react-native'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
@@ -21,6 +22,7 @@ export function MobileQueuedMessageScrollList({
   /** Rows, given `reveal` to keep an edited row in view. */
   children: (reveal: (row: LayoutRectangle) => void) => ReactNode
 }): React.JSX.Element {
+  useMobileTheme()
   const scrollRef = useRef<ScrollView>(null)
   const metrics = useRef<Metrics>({ offset: 0, viewport: 0, content: 0 })
   const shownIds = useRef<ReadonlySet<string>>(new Set(messageIds))
@@ -84,6 +86,7 @@ export function MobileQueuedMessageScrollList({
 
 /** Fades the cards into the box's fill at an edge more content lies past. */
 function ListEdgeFade({ edge }: { edge: 'top' | 'bottom' }): React.JSX.Element {
+  useMobileTheme()
   const id = `queued-list-fade-${edge}`
   const top = edge === 'top'
   return (

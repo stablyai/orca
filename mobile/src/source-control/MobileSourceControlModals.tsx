@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PickerModal } from '../components/PickerModal'
@@ -11,6 +12,8 @@ type Props = {
 }
 
 export function MobileSourceControlModals({ state, actionSheetActions }: Props) {
+  useMobileTheme()
+
   const {
     branchDiffPreview,
     setBranchDiffPreview,

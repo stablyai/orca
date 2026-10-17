@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Alert, Platform, Pressable, StyleSheet, Text } from 'react-native'
 import { Check, Copy } from 'lucide-react-native'
@@ -15,6 +17,8 @@ export function MobileSourceCopyButton({
   accessibilityLabel: string
   partial?: boolean
 }): React.JSX.Element {
+  useMobileTheme()
+
   const clipboard = useClipboardWriter()
   const [feedback, setFeedback] = useState<CopyFeedback | null>(null)
   const latestAttempt = useRef<{ sourceVersion: number } | null>(null)
@@ -116,17 +120,19 @@ export function MobileSourceCopyButton({
   )
 }
 
-const styles = StyleSheet.create({
-  button: {
-    width: 24,
-    height: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: radii.button
-  },
-  partial: { width: 128, height: 32, paddingHorizontal: spacing.sm },
-  pressed: { backgroundColor: colors.bgRaised },
-  label: { color: colors.textMuted, fontSize: typography.metaSize }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    button: {
+      width: 24,
+      height: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      borderRadius: radii.button
+    },
+    partial: { width: 128, height: 32, paddingHorizontal: spacing.sm },
+    pressed: { backgroundColor: colors.bgRaised },
+    label: { color: colors.textMuted, fontSize: typography.metaSize }
+  })
+)

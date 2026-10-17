@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import {
@@ -57,6 +59,7 @@ const CHECK_LABELS: Record<string, string> = {
  * notes. Everything comes from the row; the group is left out when there is nothing in it.
  */
 export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: string) => void }) {
+  useMobileTheme()
   const { row, onOpenLink } = props
   const identity = getWorktreeGitIdentityDisplay({ branch: row.branch })
   const origin = buildWorkspaceOrigin(row)
@@ -202,71 +205,73 @@ function LinkRow({ item, onOpen }: { item: WorkspaceDetailLink; onOpen: (url: st
   )
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.md - 2
-  },
-  heading: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  branch: {
-    marginTop: 1,
-    fontSize: 11.5,
-    fontFamily: typography.monoFamily,
-    color: colors.textMuted
-  },
-  origin: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 5,
-    marginTop: 3
-  },
-  // Sits on the first line of the 12/16 text beside it.
-  originIcon: {
-    marginTop: 2
-  },
-  originText: {
-    flex: 1,
-    fontSize: typography.metaSize,
-    lineHeight: 16,
-    color: colors.textMuted
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    minHeight: 46,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  icon: {
-    width: ICON_SIZE,
-    alignItems: 'center'
-  },
-  text: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    fontSize: typography.bodySize,
-    lineHeight: 19,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  meta: {
-    marginTop: 2,
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  notes: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textSecondary
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.md - 2
+    },
+    heading: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    branch: {
+      marginTop: 1,
+      fontSize: 11.5,
+      fontFamily: typography.monoFamily,
+      color: colors.textMuted
+    },
+    origin: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 5,
+      marginTop: 3
+    },
+    // Sits on the first line of the 12/16 text beside it.
+    originIcon: {
+      marginTop: 2
+    },
+    originText: {
+      flex: 1,
+      fontSize: typography.metaSize,
+      lineHeight: 16,
+      color: colors.textMuted
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      minHeight: 46,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    icon: {
+      width: ICON_SIZE,
+      alignItems: 'center'
+    },
+    text: {
+      flex: 1,
+      minWidth: 0
+    },
+    title: {
+      fontSize: typography.bodySize,
+      lineHeight: 19,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    meta: {
+      marginTop: 2,
+      fontSize: typography.metaSize,
+      color: colors.textMuted
+    },
+    notes: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary
+    }
+  })
+)

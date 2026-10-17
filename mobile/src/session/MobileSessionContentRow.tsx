@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View, Text, Pressable } from 'react-native'
 import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
@@ -9,6 +10,8 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
+  useMobileTheme()
+
   const {
     hostId,
     worktreeId,

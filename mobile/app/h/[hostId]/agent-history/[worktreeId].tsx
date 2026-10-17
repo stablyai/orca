@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../../../../src/theme/use-mobile-theme'
 import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import {
   useWorkspaceExecutionHost,
@@ -21,6 +22,8 @@ import { firstParam } from '../../../../src/navigation/route-param-reader'
  * schema first (through `shellScreenRoute`) and refuses here when the answer is no.
  */
 export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
+  useMobileTheme()
+
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]

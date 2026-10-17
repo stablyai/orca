@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { StyleSheet, Text, View } from 'react-native'
 import type { AccountsSnapshot } from '../components/AccountUsage'
 import { MobileHomeQuickActions } from '../components/MobileHomeQuickActions'
@@ -24,6 +26,7 @@ export function MobileHomeListFooter(props: {
   onOpenTasks: (hostId: string, provider?: TaskProvider) => void
   onPairDesktop: () => void
 }) {
+  useMobileTheme()
   const tasksHostPicker = useConnectedHostPicker(props.connectedHosts)
   const hostProviders = props.connectedHosts.map((host) => ({
     host,
@@ -66,15 +69,17 @@ export function MobileHomeListFooter(props: {
   )
 }
 
-const styles = StyleSheet.create({
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    sectionHeading: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.xs
+    }
+  })
+)

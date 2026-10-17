@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useRef, useState } from 'react'
 import {
   InteractionManager,
@@ -53,6 +55,8 @@ export function MobileSearchField({
   editable = true,
   accessibilityLabel
 }: MobileSearchFieldProps) {
+  useMobileTheme()
+
   const inputRef = useRef<TextInput>(null)
   const [focused, setFocused] = useState(false)
   const clearVisible = showClear ?? value.length > 0
@@ -144,58 +148,60 @@ export function MobileSearchField({
   )
 }
 
-const styles = StyleSheet.create({
-  shell: {
-    minHeight: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    // Keep search visually distinct from surrounding panels.
-    backgroundColor: colors.bgRaised,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm : spacing.xs + 2
-  },
-  shellFocused: {
-    // Why: monochrome focus cue without burning the blue accent token
-    // (reserved for state/selection). textMuted reads clearly on bgRaised.
-    borderColor: colors.textMuted
-  },
-  shellDisabled: {
-    opacity: 0.55
-  },
-  input: {
-    flex: 1,
-    minWidth: 0,
-    padding: 0,
-    margin: 0,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    // Why: Android TextInput draws extra vertical padding that misaligns the
-    // icon/clear chip unless we zero it out.
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
-  clearButton: {
-    minWidth: 36,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  clearButtonPressed: {
-    opacity: 0.7
-  },
-  clearChip: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Why: textMuted reads as a solid chip on bgRaised; borderSubtle was nearly
-    // invisible and made the clear control feel like decorative chrome.
-    backgroundColor: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    shell: {
+      minHeight: 42,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      // Keep search visually distinct from surrounding panels.
+      backgroundColor: colors.bgRaised,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.input,
+      paddingLeft: spacing.md,
+      paddingRight: spacing.xs,
+      paddingVertical: Platform.OS === 'ios' ? spacing.sm : spacing.xs + 2
+    },
+    shellFocused: {
+      // Why: monochrome focus cue without burning the blue accent token
+      // (reserved for state/selection). textMuted reads clearly on bgRaised.
+      borderColor: colors.textMuted
+    },
+    shellDisabled: {
+      opacity: 0.55
+    },
+    input: {
+      flex: 1,
+      minWidth: 0,
+      padding: 0,
+      margin: 0,
+      color: colors.textPrimary,
+      fontSize: TEXT_INPUT_FONT_SIZE,
+      // Why: Android TextInput draws extra vertical padding that misaligns the
+      // icon/clear chip unless we zero it out.
+      includeFontPadding: false,
+      textAlignVertical: 'center'
+    },
+    clearButton: {
+      minWidth: 36,
+      minHeight: 36,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    clearButtonPressed: {
+      opacity: 0.7
+    },
+    clearChip: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      // Why: textMuted reads as a solid chip on bgRaised; borderSubtle was nearly
+      // invisible and made the clear control feel like decorative chrome.
+      backgroundColor: colors.textMuted
+    }
+  })
+)

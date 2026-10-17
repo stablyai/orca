@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
@@ -17,6 +18,8 @@ export function MobileBrowserTabActionSheet(props: {
    *  bulk-close builder can resolve the anchor itself. */
   bulkCloseActions?: (anchorTabId: string | undefined, dismiss: () => void) => ActionSheetAction[]
 }): React.JSX.Element {
+  useMobileTheme()
+
   const { target, onClose, onNavigate, onCloseTab, bulkCloseActions } = props
   return (
     <ActionSheetModal

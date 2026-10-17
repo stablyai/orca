@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import {
   Bot,
   Box,
@@ -64,6 +66,8 @@ type Props = {
 // (favicon/avatar/upload), an emoji, or a lucide glyph. Falls back to Folder,
 // the desktop default, so a project always shows an icon rather than a dot.
 export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSecondary }: Props) {
+  useMobileTheme()
+
   if (repoIcon?.type === 'image') {
     return (
       <Image
@@ -84,12 +88,14 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
   )
 }
 
-const styles = StyleSheet.create({
-  emoji: {
-    textAlign: 'center'
-  },
-  glyph: {
-    alignItems: 'center',
-    justifyContent: 'center'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    emoji: {
+      textAlign: 'center'
+    },
+    glyph: {
+      alignItems: 'center',
+      justifyContent: 'center'
+    }
+  })
+)

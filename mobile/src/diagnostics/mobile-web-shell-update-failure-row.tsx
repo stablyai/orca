@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web-shell-update-failure'
@@ -31,6 +32,8 @@ export function updateFailureLines(
  * that can run the shell.
  */
 export function MobileWebShellUpdateFailureRow() {
+  useMobileTheme()
+
   const [lines, setLines] = useState<readonly Line[]>([])
 
   useEffect(() => {

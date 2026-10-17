@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useRef } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Pencil } from 'lucide-react-native'
@@ -20,6 +22,7 @@ export function MobileNativeChatQueuedMessageEditor({
   /** The card's "From <name>" line, kept above the text. */
   attribution: string | null
 }): React.JSX.Element {
+  useMobileTheme()
   const input = useRef<TextInput>(null)
   useEffect(() => {
     input.current?.focus()
@@ -89,83 +92,85 @@ export function MobileNativeChatQueuedMessageEditor({
 // The text column under the pencil, where the card's text was.
 const TEXT_INDENT = PENCIL_SIZE + spacing.sm
 
-const styles = StyleSheet.create({
-  editor: {
-    backgroundColor: colors.bgRaised,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  head: {
-    minHeight: EDITOR_ACTION_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  // Large text: Cancel and Save on a line of their own, under the heading.
-  actionsLine: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    gap: spacing.sm
-  },
-  label: {
-    flex: 1,
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + spacing.xs
-  },
-  // minHeight, not height: the action line grows with the system text size instead of clipping.
-  cancel: {
-    minHeight: EDITOR_ACTION_HEIGHT,
-    minWidth: 56,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  cancelLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
-  },
-  save: {
-    minHeight: EDITOR_ACTION_HEIGHT,
-    justifyContent: 'center'
-  },
-  savePill: {
-    minHeight: spacing.xl + spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  savePillPressed: {
-    backgroundColor: colors.textSecondary
-  },
-  saveLabel: {
-    color: colors.bgBase,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  attribution: {
-    marginLeft: TEXT_INDENT,
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: typography.metaSize + spacing.xs
-  },
-  // On the card itself: no fill or border, and no padding above or below the text.
-  input: {
-    marginLeft: TEXT_INDENT,
-    padding: 0,
-    paddingRight: spacing.md,
-    maxHeight: 80,
-    color: colors.textPrimary,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    lineHeight: 20,
-    textAlignVertical: 'top'
-  },
-  pressed: { backgroundColor: colors.bgPanel },
-  disabled: { opacity: 0.5 }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    editor: {
+      backgroundColor: colors.bgRaised,
+      paddingLeft: spacing.md,
+      paddingRight: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    head: {
+      minHeight: EDITOR_ACTION_HEIGHT,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm
+    },
+    // Large text: Cancel and Save on a line of their own, under the heading.
+    actionsLine: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-end',
+      gap: spacing.sm
+    },
+    label: {
+      flex: 1,
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      lineHeight: typography.metaSize + spacing.xs
+    },
+    // minHeight, not height: the action line grows with the system text size instead of clipping.
+    cancel: {
+      minHeight: EDITOR_ACTION_HEIGHT,
+      minWidth: 56,
+      paddingHorizontal: spacing.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button
+    },
+    cancelLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontWeight: '500'
+    },
+    save: {
+      minHeight: EDITOR_ACTION_HEIGHT,
+      justifyContent: 'center'
+    },
+    savePill: {
+      minHeight: spacing.xl + spacing.xs,
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.button,
+      backgroundColor: colors.textPrimary,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    savePillPressed: {
+      backgroundColor: colors.textSecondary
+    },
+    saveLabel: {
+      color: colors.bgBase,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    },
+    attribution: {
+      marginLeft: TEXT_INDENT,
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      lineHeight: typography.metaSize + spacing.xs
+    },
+    // On the card itself: no fill or border, and no padding above or below the text.
+    input: {
+      marginLeft: TEXT_INDENT,
+      padding: 0,
+      paddingRight: spacing.md,
+      maxHeight: 80,
+      color: colors.textPrimary,
+      fontSize: TEXT_INPUT_FONT_SIZE,
+      lineHeight: 20,
+      textAlignVertical: 'top'
+    },
+    pressed: { backgroundColor: colors.bgPanel },
+    disabled: { opacity: 0.5 }
+  })
+)

@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useState } from 'react'
 import {
   View,
@@ -42,6 +44,8 @@ export function TextInputModal({
   onCancel,
   onAfterClose
 }: Props) {
+  useMobileTheme()
+
   const [value, setValue] = useState(defaultValue)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
@@ -112,66 +116,68 @@ export function TextInputModal({
   )
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  message: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  // Why: matches NewWorktreeModal's input — bgRaised on the modal
-  // background reads as a tappable surface (brighter than the wrapper)
-  // rather than a recessed pit (darker than the wrapper, which is what
-  // bgBase looked like inside a bgPanel group).
-  input: {
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.md
-  },
-  cancelButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  submitButton: {
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button
-  },
-  buttonPressed: {
-    opacity: 0.7
-  },
-  submitButtonDisabled: {
-    opacity: 0.4
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '500'
-  },
-  submitText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    title: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    message: {
+      fontSize: 13,
+      color: colors.textMuted,
+      marginTop: 2
+    },
+    // Why: matches NewWorktreeModal's input — bgRaised on the modal
+    // background reads as a tappable surface (brighter than the wrapper)
+    // rather than a recessed pit (darker than the wrapper, which is what
+    // bgBase looked like inside a bgPanel group).
+    input: {
+      backgroundColor: colors.bgRaised,
+      color: colors.textPrimary,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm,
+      fontSize: TEXT_INPUT_FONT_SIZE,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    actions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: spacing.sm,
+      marginTop: spacing.md
+    },
+    cancelButton: {
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.button
+    },
+    submitButton: {
+      backgroundColor: colors.textPrimary,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderRadius: radii.button
+    },
+    buttonPressed: {
+      opacity: 0.7
+    },
+    submitButtonDisabled: {
+      opacity: 0.4
+    },
+    cancelText: {
+      color: colors.textSecondary,
+      fontSize: typography.bodySize,
+      fontWeight: '500'
+    },
+    submitText: {
+      color: colors.bgBase,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    }
+  })
+)

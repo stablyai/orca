@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronUp } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
@@ -10,6 +12,8 @@ export function MobileNativeChatPromptStrip({
   title: string
   onExpand: () => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   return (
     <View testID="native-chat-prompt-strip" style={styles.strip}>
       <Text style={styles.title} numberOfLines={1}>
@@ -28,18 +32,20 @@ export function MobileNativeChatPromptStrip({
   )
 }
 
-const styles = StyleSheet.create({
-  action: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-  strip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.bgPanel,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
-  },
-  title: { flex: 1, color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    action: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+    strip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingLeft: spacing.md,
+      paddingRight: spacing.sm,
+      paddingVertical: spacing.xs,
+      backgroundColor: colors.bgPanel,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderSubtle
+    },
+    title: { flex: 1, color: colors.textPrimary, fontSize: typography.bodySize, fontWeight: '600' }
+  })
+)

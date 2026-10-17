@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../src/theme/use-mobile-theme'
 import { useState, useRef, useCallback } from 'react'
 import {
   View,
@@ -35,6 +36,8 @@ const SCAN_RETICLE_SCALE = 0.62
 const SCAN_RETICLE_MAX_SIZE = 360
 
 function Step({ number, text }: { number: number; text: string }) {
+  useMobileTheme()
+
   return (
     <View style={styles.step}>
       <View style={styles.stepBadge}>
@@ -46,6 +49,8 @@ function Step({ number, text }: { number: number; text: string }) {
 }
 
 export default function PairScanScreen() {
+  useMobileTheme()
+
   const router = useRouter()
   const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()

@@ -1,8 +1,12 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { StyleSheet, Text, type TextStyle } from 'react-native'
 import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
 import { colors } from '../theme/mobile-theme'
 
 export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
+  useMobileTheme()
+
   return (
     <>
       {segments.map((segment, index) => (
@@ -14,32 +18,34 @@ export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegme
   )
 }
 
-const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
-  plain: {
-    color: colors.textPrimary
-  },
-  comment: {
-    color: colors.syntaxComment
-  },
-  keyword: {
-    color: colors.syntaxKeyword
-  },
-  string: {
-    color: colors.syntaxString
-  },
-  number: {
-    color: colors.syntaxNumber
-  },
-  type: {
-    color: colors.syntaxType
-  },
-  function: {
-    color: colors.syntaxFunction
-  },
-  variable: {
-    color: colors.syntaxVariable
-  },
-  meta: {
-    color: colors.syntaxMeta
-  }
-})
+const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = createThemedStyles(() =>
+  StyleSheet.create({
+    plain: {
+      color: colors.textPrimary
+    },
+    comment: {
+      color: colors.syntaxComment
+    },
+    keyword: {
+      color: colors.syntaxKeyword
+    },
+    string: {
+      color: colors.syntaxString
+    },
+    number: {
+      color: colors.syntaxNumber
+    },
+    type: {
+      color: colors.syntaxType
+    },
+    function: {
+      color: colors.syntaxFunction
+    },
+    variable: {
+      color: colors.syntaxVariable
+    },
+    meta: {
+      color: colors.syntaxMeta
+    }
+  })
+)

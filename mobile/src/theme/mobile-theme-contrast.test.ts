@@ -1,5 +1,18 @@
-import { describe, expect, it } from 'vitest'
-import { colors, onBrightColors } from './mobile-theme'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  applyMobileColorScheme,
+  colors,
+  darkColors,
+  lightColors,
+  onBrightColors
+} from './mobile-theme'
+import { styles as markdownStyles } from '../components/mobile-markdown-styles'
+import { styles } from '../session/mobile-native-chat-message-styles'
+
+vi.mock('react-native', () => ({
+  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
+}))
+afterEach(() => applyMobileColorScheme('dark'))
 
 function channelLuminance(channel: number): number {
   const value = channel / 255
@@ -24,6 +37,39 @@ function contrastRatio(foreground: string, background: string): number {
 }
 
 describe('mobile text contrast', () => {
+  it.each(['light', 'dark'] as const)(
+    'uses a %s surface and readable text for user image messages',
+    (scheme) => {
+      applyMobileColorScheme(scheme)
+      expect(styles.userBubble.backgroundColor).toBe(colors.bgRaised)
+      expect(
+        contrastRatio(markdownStyles.paragraph.color, styles.userBubble.backgroundColor)
+      ).toBeGreaterThanOrEqual(4.5)
+      expect(
+        contrastRatio(styles.imageRef.color, styles.userBubble.backgroundColor)
+      ).toBeGreaterThanOrEqual(4.5)
+    }
+  )
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('keeps %s captions, prose and filled-action text readable', (_name, palette) => {
+    for (const surface of [palette.bgBase, palette.bgPanel, palette.bgRaised]) {
+      expect(contrastRatio(palette.textMuted, surface)).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(palette.textPrimary, surface)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrastRatio(palette.onAccent, palette.accentBlue)).toBeGreaterThanOrEqual(3)
+  })
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('keeps %s agent status indicators distinct from the surface', (_name, palette) => {
+    for (const indicator of [palette.agentWorking, palette.agentDone, palette.agentAttention]) {
+      for (const surface of [palette.bgBase, palette.bgPanel, palette.bgRaised]) {
+        expect(contrastRatio(indicator, surface)).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
   it('keeps muted text readable on every standard dark surface', () => {
     for (const surface of [colors.bgBase, colors.bgPanel, colors.bgRaised]) {
       expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5)
@@ -36,10 +82,16 @@ describe('mobile text contrast', () => {
     )
   })
 
-  it("keeps every colour on your own message's fill readable", () => {
-    for (const foreground of [colors.bgBase, onBrightColors.secondary, onBrightColors.link]) {
-      expect(contrastRatio(foreground, colors.textPrimary)).toBeGreaterThanOrEqual(4.5)
+  it.each(['dark', 'light'] as const)(
+    'keeps inverted message colours readable in %s mode',
+    (scheme) => {
+      applyMobileColorScheme(scheme)
+      for (const foreground of [colors.bgBase, onBrightColors.secondary, onBrightColors.link]) {
+        expect(contrastRatio(foreground, colors.textPrimary)).toBeGreaterThanOrEqual(4.5)
+      }
+      expect(contrastRatio(colors.bgBase, onBrightColors.codeBackground)).toBeGreaterThanOrEqual(
+        4.5
+      )
     }
-    expect(contrastRatio(colors.bgBase, onBrightColors.codeBackground)).toBeGreaterThanOrEqual(4.5)
-  })
+  )
 })

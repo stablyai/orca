@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { ArrowUpFromLine, X } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
@@ -8,6 +10,8 @@ export function AppUpdateCard(props: {
   onPress: () => void
   onDismiss: () => void
 }) {
+  useMobileTheme()
+
   const title = `Orca ${props.version} is available`
   return (
     <View style={styles.card}>
@@ -43,44 +47,46 @@ export function AppUpdateCard(props: {
 }
 
 // Same frame, icon well and spacing as MobileHostCard.
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    overflow: 'hidden'
-  },
-  cardMain: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: spacing.md,
-    paddingVertical: 12
-  },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  icon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14
-  },
-  main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
-  title: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
-  subtitle: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
-  dismissButton: {
-    width: 40,
-    height: 40,
-    marginHorizontal: spacing.xs,
-    borderRadius: radii.row,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  dismissPressed: { backgroundColor: colors.bgRaised }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: radii.card,
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      overflow: 'hidden'
+    },
+    cardMain: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingLeft: spacing.md,
+      paddingVertical: 12
+    },
+    cardPressed: { backgroundColor: colors.bgRaised },
+    icon: {
+      width: 46,
+      height: 46,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgRaised,
+      marginRight: 14
+    },
+    main: { flex: 1, minWidth: 0, marginRight: spacing.sm },
+    title: { color: colors.textPrimary, fontSize: 15, fontWeight: '600', lineHeight: 20 },
+    subtitle: { color: colors.textSecondary, fontSize: 12, lineHeight: 16 },
+    dismissButton: {
+      width: 40,
+      height: 40,
+      marginHorizontal: spacing.xs,
+      borderRadius: radii.row,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    dismissPressed: { backgroundColor: colors.bgRaised }
+  })
+)

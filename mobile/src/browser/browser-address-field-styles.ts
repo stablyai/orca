@@ -1,3 +1,4 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { StyleSheet } from 'react-native'
 import { typography } from '../theme/mobile-theme'
 import { browserAddressFieldBase } from './browser-address-field-base-styles'
@@ -13,7 +14,9 @@ import { browserAddressFieldBase } from './browser-address-field-base-styles'
  */
 const ADDRESS_FONT_SIZE = typography.metaSize
 
-export const browserAddressFieldStyles = StyleSheet.create({
-  input: { ...browserAddressFieldBase.input, fontSize: ADDRESS_FONT_SIZE, lineHeight: 16 },
-  fileLabel: { ...browserAddressFieldBase.fileLabel, fontSize: ADDRESS_FONT_SIZE, lineHeight: 16 }
-})
+export const browserAddressFieldStyles = createThemedStyles(() =>
+  StyleSheet.create({
+    input: { ...browserAddressFieldBase.input, fontSize: ADDRESS_FONT_SIZE, lineHeight: 16 },
+    fileLabel: { ...browserAddressFieldBase.fileLabel, fontSize: ADDRESS_FONT_SIZE, lineHeight: 16 }
+  })
+)

@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { StyleSheet, View } from 'react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
@@ -42,6 +44,8 @@ export function MobileNativeChatPromptCard({
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
 }): React.JSX.Element | null {
+  useMobileTheme()
+
   const card = ask ? (
     <MobileNativeChatAsk
       key={askKey ?? 'ask'}
@@ -94,4 +98,4 @@ export function MobileNativeChatPromptCard({
   )
 }
 
-const styles = StyleSheet.create({ collapsed: { display: 'none' } })
+const styles = createThemedStyles(() => StyleSheet.create({ collapsed: { display: 'none' } }))

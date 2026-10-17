@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Fragment, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
@@ -29,6 +31,7 @@ export function WorktreeAgentList({
   onAgentPress,
   fullList = false
 }: Props) {
+  useMobileTheme()
   const nodes = useMemo(() => flattenAgentRowLineage(agents), [agents])
   const summaryAgents = useMemo(() => {
     const lineage = buildAgentRowLineageTree(agents)
@@ -78,8 +81,10 @@ export function WorktreeAgentList({
   )
 }
 
-const styles = StyleSheet.create({
-  list: {
-    marginTop: 3
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    list: {
+      marginTop: 3
+    }
+  })
+)

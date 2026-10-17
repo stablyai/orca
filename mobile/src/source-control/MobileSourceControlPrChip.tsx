@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import {
   AlertTriangle,
@@ -22,6 +23,8 @@ type Props = {
 // Pull Request segment. Rendered only when the repo supports hosted review — the
 // parent gates on that, so this component always has something meaningful to show.
 export function MobileSourceControlPrChip({ summary, onPress }: Props) {
+  useMobileTheme()
+
   return (
     <Pressable
       style={({ pressed }) => [hubStyles.chip, pressed && hubStyles.chipPressed]}
@@ -76,6 +79,8 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
 }
 
 function ChipRollup({ rollup }: { rollup: MobilePrChipRollup }) {
+  useMobileTheme()
+
   const color = statusColor(rollup.token)
   return (
     <View style={hubStyles.rollup}>
@@ -86,6 +91,8 @@ function ChipRollup({ rollup }: { rollup: MobilePrChipRollup }) {
 }
 
 function RollupIcon({ kind, color }: { kind: MobilePrChipRollup['kind']; color: string }) {
+  useMobileTheme()
+
   const size = 13
   const strokeWidth = 2.3
   switch (kind) {

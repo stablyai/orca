@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useState, type ReactNode } from 'react'
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -12,7 +13,7 @@ import {
   AlertTriangle
 } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
-import { troubleshootCommonIssues } from './troubleshoot-common-issues'
+import { getTroubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -23,6 +24,8 @@ export type CheckResult = {
 }
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
+  useMobileTheme()
+
   switch (status) {
     case 'pass':
       return <CheckCircle2 size={14} color={colors.statusGreen} />
@@ -51,6 +54,8 @@ export function TroubleshootView({
   /** Developer and shell rows the route fills in. */
   developerRow?: ReactNode
 }) {
+  useMobileTheme()
+
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const toggleSection = useCallback(
@@ -135,7 +140,7 @@ export function TroubleshootView({
         <Text style={styles.sectionHeading}>Common issues</Text>
 
         <View style={styles.section}>
-          {troubleshootCommonIssues.map((section, i) => (
+          {getTroubleshootCommonIssues().map((section, i) => (
             <View key={section.id}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable

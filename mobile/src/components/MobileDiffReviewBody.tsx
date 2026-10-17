@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { RefreshCw } from 'lucide-react-native'
 import type { RefObject } from 'react'
@@ -39,6 +40,8 @@ export function MobileDiffReviewBody({
   onEditNote,
   onRetry
 }: Props) {
+  useMobileTheme()
+
   if (screenState.kind === 'loading') {
     return <CenteredState text="Loading review..." busy />
   }
@@ -105,6 +108,8 @@ function DiffUnavailableState({
   diffState: ReviewDiffState
   onRetry: (() => void) | undefined
 }) {
+  useMobileTheme()
+
   const title =
     diffState.kind === 'binary'
       ? 'Binary Diff'
@@ -139,6 +144,8 @@ function CenteredState({
   text: string
   onRetry?: () => void
 }) {
+  useMobileTheme()
+
   return (
     <View style={styles.state}>
       {busy ? (

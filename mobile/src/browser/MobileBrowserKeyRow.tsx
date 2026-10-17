@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
@@ -9,6 +11,8 @@ type Props = {
 }
 
 export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.Element {
+  useMobileTheme()
+
   return (
     <View style={styles.keyRow}>
       {BROWSER_KEYS.map((key) => (
@@ -31,34 +35,36 @@ export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.
   )
 }
 
-const styles = StyleSheet.create({
-  keyRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.xs
-  },
-  keyButton: {
-    minHeight: 30,
-    minWidth: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm
-  },
-  keyButtonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  keyButtonText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: typography.monoFamily
-  },
-  disabled: {
-    opacity: 0.35
-  },
-  disabledText: {
-    color: colors.textMuted
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    keyRow: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingTop: spacing.xs
+    },
+    keyButton: {
+      minHeight: 30,
+      minWidth: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: spacing.sm
+    },
+    keyButtonPressed: {
+      backgroundColor: colors.borderSubtle
+    },
+    keyButtonText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontFamily: typography.monoFamily
+    },
+    disabled: {
+      opacity: 0.35
+    },
+    disabledText: {
+      color: colors.textMuted
+    }
+  })
+)

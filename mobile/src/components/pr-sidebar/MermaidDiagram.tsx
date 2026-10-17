@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../../theme/mobile-themed-styles'
+import { useMobileTheme } from '../../theme/use-mobile-theme'
 import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -26,16 +28,17 @@ export type MermaidDiagramProps = {
  * already inside the generation the phone downloaded.
  */
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
+  const scheme = useMobileTheme()
+
   const hostRef = useRef<View>(null)
-  // The source that failed, rather than a flag: a flag would need clearing from the effect that
-  // renders the next one, and a render the component has already failed is the only thing the
-  // fallback is about.
+  // A failed attempt belongs to one source and palette.
   const [failedSource, setFailedSource] = useState<string | null>(null)
+  const renderKey = `${scheme}\0${source}`
   // mermaid writes `#<id>` into the stylesheet it puts inside the SVG, so this has to be a CSS
   // identifier. React spells its own `_R_0_`; the strip is for a React that changes that.
   const suffix = useId().replace(/[^\w-]/g, '')
   const id = `orca-mermaid-${suffix}`
-  const failed = failedSource === source
+  const failed = failedSource === renderKey
 
   useEffect(() => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
@@ -57,7 +60,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
         host.innerHTML = svg
       } catch {
         if (!disposed) {
-          setFailedSource(source)
+          setFailedSource(renderKey)
         }
       }
     })()
@@ -67,7 +70,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
       // previous diagram when the source changes.
       host.replaceChildren()
     }
-  }, [id, source])
+  }, [id, source, renderKey])
 
   if (failed) {
     return (
@@ -93,6 +96,8 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
 
 /** The frame and label, so a diagram and its fallback sit in the same box. */
 function MermaidFrame({ children }: { children: ReactNode }) {
+  useMobileTheme()
+
   return (
     <View style={styles.frame} testID="mermaid-diagram">
       <View style={styles.label}>
@@ -104,28 +109,30 @@ function MermaidFrame({ children }: { children: ReactNode }) {
 }
 
 // No rule reaches the SVG: mermaid emits it with `width="100%"` and its own natural `max-width`.
-const styles = StyleSheet.create({
-  frame: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden',
-    backgroundColor: colors.bgRaised
-  },
-  label: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  labelText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: typography.monoFamily
-  },
-  host: { padding: spacing.sm },
-  fallbackScroll: { padding: spacing.sm },
-  fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    frame: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden',
+      backgroundColor: colors.bgRaised
+    },
+    label: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderSubtle,
+      backgroundColor: colors.bgPanel
+    },
+    labelText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: typography.monoFamily
+    },
+    host: { padding: spacing.sm },
+    fallbackScroll: { padding: spacing.sm },
+    fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
+  })
+)

@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -69,6 +71,8 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: stri
 }
 
 export function ProtocolBlockScreen({ verdict }: Props) {
+  useMobileTheme()
+
   const router = useRouteHandoff()
   const mobileUpdate = useWallAppUpdate()
   const remedy = blockRemedy(verdict)
@@ -129,62 +133,64 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  title: {
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginBottom: spacing.sm
-  },
-  body: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.lg
-  },
-  primaryButton: {
-    backgroundColor: colors.textPrimary,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    marginBottom: spacing.sm
-  },
-  primaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.bgBase
-  },
-  secondaryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center'
-  },
-  secondaryButtonText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  recoveryNote: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 17,
-    marginTop: spacing.md
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bgBase,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg
+    },
+    card: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.card,
+      padding: spacing.lg,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle
+    },
+    title: {
+      fontSize: typography.titleSize,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: spacing.sm
+    },
+    body: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      marginBottom: spacing.lg
+    },
+    primaryButton: {
+      backgroundColor: colors.textPrimary,
+      paddingVertical: spacing.sm + 2,
+      borderRadius: radii.button,
+      alignItems: 'center',
+      marginBottom: spacing.sm
+    },
+    primaryButtonText: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.bgBase
+    },
+    secondaryButton: {
+      backgroundColor: colors.bgRaised,
+      paddingVertical: spacing.sm + 2,
+      borderRadius: radii.button,
+      alignItems: 'center'
+    },
+    secondaryButtonText: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.textPrimary
+    },
+    recoveryNote: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      lineHeight: 17,
+      marginTop: spacing.md
+    },
+    pressed: {
+      opacity: 0.7
+    }
+  })
+)

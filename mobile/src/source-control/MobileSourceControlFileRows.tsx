@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
 import type { SectionListRenderItem } from 'react-native'
@@ -27,6 +28,8 @@ export function makeRenderFileRow(
   const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
     state
   return function FileRow({ item }) {
+    useMobileTheme()
+
     const rowBusy =
       busyAction === item.stageActionId ||
       busyAction === item.unstageActionId ||
@@ -150,6 +153,8 @@ type FooterState = Pick<
 >
 
 export function BranchCompareFooter({ state }: { state: FooterState }) {
+  useMobileTheme()
+
   const {
     shouldShowBranchCompareSection,
     branchCompareSummaryText,

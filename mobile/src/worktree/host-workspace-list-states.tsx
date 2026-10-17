@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import {
@@ -11,6 +13,8 @@ export function HostWorkspaceListStates(
     activeFilterCount: number
   }
 ) {
+  useMobileTheme()
+
   const state = selectHostWorkspaceListState(props)
   if (state === 'loading') {
     return (
@@ -45,21 +49,23 @@ export function HostWorkspaceListStates(
   return null
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  catalogErrorDetail: {
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    textAlign: 'center'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    emptyText: {
+      color: colors.textSecondary,
+      fontSize: typography.bodySize
+    },
+    catalogErrorDetail: {
+      marginTop: spacing.xs,
+      paddingHorizontal: spacing.lg,
+      color: colors.textMuted,
+      fontSize: typography.metaSize,
+      textAlign: 'center'
+    }
+  })
+)

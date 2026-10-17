@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
 import { Platform, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
@@ -14,6 +15,8 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
+    useMobileTheme()
+
     const webViewRef = useRef<WebView>(null)
 
     const post = useCallback((command: TerminalWebViewCommand & { id: number }) => {

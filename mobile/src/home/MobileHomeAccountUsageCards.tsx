@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import {
@@ -15,6 +17,8 @@ export function MobileHomeAccountUsageCards(props: {
   items: { host: HostProfile; snapshot: AccountsSnapshot }[]
   onOpen: (hostId: string) => void
 }) {
+  useMobileTheme()
+
   if (props.items.length === 0) {
     return null
   }
@@ -89,45 +93,47 @@ export function MobileHomeAccountUsageCards(props: {
   )
 }
 
-const styles = StyleSheet.create({
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  card: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    gap: spacing.sm,
-    marginBottom: spacing.sm
-  },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  hostLabel: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 2 },
-  icon: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  info: { flex: 1, minWidth: 0, gap: 2 },
-  email: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  bars: { flexDirection: 'row', gap: spacing.md, marginTop: 4 }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    sectionHeading: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      marginTop: spacing.xl,
+      marginBottom: spacing.sm,
+      paddingHorizontal: spacing.xs
+    },
+    card: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.card,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      gap: spacing.sm,
+      marginBottom: spacing.sm
+    },
+    cardPressed: { backgroundColor: colors.bgRaised },
+    hostLabel: {
+      fontSize: 11,
+      color: colors.textMuted,
+      fontWeight: '500',
+      textTransform: 'uppercase',
+      letterSpacing: 0.4
+    },
+    row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 2 },
+    icon: {
+      width: 32,
+      height: 32,
+      borderRadius: 9,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    info: { flex: 1, minWidth: 0, gap: 2 },
+    email: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+    bars: { flexDirection: 'row', gap: spacing.md, marginTop: 4 }
+  })
+)

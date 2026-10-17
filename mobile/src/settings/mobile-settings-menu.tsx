@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import type { ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -7,11 +9,15 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 
 export function MobileSettingsFrame({
   children,
-  onBack
+  onBack,
+  title = 'Settings'
 }: {
   children: ReactNode
   onBack?: () => void
+  title?: string
 }) {
+  useMobileTheme()
+
   const router = useRouter()
   const insets = useSafeAreaInsets()
   return (
@@ -25,7 +31,7 @@ export function MobileSettingsFrame({
         >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text style={styles.heading}>Settings</Text>
+        <Text style={styles.heading}>{title}</Text>
       </View>
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing.lg }}
@@ -52,6 +58,8 @@ export function MobileSettingsSection({
   items: MobileSettingsMenuItem[]
   spaced?: boolean
 }) {
+  useMobileTheme()
+
   return (
     <View style={[styles.section, spaced && styles.sectionSpacer]}>
       {items.map(({ label, icon: Icon, onPress, external, disabled }, index) => (
@@ -75,37 +83,39 @@ export function MobileSettingsSection({
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase, paddingHorizontal: spacing.lg },
-  topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xl },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
-  section: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
-  sectionSpacer: { marginTop: spacing.md },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: { backgroundColor: colors.bgRaised },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bgBase, paddingHorizontal: spacing.lg },
+    topRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xl },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm
+    },
+    heading: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+    section: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
+    sectionSpacer: { marginTop: spacing.md },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: { backgroundColor: colors.bgRaised },
+    rowLabel: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    }
+  })
+)

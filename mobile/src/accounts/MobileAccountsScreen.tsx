@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useState, useCallback } from 'react'
 import { View, Text, Pressable, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -36,6 +37,8 @@ type AccountsNotice = { title: string; message: string }
  * `Alert.alert` (a no-op on React Native Web) and Back is the handoff's, which pops the shell.
  */
 export function MobileAccountsScreen() {
+  useMobileTheme()
+
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()

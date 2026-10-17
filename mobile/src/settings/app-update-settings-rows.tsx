@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
 import { colors, spacing, typography } from '../theme/mobile-theme'
@@ -32,6 +34,8 @@ export function AppUpdateSettingsRows(props: {
   onUpdate: (url: string) => void
   onCheck: () => void
 }) {
+  useMobileTheme()
+
   const checkValue = checkRowValue(props.checkStatus, props.lastCheckedAt, props.now)
   const { available, installedVersion, onUpdate } = props
   const versionRow = available ? (
@@ -69,32 +73,34 @@ export function AppUpdateSettingsRows(props: {
 }
 
 // Same panel, rows and separator as MobileSettingsSection.
-const styles = StyleSheet.create({
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: { backgroundColor: colors.bgRaised },
-  rowLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowValue: { fontSize: typography.metaSize, color: colors.textSecondary },
-  actionValue: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    section: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden',
+      marginTop: spacing.md
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm + 2,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: { backgroundColor: colors.bgRaised },
+    rowLabel: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.textPrimary
+    },
+    rowValue: { fontSize: typography.metaSize, color: colors.textSecondary },
+    actionValue: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    }
+  })
+)

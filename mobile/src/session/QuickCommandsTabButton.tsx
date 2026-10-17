@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, View } from 'react-native'
 import { SquareChevronRight } from 'lucide-react-native'
 
@@ -10,6 +11,8 @@ type Props = {
 }
 
 export function QuickCommandsTabButton({ disabled, onPress }: Props) {
+  useMobileTheme()
+
   return (
     <>
       <View style={styles.tabActionDivider} />

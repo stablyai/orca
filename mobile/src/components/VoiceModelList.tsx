@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check, Download, Trash2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
@@ -48,6 +50,8 @@ export function VoiceModelList({
   onDownload,
   onDelete
 }: Props): React.JSX.Element {
+  useMobileTheme()
+
   return (
     <View style={disabled ? styles.disabled : undefined} pointerEvents={disabled ? 'none' : 'auto'}>
       {setup.models.map((model, idx) => {
@@ -135,52 +139,54 @@ export function VoiceModelList({
   )
 }
 
-const styles = StyleSheet.create({
-  disabled: { opacity: 0.5 },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  modelInfo: { flex: 1, minWidth: 0 },
-  modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  modelLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    flexShrink: 1
-  },
-  recommended: { color: colors.statusGreen, fontSize: 10, fontWeight: '700' },
-  modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
-  modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  actionPressed: { opacity: 0.7 },
-  actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
-  iconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
-  },
-  readyActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    disabled: { opacity: 0.5 },
+    modelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    modelInfo: { flex: 1, minWidth: 0 },
+    modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    modelLabel: {
+      color: colors.textPrimary,
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      flexShrink: 1
+    },
+    recommended: { color: colors.statusGreen, fontSize: 10, fontWeight: '700' },
+    modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
+    modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised
+    },
+    actionPressed: { opacity: 0.7 },
+    actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
+    iconButton: {
+      width: 34,
+      height: 34,
+      borderRadius: radii.button,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgRaised
+    },
+    readyActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+    selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    }
+  })
+)

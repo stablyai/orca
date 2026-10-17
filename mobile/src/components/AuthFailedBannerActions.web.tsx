@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, Text } from 'react-native'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
 
@@ -15,6 +16,8 @@ export function AuthFailedBannerActions({
   onRepair: () => void
   onRemove: () => void
 }) {
+  useMobileTheme()
+
   return (
     <>
       <Pressable style={styles.action} onPress={onRepair}>

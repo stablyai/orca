@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
 import { colors, radii } from '../theme/mobile-theme'
@@ -19,6 +21,8 @@ export function MobileBrowserViewModeSwitch({
   value,
   onChange
 }: Props): React.JSX.Element {
+  useMobileTheme()
+
   return (
     <View style={styles.switch}>
       {VIEW_MODES.map((mode) => (
@@ -48,6 +52,8 @@ function ViewModeButton({
   onPress: () => void
   selected: boolean
 }) {
+  useMobileTheme()
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -67,29 +73,31 @@ function ViewModeButton({
   )
 }
 
-const styles = StyleSheet.create({
-  switch: {
-    minHeight: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    padding: 2
-  },
-  button: {
-    minHeight: 24,
-    width: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  buttonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  buttonSelected: {
-    backgroundColor: colors.textPrimary
-  },
-  disabled: {
-    opacity: 0.35
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    switch: {
+      minHeight: 28,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: radii.input,
+      backgroundColor: colors.bgRaised,
+      padding: 2
+    },
+    button: {
+      minHeight: 24,
+      width: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button
+    },
+    buttonPressed: {
+      backgroundColor: colors.borderSubtle
+    },
+    buttonSelected: {
+      backgroundColor: colors.textPrimary
+    },
+    disabled: {
+      opacity: 0.35
+    }
+  })
+)

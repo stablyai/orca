@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useMemo, useRef } from 'react'
 import { ScrollView, Text } from 'react-native'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
@@ -19,6 +20,8 @@ export function MobileFilePreviewSourceText({
   byteLength?: number
   initialLine?: number
 }) {
+  useMobileTheme()
+
   const scrollRef = useRef<ScrollView>(null)
   const revealedRef = useRef(false)
   const syntax = useMemo(
@@ -59,6 +62,8 @@ export function MobileFilePreviewSourceText({
 }
 
 export function MobileFilePreviewTruncatedNote({ byteLength }: { byteLength: number }) {
+  useMobileTheme()
+
   return (
     <Text style={styles.truncatedNote}>
       Preview truncated. File size: {formatPreviewByteLength(byteLength)}.

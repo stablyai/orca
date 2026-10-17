@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useContext } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
@@ -26,6 +28,7 @@ export function MobileNativeChatLiveLine({
   fontScale: number
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
+  useMobileTheme()
   const { reasoning, reasoningExpanded } = line
   const open = reasoning !== null && reasoningExpanded
   const label = formatNativeChatActiveTurnLabel(line)
@@ -77,32 +80,34 @@ export function MobileNativeChatLiveLine({
 
 // The finished reasoning row's geometry (row gutter, 15 pt glyph slot, its gap, its 32 pt height),
 // so the label and the open text do not move when that row takes over.
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 32,
-    paddingHorizontal: spacing.lg
-  },
-  // The spinner is wider than the brain; centred in the brain's slot it keeps the text column.
-  glyph: {
-    width: 15,
-    alignItems: 'center',
-    overflow: 'visible'
-  },
-  pressed: {
-    opacity: 0.6
-  },
-  label: {
-    color: colors.textMuted,
-    fontSize: typography.bodySize,
-    flexShrink: 1
-  },
-  caretOpen: {
-    transform: [{ rotate: '90deg' }]
-  },
-  body: {
-    paddingHorizontal: spacing.lg
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 32,
+      paddingHorizontal: spacing.lg
+    },
+    // The spinner is wider than the brain; centred in the brain's slot it keeps the text column.
+    glyph: {
+      width: 15,
+      alignItems: 'center',
+      overflow: 'visible'
+    },
+    pressed: {
+      opacity: 0.6
+    },
+    label: {
+      color: colors.textMuted,
+      fontSize: typography.bodySize,
+      flexShrink: 1
+    },
+    caretOpen: {
+      transform: [{ rotate: '90deg' }]
+    },
+    body: {
+      paddingHorizontal: spacing.lg
+    }
+  })
+)

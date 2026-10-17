@@ -1,0 +1,14 @@
+apply plugin: 'com.android.library'
+group = 'expo.modules.orcamobileappearance'
+version = '0.0.1'
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+android { namespace 'expo.modules.orcamobileappearance' }
+dependencies {
+  // Use the same React Native artifact as the shell to reach its public modal window accessor.
+  implementation 'com.facebook.react:react-android'
+}

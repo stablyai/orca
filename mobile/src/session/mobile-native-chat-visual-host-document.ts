@@ -15,6 +15,7 @@ export const MOBILE_NATIVE_CHAT_VISUAL_INITIAL_HEIGHT = 160
 
 /** The host page's function the app calls to size the frame to a height it has decided. */
 export const MOBILE_NATIVE_CHAT_VISUAL_APPLY_HEIGHT = '__orcaVisualApplyHeight'
+export const MOBILE_NATIVE_CHAT_VISUAL_APPLY_THEME = '__orcaVisualApplyTheme'
 
 // The host forwards at most one size report per interval (the latest wins) and one link per window.
 const SIZE_FORWARD_INTERVAL_MS = 100
@@ -61,6 +62,7 @@ export function buildMobileNativeChatVisualHostDocument(input: {
     size: NATIVE_CHAT_VISUAL_SIZE_TYPE,
     link: NATIVE_CHAT_VISUAL_OPEN_LINK_TYPE,
     applyHeight: MOBILE_NATIVE_CHAT_VISUAL_APPLY_HEIGHT,
+    applyTheme: MOBILE_NATIVE_CHAT_VISUAL_APPLY_THEME,
     sizeIntervalMs: SIZE_FORWARD_INTERVAL_MS,
     linkWindowMs: LINK_WINDOW_MS,
     ping: NATIVE_CHAT_VISUAL_PING_TYPE,
@@ -93,6 +95,14 @@ frame.setAttribute('title', C.title)
 // iOS gives a scrollable frame its own scroll view, which takes a drag meant for the transcript;
 // inline the frame is sized to its content (full screen still scrolls).
 if (!C.fullscreen) frame.setAttribute('scrolling', 'no')
+var currentTheme = null
+function applyTheme() {
+  if (currentTheme && frame.contentWindow) frame.contentWindow.postMessage(currentTheme, '*')
+}
+window[C.applyTheme] = function (message) {
+  currentTheme = message
+  applyTheme()
+}
 var loads = 0
 var unanswered = null
 function escaped() {
@@ -100,6 +110,7 @@ function escaped() {
   send({ kind: 'escaped' })
 }
 frame.addEventListener('load', function () {
+  applyTheme()
   loads += 1
   if (loads === 1) return
   if (unanswered) clearTimeout(unanswered.timer)

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Children, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Check, ChevronRight } from 'lucide-react-native'
@@ -16,6 +17,7 @@ export function CheckRow(props: {
   radio?: boolean
   disabled?: boolean
 }) {
+  useMobileTheme()
   return (
     <Pressable
       style={[
@@ -47,6 +49,7 @@ export function CheckRow(props: {
 
 /** Rows inside one option's card, a hairline between each. */
 export function OptionRowList({ children }: { children: ReactNode }) {
+  useMobileTheme()
   // Children.map keys each result by its child's own key.
   return (
     <>
@@ -65,6 +68,7 @@ export function ChoiceRows<Id extends string>(props: {
   selected: Id
   onSelect: (id: Id) => void
 }) {
+  useMobileTheme()
   return (
     <OptionRowList>
       {props.choices.map((choice) => (
@@ -88,6 +92,7 @@ export function SwitchRow(props: {
   onChange: (value: boolean) => void
   indent?: boolean
 }) {
+  useMobileTheme()
   return (
     <View style={[styles.filterRow, props.indent && styles.optionRowIndented]}>
       <Text style={styles.filterRowText} numberOfLines={1}>
@@ -104,6 +109,7 @@ export function SwitchRow(props: {
 
 /** An option with its current value; tapping it opens the option's own page. */
 export function DrillRow(props: { label: string; value: string; onPress: () => void }) {
+  useMobileTheme()
   return (
     <Pressable
       style={styles.filterRow}

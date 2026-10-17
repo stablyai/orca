@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
@@ -17,6 +19,8 @@ type ContentProps = {
 type Props = ContentProps & { visible: boolean }
 
 export function ConfirmModal({ visible, ...content }: Props) {
+  useMobileTheme()
+
   return (
     <BottomDrawer visible={visible} onClose={content.onCancel}>
       <ConfirmContent {...content} />
@@ -33,6 +37,8 @@ export function ConfirmContent({
   onConfirm,
   onCancel
 }: ContentProps) {
+  useMobileTheme()
+
   return (
     <>
       <View style={styles.content}>
@@ -68,56 +74,58 @@ export function ConfirmContent({
   )
 }
 
-const styles = StyleSheet.create({
-  content: {
-    paddingBottom: spacing.lg
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  message: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20
-  },
-  buttons: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  button: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
-    alignItems: 'center'
-  },
-  cancelButton: {
-    backgroundColor: colors.bgPanel
-  },
-  confirmButton: {
-    backgroundColor: colors.textPrimary
-  },
-  destructiveButton: {
-    backgroundColor: colors.statusRed
-  },
-  pressed: {
-    opacity: 0.7
-  },
-  cancelText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  confirmText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.bgBase
-  },
-  destructiveText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: '#fff'
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    content: {
+      paddingBottom: spacing.lg
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary
+    },
+    message: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      marginTop: spacing.xs,
+      lineHeight: 20
+    },
+    buttons: {
+      flexDirection: 'row',
+      gap: spacing.sm
+    },
+    button: {
+      flex: 1,
+      paddingVertical: spacing.sm + 2,
+      borderRadius: radii.button,
+      alignItems: 'center'
+    },
+    cancelButton: {
+      backgroundColor: colors.bgPanel
+    },
+    confirmButton: {
+      backgroundColor: colors.textPrimary
+    },
+    destructiveButton: {
+      backgroundColor: colors.statusRed
+    },
+    pressed: {
+      opacity: 0.7
+    },
+    cancelText: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.textSecondary
+    },
+    confirmText: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.bgBase
+    },
+    destructiveText: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.onAccent
+    }
+  })
+)

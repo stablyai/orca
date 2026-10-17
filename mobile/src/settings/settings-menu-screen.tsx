@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import type { ReactNode } from 'react'
 import { Shield, LifeBuoy } from 'lucide-react-native'
 import { MobileSettingsFrame, MobileSettingsSection } from './mobile-settings-menu'
@@ -14,6 +15,8 @@ export default function SettingsMenuScreen({
   openExternal: (url: string) => Promise<unknown>
   children?: ReactNode
 }) {
+  useMobileTheme()
+
   return (
     <MobileSettingsFrame onBack={onBack}>
       <MobileSettingsSection items={mobileSettingsMenuItems(push)} />

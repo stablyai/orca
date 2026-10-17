@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { RotateCw } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -62,6 +63,8 @@ export function MobilePRSidebar({
   showOpenOnWeb = true,
   workspaceLabel
 }: Props) {
+  useMobileTheme()
+
   const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
@@ -179,6 +182,8 @@ function PrSidebarContent({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  useMobileTheme()
+
   if (branch === 'loading') {
     return (
       <View style={styles.stateArea}>
@@ -275,6 +280,8 @@ function PrSidebarSections({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  useMobileTheme()
+
   const pr = data.pr
   // Bind the triage launchers to this PR's data; the prompt builders are pure so
   // building lazily inside launch() keeps a stale capture from leaking in.

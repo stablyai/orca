@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useState } from 'react'
 import { Alert, StyleSheet } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -33,6 +35,8 @@ import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
 
 export function MobileHomeScreen() {
+  useMobileTheme()
+
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
@@ -184,6 +188,8 @@ export function MobileHomeScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.bgBase }
+  })
+)

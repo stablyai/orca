@@ -44,6 +44,7 @@ const hostStore = vi.hoisted(() => {
 })
 vi.mock('../transport/host-store', () => ({ loadHosts: () => hostStore.loadHosts() }))
 
+import { applyMobileColorScheme } from '../theme/mobile-theme'
 import { hostScreenStyles } from '../host-screen/host-screen-styles'
 import { renderMobileTasksStatusBar } from './mobile-tasks-screen-chrome'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
@@ -80,6 +81,7 @@ describe('Tasks header desktop subtitle', () => {
     renderer = null
     hostStore.deferred = false
     hostStore.pending.length = 0
+    applyMobileColorScheme('dark')
   })
 
   it('names the desktop under the Tasks title in the host screen subtitle style', async () => {
@@ -89,6 +91,18 @@ describe('Tasks header desktop subtitle', () => {
     expect(subtitle.props.style).toContain(hostScreenStyles.hostPlatformText)
     expect(subtitle.props.numberOfLines).toBe(1)
     expect(subtitle.parent!.parent!.findByProps({ children: 'Tasks' })).toBeTruthy()
+  })
+
+  it('updates the mounted desktop subtitle when the appearance changes', async () => {
+    applyMobileColorScheme('dark')
+    const tree = await renderStatusBar('buildbox')
+    const darkStyle = subtitleOf(tree).props.style[0]
+    act(() => applyMobileColorScheme('light'))
+    expect(subtitleOf(tree).props.style).toContain(hostScreenStyles.hostPlatformText)
+    expect(subtitleOf(tree).props.style[0].color).not.toBe(darkStyle.color)
+    act(() => applyMobileColorScheme('dark'))
+    expect(subtitleOf(tree).props.style[0].color).toBe(darkStyle.color)
+    expect(subtitleOf(tree).props.children).toBe('Build Box')
   })
 
   it('reserves a blank line for a desktop that is not paired', async () => {

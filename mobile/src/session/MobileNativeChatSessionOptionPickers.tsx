@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
@@ -64,6 +66,7 @@ export function MobileNativeChatSessionOptionPickers({
   onDrawerOpen,
   onDrawerAfterClose
 }: MobileNativeChatSessionOptionPickersProps & PresentationProps): React.JSX.Element | null {
+  useMobileTheme()
   const { snapshot, pendingId } = controller
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const permission = snapshot.find(
@@ -210,66 +213,68 @@ export function MobileNativeChatSessionOptionPickers({
   )
 }
 
-const styles = StyleSheet.create({
-  // The composer row's only shrinkable item: a long label truncates before it pushes Send off.
-  pills: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    minWidth: 0,
-    gap: spacing.xs
-  },
-  // Out of the row's flow, so the collapsed composer spends no gap on an empty slot.
-  pillsHidden: {
-    position: 'absolute'
-  },
-  sheet: {
-    paddingBottom: spacing.xs
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingBottom: spacing.lg
-  },
-  sheetTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '700',
-    textAlign: 'center'
-  },
-  sheetNav: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  sheetHeaderSide: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  choiceGroup: {
-    overflow: 'hidden',
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  optionGroup: {
-    overflow: 'hidden',
-    marginTop: spacing.md,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    // The composer row's only shrinkable item: a long label truncates before it pushes Send off.
+    pills: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexShrink: 1,
+      minWidth: 0,
+      gap: spacing.xs
+    },
+    // Out of the row's flow, so the collapsed composer spends no gap on an empty slot.
+    pillsHidden: {
+      position: 'absolute'
+    },
+    sheet: {
+      paddingBottom: spacing.xs
+    },
+    sheetHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingBottom: spacing.lg
+    },
+    sheetTitle: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: typography.titleSize,
+      fontWeight: '700',
+      textAlign: 'center'
+    },
+    sheetNav: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgRaised,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle
+    },
+    sheetHeaderSide: {
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    choiceGroup: {
+      overflow: 'hidden',
+      borderRadius: radii.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.bgRaised
+    },
+    optionGroup: {
+      overflow: 'hidden',
+      marginTop: spacing.md,
+      borderRadius: radii.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      backgroundColor: colors.bgRaised
+    },
+    pressed: {
+      opacity: 0.7
+    }
+  })
+)

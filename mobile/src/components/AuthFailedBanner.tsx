@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View, Text } from 'react-native'
 import { AuthFailedBannerActions } from './AuthFailedBannerActions'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
@@ -17,6 +18,8 @@ export function AuthFailedBanner({
   onRepair: () => void
   onRemove: () => void
 }) {
+  useMobileTheme()
+
   return (
     <View style={styles.banner}>
       <Text style={styles.text}>

@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, typography } from '../theme/mobile-theme'
@@ -15,6 +17,7 @@ export function MobileQueuedCardText({
   expanded: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  useMobileTheme()
   const [clipped, setClipped] = useState(false)
   // The whole text laid out unseen at the card's width: more than two lines is what clips.
   const measure = (
@@ -62,15 +65,17 @@ export function MobileQueuedCardText({
   )
 }
 
-const styles = StyleSheet.create({
-  measure: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    opacity: 0
-  },
-  caption: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    measure: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      opacity: 0
+    },
+    caption: {
+      color: colors.textMuted,
+      fontSize: typography.metaSize
+    }
+  })
+)

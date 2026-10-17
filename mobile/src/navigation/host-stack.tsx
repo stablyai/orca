@@ -1,8 +1,11 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Stack } from 'expo-router'
 import { colors } from '../theme/mobile-theme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
+  useMobileTheme()
+
   return (
     <Stack
       screenOptions={{

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View, Text, ScrollView, TextInput, Pressable } from 'react-native'
 import { hostOs } from '../platform/host-os'
 import {
@@ -25,6 +26,8 @@ import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
+  useMobileTheme()
+
   const {
     insets,
     bufferedTerminalDraftState,

@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useEffect, useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { Package } from 'lucide-react-native'
@@ -20,6 +21,8 @@ function buttonLabel(state: MobileWebBundleProbeState, awaitingHost: boolean): s
 
 /** One `label — detail` line in the same row shape the diagnostic checks use. */
 function ProbeLine({ label, detail, failed }: { label: string; detail: string; failed?: boolean }) {
+  useMobileTheme()
+
   return (
     <View style={styles.checkRow}>
       <Text style={styles.checkLabel}>{label}</Text>
@@ -29,6 +32,8 @@ function ProbeLine({ label, detail, failed }: { label: string; detail: string; f
 }
 
 function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; hostName: string }) {
+  useMobileTheme()
+
   if (state.status === 'idle' || state.status === 'running') {
     return null
   }
@@ -66,6 +71,8 @@ function ProbeResult({ state, hostName }: { state: MobileWebBundleProbeState; ho
  * result rather than implying it speaks for all of them.
  */
 export function MobileWebBundleProbeRow() {
+  useMobileTheme()
+
   const [hosts, setHosts] = useState<readonly HostProfile[]>([])
   useEffect(() => {
     let stale = false

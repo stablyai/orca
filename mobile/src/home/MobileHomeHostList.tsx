@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { memo, useCallback, type ReactElement } from 'react'
 import { FlatList, StyleSheet, View } from 'react-native'
 import type { ListRenderItemInfo } from 'react-native'
@@ -30,6 +32,8 @@ type MobileHomeHostListProps = {
 }
 
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
+  useMobileTheme()
+
   const renderHost = useCallback(
     ({ item }: ListRenderItemInfo<HostCatalogEntry>) => (
       <MobileHomeHostRow
@@ -93,6 +97,8 @@ type MobileHomeHostRowProps = Pick<
 > & { item: HostCatalogEntry }
 
 const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostRowProps) {
+  useMobileTheme()
+
   const { item, onLongPress, onOpen, onOpenActions } = props
   const state = resolveHomeHostConnectionState(
     item.id,
@@ -130,10 +136,14 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
 })
 
 function CardGap() {
+  useMobileTheme()
+
   return <View style={styles.cardGap} />
 }
 
-const styles = StyleSheet.create({
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  cardGap: { height: spacing.sm }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+    cardGap: { height: spacing.sm }
+  })
+)

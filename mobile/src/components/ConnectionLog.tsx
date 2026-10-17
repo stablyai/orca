@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useRef } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionLogEntry } from '../transport/types'
@@ -11,12 +13,12 @@ type Props = {
   fillAvailableHeight?: boolean
 }
 
-const LEVEL_COLOR: Record<ConnectionLogEntry['level'], string> = {
+const LEVEL_COLOR: Record<ConnectionLogEntry['level'], string> = createThemedStyles(() => ({
   info: colors.textSecondary,
   success: colors.statusGreen,
   warn: colors.statusAmber,
   error: colors.statusRed
-}
+}))
 
 const LEVEL_GLYPH: Record<ConnectionLogEntry['level'], string> = {
   info: '•',
@@ -39,6 +41,8 @@ function formatTime(ts: number, baseTs: number): string {
 }
 
 export function ConnectionLog({ entries, title, fillAvailableHeight = false }: Props) {
+  useMobileTheme()
+
   const scrollRef = useRef<ScrollView | null>(null)
 
   if (entries.length === 0) {
@@ -90,71 +94,73 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    width: '100%',
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
-  boundedContainer: {
-    maxHeight: 240
-  },
-  fillContainer: {
-    flex: 1
-  },
-  title: {
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: spacing.xs
-  },
-  boundedScroll: {
-    maxHeight: 200
-  },
-  fillScroll: {
-    flex: 1
-  },
-  scrollContent: {
-    gap: 6
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm
-  },
-  timestamp: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    width: 52,
-    paddingTop: 1
-  },
-  glyph: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    width: 12,
-    textAlign: 'center',
-    paddingTop: 1
-  },
-  rowText: {
-    flex: 1
-  },
-  message: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    lineHeight: 16
-  },
-  detail: {
-    fontFamily: typography.monoFamily,
-    fontSize: 11,
-    color: colors.textMuted,
-    lineHeight: 14,
-    marginTop: 1
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    container: {
+      width: '100%',
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSubtle,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md
+    },
+    boundedContainer: {
+      maxHeight: 240
+    },
+    fillContainer: {
+      flex: 1
+    },
+    title: {
+      fontSize: typography.metaSize,
+      fontFamily: typography.monoFamily,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginBottom: spacing.xs
+    },
+    boundedScroll: {
+      maxHeight: 200
+    },
+    fillScroll: {
+      flex: 1
+    },
+    scrollContent: {
+      gap: 6
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm
+    },
+    timestamp: {
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      width: 52,
+      paddingTop: 1
+    },
+    glyph: {
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      width: 12,
+      textAlign: 'center',
+      paddingTop: 1
+    },
+    rowText: {
+      flex: 1
+    },
+    message: {
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      lineHeight: 16
+    },
+    detail: {
+      fontFamily: typography.monoFamily,
+      fontSize: 11,
+      color: colors.textMuted,
+      lineHeight: 14,
+      marginTop: 1
+    }
+  })
+)

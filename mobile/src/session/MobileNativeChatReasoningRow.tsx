@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useState } from 'react'
 import { Pressable, ScrollView, Text, View } from 'react-native'
 import { Brain, ChevronRight } from 'lucide-react-native'
@@ -36,6 +37,8 @@ export function MobileNativeChatReasoningRow({
   /** Android only: opens the message's actions sheet, as a long press on any other message does. */
   onLongPress?: () => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   const [localExpanded, setLocalExpanded] = useState(false)
   const expanded = onToggle ? transcriptExpanded : localExpanded
   const toggle = () =>
@@ -86,6 +89,8 @@ export function MobileNativeChatReasoningBody({
   onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element {
+  useMobileTheme()
+
   return (
     <ScrollView style={styles.reasoningBody} nestedScrollEnabled>
       <MobileNativeChatLongPressContent onLongPress={onLongPress} style={styles.reasoning}>

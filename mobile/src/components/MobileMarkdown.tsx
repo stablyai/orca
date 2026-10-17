@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { INLINE_TEXT_SELECTION } from './inline-text-selection'
 import { memo, useContext, useMemo, type ReactNode } from 'react'
 import { Text as NativeText, View } from 'react-native'
@@ -43,6 +44,8 @@ function MobileMarkdownContent({
   growing = false,
   tone: toneName = 'default'
 }: Props) {
+  useMobileTheme()
+
   // Interactive children own their touches and must forward the row action.
   const setup = useContext(MarkdownTextContext)
   const text = content?.trim() ?? ''
@@ -83,6 +86,8 @@ function MobileMarkdownContent({
 }
 
 function MobileMarkdownInner(props: Props): React.JSX.Element | null {
+  useMobileTheme()
+
   const { rangeSelectable = false, onLongPress } = props
   // Other Markdown surfaces retain their existing selection behavior.
   const androidTranscript = rangeSelectable && !INLINE_TEXT_SELECTION

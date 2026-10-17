@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Platform } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
@@ -20,6 +21,8 @@ import {
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
+  useMobileTheme()
+
   const {
     worktreeId,
     isFolderWorkspaceRoute,

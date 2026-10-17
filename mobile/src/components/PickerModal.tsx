@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import type { ReactNode } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Check } from 'lucide-react-native'
@@ -42,6 +44,8 @@ export function PickerModal<T extends string = string>({
   onAfterClose,
   zIndex
 }: Props<T>) {
+  useMobileTheme()
+
   return (
     <BottomDrawer visible={visible} onClose={onClose} onAfterClose={onAfterClose} zIndex={zIndex}>
       <View style={styles.header}>
@@ -67,6 +71,8 @@ function PickerModalContent<T extends string = string>({
   onLongSelect,
   onClose
 }: PickerModalContentProps<T>) {
+  useMobileTheme()
+
   // Why: closed BottomDrawer instances return null, so keeping option rows in
   // this child avoids rebuilding hidden picker contents on every parent render.
   return (
@@ -123,62 +129,64 @@ function PickerModalContent<T extends string = string>({
   )
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  subtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  rowDisabled: {
-    opacity: 0.45
-  },
-  rowContent: {
-    flex: 1,
-    minWidth: 0
-  },
-  rowIcon: {
-    width: 22,
-    alignItems: 'center',
-    marginRight: spacing.sm
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  rowLabelSelected: {
-    fontWeight: '600'
-  },
-  rowSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    title: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textMuted
+    },
+    subtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 2
+    },
+    group: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden'
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSubtle,
+      marginHorizontal: spacing.md
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    rowPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    rowDisabled: {
+      opacity: 0.45
+    },
+    rowContent: {
+      flex: 1,
+      minWidth: 0
+    },
+    rowIcon: {
+      width: 22,
+      alignItems: 'center',
+      marginRight: spacing.sm
+    },
+    rowLabel: {
+      fontSize: typography.bodySize,
+      color: colors.textPrimary
+    },
+    rowLabelSelected: {
+      fontWeight: '600'
+    },
+    rowSubtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 1
+    }
+  })
+)

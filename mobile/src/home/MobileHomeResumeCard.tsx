@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { ChevronRight, Terminal } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
@@ -17,6 +19,8 @@ export function MobileHomeResumeCard(props: {
   card: HomeResumeCard
   onOpen: (card: HomeResumeCard) => void
 }) {
+  useMobileTheme()
+
   return (
     <Pressable
       disabled={!props.card.actionable}
@@ -53,32 +57,34 @@ export function MobileHomeResumeCard(props: {
   )
 }
 
-const styles = StyleSheet.create({
-  resumeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12
-  },
-  cardDisabled: { opacity: 0.45 },
-  cardPressed: { backgroundColor: colors.bgRaised },
-  resumeIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14
-  },
-  resumeMain: { flex: 1, minWidth: 0 },
-  resumeTitle: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  resumeSub: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  repoDot: { width: 7, height: 7, borderRadius: 3.5 },
-  resumeSubText: { fontSize: 12, color: colors.textSecondary, flex: 1 }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    resumeCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.borderSubtle,
+      borderRadius: radii.card,
+      paddingLeft: spacing.md,
+      paddingRight: spacing.md,
+      paddingVertical: 12
+    },
+    cardDisabled: { opacity: 0.45 },
+    cardPressed: { backgroundColor: colors.bgRaised },
+    resumeIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 13,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 14
+    },
+    resumeMain: { flex: 1, minWidth: 0 },
+    resumeTitle: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+    resumeSub: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+    repoDot: { width: 7, height: 7, borderRadius: 3.5 },
+    resumeSubText: { fontSize: 12, color: colors.textSecondary, flex: 1 }
+  })
+)

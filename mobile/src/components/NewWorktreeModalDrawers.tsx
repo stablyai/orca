@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { View } from 'react-native'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
@@ -49,6 +50,8 @@ export function NewWorktreeModalDrawers(props: {
   onSkipSetupTrust: () => void
   onCloseSetupTrust: () => void
 }) {
+  useMobileTheme()
+
   return (
     <>
       <SmartWorkspaceSourceDrawer

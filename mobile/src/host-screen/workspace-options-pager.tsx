@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useState, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, {
@@ -57,6 +59,7 @@ export function OptionPager(props: {
   /** The open page; null shows the main sheet. */
   page: ReactNode | null
 }) {
+  useMobileTheme()
   const [width, setWidth] = useState(0)
   const [mainHeight, setMainHeight] = useState<number | null>(null)
   const { slide } = props.pager
@@ -85,9 +88,11 @@ export function OptionPager(props: {
   )
 }
 
-const styles = StyleSheet.create({
-  pager: { overflow: 'hidden' },
-  underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  // Opaque and as tall as the pager, so no part of the main sheet shows around the page.
-  page: { flexGrow: 1, backgroundColor: colors.bgBase }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    pager: { overflow: 'hidden' },
+    underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
+    // Opaque and as tall as the pager, so no part of the main sheet shows around the page.
+    page: { flexGrow: 1, backgroundColor: colors.bgBase }
+  })
+)

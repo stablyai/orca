@@ -1,3 +1,5 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
+import { createThemedStyles } from '../theme/mobile-themed-styles'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
@@ -26,6 +28,8 @@ export function ShellWaitingFrame({
   indicator?: ReactNode
   caption?: string
 }) {
+  useMobileTheme()
+
   return (
     <>
       <View style={styles.indicatorSlot}>
@@ -46,6 +50,8 @@ export function ShellWaitingFrame({
  * never arrives strands a spinner over a usable page rather than a dead one.
  */
 export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
+  useMobileTheme()
+
   const opacity = useRef(new Animated.Value(1)).current
   const [mounted, setMounted] = useState(visible)
 
@@ -87,37 +93,39 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
   )
 }
 
-const styles = StyleSheet.create({
-  cover: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  indicatorSlot: {
-    height: 20,
-    justifyContent: 'center'
-  },
-  labelRow: {
-    alignSelf: 'stretch'
-  },
-  label: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    textAlign: 'center'
-  },
-  // Out of flow, so a frame with a caption centres at the same height as one without.
-  caption: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: spacing.sm,
-    textAlign: 'center',
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    fontVariant: ['tabular-nums']
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    cover: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgBase,
+      paddingHorizontal: spacing.lg
+    },
+    indicatorSlot: {
+      height: 20,
+      justifyContent: 'center'
+    },
+    labelRow: {
+      alignSelf: 'stretch'
+    },
+    label: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      marginTop: spacing.md,
+      textAlign: 'center'
+    },
+    // Out of flow, so a frame with a caption centres at the same height as one without.
+    caption: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      marginTop: spacing.sm,
+      textAlign: 'center',
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      fontVariant: ['tabular-nums']
+    }
+  })
+)

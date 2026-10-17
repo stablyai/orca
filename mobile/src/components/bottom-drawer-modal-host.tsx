@@ -1,3 +1,4 @@
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Modal } from 'react-native'
 import { BottomDrawerModalHostContext } from './bottom-drawer-modal-host-scope'
@@ -17,6 +18,8 @@ type Props = {
 // dead to taps. Hosting every drawer in ONE native Modal makes those swaps and stacks
 // in-window view changes instead, ordered by zIndex.
 export function BottomDrawerModalHost({ visible, onRequestClose, children }: Props) {
+  useMobileTheme()
+
   const [holds, setHolds] = useState(0)
   const backClaims = useRef<(() => void)[]>([])
   const hold = useCallback(() => {

@@ -1,3 +1,5 @@
+import { createThemedStyles } from '../theme/mobile-themed-styles'
+import { useMobileTheme } from '../theme/use-mobile-theme'
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { browserAddressFieldStyles } from './browser-address-field-styles'
@@ -22,6 +24,8 @@ export function MobileBrowserAddressField({
   onSubmit,
   value
 }: Props): React.JSX.Element {
+  useMobileTheme()
+
   const fileLabel = focused ? null : compactMobileBrowserFileAddress(value)
   const selection = focused ? undefined : { start: 0, end: 0 }
 
@@ -64,17 +68,19 @@ export function MobileBrowserAddressField({
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    flex: 1,
-    minWidth: 0,
-    height: 28
-  },
-  fileLabelHost: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised
-  }
-})
+const styles = createThemedStyles(() =>
+  StyleSheet.create({
+    field: {
+      flex: 1,
+      minWidth: 0,
+      height: 28
+    },
+    fileLabelHost: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.sm,
+      borderRadius: radii.input,
+      backgroundColor: colors.bgRaised
+    }
+  })
+)
