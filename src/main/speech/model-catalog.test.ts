@@ -19,6 +19,30 @@ describe('SPEECH_MODEL_CATALOG', () => {
     ])
   })
 
+  it('includes the Brazilian Portuguese Parakeet TDT v3 model with a valid manifest', () => {
+    const manifest = getCatalogModel('parakeet-tdt-0.6b-v3-pt-br-int8')
+
+    expect(manifest).toBeDefined()
+    expect(manifest?.type).toBe('transducer')
+    expect(manifest?.provider).toBe('local')
+    expect(manifest?.language).toBe('pt-BR')
+    expect(manifest?.streaming).toBe(false)
+    expect(manifest?.sampleRate).toBe(16000)
+    expect(manifest?.files).toEqual([
+      'encoder.int8.onnx',
+      'decoder.int8.onnx',
+      'joiner.int8.onnx',
+      'tokens.txt'
+    ])
+    expect(manifest?.sizeBytes).toBe(670_576_792)
+    expect(manifest?.downloadFiles?.map(({ name }) => name)).toEqual([
+      'encoder.int8.onnx',
+      'decoder.int8.onnx',
+      'joiner.int8.onnx',
+      'tokens.txt'
+    ])
+  })
+
   it('has unique ids across the catalog', () => {
     const ids = SPEECH_MODEL_CATALOG.map((m) => m.id)
 
