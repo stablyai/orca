@@ -50,6 +50,7 @@ export type BrowserNetworkTunnelStream = {
   receiveCredit: number
   sendCredit: number
   pendingToClient: Uint8Array<ArrayBufferLike>[]
+  flushingToClient: boolean
   pendingToClientBytes: number
   pendingDestinationWriteReleases: Set<() => void>
   clientEnded: boolean

@@ -13,6 +13,7 @@ type PendingWrite = {
 
 export type BrowserNetworkTunnelSourceFlowStream = {
   sendCredit: number
+  flushingWrites: boolean
   pendingWrites: PendingWrite[]
   pendingWriteBytes: number
 }
@@ -43,24 +44,36 @@ export function flushBrowserNetworkSourceWrites(
   stream: BrowserNetworkTunnelSourceFlowStream,
   sendData: (bytes: Uint8Array<ArrayBufferLike>) => boolean
 ): boolean {
-  while (stream.sendCredit > 0 && stream.pendingWrites.length > 0) {
-    const pending = stream.pendingWrites[0]!
-    const length = Math.min(
-      pending.bytes.byteLength - pending.offset,
-      stream.sendCredit,
-      BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES
-    )
-    if (!sendData(pending.bytes.subarray(pending.offset, pending.offset + length))) {
-      return false
-    }
-    pending.offset += length
-    stream.sendCredit -= length
-    stream.pendingWriteBytes -= length
-    if (pending.offset === pending.bytes.byteLength) {
-      stream.pendingWrites.shift()
-      pending.releaseApplicationBytes()
-      pending.callback()
-    }
+  if (stream.flushingWrites) {
+    return true
   }
-  return true
+  // Keep the pending write owned by this drain until transport acceptance or retirement.
+  stream.flushingWrites = true
+  try {
+    while (stream.sendCredit > 0 && stream.pendingWrites.length > 0) {
+      const pending = stream.pendingWrites[0]!
+      const length = Math.min(
+        pending.bytes.byteLength - pending.offset,
+        stream.sendCredit,
+        BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES
+      )
+      stream.sendCredit -= length
+      if (!sendData(pending.bytes.subarray(pending.offset, pending.offset + length))) {
+        return false
+      }
+      if (stream.pendingWrites[0] !== pending) {
+        return true
+      }
+      pending.offset += length
+      stream.pendingWriteBytes -= length
+      if (pending.offset === pending.bytes.byteLength) {
+        stream.pendingWrites.shift()
+        pending.releaseApplicationBytes()
+        pending.callback()
+      }
+    }
+    return true
+  } finally {
+    stream.flushingWrites = false
+  }
 }
