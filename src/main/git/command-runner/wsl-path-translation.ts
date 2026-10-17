@@ -1,3 +1,4 @@
+import { toWindowsWslUncPath } from '../../../shared/wsl-paths'
 import { parseWslPath, toWindowsWslPath } from '../../wsl'
 
 /**
@@ -43,8 +44,11 @@ export function translateWslOutputPaths(
     return output
   }
 
+  // Why: a repo inside the distro keeps its /mnt/<drive> worktrees on the distro view so their
+  // terminals, git and agent sessions stay in WSL; a Windows repo routed through WSL git keeps drive paths.
+  const toWindows = wsl ? toWindowsWslUncPath : toWindowsWslPath
   // Rewrite absolute Linux paths in structured git output (e.g. "worktree /home/user/repo/feature") to Windows UNC.
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
-    toWindowsWslPath(linuxPath, distro)
+    toWindows(linuxPath, distro)
   )
 }
