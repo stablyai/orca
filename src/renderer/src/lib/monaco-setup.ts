@@ -19,6 +19,8 @@ import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
+import { installMonacoWindowsImeInput } from './monaco-windows-ime-input'
+import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
 
@@ -91,6 +93,7 @@ runMonacoSetupSteps([
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
   ['peek references preview options', installMonacoPeekReferencesPreviewOptions],
+  ['Windows IME textarea input', () => installMonacoWindowsImeInput(monaco, isWindowsUserAgent())],
   // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is blocked in
   // Orca's sandboxed renderer. Route it through the trusted IPC bridge so right-click Paste
   // works like Cmd+V (which already works via native events).
