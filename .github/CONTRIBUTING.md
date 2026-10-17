@@ -4,6 +4,7 @@ Thanks for contributing to Orca.
 
 ## Before You Start
 
+- Found a security vulnerability? Do not open a public issue or PR; report it privately as described in [`SECURITY.md`](./SECURITY.md).
 - Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
 - Orca targets macOS, Linux, and Windows. Every change must stay compatible with all three platforms unless the code is explicitly guarded by a runtime platform check.
 - For keyboard shortcuts, use runtime platform checks in renderer code and `CmdOrCtrl` in Electron menu accelerators.
