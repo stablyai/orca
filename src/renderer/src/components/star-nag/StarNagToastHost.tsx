@@ -6,7 +6,7 @@ import { translate } from '@/i18n/i18n'
 
 const ORCA_REPO_URL = 'https://github.com/stablyai/orca'
 type StarNagMode = 'gh' | 'web'
-type StarNagToastStatus = 'idle' | 'busy' | 'starred' | 'opened'
+type StarNagToastStatus = 'idle' | 'busy' | 'saving' | 'starred' | 'opened'
 
 type StarNagToastProps = {
   id: string | number
@@ -23,17 +23,19 @@ function StarNagToast({
 }: StarNagToastProps): React.JSX.Element {
   const [mode, setMode] = useState(initialMode)
   const [status, setStatus] = useState<StarNagToastStatus>('idle')
-  const busy = status === 'busy'
+  const [saveFailed, setSaveFailed] = useState(false)
+  const actionPendingRef = useRef(false)
+  const busy = status === 'busy' || status === 'saving'
 
   const close = (): void => {
-    if (busy) {
+    if (actionPendingRef.current) {
       return
     }
     toast.dismiss(id)
   }
 
   const later = (): void => {
-    if (busy) {
+    if (actionPendingRef.current) {
       return
     }
     markResolved()
@@ -42,10 +44,12 @@ function StarNagToast({
   }
 
   const act = async (): Promise<void> => {
-    if (busy || status === 'starred') {
+    if (actionPendingRef.current || status === 'starred' || status === 'opened') {
       return
     }
+    actionPendingRef.current = true
     setStatus('busy')
+    setSaveFailed(false)
     setDismissSuppressed(true)
     if (mode === 'web') {
       try {
@@ -57,6 +61,7 @@ function StarNagToast({
         setDismissSuppressed(false)
         setStatus('idle')
       }
+      actionPendingRef.current = false
       return
     }
     let ok = false
@@ -69,10 +74,32 @@ function StarNagToast({
       setMode('web')
       setDismissSuppressed(false)
       setStatus('idle')
+      actionPendingRef.current = false
       return
     }
     markResolved()
     setStatus('starred')
+    actionPendingRef.current = false
+  }
+
+  const disable = async (): Promise<void> => {
+    if (actionPendingRef.current || status === 'starred') {
+      return
+    }
+    actionPendingRef.current = true
+    setStatus('saving')
+    setSaveFailed(false)
+    setDismissSuppressed(true)
+    try {
+      await window.api.starNag.disable()
+      markResolved()
+      toast.dismiss(id)
+    } catch {
+      actionPendingRef.current = false
+      setDismissSuppressed(false)
+      setStatus(status)
+      setSaveFailed(true)
+    }
   }
 
   const actionLabel =
@@ -80,7 +107,7 @@ function StarNagToast({
       ? translate('auto.components.star.nag.StarNagToastHost.starredThanks', 'Starred — thank you!')
       : status === 'opened'
         ? translate('auto.components.star.nag.StarNagToastHost.githubOpened', 'GitHub opened')
-        : busy
+        : status === 'busy'
           ? mode === 'web'
             ? translate('auto.components.star.nag.StarNagToastHost.opening', 'Opening…')
             : translate('auto.components.star.nag.StarNagToastHost.starring', 'Starring…')
@@ -145,7 +172,7 @@ function StarNagToast({
           onClick={() => void act()}
           disabled={busy || status === 'starred' || status === 'opened'}
         >
-          {busy ? (
+          {status === 'busy' ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : mode === 'web' ? (
             <ExternalLink className="size-3.5" />
@@ -164,6 +191,29 @@ function StarNagToast({
           {translate('auto.components.star.nag.StarNagToastHost.later', 'Later')}
         </Button>
       </div>
+      <div className="mt-2 flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void disable()}
+          disabled={busy || completedStar}
+        >
+          {status === 'saving'
+            ? translate('auto.components.star.nag.StarNagToastHost.saving', 'Saving…')
+            : translate(
+                'auto.components.star.nag.StarNagToastHost.dontAskAgain',
+                "Don't ask again"
+              )}
+        </Button>
+      </div>
+      {saveFailed && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {translate(
+            'auto.components.star.nag.StarNagToastHost.saveFailed',
+            'Could not save your preference. Please try again.'
+          )}
+        </p>
+      )}
     </div>
   )
 }
