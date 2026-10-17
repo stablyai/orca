@@ -8,8 +8,16 @@ import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import type { KeybindingOverrides } from '../../../../../../shared/keybindings'
 
-const state = {
+const state: {
+  keybindings: KeybindingOverrides | undefined
+  activeView: string
+  activeTabType: string
+  activeWorktreeId: string
+  activeTabId: string
+  tabsByWorktree: Record<string, { id: string }[]>
+} = {
   keybindings: undefined,
   activeView: 'terminal',
   activeTabType: 'terminal',
@@ -96,15 +104,22 @@ function Probe() {
 }
 
 function press(key: string, init: KeyboardEventInit = {}, target: HTMLElement = list) {
-  act(() => {
-    target.dispatchEvent(
-      new KeyboardEvent('keydown', { key, code: key, bubbles: true, cancelable: true, ...init })
-    )
+  const event = new KeyboardEvent('keydown', {
+    key,
+    code: key,
+    bubbles: true,
+    cancelable: true,
+    ...init
   })
+  act(() => {
+    target.dispatchEvent(event)
+  })
+  return event
 }
 
 beforeEach(() => {
   Object.assign(state, {
+    keybindings: undefined,
     activeView: 'terminal',
     activeTabType: 'terminal',
     activeWorktreeId: 'a',
@@ -201,6 +216,53 @@ describe('workspace list focus ownership', () => {
       expect(document.activeElement).toBe(textarea)
     }
   )
+
+  it('runs the bound worktree shortcut from a text field and leaves plain arrows alone', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
+    const composer = document.createElement('div')
+    composer.contentEditable = 'true'
+    document.body.append(composer)
+    composer.focus()
+    press('ArrowDown', {}, composer)
+    expect(activate).not.toHaveBeenCalled()
+
+    const chord = press('ArrowDown', { metaKey: true, shiftKey: true }, composer)
+    expect(chord.defaultPrevented).toBe(true)
+    expect(activate).toHaveBeenLastCalledWith('b', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false,
+      executionHostId: 'ssh:fixture'
+    })
+
+    activate.mockClear()
+    const editor = document.createElement('div')
+    editor.className = 'monaco-editor'
+    const field = document.createElement('textarea')
+    editor.append(field)
+    document.body.append(editor)
+    let reachedField = false
+    field.addEventListener('keydown', () => {
+      reachedField = true
+    })
+    field.focus()
+    press('ArrowDown', { metaKey: true, shiftKey: true }, field)
+    expect(reachedField).toBe(false)
+    expect(activate).toHaveBeenCalled()
+
+    activate.mockClear()
+    state.activeWorktreeId = 'a'
+    state.activeTabId = 'tab-a'
+    state.keybindings = { 'worktree.navigateDown': ['Ctrl+Alt+ArrowDown'] }
+    act(() => root.render(null))
+    act(() => root.render(<Probe />))
+    composer.focus()
+    press('ArrowDown', { ctrlKey: true, altKey: true }, composer)
+    expect(activate).toHaveBeenLastCalledWith('b', {
+      navigationIntent: 'user-open',
+      revealInSidebar: false,
+      executionHostId: 'ssh:fixture'
+    })
+  })
 
   it('does not navigate while an application modal is active', () => {
     modal = 'settings'

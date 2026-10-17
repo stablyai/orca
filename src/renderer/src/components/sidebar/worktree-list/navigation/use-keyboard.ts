@@ -95,25 +95,12 @@ export function useWorktreeListKeyboardNavigation(args: {
       scrollRef.current?.removeAttribute('data-keyboard-navigation')
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.defaultPrevented ||
-        e.isComposing ||
-        activeModal !== 'none' ||
-        fileSearchClaimsTextKey(e)
-      ) {
+      if (e.defaultPrevented || e.isComposing || activeModal !== 'none') {
         return
       }
 
       const platform = getShortcutPlatform()
-      if (
-        keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
-        !hasVisibleOverlay()
-      ) {
-        scrollRef.current?.focus()
-        e.preventDefault()
-        return
-      }
-
+      // Why: previous/next worktree is a window command, so the chord the user bound runs even when a text field is focused.
       const direction = keybindingMatchesAction('worktree.navigateUp', e, platform, keybindings)
         ? 'up'
         : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
@@ -123,6 +110,20 @@ export function useWorktreeListKeyboardNavigation(args: {
         endListNavigation()
         markDirectScrollInput()
         navigateWorktree(direction)
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
+      if (fileSearchClaimsTextKey(e)) {
+        return
+      }
+
+      if (
+        keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings) &&
+        !hasVisibleOverlay()
+      ) {
+        scrollRef.current?.focus()
         e.preventDefault()
       }
     }
