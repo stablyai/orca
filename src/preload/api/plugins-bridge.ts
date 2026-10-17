@@ -1,7 +1,8 @@
 import { ipcRenderer } from 'electron'
 import type {
   PluginPanelActionOutcome,
-  PluginPanelEntry
+  PluginPanelEntry,
+  PluginPanelSurface
 } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
@@ -23,6 +24,7 @@ export const pluginsApi = {
   readPanelEntry: (args: {
     pluginKey: string
     panelId: string
+    surface?: PluginPanelSurface
   }): Promise<PluginPanelEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
   invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
     ipcRenderer.invoke('plugins:invokeCommand', args),

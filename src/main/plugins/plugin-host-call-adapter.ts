@@ -32,6 +32,7 @@ export async function executePluginHostCallRequest(input: {
   pluginKey: string
   request: unknown
   viaPanel: boolean
+  viaSettingsPage?: boolean
   resolvePolicy: ResolvePluginHostCallPolicy
 }): Promise<PluginPanelActionOutcome> {
   if (!isQualifiedPluginKey(input.pluginKey)) {
@@ -52,6 +53,7 @@ export async function executePluginHostCallRequest(input: {
     method: parsed.data.method,
     params: parsed.data.params,
     viaPanel: input.viaPanel,
+    viaSettingsPage: input.viaSettingsPage,
     ...policy
   })
 }

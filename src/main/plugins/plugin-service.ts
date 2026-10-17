@@ -73,8 +73,8 @@ export class PluginService {
         return plugin && this.canStartPluginWork(plugin) ? plugin : null
       },
       contentVerifier: this.contentVerifier,
-      executeHostCall: (pluginKey, method, params) =>
-        this.executeHostCall(pluginKey, method, params, { viaPanel: true }),
+      executeHostCall: (pluginKey, method, params, viaSettingsPage) =>
+        this.executeHostCall(pluginKey, method, params, { viaPanel: true, viaSettingsPage }),
       log: (pluginKey) => this.installed.captureLog(pluginKey, 'error')
     })
     this.workerController = new PluginWorkerController({
@@ -248,12 +248,12 @@ export class PluginService {
     pluginKey: string,
     method: string,
     params: unknown,
-    options: { viaPanel: boolean }
+    options: { viaPanel: boolean; viaSettingsPage?: boolean }
   ): Promise<PluginPanelActionOutcome> {
     return executePluginHostCallRequest({
       pluginKey,
       request: { method, params },
-      viaPanel: options.viaPanel,
+      ...options,
       resolvePolicy: (boundPluginKey) => ({
         grantedCapabilities: this.getGrantedCapabilities(boundPluginKey),
         services: this.runtimeDelegate

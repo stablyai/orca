@@ -2,9 +2,10 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type {
-  PluginPanelActionOutcome,
-  PluginPanelEntry
+import {
+  PLUGIN_PANEL_SURFACES,
+  type PluginPanelActionOutcome,
+  type PluginPanelEntry
 } from '../../shared/plugins/plugin-panel-bridge'
 import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
 import {
@@ -39,7 +40,8 @@ const setEnabledArgsSchema = z.object({
 
 const readPanelEntryArgsSchema = z.object({
   pluginKey: z.string().min(1),
-  panelId: z.string().min(1)
+  panelId: z.string().min(1),
+  surface: z.enum(PLUGIN_PANEL_SURFACES).optional()
 })
 
 const invokeCommandArgsSchema = z.object({
@@ -154,7 +156,12 @@ export function registerPluginHandlers(
       )
       await pluginService.whenReady()
       const parsed = readPanelEntryArgsSchema.parse(args)
-      const entry = await pluginService.panels.open(ownerKey, parsed.pluginKey, parsed.panelId)
+      const entry = await pluginService.panels.open(
+        ownerKey,
+        parsed.pluginKey,
+        parsed.panelId,
+        parsed.surface
+      )
       if (!ownerLease.isCurrent()) {
         pluginService.panels.revokeOwner(ownerKey)
         return null

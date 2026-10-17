@@ -15,6 +15,7 @@ type ContributionValidationManifest = {
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
     vmRecipes: PathContribution[]
     agents: PathContribution[]
+    settingsPages: IdentifiedContribution[]
   }
   capabilities: { kind: string }[]
 }
@@ -44,7 +45,7 @@ export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
 ): void {
-  for (const path of ['panels', 'commands'] as const) {
+  for (const path of ['panels', 'commands', 'settingsPages'] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
       (entry) => (entry as IdentifiedContribution).id,
@@ -139,6 +140,16 @@ export function validatePluginManifestContributions(
       code: 'custom',
       path: ['capabilities'],
       message: 'events:subscribe capability required when contributes.events is non-empty'
+    })
+  }
+  if (
+    manifest.contributes.settingsPages.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'settingsPage')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['capabilities'],
+      message: 'settingsPage capability required when contributes.settingsPages is non-empty'
     })
   }
 }

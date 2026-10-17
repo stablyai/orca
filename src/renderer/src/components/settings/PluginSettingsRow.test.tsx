@@ -67,6 +67,7 @@ describe('PluginSettingsRow', () => {
           onToggleLogs={vi.fn()}
           onRollbackRequest={vi.fn()}
           onRemoveRequest={vi.fn()}
+          onOpenSettingsPage={vi.fn()}
         />
       )
     })
@@ -81,5 +82,51 @@ describe('PluginSettingsRow', () => {
       container.querySelector<HTMLButtonElement>('[aria-label="Enable Orca Skills"]')?.disabled
     ).toBe(true)
     act(() => root.unmount())
+  })
+
+  it('offers settings pages only while the plugin is active', async () => {
+    const onOpenSettingsPage = vi.fn()
+    const activePlugin: PluginHostListEntry = {
+      ...plugin,
+      status: 'idle',
+      blockedByKillList: undefined,
+      settingsPages: [{ id: 'preferences', title: 'Greeting settings' }]
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const render = (entry: PluginHostListEntry) =>
+      act(async () => {
+        root.render(
+          <PluginSettingsRow
+            plugin={entry}
+            busy={false}
+            logsOpen={false}
+            onReview={vi.fn()}
+            onToggleEnabled={vi.fn()}
+            onToggleLogs={vi.fn()}
+            onRollbackRequest={vi.fn()}
+            onRemoveRequest={vi.fn()}
+            onOpenSettingsPage={onOpenSettingsPage}
+          />
+        )
+      })
+    const findButton = () =>
+      [...container.querySelectorAll('button')].find(
+        (button) => button.getAttribute('aria-label') === 'Open Greeting settings for Orca Skills'
+      )
+
+    await render(activePlugin)
+    await act(async () => findButton()?.click())
+    expect(onOpenSettingsPage).toHaveBeenCalledWith({
+      plugin: activePlugin,
+      page: { id: 'preferences', title: 'Greeting settings' }
+    })
+
+    await render({ ...activePlugin, status: 'pending' })
+    expect(findButton()).toBeUndefined()
+    await render({ ...activePlugin, status: 'disabled' })
+    expect(findButton()).toBeUndefined()
+    await act(async () => root.unmount())
   })
 })

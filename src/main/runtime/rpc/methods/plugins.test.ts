@@ -56,7 +56,8 @@ describe('plugin panel serve RPC identity', () => {
     expect(service.panels.open).toHaveBeenCalledWith(
       'runtime:connection-one',
       'orca-samples.demo',
-      'dashboard'
+      'dashboard',
+      undefined
     )
 
     await expect(

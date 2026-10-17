@@ -127,7 +127,12 @@ export const PLUGIN_METHODS = [
       const service = requirePluginService()
       await service.whenReady()
       const ownerKey = bindRpcPanelOwner(service, context)
-      const entry = await service.panels.open(ownerKey, params.pluginKey, params.panelId)
+      const entry = await service.panels.open(
+        ownerKey,
+        params.pluginKey,
+        params.panelId,
+        params.surface
+      )
       if (context.signal?.aborted) {
         service.panels.revokeOwner(ownerKey)
         return null

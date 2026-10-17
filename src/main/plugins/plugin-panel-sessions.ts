@@ -1,8 +1,11 @@
 import { randomBytes } from 'node:crypto'
+import type { PluginPanelSurface } from '../../shared/plugins/plugin-panel-bridge'
 
 export type PluginPanelSessionBinding = {
   pluginKey: string
+  /** Contribution id: a panel id, or a settings page id when `surface` says so. */
   panelId: string
+  surface: PluginPanelSurface
   rootDir: string
   manifestRevision: string
 }
@@ -18,6 +21,7 @@ function bindingKey(ownerKey: string, binding: PluginPanelSessionBinding): strin
     ownerKey,
     binding.pluginKey,
     binding.panelId,
+    binding.surface,
     binding.rootDir,
     binding.manifestRevision
   ])
@@ -51,14 +55,22 @@ export class PluginPanelSessions {
     return token
   }
 
-  resolve(ownerKey: string, token: string): PluginPanelSessionBinding | null {
+  /** Resolves only sessions for `surfaces`. Why panels by default: a caller
+   *  that predates settings pages (say, a channel keyed by panel id) must never
+   *  accept a settings page token as a panel. */
+  resolve(
+    ownerKey: string,
+    token: string,
+    surfaces: readonly PluginPanelSurface[] = ['panel']
+  ): PluginPanelSessionBinding | null {
     const session = this.sessions.get(token)
-    if (!session || session.ownerKey !== ownerKey) {
+    if (!session || session.ownerKey !== ownerKey || !surfaces.includes(session.surface)) {
       return null
     }
     return {
       pluginKey: session.pluginKey,
       panelId: session.panelId,
+      surface: session.surface,
       rootDir: session.rootDir,
       manifestRevision: session.manifestRevision
     }

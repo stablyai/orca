@@ -108,6 +108,9 @@ export type PluginHostMethodSpec = {
   /** Whether sandboxed panels may call this over the postMessage bridge.
    *  Workers can call every method. */
   panel: boolean
+  /** Also callable from the plugin's own settings page frames, which get
+   *  every panel action plus these (still capability-gated). */
+  settingsPage?: true
   params: z.ZodTypeAny
   result: z.ZodTypeAny
 }
@@ -227,6 +230,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     capability: 'settings:own',
     mutation: false,
     panel: false,
+    settingsPage: true,
     params: settingsGetParams,
     result: settingsGetResult
   }),
@@ -237,6 +241,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     capability: 'settings:own',
     mutation: true,
     panel: false,
+    settingsPage: true,
     params: settingsSetParams,
     result: settingsSetResult
   }),
@@ -266,4 +271,14 @@ export const PLUGIN_PANEL_ACTIONS = PLUGIN_HOST_API_V0.filter((entry) => entry.p
 
 export function isPluginPanelAction(action: string): boolean {
   return PLUGIN_PANEL_ACTIONS.includes(action)
+}
+
+/** Actions a plugin's settings page frame may request: the panel set plus
+ *  methods flagged `settingsPage` (reading and writing its own settings). */
+export const PLUGIN_SETTINGS_PAGE_ACTIONS = PLUGIN_HOST_API_V0.filter(
+  (entry) => entry.panel || entry.settingsPage
+).map((entry) => entry.name)
+
+export function isPluginSettingsPageAction(action: string): boolean {
+  return PLUGIN_SETTINGS_PAGE_ACTIONS.includes(action)
 }

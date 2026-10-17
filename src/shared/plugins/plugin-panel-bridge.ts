@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isPluginPanelAction } from './plugin-host-api'
+import { isPluginPanelAction, isPluginSettingsPageAction } from './plugin-host-api'
 
 /**
  * postMessage protocol between a sandboxed plugin panel iframe and the host
@@ -44,6 +44,18 @@ export const panelActionRequestSchema = z.object({
 })
 
 export type PluginPanelActionRequest = z.infer<typeof panelActionRequestSchema>
+
+/** Where a sandboxed plugin document is mounted. Both use the same shell and
+ *  bridge; settings pages may additionally use the settings methods. */
+export const PLUGIN_PANEL_SURFACES = ['panel', 'settingsPage'] as const
+export type PluginPanelSurface = (typeof PLUGIN_PANEL_SURFACES)[number]
+
+const settingsPageActionRequestSchema = panelActionRequestSchema.extend({
+  action: z
+    .string()
+    .min(1)
+    .refine(isPluginSettingsPageAction, 'not a settings-page-callable action')
+})
 
 export const panelPongSchema = z.object({
   type: z.literal(PANEL_PONG_TYPE),
@@ -103,8 +115,13 @@ export type PanelActionRequestParseResult =
 /** Validates a raw `message` event payload from the panel iframe. On failure
  *  still surfaces a best-effort requestId so the host can answer with an
  *  error instead of silently dropping the request. */
-export function parsePanelActionRequest(data: unknown): PanelActionRequestParseResult {
-  const parsed = panelActionRequestSchema.safeParse(data)
+export function parsePanelActionRequest(
+  data: unknown,
+  surface: PluginPanelSurface = 'panel'
+): PanelActionRequestParseResult {
+  const parsed = (
+    surface === 'settingsPage' ? settingsPageActionRequestSchema : panelActionRequestSchema
+  ).safeParse(data)
   if (parsed.success) {
     return { ok: true, request: parsed.data }
   }

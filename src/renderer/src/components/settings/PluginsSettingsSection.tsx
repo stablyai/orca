@@ -9,6 +9,7 @@ import { PluginInstallDialog } from './PluginInstallDialog'
 import { PluginRemoveDialog } from './PluginRemoveDialog'
 import { PluginRollbackDialog } from './PluginRollbackDialog'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
+import { PluginSettingsPageDialog, type OpenPluginSettingsPage } from './PluginSettingsPageDialog'
 import { getPluginsSectionPresentation } from './plugins-search'
 import { SettingsSection } from './SettingsSection'
 import { usePluginLogs } from './use-plugin-logs'
@@ -36,6 +37,7 @@ export function PluginsSettingsSection({
   const [installOpen, setInstallOpen] = useState(false)
   const [consentPluginId, setConsentPluginId] = useState<string | null>(null)
   const [removePluginId, setRemovePluginId] = useState<string | null>(null)
+  const [settingsPage, setSettingsPage] = useState<OpenPluginSettingsPage | null>(null)
   const [busyPluginKeys, setBusyPluginKeys] = useState<Set<string>>(() => new Set())
   const [featureBusy, setFeatureBusy] = useState(false)
   const [devPathsBusy, setDevPathsBusy] = useState(false)
@@ -50,6 +52,17 @@ export function PluginsSettingsSection({
     // Why: accepted discovery results own installed-plugin identity and invalidate stale UI state.
     setConsentPluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
     setRemovePluginId((current) => (current && installedPluginKeys.has(current) ? current : null))
+    // Why: a disabled, removed, or changed plugin must not keep its settings frame mounted.
+    setSettingsPage((current) => {
+      const plugin = current
+        ? nextPlugins.find((entry) => entry.pluginKey === current.plugin.pluginKey)
+        : null
+      const active =
+        plugin?.status === 'running' || plugin?.status === 'idle' || plugin?.status === 'restarting'
+      return active && plugin.settingsPages?.some((page) => page.id === current?.page.id)
+        ? current
+        : null
+    })
     setBusyPluginKeys(
       (current) => new Set([...current].filter((pluginKey) => installedPluginKeys.has(pluginKey)))
     )
@@ -106,6 +119,7 @@ export function PluginsSettingsSection({
       setInstallOpen(false)
       setConsentPluginId(null)
       setRemovePluginId(null)
+      setSettingsPage(null)
       setBusyPluginKeys(new Set())
       setFeatureBusy(false)
       setDevPathsBusy(false)
@@ -336,8 +350,10 @@ export function PluginsSettingsSection({
         onMarketplaceInstalled={marketplaceLifecycle.reloadAfterMutation}
         onRollbackRequest={marketplaceLifecycle.requestRollback}
         onRemoveRequest={setRemovePluginId}
+        onOpenSettingsPage={setSettingsPage}
         onUpdateDevPaths={updateDevPaths}
       />
+      <PluginSettingsPageDialog open={settingsPage} onClose={() => setSettingsPage(null)} />
       <PluginInstallDialog open={installOpen} onOpenChange={setInstallOpen} onInstall={install} />
       <PluginConsentDialog
         key={consentPlugin?.pluginKey ?? 'closed'}

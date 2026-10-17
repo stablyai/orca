@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 1,
+  "id": "greeting-settings",
+  "publisher": "orca-samples",
+  "name": "Greeting Settings",
+  "version": "1.0.0",
+  "description": "Sample plugin with a sandboxed settings page that reads and writes the plugin's own settings, without a worker.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "settingsPages": [
+      { "id": "preferences", "title": "Greeting settings", "entry": "settings.html" }
+    ]
+  },
+  "capabilities": [{ "kind": "settingsPage" }, { "kind": "settings:own" }]
+}
