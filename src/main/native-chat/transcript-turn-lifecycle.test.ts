@@ -243,6 +243,42 @@ describe('native chat transcript turn lifecycle', () => {
     ).toBeNull()
   })
 
+  it.each([
+    '<bash-input> git status</bash-input>',
+    [{ type: 'text', text: '<bash-input>ls</bash-input>' }]
+  ])('does not treat a `!` shell command as a new working generation', (content) => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'user',
+          uuid: 'bash-1',
+          timestamp: '2026-07-16T23:46:12.000Z',
+          message: { role: 'user', content }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
+  it('does not treat a prompt absorbed mid-turn as a new generation', () => {
+    expect(
+      decodeClaudeTurnLifecycle(
+        JSON.stringify({
+          type: 'attachment',
+          uuid: 'queued-1',
+          timestamp: '2026-07-16T23:46:13.000Z',
+          attachment: {
+            type: 'queued_command',
+            prompt: 'also check the config',
+            commandMode: 'prompt',
+            origin: { kind: 'human' }
+          }
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
   it('excludes Claude tool-result rows that also carry text sidecars', () => {
     expect(
       decodeClaudeTurnLifecycle(
