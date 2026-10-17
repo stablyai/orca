@@ -5,6 +5,15 @@ import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-meth
 // local) and keeps `paired-desktop` calls. A route is what allowlists a phone method.
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
+// Group metadata and membership only; nested discovery/import accepts arbitrary host paths.
+export const PROJECT_GROUP_MANAGEMENT_METHODS = [
+  'projectGroup.create',
+  'projectGroup.delete',
+  'projectGroup.list',
+  'projectGroup.moveProject',
+  'projectGroup.update'
+] as const
+
 export const EXECUTION_HOST_METHODS = [
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
@@ -146,7 +155,7 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.unsubscribe',
   // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.
   'orchestration.workerTerminalUserInput',
-  'projectGroup.list',
+  ...PROJECT_GROUP_MANAGEMENT_METHODS,
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',
