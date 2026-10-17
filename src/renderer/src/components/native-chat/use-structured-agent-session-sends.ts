@@ -93,12 +93,15 @@ export function useStructuredAgentSessionSends(args: {
   const send = useCallback(
     (
       text: string,
-      attachments: readonly StructuredAgentSessionAttachment[] = []
+      attachments: readonly StructuredAgentSessionAttachment[] = [],
+      deliveryOptions?: { immediate?: boolean }
     ): boolean | 'queued' => {
       if (!text.trim() && attachments.length === 0) {
         return false
       }
-      const delivery = structuredAgentSessionQueueRequest(queue)
+      const delivery = deliveryOptions?.immediate
+        ? undefined
+        : structuredAgentSessionQueueRequest(queue)
       const options = sendOptions?.()
       const sent = sendStructuredAgentSessionMessage({
         sessionId,

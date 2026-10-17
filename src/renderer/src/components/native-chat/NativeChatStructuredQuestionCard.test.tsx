@@ -78,7 +78,7 @@ describe('structured extension question cards', () => {
 
   it('shows the default hint in an editor box that has no hint of its own', () => {
     render({ ...input, freeTextInput: { allowEmpty: true, multiline: true, initialValue: '' } })
-    expect(container.querySelector('textarea')?.placeholder).toBe('Type your answer')
+    expect(container.querySelector('textarea')?.placeholder).toBe('Other: type your answer')
   })
 
   it('submits the text the user edited in the editor, not its prefill', () => {

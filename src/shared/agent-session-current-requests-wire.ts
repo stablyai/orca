@@ -2,6 +2,7 @@ import type { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-s
 
 export type AgentSessionCurrentRequestsMarker = {
   contract: typeof AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY
+  includesAsyncQuestions?: true
   sessionId: string
   epoch: string
   publisher: string
@@ -14,6 +15,7 @@ export type AgentSessionCurrentRequestsRead = {
   sessionId: string
   version: string
   cursor?: number
+  includeAsyncQuestions?: boolean
 }
 
 export type AgentSessionCurrentRequestsPiece = {

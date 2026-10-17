@@ -1,3 +1,4 @@
+import { selectPendingAsyncQuestionGroups } from '../../../src/shared/native-chat-async-questions'
 import { useCallback, useMemo, useRef } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
@@ -287,6 +288,7 @@ export function useMobileStructuredAgentSession(
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     session: {
       messages,
+      pendingAsyncQuestions: selectPendingAsyncQuestionGroups(state),
       status,
       transcriptLoading: status === 'loading',
       error: state.error,

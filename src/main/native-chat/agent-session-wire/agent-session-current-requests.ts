@@ -1,3 +1,4 @@
+import { pendingJournalAsyncQuestionItems } from './agent-session-pending-async-questions'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type {
@@ -18,6 +19,9 @@ type Projection = {
   marker: AgentSessionCurrentRequestsMarker
   items: AgentJournalRenderItem[]
   json?: string
+  legacyJson?: string
+  prompts: AgentJournalRenderItem[]
+  asyncItems: AgentJournalRenderItem[]
 }
 const projections = new WeakMap<StructuredAgentSessionCurrentWorkJournal, Projection>()
 // Even six escaped bytes per UTF-16 unit leave room for the RPC and phone envelopes.
@@ -28,13 +32,15 @@ export function currentRequestsProjection(
   sessionId: string,
   work: { actionablePrompts: () => AgentJournalRenderItem[]; viewKey: () => string }
 ): Projection {
-  const items = work.actionablePrompts()
+  const prompts = work.actionablePrompts()
+  const asyncItems = pendingJournalAsyncQuestionItems(journal)
   const epoch = journal.cursor().epoch
   const previous = projections.get(journal)
   const identity = previous?.identity ?? randomUUID()
   const owner = `${identity}:${work.viewKey()}`
   if (
-    previous?.items === items &&
+    previous?.prompts === prompts &&
+    previous.asyncItems === asyncItems &&
     previous.marker.epoch === epoch &&
     previous.marker.owner === owner &&
     previous.marker.sessionId === sessionId
@@ -43,9 +49,12 @@ export function currentRequestsProjection(
   }
   const projection: Projection = {
     identity,
-    items,
+    prompts,
+    asyncItems,
+    items: [...prompts, ...asyncItems],
     marker: {
       contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
+      includesAsyncQuestions: true,
       sessionId,
       epoch,
       publisher: identity,
@@ -60,13 +69,17 @@ export function currentRequestsProjection(
 
 /** Only the current projection is retained; superseded cursors restart at its version. */
 export function readCurrentRequestsPiece(
-  projection: Projection,
+  projection: Pick<Projection, 'identity' | 'marker' | 'items' | 'json' | 'legacyJson'>,
   request: AgentSessionCurrentRequestsRead
 ): AgentSessionCurrentRequestsPiece {
   if (request.version !== projection.marker.version) {
     return { marker: projection.marker, json: '', nextCursor: 0, restart: true }
   }
-  const json = (projection.json ??= JSON.stringify(projection.items))
+  const json = request.includeAsyncQuestions
+    ? (projection.json ??= JSON.stringify(projection.items))
+    : (projection.legacyJson ??= JSON.stringify(
+        projection.items.filter((item) => item.body.kind !== 'message')
+      ))
   const cursor = request.cursor ?? 0
   if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor >= json.length) {
     throw new Error('Invalid current-request cursor')

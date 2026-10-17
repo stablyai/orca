@@ -18465,7 +18465,9 @@
       "question": {
         "step": "{{value0}} 단계",
         "other": "다른…",
-        "otherPlaceholder": "답변을 입력하세요",
+        "reply": "답변",
+        "morePending": "대화 기록에 답변을 기다리는 질문이 더 있습니다.",
+        "otherPlaceholder": "기타: 답변을 입력하세요",
         "cancel": "취소",
         "send": "제출",
         "next": "다음",

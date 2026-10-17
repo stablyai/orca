@@ -18430,7 +18430,9 @@
       "question": {
         "step": "步骤 {{value0}}",
         "other": "其他…",
-        "otherPlaceholder": "输入你的回答",
+        "reply": "回复",
+        "morePending": "聊天记录中还有其他待回答的问题。",
+        "otherPlaceholder": "其他：输入你的回答",
         "cancel": "取消",
         "send": "提交",
         "next": "下一步",

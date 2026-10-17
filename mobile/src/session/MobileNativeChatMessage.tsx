@@ -1,3 +1,5 @@
+import { MobileNativeChatAsyncQuestions } from './MobileNativeChatAsyncQuestions'
+import { MobileNativeChatAsyncQuestionContext } from './mobile-native-chat-async-question-context'
 import { memo, useCallback, useContext, useLayoutEffect, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
@@ -39,6 +41,7 @@ import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-conte
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'
 import { Prose } from './MobileNativeChatProse'
 
+/** Shows question cards when replies are available, otherwise keeps the readable message text. */
 function MobileNativeChatMessageImpl({
   message,
   mayStillGrow = false,
@@ -146,6 +149,7 @@ function MobileNativeChatMessageImpl({
   }, [message])
   const openActions = useCallback(() => openSheet(pressedMessage.current), [openSheet])
   const onLongPress = INLINE_TEXT_SELECTION ? undefined : openActions
+  const asyncReply = useContext(MobileNativeChatAsyncQuestionContext)
   const renderVisual = useContext(MobileNativeChatVisualContext) ?? undefined
   // Structured replies grow in place: only the last block of the newest row may still be typing.
   const growingBlock =
@@ -212,6 +216,15 @@ function MobileNativeChatMessageImpl({
         block={block}
         open={subagentGroupsOpen?.has(block.groupId) === true}
         onToggle={onToggleSubagentGroup}
+      />
+    ) : message.role === 'assistant' &&
+      isTextBlock(block) &&
+      block.asyncQuestions?.length &&
+      asyncReply &&
+      asyncReply.pendingQuestions === undefined ? (
+      <MobileNativeChatAsyncQuestions
+        key={`${message.id}:${JSON.stringify(block.asyncQuestions)}`}
+        questions={block.asyncQuestions}
       />
     ) : isSystem ? null : (
       <Prose

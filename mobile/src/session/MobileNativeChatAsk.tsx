@@ -8,6 +8,7 @@ import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAc
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 
 type Props = {
+  disabled?: boolean
   prompt: AskPrompt
   /** Deliver the chosen answer (per-question option indices + free text) —
    *  index-based so Claude's arrow-navigate selector can be driven by the
@@ -28,6 +29,7 @@ const OTHER = -1
  *  with a subtle green accent on the active choice to match the rest of the app. */
 export function MobileNativeChatAsk({
   prompt,
+  disabled = false,
   onAnswer,
   onCancel,
   onCollapse
@@ -43,7 +45,7 @@ export function MobileNativeChatAsk({
   // it chosen; "Other…" still needs its text.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     // The ref, not `submitting`: a tap can land before the render that disables the rows.
-    if (submittingRef.current) {
+    if (disabled || submittingRef.current) {
       return
     }
     const cur = selections[qi] ?? []
@@ -93,10 +95,11 @@ export function MobileNativeChatAsk({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [otherText, prompt.questions, selections]
   )
-  const canAdvance = !submitting && (isLast ? allAnswered : currentAnswered)
+  const canAdvance = !disabled && !submitting && (isLast ? allAnswered : currentAnswered)
 
   const submit = async (sel: number[][]): Promise<void> => {
-    if (!prompt.questions.every((_, i) => isAnswered(i, sel)) || submittingRef.current) {
+    const answered = prompt.questions.every((_, i) => isAnswered(i, sel))
+    if (disabled || !answered || submittingRef.current) {
       return
     }
     submittingRef.current = true
@@ -135,7 +138,7 @@ export function MobileNativeChatAsk({
             <Pressable
               key={i}
               style={[styles.tab, i === index && styles.tabActive]}
-              disabled={submitting}
+              disabled={disabled || submitting}
               onPress={() => {
                 autoAdvance.cancel()
                 setIndex(i)
@@ -163,7 +166,7 @@ export function MobileNativeChatAsk({
                 onCollapse()
               })
             }
-            disabled={submitting}
+            disabled={disabled || submitting}
           />
         </View>
         {q.options.map((opt, optIndex) => (
@@ -173,7 +176,7 @@ export function MobileNativeChatAsk({
             description={opt.description}
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
-            disabled={submitting}
+            disabled={disabled || submitting}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
@@ -181,7 +184,7 @@ export function MobileNativeChatAsk({
           label="Other…"
           selected={otherSelected}
           multi={q.multiSelect}
-          disabled={submitting}
+          disabled={disabled || submitting}
           onPress={() => toggle(index, OTHER, q.multiSelect)}
         />
         {otherSelected ? (
@@ -192,6 +195,7 @@ export function MobileNativeChatAsk({
             placeholder="Type your answer"
             placeholderTextColor={colors.textMuted}
             multiline
+            editable={!disabled && !submitting}
             autoFocus
           />
         ) : null}
@@ -202,7 +206,7 @@ export function MobileNativeChatAsk({
           style={styles.cancel}
           onPress={async () => {
             autoAdvance.cancel()
-            if (!submittingRef.current && onCancel) {
+            if (!disabled && !submittingRef.current && onCancel) {
               submittingRef.current = true
               setSubmitting(true)
               try {
@@ -213,7 +217,7 @@ export function MobileNativeChatAsk({
               }
             }
           }}
-          disabled={submitting}
+          disabled={disabled || submitting}
           hitSlop={8}
         >
           <Text style={styles.cancelText}>Cancel</Text>

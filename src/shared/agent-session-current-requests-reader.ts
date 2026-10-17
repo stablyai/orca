@@ -1,3 +1,4 @@
+import { isAsyncQuestionJournalItem } from './native-chat-async-questions'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isAdmissibleAgentJournalRenderItem } from './agent-session-journal-schemas'
@@ -34,7 +35,8 @@ export function createAgentSessionCurrentRequestsReader(args: {
         const piece = await args.read({
           sessionId: marker.sessionId,
           version: marker.version,
-          cursor
+          cursor,
+          ...(marker.includesAsyncQuestions ? { includeAsyncQuestions: true } : {})
         })
         if (!current()) {
           return
@@ -70,8 +72,9 @@ export function createAgentSessionCurrentRequestsReader(args: {
             !value.every(isAdmissibleAgentJournalRenderItem) ||
             !value.every(
               (item) =>
-                (item.body.kind === 'approval' || item.body.kind === 'question') &&
-                item.body.resolution.state === 'pending'
+                ((item.body.kind === 'approval' || item.body.kind === 'question') &&
+                  item.body.resolution.state === 'pending') ||
+                (marker.includesAsyncQuestions === true && isAsyncQuestionJournalItem(item))
             )
           ) {
             throw new Error('Invalid current requests')

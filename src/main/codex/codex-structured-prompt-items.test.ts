@@ -183,6 +183,20 @@ describe('codex question items', () => {
     })
   })
 
+  it.each([true, false, undefined])('honors question-level isOther: %s', (isOther) => {
+    const [question] = codexQuestionItems({
+      threadId: THREAD_ID,
+      promptKey: CODEX_ITEM_ID,
+      params: {
+        questions: [
+          { id: 'branch', question: 'Which branch?', isOther, options: [{ label: 'main' }] }
+        ]
+      }
+    })
+    expect(question?.body.options).toEqual([{ id: 'branch:main', label: 'main' }])
+    expect(question?.body.freeTextQuestionId).toBe(isOther ? 'branch' : undefined)
+  })
+
   it('bounds question text, options, labels, and prompt identity components', () => {
     const longQuestionId = 'question-id-'.repeat(500)
     const longLabel = 'option '.repeat(5_000)

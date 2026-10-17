@@ -18534,7 +18534,9 @@
       "question": {
         "step": "Étape {{value0}}",
         "other": "Autre…",
-        "otherPlaceholder": "Saisissez votre réponse",
+        "reply": "Répondre",
+        "morePending": "D’autres questions en attente sont disponibles dans l’historique.",
+        "otherPlaceholder": "Autre : saisissez votre réponse",
         "cancel": "Annuler",
         "send": "Valider",
         "next": "Suivant",

@@ -162,7 +162,7 @@ export const NATIVE_CHAT_METHODS = [
           params.transcriptPath
         ),
         initialLimit: limit,
-        onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
+        onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle, asyncQuestions) => {
           if (closed) {
             return
           }
@@ -172,7 +172,8 @@ export const NATIVE_CHAT_METHODS = [
             type: 'snapshot',
             ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),
             ...(error ? { error } : {}),
-            ...(lifecycle ? { lifecycle } : {})
+            ...(lifecycle ? { lifecycle } : {}),
+            ...(asyncQuestions ? { asyncQuestions } : {})
           })
         },
         ...(params.capabilities?.transcriptPending === 1
@@ -184,17 +185,18 @@ export const NATIVE_CHAT_METHODS = [
               }
             }
           : {}),
-        onReplace: (messages, hasMore, beforeOffset, lifecycle) => {
+        onReplace: (messages, hasMore, beforeOffset, lifecycle, asyncQuestions) => {
           if (closed) {
             return
           }
           emit({
             type: 'replacement',
             ...pageForClient(messages, hasMore, beforeOffset, clientKind, limit, params.agent),
-            ...(lifecycle ? { lifecycle } : {})
+            ...(lifecycle ? { lifecycle } : {}),
+            ...(asyncQuestions ? { asyncQuestions } : {})
           })
         },
-        onAppend: (messages, lifecycle) => {
+        onAppend: (messages, lifecycle, asyncQuestions) => {
           if (closed) {
             return
           }
@@ -207,7 +209,8 @@ export const NATIVE_CHAT_METHODS = [
             emit({
               type: 'appended',
               messages: batch,
-              ...(lifecycle && batch === batches.at(-1) ? { lifecycle } : {})
+              ...(lifecycle && batch === batches.at(-1) ? { lifecycle } : {}),
+              ...(asyncQuestions && batch === batches.at(-1) ? { asyncQuestions } : {})
             })
           }
         }

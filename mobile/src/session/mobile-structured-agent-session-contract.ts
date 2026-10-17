@@ -28,7 +28,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      sendOptions?: { immediate?: boolean }
     ) => Promise<MobileNativeChatSendOutcome>
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>

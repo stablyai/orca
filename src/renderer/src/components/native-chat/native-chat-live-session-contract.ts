@@ -1,7 +1,9 @@
+import type { PendingAsyncQuestionGroup } from '../../../../shared/native-chat-async-questions'
 // What a live native-chat session publishes to the view: the session itself, its
 // raw read phase, and the older-history pagination controls.
 
 import type {
+  AgentType,
   NativeChatMessage,
   NativeChatSession,
   NativeChatTurnLifecycle
@@ -27,6 +29,7 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 export type NativeChatLiveSession = NativeChatSession & {
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
+  pendingAsyncQuestions?: PendingAsyncQuestionGroup[]
   /** The pane's hook says the agent stopped mid-turn for the reader, and the transcript
    *  has not since ended that turn. Absent on lanes with no hook status. */
   hookAwaitingInput?: boolean
@@ -47,4 +50,18 @@ export type NativeChatLiveSession = NativeChatSession & {
   /** The transcript is the host's present, not what a stopped or disconnected read left
    *  behind. Absent on a chat read from a terminal, which cannot say what the reader missed. */
   readCurrent?: boolean
+}
+
+export type UseNativeChatLiveSessionArgs = {
+  /** Composite `${tabId}:${leafId}` key — selects the live hook entry. */
+  paneKey: string
+  agent: AgentType
+  /** The agent's own session id, or null before it reports one — nothing to read/tail, so the view shows live hook state. */
+  sessionId: string | null
+  /** Authoritative transcript path from the hook, preferred over reconstructing it from sessionId. Null when not reported. */
+  transcriptPath?: string | null
+  /** Runtime owner (Model B): non-null routes read/subscribe to the remote host; null keeps the local IPC path. */
+  runtimeEnvironmentId?: string | null
+  /** False suspends transcript IO while retaining the last committed session. */
+  enabled?: boolean
 }

@@ -1,3 +1,4 @@
+import type { NativeChatAsyncQuestionsField } from '../../shared/native-chat-pending-async-questions'
 export const DESKTOP_READ_WINDOW = 300
 export const UNFLUSHED_SETTLE_MS = 1_500
 
@@ -11,14 +12,19 @@ import type { ResolveSessionFileOptions } from './session-file-resolver'
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
   sessionId: string
-  onAppend: (messages: NativeChatMessage[], lifecycle?: NativeChatTurnLifecycle) => void
+  onAppend: (
+    messages: NativeChatMessage[],
+    lifecycle?: NativeChatTurnLifecycle,
+    asyncQuestions?: NativeChatAsyncQuestionsField
+  ) => void
   onInitialSnapshot?: (
     messages: NativeChatMessage[],
     hasMore: boolean,
     beforeOffset: number,
     /** Set when the initial drain could not deliver a transcript. */
     error?: string,
-    lifecycle?: NativeChatTurnLifecycle
+    lifecycle?: NativeChatTurnLifecycle,
+    asyncQuestions?: NativeChatAsyncQuestionsField
   ) => void
   /** The transcript file does not exist yet (a session whose agent has not
    *  flushed, or has not been prompted at all). Fires at most once, before any
@@ -29,7 +35,8 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
     messages: NativeChatMessage[],
     hasMore: boolean,
     beforeOffset: number,
-    lifecycle?: NativeChatTurnLifecycle
+    lifecycle?: NativeChatTurnLifecycle,
+    asyncQuestions?: NativeChatAsyncQuestionsField
   ) => void
   initialLimit?: number
   filePath?: string

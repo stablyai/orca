@@ -4,6 +4,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 export type MobileNativeChatStreamFrame = {
   type?: string
+  asyncQuestions?: unknown
   messages?: NativeChatMessage[]
   hasMore?: boolean
   beforeOffset?: number

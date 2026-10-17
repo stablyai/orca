@@ -1,3 +1,7 @@
+import { useContext } from 'react'
+import { nativeChatProseToMarkdown } from '../../../../shared/native-chat-prose'
+import { NativeChatAsyncQuestionContext } from './native-chat-async-question-context'
+import { NativeChatAsyncQuestions } from './NativeChatAsyncQuestions'
 import { cn } from '@/lib/utils'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
@@ -22,6 +26,7 @@ function messageIsStreaming(
   )
 }
 
+/** Shows answer cards only for the main assistant; subagent rows keep the question text. */
 export function NativeChatAssistantMessageRow({
   props,
   content,
@@ -45,15 +50,34 @@ export function NativeChatAssistantMessageRow({
     inSubagentSection = false,
     runtimeContext
   } = props
+  const asyncReply = useContext(NativeChatAsyncQuestionContext)
+  const interactiveQuestions =
+    asyncReply !== null &&
+    asyncReply.pendingQuestions === undefined &&
+    message.role === 'assistant' &&
+    !inSubagentSection
   const { markdown, prose } = content
+  const questionBlocks = interactiveQuestions
+    ? prose.filter((block) => block.type === 'text' && block.asyncQuestions?.length)
+    : []
   const toolRun = toolRunProps(props, content, run)
   const isSystem = message.role === 'system'
   // A thought heading a run reads inside it, so the row has no words of its own.
-  const words = message.role === 'reasoning' ? '' : markdown
+  const words =
+    message.role === 'reasoning'
+      ? ''
+      : questionBlocks.length > 0
+        ? nativeChatProseToMarkdown(
+            prose.filter((block) => block.type !== 'text' || !block.asyncQuestions)
+          )
+        : markdown
   // Assistant controls reveal on hover and keyboard focus; system asides stay chrome-free.
   // A working turn's last row is only its frontier: more can still land under it.
   const showControls =
-    !isSystem && words.length > 0 && !continuesTurn && activeTurnIsWorking !== true
+    !isSystem &&
+    (words.length > 0 || questionBlocks.length > 0) &&
+    !continuesTurn &&
+    activeTurnIsWorking !== true
 
   return (
     <div
@@ -88,10 +112,18 @@ export function NativeChatAssistantMessageRow({
           streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}
         />
       ) : null}
+      {questionBlocks.map((block) =>
+        block.type === 'text' && block.asyncQuestions ? (
+          <NativeChatAsyncQuestions
+            key={JSON.stringify(block.asyncQuestions)}
+            questions={block.asyncQuestions}
+          />
+        ) : null
+      )}
       {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
       {showControls ? (
         <NativeChatAgentControls
-          markdown={words}
+          markdown={markdown}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
           className={cn(

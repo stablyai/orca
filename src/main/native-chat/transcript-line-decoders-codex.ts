@@ -12,6 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { codexAsyncMessageBlocks } from '../codex/codex-async-question-block'
 import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
 
 export function decodeCodexTranscriptLine(
@@ -120,6 +121,7 @@ function isSkillContext(block: NativeChatBlock): boolean {
   return block.type === 'text' && block.text.trimStart().slice(0, 7).toLowerCase() === '<skill>'
 }
 
+/** Reads Codex transcript events, preserving async questions as assistant messages. */
 function codexEventMessage(
   payload: Record<string, unknown>,
   id: string,
@@ -145,13 +147,19 @@ function codexEventMessage(
   }
   if (payload.type === 'agent_message') {
     const text = extractString(payload.message)
-    return text
-      ? { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
+    const content: NativeChatBlock[] = text ? [{ type: 'text', text }] : []
+    const blocks =
+      payload.delivery === 'async'
+        ? codexAsyncMessageBlocks(content, payload.questions, extractString(payload.item_id))
+        : content
+    return blocks.length > 0
+      ? { id, role: 'assistant', blocks, timestamp, source: 'transcript' }
       : null
   }
   return null
 }
 
+/** Reads completed turn items using their own ID, or the enclosing event ID when absent. */
 function codexCompletedTurnItem(
   payload: Record<string, unknown>,
   fallbackId: string,
@@ -162,7 +170,12 @@ function codexCompletedTurnItem(
     return null
   }
   const id = extractString(item.id) ?? fallbackId
-  const blocks = codexTurnItemBlocks(item.content)
+  const content = codexTurnItemBlocks(item.content)
+  const assistant = item.type === 'AgentMessage' || item.type === 'agent_message'
+  const blocks =
+    assistant && item.delivery === 'async'
+      ? codexAsyncMessageBlocks(content, item.questions, extractString(item.id))
+      : content
   if (blocks.length === 0) {
     return null
   }

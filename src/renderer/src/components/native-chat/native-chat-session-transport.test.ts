@@ -565,3 +565,41 @@ describe('runtime readSession error mapping', () => {
     expect(toRuntimeNativeChatErrorMessage(new Error('request timed out'))).toBe(generic)
   })
 })
+
+it('preserves host pending async questions on remote snapshots and resolution updates', async () => {
+  runtimeEnvironmentsSubscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  const frames = vi.fn()
+  const close = getNativeChatSessionTransport(ENV).subscribe(
+    { subscriptionId: 'questions', agent: 'codex', sessionId: 's' },
+    frames
+  )
+  const callbacks = runtimeEnvironmentsSubscribe.mock.calls[0][1]
+  const asyncQuestions = {
+    state: 'ready',
+    questions: [
+      { key: '["request_user_input_async","old",0]', index: 0, title: 'Branch?', options: ['main'] }
+    ]
+  }
+  callbacks.onResponse(
+    okEnvelope({ type: 'snapshot', messages: [], hasMore: true, asyncQuestions })
+  )
+  expect(frames).toHaveBeenLastCalledWith({
+    type: 'snapshot',
+    messages: [],
+    hasMore: true,
+    asyncQuestions
+  })
+  callbacks.onResponse(
+    okEnvelope({
+      type: 'appended',
+      messages: [],
+      asyncQuestions: { state: 'ready', questions: [] }
+    })
+  )
+  expect(frames).toHaveBeenLastCalledWith({
+    type: 'appended',
+    messages: [],
+    asyncQuestions: { state: 'ready', questions: [] }
+  })
+  close()
+})

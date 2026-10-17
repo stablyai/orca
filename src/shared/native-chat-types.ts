@@ -45,10 +45,18 @@ export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
 export const NATIVE_CHAT_ROLES = ['user', 'assistant', 'tool', 'reasoning', 'system'] as const
 export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 
+export type NativeChatAsyncQuestion = {
+  title: string
+  options: string[]
+}
+
 /** Plain prose / markdown. The assistant body, a user prompt, reasoning text. */
 export type NativeChatTextBlock = {
   type: 'text'
   text: string
+  /** Nonblocking questions; text retains their readable fallback for older clients. */
+  asyncQuestions?: NativeChatAsyncQuestion[]
+  asyncQuestionId?: string
   /** Optional journal display hints; readers narrow only the values they know. */
   presentation?: string
   contextClear?: AgentSessionProviderContextBoundary

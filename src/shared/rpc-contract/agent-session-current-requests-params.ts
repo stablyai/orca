@@ -5,6 +5,7 @@ export const CurrentRequestsParams = z
   .object({
     sessionId: SessionId,
     version: z.string().uuid(),
-    cursor: z.number().int().nonnegative().optional()
+    cursor: z.number().int().nonnegative().optional(),
+    includeAsyncQuestions: z.boolean().optional()
   })
   .strict()

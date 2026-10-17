@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  reduceNativeChatAsyncQuestionsView,
+  pendingAsyncQuestionGroups,
+  type NativeChatAsyncQuestionsView
+} from '../../../src/shared/native-chat-pending-async-questions'
+import type { PendingAsyncQuestionGroup } from '../../../src/shared/native-chat-async-questions'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
@@ -26,6 +32,7 @@ export type MobileNativeChatStatus =
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]
+  pendingAsyncQuestions?: PendingAsyncQuestionGroup[]
   status: MobileNativeChatStatus
   /** True while `messages` cannot be trusted as this session's real history:
    *  the read is in flight, the transcript has not been written yet, OR the
@@ -67,6 +74,10 @@ export function useMobileNativeChatSession(args: {
   transcriptPath: string | null
 }): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const [asyncState, setAsyncState] = useState<{
+    identity: string
+    view: NativeChatAsyncQuestionsView
+  } | null>(null)
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
@@ -168,6 +179,15 @@ export function useMobileNativeChatSession(args: {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
+        setAsyncState((previous) => {
+          const view = reduceNativeChatAsyncQuestionsView(
+            previous?.identity === identity ? previous.view : { state: 'absent' },
+            frame
+          )
+          return previous?.identity === identity && previous.view === view
+            ? previous
+            : { identity: identity, view }
+        })
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,
@@ -315,10 +335,16 @@ export function useMobileNativeChatSession(args: {
     settled: settledReady
   })
 
+  const pendingAsyncQuestions = useMemo(
+    () =>
+      asyncState?.identity === identity ? pendingAsyncQuestionGroups(asyncState.view) : undefined,
+    [asyncState, identity]
+  )
   return {
     // Withheld until the settled read belongs to this identity: the effect that
     // clears the previous tab's list is passive, so `messages` lags a commit.
     messages: visibleMessages,
+    pendingAsyncQuestions,
     status,
     transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,

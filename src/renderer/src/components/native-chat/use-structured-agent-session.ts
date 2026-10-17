@@ -1,3 +1,4 @@
+import { selectPendingAsyncQuestionGroups } from '../../../../shared/native-chat-async-questions'
 import { useMemo, useRef } from 'react'
 import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
@@ -244,6 +245,7 @@ export function useStructuredAgentSession(args: {
   })
   return {
     epoch: state.epoch,
+    pendingAsyncQuestions: selectPendingAsyncQuestionGroups(state),
     /** The transcript has caught up with the host since this pane last started reading. */
     readCurrent: transportEnabled && readCurrent,
     rewind,

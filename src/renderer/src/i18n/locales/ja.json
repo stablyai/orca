@@ -18465,7 +18465,9 @@
       "question": {
         "step": "ステップ {{value0}}",
         "other": "他の…",
-        "otherPlaceholder": "答えを入力してください",
+        "reply": "返信",
+        "morePending": "履歴に未回答の質問がほかにもあります。",
+        "otherPlaceholder": "その他：回答を入力してください",
         "cancel": "キャンセル",
         "send": "送信",
         "next": "次へ",

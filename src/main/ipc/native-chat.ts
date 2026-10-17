@@ -217,7 +217,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       }
       sender.send('nativeChat:appended', payload)
     },
-    onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
+    onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle, asyncQuestions) => {
       if (!canPublish()) {
         return
       }
@@ -230,12 +230,13 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
           messages,
           hasMore,
           ...(error ? { error } : {}),
-          ...(lifecycle ? { lifecycle } : {})
+          ...(lifecycle ? { lifecycle } : {}),
+          ...(asyncQuestions ? { asyncQuestions } : {})
         }
       }
       sender.send('nativeChat:appended', payload)
     },
-    onReplace: (messages, hasMore, _beforeOffset, lifecycle) => {
+    onReplace: (messages, hasMore, _beforeOffset, lifecycle, asyncQuestions) => {
       if (!canPublish()) {
         return
       }
@@ -245,11 +246,12 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
           type: 'replacement',
           messages,
           hasMore,
-          ...(lifecycle ? { lifecycle } : {})
+          ...(lifecycle ? { lifecycle } : {}),
+          ...(asyncQuestions ? { asyncQuestions } : {})
         }
       } satisfies NativeChatAppendedPayload)
     },
-    onAppend: (messages, lifecycle) => {
+    onAppend: (messages, lifecycle, asyncQuestions) => {
       if (!canPublish()) {
         return
       }
@@ -258,7 +260,8 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         frame: {
           type: 'appended',
           messages,
-          ...(lifecycle ? { lifecycle } : {})
+          ...(lifecycle ? { lifecycle } : {}),
+          ...(asyncQuestions ? { asyncQuestions } : {})
         }
       }
       sender.send('nativeChat:appended', payload)

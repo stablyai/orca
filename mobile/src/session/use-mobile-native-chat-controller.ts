@@ -1,3 +1,5 @@
+import { mobileNativeChatStructuredPresentation } from './mobile-native-chat-structured-presentation'
+import { useMobileNativeChatAsyncReply } from './use-mobile-native-chat-async-reply'
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -271,7 +273,21 @@ export function useMobileNativeChatController(args: {
     onSendResolved
   })
 
+  const { reply: nativeChatAsyncReply, stop } = useMobileNativeChatAsyncReply(
+    streamIdentity,
+    !showNativeChat ||
+      !inputSendable ||
+      !!nativeChatAskPrompt ||
+      !!legacyNativeChatPermission ||
+      !!legacyQuestion,
+    activeChatStructured ? structuredNativeChat.sendWithOutcome : null,
+    legacyHandleNativeChatQuestionAnswer,
+    onSendResolved,
+    activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop
+  )
+
   return {
+    nativeChatAsyncReply,
     isTabChatView,
     setTabView,
     toggleTabChatView,
@@ -288,16 +304,8 @@ export function useMobileNativeChatController(args: {
     nativeChatSession,
     /** Structured lane: drives the per-turn status row and live tool progress. */
     nativeChatStructured: activeChatStructured,
-    nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
+    ...mobileNativeChatStructuredPresentation(structuredNativeChat, activeChatStructured),
     nativeChatAgentWorking,
-    nativeChatTurnIndicator: activeChatStructured ? structuredNativeChat.turnIndicator : null,
-    nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
-    nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
-    nativeChatTurnJournal: activeChatStructured ? structuredNativeChat.turnJournal : null,
-    nativeChatReceipts: activeChatStructured ? structuredNativeChat.receipts : null,
-    nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
-    // Only the structured lane names a refusal's cause; the bridge lane's starved ones drop none.
-    nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
     // A host that stops what the chat has in flight takes Stop before the agent opens a turn.
     nativeChatCanStop: activeChatStructured
       ? structuredNativeChat.turnId !== null ||
@@ -317,10 +325,7 @@ export function useMobileNativeChatController(args: {
     nativeChatCollapsedPrompt: askDismissal.collapsedAsk ?? promptCards.nativeChatCollapsedPrompt,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
-    handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
-    // The inactive lane's session is starved of identity, so its cards stay empty.
-    nativeChatQueued: structuredNativeChat.queued,
-    nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
+    handleNativeChatStop: stop,
     ...nativeChatFiles,
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send
@@ -329,8 +334,6 @@ export function useMobileNativeChatController(args: {
       ? structuredNativeChatSend.sendWithOutcome
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
-    nativeChatSessionOptions,
-    // A terminal-backed chat pastes images into the agent's own input instead.
-    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages
+    nativeChatSessionOptions
   }
 }

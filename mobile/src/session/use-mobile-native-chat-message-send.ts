@@ -39,7 +39,7 @@ export type MobileNativeChatMessageSend = {
     sentAt?: number
   ) => Promise<MobileNativeChatSendOutcome>
   /** Answer to an agent question — never touches the composer draft. */
-  answerQuestion: (text: string) => Promise<boolean>
+  answerQuestion: (text: string, isCurrent?: () => boolean) => Promise<boolean>
   /** Session-option command dispatch (e.g. `/model sonnet`) — never touches the
    *  composer draft; callers need the outcome to track dispatched state. */
   dispatchCommand: (
@@ -98,7 +98,8 @@ export function useMobileNativeChatMessageSend(args: {
       recordControlSend: boolean,
       sharedDeadline?: number,
       requireWriteSettlement?: true,
-      sentAt?: number
+      sentAt?: number,
+      isCurrent?: () => boolean
     ): Promise<MobileNativeChatSendOutcome> => {
       // The host writes trailing whitespace verbatim onto the agent's input line,
       // where it can glue the next rapid send onto this one (#14262). Only the
@@ -132,6 +133,9 @@ export function useMobileNativeChatMessageSend(args: {
       }
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
         onSendError('Message not sent')
+        return 'rejected'
+      }
+      if (isCurrent && !isCurrent()) {
         return 'rejected'
       }
       // Why: empty the composer at send time, not on the ack — over relay the
@@ -168,6 +172,9 @@ export function useMobileNativeChatMessageSend(args: {
           onSendError('Message not sent')
           return 'rejected'
         }
+      }
+      if (isCurrent && !isCurrent()) {
+        return 'rejected'
       }
       const mobileClient = deviceTokenRef.current
         ? { id: deviceTokenRef.current, type: 'mobile' as const }
@@ -266,14 +273,25 @@ export function useMobileNativeChatMessageSend(args: {
   // it takes the per-terminal write lock itself: an answer landing mid-flight
   // in an image paste sequence would interleave bytes into the PTY.
   const answerQuestion = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string, isCurrent?: () => boolean): Promise<boolean> => {
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
         onSendError('Answer not sent')
         return false
       }
       try {
-        return (await sendMessage(text, undefined, false, true, undefined, true)) === 'accepted'
+        return (
+          (await sendMessage(
+            text,
+            undefined,
+            false,
+            true,
+            undefined,
+            true,
+            undefined,
+            isCurrent
+          )) === 'accepted'
+        )
       } finally {
         if (terminal) {
           releaseMobileNativeChatTerminalWrite(terminal)

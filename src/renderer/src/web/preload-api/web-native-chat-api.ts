@@ -1,3 +1,4 @@
+import { readNativeChatAsyncQuestionsField } from '../../../../shared/native-chat-pending-async-questions'
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
 import { buildNativeChatUnsubscribe } from '../../../../shared/native-chat-stream-unsubscribe'
 import {
@@ -65,15 +66,18 @@ export function createWebNativeChatApi(): NativeChatApi {
                 }
                 return
               }
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Stream fields are checked below before forwarding; async metadata has its own wire reader.
               const result = response.result as {
                 type?: string
                 messages?: NativeChatAppendedMessages
                 hasMore?: boolean
                 error?: string
                 lifecycle?: unknown
+                asyncQuestions?: unknown
                 pending?: boolean
               }
               const lifecycle = parseRuntimeNativeChatTurnLifecycle(result?.lifecycle)
+              const asyncQuestions = readNativeChatAsyncQuestionsField(result?.asyncQuestions)
               // No transcript behind this window yet — forwarded so the view can stop spinning, but it is not the settled initial read.
               const pending = result?.pending === true
               if (
@@ -92,6 +96,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                     hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
+                    ...(asyncQuestions ? { asyncQuestions } : {}),
                     ...(pending ? { pending: true } : {})
                   })
                 } else if (result.type === 'snapshot') {
@@ -101,6 +106,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                     hasMore: result.hasMore ?? false,
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
+                    ...(asyncQuestions ? { asyncQuestions } : {}),
                     ...(pending ? { pending: true } : {})
                   })
                 } else {
@@ -110,12 +116,14 @@ export function createWebNativeChatApi(): NativeChatApi {
                           type: 'replacement',
                           messages: result.messages,
                           hasMore: result.hasMore ?? false,
-                          ...(lifecycle ? { lifecycle } : {})
+                          ...(lifecycle ? { lifecycle } : {}),
+                          ...(asyncQuestions ? { asyncQuestions } : {})
                         }
                       : {
                           type: 'appended',
                           messages: result.messages,
-                          ...(lifecycle ? { lifecycle } : {})
+                          ...(lifecycle ? { lifecycle } : {}),
+                          ...(asyncQuestions ? { asyncQuestions } : {})
                         }
                   )
                 }

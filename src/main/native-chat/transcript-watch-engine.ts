@@ -1,4 +1,5 @@
-import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import { createWatchedTranscriptAsyncQuestions } from './transcript-async-question-tracker'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
 import {
   boundaryFingerprint,
   readTranscriptFileVersion,
@@ -7,7 +8,7 @@ import {
 } from './transcript-file-version'
 import {
   createIncrementalTranscriptState,
-  readIncrementalTranscriptMessages,
+  readIncrementalTranscriptWithLifecycle,
   resetIncrementalTranscriptState
 } from './transcript-incremental-reader'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
@@ -55,6 +56,12 @@ export async function installTranscriptWatcher(
   let reading = false
   let pendingReadRequested = false
   let rotationRetryCount = 0
+  const asyncQuestions = createWatchedTranscriptAsyncQuestions(
+    args,
+    filePath,
+    decode,
+    () => !closed && !(initialDrain && onInitialSnapshot)
+  )
 
   function scheduleRotationRetry(): void {
     if (closed) {
@@ -66,30 +73,29 @@ export async function installTranscriptWatcher(
     }
   }
 
-  async function readAndEmitAppends(): Promise<void> {
-    let lifecycle: NativeChatTurnLifecycle | undefined
-    const remaining = await readIncrementalTranscriptMessages(
+  const readForward = (onBatch?: (messages: NativeChatMessage[]) => void) =>
+    readIncrementalTranscriptWithLifecycle(
       filePath,
       state,
-      decode,
-      (messages) => {
-        if (!closed) {
-          onAppend(messages)
-        }
-      },
-      decodeLifecycle ?? undefined,
-      (nextLifecycle) => {
-        lifecycle = nextLifecycle
-      },
-      gateAbort.signal
+      asyncQuestions?.readDecode ?? decode,
+      decodeLifecycle,
+      gateAbort.signal,
+      onBatch,
+      asyncQuestions?.observeOversizedRecord
     )
-    if (!closed && (remaining.length > 0 || lifecycle)) {
-      onAppend(remaining, lifecycle)
+
+  async function readAndEmitAppends(): Promise<void> {
+    const { messages: remaining, lifecycle } = await readForward(
+      (messages) => !closed && onAppend(messages)
+    )
+    const changed = closed ? undefined : asyncQuestions?.takeChanged()
+    if (!closed && (remaining.length > 0 || lifecycle || changed)) {
+      onAppend(remaining, lifecycle, changed)
     }
   }
 
-  async function readSnapshot(limit: number) {
-    return readNativeChatTranscriptTailFile(
+  const readSnapshot = (limit: number) =>
+    readNativeChatTranscriptTailFile(
       filePath,
       limit,
       decode,
@@ -101,7 +107,6 @@ export async function installTranscriptWatcher(
         state.boundary = boundary
       }
     )
-  }
 
   async function finishSuccessfulDrain(startVersion: TranscriptFileVersion): Promise<void> {
     const completedVersion = await readTranscriptFileVersion(filePath, gateAbort.signal)
@@ -117,6 +122,7 @@ export async function installTranscriptWatcher(
     if (closed) {
       return
     }
+    asyncQuestions?.afterDrain(state, state.boundary.toString('base64'), watchedVersion)
     if (!nativeWatcher.needsRebind() || nativeWatcher.bind()) {
       rotationRetryCount = 0
       return
@@ -148,6 +154,7 @@ export async function installTranscriptWatcher(
     }
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
+      asyncQuestions?.beginFromStart()
     }
     // Why: subscriber callbacks may replace the path before the drain can finish.
     watchedVersion ??= current
@@ -164,11 +171,13 @@ export async function installTranscriptWatcher(
     if (replacementSnapshot && onReplace) {
       state.offset = replacementSnapshot.consumedTo
       state.pendingStart = state.offset
+      asyncQuestions?.begin(replacementSnapshot.consumedTo, current)
       onReplace(
         replacementSnapshot.messages,
         replacementSnapshot.hasMore,
         replacementSnapshot.beforeOffset,
-        replacementSnapshot.lifecycle
+        replacementSnapshot.lifecycle,
+        asyncQuestions?.snapshotField()
       )
       await finishSuccessfulDrain(current)
       return
@@ -186,30 +195,21 @@ export async function installTranscriptWatcher(
       if (initialSnapshot) {
         state.offset = initialSnapshot.consumedTo
         state.pendingStart = state.offset
+        asyncQuestions?.begin(initialSnapshot.consumedTo, current)
         onInitialSnapshot(
           initialSnapshot.messages,
           initialSnapshot.hasMore,
           initialSnapshot.beforeOffset,
           undefined,
-          initialSnapshot.lifecycle
+          initialSnapshot.lifecycle,
+          asyncQuestions?.snapshotField()
         )
       } else {
-        let lifecycle: NativeChatTurnLifecycle | undefined
-        const messages = await readIncrementalTranscriptMessages(
-          filePath,
-          state,
-          decode,
-          undefined,
-          decodeLifecycle ?? undefined,
-          (nextLifecycle) => {
-            lifecycle = nextLifecycle
-          },
-          gateAbort.signal
-        )
+        const { messages, lifecycle } = await readForward()
         if (closed) {
           return
         }
-        onInitialSnapshot(messages, false, 0, undefined, lifecycle)
+        onInitialSnapshot(messages, false, 0, undefined, lifecycle, asyncQuestions?.snapshotField())
       }
     } else {
       initialDrain = false
@@ -273,7 +273,12 @@ export async function installTranscriptWatcher(
       }
       const versionChanged =
         watchedVersion === null || transcriptFileVersionChanged(current, watchedVersion)
-      if (versionChanged || current.size !== state.offset || nativeWatcher.needsRebind()) {
+      if (
+        versionChanged ||
+        asyncQuestions?.wantsRetry() ||
+        current.size !== state.offset ||
+        nativeWatcher.needsRebind()
+      ) {
         await drain(true)
       }
     } catch {
@@ -315,6 +320,7 @@ export async function installTranscriptWatcher(
         return
       }
       closed = true
+      asyncQuestions?.dispose()
       gateAbort.abort(new Error('Native Chat transcript watcher unsubscribed'))
       scheduler.dispose()
       stopWslObservation()

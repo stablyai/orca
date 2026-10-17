@@ -164,9 +164,11 @@ export function codexQuestionItems(input: {
   return items
 }
 
+/** Accepts Other on the question or an option; questions without choices also need free text. */
 function questionAllowsFreeText(question: Record<string, unknown>): boolean {
   const options = question.options
   return (
+    question.isOther === true ||
     !Array.isArray(options) ||
     options.length === 0 ||
     options.some((option) => readParams(option).isOther === true)
