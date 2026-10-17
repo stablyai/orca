@@ -3,6 +3,7 @@ import { OrchestrationDb } from './orchestration-db'
 import {
   ATTEMPT_OBSERVATION_FACT_COLUMNS,
   DISPATCH_CONTEXT_COLUMNS,
+  MESSAGE_COLUMNS,
   RUN_COLUMNS,
   selectColumns,
   TASK_COLUMNS
@@ -24,6 +25,7 @@ describe('row column lists', () => {
   // Why: these lists replaced `SELECT *`, so a column added to the schema without being listed here
   // would silently stop being read. tsc pins list↔type; this pins list↔schema.
   it.each([
+    ['messages', MESSAGE_COLUMNS],
     ['runs', RUN_COLUMNS],
     ['tasks', TASK_COLUMNS],
     ['dispatch_contexts', DISPATCH_CONTEXT_COLUMNS],

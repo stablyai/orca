@@ -2,6 +2,7 @@ import type { MessageType, MessageRow } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
+import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
@@ -37,9 +38,10 @@ export function getUnreadMessages(
   if (types && types.length > 0) {
     const placeholders = types.map(() => '?').join(',')
     return exposeMessageListTimestamps(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The checked projection includes every migrated MessageRow column.
       this.db
         .prepare(
-          `SELECT * FROM messages
+          `SELECT ${MESSAGE_COLUMN_LIST} FROM messages
            WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
              AND type IN (${placeholders}) ORDER BY sequence`
         )
@@ -47,9 +49,10 @@ export function getUnreadMessages(
     )
   }
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The checked projection includes every migrated MessageRow column.
     this.db
       .prepare(
-        `SELECT * FROM messages
+        `SELECT ${MESSAGE_COLUMN_LIST} FROM messages
          WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
          ORDER BY sequence`
       )
@@ -114,9 +117,10 @@ export function getUndeliveredUnreadMessages(
     params.push(Math.max(1, Math.floor(options.limit)))
   }
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The checked projection includes every migrated MessageRow column.
     this.db
       .prepare(
-        `SELECT * FROM messages
+        `SELECT ${MESSAGE_COLUMN_LIST} FROM messages
          WHERE ${conditions.join(' AND ')}
          ORDER BY sequence${limitSql}`
       )
@@ -146,9 +150,10 @@ export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 
 }
 
 export function getMessageById(this: OrchestrationDb, id: string): MessageRow | undefined {
-  const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
-    | MessageRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The checked projection includes every migrated MessageRow column.
+  const message = this.db
+    .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
+    .get(id) as MessageRow | undefined
   return message ? exposeMessageTimestamps(message) : undefined
 }
 
