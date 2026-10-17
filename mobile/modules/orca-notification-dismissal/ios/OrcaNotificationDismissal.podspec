@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
   s.author = 'Orca'
   s.homepage = 'https://onorca.dev'
   s.source = { :git => 'https://github.com/stablyai/orca.git' }
-  s.platforms = { :ios => '15.1' }
+  s.platforms = { :ios => '16.0' }
   s.swift_version = '5.9'
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
