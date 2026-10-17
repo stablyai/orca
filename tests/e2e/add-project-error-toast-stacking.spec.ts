@@ -147,7 +147,7 @@ for (const theme of ['dark', 'light'] as const) {
         .click()
       await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0)
       const toaster = page.locator('[data-sonner-toaster]')
-      await expect(toaster).toHaveCSS('z-index', '40')
+      await expect(toaster).toHaveCSS('z-index', '47')
       await toast.locator('[data-close-button]').click()
       await expect(toast).toBeHidden()
 
@@ -157,7 +157,7 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => window.__store?.getState().setAgentDashboardDrawerOpen(true))
       await expect(page.locator('[data-agent-dashboard-sheet]')).toBeVisible()
       await expect(page.locator('[data-slot="sheet-overlay"]')).toHaveCount(0)
-      await expect(toaster).toHaveCSS('z-index', '40')
+      await expect(toaster).toHaveCSS('z-index', '47')
       await page.screenshot({
         path: testInfo.outputPath(`nonmodal-drawer-${theme}.png`),
         animations: 'disabled'
@@ -165,7 +165,7 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(() => window.__store?.getState().setAgentDashboardDrawerOpen(false))
       // Scroll-lock is also used by selects and menus and must not by itself lift notifications.
       await page.evaluate(() => document.body.setAttribute('data-scroll-locked', '1'))
-      await expect(toaster).toHaveCSS('z-index', '40')
+      await expect(toaster).toHaveCSS('z-index', '47')
       await page.evaluate(() => document.body.removeAttribute('data-scroll-locked'))
       await action.click()
       await expect(page.getByPlaceholder('Search settings')).toBeVisible()

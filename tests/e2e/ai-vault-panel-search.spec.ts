@@ -134,18 +134,30 @@ test('panel renders transport failure and unavailable reasons without a local fa
     orcaPage.getByText('Could not search this computer.', { exact: false })
   ).toBeVisible()
   await orcaPage.screenshot({ path: testInfo.outputPath('failure.png') })
-  for (const reason of ['disabled', 'not-ready', 'no-service'] as const) {
-    await electronApp.evaluate(({ ipcMain }, value) => {
+  const answerUnavailable = (reason: 'disabled' | 'not-ready' | 'no-service') =>
+    electronApp.evaluate(({ ipcMain }, value) => {
       ipcMain.removeHandler('aiVault:searchSessions')
       ipcMain.handle('aiVault:searchSessions', () => ({ kind: 'unavailable', reason: value }))
     }, reason)
-    await orcaPage.getByRole('button', { name: 'Try again', exact: true }).click()
-    const copy =
-      reason === 'disabled'
-        ? 'Search is disabled on this computer.'
-        : reason === 'not-ready'
-          ? 'The search index is not ready yet.'
-          : 'Search is unavailable on this computer.'
-    await expect(orcaPage.getByText(copy, { exact: false })).toBeVisible()
+  // A host that is still indexing keeps the box in index search, with a retry.
+  await answerUnavailable('not-ready')
+  await orcaPage.getByRole('button', { name: 'Try again', exact: true }).click()
+  await expect(
+    orcaPage.getByText('The search index is not ready yet.', { exact: false })
+  ).toBeVisible()
+  // Why remount per reason: a host whose search is off sends the box back to the title filter
+  // for that host until the panel remounts (#22453), so each reason needs a fresh panel.
+  for (const reason of ['disabled', 'no-service'] as const) {
+    await answerUnavailable(reason)
+    await orcaPage.evaluate(() => window.__store?.getState().setRightSidebarTab('explorer'))
+    await expect(input).toHaveCount(0)
+    await orcaPage.evaluate(() => window.__store?.getState().setRightSidebarTab('vault'))
+    await input.fill(`needle-${reason}`)
+    await expect(
+      orcaPage.getByText('Full-text search is off on this computer, so only session titles', {
+        exact: false
+      })
+    ).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0)
   }
 })
