@@ -468,6 +468,67 @@ variable "relay_gce_cell_log_sample_rate" {
   }
 }
 
+variable "relay_gce_passthrough_edge_cells" {
+  type        = set(string)
+  description = "Relay GCE cell IDs that also get an Orca-run TLS edge VM (Envoy behind a static IP, no Google proxy). Inert until the cell's DNS name points at the edge address; the cell stays behind the shared load balancer either way."
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for cell_id in var.relay_gce_passthrough_edge_cells :
+      contains(keys(var.relay_gce_cells), cell_id) && !contains(var.relay_gce_fenced_cells, cell_id)
+    ]) && (length(var.relay_gce_passthrough_edge_cells) == 0 || var.relay_gce_edge_acme_domain != "")
+    error_message = "Passthrough edges need configured, unfenced relay_gce_cells keys and relay_gce_edge_acme_domain."
+  }
+}
+
+variable "relay_gce_edge_machine_type" {
+  type        = string
+  description = "Machine type for passthrough edge VMs."
+  default     = "e2-standard-2"
+}
+
+variable "relay_gce_edge_acme_domain" {
+  type        = string
+  description = "Cloud DNS zone the edges write ACME DNS-01 answers into. Cloudflare delegates it here, and each edge cell's _acme-challenge name is a CNAME into it, so no edge holds a Cloudflare credential."
+  default     = ""
+
+  validation {
+    condition = var.relay_gce_edge_acme_domain == "" || (
+      can(regex("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$", var.relay_gce_edge_acme_domain))
+    )
+    error_message = "relay_gce_edge_acme_domain must be empty or a lowercase DNS name without a wildcard or trailing dot."
+  }
+}
+
+variable "relay_gce_edge_acme_server" {
+  type        = string
+  description = "ACME directory the edges request certificates from."
+  default     = "https://acme-v02.api.letsencrypt.org/directory"
+}
+
+variable "relay_gce_edge_envoy_image" {
+  type        = string
+  description = "Digest-pinned Envoy image that terminates TLS on passthrough edges."
+  default     = "docker.io/envoyproxy/envoy@sha256:ccb37e93d8274a525fe00d67287716dbe3d58bc4237d7627af9e64fae0fd25c8" # distroless-v1.39.4
+
+  validation {
+    condition     = can(regex("^[a-z0-9.-]+/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$", var.relay_gce_edge_envoy_image))
+    error_message = "relay_gce_edge_envoy_image must be pinned by sha256 digest."
+  }
+}
+
+variable "relay_gce_edge_lego_image" {
+  type        = string
+  description = "Digest-pinned lego ACME client image that issues and renews edge certificates."
+  default     = "docker.io/goacme/lego@sha256:1944e8c36055beec47c7de6f15202b41128be75eea0ffa257f0c14d93c5155fd" # v5.5.2
+
+  validation {
+    condition     = can(regex("^[a-z0-9.-]+/[a-z0-9._/-]+@sha256:[a-f0-9]{64}$", var.relay_gce_edge_lego_image))
+    error_message = "relay_gce_edge_lego_image must be pinned by sha256 digest."
+  }
+}
+
 variable "relay_gce_fenced_cells" {
   type        = set(string)
   description = "Reviewed relay GCE cell IDs whose Terraform-owned MIG target size is zero."

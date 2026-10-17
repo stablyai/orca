@@ -128,6 +128,10 @@ relay_gce_cells = {
   }
 }
 
+# Passthrough-edge proof for production c35: c4 is the staging cell in c35's zone (asia-east2-a).
+relay_gce_passthrough_edge_cells = ["staging-gce-c4"]
+relay_gce_edge_acme_domain       = "relay-staging-acme.onorca.dev"
+
 # c1, c4 and c5-c7 hold rehome trust for the step-5 staging e2e: the seat feed, reserve and demote
 # routes need it.
 relay_region_rehome_source_cell_ids = [

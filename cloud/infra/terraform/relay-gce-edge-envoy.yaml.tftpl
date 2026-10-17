@@ -1,0 +1,117 @@
+# File-based xDS (the certificate and the cell endpoint) requires a node identity.
+node:
+  id: ${fqdn}
+  cluster: orca-relay-edge
+
+# Unpublished: only containers on the edge's Docker network reach it.
+admin:
+  address:
+    socket_address: { address: 0.0.0.0, port_value: 9901 }
+
+overload_manager:
+  resource_monitors:
+    - name: envoy.resource_monitors.global_downstream_max_connections
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.resource_monitors.downstream_connections.v3.DownstreamConnectionsConfig
+        max_active_downstream_connections: 20000
+
+static_resources:
+  listeners:
+    - name: cell
+      address:
+        socket_address: { address: 0.0.0.0, port_value: 8443 }
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                alpn_protocols: ["http/1.1"]
+                tls_certificate_sds_secret_configs:
+                  - name: cell
+                    sds_config:
+                      resource_api_version: V3
+                      # The renewer replaces tls.yaml with one rename, so a reload never sees half a key pair.
+                      path_config_source:
+                        path: /etc/envoy/sds/tls.yaml
+                        watched_directory: { path: /etc/envoy/sds }
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: cell
+                codec_type: HTTP1
+                use_remote_address: true
+                skip_xff_append: true
+                generate_request_id: false
+                # The shared LB's 86,400 s backend timeout is also its WebSocket lifetime; match it
+                # so the experiment changes only who proxies, not how long a stream may live.
+                stream_idle_timeout: 0s
+                request_headers_timeout: 30s
+                common_http_protocol_options:
+                  idle_timeout: 3600s
+                  max_stream_duration: 86400s
+                upgrade_configs:
+                  - upgrade_type: websocket
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                      log_format:
+                        # No client address and only the path's first 12 characters, so no host or
+                        # connection ID is logged.
+                        json_format:
+                          event: orca_relay_edge_stream
+                          start: "%START_TIME%"
+                          durationMs: "%DURATION%"
+                          path: "%REQ(:PATH):12%"
+                          code: "%RESPONSE_CODE%"
+                          flags: "%RESPONSE_FLAGS%"
+                          details: "%RESPONSE_CODE_DETAILS%"
+                          termination: "%CONNECTION_TERMINATION_DETAILS%"
+                          downstreamTls: "%DOWNSTREAM_TRANSPORT_FAILURE_REASON%"
+                          upstreamFailure: "%UPSTREAM_TRANSPORT_FAILURE_REASON%"
+                          bytesIn: "%BYTES_RECEIVED%"
+                          bytesOut: "%BYTES_SENT%"
+                route_config:
+                  name: cell
+                  virtual_hosts:
+                    - name: cell
+                      domains: ["${fqdn}", "${fqdn}:443"]
+                      routes:
+                        - match: { prefix: "/" }
+                          route:
+                            cluster: cell
+                            timeout: 0s
+                      # The cell admits by the second-to-last X-Forwarded-For entry, which the
+                      # Google LB fills as "client, LB address"; overwrite in that shape so a
+                      # caller-supplied value can never be read as the source.
+                      request_headers_to_add:
+                        - header:
+                            key: x-forwarded-for
+                            value: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%, ${edge_ip}"
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+  clusters:
+    - name: cell
+      type: EDS
+      connect_timeout: 5s
+      # The discovery loop rewrites cell.yaml with the cell VM's current address by one rename.
+      eds_cluster_config:
+        eds_config:
+          resource_api_version: V3
+          path_config_source:
+            path: /etc/envoy/eds/cell.yaml
+            watched_directory: { path: /etc/envoy/eds }
+      # Envoy's default breaker is 1,024 connections; a cell holds up to its 3,000 hard cap.
+      circuit_breakers:
+        thresholds:
+          - max_connections: 20000
+            max_pending_requests: 20000
+            max_requests: 20000
+      upstream_connection_options:
+        tcp_keepalive: { keepalive_time: 60, keepalive_interval: 15, keepalive_probes: 4 }
