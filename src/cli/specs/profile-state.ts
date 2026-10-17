@@ -14,7 +14,7 @@ export const PROFILE_STATE_COMMAND_SPECS: CommandSpec[] = [
     summary:
       'Restore a SQLite backup or retained JSON export, or keep the current JSON or SQLite profile',
     usage:
-      'orca profile state rollback (--backup <id> | --revision <revision> | --current-json | --current-sqlite | --latest-json) [--profile-id <id>] [--json]',
+      'orca profile state rollback (--backup <id> | --revision <revision> | --current-json | --current-sqlite | --latest-json) [--dry-run] [--profile-id <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'revision',
@@ -22,9 +22,11 @@ export const PROFILE_STATE_COMMAND_SPECS: CommandSpec[] = [
       'current-json',
       'current-sqlite',
       'latest-json',
+      'dry-run',
       'profile-id'
     ],
     notes: [
+      '--dry-run (with --backup or --revision only) previews which domains would be lost, changed, or added without writing anything.',
       '--profile-id selects another profile without changing the active profile. Prepare each profile before installing a JSON-only build.',
       'Orca must be stopped. Recovery validates the selected artifact and archives the current database family, JSON, and retained recovery artifacts before replacing state.',
       '--backup restores SQLite authority; --revision restores a JSON export for an older compatible runtime.',
@@ -34,6 +36,7 @@ export const PROFILE_STATE_COMMAND_SPECS: CommandSpec[] = [
     ],
     examples: [
       'orca profile state exports',
+      'orca profile state rollback --backup <id> --dry-run',
       'orca profile state rollback --backup <id>',
       'orca profile state rollback --revision 1',
       'orca profile state rollback --latest-json',

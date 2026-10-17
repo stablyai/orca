@@ -43,6 +43,7 @@
     "../src/main/persistence/profile-state/profile-state-documents.ts",
     "../src/main/persistence/profile-state/legacy-json/profile-state-json-acceptance.ts",
     "../src/main/persistence/profile-state/profile-state-revision.ts",
+    "../src/main/persistence/profile-state/profile-state-recovery-preview.ts",
     "../src/main/persistence/profile-state/profile-state-read-snapshot.ts",
     "../src/main/persistence/profile-state/profile-state-sqlite-authority.ts",
     "../src/main/persistence/profile-state/legacy-json/profile-state-authority-exports.ts",

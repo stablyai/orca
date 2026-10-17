@@ -12,6 +12,7 @@ import {
   getProfileStateExports,
   rollbackProfileState
 } from '../../main/persistence/profile-state/profile-state-recovery-command'
+import { previewProfileStateRollback } from '../../main/persistence/profile-state/profile-state-recovery-preview'
 import { acquireProfileStateMaintenance } from '../../main/persistence/profile-state/profile-state-access'
 import {
   isProfileStateRecoveryCommandError,
@@ -19,6 +20,7 @@ import {
   type ProfileStateRollbackResult,
   type ProfileStateRecoverySelector
 } from '../../shared/profile-state-recovery-command'
+import type { PreviewRollbackTarget } from '../../main/persistence/profile-state/profile-state-recovery-preview'
 import {
   canLaunchProfileStateRecovery,
   launchProfileStateRecovery
@@ -59,6 +61,22 @@ function formatRollback(result: ProfileStateRollbackResult): string {
     `quarantine: ${result.quarantineDirectory}`,
     `removedDatabaseFiles: ${result.removedDatabaseFiles.length}`
   ].join('\n')
+}
+
+function formatPreview(result: PreviewRollbackTarget): string {
+  const lines = [
+    `source: ${result.source}`,
+    `live revision: ${result.liveRevision}`,
+    `target revision: ${result.targetRevision}`,
+    `domains lost (${result.diff.lost.length}): ${result.diff.lost.join(', ') || '(none)'}`,
+    `domains changed (${result.diff.changed.length}): ${result.diff.changed.join(', ') || '(none)'}`
+  ]
+  if (result.payloadsUncomparable) {
+    lines.push('(JSON export: payloads are canonical re-serializations, so only domain-set changes are reported)')
+  }
+  lines.push(`domains added (${result.diff.added.length}): ${result.diff.added.join(', ') || '(none)'}`)
+  lines.push('No changes were made. Rerun without --dry-run to apply.')
+  return lines.join('\n')
 }
 
 function rejectProfileStateRemoteSelection(flags: ReadonlyMap<string, string | boolean>): void {
@@ -106,6 +124,26 @@ export const PROFILE_STATE_HANDLERS: Record<string, CommandHandler> = {
     const selector = parseSelector(flags)
     const profileId = parseProfileId(flags)
     const userDataPath = getDefaultUserDataPath()
+    if (flags.has('dry-run')) {
+      if (
+        flags.has('current-json') ||
+        flags.has('current-sqlite') ||
+        flags.has('latest-json')
+      ) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--dry-run is available for --backup and --revision only; it has no independent source artifact to diff for the current/latest selectors.'
+        )
+      }
+      const exportsResult = translateRecoveryError(() =>
+        getProfileStateExports(userDataPath, profileId)
+      )
+      const preview = translateRecoveryError(() =>
+        previewProfileStateRollback(exportsResult, selector)
+      )
+      printResult(localSuccess(preview), json, formatPreview)
+      return
+    }
     let result: ProfileStateRollbackResult
     if (canLaunchProfileStateRecovery()) {
       await requireStoppedRuntime(client)
