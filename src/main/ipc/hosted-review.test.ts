@@ -17,7 +17,8 @@ const {
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
-  listRepoWorktreeGraphMock
+  listRepoWorktreeGraphMock,
+  hasGitMarkerMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
@@ -25,7 +26,8 @@ const {
   getHostedReviewCreationEligibilityMock: vi.fn(),
   getHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
-  listRepoWorktreeGraphMock: vi.fn()
+  listRepoWorktreeGraphMock: vi.fn(),
+  hasGitMarkerMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -53,6 +55,10 @@ vi.mock('./registered-worktree-roots-cache', () => ({
 
 vi.mock('../repo-worktrees', () => ({
   listRepoWorktreeGraph: listRepoWorktreeGraphMock
+}))
+
+vi.mock('../project-groups/nested-repo-discovery', () => ({
+  hasGitMarker: hasGitMarkerMock
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
@@ -99,6 +105,8 @@ describe('registerHostedReviewHandlers', () => {
     getHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     listRepoWorktreeGraphMock.mockReset()
+    hasGitMarkerMock.mockReset()
+    hasGitMarkerMock.mockResolvedValue(false)
     store.getRepo.mockReset()
     store.getRepos.mockReset()
     store.getProjects.mockReset()
@@ -218,6 +226,126 @@ describe('registerHostedReviewHandlers', () => {
         sharedLinkPaths: ['node_modules']
       }
     )
+  })
+
+  it('creates a review from a nested git root under the registered repo', async () => {
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/lesspaper',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const nestedPath = resolve('/workspace/lesspaper/.worktrees/001/theme-a')
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    resolveRegisteredWorktreePathMock.mockResolvedValue(nestedPath)
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: resolve(localRepo.path) }])
+    hasGitMarkerMock.mockImplementation(async (path: string) => path === nestedPath)
+    createHostedReviewMock.mockResolvedValueOnce({ ok: true, number: 7, url: 'https://x/7' })
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:create'](null, {
+      repoPath: localRepo.path,
+      repoId: localRepo.id,
+      worktreePath: nestedPath,
+      provider: 'github',
+      base: 'main',
+      head: 'feat/theme',
+      title: 'Theme'
+    })
+
+    expect(createHostedReviewMock).toHaveBeenCalledWith(
+      nestedPath,
+      expect.objectContaining({
+        provider: 'github',
+        head: 'feat/theme',
+        title: 'Theme'
+      }),
+      'local',
+      { localGitExecOptions: { admissionTier: 'interactive' } }
+    )
+  })
+
+  it('rejects a local subdirectory that is not a git root', async () => {
+    const localRepo = {
+      id: 'repo-local',
+      path: '/workspace/lesspaper',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const nestedPath = resolve('/workspace/lesspaper/src')
+    store.getRepo.mockImplementation((repoId: string) =>
+      repoId === localRepo.id ? localRepo : null
+    )
+    store.getRepos.mockReturnValue([localRepo])
+    resolveRegisteredWorktreePathMock.mockResolvedValue(nestedPath)
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: resolve(localRepo.path) }])
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:create'](null, {
+        repoPath: localRepo.path,
+        repoId: localRepo.id,
+        worktreePath: nestedPath,
+        provider: 'github',
+        base: 'main',
+        head: 'feat/theme',
+        title: 'Theme'
+      })
+    ).rejects.toThrow('Access denied: worktree does not belong to repository')
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
+  })
+
+  it('creates a review from an SSH nested git root', async () => {
+    const nestedPath = `${repoPath}/.worktrees/001/theme-a`
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: repoPath }])
+    hasGitMarkerMock.mockImplementation(async (path: string) => path === nestedPath)
+    createHostedReviewMock.mockResolvedValueOnce({ ok: true, number: 8, url: 'https://x/8' })
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await handlers['hostedReview:create'](null, {
+      repoPath,
+      repoId: repo.id,
+      worktreePath: nestedPath,
+      provider: 'github',
+      base: 'main',
+      head: 'feat/theme',
+      title: 'Theme'
+    })
+
+    expect(createHostedReviewMock).toHaveBeenCalledWith(
+      nestedPath,
+      expect.objectContaining({ head: 'feat/theme', title: 'Theme' }),
+      'ssh:ssh-1',
+      { localGitExecOptions: { admissionTier: 'interactive' } }
+    )
+  })
+
+  it('rejects an SSH subdirectory that is not a git root', async () => {
+    const nestedPath = `${repoPath}/src`
+    listRepoWorktreeGraphMock.mockResolvedValue([{ path: repoPath }])
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:create'](null, {
+        repoPath,
+        repoId: repo.id,
+        worktreePath: nestedPath,
+        provider: 'github',
+        base: 'main',
+        head: 'feat/theme',
+        title: 'Theme'
+      })
+    ).rejects.toThrow('Access denied: worktree does not belong to repository')
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 
   // Why: remote creation never materializes these links, and `repo.path` names a

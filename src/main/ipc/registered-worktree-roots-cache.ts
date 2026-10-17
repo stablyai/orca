@@ -2,6 +2,10 @@ import { resolve } from 'node:path'
 import type { Repo } from '../../shared/repo-types'
 import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
+  findLongestRegisteredAncestor,
+  resolveNestedGitRootUnderAncestor
+} from './registered-worktree-nested-git'
+import {
   listWorktreeRootsWithConcurrency,
   pruneCreatedWorktreeRoots
 } from './registered-worktree-root-probes'
@@ -244,10 +248,10 @@ export async function resolveRegisteredWorktreePath(
   }
   synchronizeOwners(store)
   const resolvedTarget = resolve(worktreePath)
-  if (
+  const knownExact =
     registeredWorktreeRoots.has(resolvedTarget) ||
     [...currentOwners.values()].some((repo) => resolve(repo.path) === resolvedTarget)
-  ) {
+  if (knownExact) {
     return resolvedTarget
   }
   await ensureAuthorizedRootsCache(store)
@@ -258,6 +262,13 @@ export async function resolveRegisteredWorktreePath(
   synchronizeOwners(store)
   if (registeredWorktreeRoots.has(normalizedTarget)) {
     return normalizedTarget
+  }
+  const nestedRoot = await resolveNestedGitRootUnderAncestor(
+    normalizedTarget,
+    findLongestRegisteredAncestor(normalizedTarget, registeredWorktreeRoots)
+  )
+  if (nestedRoot) {
+    return nestedRoot
   }
   throw new Error('Access denied: unknown repository or worktree path')
 }
@@ -277,12 +288,7 @@ function refreshRegisteredWorktreeRoots(): void {
 
 export function isRegisteredWorktreePath(targetPath: string, store: Store): boolean {
   synchronizeOwners(store)
-  for (const root of registeredWorktreeRoots) {
-    if (isDescendantOrEqual(targetPath, root)) {
-      return true
-    }
-  }
-  return false
+  return findLongestRegisteredAncestor(targetPath, registeredWorktreeRoots) !== null
 }
 
 export async function isPathAllowedByCanonicalRegisteredRoot(
@@ -294,7 +300,7 @@ export async function isPathAllowedByCanonicalRegisteredRoot(
     return false
   }
   synchronizeOwners(store)
-  const textualRoot = findRegisteredWorktreeRoot(sourcePath)
+  const textualRoot = findLongestRegisteredAncestor(sourcePath, registeredWorktreeRoots)
   if (!textualRoot) {
     return false
   }
@@ -324,14 +330,4 @@ export async function isPathAllowedByCanonicalRegisteredRoot(
     registeredWorktreeRoots.add(canonicalRoot)
   }
   return allowed
-}
-
-function findRegisteredWorktreeRoot(targetPath: string): string | null {
-  let bestRoot: string | null = null
-  for (const root of registeredWorktreeRoots) {
-    if (isDescendantOrEqual(targetPath, root) && (!bestRoot || root.length > bestRoot.length)) {
-      bestRoot = root
-    }
-  }
-  return bestRoot
 }

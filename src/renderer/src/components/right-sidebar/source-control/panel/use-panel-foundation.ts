@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useSourceControlAi } from '../ai/use-ai'
 import { useSourceControlFileListing } from '../listing/use-file-listing'
 import { useSourceControlReviewContext } from '../review/use-review-context'
+import type { NestedRepoTarget } from '../nested/use-nested-folder-scope'
 import { useSourceControlPanelState } from './use-panel-state'
 
 /**
@@ -9,8 +10,8 @@ import { useSourceControlPanelState } from './use-panel-state'
  * listing and the AI surface. Split from the flows so no action hook can be read as a dependency
  * of the data it acts on.
  */
-export function useSourceControlPanelFoundation() {
-  const panelState = useSourceControlPanelState()
+export function useSourceControlPanelFoundation(nestedTarget?: NestedRepoTarget) {
+  const panelState = useSourceControlPanelState(nestedTarget)
   const reviewContext = useSourceControlReviewContext(panelState)
   const {
     activeConnectionId,
@@ -63,7 +64,7 @@ export function useSourceControlPanelFoundation() {
     filterQuery,
     isBranchVisible,
     isFolder,
-    isGitHistoryExpanded,
+    isGitHistoryExpanded: isGitHistoryExpanded && !panelState.isNestedRepo,
     isMac,
     refreshActiveGitStatusAfterMutation,
     remoteActionError,

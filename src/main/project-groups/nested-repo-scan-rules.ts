@@ -37,6 +37,9 @@ export type NormalizedNestedRepoScanOptions = {
   maxDepth: number
   maxRepos: number
   timeoutMs: number | null
+  scanInsideGitRepo: boolean
+  includeGitignored: boolean
+  includeHidden: boolean
 }
 
 const DEFAULT_MAX_DEPTH = 3
@@ -72,18 +75,21 @@ export function normalizeNestedRepoScanOptions(options: unknown): NormalizedNest
         ? null
         : typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs)
           ? Math.max(500, Math.min(30_000, Math.floor(raw.timeoutMs)))
-          : null
+          : null,
+    scanInsideGitRepo: raw.scanInsideGitRepo === true,
+    includeGitignored: raw.includeGitignored === true,
+    includeHidden: raw.includeHidden === true
   }
 }
 
-function shouldSkipDirectory(name: string, depth: number): boolean {
+function shouldSkipDirectory(name: string, depth: number, includeHidden: boolean): boolean {
   if (VCS_METADATA_DIRS.has(name)) {
     return true
   }
   if (SKIPPED_DIRS.has(name)) {
     return true
   }
-  return depth > 0 && name.startsWith('.')
+  return !includeHidden && depth > 0 && name.startsWith('.')
 }
 
 function compileGlobSegment(pattern: string): GlobSegment {
@@ -218,22 +224,25 @@ function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRul
 export function isIgnoredNestedRepoDirectory(
   name: string,
   segments: string[],
-  rules: IgnoreRule[]
+  rules: IgnoreRule[],
+  skip?: { gitignore?: boolean; hidden?: boolean }
 ): boolean {
   let ignored = false
-  for (const rule of rules) {
-    if (segments.length <= rule.baseSegments.length) {
-      continue
-    }
-    const relativeSegments = segments.slice(rule.baseSegments.length)
-    const matches = rule.basenameOnly
-      ? relativeSegments.some((segment) => globSegmentMatches(rule.segmentPatterns[0], segment))
-      : pathSegmentsMatch(rule.segmentPatterns, relativeSegments, rule.memoizePathWalk)
-    if (matches) {
-      ignored = !rule.negate
+  if (!skip?.gitignore) {
+    for (const rule of rules) {
+      if (segments.length <= rule.baseSegments.length) {
+        continue
+      }
+      const relativeSegments = segments.slice(rule.baseSegments.length)
+      const matches = rule.basenameOnly
+        ? relativeSegments.some((segment) => globSegmentMatches(rule.segmentPatterns[0], segment))
+        : pathSegmentsMatch(rule.segmentPatterns, relativeSegments, rule.memoizePathWalk)
+      if (matches) {
+        ignored = !rule.negate
+      }
     }
   }
-  return ignored || shouldSkipDirectory(name, segments.length - 1)
+  return ignored || shouldSkipDirectory(name, segments.length - 1, skip?.hidden === true)
 }
 
 export async function readNestedRepoGitignoreRules(args: {

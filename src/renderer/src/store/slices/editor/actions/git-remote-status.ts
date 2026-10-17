@@ -70,7 +70,7 @@ export function createGitRemoteStatus(
           pushTarget
         )
         if (options?.applyUpstreamStatus !== false) {
-          get().setUpstreamStatus(worktreeId, status)
+          get().setUpstreamStatus(options?.statusKey ?? worktreeId, status)
         }
         return status
       } catch (error) {

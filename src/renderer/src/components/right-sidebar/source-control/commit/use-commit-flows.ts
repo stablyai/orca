@@ -42,6 +42,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     remoteActionErrorSequenceByWorktreeRef,
     remoteStatus,
     remoteStatusForActions,
+    remoteStatusKey,
     resolvedCommitMessageAi,
     setAbortOperationInFlightByWorktree,
     setCommitErrorForWorktree,
@@ -126,6 +127,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     remoteStatus,
     remoteStatusForActions,
     setRemoteActionErrors,
+    statusKey: remoteStatusKey,
     syncBranch,
     worktreePath
   })

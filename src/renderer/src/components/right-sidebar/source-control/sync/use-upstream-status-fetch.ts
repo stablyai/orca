@@ -11,6 +11,7 @@ export function useSourceControlUpstreamStatusFetch({
   fetchUpstreamStatus,
   isBranchVisible,
   isFolder,
+  statusKey,
   worktreePath
 }: {
   activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
@@ -19,6 +20,7 @@ export function useSourceControlUpstreamStatusFetch({
   fetchUpstreamStatus: SourceControlStoreActions['fetchUpstreamStatus']
   isBranchVisible: boolean
   isFolder: boolean
+  statusKey: string | undefined
   worktreePath: string | null
 }): void {
   useEffect(() => {
@@ -32,7 +34,7 @@ export function useSourceControlUpstreamStatusFetch({
       worktreePath,
       connectionId,
       activeWorktree?.pushTarget,
-      { runtimeTarget: activeRepoTarget }
+      { runtimeTarget: activeRepoTarget, statusKey }
     )
   }, [
     activeRepoTarget,
@@ -41,6 +43,7 @@ export function useSourceControlUpstreamStatusFetch({
     fetchUpstreamStatus,
     isBranchVisible,
     isFolder,
+    statusKey,
     worktreePath
   ])
 }

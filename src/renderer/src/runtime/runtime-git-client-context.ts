@@ -6,6 +6,7 @@ import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/c
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
+import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
@@ -68,9 +69,19 @@ export type RuntimeGenerateCommitMessageOverrides = {
 export type RuntimeGeneratePullRequestFieldsOverrides = RuntimeGenerateCommitMessageOverrides
 
 export function resolveLocalWorktreePath(context: RuntimeGitContext): string {
-  return context.worktreeId
-    ? (splitWorktreeIdForFilesystem(context.worktreeId)?.worktreePath ?? context.worktreePath)
-    : context.worktreePath
+  const fromId = context.worktreeId
+    ? splitWorktreeIdForFilesystem(context.worktreeId)?.worktreePath
+    : undefined
+  if (!fromId) {
+    return context.worktreePath
+  }
+  // Nested independent git roots under the registered worktree must keep the
+  // explicit path; remapping to the parent checkout would hide their remotes.
+  const relative = relativePathInsideRoot(fromId, context.worktreePath)
+  if (relative !== null && relative !== '') {
+    return context.worktreePath
+  }
+  return fromId
 }
 
 export function getRuntimeGitScope(

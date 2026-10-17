@@ -144,6 +144,26 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('writes upstream status to the statusKey slot, leaving the worktree slot alone', async () => {
+    const store = createEditorStore()
+    store.getState().setUpstreamStatus('wt-1', {
+      hasUpstream: false,
+      upstreamName: undefined,
+      ahead: 0,
+      behind: 0
+    })
+
+    await store.getState().pullBranch('wt-1', '/repo/nested', undefined, undefined, {
+      statusKey: 'wt-1::/repo/nested'
+    })
+    await flushAsyncRemoteRefresh()
+
+    expect(store.getState().remoteStatusesByWorktree['wt-1::/repo/nested']).toMatchObject({
+      ahead: 1
+    })
+    expect(store.getState().remoteStatusesByWorktree['wt-1']).toMatchObject({ ahead: 0 })
+  })
+
   it('refuses a git operation whose worktree no row places, instead of using the focused server', async () => {
     const store = createEditorStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })

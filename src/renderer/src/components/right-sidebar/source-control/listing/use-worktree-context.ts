@@ -3,6 +3,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { nestedStatusKey } from '@/lib/nested-status-key'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
@@ -21,8 +22,24 @@ const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
  * about it: git status, branch compare, conflict + upstream state, hosted-review cache entries and
  * the repo-owner-routed settings that every git call must be pinned to.
  */
-export function useSourceControlWorktreeContext() {
-  const activeWorktree = useActiveWorktree()
+export function useSourceControlWorktreeContext(nestedRepoPath?: string) {
+  const workspaceWorktree = useActiveWorktree()
+  const activeWorktree = useMemo(
+    () =>
+      nestedRepoPath && workspaceWorktree
+        ? {
+            ...workspaceWorktree,
+            linkedPR: null,
+            linkedGitLabMR: null,
+            linkedBitbucketPR: null,
+            linkedAzureDevOpsPR: null,
+            linkedGiteaPR: null,
+            suppressedGitHubPR: undefined,
+            pushTarget: undefined
+          }
+        : workspaceWorktree,
+    [nestedRepoPath, workspaceWorktree]
+  )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktreeInstanceId = activeWorktree?.instanceId
   const activeGroupId = useAppStore((s) =>
@@ -70,14 +87,20 @@ export function useSourceControlWorktreeContext() {
   )
   const conflictOperationsByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   // Why: leave undefined until fetchUpstreamStatus resolves; a synthetic "no upstream" flashes "Publish Branch" on worktree switch.
+  // Nested repos get their own slot so their ahead/behind never overwrites the workspace's.
+  const remoteStatusKey =
+    nestedRepoPath && activeWorktreeId
+      ? nestedStatusKey(activeWorktreeId, nestedRepoPath)
+      : undefined
   const remoteStatus = useAppStore((s) =>
-    activeWorktreeId ? s.remoteStatusesByWorktree[activeWorktreeId] : undefined
+    activeWorktreeId ? s.remoteStatusesByWorktree[remoteStatusKey ?? activeWorktreeId] : undefined
   )
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
+  // Review caches and links are keyed by the workspace repo + branch, so a nested repo must not read them.
   const hostedReviewCacheKey =
-    activeRepo && branchName
+    activeRepo && branchName && !nestedRepoPath
       ? getHostedReviewCacheKey(
           activeRepo.path,
           branchName,
@@ -89,7 +112,7 @@ export function useSourceControlWorktreeContext() {
         )
       : null
   const activePrCacheKey =
-    activeRepo && branchName
+    activeRepo && branchName && !nestedRepoPath
       ? getGitHubPRCacheKey(
           activeRepo.path,
           activeRepo.id,
@@ -171,6 +194,7 @@ export function useSourceControlWorktreeContext() {
     isFolder,
     isRemoteOperationActive,
     remoteStatus,
+    remoteStatusKey,
     repositoryHuge,
     rightSidebarTab,
     settings,

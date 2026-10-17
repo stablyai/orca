@@ -132,6 +132,34 @@ describe('getLocalRepoForRegisteredWorktree', () => {
       ).toBeUndefined()
     })
 
+    it('matches a nested git root under a registered repo path', () => {
+      const { store } = makeStore([{ id: 'lesspaper', path: '/workspace/lesspaper' }], [])
+      expect(
+        getLocalRepoForRegisteredWorktree(
+          store,
+          '/workspace/lesspaper/.worktrees/001/theme-a',
+          '/workspace/lesspaper/.worktrees/001/theme-a'
+        )?.id
+      ).toBe('lesspaper')
+    })
+
+    it('prefers the closest registered ancestor for a nested git root', () => {
+      const { store } = makeStore(
+        [
+          { id: 'parent', path: '/workspace' },
+          { id: 'child', path: '/workspace/lesspaper' }
+        ],
+        []
+      )
+      expect(
+        getLocalRepoForRegisteredWorktree(
+          store,
+          '/workspace/lesspaper/.worktrees/001/theme-a',
+          '/workspace/lesspaper/.worktrees/001/theme-a'
+        )?.id
+      ).toBe('child')
+    })
+
     it('tolerates a store without getRepos or getAllWorktreeMeta', () => {
       expect(getLocalRepoForRegisteredWorktree({} as never, '/wt/one', '/wt/one')).toBeUndefined()
       expect(
