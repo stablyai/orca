@@ -158,6 +158,21 @@ describe('terminal paste target state', () => {
     ).toBe(true)
   })
 
+  it('keeps keyboard-owned paste current when the dispatch snapshot caught a deferred window-focus reclaim on body', () => {
+    const terminalInput = makeElement('textarea', ['xterm-helper-textarea'])
+    const body = makeElement('body')
+    const paneContainer = makePaneContainer(terminalInput)
+
+    expect(
+      isTerminalPanePasteFocusCurrent({
+        requireSameFocusedElement: true,
+        activeElementAtDispatch: body,
+        paneContainer,
+        activeElement: terminalInput
+      })
+    ).toBe(true)
+  })
+
   it('keeps keyboard-owned paste current when xterm replaces its helper textarea', () => {
     const originalTerminalInput = makeElement('textarea', ['xterm-helper-textarea'])
     const replacementTerminalInput = makeElement('textarea', ['xterm-helper-textarea'])
