@@ -1,9 +1,10 @@
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { ActiveViewPreference, getActiveViewPreferenceFile } from '../../active-view-preference'
 import * as backupWorker from '../profile-state/profile-state-backup-worker'
 import { profileStateDatabaseBackups } from '../profile-state/profile-state-backup-path'
+import { profileStateJsonExportPaths } from '../profile-state/legacy-json/profile-state-export-path'
 import {
   createSqliteMaintenanceFixture,
   createWorkerMaintenanceFixture,
@@ -293,5 +294,44 @@ export function registerProfileStateMaintenanceTests(): void {
       await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
       expect(JSON.parse(peer.readSerializedState() ?? '{}').peer).toBe(true)
     })
+  })
+}
+
+export function registerProfileStateMaintenanceCompatibilityTests(): void {
+  it('checkpoints SQL without publishing JSON or rewriting explicit exports', async () => {
+    const { store, dataFile, readState } = await createWorkerMaintenanceFixture()
+    await store.writeLatestProfileStateJsonExportAsync()
+    const retainedPaths = profileStateJsonExportPaths(dataFile)
+    const retainedBytes = retainedPaths.map((path) => readFileSync(path, 'utf8'))
+    store.updateSettings({ theme: 'dark' })
+    store.getWorkspaceSession().activeTabId = 'latest-tab'
+
+    const maintenance = await store.beginProfileMaintenance()
+
+    expect(readState()).toMatchObject({
+      settings: { theme: 'dark' },
+      workspaceSession: { activeTabId: 'latest-tab' }
+    })
+    expect(existsSync(dataFile)).toBe(false)
+    expect(profileStateJsonExportPaths(dataFile)).toEqual(retainedPaths)
+    expect(retainedPaths.map((path) => readFileSync(path, 'utf8'))).toEqual(retainedBytes)
+    await maintenance.resume()
+    await store.runDurableMutation(() => {
+      store.updateSettings({ theme: 'light' })
+      return { value: undefined }
+    })
+    expect(readState().settings.theme).toBe('light')
+  })
+
+  it('preserves the existing SQL state and publishes no JSON during a recovery pause', async () => {
+    const { store, dataFile, readState } = await createWorkerMaintenanceFixture()
+    const before = readState()
+    store.updateSettings({ theme: 'dark' })
+
+    await store.beginProfileMaintenance({ flush: false })
+
+    expect(readState()).toEqual(before)
+    expect(existsSync(dataFile)).toBe(false)
+    expect(profileStateJsonExportPaths(dataFile)).toEqual([])
   })
 }

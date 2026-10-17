@@ -615,12 +615,12 @@
       "oracle": "Assert unchanged JSON through final flush and maintenance, failure propagation before quit, missing-database refusal after marker publication, archived SQLite and latest committed JSON from inactive-profile conversion, unchanged active database/index/HTTP marker, and zero feed/check calls for incompatible pinned/local builds.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/profile-state src/main/persistence/loading-store src/main/orca-profiles src/main/startup/profile-state-recovery-preflight.test.ts src/main/startup/main-window-core-services.test.ts src/main/ipc/orca-profiles-switch-persistence.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/updater.build-channel-selection.test.ts src/cli/handlers/profile-state.test.ts src/cli/handlers/profile-state-recovery-admission.test.ts src/cli/specs/profile-state.test.ts src/cli/runtime/profile-state-recovery-launch.test.ts src/shared/profile-state-recovery-command.test.ts src/shared/profile-state-build-compatibility.test.ts",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/loading-store/profile-state-update-quit.test.ts src/main/persistence/loading-store/profile-state-maintenance-compatibility.test.ts src/main/persistence/profile-state/profile-state-authority-marker.test.ts src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/persistence/loading-store/profile-state-checkpoints.test.ts src/main/startup/main-window-core-services.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/persistence/loading-store/profile-state-update-quit.test.ts src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts src/main/persistence/profile-state/profile-state-authority-marker.test.ts src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts src/main/updater-sqlite-profile-downgrade.test.ts src/main/persistence/loading-store/profile-state-checkpoints.test.ts src/main/startup/main-window-core-services.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/profile-state-terminal-restart-persistence.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/persistence/loading-store/profile-state-update-quit.test.ts",
-        "src/main/persistence/loading-store/profile-state-maintenance-compatibility.test.ts",
+        "src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts",
         "src/main/persistence/profile-state/profile-state-authority-marker.test.ts",
         "src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts",
         "src/main/persistence/profile-state/profile-state-current-sqlite-command.test.ts",
@@ -630,6 +630,13 @@
         "tests/e2e/profile-state-terminal-restart-persistence.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/persistence/loading-store/profile-state-maintenance-contracts.test.ts",
+          "assertions": [
+            "checkpoints SQL without publishing JSON or rewriting explicit exports",
+            "preserves the existing SQL state and publishes no JSON during a recovery pause"
+          ]
+        },
         {
           "file": "src/main/persistence/profile-state/profile-state-selected-profile-recovery.test.ts",
           "assertions": [

@@ -3804,7 +3804,6 @@
       "src/main/persistence/loading-store/profile-state-checkpoints.test.ts": 1815,
       "src/main/persistence/loading-store/profile-state-direct-flush.test.ts": 1619,
       "src/main/persistence/loading-store/profile-state-import-lifetime.test.ts": 1535,
-      "src/main/persistence/loading-store/profile-state-maintenance-compatibility.test.ts": 1904,
       "src/main/persistence/loading-store/profile-state-maintenance-final-failure.test.ts": 1809,
       "src/main/persistence/loading-store/profile-state-maintenance-recovery.test.ts": 2380,
       "src/main/persistence/loading-store/profile-state-maintenance.test.ts": 2759,
