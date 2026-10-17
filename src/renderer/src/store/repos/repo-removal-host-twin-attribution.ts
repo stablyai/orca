@@ -1,19 +1,15 @@
 import type { AppState } from '../types'
 import {
-  LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import {
   belongsToRemovedHost,
-  isRuntimeHost,
   ptyHostEvidence,
   terminalTabBelongsToHost,
   terminalTabPtyEvidence,
   type HostEvidence
 } from './host-twin-terminal-evidence'
-
-export { belongsToRemovedHost, isRuntimeHost, type HostEvidence }
 import { toVisibleTabType } from '../../../../shared/tab-types'
 import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -21,72 +17,6 @@ import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
 } from '@/lib/unified-tab-host-ownership'
-
-/** Worktree ids of this host's project that another host also publishes, with those hosts. */
-export function getSurvivingTwinHostIds(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
-  projectId: string,
-  hostId: ExecutionHostId
-): Map<string, ExecutionHostId[]> {
-  const rows = [
-    ...(state.worktreesByRepo[projectId] ?? []),
-    ...(state.detectedWorktreesByRepo[projectId]?.worktrees ?? [])
-  ]
-  const hostOf = (row: { hostId?: ExecutionHostId }): ExecutionHostId =>
-    row.hostId ?? LOCAL_EXECUTION_HOST_ID
-  const removedIds = new Set(rows.filter((row) => hostOf(row) === hostId).map((row) => row.id))
-  const survivors = new Map<string, ExecutionHostId[]>()
-  for (const row of rows) {
-    const survivorHostId = hostOf(row)
-    if (!removedIds.has(row.id) || survivorHostId === hostId) {
-      continue
-    }
-    const hosts = survivors.get(row.id) ?? []
-    if (!hosts.includes(survivorHostId)) {
-      survivors.set(row.id, [...hosts, survivorHostId])
-    }
-  }
-  return survivors
-}
-
-/** The twins whose surviving host still holds a row now, after the removal's host call. */
-export function retainSurvivingTwinHostIds(
-  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
-  projectId: string,
-  twins: ReadonlyMap<string, readonly ExecutionHostId[]>
-): Map<string, ExecutionHostId[]> {
-  const rows = [
-    ...(state.worktreesByRepo[projectId] ?? []),
-    ...(state.detectedWorktreesByRepo[projectId]?.worktrees ?? [])
-  ]
-  const retained = new Map<string, ExecutionHostId[]>()
-  for (const [worktreeId, hostIds] of twins) {
-    const live = hostIds.filter((hostId) =>
-      rows.some(
-        (row) => row.id === worktreeId && (row.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
-      )
-    )
-    if (live.length > 0) {
-      retained.set(worktreeId, live)
-    }
-  }
-  return retained
-}
-
-/**
- * Every id the removal covers, and those it may purge outright. State under an id another host
- * still publishes is shared, so there only the removed host's attributed tabs and files go.
- */
-export function splitRemovedWorktreeIds(
-  knownIds: readonly string[],
-  twinsBeforeCall: ReadonlyMap<string, unknown>,
-  twinsNow: ReadonlyMap<string, unknown>
-): { worktreeIds: string[]; exclusiveWorktreeIds: string[] } {
-  const worktreeIds = [
-    ...new Set([...knownIds, ...[...twinsBeforeCall.keys()].filter((id) => !twinsNow.has(id))])
-  ]
-  return { worktreeIds, exclusiveWorktreeIds: worktreeIds.filter((id) => !twinsNow.has(id)) }
-}
 
 /**
  * State under a worktree id that a surviving host also publishes, attributed to the removed host.
@@ -105,14 +35,14 @@ export type RemovedHostTwinState = {
 }
 
 /** Runtime files always record their environment, so an unmarked one is local/SSH. */
-export function openFileHostEvidence(
+function openFileHostEvidence(
   file: Parameters<typeof hasOpenFileExecutionHostEvidence>[0]
 ): HostEvidence {
   return hasOpenFileExecutionHostEvidence(file) ? getOpenFileExecutionHostId(file) : 'non-runtime'
 }
 
 /** A browser page's host: null is explicitly this client, absent is unknown. */
-export function pageHostEvidence(page: {
+function pageHostEvidence(page: {
   browserRuntimeEnvironmentId?: string | null
 }): HostEvidence {
   if (page.browserRuntimeEnvironmentId === null) {
@@ -240,39 +170,47 @@ export function collectRemovedHostTwinState(
   return removed
 }
 
-/**
- * The settled attribution, plus pre-call entries whose surface has since disappeared. A surface
- * still present is judged on its latest evidence, which may now include a surviving host's pane.
- */
-export function mergeRemovedHostTwinState(
-  beforeCall: RemovedHostTwinState,
-  settled: RemovedHostTwinState,
+/** Keeps the three selection fields consistent once the removed host's copy is gone. */
+export function twinSelectionPatch(
   state: Pick<
     AppState,
-    'tabsByWorktree' | 'unifiedTabsByWorktree' | 'openFiles' | 'browserTabsByWorktree'
-  >
-): RemovedHostTwinState {
-  const terminalIds = new Set([
-    ...Object.values(state.tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id)),
-    ...Object.values(state.unifiedTabsByWorktree).flatMap((tabs) =>
-      tabs.flatMap((tab) => (tab.contentType === 'terminal' ? [tab.entityId] : []))
-    )
-  ])
-  const unifiedIds = new Set(
-    Object.values(state.unifiedTabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
-  const fileIds = new Set(state.openFiles.map((file) => file.id))
-  const browserIds = new Set(
-    Object.values(state.browserTabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
-  const keep = (a: Set<string>, b: Set<string>, present: Set<string>): Set<string> =>
-    new Set([...b, ...[...a].filter((id) => !present.has(id))])
-  return {
-    terminalTabIds: keep(beforeCall.terminalTabIds, settled.terminalTabIds, terminalIds),
-    fileIds: keep(beforeCall.fileIds, settled.fileIds, fileIds),
-    browserTabIds: keep(beforeCall.browserTabIds, settled.browserTabIds, browserIds),
-    otherTabIds: keep(beforeCall.otherTabIds, settled.otherTabIds, unifiedIds),
-    conversationIds: new Set([...beforeCall.conversationIds, ...settled.conversationIds]),
-    mixedTabPtyIds: settled.mixedTabPtyIds
+    | 'activeWorktreeId'
+    | 'activeWorkspaceExecutionHostId'
+    | 'worktreesByRepo'
+    | 'detectedWorktreesByRepo'
+  >,
+  twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
+  removedHostId: ExecutionHostId
+): Partial<AppState> {
+  // Why: with no surviving twin, the bulk purge owns the selection exactly as before.
+  if (twinHostIds.size === 0) {
+    return {}
   }
+  const selected = state.activeWorkspaceExecutionHostId
+  // Why canonicalized: a copy reached through a paired runtime is selected under that runtime's id.
+  const candidates = state.activeWorktreeId ? [state.activeWorktreeId] : [...twinHostIds.keys()]
+  const selectsRemovedHost =
+    selected === removedHostId ||
+    (selected !== null &&
+      candidates.some(
+        (worktreeId) =>
+          twinHostIds.has(worktreeId) &&
+          removedHostCanonicalizer(
+            state,
+            worktreeId,
+            removedHostId,
+            twinHostIds.get(worktreeId) ?? []
+          )(selected) === removedHostId
+      ))
+  if (!selectsRemovedHost) {
+    return {}
+  }
+  const survivor = state.activeWorktreeId ? twinHostIds.get(state.activeWorktreeId)?.[0] : null
+  if (survivor) {
+    return { activeWorkspaceExecutionHostId: survivor }
+  }
+  // Why: a teardown close already deselected the workspace; nothing may still name the removed host.
+  return state.activeWorktreeId === null
+    ? { activeWorkspaceKey: null, activeWorkspaceExecutionHostId: null }
+    : {}
 }

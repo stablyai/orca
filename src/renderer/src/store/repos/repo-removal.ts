@@ -17,13 +17,11 @@ import { stopRuntimeProjectTerminalsBeforeRemoval } from './runtime-project-term
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
-import { closeRemovedHostTwinState, twinSelectionPatch } from './repo-removal-host-twin-teardown'
 import {
-  collectRemovedHostTwinState,
-  getSurvivingTwinHostIds,
-  retainSurvivingTwinHostIds,
-  splitRemovedWorktreeIds
-} from './repo-removal-host-twin-attribution'
+  closeRemovedHostTwinState,
+  collectRemovedHostTwins
+} from './repo-removal-host-twin-teardown'
+import { twinSelectionPatch } from './repo-removal-host-twin-attribution'
 import {
   captureWorkspaceChatDraftKeys,
   deleteWorkspaceChatDrafts
@@ -119,24 +117,21 @@ export function createRepoRemovalActions(
         if (!target) {
           throw new Error('The project host is unresolved. Refresh and retry.')
         }
+        const knownWorktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
         // Why before the host call: its announcement can start a listing refresh that drops these tabs.
-        const survivingTwinHostIds = getSurvivingTwinHostIds(get(), projectId, ownerHostId)
-        const removedTwinState = collectRemovedHostTwinState(
-          get(),
-          new Set(survivingTwinHostIds.keys()),
-          ownerHostId,
-          survivingTwinHostIds
+        const preCallTwins = collectRemovedHostTwins(get(), knownWorktreeIds, ownerHostId)
+        const removedTwinEntityIds = new Set(
+          preCallTwins.byHost.flatMap(({ removed }) => [
+            ...removed.terminalTabIds,
+            ...removed.conversationIds
+          ])
         )
-        const removedTwinEntityIds = new Set([
-          ...removedTwinState.terminalTabIds,
-          ...removedTwinState.conversationIds
-        ])
         const chatDraftKeys = captureWorkspaceChatDraftKeys(
           get(),
-          getKnownRepoWorktreeIds(get(), projectId, ownerHostId).map((workspaceId) => ({
+          knownWorktreeIds.map((workspaceId) => ({
             workspaceId,
             executionHostId: ownerHostId,
-            ...(survivingTwinHostIds.has(workspaceId)
+            ...(preCallTwins.twinHostIds.has(workspaceId)
               ? { onlyEntityIds: removedTwinEntityIds }
               : {})
           }))
@@ -150,6 +145,7 @@ export function createRepoRemovalActions(
           await stopRuntimeProjectTerminalsBeforeRemoval(
             target.environmentId,
             projectId,
+            // Why re-read: the registration await can let a listing refresh add worktrees.
             getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
           )
         }
@@ -186,13 +182,15 @@ export function createRepoRemovalActions(
         const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
         clearRepoSlugCacheEntry(projectId)
 
+        const worktreeIds = [
+          ...new Set([
+            ...knownWorktreeIds,
+            ...getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+          ])
+        ]
         // Why rechecked: a concurrent removal of the other copy leaves no survivor to share with.
-        const twinHostIds = retainSurvivingTwinHostIds(get(), projectId, survivingTwinHostIds)
-        const { worktreeIds, exclusiveWorktreeIds } = splitRemovedWorktreeIds(
-          getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
-          survivingTwinHostIds,
-          twinHostIds
-        )
+        const twins = collectRemovedHostTwins(get(), worktreeIds, ownerHostId)
+        const exclusiveWorktreeIds = worktreeIds.filter((id) => !twins.twinHostIds.has(id))
         const localAgentContextProjectIds =
           ownerHostId === LOCAL_EXECUTION_HOST_ID
             ? [
@@ -214,7 +212,7 @@ export function createRepoRemovalActions(
         }
 
         // Why: use the canonical per-worktree purge to evict all worktree-scoped maps (hand-deletion leaked most); runs before the set() below so it still sees tabsByWorktree.
-        closeRemovedHostTwinState(get, set, twinHostIds, removedTwinState, ownerHostId)
+        closeRemovedHostTwinState(get, set, twins, preCallTwins)
         get().purgeWorktreeTerminalState(exclusiveWorktreeIds)
         deleteWorkspaceChatDrafts(chatDraftKeys)
         get().clearLocalDetectedAgentContextsForProjects(localAgentContextProjectIds)
@@ -277,7 +275,7 @@ export function createRepoRemovalActions(
               hostId: ownerHostId
             }),
             activeRepoId: s.activeRepoId === projectId ? null : s.activeRepoId,
-            ...twinSelectionPatch(s, twinHostIds, ownerHostId),
+            ...twinSelectionPatch(s, twins.twinHostIds, ownerHostId),
             filterRepoIds: s.filterRepoIds.filter((id) => id !== projectId),
             worktreesByRepo: nextWorktrees,
             detectedWorktreesByRepo: nextDetectedWorktrees,

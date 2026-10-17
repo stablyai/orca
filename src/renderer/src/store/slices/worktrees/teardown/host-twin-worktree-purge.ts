@@ -16,9 +16,9 @@ import { getFolderWorkspaceHostId } from '../../../folder-workspaces/folder-work
 import { getProjectGroupHostId } from '../../project-group-owner-routing'
 import {
   collectRemovedHostTwinState,
-  removedHostCanonicalizer
+  removedHostCanonicalizer,
+  twinSelectionPatch
 } from '../../../repos/repo-removal-host-twin-attribution'
-import { twinSelectionPatch } from '../../../repos/repo-removal-host-twin-teardown'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildActiveSurfacePatch } from '../../tabs/tabs-surface'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'

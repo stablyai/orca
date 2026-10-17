@@ -208,12 +208,7 @@ const TWIN_KINDS: readonly HostTwinKind[] = [
 ]
 
 /** `<action> | <kind> | <target>` → why the survivor is touched today (tracker Stage 1 worklist). */
-const KNOWN_TWIN_LEAKS: Readonly<Record<string, string>> = Object.fromEntries([
-  [
-    'remove project | local+runtime | local',
-    'a sleeping-agent record with no host evidence is dropped instead of kept for the survivor'
-  ]
-])
+const KNOWN_TWIN_LEAKS: Readonly<Record<string, string>> = Object.fromEntries([])
 
 function cellId(action: TwinAction, kind: HostTwinKind, target: 'local' | 'remote'): string {
   return `${action.id} | ${kind} | ${target}`
