@@ -162,13 +162,13 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
           reject(new Error('relay_host_data_attach_timeout'))
         }
       }, connection.attachDeadlineMs)
-      const finalize = (): void => {
+      const finalize = (closeCode?: number): void => {
         if (finalized) {
           return
         }
         finalized = true
         clearTimeout(deadline)
-        this.finalizeConnection(connection.connId, socket)
+        this.finalizeConnection(connection.connId, socket, closeCode)
       }
       const onMessage = (raw: RawData, isBinary: boolean): void => {
         if (this.stopped || finalized) {
@@ -294,7 +294,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     socket.once('close', clearQuarantine)
   }
 
-  private finalizeConnection(connectionId: string, socket: WebSocket): void {
+  private finalizeConnection(connectionId: string, socket: WebSocket, closeCode?: number): void {
     if (this.socketsByConnectionId.get(connectionId) !== socket) {
       return
     }
@@ -306,6 +306,6 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.clientIds.delete(socket)
     this.onConnectionClosed?.(connectionId)
     const hasOtherConnections = clientId !== null && [...this.clientIds.values()].includes(clientId)
-    this.closeHandler?.(clientId, socket, hasOtherConnections)
+    this.closeHandler?.(clientId, socket, hasOtherConnections, closeCode)
   }
 }

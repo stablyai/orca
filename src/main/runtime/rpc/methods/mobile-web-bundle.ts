@@ -11,6 +11,7 @@
  * there, whatever its cause, reaches the client as `mobile_web_bundle_asset_changed`.
  */
 import {
+  MOBILE_WEB_BUNDLE_ERROR_CODES,
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
@@ -40,6 +41,19 @@ import {
   mobileWebBundleReadBucket
 } from './mobile-web-bundle-read-admission'
 import { encodeMobileWebBundleRange } from './mobile-web-bundle-range-encoding'
+import { mobileClientTraces } from '../mobile-client-trace'
+
+const BUNDLE_ERROR_CODES: ReadonlySet<string> = new Set(MOBILE_WEB_BUNDLE_ERROR_CODES)
+
+/** The code a failed read is traced under; only contract codes, never a message or host path. */
+function traceCodeOf(error: unknown): string {
+  if (isClientDisconnectedError(error)) {
+    return 'client_disconnected'
+  }
+  return error instanceof InvalidArgumentError && BUNDLE_ERROR_CODES.has(error.message)
+    ? error.message
+    : 'internal_error'
+}
 
 /** The code IS the message: `InvalidArgumentError` carries no data field, so the message is the only
  *  place a stable code can travel, and a client must be able to branch without matching prose. */
@@ -113,6 +127,20 @@ async function readVerifiedWindow<T>(
   windowBytes: number,
   encode: (window: VerifiedWindow) => Promise<T>
 ): Promise<T> {
+  try {
+    return await verifyAndReadWindow(ctx, params, windowBytes, encode)
+  } catch (error) {
+    mobileClientTraces.forConnection(ctx.connectionId)?.bundleReadFailed(traceCodeOf(error))
+    throw error
+  }
+}
+
+async function verifyAndReadWindow<T>(
+  ctx: RpcContext,
+  params: MobileWebBundleChunkParams,
+  windowBytes: number,
+  encode: (window: VerifiedWindow) => Promise<T>
+): Promise<T> {
   const bundle = requireBundle()
   // Checked before the asset lookup: a desktop that auto-updated mid-download must tell the
   // client to restart from the manifest, not that its path went missing.
@@ -139,7 +167,7 @@ async function readVerifiedWindow<T>(
       windowBytes
     )
     abortIfDisconnected(ctx)
-    return await encode({
+    const encoded = await encode({
       header: {
         buildId: bundle.manifest.buildId,
         path: asset.path,
@@ -151,6 +179,10 @@ async function readVerifiedWindow<T>(
       },
       data
     })
+    mobileClientTraces
+      .forConnection(ctx.connectionId)
+      ?.bundleWindowRead(bundle.manifest, asset.path, params.offset, data.byteLength)
+    return encoded
   } catch (error) {
     throw asContractError(error, asset.path)
   } finally {
@@ -163,11 +195,21 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
     name: MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
     permission: 'workspace',
     params: null,
-    handler: async (): Promise<MobileWebBundleManifestResult> => ({
-      manifest: requireBundle().manifest,
-      chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
-      rangeBytes: MOBILE_WEB_BUNDLE_RANGE_BYTES
-    })
+    handler: async (_params, ctx): Promise<MobileWebBundleManifestResult> => {
+      const trace = mobileClientTraces.forConnection(ctx.connectionId)
+      try {
+        const { manifest } = requireBundle()
+        trace?.bundleManifestRead(manifest)
+        return {
+          manifest,
+          chunkBytes: MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+          rangeBytes: MOBILE_WEB_BUNDLE_RANGE_BYTES
+        }
+      } catch (error) {
+        trace?.bundleReadFailed(traceCodeOf(error))
+        throw error
+      }
+    }
   }),
   defineMethod({
     name: MOBILE_WEB_BUNDLE_CHUNK_METHOD,
