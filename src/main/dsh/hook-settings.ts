@@ -17,14 +17,17 @@ const DSH_SCRIPT_BASE = 'dsh-hook'
  * (`@deepseek-ai/dsh-hooks-claude-code`) can fire. This is a strict subset of Claude's:
  * the bridge documents no `Notification`, no `PermissionRequest` and no `SessionEnd`,
  * and registering an unsupported event name makes it register nothing for that event.
- * `normalizeDshEvent` is written against exactly this list.
+ * `normalizeDshEvent` is written against exactly this list. The Subagent pair carries no
+ * status; it is the only signal naming which session ids belong to child agents.
  */
 export const DSH_HOOK_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PostToolUse',
-  'Stop'
+  'Stop',
+  'SubagentStart',
+  'SubagentStop'
 ] as const
 
 export const DSH_MANAGED_HOOKS_FILE_NAME = 'dsh-hooks.json'
