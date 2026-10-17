@@ -2,23 +2,36 @@ import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
+  appMock,
   browserWindowGetAllWindowsMock,
+  createEmptyMock,
   createFromPathMock,
   dockSetIconMock,
   isMock,
   windowSetIconMock
-} = vi.hoisted(() => ({
-  browserWindowGetAllWindowsMock: vi.fn(),
-  createFromPathMock: vi.fn(),
-  dockSetIconMock: vi.fn(),
-  isMock: { dev: false },
-  windowSetIconMock: vi.fn()
-}))
+} = vi.hoisted(() => {
+  const dockSetIconMock = vi.fn()
+  return {
+    // Why getPath: a packaged run resolves the bundle for Dock pin persistence; a non-.app
+    // path makes that a no-op, so these tests never run osascript.
+    appMock: {
+      dock: { setIcon: dockSetIconMock },
+      getPath: () => '/tmp/electron/Contents/MacOS/Electron',
+      isPackaged: false
+    },
+    browserWindowGetAllWindowsMock: vi.fn(),
+    createEmptyMock: vi.fn(),
+    createFromPathMock: vi.fn(),
+    dockSetIconMock,
+    isMock: { dev: false },
+    windowSetIconMock: vi.fn()
+  }
+})
 
 vi.mock('electron', () => ({
-  app: { dock: { setIcon: dockSetIconMock } },
+  app: appMock,
   BrowserWindow: { getAllWindows: browserWindowGetAllWindowsMock },
-  nativeImage: { createFromPath: createFromPathMock }
+  nativeImage: { createEmpty: createEmptyMock, createFromPath: createFromPathMock }
 }))
 
 vi.mock('@electron-toolkit/utils', () => ({
@@ -75,7 +88,9 @@ describe('app icon selection', () => {
     createFromPathMock.mockReset()
     dockSetIconMock.mockReset()
     windowSetIconMock.mockReset()
+    createEmptyMock.mockReset()
     isMock.dev = false
+    appMock.isPackaged = false
   })
 
   afterEach(() => {
@@ -106,6 +121,42 @@ describe('app icon selection', () => {
       expect(dockSetIconMock).not.toHaveBeenCalled()
     }
     expect(windowSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it('restores the bundle icon in a packaged Dock for the default icon', () => {
+    const image = { isEmpty: () => false }
+    const emptyImage = { isEmpty: () => true }
+    createFromPathMock.mockReturnValue(image)
+    createEmptyMock.mockReturnValue(emptyImage)
+    browserWindowGetAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, setIcon: windowSetIconMock }
+    ])
+    appMock.isPackaged = true
+
+    applyAppIcon('classic')
+
+    if (process.platform === 'darwin') {
+      expect(dockSetIconMock).toHaveBeenCalledWith(emptyImage)
+    } else {
+      expect(dockSetIconMock).not.toHaveBeenCalled()
+    }
+    expect(windowSetIconMock).toHaveBeenCalledWith(image)
+  })
+
+  it('keeps setting a selected alternate icon in a packaged Dock', () => {
+    const image = { isEmpty: () => false }
+    createFromPathMock.mockReturnValue(image)
+    browserWindowGetAllWindowsMock.mockReturnValue([])
+    appMock.isPackaged = true
+
+    applyAppIcon('blue')
+
+    expect(createEmptyMock).not.toHaveBeenCalled()
+    if (process.platform === 'darwin') {
+      expect(dockSetIconMock).toHaveBeenCalledWith(image)
+    } else {
+      expect(dockSetIconMock).not.toHaveBeenCalled()
+    }
   })
 
   it('persists a custom macOS dock icon to the app bundle for inactive Dock pins', async () => {
