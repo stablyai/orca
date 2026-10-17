@@ -179,8 +179,88 @@ describe('next-attention workspace order', () => {
     seedStore([makeWorktree('wt-local')])
 
     expect(getAttentionOrderWorkspaceTargets()).toEqual([
-      { id: 'wt-local', identityHostId: 'local', executionHostId: 'local' }
+      {
+        id: 'wt-local',
+        identityHostId: 'local',
+        executionHostId: 'local',
+        isUnread: false,
+        lastActivityAt: 0
+      }
     ])
+  })
+
+  it('keys a host-less row by the focused runtime host and carries its unread flag', () => {
+    seedStore([makeWorktree('wt-a', { isUnread: true, lastActivityAt: 5 })], {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host focus reads only this setting.
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+    })
+
+    expect(getAttentionOrderWorkspaceTargets()).toEqual([
+      { id: 'wt-a', identityHostId: 'runtime:env-1', isUnread: true, lastActivityAt: 5 }
+    ])
+  })
+
+  it('reads unread flags from the live store, not the last published list', () => {
+    const marked = makeWorktree('wt-marked')
+    const read = makeWorktree('wt-read', { isUnread: true })
+    seedStore([marked, read], { groupBy: 'none' })
+    setPublishedSidebarWorktrees([marked, read])
+    useAppStore.setState({
+      worktreesByRepo: {
+        repo1: [
+          { ...marked, isUnread: true },
+          { ...read, isUnread: false }
+        ],
+        repo2: []
+      }
+    })
+
+    expect(getAttentionOrderWorkspaceTargets().map((target) => target.isUnread)).toEqual([
+      true,
+      false
+    ])
+  })
+
+  it('carries each same-id row its own host flags', () => {
+    seedStore(
+      [
+        makeWorktree('wt-a', { hostId: 'local', isUnread: true, lastActivityAt: 1 }),
+        makeWorktree('wt-a', { hostId: 'ssh:box', lastActivityAt: 2 })
+      ],
+      { groupBy: 'none' }
+    )
+
+    const flags = getAttentionOrderWorkspaceTargets().map(
+      ({ identityHostId, isUnread, lastActivityAt }) => ({
+        identityHostId,
+        isUnread,
+        lastActivityAt
+      })
+    )
+
+    expect(flags).toHaveLength(2)
+    expect(flags).toEqual(
+      expect.arrayContaining([
+        { identityHostId: 'local', isUnread: true, lastActivityAt: 1 },
+        { identityHostId: 'ssh:box', isUnread: false, lastActivityAt: 2 }
+      ])
+    )
+  })
+
+  it('carries a folder workspace its own flags', () => {
+    const group = makeProjectGroup('group-1')
+    const folderWorkspace = {
+      ...makeFolderWorkspace('fw-1', group.id),
+      isUnread: true,
+      lastActivityAt: 7
+    }
+    seedStore([], { projectGroups: [group], folderWorkspaces: [folderWorkspace] })
+
+    expect(
+      getAttentionOrderWorkspaceTargets().find(
+        (target) => target.id === folderWorkspaceKey(folderWorkspace.id)
+      )
+    ).toMatchObject({ isUnread: true, lastActivityAt: 7 })
   })
 
   it('skips workspaces a sidebar filter hides', () => {
