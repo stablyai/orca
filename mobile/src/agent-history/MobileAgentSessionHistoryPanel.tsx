@@ -7,6 +7,10 @@ import { colors } from '../theme/mobile-theme'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
+import {
+  readInitialMobileAgentHistoryWorktrees,
+  recordMobileAgentHistoryPanelWorktrees
+} from './mobile-agent-history-worktree-cache'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -57,8 +61,12 @@ export function MobileAgentSessionHistoryPanel({
     client,
     connState
   )
-  const [worktrees, setWorktrees] = useState<Worktree[]>([])
-  const [worktreesLoaded, setWorktreesLoaded] = useState(false)
+  const [worktrees, setWorktrees] = useState<Worktree[]>(() =>
+    readInitialMobileAgentHistoryWorktrees(hostId)
+  )
+  const [worktreesLoaded, setWorktreesLoaded] = useState(
+    () => readInitialMobileAgentHistoryWorktrees(hostId).length > 0
+  )
   const [query, setQuery] = useState('')
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
@@ -87,7 +95,9 @@ export function MobileAgentSessionHistoryPanel({
           // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it
           // absent, and `use-mobile-agent-history-state.ts:61` calls `.find` on it unguarded.
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque in the reader because three screens project them differently; this panel reads only `path` off a row to seed `scopePaths`, and `matrix-aivault.history-screen-worktree.ps-1` records every partition of its own family rendering a list rather than a crash.
-          setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
+          const list = (catalog.value.worktrees ?? []) as Worktree[]
+          recordMobileAgentHistoryPanelWorktrees(hostId, list)
+          setWorktrees(list)
         }
       } catch {
         // Why: worktree list is best-effort context; the session scan still runs
@@ -103,7 +113,7 @@ export function MobileAgentSessionHistoryPanel({
     return () => {
       cancelled = true
     }
-  }, [client, connState])
+  }, [client, connState, hostId])
 
   const {
     scope,

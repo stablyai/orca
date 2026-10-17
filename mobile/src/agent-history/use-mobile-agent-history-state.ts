@@ -16,13 +16,27 @@ import {
 } from './mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
+import {
+  canPaintMobileAiVaultCache,
+  clearMobileAiVaultMemoryCache,
+  executeMobileAiVaultPlan,
+  getMobileAiVaultCacheKey,
+  MOBILE_AI_VAULT_INITIAL_LIMIT,
+  MOBILE_AI_VAULT_SESSION_LIMIT,
+  planMobileAiVaultLoad,
+  readMobileAiVaultCache,
+  type MobileAiVaultCacheEntry,
+  type MobileAiVaultScanReply
+} from './mobile-ai-vault-session-cache'
 
 export { MOBILE_AI_VAULT_CAPABILITY }
-
-// Why: mirror the desktop renderer's SESSION_LIMIT=500. limit caps only the
-// global recency list; the in-scope Claude union is capped separately host-side,
-// so the response can still be large — hence virtualization + lazy preview.
-const MOBILE_AI_VAULT_SESSION_LIMIT = 500
+export {
+  MOBILE_AI_VAULT_INITIAL_LIMIT,
+  MOBILE_AI_VAULT_SESSION_LIMIT,
+  clearMobileAiVaultMemoryCache,
+  getMobileAiVaultCacheKey,
+  type MobileAiVaultCacheEntry
+}
 
 export type AgentHistoryScreenState =
   | { kind: 'loading' }
@@ -39,12 +53,36 @@ export type MobileAgentHistoryStateParams = {
   worktreesLoaded: boolean
 }
 
+function initialScreenState(params: MobileAgentHistoryStateParams): AgentHistoryScreenState {
+  const scope: AiVaultScope = 'workspace'
+  const activeWorktree = params.worktrees.find((worktree) => worktree.worktreeId === params.worktreeId)
+  const scopeFilterPaths = deriveMobileAiVaultScopePaths(scope, activeWorktree ?? null, params.worktrees)
+  if (!canPaintMobileAiVaultCache(scope, scopeFilterPaths)) {
+    return { kind: 'loading' }
+  }
+  const cached = readMobileAiVaultCache(
+    getMobileAiVaultCacheKey(params.hostId, params.worktreeId, scope)
+  )
+  if (!cached) {
+    return { kind: 'loading' }
+  }
+  return { kind: 'ready', sessions: cached.sessions, issues: cached.issues }
+}
+
+function publishReady(
+  entry: MobileAiVaultCacheEntry
+): Extract<AgentHistoryScreenState, { kind: 'ready' }> {
+  return { kind: 'ready', sessions: entry.sessions, issues: entry.issues }
+}
+
 export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams) {
   const { hostId, worktreeId, worktrees, worktreesLoaded } = params
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const [scope, setScope] = useState<AiVaultScope>('workspace')
-  const [screenState, setScreenState] = useState<AgentHistoryScreenState>({ kind: 'loading' })
+  const [screenState, setScreenState] = useState<AgentHistoryScreenState>(() =>
+    initialScreenState(params)
+  )
   const clientGeneration = client?.getGeneration?.() ?? 0
   const [hostStatusProbe, setHostStatusProbe] = useState<{
     hostId: string
@@ -105,7 +143,19 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         return
       }
 
-      setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+      const cacheKey = getMobileAiVaultCacheKey(hostId, worktreeId, options.scope)
+      const cached = readMobileAiVaultCache(cacheKey)
+      const pendingScopePaths = deriveMobileAiVaultScopePaths(
+        options.scope,
+        activeWorktree,
+        worktrees
+      )
+      if (cached && canPaintMobileAiVaultCache(options.scope, pendingScopePaths) && isCurrent()) {
+        setScreenState(publishReady(cached))
+      } else if (isCurrent()) {
+        setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+      }
+
       try {
         // Gate on the capability so older hosts lacking the method are detected
         // and we never call a missing RPC.
@@ -135,38 +185,50 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
         }
 
         const scopePaths = deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
-        const reply = await agentHistorySessionScan.request(client, {
-          limit: MOBILE_AI_VAULT_SESSION_LIMIT,
-          force: options.force,
-          scopePaths
-        })
-        if (!isCurrent()) {
-          return
+        const plan = planMobileAiVaultLoad(cached, options.force)
+        const scan = async (args: {
+          limit: number
+          force: boolean
+          afterFingerprint: string | null
+        }): Promise<MobileAiVaultScanReply> => {
+          const reply = await agentHistorySessionScan.request(client, {
+            limit: args.limit,
+            force: args.force,
+            scopePaths,
+            afterFingerprint: args.afterFingerprint
+          })
+          if (!isCurrent()) {
+            return { sessions: [], issues: [] }
+          }
+          return interpretOrThrowRefusalMessage(
+            () => agentHistorySessionScan.interpret(reply),
+            'Unable to load agent sessions'
+          )
         }
-        const result = interpretOrThrowRefusalMessage(
-          () => agentHistorySessionScan.interpret(reply),
-          'Unable to load agent sessions'
-        )
-        setScreenState({
-          kind: 'ready',
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
-          sessions: result.sessions as AiVaultSession[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue and are only counted, never read member-wise (MobileAgentSessionHistoryPanel.tsx:335).
-          issues: result.issues as AiVaultScanIssue[]
+        await executeMobileAiVaultPlan({
+          cacheKey,
+          cached,
+          plan,
+          isCurrent,
+          scan,
+          onPublish: (entry) => setScreenState(publishReady(entry))
         })
       } catch (err) {
         if (!isCurrent()) {
           return
         }
         const message = err instanceof Error ? err.message : 'Unable to load agent sessions'
+        // Why: background SWR/stage failures must not blank a list the user already sees.
+        setScreenState((prev) =>
+          !options.force && prev.kind === 'ready' ? prev : { kind: 'error', message }
+        )
         setHostStatusProbe(null)
-        setScreenState({ kind: 'error', message })
       }
     },
-    [activeWorktree, client, clientGeneration, connState, hostId, worktrees, worktreesLoaded]
+    [activeWorktree, client, clientGeneration, connState, hostId, worktreeId, worktrees, worktreesLoaded]
   )
 
-  // Initial + reconnect load. Why: scope switches reuse the host's 15s cache
+  // Initial + reconnect load. Why: scope switches reuse the host's scan cache
   // (force:false) so a tab tap is cheap; only an explicit refresh bypasses it.
   useEffect(() => {
     void loadSessions({ scope, force: false })
@@ -185,7 +247,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     setRefreshing(true)
     try {
       // Why: pull-to-refresh bypasses the host TTL (force:true) and joins any
-      // active inflight scan; otherwise a refresh within 15s shows no change.
+      // active inflight scan; otherwise a refresh within the TTL shows no change.
       await loadSessions({ scope, force: true })
     } finally {
       if (mountedRef.current) {

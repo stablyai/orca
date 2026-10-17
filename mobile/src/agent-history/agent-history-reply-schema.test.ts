@@ -38,6 +38,32 @@ describe('agent history reply schemas', () => {
     expect(parsed.sessions).toEqual([{ id: 's1', agent: 'some-new-agent' }])
   })
 
+  it('reads conditional fingerprint and unchanged without requiring them', () => {
+    expect(
+      agentHistorySessionScanSchema.parse({ sessions: [], issues: [] })
+    ).toMatchObject({ sessions: [], issues: [] })
+    const conditional = agentHistorySessionScanSchema.parse({
+      sessions: [],
+      issues: [],
+      fingerprint: 'a'.repeat(64),
+      unchanged: true
+    })
+    expect(conditional.fingerprint).toBe('a'.repeat(64))
+    expect(conditional.unchanged).toBe(true)
+  })
+
+  it('salvages a non-string fingerprint instead of refusing the scan', () => {
+    const parsed = agentHistorySessionScanSchema.parse({
+      sessions: [{ id: 's1' }],
+      issues: [],
+      fingerprint: 12,
+      unchanged: 'yes'
+    })
+    expect(parsed.sessions).toEqual([{ id: 's1' }])
+    expect(parsed.fingerprint).toBeUndefined()
+    expect(parsed.unchanged).toBeUndefined()
+  })
+
   it('requires the resume repo list to be an array', () => {
     expect(resumeRepoListSchema.safeParse({}).success).toBe(false)
     expect(resumeRepoListSchema.safeParse({ repos: 'none' }).success).toBe(false)

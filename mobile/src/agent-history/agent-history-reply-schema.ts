@@ -40,7 +40,10 @@ export const agentHistoryHostStatusSchema = z.looseObject({
  */
 export const agentHistorySessionScanSchema = z.looseObject({
   sessions: z.array(z.unknown()),
-  issues: z.array(z.unknown())
+  issues: z.array(z.unknown()),
+  // Why: host opt-in conditional replies; salvage so a weird shape never fails the whole scan.
+  fingerprint: salvagedOptional('fingerprint', z.string()),
+  unchanged: salvagedOptional('unchanged', z.boolean())
 })
 
 /**
