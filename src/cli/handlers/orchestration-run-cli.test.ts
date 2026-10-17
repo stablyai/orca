@@ -141,11 +141,15 @@ describe('orchestration reset CLI handler', () => {
 
   it('sends only the tasks scope for --tasks', async () => {
     await invoke(new Map([['tasks', true]]))
-    expect(callMock).toHaveBeenCalledWith('orchestration.reset', {
-      all: undefined,
-      tasks: true,
-      messages: undefined
-    })
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.reset',
+      {
+        all: undefined,
+        tasks: true,
+        messages: undefined
+      },
+      { orchestrationRequestId: expect.any(String) }
+    )
   })
 
   it('sends only the all scope for --all', async () => {

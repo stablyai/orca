@@ -10,23 +10,25 @@ export async function callOrchestrationMutation<TResult>(
   flags: Map<string, string | boolean>,
   method: string,
   params: unknown,
-  options?: { timeoutMs?: number; orchestrationCapability?: string },
+  options?: { timeoutMs?: number; orchestrationCapability?: string; alwaysRequestId?: boolean },
   unavailableRetryMs = 0
 ) {
   // Why: every retry reuses one request id, so the host replays instead of applying the mutation twice.
+  const { alwaysRequestId = false, ...callOptions } = options ?? {}
   const requestId =
-    readRetryRequestFlag(flags) ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
+    readRetryRequestFlag(flags) ??
+    (alwaysRequestId || unavailableRetryMs > 0 ? randomUUID() : undefined)
   const deadline = Date.now() + unavailableRetryMs
   let sentError: RuntimeClientError | undefined
   for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_UNAVAILABLE_RETRY_DELAY_MS)) {
     try {
       return requestId
         ? await client.call<TResult>(method, params, {
-            ...options,
+            ...callOptions,
             orchestrationRequestId: requestId
           })
         : options
-          ? await client.call<TResult>(method, params, options)
+          ? await client.call<TResult>(method, params, callOptions)
           : await client.call<TResult>(method, params)
     } catch (error) {
       const unavailable =

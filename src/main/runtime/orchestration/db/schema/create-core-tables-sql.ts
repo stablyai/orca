@@ -20,6 +20,24 @@ CREATE TABLE IF NOT EXISTS runs (
   updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS run_reset_lineage (
+  run_id      TEXT PRIMARY KEY,
+  snapshot    TEXT
+);
+
+-- A null snapshot proves this Run was born after lineage recording became available.
+CREATE TRIGGER IF NOT EXISTS trg_runs_insert_reset_lineage
+AFTER INSERT ON runs
+BEGIN
+  INSERT OR IGNORE INTO run_reset_lineage (run_id, snapshot) VALUES (NEW.id, NULL);
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_runs_delete_reset_lineage
+AFTER DELETE ON runs
+BEGIN
+  DELETE FROM run_reset_lineage WHERE run_id = OLD.id;
+END;
+
 CREATE TABLE IF NOT EXISTS messages (
   id            TEXT NOT NULL,
   run_id        TEXT NOT NULL DEFAULT '${LEGACY_RUN_ID}',

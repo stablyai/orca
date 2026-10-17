@@ -75,13 +75,18 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
         legacy: number
         created_at: string
       }
+      resetLineage?: {
+        status: 'no_recorded_reset' | 'complete' | 'incomplete' | 'unavailable'
+        resetCount?: number
+      }
     }>('orchestration.runShow', { id: getRequiredStringFlag(flags, 'id') })
-    printResult(
-      result,
-      json,
-      (r) =>
-        `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
-        `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}`
-    )
+    printResult(result, json, (r) => {
+      const count = r.resetLineage?.resetCount
+      const status =
+        r.resetLineage?.status === 'no_recorded_reset'
+          ? 'none recorded'
+          : (r.resetLineage?.status ?? 'unavailable')
+      return `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\nconsumer generation ${r.run.consumer_generation}; created ${r.run.created_at}\nrecorded task reset history: ${status}${count === undefined ? '' : ` (${count} resets)`}`
+    })
   }
 }

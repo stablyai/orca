@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { LEGACY_RUN_ID, OrchestrationDb } from './db'
+import { readRunResetLineage } from './db/reset/run-reset-lineage'
 
 describe('OrchestrationDb reset scopes', () => {
   let db: OrchestrationDb | undefined
@@ -92,13 +93,103 @@ describe('OrchestrationDb reset scopes', () => {
 
   it('resetTasks preserves Runs and messages while clearing every worker attachment', () => {
     const state = createState()
+    const child = db!.createTask({
+      runId: state.run.id,
+      parentId: state.task.id,
+      spec: 'child work',
+      createdByTerminalHandle: 'term_worker'
+    })
+    const childDispatch = db!.createStartingWorkerDispatch({
+      taskId: child.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: { worktree: 'current' }
+    })
+    const resource = db!.createWorkerTerminalResourceStatement({
+      dispatchId: childDispatch.dispatch.id,
+      worktreeId: null,
+      terminalHandle: 'term_child',
+      paneKey: null,
+      processIncarnation: 'process_child',
+      ownership: 'owned'
+    })
+    const remote = db!.createRemoteDispatchAttachment({
+      dispatchId: 'ctx_remote_reset_fixture',
+      runId: state.run.id,
+      taskId: child.id,
+      homePeerFingerprint: 'peer_remote_reset_fixture',
+      protocolVersion: 1,
+      runtimeEpoch: 'remote_epoch',
+      mutationReceipt: {
+        callerFingerprint: 'peer_remote_reset_fixture',
+        requestId: 'remote_reset_fixture',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'remote_hash'
+      }
+    })
+    const remoteResource = db!.createWorkerTerminalResourceStatement({
+      dispatchId: remote.dispatch_id,
+      worktreeId: null,
+      terminalHandle: 'term_remote',
+      paneKey: null,
+      processIncarnation: 'remote_process',
+      hostScope: 'remote_host',
+      ownership: 'owned'
+    })
 
-    db!.resetTasks()
+    const result = db!.resetTasks()
 
     expect(db!.getRun(state.run.id)).toBeDefined()
     expect(db!.getMessageById(state.message.id)).toBeDefined()
     expect(db!.getTask(state.task.id)).toBeUndefined()
     expect(db!.getWorkerDispatch(state.started.dispatch.id)).toBeUndefined()
+    expect(db!.getWorkerTerminalResource(resource.id)).toBeUndefined()
+    expect(db!.getWorkerTerminalResource(remoteResource.id)).toBeUndefined()
+    const lineage = readRunResetLineage(db!, state.run.id)
+    expect(lineage).toMatchObject({
+      status: 'complete',
+      resetCount: 1,
+      batches: [
+        {
+          requestId: result.requestId,
+          scope: {
+            tasks: {
+              total: 2,
+              rows: expect.arrayContaining([
+                expect.objectContaining({
+                  id: child.id,
+                  parent_id: state.task.id,
+                  created_by_terminal_handle: 'term_worker'
+                })
+              ])
+            },
+            dispatches: {
+              total: 2,
+              rows: expect.arrayContaining([
+                expect.objectContaining({ id: childDispatch.dispatch.id, task_id: child.id })
+              ])
+            },
+            resources: {
+              total: 2,
+              rows: expect.arrayContaining([
+                expect.objectContaining({
+                  id: resource.id,
+                  owner_dispatch_id: childDispatch.dispatch.id
+                }),
+                expect.objectContaining({
+                  id: remoteResource.id,
+                  owner_dispatch_id: remote.dispatch_id
+                })
+              ])
+            },
+            remoteAttachments: {
+              total: 1,
+              rows: [expect.objectContaining({ dispatch_id: remote.dispatch_id })]
+            }
+          }
+        }
+      ]
+    })
     expect(db!.getFederatedDispatch(state.started.dispatch.id)).toBeUndefined()
     expect(db!.getRemoteQuestion('question_1')).toBeUndefined()
     expect(db!.getMessageById(state.localQuestion.message.id)).toBeDefined()
@@ -118,6 +209,88 @@ describe('OrchestrationDb reset scopes', () => {
     expect(
       db!.getStructuredPointerOperation(`dispatch:${state.started.dispatch.id}`)
     ).toBeUndefined()
+    const later = db!.createTask({ runId: state.run.id, spec: 'later work' })
+    db!.resetTasks()
+    expect(readRunResetLineage(db!, state.run.id)).toMatchObject({
+      status: 'complete',
+      resetCount: 2,
+      batches: [
+        { scope: { tasks: { total: 2 } } },
+        { scope: { tasks: { total: 1, rows: [expect.objectContaining({ id: later.id })] } } }
+      ]
+    })
+  })
+
+  it('still resets when the lineage bound is exceeded and marks the record incomplete', () => {
+    db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'Large reset',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
+    })
+    for (let index = 0; index < 129; index += 1) {
+      db.createTask({ runId: run.id, spec: `task ${index}` })
+    }
+
+    db.resetTasks()
+
+    expect(db.listTasks()).toEqual([])
+    expect(readRunResetLineage(db, run.id)).toMatchObject({
+      status: 'incomplete',
+      batches: [{ scope: { tasks: { total: 129, rows: expect.any(Array) } } }]
+    })
+  })
+
+  it('does not claim complete lifetime history for a Run created before the recording boundary', () => {
+    db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'Older Run',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
+    })
+    db.db.prepare('DELETE FROM run_reset_lineage WHERE run_id = ?').run(run.id)
+    db.createTask({ runId: run.id, spec: 'recent task' })
+
+    db.resetTasks()
+
+    expect(readRunResetLineage(db, run.id)).toMatchObject({
+      status: 'incomplete',
+      priorHistoryUnknown: true,
+      batches: [{ scope: { tasks: { total: 1 } } }]
+    })
+  })
+
+  it('rolls back the lineage and receipt with a failed deletion', () => {
+    db = new OrchestrationDb(':memory:')
+    const run = db.createRun({
+      objective: 'Atomic reset',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
+    })
+    const task = db.createTask({ runId: run.id, spec: 'work' })
+    const mutation = {
+      callerFingerprint: 'caller',
+      requestId: 'reset_request',
+      method: 'orchestration.reset',
+      payloadHash: 'tasks'
+    }
+    db.beginMutationReceipt(mutation)
+    db.db.exec(`CREATE TRIGGER refuse_reset BEFORE DELETE ON tasks
+      BEGIN SELECT RAISE(ABORT, 'refuse'); END;`)
+
+    expect(() => db!.resetTasks(mutation)).toThrow('refuse')
+
+    expect(db.getTask(task.id)).toBeDefined()
+    expect(readRunResetLineage(db, run.id)).toMatchObject({ status: 'no_recorded_reset' })
+    expect(db.getMutationReceipt('caller', 'reset_request')?.state).toBe('pending')
+
+    db.db.exec('DROP TRIGGER refuse_reset')
+    db.resetTasks(mutation)
+    expect(db.getMutationReceipt('caller', 'reset_request')).toMatchObject({
+      state: 'completed',
+      receipt: expect.stringContaining('"requestId":"reset_request"')
+    })
+    expect(db.getTask(task.id)).toBeUndefined()
   })
 
   it('resetMessages preserves active relay cursors while clearing the Run inbox', () => {

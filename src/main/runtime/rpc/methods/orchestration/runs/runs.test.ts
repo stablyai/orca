@@ -24,6 +24,35 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('lightweight Runs', () => {
+    it('lets another workspace caller read retained reset lineage through run-show', async () => {
+      setup(false)
+      const run = db.createRun({
+        objective: 'Reset read contract',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey
+      })
+      const task = db.createTask({ runId: run.id, spec: 'worker task' })
+      db.resetTasks()
+
+      const shown = await h.call(
+        'orchestration.runShow',
+        { id: run.id },
+        {
+          ...ctx,
+          authenticatedCallerFingerprint: 'different_workspace_caller'
+        }
+      )
+
+      expect(shown).toMatchObject({
+        resetLineage: {
+          status: 'complete',
+          batches: [
+            { scope: { tasks: { total: 1, rows: [expect.objectContaining({ id: task.id })] } } }
+          ]
+        }
+      })
+    })
+
     it('creates and binds a Run to the runtime-resolved caller pane', async () => {
       setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(

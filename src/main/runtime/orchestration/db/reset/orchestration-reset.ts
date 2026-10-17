@@ -1,11 +1,18 @@
+import { randomUUID } from 'node:crypto'
 import { LEGACY_RUN_ID } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
+import { captureRunResetLineage } from './run-reset-lineage'
 
 // ── Lifecycle ──
 
-export function runResetTransaction(this: OrchestrationDb, statements: string): void {
+export function runResetTransaction(
+  this: OrchestrationDb,
+  statements: string,
+  beforeDelete?: () => void
+): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    beforeDelete?.()
     this.db.exec(statements)
     this.db.exec('COMMIT')
   } catch (error) {
@@ -49,10 +56,21 @@ export function resetAll(this: OrchestrationDb): void {
   this.hasAnyDispatchContextsCache = undefined
 }
 
-export function resetTasks(this: OrchestrationDb): void {
+export function resetTasks(
+  this: OrchestrationDb,
+  mutation?: {
+    callerFingerprint: string
+    requestId: string
+    method: string
+    payloadHash: string
+  }
+): { requestId: string; affectedRuns: number; incompleteRuns: number } {
+  const requestId = mutation?.requestId ?? randomUUID()
+  let lineage = { requestId, affectedRuns: 0, incompleteRuns: 0 }
   // Why: messages survive this scope, so question threads are closed rather than deleted — an orphaned
   // question message would otherwise answer as a generic reply while legacy acknowledgment rejects it.
-  this.runResetTransaction(`
+  this.runResetTransaction(
+    `
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
@@ -73,8 +91,23 @@ export function resetTasks(this: OrchestrationDb): void {
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
-  `)
+  `,
+    () => {
+      lineage = captureRunResetLineage(this, requestId)
+      if (mutation) {
+        this.completeMutationReceipt({
+          ...mutation,
+          receipt: JSON.stringify({
+            reset: 'tasks',
+            lineage,
+            mutation: { requestId, replayed: false }
+          })
+        })
+      }
+    }
+  )
   this.hasAnyDispatchContextsCache = undefined
+  return lineage
 }
 
 export function resetMessages(this: OrchestrationDb): void {

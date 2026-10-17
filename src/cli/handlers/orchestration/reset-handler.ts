@@ -14,7 +14,10 @@ export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
         'Choose exactly one reset scope: --all, --tasks, or --messages.'
       )
     }
-    const result = await callOrchestrationMutation<{ reset: string }>(
+    const result = await callOrchestrationMutation<{
+      reset: string
+      lineage?: { affectedRuns: number; incompleteRuns: number }
+    }>(
       client,
       flags,
       'orchestration.reset',
@@ -22,8 +25,15 @@ export const ORCHESTRATION_RESET_HANDLER: Record<string, CommandHandler> = {
         all: flags.has('all') ? true : undefined,
         tasks: flags.has('tasks') ? true : undefined,
         messages: flags.has('messages') ? true : undefined
-      }
+      },
+      flags.has('tasks') ? { alwaysRequestId: true } : undefined
     )
-    printResult(result, json, (value) => `Reset: ${value.reset}`)
+    printResult(result, json, (value) => {
+      if (!value.lineage) {
+        return `Reset: ${value.reset}`
+      }
+      const incomplete = value.lineage.incompleteRuns
+      return `Reset: ${value.reset}; task reset history saved for ${value.lineage.affectedRuns} Runs${incomplete > 0 ? ` (${incomplete} incomplete)` : ''}`
+    })
   }
 }

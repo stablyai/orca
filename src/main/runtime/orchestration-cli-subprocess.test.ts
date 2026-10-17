@@ -227,7 +227,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
     vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
       runtime.getTerminalPaneKey(handle)
     )
-    db.createRun({
+    const run = db.createRun({
       objective: 'CLI reset subprocess fixture',
       coordinatorHandle: 'term_cli',
       coordinatorPaneKey
@@ -257,8 +257,29 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         '--json'
       ])
       expect(create.exitCode, create.stderr).toBe(0)
+      const rootTask = db.listTasks()[0]
+      const childTask = db.createTask({
+        runId: run.id,
+        parentId: rootTask.id,
+        spec: 'throwaway child',
+        createdByTerminalHandle: 'term_cli'
+      })
+      const childDispatch = db.createStartingWorkerDispatch({
+        taskId: childTask.id,
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        startOptions: { worktree: 'current' }
+      })
+      const resource = db.createWorkerTerminalResourceStatement({
+        dispatchId: childDispatch.dispatch.id,
+        worktreeId: null,
+        terminalHandle: 'term_child',
+        paneKey: null,
+        processIncarnation: 'child_process',
+        ownership: 'owned'
+      })
       expect(db.getInbox()).toHaveLength(1)
-      expect(db.listTasks()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(2)
 
       const invalid = await runBuiltCli(userDataPath, [
         'orchestration',
@@ -276,7 +297,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
       expect(invalidPayload.error.code).toBe('invalid_argument')
       expect(invalidPayload.error.message).toContain('Choose exactly one reset scope')
       expect(db.getInbox()).toHaveLength(1)
-      expect(db.listTasks()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(2)
 
       const resetTasks = await runBuiltCli(userDataPath, [
         'orchestration',
@@ -288,9 +309,41 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
       expect(JSON.parse(resetTasks.stdout)).toMatchObject({ ok: true, result: { reset: 'tasks' } })
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(0)
+      const show = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'run-show',
+        '--id',
+        run.id,
+        '--json'
+      ])
+      expect(show.exitCode, show.stderr).toBe(0)
+      expect(JSON.parse(show.stdout)).toMatchObject({
+        ok: true,
+        result: {
+          resetLineage: {
+            status: 'complete',
+            batches: [
+              {
+                scope: {
+                  tasks: {
+                    total: 2,
+                    rows: expect.arrayContaining([
+                      expect.objectContaining({ id: childTask.id, parent_id: rootTask.id })
+                    ])
+                  },
+                  dispatches: {
+                    total: 1,
+                    rows: [expect.objectContaining({ id: childDispatch.dispatch.id })]
+                  },
+                  resources: { total: 1, rows: [expect.objectContaining({ id: resource.id })] }
+                }
+              }
+            ]
+          }
+        }
+      })
 
-      // Why: task resets intentionally remove Runs, so recreate the caller's
-      // normal binding before exercising task creation again.
+      // Why: verify a new Run can be created after a task reset while the earlier Run remains readable.
       db.createRun({
         objective: 'CLI reset subprocess fixture after reset',
         coordinatorHandle: 'term_cli',

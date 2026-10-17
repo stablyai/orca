@@ -125,6 +125,7 @@ export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts',
   'src/main/runtime/orchestration/worker-dispatch-settlement.test.ts',
   'src/main/runtime/orchestration/worker-start-unobserved-prompt-settlement.test.ts',
+  'src/main/runtime/rpc/methods/orchestration/runs/runs.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-instant-tab.test.ts',
   'src/main/runtime/rpc/methods/agent-launch-restart-replay.test.ts',
   'src/main/runtime/rpc/methods/native-chat-opencode-semantic-pages.test.ts',
