@@ -108,6 +108,11 @@ export function isDashboardSnapshot(value: unknown): value is DashboardSnapshot 
     snapshot.cards.every(isDashboardCard) &&
     isDashboardWorkspaceList(snapshot.workspaces) &&
     (snapshot.showIdle === undefined || typeof snapshot.showIdle === 'boolean') &&
+    (snapshot.openAgentsInApp === undefined || typeof snapshot.openAgentsInApp === 'boolean') &&
+    (snapshot.selectedPaneKey === undefined || isDashboardPaneKey(snapshot.selectedPaneKey)) &&
+    (snapshot.selectedExecutionHostId === undefined ||
+      (isBoundedString(snapshot.selectedExecutionHostId, MAX_ID_LENGTH) &&
+        normalizeExecutionHostId(snapshot.selectedExecutionHostId) !== null)) &&
     isDashboardFilterOptions(snapshot.filterOptions) &&
     isDashboardLaunchOptions(snapshot.launchableAgentsByWorktreeId) &&
     isDashboardRepoIcons(snapshot.repoIconsByRepoId)
@@ -139,6 +144,11 @@ export function admitDashboardSnapshot(value: unknown): DashboardSnapshotAdmissi
     snapshot.cards.length > MAX_DASHBOARD_CARDS ||
     workspaces === null ||
     (snapshot.showIdle !== undefined && typeof snapshot.showIdle !== 'boolean') ||
+    (snapshot.openAgentsInApp !== undefined && typeof snapshot.openAgentsInApp !== 'boolean') ||
+    (snapshot.selectedPaneKey !== undefined && !isDashboardPaneKey(snapshot.selectedPaneKey)) ||
+    (snapshot.selectedExecutionHostId !== undefined &&
+      (!isBoundedString(snapshot.selectedExecutionHostId, MAX_ID_LENGTH) ||
+        normalizeExecutionHostId(snapshot.selectedExecutionHostId) === null)) ||
     !isDashboardFilterOptions(snapshot.filterOptions) ||
     !isDashboardLaunchOptions(snapshot.launchableAgentsByWorktreeId) ||
     !isDashboardRepoIcons(snapshot.repoIconsByRepoId)

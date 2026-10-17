@@ -44,6 +44,13 @@ export function dashboardSnapshotInputsChanged(
   previousState: DashboardSnapshotWatchState
 ): boolean {
   return (
+    state.activeView !== previousState.activeView ||
+    state.activeWorktreeId !== previousState.activeWorktreeId ||
+    state.activeWorkspaceExecutionHostId !== previousState.activeWorkspaceExecutionHostId ||
+    state.activeTabId !== previousState.activeTabId ||
+    state.activeTabType !== previousState.activeTabType ||
+    state.activePendingCreationId !== previousState.activePendingCreationId ||
+    state.pendingWorktreeCreations !== previousState.pendingWorktreeCreations ||
     state.repos !== previousState.repos ||
     state.worktreesByRepo !== previousState.worktreesByRepo ||
     state.tabsByWorktree !== previousState.tabsByWorktree ||

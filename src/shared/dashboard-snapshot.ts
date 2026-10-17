@@ -192,6 +192,12 @@ export type DashboardSnapshot = {
    *  optional for preload compatibility with older snapshot producers. */
   workspaces?: DashboardWorkspace[]
   showIdle?: boolean
+  /** Pop-out click destination. Optional for snapshots from older hosts. */
+  openAgentsInApp?: boolean
+  /** Agent pane currently viewed in the main window; absent for older producers or no selection. */
+  selectedPaneKey?: string
+  /** Execution host of the selected pane, disambiguating colliding pane keys. */
+  selectedExecutionHostId?: ExecutionHostId
   /** Available filter dimensions are store-derived so zero-card projects and
    *  statuses remain selectable. Optional for preload-version compatibility. */
   filterOptions?: DashboardFilterOptions

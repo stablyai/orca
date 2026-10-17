@@ -39,6 +39,8 @@ Dashboard cards show a host badge for SSH workspaces and paired [Remote Orca Ser
 
 **In-window** board beside the sidebar, or **Pop-out** in a separate window.
 
+In a popped-out dashboard, enable **Open agents in main window** from the board's settings (gear) or **Settings → Experimental → Agent Dashboard**. Clicking an agent then opens its workspace and terminal in the main window while the dashboard stays on the board. The preference is saved and off by default; the in-window dashboard still opens a terminal preview. If the workspace is no longer available, Orca leaves the current workspace and terminal selected.
+
 ### Search and filters
 
 The board toolbar includes:
@@ -54,6 +56,7 @@ The board toolbar includes:
 - **Footer** — project icon, worktree name (when the header already shows a session name), and age; cached review state when present. Workspace status stays in the toolbar filter only — cards no longer show a per-worktree status dot.
 - **Needs You** cards tint amber (and can show the pending question summary); **Done** cards tint green; other states stay neutral so tint means “look here”
 - Click a card to open/focus that agent’s live terminal
+- The selected agent has an outlined card. Selection follows the terminal you're viewing in the main window or a dashboard preview, and updates when you switch workspaces, tabs, or panes.
 - Nested Codex/Claude subagents can appear as expandable children under the parent row
 
 Worktree cards still inline agent rows with the same glyphs when the experimental board is off. If you don't see status indicators, the agent CLI in that session isn't one Orca recognizes — start it through the agent combobox rather than typing the binary by hand.

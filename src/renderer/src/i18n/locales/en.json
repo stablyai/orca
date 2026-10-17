@@ -19439,7 +19439,10 @@
     "close": "Close dashboard",
     "settings": {
       "showIdle": "Show idle agents",
-      "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default."
+      "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default.",
+      "openInApp": "Open agents in main window",
+      "openInAppCopy": "Agent clicks in the pop-out open their workspace and terminal in the main window, leaving the dashboard in place.",
+      "saveFailed": "Could not save dashboard settings"
     },
     "settingsTooltip": "Board settings",
     "card": {

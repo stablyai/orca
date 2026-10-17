@@ -99,6 +99,34 @@ export function AgentDashboardExperimentalSetting({
               ]}
             />
           </div>
+          {mode === 'popout' ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {translate('dashboardPopout.settings.openInApp', 'Open agents in main window')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'dashboardPopout.settings.openInAppCopy',
+                    'Agent clicks in the pop-out open their workspace and terminal in the main window, leaving the dashboard in place.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={settings.experimentalAgentDashboardOpenInApp === true}
+                ariaLabel={translate(
+                  'dashboardPopout.settings.openInApp',
+                  'Open agents in main window'
+                )}
+                onChange={() =>
+                  updateSettings({
+                    experimentalAgentDashboardOpenInApp:
+                      settings.experimentalAgentDashboardOpenInApp !== true
+                  })
+                }
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </SearchableSetting>

@@ -13,6 +13,13 @@ import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const rowsCacheRef = useRef<ReturnType<typeof createWorktreeAgentRowsCache>>(undefined!)
   rowsCacheRef.current ??= createWorktreeAgentRowsCache()
+  const activeView = useAppStore((s) => s.activeView)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
+  const activeTabId = useAppStore((s) => s.activeTabId)
+  const activeTabType = useAppStore((s) => s.activeTabType)
+  const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
+  const pendingWorktreeCreations = useAppStore((s) => s.pendingWorktreeCreations)
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
@@ -69,6 +76,13 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
     () =>
       buildDashboardSnapshot(
         {
+          activeView,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId,
+          activeTabId,
+          activeTabType,
+          activePendingCreationId,
+          pendingWorktreeCreations,
           repos,
           worktreesByRepo,
           tabsByWorktree,
@@ -112,6 +126,13 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      activeView,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId,
+      activeTabId,
+      activeTabType,
+      activePendingCreationId,
+      pendingWorktreeCreations,
       repos,
       worktreesByRepo,
       tabsByWorktree,

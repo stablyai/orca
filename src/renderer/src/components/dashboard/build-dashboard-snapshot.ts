@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
   type DashboardCard,
@@ -68,7 +69,19 @@ export type DashboardSnapshotState = Pick<
   Partial<
     DashboardCardTerminalInputState &
       DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
+      Pick<
+        AppState,
+        | 'runtimeEnvironments'
+        | 'sshTargetLabels'
+        | 'unifiedTabsByWorktree'
+        | 'activeView'
+        | 'activeWorktreeId'
+        | 'activeWorkspaceExecutionHostId'
+        | 'activeTabId'
+        | 'activeTabType'
+        | 'activePendingCreationId'
+        | 'pendingWorktreeCreations'
+      >
   >
 
 /**
@@ -92,6 +105,17 @@ export function buildDashboardSnapshot(
   } = {}
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
+  let selectedPaneKey: string | undefined
+  let selectedExecutionHostId: DashboardCard['executionHostId']
+  const creationSurfaceVisible =
+    state.activeView === 'terminal' &&
+    shouldShowWorktreeCreationSurface({
+      activeView: state.activeView,
+      activePendingCreationId: state.activePendingCreationId ?? null,
+      hasActivePendingCreation:
+        state.activePendingCreationId != null &&
+        state.pendingWorktreeCreations?.[state.activePendingCreationId] !== undefined
+    })
   const workspaces: DashboardWorkspace[] | undefined =
     options.includeCardDetails === false ? undefined : []
   const clientHost = readDashboardClientHost()
@@ -209,6 +233,21 @@ export function buildDashboardSnapshot(
             clientHost.platform
           )
         : undefined
+      if (
+        includeCardDetails &&
+        !creationSurfaceVisible &&
+        state.activeView === 'terminal' &&
+        state.activeTabType === 'terminal' &&
+        state.activeWorktreeId === worktreeId &&
+        state.activeTabId === tabId &&
+        leafId !== null &&
+        terminalLayoutsByTabId[tabId]?.activeLeafId === leafId &&
+        (state.activeWorkspaceExecutionHostId == null ||
+          state.activeWorkspaceExecutionHostId === hostMetadata?.executionHostId)
+      ) {
+        selectedPaneKey = row.paneKey
+        selectedExecutionHostId = hostMetadata?.executionHostId
+      }
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
 
@@ -270,6 +309,9 @@ export function buildDashboardSnapshot(
     cards,
     ...(workspaces ? { workspaces } : {}),
     showIdle,
+    openAgentsInApp: state.settings?.experimentalAgentDashboardOpenInApp === true,
+    selectedPaneKey,
+    selectedExecutionHostId,
     filterOptions,
     // Only the dashboard surfaces offer a launcher; the count-only rebuild that
     // feeds the sidebar must not pay for host-detection lookups.

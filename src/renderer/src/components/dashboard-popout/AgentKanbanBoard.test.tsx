@@ -311,6 +311,42 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByTestId('card').dataset.now).toBe('190000')
   })
 
+  it.each(['local', 'ssh:devbox', 'runtime:env-1'] as const)(
+    'opens the exact %s workspace in app without opening a dashboard preview',
+    (executionHostId) => {
+      const agent = card({ paneKey: 'selected-agent', executionHostId, unseen: true })
+      const reveal = vi.fn()
+      const { rerender } = render(
+        <AgentKanbanBoard
+          snapshot={{ generatedAt: 1, cards: [agent] }}
+          openAgentsInApp
+          onRevealAgent={reveal}
+        />
+      )
+      fireEvent.click(screen.getByTestId('card'))
+      expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
+      expect(reveal).toHaveBeenCalledWith({
+        repoId: 'r1',
+        worktreeId: 'w1',
+        executionHostId,
+        tabId: 'tab1',
+        leafId: 'l1'
+      })
+      expect(ackAgent).toHaveBeenCalledWith('selected-agent', 'explicit')
+
+      reveal.mockClear()
+      rerender(
+        <AgentKanbanBoard
+          snapshot={{ generatedAt: 2, cards: [agent], openAgentsInApp: true }}
+          onRevealAgent={reveal}
+        />
+      )
+      fireEvent.click(screen.getByTestId('card'))
+      expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
+      expect(reveal).not.toHaveBeenCalled()
+    }
+  )
+
   it('keeps the terminal dialog open across bucket moves and card removal', () => {
     const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
     const { rerender } = render(

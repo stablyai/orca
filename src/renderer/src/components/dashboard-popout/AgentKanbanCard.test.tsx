@@ -8,6 +8,7 @@ import type { RepoIcon } from '../../../../shared/repo-icon'
 import { i18n } from '@/i18n/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentKanbanCard } from './AgentKanbanCard'
+import { AgentKanbanBoard } from './AgentKanbanBoard'
 
 const agentIconRender = vi.fn()
 const agentStateDotRender = vi.fn()
@@ -25,6 +26,8 @@ vi.mock('@/components/AgentStateDot', () => ({
     return <span data-testid="state-dot" />
   }
 }))
+
+vi.mock('./AgentTerminalDialog', () => ({ AgentTerminalDialog: () => null }))
 
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
   return {
@@ -74,6 +77,66 @@ describe('AgentKanbanCard', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+  })
+
+  it('updates its current-agent indicator when selection changes without card changes', () => {
+    const agent = card()
+    const open = vi.fn()
+    const { rerender } = render(
+      <TooltipProvider>
+        <AgentKanbanCard card={agent} now={2_000} onOpenTerminal={open} />
+      </TooltipProvider>
+    )
+    const button = screen.getByRole('button', { name: /dashboard-review/ })
+    expect(button).not.toHaveAttribute('aria-current')
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard card={agent} now={2_000} onOpenTerminal={open} isSelected />
+      </TooltipProvider>
+    )
+    expect(button).toHaveAttribute('aria-current', 'true')
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard card={agent} now={2_000} onOpenTerminal={open} isSelected={false} />
+      </TooltipProvider>
+    )
+    expect(button).not.toHaveAttribute('aria-current')
+  })
+  it('keeps selection on the correct host when pane keys collide and cards change column', () => {
+    const local = card({ executionHostId: 'local', worktreeName: 'Local session' })
+    const remote = card({ executionHostId: 'ssh:devbox', worktreeName: 'SSH session' })
+    const snapshot = {
+      generatedAt: 1,
+      cards: [local, remote],
+      selectedPaneKey: remote.paneKey,
+      selectedExecutionHostId: remote.executionHostId
+    }
+    const { rerender } = render(<AgentKanbanBoard snapshot={snapshot} />)
+    expect(screen.getByRole('button', { name: /Local session/ })).not.toHaveAttribute(
+      'aria-current'
+    )
+    expect(screen.getByRole('button', { name: /SSH session/ })).toHaveAttribute(
+      'aria-current',
+      'true'
+    )
+    rerender(
+      <AgentKanbanBoard
+        snapshot={{
+          ...snapshot,
+          cards: [local, { ...remote, bucket: 'done', dotState: 'done' }]
+        }}
+      />
+    )
+    expect(screen.getByRole('button', { name: /SSH session/ })).toHaveAttribute(
+      'aria-current',
+      'true'
+    )
+    rerender(<AgentKanbanBoard snapshot={{ ...snapshot, selectedExecutionHostId: 'local' }} />)
+    expect(screen.getByRole('button', { name: /Local session/ })).toHaveAttribute(
+      'aria-current',
+      'true'
+    )
+    expect(screen.getByRole('button', { name: /SSH session/ })).not.toHaveAttribute('aria-current')
   })
 
   it('does not render an invented age when the start time is unknown', () => {

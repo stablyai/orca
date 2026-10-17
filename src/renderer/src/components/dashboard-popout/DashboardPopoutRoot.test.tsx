@@ -6,7 +6,9 @@ import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-menu-selection-actions'
 
 vi.mock('./AgentKanbanBoard', () => ({ AgentKanbanBoard: () => null }))
-vi.mock('./useDashboardSnapshot', () => ({ useDashboardSnapshot: () => null }))
+vi.mock('./useDashboardSnapshot', () => ({
+  useDashboardSnapshot: () => ({ generatedAt: 1, cards: [] })
+}))
 
 import { DashboardPopoutRoot } from './DashboardPopoutRoot'
 

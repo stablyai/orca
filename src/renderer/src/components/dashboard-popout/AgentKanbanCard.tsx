@@ -188,18 +188,18 @@ type AgentKanbanCardProps = {
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
-  /** Opens the board-level terminal dialog. The dialog is NOT owned by the
-   *  card: bucket moves remount the card, and an embedded dialog would close
-   *  the chat mid-conversation. */
+  isSelected?: boolean
+  /** The board owns click routing and any preview so bucket moves cannot close it. */
   onOpenTerminal: (card: DashboardCard) => void
 }
 
-/** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
+/** One agent on the kanban board; its host chooses the click destination. */
 export const AgentKanbanCard = memo(
   function AgentKanbanCard({
     card,
     repoIcon = null,
     now,
+    isSelected = false,
     onOpenTerminal
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
@@ -222,18 +222,21 @@ export const AgentKanbanCard = memo(
         // the card from its old column to its new one when its bucket changes.
         // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
+        data-current={isSelected || undefined}
         className={cn(
           'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
           needsYou
             ? 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
             : isDone
               ? 'border-emerald-500/40 bg-emerald-500/[0.06] hover:border-emerald-500/60 hover:bg-emerald-500/10'
-              : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
+              : 'border-border/60 bg-card hover:border-border hover:bg-accent/40',
+          isSelected && 'bg-accent ring-2 ring-inset ring-ring'
         )}
       >
         <button
           type="button"
           onClick={() => onOpenTerminal(card)}
+          aria-current={isSelected ? 'true' : undefined}
           className="flex w-full flex-col gap-1.5 text-left focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <div className="flex w-full items-center gap-1.5">
@@ -351,6 +354,7 @@ export const AgentKanbanCard = memo(
   },
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.isSelected === next.isSelected &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||
