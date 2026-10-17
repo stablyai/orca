@@ -9,6 +9,21 @@ export function exposeUtcTimestamp(timestamp: string | null): string | null {
   return `${timestamp.replace(' ', 'T')}Z`
 }
 
+/** Epoch ms for a stored stamp in either the space format or an explicit-offset one.
+ *  `null` = the column holds no value; `'unreadable'` = it holds one no parser accepts. The two
+ *  stay distinct so a corrupt row can neither become a bogus instant nor be reported as "never
+ *  written", and the literal (rather than `NaN`) keeps caller arithmetic type-checked and JSON-safe. */
+export function readUtcTimestampMs(timestamp: string | null): number | null | 'unreadable' {
+  const exposed = exposeUtcTimestamp(timestamp)
+  // Only SQL NULL means "never written". An empty string is a value that was stored and lost its
+  // contents, so it falls through to the parse and is classified as corruption.
+  if (exposed === null) {
+    return null
+  }
+  const parsed = Date.parse(exposed)
+  return Number.isNaN(parsed) ? 'unreadable' : parsed
+}
+
 export function exposeMessageTimestamps(message: MessageRow): MessageRow {
   // Why: SQLite stores UTC as timezone-less space format for SQL ordering, but RPC/CLI consumers need an explicit offset.
   return {
