@@ -14,6 +14,7 @@ import {
 } from '../plugin-catalog/PluginCatalogLayout'
 import { Button } from '../ui/button'
 import { PluginMarketplaceListingRow } from './PluginMarketplaceListingRow'
+import { pluginPlatformInstallErrorMessage } from './plugin-error-presentation'
 import {
   PluginMarketplacePreviewDialog,
   type PluginMarketplacePreviewMode
@@ -29,7 +30,7 @@ type PluginMarketplaceBrowserProps = {
 
 function marketplaceError(cause: unknown, fallback: string): string {
   console.warn('[plugins] marketplace action failed:', cause)
-  return fallback
+  return pluginPlatformInstallErrorMessage(cause) ?? fallback
 }
 
 export function PluginMarketplaceBrowser({

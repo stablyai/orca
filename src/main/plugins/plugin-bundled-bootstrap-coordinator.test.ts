@@ -5,6 +5,7 @@ import { PluginBundledBootstrapCoordinator } from './plugin-bundled-bootstrap-co
 const unchanged: PluginBundledBootstrapResult = {
   installed: [],
   unchanged: ['stablyai.orca-theme'],
+  skipped: [],
   errors: []
 }
 
@@ -17,6 +18,7 @@ describe('PluginBundledBootstrapCoordinator', () => {
       .mockResolvedValueOnce({
         installed: ['stablyai.orca-theme'],
         unchanged: [],
+        skipped: [],
         errors: []
       })
     const refreshPlugins = vi.fn().mockResolvedValue(undefined)

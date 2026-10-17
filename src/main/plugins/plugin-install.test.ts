@@ -38,7 +38,7 @@ async function tempRoot(prefix: string): Promise<string> {
 
 async function writePluginSource(
   root: string,
-  options: { id?: string; panelEntry?: string; includePanel?: boolean } = {}
+  options: { id?: string; panelEntry?: string; includePanel?: boolean; platforms?: string[] } = {}
 ): Promise<void> {
   const panelEntry = options.panelEntry ?? 'panel.html'
   await writeFile(
@@ -51,6 +51,7 @@ async function writePluginSource(
       version: '1.0.0',
       engines: { orca: '>=1.0.0' },
       pluginApi: 1,
+      ...(options.platforms ? { platforms: options.platforms } : {}),
       contributes: {
         panels: [{ id: 'panel', title: 'Panel', entry: panelEntry }],
         commands: [],
@@ -349,6 +350,35 @@ describe('installPluginFromLocalPath', () => {
     })
 
     expect(result).toMatchObject({ ok: false })
+  })
+
+  it('refuses a plugin built for another operating system and publishes nothing', async () => {
+    const sourcePath = await tempRoot('orca-plugin-source-')
+    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const otherPlatform = process.platform === 'win32' ? 'linux' : 'win32'
+    await writePluginSource(sourcePath, { platforms: [otherPlatform] })
+
+    const result = await installPluginFromLocalPath({
+      pluginsDir,
+      sourcePath,
+      hostVersion: '1.4.0'
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: `plugin is not available on this platform: supports ${otherPlatform} (this is ${process.platform})`
+    })
+    expect(await readdir(pluginsDir)).toEqual([])
+  })
+
+  it('installs a plugin whose platforms include this computer', async () => {
+    const sourcePath = await tempRoot('orca-plugin-source-')
+    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    await writePluginSource(sourcePath, { platforms: ['darwin', 'linux', 'win32'] })
+
+    await expect(
+      installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
+    ).resolves.toMatchObject({ ok: true, pluginKey: 'orca-samples.demo' })
   })
 
   it('rejects an oversized manifest without reading an unbounded JSON payload', async () => {

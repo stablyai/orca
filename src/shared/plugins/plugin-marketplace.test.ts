@@ -8,10 +8,12 @@ import {
   isOfficialOrganizationGitSource,
   isOfficialPluginIdentity,
   isReservedPluginIdentity,
+  createOfficialPluginPolicy,
   parseGitRepositoryIdentity,
   pluginMarketplaceSchema,
   pluginMarketplaceTrustMetadataSchema
 } from './plugin-marketplace'
+import { OFFICIAL_PLUGIN_PUBLISHERS } from './plugin-official-publishers'
 
 function listing(id = 'community.nord'): Record<string, unknown> {
   return {
@@ -184,5 +186,33 @@ describe('marketplace provenance contracts', () => {
     for (const deferred of ['themes', 'icons', 'icon-themes', 'terminal-themes', 'skills']) {
       expect(isMarketplaceListingSupported([deferred, 'official'])).toBe(false)
     }
+  })
+})
+
+describe('official plugin publisher allowlist', () => {
+  it('defaults to stablyai only', () => {
+    expect(OFFICIAL_PLUGIN_PUBLISHERS).toEqual([{ publisher: 'stablyai', githubOwner: 'stablyai' }])
+  })
+
+  it('extends every official check from one list entry', () => {
+    const policy = createOfficialPluginPolicy([
+      ...OFFICIAL_PLUGIN_PUBLISHERS,
+      { publisher: 'pod-labs', githubOwner: 'Pod-Labs' }
+    ])
+
+    expect(policy.isOfficialPluginIdentity('pod-labs.orca-sync')).toBe(true)
+    expect(policy.isOfficialPluginIdentity('stablyai.orca-skills')).toBe(true)
+    // The reserved prefix still needs an allowlisted publisher to be official.
+    expect(policy.isOfficialPluginIdentity('pod-labs.sync')).toBe(false)
+    expect(policy.isOfficialPluginIdentity('community.orca-sync')).toBe(false)
+    expect(policy.isReservedPluginIdentity('pod-labs.sync')).toBe(true)
+    expect(policy.isOfficialOrganizationGitSource('git@github.com:pod-labs/orca-sync.git')).toBe(
+      true
+    )
+    expect(policy.isOfficialOrganizationGitSource('https://github.com/pod-labs-fakes/x')).toBe(
+      false
+    )
+    // The default exports stay bound to the built-in list.
+    expect(isOfficialPluginIdentity('pod-labs.orca-sync')).toBe(false)
   })
 })

@@ -65,6 +65,8 @@ export type PluginHostListEntry = {
   }[]
   restarts: number
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** Set on `invalid` entries whose manifest excludes this computer's OS. */
+  unsupportedPlatform?: { platforms: ('darwin' | 'linux' | 'win32')[] }
   source?: {
     kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
     reference: string

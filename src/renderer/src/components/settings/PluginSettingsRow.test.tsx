@@ -82,4 +82,46 @@ describe('PluginSettingsRow', () => {
     ).toBe(true)
     act(() => root.unmount())
   })
+
+  it('explains a plugin for another OS calmly instead of as a broken plugin', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    const unsupported: PluginHostListEntry = {
+      ...plugin,
+      pluginKey: 'orca-samples.mac-tool',
+      name: 'Mac Tool',
+      publisher: 'orca-samples',
+      status: 'invalid',
+      error: 'not available on this platform: supports darwin, linux (this is win32)',
+      official: false,
+      bundled: false,
+      blockedByKillList: undefined,
+      source: undefined,
+      unsupportedPlatform: { platforms: ['darwin', 'linux'] }
+    }
+    await act(async () => {
+      root.render(
+        <PluginSettingsRow
+          plugin={unsupported}
+          busy={false}
+          logsOpen={false}
+          onReview={vi.fn()}
+          onToggleEnabled={vi.fn()}
+          onToggleLogs={vi.fn()}
+          onRollbackRequest={vi.fn()}
+          onRemoveRequest={vi.fn()}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain('Unavailable')
+    expect(container.textContent).toContain(
+      'Available only on macOS, Linux. It stays off on this computer.'
+    )
+    expect(container.textContent).not.toContain('Invalid')
+    expect(container.textContent).not.toContain('invalid')
+    expect(container.querySelector('[role="switch"]')?.hasAttribute('disabled')).toBe(true)
+    expect(container.textContent).toContain('Remove')
+  })
 })
