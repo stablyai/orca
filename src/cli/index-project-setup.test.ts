@@ -451,6 +451,38 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  // `--kind=` reaches the parser as an empty string; read as "no kind given" it would register a
+  // git project where the caller asked for a folder one.
+  it('rejects an empty --kind on project setup before contacting the runtime', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'project',
+        'setup-existing-folder',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'local',
+        '--path',
+        '/tmp/orca',
+        '--kind=',
+        '--json'
+      ],
+      '/tmp'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--kind must be git or folder'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects remote project setup relative paths instead of resolving against client cwd', async () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
+import { formatNonGitRepoRejection } from '../../../shared/non-git-repo-rejection'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -27,7 +28,7 @@ export async function addLocalRepoFromPath(
   }
   const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
   if (gitInfo && !gitInfo.isRepo) {
-    return { error: `Not a valid git repository: ${path}` }
+    return { error: formatNonGitRepoRejection(path) }
   }
 
   const resolvedPath = gitInfo?.rootPath ?? path
