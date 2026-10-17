@@ -329,6 +329,27 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
     expectLifecycle(output, 0)
   })
 
+  itWithBash('starts a command only after its prompt with functrace enabled', () => {
+    const output = runInteractiveBash(['set -T', "PS1='ORCA_PS1> '"].join('\n'), tempHome)
+    const startBeforePrompt = new RegExp(
+      `${String.fromCharCode(27)}]133;A${String.fromCharCode(7)}(?:(?!ORCA_PS1> )[\\s\\S])*${String.fromCharCode(27)}]133;C`
+    )
+
+    expect(output).toContain('ORCA_PS1> ')
+    expect(output).not.toMatch(startBeforePrompt)
+    expectLifecycle(output)
+  })
+
+  itWithBash.each(['trap - DEBUG', "trap ':' DEBUG"])(
+    'starts each command once after `%s` when PS0 runs a command substitution',
+    (trapChange) => {
+      const profile = ['set -T', "PS0='$(:)'"].join('\n')
+      const output = runInteractiveBash(profile, tempHome, `${trapChange}\ntrue\nexit 0\n`)
+
+      expectLifecycle(output, 0)
+    }
+  )
+
   itWithBash('does not treat a DEBUG trap query as a mutation', () => {
     const profile = [
       'trap \'trap -p DEBUG >/dev/null; printf "QUERY:<%s>\\n" "$BASH_COMMAND"\' DEBUG',
@@ -383,6 +404,8 @@ PROMPT_COMMAND='printf "PROMPT_REMATCH:<%s>\\n" "\${BASH_REMATCH[1]-unset}"'
       '__bp_preexec() { [[ -n "${__bp_armed:-}" ]] || return; __bp_armed=""; printf \'PROMPT_PREEXEC:<%s>\\n\' "$BASH_COMMAND"; }',
       "trap '__bp_preexec' DEBUG",
       '__bp_arm() { __bp_armed=1; }',
+      // Why: /etc/profile may already hold a hook (systemd 258+ adds one) that would run after the arm.
+      'unset PROMPT_COMMAND',
       'PROMPT_COMMAND=__bp_arm'
     ].join('\n')
     const output = runInteractiveBash(
