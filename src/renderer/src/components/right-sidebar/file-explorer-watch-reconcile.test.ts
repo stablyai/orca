@@ -55,6 +55,83 @@ function processUpdate(args: {
   return refreshDir
 }
 
+function processEvent(args: {
+  root: string
+  event: {
+    kind: 'create' | 'update' | 'delete' | 'rename' | 'overflow'
+    absolutePath: string
+    oldAbsolutePath?: string
+    isDirectory?: boolean
+  }
+  cache: Record<string, DirCache>
+}): ReturnType<typeof vi.fn> {
+  const refreshDir = vi.fn()
+  processFileExplorerFsPayload({
+    payload: {
+      worktreePath: args.root,
+      events: [args.event]
+    },
+    currentWorktreePath: args.root,
+    worktreeId: 'wt-1',
+    cache: args.cache,
+    expanded: new Set(),
+    setDirCache: vi.fn(),
+    setSelectedPath: vi.fn(),
+    refreshDir,
+    refreshTree: vi.fn()
+  })
+  return refreshDir
+}
+
+describe('processFileExplorerFsPayload create/delete reconciliation', () => {
+  it('refreshes a cached parent when an external process creates a file', () => {
+    const root = '/repo'
+    const refreshDir = processEvent({
+      root,
+      event: { kind: 'create', absolutePath: `${root}/new.ts`, isDirectory: false },
+      cache: { [root]: cacheWithChildren([`${root}/existing.ts`]) }
+    })
+
+    expect(refreshDir).toHaveBeenCalledOnce()
+    expect(refreshDir).toHaveBeenCalledWith(root)
+  })
+
+  it('refreshes a cached Windows parent when create casing differs from the worktree key', () => {
+    const root = 'C:\\Repo'
+    const refreshDir = processEvent({
+      root,
+      event: { kind: 'create', absolutePath: 'c:\\repo\\new.ts', isDirectory: false },
+      cache: { [root]: cacheWithChildren([`${root}\\existing.ts`]) }
+    })
+
+    expect(refreshDir).toHaveBeenCalledOnce()
+    expect(refreshDir).toHaveBeenCalledWith(root)
+  })
+
+  it('refreshes a cached parent when an external process deletes a file', () => {
+    const root = '/repo'
+    const refreshDir = processEvent({
+      root,
+      event: { kind: 'delete', absolutePath: `${root}/existing.ts` },
+      cache: { [root]: cacheWithChildren([`${root}/existing.ts`]) }
+    })
+
+    expect(refreshDir).toHaveBeenCalledOnce()
+    expect(refreshDir).toHaveBeenCalledWith(root)
+  })
+
+  it('does not reread a directory for an existing file content modify', () => {
+    const root = '/repo'
+    const refreshDir = processEvent({
+      root,
+      event: { kind: 'update', absolutePath: `${root}/existing.ts`, isDirectory: false },
+      cache: { [root]: cacheWithChildren([`${root}/existing.ts`]) }
+    })
+
+    expect(refreshDir).not.toHaveBeenCalled()
+  })
+})
+
 describe('processFileExplorerFsPayload update reconciliation', () => {
   it('purges Windows descendants case-insensitively without folding remote POSIX paths', () => {
     let cache: Record<string, DirCache> = {
