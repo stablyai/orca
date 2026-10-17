@@ -12,7 +12,7 @@ import {
 // policy, decided where the wire is.
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 6
+export const SESSION_SEARCH_SCHEMA_VERSION = 7
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -88,6 +88,12 @@ CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
 -- second table on a 105 MB corpus, under the 2x bar the decision was set at.
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   user_text, assistant_text, tool_text, identifiers, ${TOKENIZER}, detail=full
+);
+-- Why a second table: unicode61 indexes a whole CJK run between punctuation as one
+-- token, so only trigram can match a substring. Rows without CJK text are never
+-- written here, so Latin-only indexes pay nothing for it.
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_cjk_fts USING fts5(
+  user_text, assistant_text, tool_text, tokenize="trigram"
 );
 `
 

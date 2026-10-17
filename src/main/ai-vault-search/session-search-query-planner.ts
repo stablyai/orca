@@ -11,8 +11,13 @@ const STOP_WORDS = new Set(
     "these those there's im ive dont"
   ).split(' ')
 )
+// Han, kana and Hangul. `scx` (not `sc`) so the prolonged sound mark `ー` counts as kana.
+const CJK_CLASS = '[\\p{scx=Han}\\p{scx=Hiragana}\\p{scx=Katakana}\\p{scx=Hangul}]'
+const CJK_RUN = new RegExp(`${CJK_CLASS}+`, 'gu')
+const CJK_CHAR = new RegExp(CJK_CLASS, 'u')
 const MAX_BODY_TERMS = 48
 const MAX_TERMS = 64
+const MAX_CJK_RUNS = 8
 
 // A query that quotes something from a transcript: camelCase, SCREAMING_SNAKE,
 // a dotted or snake_case name, a path, a filename, a PR number, a ticket, code
@@ -40,6 +45,16 @@ export type SessionSearchQueryPlan = {
    * phrase rung has to search the words the user actually typed.
    */
   phrase: string[]
+  /** CJK runs of the query: each must occur as a substring, which unicode61 cannot answer. */
+  cjkRuns: string[]
+  /** The query's non-CJK tokens, which the CJK route still requires through the main index. */
+  cjkRest: string[]
+  /** Set on the plan a hit was actually retrieved by through the CJK index, so its snippet reads the same text. */
+  cjkMatched?: boolean
+}
+
+export function hasCjkText(text: string): boolean {
+  return CJK_CHAR.test(text)
 }
 
 export function isLiteralQuery(query: string): boolean {
@@ -98,9 +113,12 @@ export function planSessionSearchQuery(
       }
     }
   }
+  const cjkRuns = [...new Set(query.match(CJK_RUN) ?? [])].slice(0, MAX_CJK_RUNS)
   return {
     literal,
     truncated,
+    cjkRuns,
+    cjkRest: cjkRuns.length > 0 ? indexTokens(query.replace(CJK_RUN, ' '), MAX_BODY_TERMS) : [],
     terms: [...terms, ...extra].slice(0, MAX_TERMS),
     body: body.slice(0, MAX_BODY_TERMS),
     phrase: raw
