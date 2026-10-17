@@ -18,6 +18,7 @@ type RuntimeFileCommandName =
   | 'readFileExplorerChunk'
   | 'readDocPreviewFile'
   | 'writeFileExplorerFile'
+  | 'formatFileExplorerFile'
   | 'writeFileExplorerFileBase64'
   | 'writeFileExplorerFileBase64Chunk'
   | 'createFileExplorerFile'
@@ -57,6 +58,7 @@ export function installRuntimeFileCommandSurface(
     readFileExplorerChunk: commands.readFileExplorerChunk.bind(commands),
     readDocPreviewFile: commands.readDocPreviewFile.bind(commands),
     writeFileExplorerFile: commands.writeFileExplorerFile.bind(commands),
+    formatFileExplorerFile: commands.formatFileExplorerFile.bind(commands),
     writeFileExplorerFileBase64: commands.writeFileExplorerFileBase64.bind(commands),
     writeFileExplorerFileBase64Chunk: commands.writeFileExplorerFileBase64Chunk.bind(commands),
     createFileExplorerFile: commands.createFileExplorerFile.bind(commands),

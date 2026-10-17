@@ -45,13 +45,22 @@ export type EditorWindowStub = {
   dispatchEvent: Window['dispatchEvent']
   setTimeout: Window['setTimeout']
   clearTimeout: Window['clearTimeout']
-  api: { fs: FakeEditorDisk['fs'] }
+  api: {
+    fs: FakeEditorDisk['fs'] & { readFile: ReturnType<typeof vi.fn> }
+    editor: { formatOnSave: ReturnType<typeof vi.fn> }
+  }
 }
 
-/** Stubs the global window with an isolated event target backed by `disk`. */
+/** Stubs the global window with an isolated event target backed by `disk`.
+ *  Format-on-save is stubbed as "nothing configured" so unrelated suites stay unaffected. */
 export function stubEditorWindowWithDisk(
-  disk: FakeEditorDisk = createFakeEditorDisk()
+  disk: FakeEditorDisk = createFakeEditorDisk(),
+  overrides?: { readFile?: ReturnType<typeof vi.fn>; formatOnSave?: ReturnType<typeof vi.fn> }
 ): FakeEditorDisk {
+  const readFile = overrides?.readFile ?? vi.fn().mockResolvedValue({ content: '' })
+  const formatOnSave =
+    overrides?.formatOnSave ??
+    vi.fn().mockResolvedValue({ status: 'skipped', reason: 'not-configured' })
   const eventTarget = new EventTarget()
   vi.stubGlobal('window', {
     addEventListener: eventTarget.addEventListener.bind(eventTarget),
@@ -59,15 +68,18 @@ export function stubEditorWindowWithDisk(
     dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
     setTimeout: globalThis.setTimeout.bind(globalThis),
     clearTimeout: globalThis.clearTimeout.bind(globalThis),
-    api: { fs: disk.fs }
+    api: { fs: { ...disk.fs, readFile }, editor: { formatOnSave } }
   } satisfies EditorWindowStub)
   return disk
 }
 
 /** Stubs the global window with an isolated event target and fs bridge;
  *  returns the writeFile mock for assertions. */
-export function stubEditorWindow(): ReturnType<typeof vi.fn> {
-  return stubEditorWindowWithDisk().fs.writeFile
+export function stubEditorWindow(overrides?: {
+  readFile?: ReturnType<typeof vi.fn>
+  formatOnSave?: ReturnType<typeof vi.fn>
+}): ReturnType<typeof vi.fn> {
+  return stubEditorWindowWithDisk(createFakeEditorDisk(), overrides).fs.writeFile
 }
 
 export function createEditorStore(): StoreApi<AppState> {
@@ -76,7 +88,7 @@ export function createEditorStore(): StoreApi<AppState> {
     activeWorktreeId: 'wt-1',
     repos: [],
     worktreesByRepo: {
-      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
+      'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local', path: '/repo' }]
     },
     detectedWorktreesByRepo: {},
     runtimeEnvironments: [],

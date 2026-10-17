@@ -3,6 +3,7 @@ import { RuntimeTerminalArtifacts } from './terminal/artifacts/terminal-artifact
 import { RuntimeFileAccess } from './files/file-access'
 import { RuntimeFileReads } from './files/file-reads'
 import { RuntimeFileMutations } from './files/file-mutations'
+import { RuntimeFileFormatting } from './files/file-format-on-save'
 import { RuntimeFileWatches } from './files/watch/file-watches'
 import { RuntimeTerminalPathResolver } from './terminal/terminal-path-resolver'
 import type { RuntimeFileCommandHost } from './files/file-command-host'
@@ -13,6 +14,7 @@ export class RuntimeFileCommands {
   private readonly access: RuntimeFileAccess
   private readonly reads: RuntimeFileReads
   private readonly mutations: RuntimeFileMutations
+  private readonly formatting: RuntimeFileFormatting
   private readonly watches: RuntimeFileWatches
   private readonly terminalPaths: RuntimeTerminalPathResolver
 
@@ -26,6 +28,7 @@ export class RuntimeFileCommands {
   readonly readDocPreviewFile: RuntimeFileReads['readDocPreviewFile']
   readonly readFileExplorerChunk: RuntimeFileReads['readFileExplorerChunk']
   readonly writeFileExplorerFile: RuntimeFileMutations['writeFileExplorerFile']
+  readonly formatFileExplorerFile: RuntimeFileFormatting['formatFileExplorerFile']
   readonly writeFileExplorerFileBase64: RuntimeFileMutations['writeFileExplorerFileBase64']
   readonly writeFileExplorerFileBase64Chunk: RuntimeFileMutations['writeFileExplorerFileBase64Chunk']
   readonly createFileExplorerFile: RuntimeFileMutations['createFileExplorerFile']
@@ -48,6 +51,7 @@ export class RuntimeFileCommands {
     this.access = new RuntimeFileAccess(host)
     this.reads = new RuntimeFileReads(host)
     this.mutations = new RuntimeFileMutations(host)
+    this.formatting = new RuntimeFileFormatting(host)
     this.watches = new RuntimeFileWatches(host)
     this.terminalPaths = new RuntimeTerminalPathResolver(host, this.artifacts)
     this.openMobileFile = this.access.openMobileFile.bind(this.access)
@@ -60,6 +64,7 @@ export class RuntimeFileCommands {
     this.readDocPreviewFile = this.reads.readDocPreviewFile.bind(this.reads)
     this.readFileExplorerChunk = this.reads.readFileExplorerChunk.bind(this.reads)
     this.writeFileExplorerFile = this.mutations.writeFileExplorerFile.bind(this.mutations)
+    this.formatFileExplorerFile = this.formatting.formatFileExplorerFile.bind(this.formatting)
     this.writeFileExplorerFileBase64 = this.mutations.writeFileExplorerFileBase64.bind(
       this.mutations
     )

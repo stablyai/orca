@@ -58,6 +58,8 @@ vi.mock('@/lib/monaco-setup', async () => {
           saveViewState: () => null,
           getTargetAtClientPoint: () => null,
           setPosition: vi.fn(),
+          getSelections: () => null,
+          setSelections: vi.fn(),
           focus: widgetCalls.focus,
           onDidBlurEditorWidget: () => ({ dispose: vi.fn() }),
           addCommand: vi.fn(),

@@ -107,6 +107,7 @@ export class RepoUpdatePersistenceOperations {
         | 'upstream'
         | 'gitRemoteIdentity'
         | 'hookSettings'
+        | 'formatOnSave'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'

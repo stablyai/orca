@@ -92,13 +92,16 @@ vi.mock('@/lib/lazy-with-retry', async () => {
             }),
             pushEditOperations: (_selections: unknown[], operations: { text: string }[]) => {
               retained.content = operations[0]?.text ?? retained.content
-            }
+            },
+            validatePosition: (position: unknown) => position
           }
           // Why: exercising the real mount reconciler makes outer key ordering
           // observable without replacing Monaco's retained-model semantics.
           syncContentOnMount(
             {
               getModel: () => model,
+              getSelections: () => [],
+              setSelections: () => undefined,
               pushUndoStop: () => {
                 retained.undo.push('unexpected undo stop')
                 return true

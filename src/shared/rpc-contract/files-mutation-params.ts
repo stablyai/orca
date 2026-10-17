@@ -85,3 +85,6 @@ export const FileCommitUpload = WorktreeSelector.extend({
 export const FileDelete = FileMutationOpen.extend({
   recursive: z.boolean().optional()
 })
+
+// Why: formatting rewrites the saved file, so it carries the same host expectations as a write.
+export const FileFormatOnSave = FileMutationOpen

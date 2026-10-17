@@ -3,6 +3,7 @@ import {
   FileCommitUpload,
   FileCopy,
   FileDelete,
+  FileFormatOnSave,
   FileMutationOpen,
   FileRename,
   FileWrite,
@@ -43,6 +44,17 @@ export const FILE_MUTATION_METHODS = [
         params.worktree,
         params.relativePath,
         params.content,
+        ...sshMutationArguments(params)
+      )
+  }),
+  defineMethod({
+    name: 'files.formatOnSave',
+    permission: 'workspace',
+    params: FileFormatOnSave,
+    handler: async (params, { runtime }) =>
+      runtime.formatFileExplorerFile(
+        params.worktree,
+        params.relativePath,
         ...sshMutationArguments(params)
       )
   }),
