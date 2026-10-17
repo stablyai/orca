@@ -188,6 +188,17 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.stepDone['two-worktrees']).toBe(true)
   })
 
+  it('treats a deliberately cleared default agent as a completed choice', () => {
+    const stepDone = (defaultTuiAgent: 'blank' | 'claude' | null): boolean =>
+      getFeatureWallSetupProgress(
+        makeInput({ settings: { defaultTuiAgent, notifications: {} } as never })
+      ).stepDone['default-agent']
+
+    expect(stepDone(null)).toBe(false)
+    expect(stepDone('blank')).toBe(true)
+    expect(stepDone('claude')).toBe(true)
+  })
+
   it('marks the browser step complete once a non-blank page has been viewed', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
