@@ -20,6 +20,7 @@ import { useCombinedDiffSectionRevalidation } from './load-sections/use-combined
 import { useCombinedDiffViewPersist } from './remember-view/use-combined-diff-view-persist'
 import { useCombinedDiffViewRestore } from './remember-view/use-combined-diff-view-restore'
 import { useCombinedDiffDirectScrollInput } from './scroll-viewport/use-combined-diff-direct-scroll-input'
+import { planCombinedDiffSectionToggle } from './scroll-viewport/combined-diff-collapse-scroll-anchor'
 import { useCombinedDiffScrollAnchors } from './scroll-viewport/use-combined-diff-scroll-anchors'
 import { useCombinedDiffScrollPersistence } from './scroll-viewport/use-combined-diff-scroll-persistence'
 import { useCombinedDiffScrollbar } from './scroll-viewport/use-combined-diff-scrollbar'
@@ -163,15 +164,17 @@ export default function CombinedDiffViewer({
 
   const toggleSection = useCallback(
     (index: number) => {
-      const shouldLoadAfterExpand = registry.sectionsRef.current[index]?.collapsed ?? false
-      setSections((prev) =>
-        prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s))
-      )
-      if (shouldLoadAfterExpand) {
+      const plan = planCombinedDiffSectionToggle({
+        index,
+        sections: registry.sectionsRef.current,
+        anchor: restore.scrollAnchorRef.current
+      })
+      setSections((prev) => plan.next(prev))
+      if (plan.shouldLoadAfterExpand) {
         registry.loadSchedulerRef.current.request(index)
       }
     },
-    [registry.loadSchedulerRef, registry.sectionsRef]
+    [registry.loadSchedulerRef, registry.sectionsRef, restore.scrollAnchorRef]
   )
 
   const treeNavigation = useCombinedDiffTreeNavigation({
