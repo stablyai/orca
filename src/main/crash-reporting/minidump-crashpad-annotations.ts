@@ -10,6 +10,11 @@ import {
   type LocationDescriptor,
   type MinidumpView
 } from './minidump-stream-reader'
+import {
+  ELECTRON_OOM_LOCATION_ANNOTATION,
+  ELECTRON_OOM_STACK_ANNOTATION,
+  V8_OOM_STACK_ANNOTATION
+} from './minidump-oom-js-stack'
 
 // Why: a dump claiming an absurd annotation count is corrupt; cap before iterating.
 const MAX_ANNOTATIONS = 512
@@ -50,6 +55,10 @@ const ANNOTATION_ALLOWLIST = new Set([
   // Distinguishes a one-off from a crash loop.
   'crash-loop-before',
   'first-crash-time',
+  // Renderer heap-OOM JS stack; the only frame naming a loop that froze the renderer.
+  ELECTRON_OOM_STACK_ANNOTATION,
+  ELECTRON_OOM_LOCATION_ANNOTATION,
+  V8_OOM_STACK_ANNOTATION,
   // The Linux SIGBUS/SIGSEGV reports are GPU-adjacent; driver identity matters.
   'gpu-gl-vendor',
   'gpu-gl-renderer',

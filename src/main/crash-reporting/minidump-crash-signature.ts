@@ -14,6 +14,12 @@
 import { findStream, isMinidump, MinidumpView, type MinidumpSource } from './minidump-stream-reader'
 import { readCrashpadAnnotations } from './minidump-crashpad-annotations'
 import { findEmbeddedCheckMessage } from './minidump-embedded-check'
+import {
+  ELECTRON_OOM_LOCATION_ANNOTATION,
+  ELECTRON_OOM_STACK_ANNOTATION,
+  sanitizeOomJsStack,
+  V8_OOM_STACK_ANNOTATION
+} from './minidump-oom-js-stack'
 
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
@@ -193,6 +199,16 @@ export async function parseMinidumpCrashSignature(
   return signature
 }
 
+// Emitted under their own detail keys above; raw OOM frames carry install paths.
+const EXPLICIT_ANNOTATION_KEYS = new Set([
+  'LOG_FATAL',
+  'abort-message',
+  'ptype',
+  ELECTRON_OOM_STACK_ANNOTATION,
+  ELECTRON_OOM_LOCATION_ANNOTATION,
+  V8_OOM_STACK_ANNOTATION
+])
+
 /** Flattens a signature into `CrashReportRecord.details` keys. */
 export function minidumpSignatureDetails(
   signature: MinidumpCrashSignature
@@ -222,8 +238,16 @@ export function minidumpSignatureDetails(
   if (signature.faultingModuleOffset) {
     details.minidumpFaultingModuleOffset = signature.faultingModuleOffset
   }
+  const oomJsStack = sanitizeOomJsStack(signature.annotations)
+  if (oomJsStack) {
+    details.minidumpOomJsStack = oomJsStack
+  }
+  const oomLocation = signature.annotations[ELECTRON_OOM_LOCATION_ANNOTATION]
+  if (oomLocation) {
+    details.minidumpOomLocation = oomLocation
+  }
   for (const [key, value] of Object.entries(signature.annotations)) {
-    if (key === 'LOG_FATAL' || key === 'abort-message' || key === 'ptype') {
+    if (EXPLICIT_ANNOTATION_KEYS.has(key)) {
       continue
     }
     details[`minidumpAnnotation_${key.replace(/-/g, '_')}`] = value
