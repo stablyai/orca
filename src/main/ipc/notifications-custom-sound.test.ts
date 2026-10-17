@@ -42,61 +42,75 @@ describe('registerNotificationHandlers', () => {
     rmSync(tempDir, { recursive: true, force: true })
   })
 
-  it('uses the macOS default notification sound when no custom sound is configured', async () => {
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    try {
-      registerNotificationHandlers({
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: false,
-            customSoundPath: null
-          }
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'leaves native System sound options unset on %s',
+    async (platform) => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+      try {
+        registerNotificationHandlers({
+          getSettings: () => ({
+            notifications: {
+              enabled: true,
+              agentTaskComplete: true,
+              terminalBell: true,
+              suppressWhenFocused: false,
+              customSoundId: 'system',
+              customSoundPath: null
+            }
+          })
+        } as never)
+
+        const handler = getDispatchHandler()
+        for (const source of ['test', 'agent-task-complete', 'terminal-bell'] as const) {
+          expect(await handler({}, { source, worktreeId: source })).toEqual({ delivered: true })
+        }
+        expect(notificationCtorMock).toHaveBeenCalledWith({
+          title: 'Orca notifications are on',
+          body: 'This is a test notification from Orca.'
         })
-      } as never)
-
-      const handler = getDispatchHandler()
-      expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
-      expect(notificationCtorMock).toHaveBeenCalledWith({
-        title: 'Orca notifications are on',
-        body: 'This is a test notification from Orca.',
-        sound: 'default'
-      })
-    } finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+        expect(notificationCtorMock).toHaveBeenCalledTimes(3)
+        for (const [options] of notificationCtorMock.mock.calls) {
+          expect(options).not.toHaveProperty('sound')
+          expect(options).not.toHaveProperty('silent')
+        }
+      } finally {
+        Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      }
     }
-  })
+  )
 
-  it('does not request a native macOS sound when a custom sound is configured', async () => {
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    try {
-      registerNotificationHandlers({
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: false,
-            customSoundPath: '/Users/kaylee/Downloads/Note_block_pling.ogg'
-          }
+  it.each(['custom', 'two-tone'] as const)(
+    'silences the native macOS notification when %s playback is selected',
+    async (customSoundId) => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+      try {
+        registerNotificationHandlers({
+          getSettings: () => ({
+            notifications: {
+              enabled: true,
+              agentTaskComplete: true,
+              terminalBell: true,
+              suppressWhenFocused: false,
+              customSoundId,
+              customSoundPath: customSoundId === 'custom' ? join(tempDir, 'notification.ogg') : null
+            }
+          })
+        } as never)
+
+        const handler = getDispatchHandler()
+        expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
+        expect(notificationCtorMock).toHaveBeenCalledWith({
+          title: 'Orca notifications are on',
+          body: 'This is a test notification from Orca.',
+          silent: true
         })
-      } as never)
-
-      const handler = getDispatchHandler()
-      expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
-      expect(notificationCtorMock).toHaveBeenCalledWith({
-        title: 'Orca notifications are on',
-        body: 'This is a test notification from Orca.',
-        silent: true
-      })
-    } finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      } finally {
+        Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+      }
     }
-  })
+  )
 
   it('silences the native notification when a custom sound is configured', async () => {
     registerNotificationHandlers({
