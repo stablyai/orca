@@ -57,4 +57,6 @@ export type RuntimeBrowserCommandHost = {
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
   /** Saved browser tabs on a host with no window; their writes and starts do nothing with one. */
   serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start'>
+  /** False only when the saved session is known to hold no browser tab the renderer could mount for that worktree (undefined = the focused one). */
+  hasSavedBrowserTabs?(worktreeId: string | undefined): boolean
 }

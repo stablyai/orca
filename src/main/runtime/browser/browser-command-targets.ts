@@ -13,6 +13,9 @@ import type {
   ResolvedBrowserPageWebContents
 } from './browser-command-contracts'
 
+// Why: the renderer writes the workspace session on a 150 ms debounce, so a tab it created just now can register before main sees it saved.
+const UNSAVED_BROWSER_TAB_REGISTRATION_GRACE_MS = 500
+
 export class RuntimeBrowserCommandTargets {
   constructor(
     private readonly host: Pick<
@@ -22,6 +25,7 @@ export class RuntimeBrowserCommandTargets {
       | 'getAuthoritativeWindow'
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'serveBrowserTabs'
+      | 'hasSavedBrowserTabs'
     >
   ) {}
 
@@ -158,6 +162,11 @@ export class RuntimeBrowserCommandTargets {
     }
     const win = this.host.getAuthoritativeWindow()
     win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
+    // Why: the renderer only mounts a saved browser tab, so with none saved the full wait just runs out (#20434); the grace covers a tab not yet persisted.
+    if (this.host.hasSavedBrowserTabs?.(worktreeId) === false) {
+      await waitForWorktreeTabRegistration(worktreeId, UNSAVED_BROWSER_TAB_REGISTRATION_GRACE_MS)
+      return
+    }
     // Why: the pane is operable only after the webview mounts and calls registerGuest; wait on that IPC rather than a flaky fixed sleep.
     await waitForWorktreeTabRegistration(worktreeId)
   }

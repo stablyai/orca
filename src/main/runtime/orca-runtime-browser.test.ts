@@ -220,6 +220,53 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(bridge.tabList).toHaveBeenCalledWith(undefined)
   })
 
+  async function commandsForUnregisteredWorktree(
+    hasSavedBrowserTabs: (worktreeId: string | undefined) => boolean
+  ) {
+    const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
+    const send = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: browserTabList reads only getRegisteredTabs and tabList from the bridge.
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map()),
+      tabList: vi.fn(() => ({ tabs: [] }))
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wake only calls webContents.send on the window.
+        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send } }) as never),
+        hasSavedBrowserTabs
+      })
+    )
+    return { commands, send }
+  }
+
+  it('lists an empty worktree after a short grace when the saved session holds no browser tab to mount', async () => {
+    const hasSavedBrowserTabs = vi.fn(() => false)
+    const { commands, send } = await commandsForUnregisteredWorktree(hasSavedBrowserTabs)
+
+    await expect(commands.browserTabList({ worktree: 'id:wt-1' })).resolves.toEqual({ tabs: [] })
+    await expect(commands.browserTabList({})).resolves.toEqual({ tabs: [] })
+
+    // Why: the wake is still requested, but only a short grace is spent on a registration that cannot come (#20434).
+    expect(send).toHaveBeenCalledWith('browser:activateView', { worktreeId: 'wt-1' })
+    expect(send).toHaveBeenCalledWith('browser:activateView', {})
+    expect(hasSavedBrowserTabs).toHaveBeenCalledWith('wt-1')
+    expect(hasSavedBrowserTabs).toHaveBeenCalledWith(undefined)
+    expect(waitForWorktreeTabRegistrationMock).toHaveBeenCalledWith('wt-1', 500)
+    expect(waitForWorktreeTabRegistrationMock).toHaveBeenCalledWith(undefined, 500)
+    expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalledWith('wt-1')
+  })
+
+  it('still waits for registration when the saved session holds browser tabs for the worktree', async () => {
+    const { commands, send } = await commandsForUnregisteredWorktree(() => true)
+
+    await commands.browserTabList({ worktree: 'id:wt-1' })
+
+    expect(send).toHaveBeenCalledWith('browser:activateView', { worktreeId: 'wt-1' })
+    expect(waitForWorktreeTabRegistrationMock).toHaveBeenCalledWith('wt-1')
+  })
+
   it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
     const { RuntimeBrowserCommands } = await import('./browser/browser-commands')
     const webContents = { send: vi.fn() }

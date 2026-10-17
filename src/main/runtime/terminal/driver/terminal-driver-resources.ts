@@ -186,7 +186,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
         this.notifyMobileSessionTabsChanged(worktreeId),
       retireRuntimeOwnedBrowserSessionTab: (worktreeId, browserPageId) =>
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId),
-      serveBrowserTabs: this.serveBrowserTabs
+      serveBrowserTabs: this.serveBrowserTabs,
+      hasSavedBrowserTabs: (worktreeId) => this.hasSavedBrowserTabs(worktreeId)
     },
     screencast: {
       registerSubscriptionCleanup: (subscriptionId, cleanup, connectionId) =>
@@ -207,6 +208,16 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       getSettings: () => this.requireStore().getSettings()
     }
   })
+
+  // Why: mirrors the renderer's activateView target (the focused worktree when none is named); no target, no store, or an unroutable workspace answers true so the wake keeps its full wait.
+  protected hasSavedBrowserTabs(worktreeId: string | undefined): boolean {
+    const target = worktreeId ?? this.store?.getWorkspaceSession?.()?.activeWorktreeId
+    const session = target ? this.getWorkspaceSessionForWorktree(target) : null
+    if (!target || !session) {
+      return true
+    }
+    return (session.browserTabsByWorktree?.[target]?.length ?? 0) > 0
+  }
 
   // Why: tests and diagnostic seams replace only screencast startup; ordinary edge methods stay pre-bound.
   protected browserCommands = this.edgeCommands.getBrowserCommands()
