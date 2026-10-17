@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
+import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog-context'
 import { isWindowsUserAgent } from './pane-helpers'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
