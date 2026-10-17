@@ -1,6 +1,8 @@
 // Why shared: main's terminal side-effect tracker emits pr-link facts
 // (terminal-side-effect-authority.md, slice 3) and needs the same GitHub URL
 // parsing core the renderer link picker uses.
+import { parseBareItemNumber } from '../work-item-number'
+
 const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 
 export type RepoSlug = {
@@ -30,8 +32,7 @@ function matchGitHubItemPath(url: URL): RegExpExecArray | null {
 }
 
 function parseGitHubItemNumber(value: string): number | null {
-  const parsed = Number.parseInt(value, 10)
-  return parsed > 0 ? parsed : null
+  return parseBareItemNumber(value)
 }
 
 /**

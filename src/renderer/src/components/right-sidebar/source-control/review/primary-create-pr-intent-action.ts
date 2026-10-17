@@ -50,6 +50,9 @@ export function resolveProvisionalHostedReviewProvider(input: {
   if (input.linkedGiteaPR != null) {
     return 'gitea'
   }
+  if (input.linkedBitbucketPR != null) {
+    return 'bitbucket'
+  }
   if (input.linkedGitHubPR != null || input.fallbackGitHubPR != null) {
     return 'github'
   }
