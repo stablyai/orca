@@ -285,7 +285,18 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       id,
       ...(expectedOwner ? { expectedOwner } : {})
     })
-    printResult(result, json, formatAutomationRun)
+    const environment = getOptionalStringFlag(flags, 'environment') ?? process.env.ORCA_ENVIRONMENT
+    printResult(
+      { ...result, result: { ...result.result, runId: result.result.run.id } },
+      json,
+      (value) =>
+        formatAutomationRun(value, {
+          environment,
+          preserveConnectionSettings: Boolean(
+            (client.isRemote && !environment) || process.env.ORCA_USER_DATA_PATH
+          )
+        })
+    )
   },
   'automations runs': async ({ flags, client, json }) => {
     const automationId = getOptionalStringFlag(flags, 'id')
