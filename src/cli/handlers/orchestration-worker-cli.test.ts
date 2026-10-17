@@ -48,6 +48,34 @@ describe('orchestration worker-start CLI contract', () => {
       json
     } as never)
 
+  it.each(['succeeded', 'failed'])(
+    'keeps startup successful for an already settled worker (%s)',
+    async (workerOutcome) => {
+      callMock.mockResolvedValue({
+        result: {
+          state: 'ready',
+          stage: 'settled',
+          workerOutcome,
+          effects: [],
+          residualResources: []
+        }
+      })
+      await invokeWorkerStart(
+        new Map([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['from', 'term_coord']
+        ])
+      )
+      expect(process.exitCode).toBeUndefined()
+      expect(printResult).toHaveBeenCalledWith(
+        expect.objectContaining({ result: expect.objectContaining({ workerOutcome }) }),
+        true,
+        expect.any(Function)
+      )
+    }
+  )
+
   it('passes the complete supported creation contract and retry receipt', async () => {
     callMock.mockResolvedValue({
       result: {

@@ -10,9 +10,11 @@ import {
   createAgentPromptSubmissionRuntime
 } from '../../../../agent-prompt-submission-runtime-test-fixture'
 import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import * as FailedStartTeardown from './failed-worker-start-teardown'
 
 vi.mock('../../../../../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -182,6 +184,7 @@ describe('orchestration worker-start prompt contract', () => {
       rmSync(root, { recursive: true, force: true })
     }
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('durably accepts exactly one submitted and started turn', async () => {
@@ -264,6 +267,155 @@ describe('orchestration worker-start prompt contract', () => {
       outcome === 'succeeded' ? 'completed' : 'failed'
     )
   })
+
+  it.each([
+    ['succeeded', false],
+    ['failed', false],
+    ['succeeded', true],
+    ['failed', true]
+  ] as const)(
+    'preserves an early %s report when the prompt receipt subsequently rejects (unknown=%s)',
+    async (outcome, unknown) => {
+      vi.useFakeTimers()
+      const teardown = vi.spyOn(FailedStartTeardown, 'tearDownFailedWorkerStart')
+      const harness = await createPromptContractHarness('swallowed')
+      vi.spyOn(harness.runtime, 'sendTerminalAgentPrompt').mockImplementation(async () => {
+        const dispatch = harness.db.findActiveDispatchForAssignee(harness.handle)
+        if (!dispatch) {
+          throw new Error('Missing starting dispatch')
+        }
+        expect(
+          harness.db.settleWorkerReport({
+            taskId: harness.taskId,
+            dispatchId: dispatch.id,
+            outcome,
+            result: 'Finished before receipt'
+          })
+        ).toMatchObject({ action: 'settled', outcome })
+        throw Object.assign(
+          new Error('terminal_handle_stale'),
+          unknown ? { code: 'operation_unknown' } : {}
+        )
+      })
+      const pending = harness.dispatcher.dispatch(harness.request)
+      await vi.runAllTimersAsync()
+      const response = await pending
+      expect(response).toMatchObject({
+        ok: true,
+        result: { state: 'ready', stage: 'settled', workerOutcome: outcome }
+      })
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      expect(response.result).not.toHaveProperty('lastError')
+      expect(response.result).not.toHaveProperty('failedStage')
+      expect(teardown).not.toHaveBeenCalled()
+      expect(harness.db.getTask(harness.taskId)?.status).toBe(
+        outcome === 'succeeded' ? 'completed' : 'failed'
+      )
+      const replay = await harness.dispatcher.dispatch({ ...harness.request, id: 'retry' })
+      expect(replay).toMatchObject({
+        ok: true,
+        result: { state: 'ready', workerOutcome: outcome, mutation: { replayed: true } }
+      })
+    }
+  )
+
+  it.each([
+    ['succeeded', false],
+    ['failed', false],
+    ['succeeded', true],
+    ['failed', true]
+  ] as const)(
+    'preserves a concurrent %s report during the failed-start transition (unknown=%s)',
+    async (outcome, unknown) => {
+      vi.useFakeTimers()
+      const teardown = vi.spyOn(FailedStartTeardown, 'tearDownFailedWorkerStart')
+      const harness = await createPromptContractHarness('swallowed')
+      const reporter = new OrchestrationDb(harness.dbPath)
+      openDatabases.push(reporter)
+      const send = vi
+        .spyOn(harness.runtime, 'sendTerminalAgentPrompt')
+        .mockRejectedValue(
+          Object.assign(
+            new Error('terminal_handle_stale'),
+            unknown ? { code: 'operation_unknown' } : {}
+          )
+        )
+      const method = unknown ? 'markWorkerStartUnknown' : 'failWorkerStart'
+      const applyTransition = harness.db[method].bind(harness.db)
+      const transition = vi
+        .spyOn(harness.db, method)
+        .mockImplementation((dispatchId, stage, reason) => {
+          expect(harness.db.getWorkerDispatch(dispatchId)?.state).toBe('starting')
+          expect(
+            reporter.settleWorkerReport({
+              taskId: harness.taskId,
+              dispatchId,
+              outcome,
+              result: 'Settled on another connection before the start transition'
+            })
+          ).toMatchObject({ action: 'settled', outcome })
+          return applyTransition(dispatchId, stage, reason)
+        })
+      const pending = harness.dispatcher.dispatch(harness.request)
+      await vi.runAllTimersAsync()
+      expect(await pending).toMatchObject({
+        ok: true,
+        result: { state: 'ready', stage: 'settled', workerOutcome: outcome }
+      })
+      const dispatch = reporter.getDispatchContext(harness.taskId)!
+      const worker = reporter.getWorkerDispatch(dispatch.id)
+      expect(worker).toMatchObject({ state: outcome, stage: 'settled', last_error: null })
+      expect(harness.db.getTask(harness.taskId)?.status).toBe(
+        outcome === 'succeeded' ? 'completed' : 'failed'
+      )
+      expect(await harness.dispatcher.dispatch({ ...harness.request, id: 'retry' })).toMatchObject({
+        ok: true,
+        result: { state: 'ready', workerOutcome: outcome, mutation: { replayed: true } }
+      })
+      expect(reporter.getWorkerDispatch(dispatch.id)).toEqual(worker)
+      expect(reporter.getDispatchContext(harness.taskId)).toEqual(dispatch)
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(transition).toHaveBeenCalledTimes(1)
+      expect(teardown).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    ['dispatch_inactive', false, 'dispatch_inactive'],
+    ['storage_failed', true, 'runtime_error']
+  ] as const)(
+    'rethrows %s when concurrent settlement does not explain it',
+    async (code, settled, responseCode) => {
+      vi.useFakeTimers()
+      const teardown = vi.spyOn(FailedStartTeardown, 'tearDownFailedWorkerStart')
+      const harness = await createPromptContractHarness('swallowed')
+      vi.spyOn(harness.runtime, 'sendTerminalAgentPrompt').mockRejectedValue(
+        new Error('lost receipt')
+      )
+      vi.spyOn(harness.db, 'failWorkerStart').mockImplementation((dispatchId) => {
+        if (settled) {
+          harness.db.settleWorkerReport({
+            taskId: harness.taskId,
+            dispatchId,
+            outcome: 'succeeded',
+            result: 'Finished'
+          })
+        } else {
+          harness.db.markWorkerDispatchReady(dispatchId, [])
+        }
+        throw new OrchestrationError(code, 'Rejected transition')
+      })
+      const pending = harness.dispatcher.dispatch(harness.request)
+      await vi.runAllTimersAsync()
+      expect(await pending).toMatchObject({
+        ok: false,
+        error: { code: responseCode, message: 'Rejected transition' }
+      })
+      expect(teardown).not.toHaveBeenCalled()
+    }
+  )
 
   it('retains accepted authority when the observation binding becomes stale', async () => {
     vi.useFakeTimers()
