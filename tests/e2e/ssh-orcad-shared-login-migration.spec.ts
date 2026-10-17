@@ -6,6 +6,9 @@
  * profile. B connects: it pairs with A's server as it runs (no upload, no restart), links its
  * project to the one A added instead of being refused, moves the rest, and A's terminal keeps
  * running.
+ *
+ * The same join must also hold once that server has stopped, as an idle stop or a host reboot
+ * leaves it: B wakes it rather than deferring its own update on a terminal count it cannot take.
  */
 import { createHash } from 'node:crypto'
 import { appendFileSync, cpSync, readFileSync, writeFileSync } from 'node:fs'
@@ -81,6 +84,44 @@ async function connectFresh(
   return { targetId: connected.targetId, environmentId: server.environmentId }
 }
 
+/** Desktop B, whose relay-era profile holds the host's repository, connects until it is managed. */
+async function joinFromRelayEraProfile(
+  desktopB: ReturnType<typeof createRestartSession>,
+  host: OrcadConvertHost,
+  track: (app: ElectronApplication | null) => void
+): Promise<{
+  b: { app: ElectronApplication; page: Page }
+  seeded: { targetId: string; repoId: string }
+}> {
+  const established = await desktopB.launch()
+  track(established.app)
+  await waitForSessionReady(established.page)
+  await desktopB.close(established.app)
+  track(null)
+  const seeded = seedRelayEraProfile(desktopB.userDataDir, host.input, {
+    repoPath: host.remoteRepoPath,
+    folderPath: host.remoteFolderPath
+  })
+  const b = await desktopB.launch()
+  track(b.app)
+  await waitForSessionReady(b.page)
+  const connected = await reconnect(b.page, seeded.targetId)
+  await expect
+    .poll(
+      async () => {
+        const server = await managedServer(b.page, seeded.targetId)
+        const journal = findOrcadMigrationSourceCutoverForTarget(
+          desktopB.userDataDir,
+          seeded.targetId
+        )
+        return JSON.stringify({ server, phase: journal?.phase ?? null, connected })
+      },
+      { timeout: 10 * 60_000 }
+    )
+    .toContain('"kind":"managed"')
+  return { b, seeded }
+}
+
 test('a relay-era desktop joins the server another version runs for the same login', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   test.setTimeout(20 * 60_000)
@@ -114,32 +155,7 @@ test('a relay-era desktop joins the server another version runs for the same log
     app = null
 
     // 2. Desktop B's relay-era profile already holds the same repository on the same host.
-    const established = await desktopB.launch()
-    app = established.app
-    await waitForSessionReady(established.page)
-    await desktopB.close(app)
-    app = null
-    const seeded = seedRelayEraProfile(desktopB.userDataDir, host.input, {
-      repoPath: host.remoteRepoPath,
-      folderPath: host.remoteFolderPath
-    })
-    const b = await desktopB.launch()
-    app = b.app
-    await waitForSessionReady(b.page)
-    const connected = await reconnect(b.page, seeded.targetId)
-    await expect
-      .poll(
-        async () => {
-          const server = await managedServer(b.page, seeded.targetId)
-          const journal = findOrcadMigrationSourceCutoverForTarget(
-            desktopB.userDataDir,
-            seeded.targetId
-          )
-          return JSON.stringify({ server, phase: journal?.phase ?? null, connected })
-        },
-        { timeout: 10 * 60_000 }
-      )
-      .toContain('"kind":"managed"')
+    const { b, seeded } = await joinFromRelayEraProfile(desktopB, host, (next) => (app = next))
 
     // Paired with A's server as it runs: same version, same process, A's terminal untouched.
     expect(hostRecord(host).active).toBe(versionA)
@@ -169,6 +185,52 @@ test('a relay-era desktop joins the server another version runs for the same log
   } finally {
     if (app) {
       // Either session's close quits whichever app is still running.
+      await desktopB.close(app)
+    }
+    await desktopA.dispose()
+    await desktopB.dispose()
+    host.cleanup()
+  }
+})
+
+test('a relay-era desktop wakes the server another version left stopped', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
+{}, testInfo) => {
+  test.setTimeout(20 * 60_000)
+  const host = startOrcadConvertHost(HOST!, testInfo)
+  const desktopA = createRestartSession(testInfo, {
+    ORCA_ORCAD_TEMPLATE_PATH: otherVersionTemplate(
+      TEMPLATE!,
+      testInfo.outputPath('other-version-template')
+    )
+  })
+  const desktopB = createRestartSession(testInfo, { ORCA_ORCAD_TEMPLATE_PATH: TEMPLATE! })
+  let app: ElectronApplication | null = null
+  try {
+    // 1. Desktop A deploys its version, then everything Orca runs on the host stops, as an idle
+    //    stop or a reboot leaves it: the record still names A's version, but nothing answers.
+    const a = await desktopA.launch()
+    app = a.app
+    await waitForSessionReady(a.page)
+    await connectFresh(a.page, host)
+    const versionA = hostRecord(host).active
+    expect(versionA).toBeTruthy()
+    await desktopA.close(app)
+    app = null
+    // The bracket keeps pkill from matching the shell that runs it.
+    host.exec!("pkill -TERM -f '[/].orca-remote/' ; true")
+    await expect.poll(() => orcadPids(host), { timeout: 60_000 }).toBe('')
+
+    // 2. B must start A's server and pair with it; its own deploy would defer on a terminal
+    //    count no running server can give.
+    const { seeded } = await joinFromRelayEraProfile(desktopB, host, (next) => (app = next))
+    // Paired with A's server, woken, rather than replaced by a deploy of B's own.
+    expect(hostRecord(host).active).toBe(versionA)
+    expect(orcadPids(host)).not.toBe('')
+    expect(
+      findOrcadMigrationSourceCutoverForTarget(desktopB.userDataDir, seeded.targetId)
+    ).toMatchObject({ phase: 'destination-committed' })
+  } finally {
+    if (app) {
       await desktopB.close(app)
     }
     await desktopA.dispose()
