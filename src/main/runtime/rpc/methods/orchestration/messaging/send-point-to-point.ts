@@ -2,7 +2,11 @@ import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
-import { isDispatchMutationMessageType, parseMessageTaskId } from '../schemas'
+import {
+  isDispatchMutationMessageType,
+  parseMessageTaskId,
+  parseRemoteWorkerPayload
+} from '../schemas'
 import type { SendParams } from '../schemas'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
@@ -52,9 +56,11 @@ export function sendPointToPointMessage(args: {
   // Point-to-point — existing single-recipient behavior
   revalidateLegacyCoordinator?.()
   const messageType = (params.type ?? 'status') as MessageType
-  const processIncarnation = isDispatchMutationMessageType(messageType)
-    ? resolveProcessIncarnation()
-    : undefined
+  const taskId = parseMessageTaskId(params.payload)
+  const processIncarnation =
+    isDispatchMutationMessageType(messageType) || (messageType === 'status' && taskId !== undefined)
+      ? resolveProcessIncarnation()
+      : undefined
   const commitMessage = (): { receipt: unknown; nudge: () => void } => {
     const dispatch = dispatchId ? db.getDispatchContextById(dispatchId) : undefined
     const msg = db.insertMessage({
@@ -76,8 +82,30 @@ export function sendPointToPointMessage(args: {
         to
       )
     })
+    if (
+      msg.type === 'status' &&
+      dispatch &&
+      taskId === dispatch.task_id &&
+      parseRemoteWorkerPayload(params.payload).dispatchId === dispatch.id &&
+      messageRunId === dispatch.run_id &&
+      to === `run:${dispatch.run_id}` &&
+      (db.getWorkerDispatch(dispatch.id)?.state === 'stopping' ||
+        (dispatch.status !== 'pending' && dispatch.status !== 'dispatched')) &&
+      db.isDispatchProcessCurrent({
+        dispatchId: dispatch.id,
+        paneKey: senderPaneKey ?? null,
+        processIncarnation: processIncarnation ?? null
+      })
+    ) {
+      db.markAsReadAndDelivered([msg.id])
+      return recordReceiptForPostCommitNudge(
+        recordMutationReceipt,
+        withSendWarnings({ message: exposeMessage(msg) }),
+        () => undefined,
+        null
+      )
+    }
     if (isDispatchMutationMessageType(msg.type)) {
-      const taskId = parseMessageTaskId(params.payload)
       const coordinatorMutation = msg.type === 'escalation' || msg.type === 'decision_gate'
       const refusal = lifecycleRefusal({
         db,

@@ -41,6 +41,34 @@ export function bindRun(
       return undefined
     }
     const sameBinding = runBoundToCoordinator(run, coordinator)
+    // The target Run decides worker ownership before any mailbox or binding can change.
+    const assignedWorker =
+      !sameBinding &&
+      this.db
+        .prepare(
+          `SELECT assignee_handle, assignee_pane_key, assignee_orca_session_id
+         FROM dispatch_contexts
+         WHERE run_id = ? AND status IN ('pending', 'dispatched')`
+        )
+        .all(params.runId)
+        .some(
+          (dispatch) =>
+            (coordinator.orcaSessionId !== null &&
+              dispatch.assignee_orca_session_id === coordinator.orcaSessionId) ||
+            (coordinator.paneKey !== null &&
+              typeof dispatch.assignee_pane_key === 'string' &&
+              isEquivalentPaneKey(dispatch.assignee_pane_key, coordinator.paneKey)) ||
+            (coordinator.terminalHandle !== null &&
+              dispatch.assignee_handle === coordinator.terminalHandle &&
+              (coordinator.paneKey === null || dispatch.assignee_pane_key === null))
+        )
+    if (assignedWorker) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        'A worker cannot become coordinator of the Run that owns its unsettled assignment. No effects were applied.',
+        { effectsApplied: false }
+      )
+    }
     const adoption = this.getLegacyAdoption()
     const adoptedRun = adoption?.adopted_run_id === params.runId
     const legacyAuthority = params.legacyCoordinatorAuthority
