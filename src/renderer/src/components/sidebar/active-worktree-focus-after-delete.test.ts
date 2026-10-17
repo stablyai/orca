@@ -17,7 +17,14 @@ const mocks = vi.hoisted(() => {
     repos: [] as SeedRepo[],
     lastVisitedAtByWorktreeId: {} as Record<string, number>,
     deleteStateByWorktreeId: {} as Record<string, { isDeleting?: boolean }>,
-    worktreeMap: new Map<string, SeedWorktree>()
+    worktreeMap: new Map<string, SeedWorktree>(),
+    tabsByWorktree: {} as Record<string, { id: string }[]>,
+    ptyIdsByTabId: {} as Record<string, string[]>,
+    browserTabsByWorktree: {} as Record<string, { id: string }[]>,
+    agentStatusByPaneKey: {} as Record<
+      string,
+      { paneKey: string; worktreeId?: string; state: string; updatedAt: number }
+    >
   }
   return { state }
 })
@@ -41,7 +48,14 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 
 function seed(
-  worktrees: { id: string; repoId?: string; isMainWorktree?: boolean; hostId?: string }[]
+  worktrees: {
+    id: string
+    repoId?: string
+    isMainWorktree?: boolean
+    hostId?: string
+    /** Slept workspaces keep their tab records but hold no live PTY. */
+    asleep?: boolean
+  }[]
 ): void {
   const normalized: SeedWorktree[] = worktrees.map((worktree) => ({
     id: worktree.id,
@@ -57,6 +71,15 @@ function seed(
   mocks.state.worktreesByRepo = byRepo
   // A repo per referenced repoId so getRepoMapFromState resolves (host info comes via worktree.hostId).
   mocks.state.repos = [...new Set(normalized.map((w) => w.repoId))].map((id) => ({ id }))
+  mocks.state.tabsByWorktree = {}
+  mocks.state.ptyIdsByTabId = {}
+  for (const worktree of worktrees) {
+    const tabId = `${worktree.id}-tab`
+    mocks.state.tabsByWorktree[worktree.id] = [{ id: tabId }]
+    if (worktree.asleep !== true) {
+      mocks.state.ptyIdsByTabId[tabId] = [`${tabId}-pty`]
+    }
+  }
 }
 
 // Why: mirror the store reducer — once a delete resolves, the removed worktree
@@ -85,6 +108,10 @@ describe('prepareActiveWorktreeFocusAfterDelete', () => {
     mocks.state.lastVisitedAtByWorktreeId = {}
     mocks.state.deleteStateByWorktreeId = {}
     mocks.state.worktreeMap = new Map()
+    mocks.state.tabsByWorktree = {}
+    mocks.state.ptyIdsByTabId = {}
+    mocks.state.browserTabsByWorktree = {}
+    mocks.state.agentStatusByPaneKey = {}
     vi.mocked(activateAndRevealWorktree).mockClear()
   })
 
@@ -125,6 +152,65 @@ describe('prepareActiveWorktreeFocusAfterDelete', () => {
     commit()
 
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('leaves focus empty rather than waking a sleeping sibling', () => {
+    // The reported flow: every survivor slept, so the delete revived one. #10205
+    seed([
+      { id: 'main', isMainWorktree: true, asleep: true },
+      { id: 'wt-slept', asleep: true },
+      { id: 'wt-del' }
+    ])
+    mocks.state.activeWorktreeId = 'wt-del'
+    mocks.state.lastVisitedAtByWorktreeId = { 'wt-slept': 300 }
+
+    const commit = prepareActiveWorktreeFocusAfterDelete('wt-del')
+    simulateDelete('wt-del', true)
+    commit()
+
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('prefers an awake sibling over a more-recently-visited sleeping one', () => {
+    seed([
+      { id: 'main', isMainWorktree: true },
+      { id: 'wt-awake' },
+      { id: 'wt-slept', asleep: true },
+      { id: 'wt-del' }
+    ])
+    mocks.state.activeWorktreeId = 'wt-del'
+    mocks.state.lastVisitedAtByWorktreeId = { 'wt-awake': 100, 'wt-slept': 300 }
+
+    const commit = prepareActiveWorktreeFocusAfterDelete('wt-del')
+    simulateDelete('wt-del', true)
+    commit()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-awake', { revealInSidebar: false })
+  })
+
+  it('keeps a sibling whose agent is live across a PTY gap eligible', () => {
+    // Why: an SSH reconnect drops the live PTY while the agent keeps running (#7197);
+    // that workspace is awake, so focusing it wakes nothing.
+    seed([
+      { id: 'main', isMainWorktree: true, asleep: true },
+      { id: 'wt-agent', asleep: true },
+      { id: 'wt-del' }
+    ])
+    mocks.state.activeWorktreeId = 'wt-del'
+    mocks.state.agentStatusByPaneKey = {
+      pane1: {
+        paneKey: 'pane1',
+        worktreeId: 'wt-agent',
+        state: 'working',
+        updatedAt: Date.now()
+      }
+    }
+
+    const commit = prepareActiveWorktreeFocusAfterDelete('wt-del')
+    simulateDelete('wt-del', true)
+    commit()
+
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-agent', { revealInSidebar: false })
   })
 
   it('stays within the deleted worktree project instead of jumping to another project', () => {
