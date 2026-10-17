@@ -15,7 +15,10 @@ import {
 import { mapCodexCredits } from './codex-credit-balance'
 import { classifyCodexRpcErrorFailureKind } from './codex-rpc-failure-kind'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
-import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
+import {
+  abortedCodexRateLimitResult,
+  codexRateLimitErrorResult
+} from './codex-rate-limit-fetch-result'
 import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
 import {
   mapRpcRateLimitResetCredits,
@@ -31,7 +34,11 @@ type RpcResponse = {
 }
 
 type RpcRateLimitsResponse = {
-  rateLimits?: CodexRateLimitWindowsSnapshot | null
+  rateLimits?:
+    | (CodexRateLimitWindowsSnapshot & {
+        planType?: string | null
+      })
+    | null
   rateLimitResetCredits?: RpcRateLimitResetCredits
 }
 
@@ -246,15 +253,29 @@ export function readCodexRateLimitsViaRpc(
             return
           }
           const wrapper = message.result as RpcRateLimitsResponse | undefined
-          const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
+          const rateLimits = wrapper?.rateLimits
+          const classified = classifyCodexRateLimitWindows(rateLimits)
+          const session = mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES)
+          const weekly = mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
           const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
-          const extraUsage = mapCodexCredits(wrapper?.rateLimits?.credits)
+          const extraUsage = mapCodexCredits(rateLimits?.credits)
+          const planType =
+            typeof rateLimits?.planType === 'string' ? rateLimits.planType.trim() : undefined
+          const isUnlimited = rateLimits?.credits?.unlimited === true
+          if (!session && !weekly && !isUnlimited) {
+            settle(codexRateLimitErrorResult('RPC response did not include rate-limit windows'), {
+              kill: true
+            })
+            return
+          }
           settle(
             {
               provider: 'codex',
-              session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
-              weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
+              session,
+              weekly,
               ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
+              ...(planType ? { planType } : {}),
+              ...(isUnlimited ? { isUnlimited: true } : {}),
               ...(extraUsage ? { extraUsage } : {}),
               updatedAt: Date.now(),
               error: null,

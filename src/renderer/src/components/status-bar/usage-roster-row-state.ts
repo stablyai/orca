@@ -3,7 +3,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { getProviderUsageStatusLabel } from './usage-error-copy'
 
 export type UsageRosterRowState = {
-  kind: 'usage' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'
+  kind: 'usage' | 'unlimited' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'
   statusLabel: string | null
 }
 
@@ -17,7 +17,7 @@ const CONFIRMED_SIGN_OUT_PATTERNS = [
   /\bplease reauthenticate\b/i
 ]
 
-function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
+export function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
   if (provider.usageMetadata?.failureKind === 'missing-credentials') {
     return true
   }
@@ -34,6 +34,15 @@ export function getUsageRosterRowState(
   provider: ProviderRateLimits,
   hasUsage: boolean
 ): UsageRosterRowState {
+  if (provider.isUnlimited && !isConfirmedSignedOut(provider)) {
+    return {
+      kind: 'unlimited',
+      statusLabel: translate(
+        'auto.components.status.bar.UsageRosterPanel.unlimitedUsage',
+        'Unlimited'
+      )
+    }
+  }
   if (hasUsage) {
     return { kind: 'usage', statusLabel: null }
   }

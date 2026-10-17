@@ -82,6 +82,55 @@ describe('getUsageRosterRowState', () => {
     ).toEqual({ kind: 'error', statusLabel: 'Refresh failed' })
   })
 
+  it('shows unlimited accounts as a successful unmetered state', () => {
+    expect(
+      getUsageRosterRowState(
+        provider({ provider: 'codex', planType: 'business', isUnlimited: true }),
+        false
+      )
+    ).toEqual({ kind: 'unlimited', statusLabel: 'Unlimited' })
+  })
+
+  it('prioritizes unlimited metadata over retained usage windows', () => {
+    expect(
+      getUsageRosterRowState(
+        provider({
+          provider: 'codex',
+          isUnlimited: true,
+          session: { usedPercent: 90, windowMinutes: 300, resetsAt: null, resetDescription: null }
+        }),
+        true
+      )
+    ).toEqual({ kind: 'unlimited', statusLabel: 'Unlimited' })
+  })
+
+  it.each([
+    { error: 'ChatGPT authentication required to read rate limits' },
+    { usageMetadata: { failureKind: 'missing-credentials' as const } }
+  ])('offers sign-in over cached unlimited usage: %j', (failure) => {
+    expect(
+      getUsageRosterRowState(
+        provider({ provider: 'codex', isUnlimited: true, status: 'error', ...failure }),
+        false
+      )
+    ).toEqual({ kind: 'sign-in', statusLabel: 'not signed in' })
+  })
+
+  it.each([
+    { error: 'temporary refresh failure' },
+    {
+      error: 'authentication required',
+      usageMetadata: { failureKind: 'stale-token' as const }
+    }
+  ])('keeps unlimited usage for transient failures: %j', (failure) => {
+    expect(
+      getUsageRosterRowState(
+        provider({ provider: 'codex', isUnlimited: true, status: 'error', ...failure }),
+        false
+      )
+    ).toEqual({ kind: 'unlimited', statusLabel: 'Unlimited' })
+  })
+
   it('distinguishes unavailable and empty successful responses', () => {
     expect(
       getUsageRosterRowState(
