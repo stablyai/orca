@@ -14,6 +14,7 @@ import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
+import { WithMarkdownBacklinks } from './MarkdownBacklinksPanel'
 import type { MarkdownRenderState } from './markdown-render-mode'
 
 const noopCloseMarkdownTableOfContents = (): void => {}
@@ -215,7 +216,7 @@ export function EditorContent({
     const previewSourceFileId = activeFile.markdownPreviewSourceFileId ?? activeFile.filePath
     const previewContent = editBuffers[previewSourceFileId] ?? fileContent.content
     return (
-      <div className="min-h-0 flex-1">
+      <WithMarkdownBacklinks activeFile={activeFile} documents={markdownDocuments}>
         <MarkdownPreviewSizeGate content={previewContent}>
           <MarkdownPreview
             key={`${viewStateScopeId}:${markdownPreviewViewStateKey}`}
@@ -232,7 +233,7 @@ export function EditorContent({
             {...markdownDocuments.previewProps}
           />
         </MarkdownPreviewSizeGate>
-      </div>
+      </WithMarkdownBacklinks>
     )
   }
 
