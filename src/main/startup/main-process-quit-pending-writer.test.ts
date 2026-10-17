@@ -6,6 +6,7 @@ const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
 const stopAgentHookServer = idle()
 const stopStructuredAgentSessionRuntime = settled()
+const closeMacMenuBarIconGate = idle()
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
@@ -45,6 +46,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../terminal-history-gc': { cancelHistoryGc: idle() },
   './window-all-closed-quit-policy': { shouldQuitWhenAllWindowsClosed: vi.fn(() => false) },
   './configure-process': { isDevParentShutdownRequested: vi.fn(() => false) },
+  './main-window-actions': { closeMacMenuBarIconGate },
   '../persistence': { getCanonicalUserDataPath: vi.fn(() => '/unused') }
 }
 
@@ -115,6 +117,12 @@ it('releases admission only after the final flush and freeze complete', async ()
   expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
   expect(admission.release).toHaveBeenCalledOnce()
   expect(app.quit).toHaveBeenCalledOnce()
+})
+
+it('closes the macOS menu-bar icon gate on the committed quit path', async () => {
+  closeMacMenuBarIconGate.mockClear()
+  await startQuit(async () => {})
+  expect(closeMacMenuBarIconGate).toHaveBeenCalledOnce()
 })
 
 // The chat teardown decides which chats to offer to resume from the hook server's status store,

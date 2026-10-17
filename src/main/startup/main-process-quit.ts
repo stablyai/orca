@@ -32,6 +32,7 @@ import { cancelHistoryGc } from '../terminal-history-gc'
 import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
 import { mainProcessState as state } from './main-process-state'
 import { isDevParentShutdownRequested } from './configure-process'
+import { closeMacMenuBarIconGate } from './main-window-actions'
 import { getCanonicalUserDataPath } from '../persistence'
 import { flushUnsavedCloudSessions } from '../orca-profiles/profile-cloud-session-owner'
 
@@ -128,7 +129,8 @@ function installWillQuitHandler(): void {
         { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
       )
     }
-    // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon on the committed quit path.
+    // Why: before-quit can still be aborted by renderer beforeunload; only remove the tray on the committed quit path.
+    closeMacMenuBarIconGate()
     destroySystemTray()
     // Why: an agent still working at quit gets no terminating hook, so stats.flushAsync() closes those sessions out synchronously (only the write is deferred) — otherwise their duration is lost.
     state.starNag?.stop()

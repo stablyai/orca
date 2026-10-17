@@ -33,9 +33,8 @@ let trayOptions: SystemTrayOptions | null = null
 // off with tray.setImage without rebuilding the icon from the app-icon PNG.
 let baseTrayImage: NativeImage | null = null
 
-// Why: an attention event can fire while the tray is still being created
-// (creation is deferred ~ready-to-show); remember the desired state so a
-// freshly created tray reflects it immediately.
+// Why: an attention event can fire before the tray exists (macOS waits for its
+// startup gate); remember the desired state so a freshly created tray reflects it.
 let attentionActive = false
 
 // Why: dev instances share the production template glyph, so remember dev-ness
