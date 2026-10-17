@@ -33,6 +33,7 @@ const SEMVER_RE =
   /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 export const PLUGIN_PANEL_LIMIT = 64
 export const PLUGIN_COMMAND_LIMIT = 256
+export const PLUGIN_LANGUAGE_FEATURE_LIMIT = 16
 
 // Why: v0 supports only the ">=x.y.z" form. A closed grammar keeps the gate
 // predictable; richer ranges can be added without breaking old manifests.
@@ -56,6 +57,14 @@ const commandContributionSchema = z.object({
   context: z.enum(['global', 'worktree']).optional(),
   /** Built-in action aliases remain declarative and do not activate a worker. */
   action: pluginCommandIdSchema.optional()
+})
+
+/** Editor hover/definition/references for Monaco language ids, answered by a
+ *  worker command. The editor invokes `command` with
+ *  `{ method, filePath, content, line, column }` (1-based) and renders the result. */
+const languageFeatureContributionSchema = z.object({
+  command: pluginCommandIdSchema,
+  languages: z.array(z.string().min(1).max(64)).min(1).max(32)
 })
 
 /** Domain events a plugin can subscribe to in v0. Closed set: server-side
@@ -99,6 +108,10 @@ export const pluginManifestSchema = z
         panels: z.array(panelContributionSchema).max(PLUGIN_PANEL_LIMIT).default([]),
         commands: z.array(commandContributionSchema).max(PLUGIN_COMMAND_LIMIT).default([]),
         events: z.array(eventContributionSchema).max(PLUGIN_EVENT_SUBSCRIPTION_LIMIT).default([]),
+        languageFeatures: z
+          .array(languageFeatureContributionSchema)
+          .max(PLUGIN_LANGUAGE_FEATURE_LIMIT)
+          .default([]),
         languagePacks: z
           .array(pluginLanguagePackContributionSchema)
           .max(PLUGIN_LANGUAGE_PACK_LIMIT)
@@ -121,6 +134,7 @@ export const pluginManifestSchema = z
         panels: [],
         commands: [],
         events: [],
+        languageFeatures: [],
         languagePacks: [],
         keybindings: [],
         vmRecipes: [],

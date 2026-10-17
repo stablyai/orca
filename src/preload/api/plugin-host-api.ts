@@ -54,6 +54,8 @@ export type PluginHostListEntry = {
     keybindings: { key: string; when: 'global' | 'worktree' }[]
   }[]
   hasWorker: boolean
+  /** Optional: an older desktop build paired with this client omits it. */
+  languageFeatures?: { command: string; languages: string[] }[]
   vmRecipes?: {
     id: string
     name: string

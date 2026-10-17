@@ -11,6 +11,7 @@ type ContributionValidationManifest = {
     panels: IdentifiedContribution[]
     commands: (IdentifiedContribution & { action?: string; context?: 'global' | 'worktree' })[]
     events: { on: string }[]
+    languageFeatures?: { command: string }[]
     languagePacks: { locale: string }[]
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
     vmRecipes: PathContribution[]
@@ -40,6 +41,7 @@ function rejectDuplicateValues(
   }
 }
 
+/** Cross-field manifest checks: references between contributions and the capabilities they require. */
 export function validatePluginManifestContributions(
   manifest: ContributionValidationManifest,
   ctx: RefinementCtx
@@ -139,6 +141,28 @@ export function validatePluginManifestContributions(
       code: 'custom',
       path: ['capabilities'],
       message: 'events:subscribe capability required when contributes.events is non-empty'
+    })
+  }
+  const languageFeatures = manifest.contributes.languageFeatures ?? []
+  for (const [index, feature] of languageFeatures.entries()) {
+    const command = commands.get(feature.command)
+    if (!command || command.action !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'languageFeatures', index, 'command'],
+        message: `must reference a contributed worker command: ${feature.command}`
+      })
+    }
+  }
+  if (
+    languageFeatures.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'editor:languageFeatures')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['capabilities'],
+      message:
+        'editor:languageFeatures capability required when contributes.languageFeatures is non-empty'
     })
   }
 }

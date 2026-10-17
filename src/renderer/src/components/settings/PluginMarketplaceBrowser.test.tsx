@@ -69,6 +69,7 @@ const preview: PluginMarketplaceHostInstallPreview = {
       panels: [],
       commands: [],
       events: [],
+      languageFeatures: [],
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],

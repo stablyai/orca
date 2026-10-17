@@ -11735,7 +11735,8 @@
             "storage": "Guardar datos en la carpeta de almacenamiento propia del plugin",
             "secrets": "Guardar y leer secretos en la bóveda cifrada propia del plugin",
             "eventsSubscribe": "Recibir avisos cuando se creen o eliminen worktrees y cuando cambie el estado de un agente",
-            "settingsOwn": "Leer y cambiar la configuración propia del plugin"
+            "settingsOwn": "Leer y cambiar la configuración propia del plugin",
+            "editorLanguageFeatures": "Recibir la ruta, el contenido completo (incluidos los cambios sin guardar) y la posición del cursor de los archivos sobre los que pasas el cursor o por los que navegas en el editor"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo."
         },

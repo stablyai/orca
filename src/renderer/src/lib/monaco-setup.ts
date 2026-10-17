@@ -21,6 +21,7 @@ import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-dispo
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
 import { installMonacoContextMenuPaste } from '@/components/editor/install-monaco-context-menu-paste'
 import { runMonacoSetupSteps } from './monaco-setup-steps'
+import { installPluginLanguageFeatures } from './plugin-language-features'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -94,7 +95,10 @@ runMonacoSetupSteps([
   // Why: Monaco's built-in context-menu Paste reads navigator.clipboard, which is blocked in
   // Orca's sandboxed renderer. Route it through the trusted IPC bridge so right-click Paste
   // works like Cmd+V (which already works via native events).
-  ['context-menu paste', () => installMonacoContextMenuPaste(monaco)]
+  ['context-menu paste', () => installMonacoContextMenuPaste(monaco)],
+  // Why: project-wide hover/definition/references come from plugins (e.g. a tsserver per worktree);
+  // the built-in TS worker above only sees the current file.
+  ['plugin language features', () => installPluginLanguageFeatures(monaco)]
 ])
 
 // Configure Monaco to use the locally bundled editor instead of CDN

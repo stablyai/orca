@@ -46,6 +46,7 @@ describe('content-pack manifest contributions', () => {
       panels: [],
       commands: [],
       events: [],
+      languageFeatures: [],
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],

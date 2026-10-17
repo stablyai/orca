@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 
+/** Localized consent text for a capability kind, or `fallback` for unknown kinds. */
 export function pluginCapabilityDescription(kind: string, fallback: string): string {
   switch (kind) {
     case 'workspace:read':
@@ -36,6 +37,11 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
       return translate(
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         "Read and change the plugin's own settings"
+      )
+    case 'editor:languageFeatures':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.editorLanguageFeatures',
+        'Receive the path, full contents (including unsaved edits), and cursor position of files you hover or navigate in the editor'
       )
     default:
       return fallback

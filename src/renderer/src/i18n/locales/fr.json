@@ -11839,7 +11839,8 @@
             "storage": "Stocker des données dans le dossier de stockage propre au plugin",
             "secrets": "Stocker et lire des secrets dans le coffre chiffré propre au plugin",
             "eventsSubscribe": "Être notifié quand des worktrees sont créés ou supprimés et quand le statut d'un agent change",
-            "settingsOwn": "Lire et modifier les paramètres propres au plugin"
+            "settingsOwn": "Lire et modifier les paramètres propres au plugin",
+            "editorLanguageFeatures": "Recevoir le chemin, le contenu complet (y compris les modifications non enregistrées) et la position du curseur des fichiers que vous survolez ou parcourez dans l’éditeur"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez."
         },

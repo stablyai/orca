@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../preload/api-types'
 import {
   collectActivePluginCommands,
+  collectActivePluginLanguageFeatures,
   collectEditablePluginCommands,
   usePluginPanelsStore
 } from './plugin-panels'
@@ -150,5 +151,40 @@ describe('plugin panel list loading', () => {
       fetchStatus: 'ready',
       plugins: [expect.objectContaining({ pluginKey: 'orca-samples.recovered' })]
     })
+  })
+})
+
+describe('plugin language features', () => {
+  const languagePlugin = (overrides: Partial<PluginHostListEntry> = {}): PluginHostListEntry => ({
+    ...plugin('hypersolid.typescript-language'),
+    hasWorker: true,
+    capabilities: [{ kind: 'editor:languageFeatures', description: '' }],
+    commands: [
+      {
+        id: 'ts-language-request',
+        title: 'TypeScript: Language request',
+        context: 'global',
+        handler: { type: 'worker' },
+        keybindings: []
+      }
+    ],
+    languageFeatures: [{ command: 'ts-language-request', languages: ['typescript'] }],
+    ...overrides
+  })
+
+  it('collects features only from enabled plugins holding the capability', () => {
+    expect(collectActivePluginLanguageFeatures([languagePlugin()])).toEqual([
+      {
+        pluginKey: 'hypersolid.typescript-language',
+        command: 'ts-language-request',
+        languages: ['typescript']
+      }
+    ])
+    expect(collectActivePluginLanguageFeatures([languagePlugin({ status: 'pending' })])).toEqual([])
+    expect(collectActivePluginLanguageFeatures([languagePlugin({ capabilities: [] })])).toEqual([])
+  })
+
+  it('hides language-feature commands from the command palette', () => {
+    expect(collectActivePluginCommands([languagePlugin()])).toEqual([])
   })
 })

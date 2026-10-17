@@ -88,3 +88,45 @@ describe('pluginManifestSchema boundaries', () => {
     ).toBe(false)
   })
 })
+
+describe('languageFeatures contributions', () => {
+  const contributes = (languageFeatures: unknown[]): Record<string, unknown> => ({
+    panels: [],
+    commands: [{ id: 'ts-language-request', title: 'TypeScript: Language request' }],
+    events: [],
+    languageFeatures
+  })
+  const feature = { command: 'ts-language-request', languages: ['typescript'] }
+
+  it('accepts a worker command with the editor:languageFeatures capability', () => {
+    const result = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: contributes([feature]),
+        capabilities: [{ kind: 'editor:languageFeatures' }]
+      })
+    )
+    expect(result).toMatchObject({ ok: true })
+  })
+
+  it('requires the editor:languageFeatures capability', () => {
+    const result = parsePluginManifest(
+      manifest({ main: 'main.mjs', contributes: contributes([feature]) })
+    )
+    expect(result).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('editor:languageFeatures')
+    })
+  })
+
+  it('rejects a command the plugin does not contribute', () => {
+    const result = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: contributes([{ ...feature, command: 'missing' }]),
+        capabilities: [{ kind: 'editor:languageFeatures' }]
+      })
+    )
+    expect(result).toMatchObject({ ok: false, error: expect.stringContaining('missing') })
+  })
+})
