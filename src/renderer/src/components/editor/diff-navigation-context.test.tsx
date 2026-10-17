@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
+import { useAppStore } from '@/store'
 import {
   DiffNavigationProvider,
   useDiffEditorRegistration,
@@ -13,6 +14,7 @@ import {
 
 type FakeDiffEditor = editor.IStandaloneDiffEditor & {
   setLineChanges: (count: number) => void
+  setCursorLine: (line: number) => void
   fireUpdate: () => void
   goToDiff: ReturnType<typeof vi.fn>
   disposeUpdate: ReturnType<typeof vi.fn>
@@ -21,13 +23,20 @@ type FakeDiffEditor = editor.IStandaloneDiffEditor & {
 
 function createFakeEditor(initialCount: number): FakeDiffEditor {
   let count = initialCount
+  let cursorLine = 1
   let updateCallback: (() => void) | null = null
   const disposeUpdate = vi.fn(() => {
     updateCallback = null
   })
   const containerNode = document.createElement('div')
   const editor = {
-    getLineChanges: () => (count > 0 ? Array.from({ length: count }, () => ({})) : []),
+    // Changes sit at lines 10, 20, 30… so tests can place the cursor before,
+    // between, or at the last change to exercise boundary detection.
+    getLineChanges: () =>
+      count > 0
+        ? Array.from({ length: count }, (_unused, i) => ({ modifiedStartLineNumber: (i + 1) * 10 }))
+        : [],
+    getModifiedEditor: () => ({ getPosition: () => ({ lineNumber: cursorLine, column: 1 }) }),
     goToDiff: vi.fn(),
     getContainerDomNode: () => containerNode,
     onDidUpdateDiff: (cb: () => void) => {
@@ -38,6 +47,9 @@ function createFakeEditor(initialCount: number): FakeDiffEditor {
     },
     setLineChanges: (next: number) => {
       count = next
+    },
+    setCursorLine: (line: number) => {
+      cursorLine = line
     },
     fireUpdate: () => updateCallback?.(),
     disposeUpdate,
@@ -89,6 +101,7 @@ describe('DiffNavigationProvider', () => {
     captured = null
     registration = null
     registrationRenderCount = 0
+    useAppStore.getState().setChangedFileDiffNavigator(null)
   })
 
   it('exposes the change count and routes nav actions to the registered editor', () => {
@@ -103,6 +116,34 @@ describe('DiffNavigationProvider', () => {
 
     act(() => captured?.goToPreviousDiff())
     expect(editor.goToDiff).toHaveBeenCalledWith('previous')
+  })
+
+  it('crosses to the adjacent file at the last change, wraps within-file otherwise', () => {
+    mount()
+    const editor = createFakeEditor(3) // changes at lines 10, 20, 30
+    act(() => registration?.registerDiffEditor(editor))
+
+    const navigate = vi.fn(() => true)
+    act(() => useAppStore.getState().setChangedFileDiffNavigator(navigate))
+
+    // Cursor between changes: stays within the file (built-in goToDiff).
+    act(() => editor.setCursorLine(15))
+    act(() => captured?.goToNextDiff())
+    expect(navigate).not.toHaveBeenCalled()
+    expect(editor.goToDiff).toHaveBeenCalledWith('next')
+
+    // Cursor at the last change: hands off to the next file, no in-file wrap.
+    editor.goToDiff.mockClear()
+    act(() => editor.setCursorLine(30))
+    act(() => captured?.goToNextDiff())
+    expect(navigate).toHaveBeenCalledWith('next')
+    expect(editor.goToDiff).not.toHaveBeenCalled()
+
+    // No adjacent file (navigator declines): fall back to in-file wrap.
+    navigate.mockReturnValue(false)
+    editor.goToDiff.mockClear()
+    act(() => captured?.goToNextDiff())
+    expect(editor.goToDiff).toHaveBeenCalledWith('next')
   })
 
   it('re-renders when onDidUpdateDiff flips the count 0 -> N (count is state)', () => {
