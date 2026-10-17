@@ -200,16 +200,16 @@ function hasSessionUsageColumns(db: Database.Database, tables: readonly string[]
   )
 }
 
-function getSessionUsageRowCount(db: Database.Database, sessionSource: string): number {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SQLite aggregate rows are validated by the typed count field below.
+function hasSessionUsageRows(db: Database.Database, sessionSource: string): boolean {
   const row = db
     .prepare(
-      `SELECT COUNT(*) AS count
+      `SELECT 1 AS found
        FROM ${sessionSource} s
-       WHERE ${SESSION_TOKEN_TOTAL} > 0`
+       WHERE ${SESSION_TOKEN_TOTAL} > 0
+       LIMIT 1`
     )
-    .get() as { count?: number } | undefined
-  return row?.count ?? 0
+    .get()
+  return row?.found === 1
 }
 
 function selectSessionUsageRows(db: Database.Database, sessionSource: string): OpenCodeUsageRow[] {
@@ -266,7 +266,7 @@ export function selectUsageRows(db: Database.Database): OpenCodeUsageRow[] {
 
   // Why: newer OpenCode DBs maintain session-level token/cost totals. Reading
   // one aggregate row per session is faster than parsing every message blob.
-  if (hasSessionUsageColumns(db, sessionTables) && getSessionUsageRowCount(db, sessionSource) > 0) {
+  if (hasSessionUsageColumns(db, sessionTables) && hasSessionUsageRows(db, sessionSource)) {
     return selectSessionUsageRows(db, sessionSource)
   }
 
