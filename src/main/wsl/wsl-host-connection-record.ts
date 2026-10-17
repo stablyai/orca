@@ -5,7 +5,7 @@ import type { WslHostStatus } from '../../shared/wsl-host-types'
 import type { WslOrcadConnection } from './wsl-orcad-connection'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 
-/** Saves a relaunch's new device token or a moved bridge; true when the pairing changed. */
+/** Saves an explicit re-pair or a moved bridge; true when the pairing changed. */
 export function persistWslHostConnection(
   userDataPath: string,
   record: WslHostDeploymentRecord,
