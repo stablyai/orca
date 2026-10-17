@@ -31,7 +31,8 @@ export async function sweepProviderByPrefix(
     stop: () => Promise<boolean>
   ) => Promise<{ stopped: boolean; owner: boolean }>,
   onPtyStopped?: (ptyId: string) => void,
-  failClosed = false
+  failClosed = false,
+  inventoryDeadline = deadline
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   // Why (#10252): the cwd fallback only proves ownership when the filesystem path
@@ -44,10 +45,15 @@ export async function sweepProviderByPrefix(
     splitWorktreeIdForFilesystem(worktreeId)?.worktreePath === fullWorktreePath
       ? fullWorktreePath
       : undefined
-  const rpcDeadline = teardownRpcDeadline(deadline)
+  const listStartedAt = Date.now()
+  const listRpcDeadline = teardownRpcDeadline(inventoryDeadline)
   const sessions = failClosed
-    ? await provider.listProcesses({ deadlineMs: rpcDeadline })
-    : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
+    ? await provider.listProcesses({ deadlineMs: listRpcDeadline })
+    : await provider.listProcesses({ deadlineMs: listRpcDeadline }).catch(() => [])
+  // Why: time spent waiting on a slow list is not taken from the stops, which still end by
+  // `inventoryDeadline`; with the default `inventoryDeadline` this is exactly `deadline`.
+  const stopDeadline = Math.min(deadline + (Date.now() - listStartedAt), inventoryDeadline)
+  const rpcDeadline = teardownRpcDeadline(stopDeadline)
   const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
@@ -65,21 +71,21 @@ export async function sweepProviderByPrefix(
     ownedSessions,
     WORKTREE_TEARDOWN_CONCURRENCY,
     async (session) => {
-      if (Date.now() >= deadline) {
+      if (Date.now() >= stopDeadline) {
         return 0
       }
       const stopResult = await stopPty(session.id, async () => {
-        if (Date.now() >= deadline) {
+        if (Date.now() >= stopDeadline) {
           return false
         }
         try {
           await provider.shutdown(session.id, { immediate: true, deadlineMs: rpcDeadline })
-          return Date.now() < deadline
+          return Date.now() < stopDeadline
         } catch {
           return false
         }
       })
-      if (stopResult.owner && Date.now() < deadline) {
+      if (stopResult.owner && Date.now() < stopDeadline) {
         clearStoppedPtyState(session.id, onPtyStopped)
         return 1
       }
