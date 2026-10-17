@@ -17,6 +17,7 @@ export function pasteAgentLaunchPromptOnceReady(args: {
   submit: boolean
   /** The prompt as written, which Command Code's working row shows. */
   prompt: string
+  hostPlatform?: NodeJS.Platform
   onPromptDelivered?: () => void
   onPromptDeliveryUnconfirmed?: () => void
   /** The launch pane's PTY once its agent started; the paste goes there and nowhere else. */
@@ -35,6 +36,7 @@ export function pasteAgentLaunchPromptOnceReady(args: {
     agent,
     submit,
     forcePaste: true,
+    ...(args.hostPlatform ? { hostPlatform: args.hostPlatform } : {}),
     onTimeout: timeoutNotice.onTimeout,
     ...(args.launchPty ? { launchPty: args.launchPty } : {}),
     ...(onPromptDeliveryUnconfirmed ? { onUnconfirmedDelivery: onPromptDeliveryUnconfirmed } : {})
