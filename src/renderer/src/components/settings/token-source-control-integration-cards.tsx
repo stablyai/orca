@@ -205,10 +205,20 @@ export function GiteaIntegrationCard(): React.JSX.Element {
                 )}
               </>
             ) : (
-              translate(
-                'auto.components.settings.token.source.control.integration.cards.19fb419c12',
-                'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
-              )
+              <>
+                {translate(
+                  'auto.components.settings.token.source.control.integration.cards.19fb419c12',
+                  'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
+                )}
+                {statuses.giteaAuthError ? (
+                  <>
+                    {' '}
+                    <span className="font-mono text-[11px] break-all">
+                      {statuses.giteaAuthError}
+                    </span>
+                  </>
+                ) : null}
+              </>
             )}
           </p>
           <div className="flex items-center gap-2">
