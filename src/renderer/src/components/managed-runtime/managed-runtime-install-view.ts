@@ -15,6 +15,8 @@ export type ManagedRuntimeInstallView = {
   /** Why the last operation or status read failed. */
   error: string | null
   action: ManagedRuntimeInstallAction | null
+  /** Settings may offer to delete the copy Orca installed: one is there and nothing runs. */
+  removable: boolean
 }
 
 const megabytes = (bytes: number): string => (bytes / 1_000_000).toFixed(1)
@@ -25,6 +27,10 @@ function runningView(
   cancelling: boolean
 ): ManagedRuntimeInstallView | null {
   const { phase, downloadedBytes: done, totalBytes: total } = operation
+  if (phase === 'removing') {
+    const status = translate('components.managed-runtime.removing', 'Removing…')
+    return { status, progress: null, error: null, action: null, removable: false }
+  }
   if (phase !== 'downloading' && phase !== 'extracting' && phase !== 'verifying') {
     return null
   }
@@ -48,7 +54,8 @@ function runningView(
     status,
     progress: phase === 'downloading' && total ? Math.min(100, (done / total) * 100) : null,
     error: null,
-    action: { kind: 'cancel', label, operationId: operation.id }
+    action: { kind: 'cancel', label, operationId: operation.id },
+    removable: false
   }
 }
 
@@ -67,7 +74,8 @@ function settledView(
     status,
     progress: null,
     error,
-    action: label === null ? null : { kind: 'install', label }
+    action: label === null ? null : { kind: 'install', label },
+    removable: surface === 'settings' && state.canRemove === true
   })
   const install = translate('components.managed-runtime.install', 'Install {{agent}}', { agent })
   // Install, Reinstall and Update belong to Settings; a chat that can start shows its composer.
@@ -151,7 +159,8 @@ export function managedRuntimeInstallView(
               { agent }
             )
           : null,
-      action: null
+      action: null,
+      removable: false
     }
   }
   const { operation } = snapshot.state

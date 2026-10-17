@@ -3,7 +3,8 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import {
   cancelManagedRuntimeInstall,
-  installManagedRuntime
+  installManagedRuntime,
+  removeManagedRuntime
 } from '@/runtime/managed-runtime-install-status'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
 import { Button } from '../ui/button'
@@ -13,9 +14,11 @@ import {
   type ManagedRuntimeInstallAction,
   type ManagedRuntimeInstallSurface
 } from './managed-runtime-install-view'
+import { ManagedRuntimeRemoveButton } from './ManagedRuntimeRemoveButton'
 
-/** Install, progress and Cancel for the runtime Orca provides an agent, on the host it runs on.
- *  Settings and a chat show the same host answer, so either one's action moves both. */
+/** Install, progress and Cancel for the runtime Orca provides an agent, on the host it runs on, and
+ *  in Settings its removal. Settings and a chat show the same host answer, so either one's action
+ *  moves both. */
 export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
@@ -23,7 +26,7 @@ export function ManagedRuntimeInstallRow(props: {
 }): React.JSX.Element {
   const { observation, agentLabel, surface } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
-  const [pending, setPending] = useState<ManagedRuntimeInstallAction['kind'] | null>(null)
+  const [pending, setPending] = useState<'install' | 'cancel' | 'remove' | null>(null)
   const view = managedRuntimeInstallView(
     observation.snapshot,
     agentLabel,
@@ -31,15 +34,11 @@ export function ManagedRuntimeInstallRow(props: {
     pending === 'cancel'
   )
   const [refusal, setRefusal] = useState<string | null>(null)
-  const act = (action: ManagedRuntimeInstallAction): void => {
-    setPending(action.kind)
+  const { subject } = observation
+  const act = (kind: 'install' | 'cancel' | 'remove', request: () => Promise<void>): void => {
+    setPending(kind)
     setRefusal(null)
-    const { subject } = observation
-    const request =
-      action.kind === 'cancel'
-        ? cancelManagedRuntimeInstall(subject, action.operationId)
-        : installManagedRuntime(subject)
-    void request
+    void request()
       .catch((cause: unknown) =>
         setRefusal(
           cause instanceof Error
@@ -52,6 +51,11 @@ export function ManagedRuntimeInstallRow(props: {
   const chat = surface === 'chat'
   const alert = refusal ?? view.error
   const { action } = view
+  const removable = observation.removable && view.removable
+  const primary = (chosen: ManagedRuntimeInstallAction) => () =>
+    chosen.kind === 'cancel'
+      ? cancelManagedRuntimeInstall(subject, chosen.operationId)
+      : installManagedRuntime(subject)
   return (
     <div
       data-managed-runtime-install-row={surface}
@@ -98,16 +102,26 @@ export function ManagedRuntimeInstallRow(props: {
           </p>
         ) : null}
       </div>
-      {action ? (
-        <div className="flex shrink-0 justify-end">
-          <Button
-            size="xs"
-            variant={action.kind === 'cancel' ? 'ghost' : 'outline'}
-            disabled={pending !== null}
-            onClick={() => act(action)}
-          >
-            {action.label}
-          </Button>
+      {action || removable ? (
+        <div className="flex shrink-0 items-center justify-end gap-1">
+          {removable ? (
+            <ManagedRuntimeRemoveButton
+              agentLabel={agentLabel}
+              host={subject.target}
+              disabled={pending !== null}
+              onRemove={() => act('remove', () => removeManagedRuntime(subject))}
+            />
+          ) : null}
+          {action ? (
+            <Button
+              size="xs"
+              variant={action.kind === 'cancel' ? 'ghost' : 'outline'}
+              disabled={pending !== null}
+              onClick={() => act(action.kind, primary(action))}
+            >
+              {action.label}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -177,7 +177,7 @@ export function wakeManagedRuntimeInstall(subject: ManagedRuntimeInstallSubject)
 
 function callHost<T>(
   subject: ManagedRuntimeInstallSubject,
-  method: 'managedRuntime.install' | 'managedRuntime.cancel',
+  method: 'managedRuntime.install' | 'managedRuntime.cancel' | 'managedRuntime.remove',
   params: Record<string, unknown>
 ): Promise<T> {
   return callRuntimeRpc<T>(
@@ -188,15 +188,22 @@ function callHost<T>(
   )
 }
 
-/** Starts, or joins, the host's install; rejects with the host's refusal. */
-export async function installManagedRuntime(subject: ManagedRuntimeInstallSubject): Promise<void> {
+async function startOperation(
+  subject: ManagedRuntimeInstallSubject,
+  method: 'managedRuntime.install' | 'managedRuntime.remove'
+): Promise<void> {
   const entry = entryFor(subject)
   const { generation } = entry
-  const state = await callHost<ManagedRuntimeInstallState>(subject, 'managedRuntime.install', {})
+  const state = await callHost<ManagedRuntimeInstallState>(subject, method, {})
   // A reply that crossed a resubscribe is stale; the new subscription's snapshot governs.
   if (entry.generation === generation) {
     accept(entry, state, generation)
   }
+}
+
+/** Starts, or joins, the host's install; rejects with the host's refusal. */
+export function installManagedRuntime(subject: ManagedRuntimeInstallSubject): Promise<void> {
+  return startOperation(subject, 'managedRuntime.install')
 }
 
 /** Resolves once the run has unwound; the subscription shows its outcome. */
@@ -205,6 +212,11 @@ export async function cancelManagedRuntimeInstall(
   operationId: string
 ): Promise<void> {
   await callHost<unknown>(subject, 'managedRuntime.cancel', { operationId })
+}
+
+/** Starts, or joins, the host's removal; it fails, keeping the files, while anything may run them. */
+export function removeManagedRuntime(subject: ManagedRuntimeInstallSubject): Promise<void> {
+  return startOperation(subject, 'managedRuntime.remove')
 }
 
 export function subscribeManagedRuntimeInstalls(listener: () => void): () => void {

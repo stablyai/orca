@@ -98,7 +98,8 @@ describe('NativeChatStructuredSession launch lifecycle', () => {
       install.observation = {
         kind: 'active',
         subject: { target: { kind: 'local' }, runtimeId: null, agent: 'codex' },
-        snapshot: state ? { kind: 'known', state } : { kind: 'unknown' }
+        snapshot: state ? { kind: 'known', state } : { kind: 'unknown' },
+        removable: false
       }
     }
     const draft = structuredAgentSessionDraftScopeKey('session-1')

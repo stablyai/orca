@@ -79,6 +79,37 @@ describe('managedRuntimeInstallView', () => {
       shown({ ...installed, installedVersion: '1.2.0', installedCurrent: false }, 'settings')
     ).toEqual(['Installed.', 'Update Fake', null])
     expect(shown(installed, 'chat')[1]).toBeNull()
+    const removal = (patch: Partial<ManagedRuntimeOperation>, surface: 'settings' | 'chat') =>
+      managedRuntimeInstallView(
+        {
+          kind: 'known',
+          state: {
+            ...idle,
+            ...installed,
+            canRemove: true,
+            operation: op({ kind: 'remove', ...patch })
+          }
+        },
+        'Fake',
+        surface
+      )
+    expect(removal({ phase: 'removing' }, 'settings')).toMatchObject({
+      status: 'Removing…',
+      action: null,
+      removable: false
+    })
+    // A refused removal keeps the files, so Remove stays offered beside the host's reason.
+    expect(
+      removal({ phase: 'failed', error: 'Fake could not be stopped.' }, 'settings')
+    ).toMatchObject({
+      status: 'Installed.',
+      error: 'Fake could not be stopped.',
+      removable: true
+    })
+    expect(removal({ phase: 'succeeded' }, 'chat').removable).toBe(false)
+    // A damaged copy is removable too, so a broken install never leaves Settings without an exit.
+    const damaged = { kind: 'known' as const, state: { ...idle, damaged: true, canRemove: true } }
+    expect(managedRuntimeInstallView(damaged, 'Fake', 'settings').removable).toBe(true)
     expect(shown({ available: false, version: null }, 'settings')).toEqual([
       'Fake is not available on this host.',
       null,
