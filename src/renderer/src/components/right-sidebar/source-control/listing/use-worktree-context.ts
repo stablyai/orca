@@ -48,6 +48,9 @@ export function useSourceControlWorktreeContext() {
   const repositoryHuge = useAppStore((s) =>
     activeWorktreeId ? s.gitStatusHugeByWorktree?.[activeWorktreeId] : undefined
   )
+  const statusReadError = useAppStore((s) =>
+    activeWorktreeId ? s.gitStatusReadErrorByWorktree?.[activeWorktreeId] : undefined
+  )
   const branchEntries = useAppStore((s) =>
     activeWorktreeId
       ? (s.gitBranchChangesByWorktree[activeWorktreeId] ?? EMPTY_BRANCH_CHANGE_ENTRIES)
@@ -174,6 +177,7 @@ export function useSourceControlWorktreeContext() {
     repositoryHuge,
     rightSidebarTab,
     settings,
+    statusReadError,
     worktreeMap,
     worktreePath
   }
