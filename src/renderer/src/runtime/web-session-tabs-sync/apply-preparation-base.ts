@@ -30,6 +30,10 @@ import {
 } from './terminal-surfaces'
 import { buildMirroredTerminalTabs } from './terminal-build'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import {
+  forgetUserEmptiedWorktree,
+  wasWorktreeEmptiedByUserClose
+} from '../web-session-close-intent'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -170,17 +174,29 @@ export function prepareWebSessionTabsSnapshotBase(
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
   // Why an empty row rather than a deleted key: an explicit empty row is the closed-last-terminal
   // tombstone every seeder reads (initial-terminal.ts), and dropping the key reads back as "never
-  // initialized", which re-seeds the workspace on every focus (STA-6173). `sameTerminalTabs` treats
-  // a missing row and an empty one as equal, so a worktree that never had a terminal still gets no
-  // row. A removal frame really is gone, and a synthesized unpublished frame is "ask me later", not
-  // evidence the user emptied anything — neither may leave a tombstone behind.
+  // initialized", which re-seeds the workspace on every focus (STA-6173). Only a remembered user
+  // close selects the empty row, so a worktree that never had a terminal still gets no row, and a
+  // null frame leaves an existing tombstone alone. A removal frame really is gone, and a synthesized unpublished frame is "ask me later", not
+  // evidence the user emptied anything — neither may leave a tombstone behind. Neither may an
+  // affirming-empty frame on its own: the host reports zero terminals for a session it ended the
+  // same as for tabs the user closed, so only the remembered user-emptied state (written at the
+  // user's own close of the last terminal tab) may tombstone. A host-side exit deletes the row
+  // and the next activation re-creates the surface instead of stranding the workspace empty.
   const nextTerminalTabs =
     retainedTerminalTabs.length + mirroredTerminalTabEntries.length > 0
       ? [...retainedTerminalTabs, ...mirroredTerminalTabEntries]
       : isWebSessionTabsWorktreeRemovalFrame(snapshot) ||
           !hostSnapshotAffirmsWorktreeContents(snapshot)
         ? null
-        : []
+        : wasWorktreeEmptiedByUserClose(worktreeId)
+          ? []
+          : null
+  if (nextTerminalTabs && nextTerminalTabs.length > 0) {
+    // Why forget here: a terminal row landing for the worktree ends any
+    // remembered user-emptied state, so a later host-side exit of that
+    // terminal deletes the row and the workspace can regain its surface.
+    forgetUserEmptiedWorktree(worktreeId)
+  }
   const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)

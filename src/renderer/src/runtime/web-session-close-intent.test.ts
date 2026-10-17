@@ -3,10 +3,13 @@ import {
   clearWebSessionCloseIntent,
   clearWebSessionCloseIntentsForOwner,
   clearWebSessionCloseIntentsForWorktree,
+  forgetUserEmptiedWorktree,
   isWebSessionCloseIntentPending,
   reconcileWebSessionCloseIntents,
   recordWebSessionCloseIntent,
+  rememberUserEmptiedWorktree,
   resetWebSessionCloseIntentForTests,
+  wasWorktreeEmptiedByUserClose,
   WEB_SESSION_CLOSE_INTENT_TTL_MS
 } from './web-session-close-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
@@ -86,5 +89,15 @@ describe('web session close intent', () => {
   it('ignores empty ids', () => {
     recordWebSessionCloseIntent(OWNER, WT, '   ', 1000)
     expect(isWebSessionCloseIntentPending(OWNER, WT, '', 1000)).toBe(false)
+  })
+
+  it('keeps the exact worktree id in the user-emptied marker', () => {
+    const padded = `${WT} `
+    rememberUserEmptiedWorktree(padded)
+    expect(wasWorktreeEmptiedByUserClose(padded)).toBe(true)
+    forgetUserEmptiedWorktree(padded)
+    expect(wasWorktreeEmptiedByUserClose(padded)).toBe(false)
+    rememberUserEmptiedWorktree('   ')
+    expect(wasWorktreeEmptiedByUserClose('   ')).toBe(false)
   })
 })
