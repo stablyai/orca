@@ -54,6 +54,13 @@ const textField: GitHubProjectField = {
   dataType: 'TEXT'
 }
 
+const numberField: GitHubProjectField = {
+  kind: 'field',
+  id: 'F_points',
+  name: 'Story Points',
+  dataType: 'NUMBER'
+}
+
 function makeRow(
   id: string,
   position: number,
@@ -324,6 +331,50 @@ describe('groupRows', () => {
       ['alice', ['alice']],
       ['No Assignees', ['empty-list', 'no-value']]
     ])
+  })
+
+  it('orders number-field groups by value, not by the rendered label', () => {
+    // Why: the group label is `String(value.number)`, so ordering groups by
+    // label alone puts 10 before 2 — while sortRows already orders number rows
+    // numerically. Grouping and sorting must agree on the same field.
+    const view = { ...makeView(numberField), groupByFields: [numberField] }
+    const rows = [8, 10, 2, 1, 13].map((points, index) =>
+      makeRow(`p${points}`, index, {
+        F_points: { kind: 'number', fieldId: 'F_points', number: points }
+      })
+    )
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => group.label)).toEqual(['1', '2', '8', '10', '13'])
+  })
+
+  it('orders negative number-field groups by value', () => {
+    // Why: the collator treats the minus sign as ignorable punctuation, so by
+    // label `-10` sorts next to `-1` rather than below `-2`.
+    const view = { ...makeView(numberField), groupByFields: [numberField] }
+    const rows = [10, -2, 2, -10, -1].map((points, index) =>
+      makeRow(`p${index}`, index, {
+        F_points: { kind: 'number', fieldId: 'F_points', number: points }
+      })
+    )
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => group.label)).toEqual(['-10', '-2', '-1', '2', '10'])
+  })
+
+  it('keeps the empty group last for a number field', () => {
+    const view = { ...makeView(numberField), groupByFields: [numberField] }
+    const rows = [
+      makeRow('none', 0, {}),
+      makeRow('p10', 1, { F_points: { kind: 'number', fieldId: 'F_points', number: 10 } }),
+      makeRow('p2', 2, { F_points: { kind: 'number', fieldId: 'F_points', number: 2 } })
+    ]
+
+    const groups = groupRows(makeTable(view, rows), rows)
+
+    expect(groups.map((group) => group.key)).toEqual(['raw:2', 'raw:10', '__empty__'])
   })
 
   it('places the empty group last', () => {
