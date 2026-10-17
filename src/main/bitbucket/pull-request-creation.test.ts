@@ -34,7 +34,7 @@ function createdPullRequestResponse(): Response {
     state: 'OPEN',
     updated_on: '2026-08-11T00:00:00Z',
     links: { html: { href: 'https://bitbucket.org/team/repo/pull-requests/42' } },
-    source: { branch: { name: 'feature/login' } },
+    source: { branch: { name: 'feature/login' }, repository: { full_name: 'team/repo' } },
     destination: { branch: { name: 'main' } }
   })
 }
@@ -132,7 +132,7 @@ describe('Bitbucket pull request creation', () => {
             state: 'OPEN',
             updated_on: '2026-08-11T00:00:00Z',
             links: { html: { href: 'https://bitbucket.org/team/repo/pull-requests/7' } },
-            source: { branch: { name: 'feature/login' } },
+            source: { branch: { name: 'feature/login' }, repository: { full_name: 'team/repo' } },
             destination: { branch: { name: 'main' } }
           }
         ]

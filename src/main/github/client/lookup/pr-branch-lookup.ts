@@ -5,59 +5,49 @@ import {
   githubRepositoryWebHost,
   type GitHubApiRepository
 } from '../../github-api-repository'
+import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GhExecOptions } from './../github-exec-scope'
 import { isNoPullRequestError } from './../gh-error-predicates'
 import {
   PR_LOOKUP_JSON_FIELDS,
-  PR_BRANCH_LIST_JSON_FIELDS,
   mapRestPullRequest,
   normalizePullRequestLookupData,
   pullRequestMatchesHeadRepository,
   type PullRequestLookupData,
-  type PullRequestLookupPolicy,
   type RestPullRequest
 } from './pull-request-lookup-data'
 import { getPRByNumber } from './pr-number-lookup'
-export async function getRestPRForBranch(
+import {
+  BRANCH_REVIEW_PAGE_SIZE,
+  selectReviewForHead
+} from '../../../source-control/branch-review-selection'
+
+/** The PR whose head is exactly `headOwner:branchName`, filtered by GitHub (`head=` matches the owner and branch). */
+export async function getRestPRForHead(
   prRepo: GitHubApiRepository,
   headOwner: string,
   branchName: string,
   ghOptions: ReturnType<typeof ghRepoExecOptions>
 ): Promise<PullRequestLookupData | null> {
   const head = encodeURIComponent(`${headOwner}:${branchName}`)
-  const { stdout } = await ghExecFileAsync(
-    ['api', `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=all&per_page=1`],
-    { ...ghOptions, ...githubHostExecOptions(prRepo) }
+  const pr = await selectReviewForHead(
+    async (states) => {
+      if (states === 'open') {
+        noteRepositoryRateLimitSpend(prRepo, 'core', 1, ghOptions)
+      }
+      const { stdout } = await ghExecFileAsync(
+        [
+          'api',
+          `repos/${prRepo.owner}/${prRepo.repo}/pulls?head=${head}&state=${states}&per_page=${BRANCH_REVIEW_PAGE_SIZE}`
+        ],
+        { ...ghOptions, ...githubHostExecOptions(prRepo) }
+      )
+      const list: RestPullRequest[] = JSON.parse(stdout)
+      return list
+    },
+    (pr) => pr.state.toLowerCase() === 'open'
   )
-  const list = JSON.parse(stdout) as RestPullRequest[]
-  const pr = list[0]
   return pr ? mapRestPullRequest(pr) : null
-}
-
-export async function getFallbackPRListForBranch(
-  prRepo: GitHubApiRepository,
-  branchName: string,
-  ghOptions: ReturnType<typeof ghRepoExecOptions>
-): Promise<PullRequestLookupData | null> {
-  const { stdout } = await ghExecFileAsync(
-    [
-      'pr',
-      'list',
-      '--repo',
-      `${prRepo.owner}/${prRepo.repo}`,
-      '--head',
-      branchName,
-      '--state',
-      'all',
-      '--limit',
-      '1',
-      '--json',
-      PR_BRANCH_LIST_JSON_FIELDS
-    ],
-    { ...ghOptions, ...githubHostExecOptions(prRepo) }
-  )
-  const list = JSON.parse(stdout) as PullRequestLookupData[]
-  return list[0] ?? null
 }
 
 export async function hydrateBranchLookupWithExactPR(
@@ -79,109 +69,54 @@ export async function hydrateBranchLookupWithExactPR(
   }
 }
 
-export async function lookupPRByBranchName(args: {
+/** The PR for a branch pushed to `headRepo`, asked of each base candidate on that host. */
+export async function lookupPRByHead(args: {
   candidates: OwnerRepo[]
-  headRepo: OwnerRepo | null
+  headRepo: OwnerRepo
   branchName: string
   ghOptions: GhExecOptions
   executionScope: string
-  policy?: PullRequestLookupPolicy
-}): Promise<{
-  data: PullRequestLookupData | null
-  dataRepo: OwnerRepo | null
-  pendingError?: unknown
-}> {
-  if (args.candidates.length > 0) {
-    let pendingError: unknown
-    let hasPendingError = false
-    for (const candidate of args.candidates) {
-      if (
-        args.headRepo &&
-        githubRepositoryWebHost(candidate).trim().toLowerCase() !==
-          githubRepositoryWebHost(args.headRepo).trim().toLowerCase()
-      ) {
-        continue
-      }
-      try {
-        const branchData = args.headRepo
-          ? await getRestPRForBranch(
-              candidate,
-              args.headRepo.owner,
-              args.branchName,
-              args.ghOptions
-            )
-          : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
-        // Why: REST/list branch lookup identifies the PR cheaply; exact `gh pr view` carries review, merge-queue, and auto-merge state.
-        const data = await hydrateBranchLookupWithExactPR(
-          candidate,
-          branchData,
-          args.ghOptions,
-          args.executionScope
-        )
-        if (
-          data &&
-          pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-          (!args.policy || (await args.policy.accepts(data, candidate)))
-        ) {
-          return { data, dataRepo: candidate }
-        }
-      } catch (err) {
-        if (args.headRepo) {
-          throw err
-        }
-        if (!hasPendingError) {
-          pendingError = err
-          hasPendingError = true
-        }
-        try {
-          const branchData = await getRestPRForBranch(
-            candidate,
-            candidate.owner,
-            args.branchName,
-            args.ghOptions
-          )
-          const data = await hydrateBranchLookupWithExactPR(
-            candidate,
-            branchData,
-            args.ghOptions,
-            args.executionScope
-          )
-          if (
-            data &&
-            pullRequestMatchesHeadRepository(data, candidate, args.headRepo) &&
-            (!args.policy || (await args.policy.accepts(data, candidate)))
-          ) {
-            return { data, dataRepo: candidate }
-          }
-        } catch (retryErr) {
-          if (!hasPendingError) {
-            pendingError = retryErr
-            hasPendingError = true
-          }
-        }
-      }
+}): Promise<{ data: PullRequestLookupData | null; dataRepo: OwnerRepo | null }> {
+  const headHost = githubRepositoryWebHost(args.headRepo).trim().toLowerCase()
+  for (const candidate of args.candidates) {
+    if (githubRepositoryWebHost(candidate).trim().toLowerCase() !== headHost) {
+      continue
     }
-    // Why: branch-list failures are ambiguous for fork discovery; give exact fallback-number recovery a chance before surfacing the error.
-    return hasPendingError
-      ? { data: null, dataRepo: null, pendingError }
-      : { data: null, dataRepo: null }
-  }
-
-  try {
-    const { stdout } = await ghExecFileAsync(
-      ['pr', 'view', args.branchName, '--json', PR_LOOKUP_JSON_FIELDS],
+    const branchData = await getRestPRForHead(
+      candidate,
+      args.headRepo.owner,
+      args.branchName,
       args.ghOptions
     )
-    const lookup = {
-      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
-      dataRepo: null
+    // Why: REST/list branch lookup identifies the PR cheaply; exact `gh pr view` carries review, merge-queue, and auto-merge state.
+    const data = await hydrateBranchLookupWithExactPR(
+      candidate,
+      branchData,
+      args.ghOptions,
+      args.executionScope
+    )
+    if (data && pullRequestMatchesHeadRepository(data, candidate, args.headRepo)) {
+      return { data, dataRepo: candidate }
     }
-    return !args.policy || (await args.policy.accepts(lookup.data, null))
-      ? lookup
-      : { data: null, dataRepo: null }
+  }
+  return { data: null, dataRepo: null }
+}
+
+/** No GitHub candidate resolved here: let `gh` find the branch's PR in its own repo context. */
+export async function lookupPRByGhBranch(
+  branchName: string,
+  ghOptions: GhExecOptions
+): Promise<PullRequestLookupData | null> {
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['pr', 'view', branchName, '--json', PR_LOOKUP_JSON_FIELDS],
+      ghOptions
+    )
+    const data: PullRequestLookupData = JSON.parse(stdout)
+    return normalizePullRequestLookupData(data)
   } catch (err) {
     if (isNoPullRequestError(err)) {
-      return { data: null, dataRepo: null }
+      return null
     }
     throw err
   }

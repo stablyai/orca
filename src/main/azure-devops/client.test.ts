@@ -42,6 +42,7 @@ describe('Azure DevOps client', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     process.env = OLD_ENV
     globalThis.fetch = OLD_FETCH
     _resetAzureDevOpsRepoRefCache()
@@ -200,60 +201,119 @@ describe('Azure DevOps client', () => {
     ).rejects.toThrow(/Azure DevOps request failed/)
   })
 
-  it('uses the most recent branch PR instead of preferring stale active PRs', async () => {
+  it('shows the active branch PR over a newer completed one (#28324)', async () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
     })
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input))
+        const response = (body: unknown): Response =>
+          new Response(JSON.stringify(body), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          })
 
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({ id: 'repo-guid' })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        return response({
-          value: [
-            {
-              pullRequestId: 20,
-              title: 'Stale active PR',
-              status: 'active',
-              creationDate: '2026-05-10T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'oldsha' }
-            },
-            {
-              pullRequestId: 21,
-              title: 'Latest completed PR',
-              status: 'completed',
-              creationDate: '2026-05-15T00:00:00Z',
-              closedDate: '2026-05-16T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'newsha' }
-            }
-          ]
-        })
-      }
-      if (
-        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/21/statuses'
-      ) {
-        return response({ value: [{ state: 'succeeded' }] })
-      }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
+        if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+          return response({ id: 'repo-guid' })
+        }
+        if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
+          expect(url.searchParams.get('searchCriteria.sourceRefName')).toBe(
+            'refs/heads/feature/azure'
+          )
+          expect(url.searchParams.get('searchCriteria.sourceRepositoryId')).toBe('repo-guid')
+          expect(url.searchParams.get('searchCriteria.status')).toBe('all')
+          return response({
+            value: [
+              {
+                pullRequestId: 20,
+                title: 'Open PR',
+                status: 'active',
+                creationDate: '2026-05-10T00:00:00Z',
+                mergeStatus: 'succeeded',
+                lastMergeSourceCommit: { commitId: 'oldsha' }
+              },
+              {
+                pullRequestId: 21,
+                title: 'Latest completed PR',
+                status: 'completed',
+                creationDate: '2026-05-15T00:00:00Z',
+                closedDate: '2026-05-16T00:00:00Z',
+                mergeStatus: 'succeeded',
+                lastMergeSourceCommit: { commitId: 'newsha' }
+              }
+            ]
+          })
+        }
+        if (
+          url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/20/statuses'
+        ) {
+          return response({ value: [{ state: 'succeeded' }] })
+        }
+        return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
+      })
+    )
 
     await expect(
       getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
     ).resolves.toMatchObject({
-      number: 21,
-      title: 'Latest completed PR',
-      state: 'merged',
-      headSha: 'newsha'
+      number: 20,
+      title: 'Open PR',
+      state: 'open',
+      headSha: 'oldsha'
     })
+  })
+
+  it('shows the linked PR without consulting the branch', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        return Response.json({ id: 'repo-guid' })
+      }
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/42') {
+        return Response.json({ pullRequestId: 42, title: 'Linked PR', status: 'active' })
+      }
+      return Response.json({ value: [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/azure', 42)
+    ).resolves.toMatchObject({ number: 42, title: 'Linked PR' })
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        new URL(String(input)).pathname.endsWith('/pullRequests')
+      )
+    ).toBe(false)
+  })
+
+  it('ignores a same-named branch from a fork', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) =>
+        new URL(String(input)).pathname === '/acme/Project/_apis/git/repositories/repo'
+          ? Response.json({ id: 'repo-guid' })
+          : Response.json({
+              value: [
+                {
+                  pullRequestId: 5,
+                  title: 'Fork PR',
+                  status: 'active',
+                  forkSource: { repository: { id: 'fork-guid' } }
+                }
+              ]
+            })
+      )
+    )
+
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/azure')).resolves.toBeNull()
   })
 
   it('hides a stale completed/abandoned PR whose source branch is the repo default branch (#9171)', async () => {

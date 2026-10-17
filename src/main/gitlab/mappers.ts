@@ -96,6 +96,8 @@ type GitLabMRRaw = {
   merge_status?: string
   description?: string | null
   target_branch?: string
+  source_project_id?: number
+  target_project_id?: number
   author?: { username?: string | null; avatar_url?: string | null } | null
 }
 

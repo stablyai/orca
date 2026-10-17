@@ -27,11 +27,13 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
-import { resetPRForBranchMocks } from './client-test-harness'
+import { gitConfigListOutput, resetPRForBranchMocks } from './client-test-harness'
 
 const {
   ghExecFileAsyncMock,
   getOwnerRepoMock,
+  getOwnerRepoForRemoteMock,
+  gitConfigListMock,
   gitExecFileAsyncMock,
   resolvePRRepositoryCandidatesMock
 } = clientMocks
@@ -71,42 +73,6 @@ function mockMergedBranchPRLookup(): void {
         headRefName: MERGED_BRANCH,
         baseRefOid: 'base-oid',
         headRefOid: MERGED_HEAD_OID
-      })
-    })
-}
-
-function mockUpstreamOnlyPRLookup(): void {
-  ghExecFileAsyncMock
-    .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-    .mockResolvedValueOnce({
-      stdout: JSON.stringify([
-        {
-          number: 78,
-          title: 'Upstream branch PR',
-          state: 'open',
-          html_url: 'https://github.com/acme/widgets/pull/78',
-          updated_at: '2026-03-28T00:00:00Z',
-          draft: false,
-          mergeable: true,
-          base: { ref: 'main', sha: 'base-oid' },
-          head: { ref: 'contributor/original', sha: 'upstream-head-oid' }
-        }
-      ])
-    })
-    .mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        number: 78,
-        title: 'Hydrated upstream branch PR',
-        state: 'OPEN',
-        url: 'https://github.com/acme/widgets/pull/78',
-        statusCheckRollup: [],
-        updatedAt: '2026-03-28T00:00:00Z',
-        isDraft: false,
-        mergeable: 'MERGEABLE',
-        baseRefName: 'main',
-        headRefName: 'contributor/original',
-        baseRefOid: 'base-oid',
-        headRefOid: 'upstream-head-oid'
       })
     })
 }
@@ -167,18 +133,13 @@ describe('getPRForBranch SSH execution boundary', () => {
     expect(pr).toMatchObject({ number: 5875, state: 'merged', headSha: MERGED_HEAD_OID })
   })
 
-  it('does not read tracked upstreams locally when the SSH provider is unregistered', async () => {
-    mockUpstreamOnlyPRLookup()
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: `${MERGED_BRANCH}\0origin/contributor/original\n`,
-      stderr: ''
-    })
-
+  it('does not read git config locally when the SSH provider is unregistered', async () => {
     const outcome = await getPRForBranchOutcome('/remote/repo', MERGED_BRANCH, null, 'ssh-1')
 
+    expect(gitConfigListMock).not.toHaveBeenCalled()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('reports an upstream error when the SSH HEAD probe loses its provider mid-flight', async () => {
@@ -190,31 +151,29 @@ describe('getPRForBranch SSH execution boundary', () => {
     expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
   })
 
-  it('reports an upstream error when the SSH upstream probe loses its provider mid-flight', async () => {
-    mockUpstreamOnlyPRLookup()
+  it('reads the review head from git config through the local runtime for a WSL repository', async () => {
+    gitConfigListMock.mockResolvedValue(
+      gitConfigListOutput([
+        [`branch.${MERGED_BRANCH}.remote`, 'fork'],
+        [`branch.${MERGED_BRANCH}.merge`, `refs/heads/${MERGED_BRANCH}`]
+      ])
+    )
+    getOwnerRepoForRemoteMock.mockImplementation(async (_repoPath: string, remote: string) =>
+      remote === 'fork' ? { owner: 'contributor', repo: 'widgets' } : null
+    )
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify([]) })
 
-    const outcome = await getPRForBranchOutcome('/remote/repo', MERGED_BRANCH, null, 'ssh-1')
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
-  })
-
-  it('reads tracked upstreams through the local runtime for a WSL repository', async () => {
-    const forEachRefArgs = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
-    mockUpstreamOnlyPRLookup()
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: `${MERGED_BRANCH}\0origin/contributor/original\n`,
-      stderr: ''
-    })
-
-    const pr = await getPRForBranch('/repo-root', MERGED_BRANCH, null, null, null, {
+    await getPRForBranch('/repo-root', MERGED_BRANCH, null, null, null, {
       localGitExecOptions: { wslDistro: 'Ubuntu' }
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(forEachRefArgs, {
+    expect(gitConfigListMock).toHaveBeenCalledWith(['config', '--list', '-z'], {
       cwd: '/repo-root',
       wslDistro: 'Ubuntu'
     })
-    expect(pr).toMatchObject({ number: 78, title: 'Hydrated upstream branch PR' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['api', `repos/acme/widgets/pulls?head=contributor%3A${MERGED_BRANCH}&state=all&per_page=10`],
+      expect.anything()
+    )
   })
 })

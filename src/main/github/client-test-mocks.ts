@@ -18,6 +18,8 @@ export type GitHubClientMocks = {
   resolvePRRepositoryCandidatesMock: Mock
   getRemoteUrlForRepoMock: Mock
   gitExecFileAsyncMock: Mock
+  /** Answers `git config --list -z` (the review-head config read) apart from other git calls. */
+  gitConfigListMock: Mock
   getRateLimitMock: Mock
   rateLimitGuardMock: Mock<(bucket?: string) => RateLimitGuardResult>
   noteRateLimitSpendMock: Mock
@@ -41,6 +43,7 @@ export function createGitHubClientMocks(): GitHubClientMocks {
     resolvePRRepositoryCandidatesMock: vi.fn(),
     getRemoteUrlForRepoMock: vi.fn(),
     gitExecFileAsyncMock: vi.fn(),
+    gitConfigListMock: vi.fn(),
     getRateLimitMock: vi.fn(),
     rateLimitGuardMock: vi.fn<(bucket?: string) => RateLimitGuardResult>(() => ({
       blocked: false
@@ -124,7 +127,11 @@ export type GitRunnerModuleMock = { gitExecFileAsync: Mock; ghExecFileAsync: Moc
 
 export function gitRunnerModuleMock(mocks: GitHubClientMocks): GitRunnerModuleMock {
   return {
-    gitExecFileAsync: mocks.gitExecFileAsyncMock,
+    gitExecFileAsync: vi.fn((args: string[], options?: unknown) =>
+      args[0] === 'config' && args[1] === '--list'
+        ? mocks.gitConfigListMock(args, options)
+        : mocks.gitExecFileAsyncMock(args, options)
+    ),
     ghExecFileAsync: mocks.ghExecFileAsyncMock
   }
 }

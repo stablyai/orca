@@ -3,10 +3,6 @@ export {
   _resetMergeQueueCacheForTests
 } from './client/detect/repository-merge-metadata-cache'
 export { _resetPRStackSummaryCacheForTests } from './client/lookup/pr-stack-summary-cache'
-export {
-  _getTrackedUpstreamBranchCacheSizesForTests,
-  __resetTrackedUpstreamBranchCacheForTests
-} from './client/lookup/tracked-upstream-cache'
 export { addPRReviewComment, addPRReviewCommentReply } from './client/create/add-pr-review-comment'
 export { __resetOrcaStarCheckForTests, checkOrcaStarred, starOrca } from './client/fetch/orca-star'
 export { countWorkItems } from './client/list/count-work-items'

@@ -62,7 +62,8 @@ describe('Bitbucket hosted review integration', () => {
               },
               source: {
                 branch: { name: 'feature/bitbucket' },
-                commit: { hash: 'abc123' }
+                commit: { hash: 'abc123' },
+                repository: { full_name: 'team/repo' }
               }
             }
           ]
@@ -117,7 +118,9 @@ describe('Bitbucket hosted review integration', () => {
       ])
       expect(seen.every((request) => request.authorization === 'Bearer local-token')).toBe(true)
       const query = new URLSearchParams(seen[0].search)
-      expect(query.get('q')).toContain('source.branch.name = "feature/bitbucket"')
+      expect(query.get('q')).toContain(
+        'source.repository.full_name = "team/repo" AND source.branch.name = "feature/bitbucket"'
+      )
       expect(query.getAll('state')).toEqual(['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'])
     } finally {
       await rm(repoPath, { recursive: true, force: true })
@@ -148,7 +151,11 @@ describe('Bitbucket hosted review integration', () => {
               state: 'OPEN',
               updated_on: '2026-05-15T00:00:00Z',
               links: { html: { href: 'https://bitbucket.org/team/repo/pull-requests/13' } },
-              source: { branch: { name: 'feature/recovery' }, commit: { hash: 'def456' } }
+              source: {
+                branch: { name: 'feature/recovery' },
+                commit: { hash: 'def456' },
+                repository: { full_name: 'team/repo' }
+              }
             }
           ]
         })

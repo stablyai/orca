@@ -469,8 +469,13 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('reports reviewLookupOutcome: found when an existing review is returned', async () => {
-    getHostedReviewForBranchMock.mockResolvedValue({ number: 7, url: 'https://x/pull/7' })
+  it.each([
+    ['open', 'existing_review'],
+    ['draft', 'existing_review'],
+    ['merged', null],
+    ['closed', null]
+  ])('blocks creation only on an open review (found %s)', async (state, blockedReason) => {
+    getHostedReviewForBranchMock.mockResolvedValue({ number: 7, url: 'https://x/pull/7', state })
     await expect(
       getHostedReviewCreationEligibility({
         ...LOCAL_REPO_ARGS,
@@ -480,7 +485,7 @@ describe('getHostedReviewCreationEligibility', () => {
         ahead: 0,
         behind: 0
       })
-    ).resolves.toMatchObject({ blockedReason: 'existing_review', reviewLookupOutcome: 'found' })
+    ).resolves.toMatchObject({ blockedReason, reviewLookupOutcome: 'found' })
   })
 
   it('reports reviewLookupOutcome: not_found when the lookup accepts no review', async () => {

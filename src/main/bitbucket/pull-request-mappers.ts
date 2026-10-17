@@ -17,6 +17,7 @@ export type RawBitbucketPullRequest = {
     commit?: {
       hash?: string
     } | null
+    repository?: { full_name?: string } | null
   }
   destination?: {
     branch?: {

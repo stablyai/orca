@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
 
+const { PROJECT_ID } = vi.hoisted(() => ({ PROJECT_ID: 42 }))
+
 const {
   glabExecFileAsyncMock,
   glabApiWithHeadersMock,
@@ -27,6 +29,8 @@ vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+vi.mock('./gitlab-project-id', () => ({ getGitLabProjectId: vi.fn(async () => PROJECT_ID) }))
+
 vi.mock('./gl-utils', async () => {
   const actual = await vi.importActual<typeof GlUtils>('./gl-utils')
   return {
@@ -46,7 +50,7 @@ import {
   getMergeRequestForBranch,
   getMergeRequestForBranchOrThrow
 } from './client'
-import { resetGitLabMrMocks } from './client-mr-test-harness'
+import { primeGitConfig, resetGitLabMrMocks } from './client-mr-test-harness'
 
 describe('gitlab client — MR operations', () => {
   beforeEach(() => {
@@ -145,6 +149,7 @@ describe('gitlab client — MR operations', () => {
         stdout: JSON.stringify([
           {
             iid: 7,
+            source_project_id: PROJECT_ID,
             title: 'WIP',
             state: 'merged',
             sha: 'abc',
@@ -160,7 +165,7 @@ describe('gitlab client — MR operations', () => {
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         [
           'api',
-          'projects/g%2Fp/merge_requests?source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true'
+          'projects/g%2Fp/merge_requests?source_project_id=42&source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=10&with_merge_status_recheck=true'
         ],
         { cwd: '/repo' }
       )
@@ -184,6 +189,7 @@ describe('gitlab client — MR operations', () => {
         stdout: JSON.stringify([
           {
             iid: 8,
+            source_project_id: PROJECT_ID,
             title: 'Legacy pipeline branch',
             state: 'opened',
             sha: 'def',
@@ -217,6 +223,7 @@ describe('gitlab client — MR operations', () => {
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 9,
+          source_project_id: PROJECT_ID,
           title: 'Linked MR',
           state: 'opened',
           pipeline: { status: 'success' }
@@ -238,6 +245,7 @@ describe('gitlab client — MR operations', () => {
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 2,
+          source_project_id: PROJECT_ID,
           title: 'Replacement linked MR',
           state: 'opened',
           sha: 'head-2',
@@ -264,6 +272,7 @@ describe('gitlab client — MR operations', () => {
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 2,
+          source_project_id: PROJECT_ID,
           title: 'Already selected MR',
           state: 'opened',
           sha: 'head-2',
@@ -286,6 +295,7 @@ describe('gitlab client — MR operations', () => {
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 10,
+          source_project_id: PROJECT_ID,
           title: 'Merged linked MR',
           state: 'merged',
           pipeline: { status: 'success' }
@@ -307,6 +317,7 @@ describe('gitlab client — MR operations', () => {
         stdout: JSON.stringify([
           {
             iid: 12,
+            source_project_id: PROJECT_ID,
             title: 'WSL branch',
             state: 'opened',
             sha: 'abc',
@@ -335,6 +346,7 @@ describe('gitlab client — MR operations', () => {
         stdout: JSON.stringify([
           {
             iid: 7,
+            source_project_id: PROJECT_ID,
             title: 'Accidental MR from main',
             state: 'closed',
             sha: 'stale-main-oid',
@@ -352,6 +364,7 @@ describe('gitlab client — MR operations', () => {
         stdout: JSON.stringify([
           {
             iid: 9,
+            source_project_id: PROJECT_ID,
             title: 'Wedged mid-merge MR from main',
             state: 'locked',
             sha: 'locked-main-oid',
@@ -369,6 +382,7 @@ describe('gitlab client — MR operations', () => {
         stdout: JSON.stringify([
           {
             iid: 8,
+            source_project_id: PROJECT_ID,
             title: 'main → release',
             state: 'opened',
             sha: 'abc',
@@ -379,8 +393,9 @@ describe('gitlab client — MR operations', () => {
 
       const mr = await getMergeRequestForBranch('/repo', 'main')
       expect(mr?.number).toBe(8)
-      // Open results never consult git for the default branch (lazy resolution).
-      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+      // Open results never consult git for the default branch (lazy resolution); the
+      // review-head config read is the only git call.
+      expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args[0])).toEqual(['config'])
     })
 
     it('keeps a closed MR on a feature branch (behavior preserved)', async () => {
@@ -389,6 +404,7 @@ describe('gitlab client — MR operations', () => {
         stdout: JSON.stringify([
           {
             iid: 9,
+            source_project_id: PROJECT_ID,
             title: 'Rejected work',
             state: 'closed',
             sha: 'def',
@@ -407,6 +423,7 @@ describe('gitlab client — MR operations', () => {
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 42,
+          source_project_id: PROJECT_ID,
           title: 'Linked MR',
           state: 'merged',
           pipeline: { status: 'success' }
@@ -429,6 +446,7 @@ describe('gitlab client — MR operations', () => {
       glabExecFileAsyncMock.mockResolvedValueOnce({
         stdout: JSON.stringify({
           iid: 7,
+          source_project_id: PROJECT_ID,
           title: 'Linked trunk MR',
           state: 'merged',
           sha: 'abc',
@@ -440,6 +458,74 @@ describe('gitlab client — MR operations', () => {
 
       expect(mr).toMatchObject({ number: 7, state: 'merged' })
       expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+    })
+
+    it('shows the open MR over a newer closed one from the same branch (#28324)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          { iid: 9, source_project_id: PROJECT_ID, title: 'Retry', state: 'closed' },
+          { iid: 3, source_project_id: PROJECT_ID, title: 'Feature', state: 'opened' }
+        ])
+      })
+
+      await expect(getMergeRequestForBranch('/repo', 'feature/foo')).resolves.toMatchObject({
+        number: 3,
+        state: 'opened'
+      })
+    })
+
+    it('asks for open MRs only when a full page of closed ones could hide one', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      const closed = Array.from({ length: 10 }, (_, index) => ({
+        iid: 20 + index,
+        source_project_id: PROJECT_ID,
+        title: 'Retry',
+        state: 'closed'
+      }))
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({ stdout: JSON.stringify(closed) })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([
+            { iid: 3, source_project_id: PROJECT_ID, title: 'Feature', state: 'opened' }
+          ])
+        })
+
+      await expect(getMergeRequestForBranch('/repo', 'feature/foo')).resolves.toMatchObject({
+        number: 3
+      })
+      expect(glabExecFileAsyncMock.mock.calls[1][0][1]).toContain(
+        'source_branch=feature%2Ffoo&state=opened&'
+      )
+    })
+
+    it('ignores a same-named branch from another project', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          { iid: 5, source_project_id: PROJECT_ID + 1, title: 'Fork MR', state: 'opened' }
+        ])
+      })
+
+      await expect(getMergeRequestForBranch('/repo', 'feature/foo')).resolves.toBeNull()
+    })
+
+    it('follows a `glab mr checkout` branch to its MR', async () => {
+      primeGitConfig(gitExecFileAsyncMock, [
+        ['branch.mr-9.remote', 'origin'],
+        ['branch.mr-9.merge', 'refs/merge-requests/9/head']
+      ])
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ iid: 9, source_project_id: 77, title: 'Fork MR', state: 'opened' })
+      })
+
+      await expect(getMergeRequestForBranch('/repo', 'mr-9')).resolves.toMatchObject({ number: 9 })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/9?with_merge_status_recheck=true'],
+        { cwd: '/repo' }
+      )
     })
 
     it('returns null for an empty / detached-HEAD branch arg', async () => {

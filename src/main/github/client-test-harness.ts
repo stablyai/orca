@@ -2,7 +2,7 @@ import type { GitHubClientMocks } from './client-test-mocks'
 import { _resetOwnerRepoCache } from './gh-utils'
 import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
 import { _resetPRStackSummaryCacheForTests } from './client/lookup/pr-stack-summary-cache'
-import { __resetTrackedUpstreamBranchCacheForTests } from './client/lookup/tracked-upstream-cache'
+import { __resetRepoGitConfigSnapshotCacheForTests } from '../source-control/repo-git-config-snapshot'
 import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
@@ -34,6 +34,8 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   })
   mocks.getRemoteUrlForRepoMock.mockReset()
   mocks.gitExecFileAsyncMock.mockReset()
+  mocks.gitConfigListMock.mockReset()
+  mocks.gitConfigListMock.mockRejectedValue(new Error('git config unavailable'))
   mocks.getRateLimitMock.mockReset()
   mocks.getRateLimitMock.mockResolvedValue({ resources: {} })
   mocks.rateLimitGuardMock.mockReset()
@@ -50,7 +52,7 @@ export function resetPRForBranchMocks(mocks: GitHubClientMocks): void {
   _resetMergeQueueCacheForTests()
   _resetPRStackSummaryCacheForTests()
   _resetGitHubPRStackCacheForTests()
-  __resetTrackedUpstreamBranchCacheForTests()
+  __resetRepoGitConfigSnapshotCacheForTests()
   __resetPRConflictSummaryCachesForTests()
   resetMergedPRCommitMembershipCacheForTest()
   // Why: the #9171 guard caches default-branch resolutions per repoPath;
@@ -87,4 +89,12 @@ export function resetGraphQLRateLimitGuardMocks(mocks: GitHubClientMocks): void 
   _resetMergeQueueCacheForTests()
   _resetPRStackSummaryCacheForTests()
   __resetPRConflictSummaryCachesForTests()
+}
+
+/** `git config --list -z` output for the review-head config read (`gitConfigListMock`). */
+export function gitConfigListOutput(records: [string, string][]): {
+  stdout: string
+  stderr: string
+} {
+  return { stdout: records.map(([key, value]) => `${key}\n${value}`).join('\0'), stderr: '' }
 }

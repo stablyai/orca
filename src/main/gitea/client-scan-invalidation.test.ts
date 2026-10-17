@@ -26,7 +26,7 @@ const pullRequest = {
   title: 'Add Gitea',
   state: 'open',
   html_url: 'https://git.example.com/team/repo/pulls/7',
-  head: { ref: branch }
+  head: { ref: branch, repo: { full_name: 'team/repo' } }
 }
 
 function createReview() {

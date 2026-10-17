@@ -1,5 +1,6 @@
 import {
   deriveGiteaCommitStatus,
+  isGiteaPullRequestFromHead,
   mapGiteaPullRequest,
   mapGiteaPullRequestState,
   type GiteaPullRequestInfo,
@@ -7,7 +8,9 @@ import {
   type RawGiteaPullRequest
 } from './pull-request-mappers'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
-import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import { pickReviewForHead } from '../source-control/branch-review-selection'
+import { resolveBranchReviewTarget } from '../source-control/review-head'
+import { getGiteaRepoRef, getGiteaRepoRefForRemote, type GiteaRepoRef } from './repository-ref'
 import { invalidateGiteaPullRequestScan, scanGiteaPullRequests } from './pull-request-scan-cache'
 import {
   getHostedReviewLocalGitOptions,
@@ -158,15 +161,6 @@ async function normalizePullRequest(
   return mapGiteaPullRequest(raw, status)
 }
 
-function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
-  const ref = raw.head?.ref?.trim()
-  if (ref === branchName) {
-    return true
-  }
-  const label = raw.head?.label?.trim()
-  return label === branchName || label?.endsWith(`:${branchName}`) === true
-}
-
 export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
   const config = getAuthConfig()
   const tokenConfigured = config.token !== null
@@ -250,68 +244,80 @@ export async function getGiteaPullRequestForBranch(
     return null
   }
 
-  const repo = await getGiteaRepoRef(
-    repoPath,
-    connectionId,
-    getHostedReviewLocalGitOptions(options)
-  )
+  const localGitOptions = getHostedReviewLocalGitOptions(options)
+  const repo = await getGiteaRepoRef(repoPath, connectionId, localGitOptions)
   if (!repo) {
     return null
   }
 
-  if (branchName) {
-    const pullRequests = await scanGiteaPullRequests(
-      // Why: throwing scans keep a separate cache namespace so they never reuse a
-      // prior swallowing scan's cached-empty from a failed page fetch, which would
-      // otherwise let a real lookup failure masquerade as "no PR".
-      throwOnFailure ? `${giteaPullRequestScanKey(repo)}::strict` : giteaPullRequestScanKey(repo),
-      (page) =>
-        requestJson<RawGiteaPullRequest[]>(
-          repo,
-          `/repos/${encodedRepoPath(repo)}/pulls`,
-          {
-            searchParams: {
-              state: 'all',
-              sort: 'recentupdate',
-              page,
-              limit: PULL_REQUEST_PAGE_LIMIT
-            },
-            timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS
-          },
-          throwOnFailure
-        ),
-      PULL_REQUEST_PAGE_LIMIT,
-      MAX_PULL_REQUEST_PAGES
+  const { linkedNumber, head } = await resolveBranchReviewTarget(
+    repoPath,
+    branchName,
+    linkedPRNumber,
+    connectionId,
+    localGitOptions
+  )
+  if (linkedNumber !== null) {
+    const raw = await requestJson<RawGiteaPullRequest>(
+      repo,
+      `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedNumber))}`,
+      {},
+      throwOnFailure
     )
-    const raw = pullRequests.find((item) => matchesBranch(item, branchName))
     if (raw) {
-      // Why (#9171): discard a non-open implicit branch match on the repo
-      // default branch and fall through to the linked-number fallback below.
-      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
-        state: mapGiteaPullRequestState(raw),
-        reviewNumber: raw.number ?? null,
-        linkedReviewNumber: linkedPRNumber,
-        branchName,
-        repoPath,
-        connectionId,
-        localGitOptions: getHostedReviewLocalGitOptions(options)
-      })
-      if (!hideOnDefaultBranch) {
-        return normalizePullRequest(repo, raw)
-      }
+      return normalizePullRequest(repo, raw)
     }
   }
 
-  if (typeof linkedPRNumber !== 'number') {
+  const headRepo = !head
+    ? null
+    : head.remote === 'origin'
+      ? repo
+      : await getGiteaRepoRefForRemote(repoPath, head.remote, connectionId, localGitOptions)
+  if (!head || !headRepo) {
     return null
   }
-  const raw = await requestJson<RawGiteaPullRequest>(
-    repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
-    {},
-    throwOnFailure
+  const pullRequests = await scanGiteaPullRequests(
+    // Why: throwing scans keep a separate cache namespace so they never reuse a
+    // prior swallowing scan's cached-empty from a failed page fetch, which would
+    // otherwise let a real lookup failure masquerade as "no PR".
+    throwOnFailure ? `${giteaPullRequestScanKey(repo)}::strict` : giteaPullRequestScanKey(repo),
+    (page) =>
+      requestJson<RawGiteaPullRequest[]>(
+        repo,
+        `/repos/${encodedRepoPath(repo)}/pulls`,
+        {
+          searchParams: {
+            state: 'all',
+            sort: 'recentupdate',
+            page,
+            limit: PULL_REQUEST_PAGE_LIMIT
+          },
+          timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS
+        },
+        throwOnFailure
+      ),
+    PULL_REQUEST_PAGE_LIMIT,
+    MAX_PULL_REQUEST_PAGES
   )
-  return raw ? normalizePullRequest(repo, raw) : null
+  const raw = pickReviewForHead(
+    pullRequests.filter((item) => isGiteaPullRequestFromHead(item, headRepo, head.branch)),
+    (item) => ['open', 'draft'].includes(mapGiteaPullRequestState(item))
+  )
+  if (!raw) {
+    return null
+  }
+  // Why (#9171): discard a non-open implicit branch match on the repo default branch.
+  const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+    state: mapGiteaPullRequestState(raw),
+    reviewNumber: raw.number ?? null,
+    linkedReviewNumber: linkedPRNumber,
+    branchName,
+    repoPath,
+    connectionId,
+    localGitOptions
+  })
+  return hideOnDefaultBranch ? null : normalizePullRequest(repo, raw)
 }
 
 /**

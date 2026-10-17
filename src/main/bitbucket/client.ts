@@ -7,8 +7,17 @@ import {
   type RawBitbucketBuildStatus,
   type RawBitbucketPullRequest
 } from './pull-request-mappers'
-import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
+import {
+  getBitbucketRepoRef,
+  getBitbucketRepoRefForRemote,
+  type BitbucketRepoRef
+} from './repository-ref'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
+import {
+  BRANCH_REVIEW_PAGE_SIZE,
+  selectReviewForHead
+} from '../source-control/branch-review-selection'
+import { resolveBranchReviewTarget } from '../source-control/review-head'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -120,8 +129,8 @@ function escapeBitbucketQueryString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
-function allStateFilter(): string {
-  return `(${ALL_PULL_REQUEST_STATES.map((state) => `state = "${state}"`).join(' OR ')})`
+function stateFilter(states: readonly string[]): string {
+  return `(${states.map((state) => `state = "${state}"`).join(' OR ')})`
 }
 
 async function getBuildStatus(
@@ -216,11 +225,8 @@ export async function getBitbucketPullRequestForBranch(
     return null
   }
 
-  const repo = await getBitbucketRepoRef(
-    repoPath,
-    connectionId,
-    getHostedReviewLocalGitOptions(options)
-  )
+  const localGitOptions = getHostedReviewLocalGitOptions(options)
+  const repo = await getBitbucketRepoRef(repoPath, connectionId, localGitOptions)
   if (!repo) {
     return null
   }
@@ -237,43 +243,59 @@ export async function getBitbucketPullRequestForBranch(
     }
   }
 
-  if (branchName) {
-    const query = [
-      `source.branch.name = "${escapeBitbucketQueryString(branchName)}"`,
-      allStateFilter()
-    ].join(' AND ')
-    const list = await requestJson<{ values?: RawBitbucketPullRequest[] }>(
-      `/repositories/${encodedRepoPath(repo)}/pullrequests`,
-      {
-        searchParams: {
-          pagelen: '1',
-          sort: '-updated_on',
-          q: query,
-          state: ALL_PULL_REQUEST_STATES
-        }
+  // Why: a stale link falls back to the branch, so resolve its head as if unlinked.
+  const { head } = await resolveBranchReviewTarget(
+    repoPath,
+    branchName,
+    null,
+    connectionId,
+    localGitOptions
+  )
+  const headRepo = !head
+    ? null
+    : head.remote === 'origin'
+      ? repo
+      : await getBitbucketRepoRefForRemote(repoPath, head.remote, connectionId, localGitOptions)
+  if (head && headRepo) {
+    const headFullName = `${headRepo.workspace}/${headRepo.repoSlug}`
+    const raw = await selectReviewForHead(
+      async (states) => {
+        const pullRequestStates = states === 'open' ? ['OPEN'] : ALL_PULL_REQUEST_STATES
+        const list = await requestJson<{ values?: RawBitbucketPullRequest[] }>(
+          `/repositories/${encodedRepoPath(repo)}/pullrequests`,
+          {
+            searchParams: {
+              pagelen: String(BRANCH_REVIEW_PAGE_SIZE),
+              sort: '-updated_on',
+              // Why: `q=` drops Bitbucket's default open-only filter, so name every state.
+              q: [
+                `source.repository.full_name = "${escapeBitbucketQueryString(headFullName)}"`,
+                `source.branch.name = "${escapeBitbucketQueryString(head.branch)}"`,
+                stateFilter(pullRequestStates)
+              ].join(' AND '),
+              state: pullRequestStates
+            }
+          },
+          throwOnFailure
+        )
+        return (list?.values ?? []).filter(
+          (pr) => pr.source?.repository?.full_name?.toLowerCase() === headFullName.toLowerCase()
+        )
       },
-      throwOnFailure
+      (pr) => mapBitbucketPullRequestState(pr.state) === 'open'
     )
-    const raw = list?.values?.[0]
     if (raw) {
-      const state = mapBitbucketPullRequestState(raw.state)
-      // Why: a merged PR we only matched by branch name is history, not review
-      // context (GitHub's isMergedImplicitPR rule). Keeping it reported "a pull
-      // request already exists" and blocked the branch's next PR. Scoped to
-      // merged so a declined PR stays visible off the default branch, matching
-      // every other provider; the linked lookup above already returned early
-      // for an explicitly linked review.
-      const isMergedImplicitMatch = state === 'merged'
+      // Why (#9171): discard a non-open implicit branch match on the repo default branch.
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
-        state,
+        state: mapBitbucketPullRequestState(raw.state),
         reviewNumber: raw.id ?? null,
         linkedReviewNumber: linkedPRNumber,
         branchName,
         repoPath,
         connectionId,
-        localGitOptions: getHostedReviewLocalGitOptions(options)
+        localGitOptions
       })
-      if (!isMergedImplicitMatch && !hideOnDefaultBranch) {
+      if (!hideOnDefaultBranch) {
         return normalizePullRequest(repo, raw)
       }
     }

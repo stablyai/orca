@@ -14,6 +14,7 @@ export type RawAzureDevOpsPullRequest = {
   closedDate?: string | null
   mergeStatus?: string | null
   sourceRefName?: string | null
+  forkSource?: { repository?: { id?: string | null } | null } | null
   lastMergeSourceCommit?: {
     commitId?: string | null
   } | null

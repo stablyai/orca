@@ -7,7 +7,16 @@ import {
   type RawAzureDevOpsStatus
 } from './pull-request-mappers'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
-import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
+import {
+  BRANCH_REVIEW_PAGE_SIZE,
+  selectReviewForHead
+} from '../source-control/branch-review-selection'
+import { resolveBranchReviewTarget } from '../source-control/review-head'
+import {
+  getAzureDevOpsRepoRef,
+  getAzureDevOpsRepoRefForRemote,
+  type AzureDevOpsRepoRef
+} from './repository-ref'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -111,25 +120,6 @@ async function normalizePullRequest(
   return mapAzureDevOpsPullRequest(raw, deriveAzureDevOpsStatus(statuses), webBaseUrl)
 }
 
-function sortPullRequestsForBranch(
-  left: RawAzureDevOpsPullRequest,
-  right: RawAzureDevOpsPullRequest
-): number {
-  const leftStatus = left.status?.trim().toLowerCase()
-  const rightStatus = right.status?.trim().toLowerCase()
-  const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
-  // Why: abandoned PRs can have newer close dates, but should not hide a usable branch PR.
-  if (abandonedOrder !== 0) {
-    return abandonedOrder
-  }
-  const leftTime = Date.parse(left.closedDate ?? left.creationDate ?? '') || 0
-  const rightTime = Date.parse(right.closedDate ?? right.creationDate ?? '') || 0
-  if (leftTime !== rightTime) {
-    return rightTime - leftTime
-  }
-  return Number(rightStatus === 'active') - Number(leftStatus === 'active')
-}
-
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
   const config = getAzureDevOpsAuthConfig()
   const baseUrl = config.apiBaseUrl ? normalizeAzureDevOpsApiBaseUrl(config.apiBaseUrl) : null
@@ -207,60 +197,89 @@ export async function getAzureDevOpsPullRequestForBranch(
     return null
   }
 
-  const repo = await getAzureDevOpsRepoRef(
-    repoPath,
-    connectionId,
-    getHostedReviewLocalGitOptions(options)
-  )
+  const localGitOptions = getHostedReviewLocalGitOptions(options)
+  const repo = await getAzureDevOpsRepoRef(repoPath, connectionId, localGitOptions)
   const repository = repo ? await getRepository(repo) : null
   if (!repo || !repository) {
     return null
   }
+  const { linkedNumber, head } = await resolveBranchReviewTarget(
+    repoPath,
+    branchName,
+    linkedPRNumber,
+    connectionId,
+    localGitOptions
+  )
 
-  if (branchName) {
-    const list = await requestAzureDevOpsJson<{ value?: RawAzureDevOpsPullRequest[] }>(
+  if (linkedNumber !== null) {
+    const raw = await requestAzureDevOpsJson<RawAzureDevOpsPullRequest>(
       repo,
-      `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests`,
-      {
-        searchParams: {
-          'searchCriteria.sourceRefName': `refs/heads/${branchName}`,
-          'searchCriteria.status': 'all',
-          $top: 10
-        }
-      },
+      `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
+        String(linkedNumber)
+      )}`,
+      {},
       throwOnFailure
     )
-    const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
     if (raw) {
-      // Why (#9171): discard a non-open implicit branch match on the repo
-      // default branch and fall through to the linked-number fallback below.
-      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
-        state: mapAzureDevOpsPullRequestState(raw),
-        reviewNumber: raw.pullRequestId ?? null,
-        linkedReviewNumber: linkedPRNumber,
-        branchName,
-        repoPath,
-        connectionId,
-        localGitOptions: getHostedReviewLocalGitOptions(options)
-      })
-      if (!hideOnDefaultBranch) {
-        return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
-      }
+      return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
     }
   }
 
-  if (typeof linkedPRNumber !== 'number') {
+  if (!head) {
     return null
   }
-  const raw = await requestAzureDevOpsJson<RawAzureDevOpsPullRequest>(
-    repo,
-    `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests/${encodePathSegment(
-      String(linkedPRNumber)
-    )}`,
-    {},
-    throwOnFailure
+  const headRepositoryId =
+    head.remote === 'origin'
+      ? null
+      : await getAzureDevOpsRepoRefForRemote(repoPath, head.remote, connectionId, localGitOptions)
+          .then((headRepo) => (headRepo ? getRepository(headRepo) : null))
+          .then((headRepository) => headRepository?.idOrName ?? null)
+  if (head.remote !== 'origin' && !headRepositoryId) {
+    return null
+  }
+  const isFromHead = (pr: RawAzureDevOpsPullRequest): boolean =>
+    headRepositoryId === null ? !pr.forkSource : pr.forkSource?.repository?.id === headRepositoryId
+  const raw = await selectReviewForHead(
+    async (states) => {
+      const list = await requestAzureDevOpsJson<{ value?: RawAzureDevOpsPullRequest[] }>(
+        repo,
+        `/_apis/git/repositories/${encodePathSegment(repository.idOrName)}/pullRequests`,
+        {
+          searchParams: {
+            'searchCriteria.sourceRefName': `refs/heads/${head.branch}`,
+            'searchCriteria.sourceRepositoryId': headRepositoryId ?? repository.idOrName,
+            'searchCriteria.status': states === 'open' ? 'active' : 'all',
+            $top: BRANCH_REVIEW_PAGE_SIZE
+          }
+        },
+        throwOnFailure
+      )
+      // Why: Azure doesn't document its order, so sort newest first here.
+      return (list?.value ?? [])
+        .filter(isFromHead)
+        .sort(
+          (left, right) =>
+            (Date.parse(right.creationDate ?? '') || 0) - (Date.parse(left.creationDate ?? '') || 0)
+        )
+    },
+    (pr) => pr.status?.trim().toLowerCase() === 'active'
   )
-  return raw ? normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw) : null
+  if (!raw) {
+    return null
+  }
+  // Why (#9171): discard a non-open implicit branch match on the repo default branch.
+  const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+    state: mapAzureDevOpsPullRequestState(raw),
+    reviewNumber: raw.pullRequestId ?? null,
+    linkedReviewNumber: linkedPRNumber,
+    branchName,
+    repoPath,
+    connectionId,
+    localGitOptions
+  })
+  return hideOnDefaultBranch
+    ? null
+    : normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
 }
 
 /**

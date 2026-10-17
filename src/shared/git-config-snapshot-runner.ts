@@ -1,6 +1,6 @@
 type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>
 
-type GitConfigSnapshot = Map<string, string[]>
+export type GitConfigSnapshot = Map<string, string[]>
 
 // Why: mirror `git config --get`'s exit-1-on-absent-key so an intercepted miss
 // rejects (matching real git) instead of resolving an empty success value.
@@ -25,7 +25,7 @@ function canonicalizeGitConfigLookupKey(key: string): string {
   return [firstPart, ...parts.slice(1, -1), lastPart].join('.')
 }
 
-function parseGitConfigListSnapshot(stdout: string): GitConfigSnapshot {
+export function parseGitConfigListSnapshot(stdout: string): GitConfigSnapshot {
   const snapshot: GitConfigSnapshot = new Map()
   for (const record of iterateNulDelimitedFields(stdout)) {
     if (!record.trim()) {
@@ -42,6 +42,15 @@ function parseGitConfigListSnapshot(stdout: string): GitConfigSnapshot {
     snapshot.set(key, values)
   }
   return snapshot
+}
+
+/** The value `git config --get <key>` would print from this snapshot (last occurrence), or null. */
+export function readGitConfigSnapshotValue(
+  snapshot: GitConfigSnapshot,
+  key: string
+): string | null {
+  const value = snapshot.get(canonicalizeGitConfigLookupKey(key))?.at(-1)?.trim()
+  return value ? value : null
 }
 
 export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitCommandRunner {

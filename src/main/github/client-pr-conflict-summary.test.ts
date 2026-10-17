@@ -182,23 +182,25 @@ describe('getPRForBranch', () => {
 
   it('omits conflict summaries for SSH-backed repos', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    // Linked, so no review-head git read is needed for this SSH repo.
     ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify([
-        {
-          number: 42,
-          title: 'Fix PR discovery',
-          state: 'open',
-          html_url: 'https://github.com/acme/widgets/pull/42',
-          updated_at: '2026-03-28T00:00:00Z',
-          draft: false,
-          mergeable_state: 'dirty',
-          base: { ref: 'main', sha: 'base-oid' },
-          head: { ref: 'feature/test', sha: 'head-oid' }
-        }
-      ])
+      stdout: JSON.stringify({
+        number: 42,
+        title: 'Fix PR discovery',
+        state: 'OPEN',
+        url: 'https://github.com/acme/widgets/pull/42',
+        statusCheckRollup: [],
+        updatedAt: '2026-03-28T00:00:00Z',
+        isDraft: false,
+        mergeable: 'CONFLICTING',
+        baseRefName: 'main',
+        headRefName: 'feature/test',
+        baseRefOid: 'base-oid',
+        headRefOid: 'head-oid'
+      })
     })
 
-    const pr = await getPRForBranch('/remote/repo-root', 'feature/test', undefined, 'ssh-1')
+    const pr = await getPRForBranch('/remote/repo-root', 'feature/test', 42, 'ssh-1')
 
     expect(pr?.mergeable).toBe('CONFLICTING')
     expect(pr?.conflictSummary).toBeUndefined()

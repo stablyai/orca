@@ -75,7 +75,13 @@ describe('Bitbucket client', () => {
         return Response.json({ values: [] })
       }
       return Response.json({
-        values: [{ ...bitbucketPr(7), state: 'DECLINED', source: { branch: { name: 'main' } } }]
+        values: [
+          {
+            ...bitbucketPr(7),
+            state: 'DECLINED',
+            source: { branch: { name: 'main' }, repository: { full_name: 'team/repo' } }
+          }
+        ]
       })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -90,7 +96,14 @@ describe('Bitbucket client', () => {
       }
       return Response.json({
         values: [
-          { ...bitbucketPr(8), source: { branch: { name: 'main' }, commit: { hash: 'abc123' } } }
+          {
+            ...bitbucketPr(8),
+            source: {
+              branch: { name: 'main' },
+              commit: { hash: 'abc123' },
+              repository: { full_name: 'team/repo' }
+            }
+          }
         ]
       })
     })
@@ -111,7 +124,13 @@ describe('Bitbucket client', () => {
         return Response.json(bitbucketPr(42))
       }
       return Response.json({
-        values: [{ ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'main' } } }]
+        values: [
+          {
+            ...bitbucketPr(7),
+            state: 'MERGED',
+            source: { branch: { name: 'main' }, repository: { full_name: 'team/repo' } }
+          }
+        ]
       })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -121,24 +140,27 @@ describe('Bitbucket client', () => {
     ).resolves.toMatchObject({ number: 42 })
   })
 
-  it('hides a MERGED PR matched only by feature-branch name so a new PR can be created', async () => {
+  it('shows a MERGED PR for its branch, like every other provider', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
       return Response.json({
         values: [
-          { ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'feature/login' } } }
+          {
+            ...bitbucketPr(7),
+            state: 'MERGED',
+            source: { branch: { name: 'feature/login' }, repository: { full_name: 'team/repo' } }
+          }
         ]
       })
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    // Why: a merged branch match is history. Returning it made eligibility
-    // report "a pull request already exists" and blocked the branch's next PR.
+    // Create eligibility only blocks on open reviews, so a merged one no longer blocks the next PR.
     await expect(
       getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
-    ).resolves.toBeNull()
+    ).resolves.toMatchObject({ number: 7, state: 'merged' })
   })
 
   it('keeps a DECLINED PR on a feature branch visible', async () => {
@@ -148,17 +170,45 @@ describe('Bitbucket client', () => {
       }
       return Response.json({
         values: [
-          { ...bitbucketPr(9), state: 'DECLINED', source: { branch: { name: 'feature/login' } } }
+          {
+            ...bitbucketPr(9),
+            state: 'DECLINED',
+            source: { branch: { name: 'feature/login' }, repository: { full_name: 'team/repo' } }
+          }
         ]
       })
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    // Why: only merged matches are hidden. Hiding declined too made a declined
-    // PR permanently invisible off the default branch, unlike every other provider.
     await expect(
       getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
     ).resolves.toMatchObject({ number: 9, state: 'closed' })
+  })
+
+  it('shows the OPEN PR over a newer DECLINED one from the same branch (#28324)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.includes('/statuses/build')
+          ? Response.json({ values: [] })
+          : Response.json({ values: [{ ...bitbucketPr(9), state: 'DECLINED' }, bitbucketPr(3)] })
+      )
+    )
+
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'feature/bitbucket')
+    ).resolves.toMatchObject({ number: 3, state: 'open' })
+  })
+
+  it('ignores a same-named branch from another fork', async () => {
+    const forkPr = bitbucketPr(5)
+    forkPr.source.repository.full_name = 'alice/repo'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ values: [forkPr] }))
+    )
+
+    await expect(getBitbucketPullRequestForBranch('/repo', 'feature/bitbucket')).resolves.toBeNull()
   })
 
   it('returns null instead of querying anonymously when no credential resolves', async () => {
@@ -273,7 +323,7 @@ describe('Bitbucket client', () => {
     const parsed = new URL(listUrl)
     expect(parsed.pathname).toBe('/2.0/repositories/team/repo/pullrequests')
     expect(parsed.searchParams.get('q')).toBe(
-      'source.branch.name = "feature/bitbucket" AND (state = "OPEN" OR state = "MERGED" OR state = "DECLINED" OR state = "SUPERSEDED")'
+      'source.repository.full_name = "team/repo" AND source.branch.name = "feature/bitbucket" AND (state = "OPEN" OR state = "MERGED" OR state = "DECLINED" OR state = "SUPERSEDED")'
     )
     expect(parsed.searchParams.getAll('state')).toEqual([
       'OPEN',

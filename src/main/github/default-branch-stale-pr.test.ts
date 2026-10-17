@@ -120,7 +120,7 @@ import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 import { _resetOwnerRepoCache } from './gh-utils'
 import { _resetMergeQueueCacheForTests } from './client/detect/repository-merge-metadata-cache'
-import { __resetTrackedUpstreamBranchCacheForTests } from './client/lookup/tracked-upstream-cache'
+import { __resetRepoGitConfigSnapshotCacheForTests } from '../source-control/repo-git-config-snapshot'
 import { __resetPRConflictSummaryCachesForTests } from './conflict-summary'
 import { resetMergedPRCommitMembershipCacheForTest } from './merged-pr-commit-membership'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
@@ -128,7 +128,7 @@ import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-de
 const DEFAULT_BRANCH_REF = 'refs/remotes/origin/master'
 
 /**
- * Answer the default-base and tracked-upstream snapshots and merged-at-head probe.
+ * Answer the default-base snapshot and merged-at-head probe.
  */
 function primeGitExecForDefaultBranch({
   defaultRef = DEFAULT_BRANCH_REF,
@@ -222,7 +222,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     acquireMock.mockResolvedValue(undefined)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
-    __resetTrackedUpstreamBranchCacheForTests()
+    __resetRepoGitConfigSnapshotCacheForTests()
     __resetPRConflictSummaryCachesForTests()
     resetMergedPRCommitMembershipCacheForTest()
     __resetRepoDefaultBranchCacheForTests()
@@ -236,7 +236,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
 
     // The head-branch lookup still runs (state=all) and sees the closed PR…
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Amaster&state=all&per_page=10'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     // …but the default-branch guard discards it: no PR on the trunk (#9171).
@@ -261,12 +261,12 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     expect(pr?.number).toBe(8)
     expect(pr?.state).toBe('open')
     // Open results never consult git for the default branch (lazy resolution).
-    // Remote-name listing is a separate concern from default-branch resolution,
-    // so allow it and keep every other git command forbidden here.
+    // Remote-name listing and the review-head config read are separate concerns
+    // from default-branch resolution, so allow them and forbid every other git command.
     expect(
       gitExecFileAsyncMock.mock.calls
         .map(([args]) => args[0])
-        .filter((command) => command !== 'remote')
+        .filter((command) => command !== 'remote' && command !== 'config')
     ).toEqual([])
   })
 

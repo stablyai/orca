@@ -48,8 +48,9 @@ function giteaPr(index = 7, branch = 'feature/gitea') {
     mergeable: true,
     head: {
       ref: branch,
-      label: `team:${branch}`,
-      sha: 'abc123'
+      label: branch,
+      sha: 'abc123',
+      repo: { full_name: 'team/repo' }
     }
   }
 }
@@ -366,6 +367,49 @@ describe('Gitea client', () => {
       number: 42,
       status: 'success'
     })
+  })
+
+  it('shows the linked PR even when the branch matches another one', async () => {
+    const fetchMock = vi.fn(async (url: string | URL) => {
+      if (String(url).includes('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      return String(url).endsWith('/pulls/42')
+        ? Response.json(giteaPr(42, 'renamed-local-branch'))
+        : Response.json([giteaPr(7)])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea', 42)).resolves.toMatchObject(
+      { number: 42 }
+    )
+  })
+
+  it('shows the open PR over a newer closed one from the same branch (#28324)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) =>
+        String(url).includes('/status')
+          ? Response.json({ state: 'success' })
+          : Response.json([{ ...giteaPr(9), state: 'closed' }, giteaPr(3)])
+      )
+    )
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+      number: 3,
+      state: 'open'
+    })
+  })
+
+  it('ignores a same-named branch from another fork', async () => {
+    const forkPr = giteaPr(5)
+    forkPr.head.repo.full_name = 'alice/repo'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json([forkPr]))
+    )
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
   })
 
   it('reports configured token auth without a global API base URL', async () => {

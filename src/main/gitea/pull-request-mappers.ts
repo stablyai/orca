@@ -13,6 +13,7 @@ export type RawGiteaPullRequest = {
     ref?: string | null
     label?: string | null
     sha?: string | null
+    repo?: { full_name?: string | null } | null
   } | null
 }
 
@@ -102,6 +103,22 @@ export function mapGiteaPullRequestState(
     return 'draft'
   }
   return 'open'
+}
+
+/**
+ * Gitea has no server-side head filter, so a branch lookup matches the scan on head repository and
+ * branch (a Forgejo AGit PR carries its topic as the label).
+ */
+export function isGiteaPullRequestFromHead(
+  raw: RawGiteaPullRequest,
+  headRepo: { owner: string; repo: string },
+  branch: string
+): boolean {
+  return (
+    raw.head?.repo?.full_name?.toLowerCase() ===
+      `${headRepo.owner}/${headRepo.repo}`.toLowerCase() &&
+    (raw.head.ref?.trim() === branch || raw.head.label?.trim() === branch)
+  )
 }
 
 export function mapGiteaMergeable(value: boolean | null | undefined): PRMergeableState {

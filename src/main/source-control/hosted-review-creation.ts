@@ -172,7 +172,8 @@ export async function getHostedReviewCreationEligibility(
   if (!branch || branch === 'HEAD') {
     return { ...baseResult, canCreate: false, blockedReason: 'detached_head', nextAction: null }
   }
-  if (review) {
+  // Why: providers accept a new review from a head whose earlier reviews were merged or closed.
+  if (review?.state === 'open' || review?.state === 'draft') {
     return {
       ...baseResult,
       canCreate: false,

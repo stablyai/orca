@@ -1,6 +1,7 @@
 import type { Mock } from 'vitest'
 import { _resetGitLabRateLimitCache } from './client'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
+import { __resetRepoGitConfigSnapshotCacheForTests } from '../source-control/repo-git-config-snapshot'
 import { _resetKnownHostsCache } from './gitlab-known-host-probe'
 
 /** The hoisted gl-utils / git-runner mocks every GitLab MR test file installs. */
@@ -28,6 +29,17 @@ export function primeGitDefaultBranch(
   })
 }
 
+/** Answer `git config --list -z` with these records, on top of the default-branch probes. */
+export function primeGitConfig(gitExecFileAsyncMock: Mock, records: [string, string][]): void {
+  primeGitDefaultBranch(gitExecFileAsyncMock)
+  const defaultBranchProbe = gitExecFileAsyncMock.getMockImplementation()
+  gitExecFileAsyncMock.mockImplementation(async (args: string[], options: unknown) =>
+    args[0] === 'config' && args[1] === '--list'
+      ? { stdout: records.map(([key, value]) => `${key}\n${value}`).join('\0'), stderr: '' }
+      : defaultBranchProbe?.(args, options)
+  )
+}
+
 /** Shared per-test reset: mocks, module caches, and the default host/source stubs. */
 export function resetGitLabMrMocks(mocks: GitLabMrMocks): void {
   mocks.glabExecFileAsyncMock.mockReset()
@@ -41,6 +53,7 @@ export function resetGitLabMrMocks(mocks: GitLabMrMocks): void {
   mocks.gitExecFileAsyncMock.mockReset()
   primeGitDefaultBranch(mocks.gitExecFileAsyncMock)
   __resetRepoDefaultBranchCacheForTests()
+  __resetRepoGitConfigSnapshotCacheForTests()
   _resetKnownHostsCache()
   _resetGitLabRateLimitCache()
   mocks.getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])

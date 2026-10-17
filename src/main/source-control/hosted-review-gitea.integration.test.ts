@@ -53,7 +53,12 @@ describe('Gitea hosted review integration', () => {
             html_url: 'http://127.0.0.1/team/repo/pulls/9',
             updated_at: '2026-05-15T00:00:00Z',
             mergeable: true,
-            head: { ref: 'feature/gitea', label: 'team:feature/gitea', sha: 'abc123' }
+            head: {
+              ref: 'feature/gitea',
+              label: 'feature/gitea',
+              sha: 'abc123',
+              repo: { full_name: 'team/repo' }
+            }
           }
         ])
         return

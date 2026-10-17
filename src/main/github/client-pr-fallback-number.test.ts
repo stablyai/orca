@@ -29,13 +29,7 @@ import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 import { getPRForBranch } from './client/lookup/get-pr-for-branch'
 import { resetPRForBranchMocks } from './client-test-harness'
 
-const {
-  ghExecFileAsyncMock,
-  getOwnerRepoMock,
-  getOwnerRepoForRemoteMock,
-  resolvePRRepositoryCandidatesMock,
-  gitExecFileAsyncMock
-} = clientMocks
+const { ghExecFileAsyncMock, getOwnerRepoMock, resolvePRRepositoryCandidatesMock } = clientMocks
 
 describe('getPRForBranch', () => {
   beforeEach(() => {
@@ -82,7 +76,7 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10'],
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 43, title: 'Hydrated branch PR wins' })
@@ -103,7 +97,7 @@ describe('getPRForBranch', () => {
           isDraft: false,
           mergeable: 'MERGEABLE',
           baseRefName: 'main',
-          headRefName: 'contributor/original',
+          headRefName: 'feature/test',
           baseRefOid: 'base-oid',
           headRefOid: 'fallback-head-oid'
         })
@@ -113,7 +107,7 @@ describe('getPRForBranch', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10'],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
@@ -132,59 +126,46 @@ describe('getPRForBranch', () => {
     expect(pr).toMatchObject({ number: 42, title: 'Fallback PR lookup' })
   })
 
-  it('reports upstream error when fallback branch discovery fails transiently then retry misses', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: null
-    })
+  it('drops a remembered PR number whose head is another branch and reports it', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
       .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          number: 42,
+          title: 'Develop into release',
+          state: 'MERGED',
+          url: 'https://github.com/acme/widgets/pull/42',
+          statusCheckRollup: [],
+          updatedAt: '2026-03-28T00:00:00Z',
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          baseRefName: 'release',
+          headRefName: 'develop',
+          baseRefOid: 'base-oid',
+          headRefOid: 'develop-head-oid'
+        })
+      })
 
-    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test', null, null, 42)
 
     expect(outcome).toMatchObject({
-      kind: 'upstream-error',
-      errorType: 'rate_limited'
+      kind: 'no-pr',
+      rejectedPRUrls: ['https://github.com/acme/widgets/pull/42']
     })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      [
-        'pr',
-        'list',
-        '--repo',
-        'stablyai/orca',
-        '--head',
-        'feature/test',
-        '--state',
-        'all',
-        '--limit',
-        '1',
-        '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
-      ],
-      { cwd: '/repo-root' }
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['api', 'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=1'],
-      { cwd: '/repo-root' }
-    )
   })
 
   it('propagates a Retry-After cooldown into the rate-limited retry schedule', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: null
+      headRepo: { owner: 'stablyai', repo: 'orca' }
     })
     // gh puts the diagnostic on `.stderr`; a secondary limit carries Retry-After.
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(
-        Object.assign(new Error('gh exited with 1.'), {
-          stderr: 'HTTP 403: You have exceeded a secondary rate limit\nRetry-After: 120'
-        })
-      )
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+    ghExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('gh exited with 1.'), {
+        stderr: 'HTTP 403: You have exceeded a secondary rate limit\nRetry-After: 120'
+      })
+    )
 
     const before = Date.now()
     const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
@@ -198,192 +179,6 @@ describe('getPRForBranch', () => {
     expect(outcome.nextAutoRetryAt).toBe(outcome.retryDisabledUntil)
     expect(outcome.retryDisabledUntil ?? 0).toBeGreaterThanOrEqual(before + 119_000)
     expect(outcome.retryDisabledUntil ?? 0).toBeLessThanOrEqual(Date.now() + 121_000)
-  })
-
-  it('reports no PR when fallback branch discovery cleanly misses', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: null
-    })
-    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-
-    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
-
-    expect(outcome.kind).toBe('no-pr')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('returns found when fallback branch discovery retry finds the PR', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: null
-    })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 42,
-            title: 'Retry branch PR',
-            state: 'open',
-            html_url: 'https://github.com/stablyai/orca/pull/42',
-            updated_at: '2026-03-28T00:00:00Z',
-            draft: false,
-            mergeable: true,
-            base: { ref: 'main', sha: 'base-oid' },
-            head: { ref: 'feature/test', sha: 'retry-head-oid' }
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Hydrated retry branch PR',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-03-28T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'retry-head-oid'
-        })
-      })
-
-    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
-
-    expect(outcome).toMatchObject({
-      kind: 'found',
-      pr: {
-        number: 42,
-        title: 'Hydrated retry branch PR',
-        prRepo: { owner: 'stablyai', repo: 'orca' }
-      }
-    })
-  })
-
-  it('lets fallback PR number recovery win after fallback branch queries throw', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: null
-    })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
-      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Fallback number recovered PR',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-03-28T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'feature/test',
-          baseRefOid: 'base-oid',
-          headRefOid: 'fallback-head-oid'
-        })
-      })
-
-    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test', null, null, 42)
-
-    expect(outcome).toMatchObject({
-      kind: 'found',
-      pr: {
-        number: 42,
-        title: 'Fallback number recovered PR'
-      }
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      [
-        'pr',
-        'view',
-        '42',
-        '--repo',
-        'stablyai/orca',
-        '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
-      ],
-      { cwd: '/repo-root' }
-    )
-  })
-
-  it('reports upstream error when fallback branch discovery has a network failure', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: null
-    })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('could not resolve host: api.github.com'))
-      .mockRejectedValueOnce(new Error('could not resolve host: api.github.com'))
-
-    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
-
-    expect(outcome).toMatchObject({
-      kind: 'upstream-error',
-      errorType: 'network'
-    })
-  })
-
-  it('reports a GitHub server error when fallback branch discovery receives 5xx responses', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: null
-    })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
-      .mockRejectedValueOnce(new Error('HTTP 502: Bad Gateway'))
-
-    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
-
-    expect(outcome).toMatchObject({
-      kind: 'upstream-error',
-      errorType: 'server_error'
-    })
-  })
-
-  it('keeps a pending fallback branch error when a later candidate cleanly misses', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [
-        { owner: 'stablyai', repo: 'orca' },
-        { owner: 'fork', repo: 'orca' }
-      ],
-      headRepo: null
-    })
-    ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 429: API rate limit exceeded'))
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-
-    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test')
-
-    expect(outcome).toMatchObject({
-      kind: 'upstream-error',
-      errorType: 'rate_limited'
-    })
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      3,
-      [
-        'pr',
-        'list',
-        '--repo',
-        'fork/orca',
-        '--head',
-        'feature/test',
-        '--state',
-        'all',
-        '--limit',
-        '1',
-        '--json',
-        'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
-      ],
-      { cwd: '/repo-root' }
-    )
   })
 
   it('treats a merged branch lookup as a miss before using a fallback PR number', async () => {
@@ -432,7 +227,7 @@ describe('getPRForBranch', () => {
           isDraft: false,
           mergeable: 'MERGEABLE',
           baseRefName: 'main',
-          headRefName: 'contributor/original',
+          headRefName: 'feature/test',
           baseRefOid: 'base-oid',
           headRefOid: 'fallback-head-oid'
         })
@@ -511,76 +306,6 @@ describe('getPRForBranch', () => {
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 5511, state: 'merged', title: 'Merged current PR' })
-  })
-
-  it('does not carry a merged upstream branch head repo into a fallback PR number', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
-      candidates: [{ owner: 'stablyai', repo: 'orca' }],
-      headRepo: { owner: 'origin-owner', repo: 'orca' }
-    })
-    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'fork-owner', repo: 'orca' })
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'local-created-from-pr\0fork/contributor/original\n',
-      stderr: ''
-    })
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            number: 5511,
-            title: 'Merged upstream branch PR',
-            state: 'closed',
-            merged_at: '2026-06-16T17:15:33Z',
-            html_url: 'https://github.com/stablyai/orca/pull/5511',
-            updated_at: '2026-06-16T17:15:33Z',
-            draft: false,
-            mergeable_state: 'clean',
-            head: { ref: 'contributor/original', sha: 'merged-head-oid' },
-            base: { ref: 'main', sha: 'base-oid' }
-          }
-        ])
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 5511,
-          title: 'Merged upstream branch PR',
-          state: 'MERGED',
-          url: 'https://github.com/stablyai/orca/pull/5511',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-16T17:15:33Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'contributor/original',
-          baseRefOid: 'base-oid',
-          headRefOid: 'merged-head-oid'
-        })
-      })
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify({
-          number: 42,
-          title: 'Open fallback PR',
-          state: 'OPEN',
-          url: 'https://github.com/stablyai/orca/pull/42',
-          statusCheckRollup: [],
-          updatedAt: '2026-06-17T00:00:00Z',
-          isDraft: false,
-          mergeable: 'MERGEABLE',
-          baseRefName: 'main',
-          headRefName: 'fresh/fallback',
-          baseRefOid: 'base-oid',
-          headRefOid: 'fallback-head-oid'
-        })
-      })
-
-    const pr = await getPRForBranch('/repo-root', 'local-created-from-pr', null, null, 42)
-
-    expect(pr).toMatchObject({
-      number: 42,
-      title: 'Open fallback PR',
-      headRepo: { owner: 'origin-owner', repo: 'orca' }
-    })
   })
 
   it('ignores merged PRs discovered only from a fallback PR number', async () => {
