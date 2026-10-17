@@ -13,6 +13,10 @@ import type {
   BrowserWebAuthnAccountResponse
 } from '../../shared/browser-webauthn-account'
 import type {
+  BrowserBasicAuthRequest,
+  BrowserBasicAuthResponse
+} from '../../shared/browser-basic-auth'
+import type {
   BrowserSetGrabModeArgs,
   BrowserSetGrabModeResult,
   BrowserAwaitGrabSelectionArgs,
@@ -78,6 +82,9 @@ export type BrowserApi = {
   ) => () => void
   onWebAuthnAccountRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse) => Promise<boolean>
+  onBasicAuthRequest: (callback: (request: BrowserBasicAuthRequest) => void) => () => void
+  onBasicAuthRequestClosed: (callback: (event: { requestId: string }) => void) => () => void
+  respondBasicAuth: (response: BrowserBasicAuthResponse) => Promise<boolean>
   openDevTools: (args: { browserPageId: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
