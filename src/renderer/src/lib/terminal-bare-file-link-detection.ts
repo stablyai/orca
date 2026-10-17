@@ -23,7 +23,7 @@ const EXTENSIONLESS_FILENAMES = new Set([
   'CONTRIBUTING'
 ])
 
-const BARE_FILENAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/
+const BARE_FILENAME_PATTERN = /^[\p{L}\p{N}_][\p{L}\p{N}\p{M}._+-]*$/u
 const MAX_BARE_FILENAME_TOKEN_LENGTH = 120
 
 function looksLikeFilename(token: string): boolean {
@@ -33,7 +33,7 @@ function looksLikeFilename(token: string): boolean {
   if (!BARE_FILENAME_PATTERN.test(token)) {
     return false
   }
-  if (/^\d+$/.test(token)) {
+  if (/^\p{N}+$/u.test(token)) {
     return false
   }
   if (token.includes('.')) {
