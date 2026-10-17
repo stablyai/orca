@@ -23,6 +23,7 @@ export function createTerminalTabPresentationActions(
   | 'setGeneratedTabTitleFromAgentPrompt'
   | 'setGeneratedTabTitlesFromAgentPrompts'
   | 'clearTabLaunchAgent'
+  | 'replaceTabLaunchAgent'
   | 'setRuntimePaneTitle'
   | 'clearRuntimePaneTitle'
 > {
@@ -138,6 +139,24 @@ export function createTerminalTabPresentationActions(
         void _launchAgent
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = tabWithoutLaunchAgent
+        scheduleRuntimeGraphSync()
+        return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+      })
+    },
+    replaceTabLaunchAgent: (tabId, agent) => {
+      set((s) => {
+        const ownerWorktreeId = getTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        if (!ownerWorktreeId) {
+          return s
+        }
+        const tabs = s.tabsByWorktree[ownerWorktreeId] ?? []
+        const tabIndex = tabs.findIndex((t) => t.id === tabId)
+        const currentTab = tabs[tabIndex]
+        if (!currentTab || currentTab.launchAgent === agent) {
+          return s
+        }
+        const nextTabs = [...tabs]
+        nextTabs[tabIndex] = { ...currentTab, launchAgent: agent }
         scheduleRuntimeGraphSync()
         return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
       })

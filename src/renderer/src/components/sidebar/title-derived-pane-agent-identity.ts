@@ -1,6 +1,10 @@
 import { titleShowsNoAgent } from '../../../../shared/agent-detection'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { resolveCompatibleAgentTypeForOwner } from '../../../../shared/agent-title-owner'
+import { titlePresentsAgentIdentity } from '../../../../shared/agent-title-identity-claim'
+import {
+  resolveCompatibleAgentTypeForOwner,
+  shareCompatibleTitleIdentityGroup
+} from '../../../../shared/agent-title-owner'
 import { isClaudeIdentityFrameTitle } from '../../../../shared/terminal-title-agent-type'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
@@ -32,8 +36,15 @@ export function resolveTitleDerivedAgentType(
   ownerAgentType?: AgentType | null
 ): AgentType | null {
   const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
+  const owner = ownerAgentType && ownerAgentType !== 'unknown' ? ownerAgentType : null
   if (agentType !== 'claude') {
-    return agentType
+    // Why: a different-family name in task text (#24854) must not take a pane from its owner.
+    const mentionOnly =
+      owner !== null &&
+      agentType !== 'unknown' &&
+      !shareCompatibleTitleIdentityGroup(owner, agentType) &&
+      !titlePresentsAgentIdentity(title, agentType)
+    return mentionOnly ? null : agentType
   }
   // Why: Claude's task-title spinner heuristic has no provider identity. In
   // split panes it can match arbitrary terminal spinners, so sidebar rows only
@@ -43,7 +54,6 @@ export function resolveTitleDerivedAgentType(
   }
   // Why: a "claude" word inside another agent's task text is a mention, not identity.
   // Only a title that PRESENTS Claude may take a pane away from its known owner (#8940).
-  const owner = ownerAgentType && ownerAgentType !== 'unknown' ? ownerAgentType : null
   if (owner && owner !== 'claude' && !isClaudeIdentityFrameTitle(title)) {
     return null
   }

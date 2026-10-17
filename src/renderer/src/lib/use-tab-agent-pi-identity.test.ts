@@ -338,13 +338,13 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
 
   it('does not flash the exited agent before a hookless reuse title reclaims on mount', () => {
     // hasObservedAgentSignal starts false for one mount commit; a completed hook
-    // is itself activity evidence, so the reuse title reclaims immediately
+    // is itself activity evidence, so an anchored reuse title reclaims immediately
     // instead of flashing the prior agent's idle identity. (claude ran+idled,
     // then a hookless codex reused the pane and emits its own title.)
     const onMount = resolveTabAgentFromSignals({
       hasObservedAgentSignal: false,
       isRemote: false,
-      title: '⠋ Codex',
+      title: '⠋ fix the parser - Codex',
       hookAgent: null,
       focusedCompletedHookAgent: 'claude',
       launchAgent: undefined
@@ -352,12 +352,27 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
     const afterObserved = resolveTabAgentFromSignals({
       hasObservedAgentSignal: true,
       isRemote: false,
-      title: '⠋ Codex',
+      title: '⠋ fix the parser - Codex',
       hookAgent: null,
       focusedCompletedHookAgent: 'claude',
       launchAgent: undefined
     })
     expect(onMount).toBe('codex')
     expect(afterObserved).toBe('codex')
+  })
+
+  it('does not let a bare-name title reclaim a pane from its completed hook (#24854)', () => {
+    // '⠋ Codex' is a free-text name, not an anchored identity claim; on a local
+    // pane the process read is what proves the reused agent actually started.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ Codex',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'claude',
+        launchAgent: undefined
+      })
+    ).toBe('claude')
   })
 })

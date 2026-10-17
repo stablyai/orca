@@ -84,7 +84,6 @@ export function createAgentStatusLiveActions(
         const owner = resolvePaneKey(state, paneKey)
         if (
           !owner.exists ||
-          payload.agentType !== 'omp' ||
           (routing?.worktreeId !== undefined && routing.worktreeId !== owner.owningWorktreeId) ||
           (routing?.connectionId !== undefined &&
             routing.connectionId !== owner.repoConnectionId &&

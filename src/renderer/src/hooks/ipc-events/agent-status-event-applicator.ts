@@ -54,8 +54,7 @@ export function createAgentStatusEventApplicator(args: {
     if (!store.workspaceSessionReady) {
       return 'dropped'
     }
-    const authorityRestartId =
-      options?.replay !== true && data.agentType === 'omp' ? data.authorityRestartId : undefined
+    const authorityRestartId = options?.replay !== true ? data.authorityRestartId : undefined
     if (isAgentStatusForRecentlyClosedTab(store, data.paneKey, authorityRestartId)) {
       return 'dropped'
     }
