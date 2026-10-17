@@ -141,6 +141,7 @@ function replaceReferenceLinks(
 ): string {
   let result = ''
   let index = 0
+  let noClosingBracketsRemain = false
   const isInsideFence = createMarkdownFenceRangeCursor(getMarkdownFenceRanges(markdown))
 
   while (index < markdown.length) {
@@ -150,8 +151,10 @@ function replaceReferenceLinks(
       continue
     }
 
-    const closingTextIndex = findClosingBracket(markdown, index + 1)
+    const closingTextIndex = noClosingBracketsRemain ? -1 : findClosingBracket(markdown, index + 1)
     if (closingTextIndex === -1) {
+      // Later text probes cannot close after an exhausted suffix.
+      noClosingBracketsRemain = true
       result += markdown[index]
       index += 1
       continue

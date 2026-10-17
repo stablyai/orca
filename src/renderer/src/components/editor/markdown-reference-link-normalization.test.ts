@@ -86,4 +86,36 @@ describe('normalizeMarkdownReferenceLinks', () => {
       )
     ).toHaveLength(0)
   })
+
+  it.each(['\n', '\r\n', '\r'])('preserves an unfinished tail with %j endings', (newline) => {
+    const tail = '[unfinished '.repeat(2000)
+    expect(
+      normalizeMarkdownReferenceLinks(`[ref]${newline}${tail}${newline}[ref]: https://example.com`)
+    ).toBe(`[ref](https://example.com)${newline}${tail}${newline}`)
+  })
+
+  it('does not treat escaped brackets as closers in an unfinished tail', () => {
+    const tail = '[unfinished \\] '.repeat(2000)
+    expect(normalizeMarkdownReferenceLinks(`${tail}\n\n[ref]: https://example.com`)).toBe(
+      `${tail}\n\n`
+    )
+  })
+
+  it.each([
+    ['[unknown][unfinished [ref]', '[unknown][unfinished [ref](https://example.com)'],
+    ['[unknown [ref][unfinished', '[unknown [ref][unfinished']
+  ])('preserves malformed reference labels and later shortcuts: %j', (source, expected) => {
+    expect(normalizeMarkdownReferenceLinks(`${source}\n\n[ref]: https://example.com`)).toBe(
+      `${expected}\n\n`
+    )
+  })
+
+  it('keeps closing-bracket exhaustion local to one normalization', () => {
+    expect(normalizeMarkdownReferenceLinks('[unfinished\n\n[ref]: https://example.com')).toBe(
+      '[unfinished\n\n'
+    )
+    expect(normalizeMarkdownReferenceLinks('[ref]\n\n[ref]: https://example.com')).toBe(
+      '[ref](https://example.com)\n\n'
+    )
+  })
 })
