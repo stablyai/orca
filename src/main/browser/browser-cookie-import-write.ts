@@ -128,7 +128,7 @@ export type ImportWritePlanResult<T extends PlannableCookie = SourceCookieToWrit
 /**
  * Decides every source cookie's fate BEFORE any jar mutation (STA-4300 invariant I1).
  *
- * Two passes, not one, and the second is not optional. Family-atomic skip is a property of the
+ * Two passes when a family must be skipped. Family-atomic skip is a property of the
  * whole input: with a readable `mixed.example` row *before* an unreadable `sub.mixed.example` row,
  * a per-row guard emits the readable one before anything knows the family will be skipped. Pass 1
  * classifies and collects the skipped families; pass 2 re-filters the provisional writes.
@@ -158,6 +158,10 @@ export function planImportWrites<T extends PlannableCookie>(
       continue
     }
     provisional.push(cookie)
+  }
+
+  if (skippedFamilies.size === 0) {
+    return { writes: provisional, skips, skippedFamilies, hasUnrepresentableSkip }
   }
 
   // Pass 2: a readable cookie whose family was skipped is suppressed too — otherwise its family's

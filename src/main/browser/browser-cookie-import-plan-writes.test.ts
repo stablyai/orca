@@ -37,6 +37,37 @@ describe('planImportWrites', () => {
     expect(plan.skippedFamilies.size).toBe(0)
   })
 
+  it('does not read readable domains when there are no skipped families', () => {
+    let domainReads = 0
+    const rows = Array.from({ length: 2000 }, (_, index) => ({
+      get domain() {
+        domainReads += 1
+        return `.site${index}.com`
+      },
+      partition: READABLE
+    }))
+
+    const plan = planImportWrites(rows)
+
+    expect(domainReads).toBe(0)
+    expect(plan.writes).toHaveLength(rows.length)
+    expect(plan.writes.every((row, index) => row === rows[index])).toBe(true)
+    expect(plan.skips).toHaveLength(0)
+    expect(plan.hasUnrepresentableSkip).toBe(false)
+  })
+
+  it('keeps the refusal flag and readable rows when an unreadable family cannot be named', () => {
+    const readable = cookie('.other.example', 'readable', READABLE)
+    const unreadable = cookie('com', 'bare-suffix', UNREADABLE)
+
+    const plan = planImportWrites([readable, unreadable])
+
+    expect(plan.hasUnrepresentableSkip).toBe(true)
+    expect(plan.writes).toEqual([readable])
+    expect(plan.skips).toEqual([{ cookie: unreadable, reason: UNREADABLE.reason }])
+    expect(plan.skippedFamilies.size).toBe(0)
+  })
+
   it('skips the whole registrable family, not just the unreadable cookie', () => {
     const plan = planImportWrites([
       cookie('.mixed.example', 'readable-sibling', READABLE),
