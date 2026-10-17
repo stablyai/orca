@@ -224,7 +224,8 @@ describe('Windows server prebuild cache inputs', () => {
           'process-spec',
           'windows-command-line',
           'windows-cmd-shim-resolution',
-          'windows-system-binary'
+          'windows-system-binary',
+          'windows-tree-kill'
         ].map((name) => `src/packages/process-host/src/${name}.ts`)
       )
     )
