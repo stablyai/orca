@@ -17,6 +17,8 @@ import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
 import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+import { SidebarLayoutToggle } from './SidebarLayoutToggle'
+import { RightSidebarToggle } from './TitlebarMainStrip'
 
 /**
  * The titlebar's left cluster: window chrome padding, app name, sidebar toggle, and the
@@ -108,6 +110,10 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
           </Tooltip>
         )}
       </div>
+      {layout.showRightSidebarControls ? <SidebarLayoutToggle /> : null}
+      {layout.showRightSidebarControls && layout.toolsSidebarOnLeft && !layout.rightSidebarOpen ? (
+        <RightSidebarToggle />
+      ) : null}
       {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}
       {shouldShowWorktreeHistoryControls(layout.activeView) && (
         // With the sidebar collapsed the header shrink-wraps and ml-auto has no spare width, so keep a fixed gutter before Back.

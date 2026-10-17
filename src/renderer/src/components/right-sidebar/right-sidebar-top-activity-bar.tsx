@@ -15,6 +15,7 @@ import {
 
 export function RightSidebarTopActivityBar({
   hasDesktopWindowChrome,
+  atWindowEdge = true,
   topActivityStripRef,
   topActivityLayout,
   effectiveTab,
@@ -25,6 +26,7 @@ export function RightSidebarTopActivityBar({
   onChangeActivityBarPosition
 }: {
   hasDesktopWindowChrome: boolean
+  atWindowEdge?: boolean
   topActivityStripRef: (node: HTMLDivElement | null) => void
   topActivityLayout: { visibleItems: ActivityBarItem[]; overflowItems: ActivityBarItem[] }
   effectiveTab: ActiveRightSidebarTab
@@ -37,7 +39,12 @@ export function RightSidebarTopActivityBar({
   return (
     /* ── Top activity bar: horizontal icon row ── */
     <ContextMenu>
-      <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
+      <div
+        className={cn(
+          'flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-drag overflow-hidden',
+          atWindowEdge && 'right-sidebar-header-inset'
+        )}
+      >
         {!hasDesktopWindowChrome && (
           <TooltipProvider delayDuration={400}>
             <ContextMenuTrigger asChild>
