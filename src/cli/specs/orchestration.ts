@@ -6,11 +6,12 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'run-create'],
     summary: 'Create and bind a lightweight orchestration Run',
     usage:
-      'orca orchestration run-create --objective <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'retry-request'],
+      'orca orchestration run-create --objective <text> [--from <handle>] [--replace-current] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'replace-current', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
     notes: [
       'A Run is a namespace and home inbox. It never schedules or places workers.',
+      'If a Run is already bound, creation requires --replace-current. Its existing mail stays in the old Run; use run-use to return to it.',
       '--retry-request is only for exact recovery after an unknown mutation result.'
     ]
   },

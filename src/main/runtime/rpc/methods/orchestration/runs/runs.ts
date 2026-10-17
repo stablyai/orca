@@ -39,6 +39,13 @@ export const ORCHESTRATION_RUN_METHODS = [
       })
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForCoordinator(caller)
+      if (priorRun && params.replaceCurrent !== true) {
+        throw new OrchestrationError(
+          'run_already_bound',
+          `This coordinator is already bound to Run ${priorRun.id}. Use --replace-current to create and bind a new Run instead. No effects were applied.`,
+          { effectsApplied: false, runId: priorRun.id }
+        )
+      }
       const run = db.createRun({
         objective: params.objective,
         coordinatorHandle: caller.terminalHandle,

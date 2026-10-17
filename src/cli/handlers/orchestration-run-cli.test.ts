@@ -7,6 +7,8 @@ vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { parseArgs } from '../args'
+import { RuntimeClient } from '../runtime-client'
 
 describe('lightweight Run CLI handlers', () => {
   beforeEach(() => {
@@ -15,22 +17,33 @@ describe('lightweight Run CLI handlers', () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
   })
 
-  it('creates a Run with the resolved coordinator terminal', async () => {
+  it.each([
+    { option: [], replace: false },
+    { option: ['--replace-current'], replace: true },
+    { option: ['--replace-current=false'], replace: false }
+  ])('creates a Run with explicit replacement only for $option', async ({ option, replace }) => {
+    const client = new RuntimeClient('test-profile', 60_000, null, null)
+    vi.spyOn(client, 'call').mockImplementation(callMock)
     callMock.mockResolvedValue({
       result: { run: { id: 'run_1', objective: 'Coordinate work', consumer_generation: 1 } }
     })
     await ORCHESTRATION_HANDLERS['orchestration run-create']({
-      flags: new Map<string, string | boolean>([
-        ['objective', 'Coordinate work'],
-        ['json', true]
-      ]),
-      client: { call: callMock },
+      flags: parseArgs([
+        ...option,
+        'orchestration',
+        'run-create',
+        '--objective',
+        'Coordinate work',
+        '--json'
+      ]).flags,
+      client,
       cwd: '/tmp/repo',
       json: true
-    } as never)
+    })
     expect(callMock).toHaveBeenCalledWith('orchestration.runCreate', {
       objective: 'Coordinate work',
-      from: 'term_coord'
+      from: 'term_coord',
+      ...(replace ? { replaceCurrent: true } : {})
     })
   })
 

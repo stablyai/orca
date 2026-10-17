@@ -219,7 +219,14 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
   it("never lets one chat's run-create unbind another chat's Run", async () => {
     const xFirst = await runCreate(SESSION_X, 'x first')
     const yRun = await runCreate(SESSION_Y, 'y')
-    const xSecond = await runCreate(SESSION_X, 'x second')
+    const xSecond = idOf(
+      (
+        await as(SESSION_X, 'orchestration.runCreate', {
+          objective: 'x second',
+          replaceCurrent: true
+        })
+      ).run
+    )
 
     expect(await as(SESSION_Y, 'orchestration.runCurrent', {})).toMatchObject({
       run: { id: yRun }

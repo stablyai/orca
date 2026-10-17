@@ -43,6 +43,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'references',
   'relations',
   'reinstall',
+  'replace-current',
   'restore-window',
   'return-preamble',
   'run-hooks',
