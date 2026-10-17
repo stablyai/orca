@@ -40,6 +40,22 @@ describe('Codex subagent roster', () => {
     expect(roster.size).toBe(0)
   })
 
+  it('clears the model when a child is announced as a different agent type without one', () => {
+    const roster: CodexSubagentRoster = new Map()
+    upsertCodexSubagent(
+      roster,
+      'child-1',
+      { agentType: 'explorer', model: 'model-a', state: 'working' },
+      10
+    )
+
+    upsertCodexSubagent(roster, 'child-1', { agentType: 'explorer', state: 'working' }, 10)
+    expect(roster.get('child-1')?.model).toBe('model-a')
+
+    upsertCodexSubagent(roster, 'child-1', { agentType: 'worker', state: 'working' }, 10)
+    expect(roster.get('child-1')).toMatchObject({ agentType: 'worker', model: undefined })
+  })
+
   it('rejects an id that would normalize to an invisible child', () => {
     const roster: CodexSubagentRoster = new Map()
 
