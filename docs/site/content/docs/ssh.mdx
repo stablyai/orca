@@ -72,6 +72,14 @@ For SSH worktrees, the worktree menu's **Open in** list can hand the remote path
 
 **Not supported for this remote path:** Cursor, Zed, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
 
+## Docker Sandboxes
+
+A local [Docker Sandbox](https://docs.docker.com/ai/sandboxes/) is an ordinary SSH target once `sbx setup ssh` has written its managed block to `~/.ssh/config`. Add the target with the sandbox hostname (`<name>.sbx`) as the host, `_default_user_` as the username, and no identity file. Any other username is taken literally as a user inside the sandbox.
+
+There is no sshd in the sandbox and no port to publish: the managed block routes the connection through a `ProxyCommand` that the sandbox daemon terminates, so Orca uses the **system OpenSSH** transport for it and host key verification stays OpenSSH's job. Agents, terminals and git run inside the sandbox like any other remote host. See [Docker's integration docs](https://docs.docker.com/ai/sandboxes/integrations/) for the sandbox side.
+
+A cloud sandbox is a different target with its own setup command, host and username, so none of the above applies to it. See [Connect with SSH](https://docs.docker.com/ai/sandboxes/cloud/usage/#connect-with-ssh).
+
 ## Kerberos / GSSAPI
 
 If a host in OpenSSH config sets `GSSAPIAuthentication yes`, Orca prefers the **system OpenSSH** transport for that target (the built-in ssh2 client does not speak GSSAPI). Keep a valid Kerberos ticket (`kinit` / your org's SSO) before connecting. Manual targets can also enable GSSAPI when configured for system SSH.
