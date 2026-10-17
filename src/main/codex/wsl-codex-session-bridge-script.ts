@@ -9,22 +9,32 @@ const WSL_CODEX_SESSION_BRIDGE_BODY = [
   'scan_scope=${5-full}',
   'scan_start=${6-}',
   'scan_end=${7-}',
+  'index_pending_root=${index_pending_root-}',
   'if [ -n "$rollback_manifest" ]; then',
   '  [ -n "$rollback_stage_root" ] || exit 1',
   '  mkdir -p -- "$rollback_stage_root" || exit 1',
   '  : > "$rollback_manifest" || exit 1',
   'fi',
+  'if [ -n "$index_pending_root" ]; then',
+  '  mkdir -p -- "$index_pending_root" || exit 1',
+  'fi',
   'scanned_files=0',
   'linked_files=0',
   'bridge_failed=0',
-  'if [ ! -d "$source_sessions_root" ]; then',
+  // Why: pending markers left by an interrupted index heal are still reported without a source.
+  'if [ ! -d "$source_sessions_root" ] && [ -z "$index_pending_root" ]; then',
   `  printf '{"scannedFiles":0,"linkedFiles":0}\\n'`,
   '  exit 0',
   'fi',
   'file_list=$(mktemp) || exit 1',
   'day_list="$file_list.days"',
-  'trap \'rm -f -- "$file_list" "$day_list"\' EXIT HUP INT TERM',
+  'pending_list="$file_list.pending"',
+  'trap \'rm -f -- "$file_list" "$day_list" "$pending_list"\' EXIT HUP INT TERM',
+  'if [ ! -d "$source_sessions_root" ]; then',
+  '  scan_scope=none',
+  'fi',
   'case "$scan_scope" in',
+  '  none) : > "$file_list" || exit 1 ;;',
   `  full) find "$source_sessions_root" -type f -name '*.jsonl' -print0 > "$file_list" || exit 1 ;;`,
   '  recent)',
   '    case "$scan_start" in ????/??/??) ;; *) exit 1 ;; esac',
@@ -83,6 +93,17 @@ const WSL_CODEX_SESSION_BRIDGE_BODY = [
   '    fi',
   '    link_source="$target_stage"',
   '  fi',
+  // Why: the marker is the durable record that Codex still has to index this rollout.
+  '  pending_marker=',
+  '  case "${index_pending_root:+on}:${source_file##*/}" in',
+  '    on:rollout-*.jsonl)',
+  '      pending_marker="$index_pending_root/${source_file##*/}"',
+  '      if ! : > "$pending_marker"; then',
+  '        bridge_failed=1',
+  '        continue',
+  '      fi',
+  '      ;;',
+  '  esac',
   // Codex resume ignores symlinked JSONL, so create links inside the distro.
   '  if ln -- "$link_source" "$target_file"; then',
   '    linked_files=$((linked_files + 1))',
@@ -99,7 +120,21 @@ const WSL_CODEX_SESSION_BRIDGE_BODY = [
   '      rm -f -- "$target_stage"',
   '    fi',
   '  fi',
+  '  if [ -n "$pending_marker" ] && [ ! -e "$target_file" ]; then',
+  '    rm -f -- "$pending_marker"',
+  '  fi',
   'done < "$file_list"',
+  'if [ -n "$index_pending_root" ]; then',
+  '  for pending_marker in "$index_pending_root"/rollout-*; do',
+  '    [ -f "$pending_marker" ] && printf \'%s\\n\' "${pending_marker##*/}"',
+  '  done | LC_ALL=C sort -r > "$pending_list" || exit 1',
+  '  pending_files=$(( $(wc -l < "$pending_list") ))',
+  '  cat -- "$pending_list" || exit 1',
+  // Why: printed before the failure exit so one unlinkable file cannot strand every pending marker.
+  `  printf '{"scannedFiles":%s,"linkedFiles":%s,"pendingFiles":%s}\\n' "$scanned_files" "$linked_files" "$pending_files"`,
+  '  [ "$bridge_failed" = 0 ] || exit 1',
+  '  exit 0',
+  'fi',
   '[ "$bridge_failed" = 0 ] || exit 1',
   `printf '{"scannedFiles":%s,"linkedFiles":%s}\\n' "$scanned_files" "$linked_files"`
 ].join('\n')
@@ -110,13 +145,22 @@ export const WSL_CODEX_SESSION_BRIDGE_SCRIPT = [
   WSL_CODEX_SESSION_BRIDGE_BODY
 ].join('\n')
 
+/**
+ * The launch-time bridge. With `indexPendingRoot`, every newly linked rollout
+ * gets an empty marker there, and the script prints the pending marker names
+ * (newest first) before a summary that counts them.
+ */
 export function buildWslCodexSessionBridgeShellCommand(paths: {
   managedSessionsRoot: string
   systemSessionsRoot: string
+  indexPendingRoot?: string
 }): string {
   return [
     `source_sessions_root=${quotePosixShell(paths.systemSessionsRoot)}`,
     `managed_sessions_root=${quotePosixShell(paths.managedSessionsRoot)}`,
+    ...(paths.indexPendingRoot
+      ? [`index_pending_root=${quotePosixShell(paths.indexPendingRoot)}`]
+      : []),
     WSL_CODEX_SESSION_BRIDGE_BODY
   ].join('\n')
 }

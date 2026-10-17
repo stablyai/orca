@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import {
   _internals,
   createCodexAccountStateDb,
-  healCodexAccountSessionIndex
+  healCodexAccountSessionIndex,
+  healPendingCodexAccountThreads
 } from './codex-account-session-index-heal'
 import {
   CodexAppServerUnsupportedError,
@@ -302,5 +303,72 @@ describe('createCodexAccountStateDb', () => {
 
     expect(created).toBe(false)
     warn.mockRestore()
+  })
+})
+
+describe('healPendingCodexAccountThreads', () => {
+  it('reports each batch it settled, newest rollout first', async () => {
+    const { runSession } = fakeAppServer((threadId) => {
+      if (threadId === 'old') {
+        throw new Error('codex app-server thread/read failed: no rollout found for old')
+      }
+    })
+    const batches: string[][] = []
+
+    const summary = await healPendingCodexAccountThreads(
+      HOME,
+      new Map([
+        ['old', '2026-07-01T10-00-00'],
+        ['new', '2026-07-20T10-00-00']
+      ]),
+      {
+        buildInvocation,
+        runSession,
+        readsPerServerSession: 1,
+        interBatchDelayMs: 0,
+        afterBatch: async (settled) => {
+          batches.push(settled.map(({ threadId, outcome }) => `${threadId}:${outcome}`))
+        }
+      }
+    )
+
+    expect(batches).toEqual([['new:healed'], ['old:missing']])
+    expect(summary).toMatchObject({ healedThreads: 1, missingThreads: 1 })
+  })
+
+  it('keeps indexing when post-batch bookkeeping fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { runSession, readThreadIds } = fakeAppServer()
+
+    const summary = await healPendingCodexAccountThreads(HOME, bridged('a', 'b'), {
+      buildInvocation,
+      runSession,
+      readsPerServerSession: 1,
+      interBatchDelayMs: 0,
+      afterBatch: async () => {
+        throw new Error('guest unreachable')
+      }
+    })
+
+    expect(readThreadIds.sort()).toEqual(['a', 'b'])
+    expect(summary.outcome).toBe('completed')
+    warn.mockRestore()
+  })
+})
+
+describe('createCodexAccountStateDb timeout', () => {
+  it('passes a caller timeout to the invocation', async () => {
+    const timeouts: number[] = []
+
+    await createCodexAccountStateDb(HOME, {
+      buildInvocation: (_home, timeoutMs) => {
+        timeouts.push(timeoutMs)
+        return buildInvocation()
+      },
+      runSession: async () => {},
+      timeoutMs: 900_000
+    })
+
+    expect(timeouts).toEqual([900_000])
   })
 })

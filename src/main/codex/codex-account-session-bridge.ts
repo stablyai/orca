@@ -140,6 +140,10 @@ export function stopCodexAccountSessionBridges(): void {
   stopping = true
 }
 
+export function isCodexAccountSessionBridgeStopping(): boolean {
+  return stopping
+}
+
 /**
  * Mirrors every source home's rollouts into the target home's sessions tree.
  */
