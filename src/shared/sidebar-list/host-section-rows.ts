@@ -147,7 +147,8 @@ function localizePendingRowsForHost(
         ...row,
         count,
         hostId,
-        worktreeIds: row.hostWorktreeIds?.get(hostId) ?? row.worktreeIds
+        worktreeIds: row.hostWorktreeIds?.get(hostId) ?? row.worktreeIds,
+        countedWorkspaceIds: row.hostCountedWorkspaceIds?.get(hostId) ?? row.countedWorkspaceIds
       })
     }
   }
@@ -218,7 +219,8 @@ export function addHostSectionRows(args: {
           ...row,
           count,
           hostId,
-          worktreeIds: hostIds ?? row.worktreeIds
+          worktreeIds: hostIds ?? row.worktreeIds,
+          countedWorkspaceIds: row.hostCountedWorkspaceIds?.get(hostId) ?? row.countedWorkspaceIds
         })
         rowsByHostId.set(hostId, hostRows)
       }
