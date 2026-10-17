@@ -182,6 +182,38 @@ describe('getAgentRowConversationName', () => {
       getAgentRowConversationName(makeTab({ title: 'claude agents' }), 'claude', false)
     ).toBeNull()
     expect(getAgentRowConversationName(makeTab({ title: 'Agent' }), 'claude', false)).toBeNull()
+    expect(getAgentRowConversationName(makeTab({ title: 'agy' }), 'antigravity', false)).toBeNull()
+  })
+
+  it('rejects shell command lines launching the agent', () => {
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: "agy '--dangerously-s ~/C/orca" }),
+        'antigravity',
+        false
+      )
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: "agy '--dangerously-skip-permissions' ~/Codes/orca" }),
+        'antigravity',
+        false
+      )
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: "claude '--dangerously-skip-permissions'" }),
+        'claude',
+        false
+      )
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: "codex '--dangerously-bypass-approvals-and-sandbox'" }),
+        'codex',
+        false
+      )
+    ).toBeNull()
   })
 
   it("rejects jcode's live identity title so the row shows the prompt instead", () => {
