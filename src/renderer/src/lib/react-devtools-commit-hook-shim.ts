@@ -14,7 +14,8 @@
  * Only what react-dom and react-refresh require. onCommitFiberUnmount,
  * onPostCommitFiberRoot and setStrictMode are deliberately absent: react-dom
  * guards each with a typeof check, and calls onCommitFiberUnmount once per
- * DELETED FIBER, which is genuinely hot when terminal panes unmount.
+ * DELETED FIBER, which is genuinely hot when terminal panes unmount. The
+ * cascade observer adds onPostCommitFiberRoot itself (once per passive flush).
  */
 export type ReactDevtoolsCommitHook = {
   isDisabled?: boolean
@@ -27,6 +28,7 @@ export type ReactDevtoolsCommitHook = {
     priorityLevel: unknown,
     didError: boolean
   ) => void
+  onPostCommitFiberRoot?: (rendererId: number, root: unknown) => void
 }
 
 // Indexed, not a global augmentation: bippy (a react-grab dependency) already

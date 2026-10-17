@@ -49,9 +49,9 @@ const useCascadeStore = create<CascadeState>()(
 )
 
 /**
- * Layout effect, not passive: only the synchronous counter throws #185. A
- * useEffect loop leaves `pendingLanes: 0` at commit time (measured) because
- * passive effects flush after the callback, and React only console.errors it.
+ * Layout effect: the write lands before onCommitFiberRoot reads pendingLanes.
+ * The useEffect variant, seen only by onPostCommitFiberRoot, is covered in
+ * react-commit-cascade-observer.passive185.test.tsx.
  */
 function RunawayLayoutEffectPane(): React.JSX.Element {
   const ticks = useCascadeStore((state) => state.ticks)
@@ -79,6 +79,7 @@ beforeEach(() => {
   // called — and reinstalling over the last test's wrapper double-counts commits.
   if (commitHook) {
     commitHook.onCommitFiberRoot = undefined
+    commitHook.onPostCommitFiberRoot = undefined
   }
   installReactCommitCascadeObserver()
   host = document.createElement('div')
