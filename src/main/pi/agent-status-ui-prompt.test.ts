@@ -323,7 +323,7 @@ describe('Pi UI prompt status', () => {
     await harness.callHook('ui_prompt_start')
     await harness.callHook('ui_prompt_end', {}, { isIdle: () => true })
     expect(harness.fetchMock).not.toHaveBeenCalled()
-    await harness.callHook('tool_call', { toolName: 'bash', input: { command: 'pwd' } })
+    await harness.callHook('tool_execution_start', { toolName: 'bash', args: { command: 'pwd' } })
     const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
     expect(body.payload.ui_prompt_active).toBeUndefined()
   })
