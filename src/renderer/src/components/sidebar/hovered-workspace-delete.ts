@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { runWorktreeDelete } from './delete-worktree-flow'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
@@ -19,6 +19,7 @@ type DeleteWorktree = typeof runWorktreeDelete
 type HoveredWorkspaceDeleteState = Pick<
   AppState,
   | 'activeModal'
+  | 'activeWorkspaceExecutionHostId'
   | 'activeWorktreeId'
   | 'deleteFolderWorkspace'
   | 'deleteStateByWorktreeId'
@@ -55,14 +56,41 @@ export function getHoveredWorkspaceIdentity(
   return workspaceId && hostIdentity ? { workspaceId, hostIdentity } : null
 }
 
-export function resolveHoveredWorkspaceDeleteTarget(
+/**
+ * The workspace the sidebar is currently showing as active.
+ *
+ * Why: the delete shortcut is usable from the terminal, where the pointer is
+ * nowhere near a card, so hover alone leaves it silently dead (#17815).
+ *
+ * @param state Store slice carrying the active workspace.
+ * @returns The active workspace's identity, or null when none is active.
+ */
+export function getActiveWorkspaceIdentity(
+  state: Pick<HoveredWorkspaceDeleteState, 'activeWorkspaceExecutionHostId' | 'activeWorktreeId'>
+): { hostIdentity: string; workspaceId: string } | null {
+  const workspaceId = state.activeWorktreeId
+  return workspaceId
+    ? {
+        workspaceId,
+        hostIdentity: composeWorktreeHostIdentity(
+          state.activeWorkspaceExecutionHostId ?? undefined,
+          workspaceId
+        )
+      }
+    : null
+}
+
+export function resolveWorkspaceDeleteTarget(
   state: HoveredWorkspaceDeleteState,
   doc: HoveredWorkspaceDocument = document
 ): HoveredWorkspaceDeleteTarget | null {
   if (state.activeModal !== 'none' || (doc.activeElement && isEditableTarget(doc.activeElement))) {
     return null
   }
-  const hovered = getHoveredWorkspaceIdentity(doc)
+  // Why hover first: with the pointer on a card, that card is what the user
+  // means — the sidebar highlights it. Otherwise fall back to the active
+  // workspace, which is the one the rest of the UI is already about.
+  const hovered = getHoveredWorkspaceIdentity(doc) ?? getActiveWorkspaceIdentity(state)
   if (!hovered) {
     return null
   }
@@ -79,11 +107,16 @@ export function resolveHoveredWorkspaceDeleteTarget(
       workspaceKey: hovered.workspaceId
     }
   }
-  const worktree = getAllWorktreesFromState(state).find(
-    (candidate) =>
-      candidate.id === hovered.workspaceId &&
-      getWorktreeHostIdentity(candidate) === hovered.hostIdentity
+  const candidates = getAllWorktreesFromState(state).filter(
+    (candidate) => candidate.id === hovered.workspaceId
   )
+  const worktree =
+    candidates.find((candidate) => getWorktreeHostIdentity(candidate) === hovered.hostIdentity) ??
+    // Why: pre-host-qualification rows carry no hostId, so their `|<id>` identity
+    // never matches the `local|<id>` a click resolves — the exact no-op this fixes.
+    (getExecutionHostIdFromWorktreeHostIdentity(hovered.hostIdentity) === LOCAL_EXECUTION_HOST_ID
+      ? candidates.find((candidate) => candidate.hostId === undefined)
+      : undefined)
   return worktree &&
     !worktree.isMainWorktree &&
     !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting
@@ -93,7 +126,7 @@ export function resolveHoveredWorkspaceDeleteTarget(
 
 export function deleteHoveredWorkspaceImmediately(
   state: HoveredWorkspaceDeleteState,
-  target: HoveredWorkspaceDeleteTarget | null = resolveHoveredWorkspaceDeleteTarget(state),
+  target: HoveredWorkspaceDeleteTarget | null = resolveWorkspaceDeleteTarget(state),
   dependencies: HoveredWorkspaceDeleteDependencies = {
     deleteWorktree: runWorktreeDelete,
     getCurrentState: useAppStore.getState
