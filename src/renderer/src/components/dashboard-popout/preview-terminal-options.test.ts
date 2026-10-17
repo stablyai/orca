@@ -15,7 +15,7 @@ const SETTINGS = {
   terminalCursorStyle: 'bar',
   terminalCursorBlink: false,
   terminalLineHeight: 1.4,
-  terminalWordSeparator: ' ()[]',
+  terminalWordSeparator: '()[]',
   terminalScrollSensitivity: 3
 } as unknown as GlobalSettings
 
@@ -29,7 +29,8 @@ describe('buildPreviewAppearanceOptions', () => {
     expect(options.cursorStyle).toBe('bar')
     expect(options.cursorBlink).toBe(false)
     expect(options.lineHeight).toBe(1.4)
-    expect(options.wordSeparator).toBe(' ()[]')
+    // Why: whitespace is force-included so a custom list cannot disable it.
+    expect(options.wordSeparator).toBe(' \t()[]')
     expect(options.scrollSensitivity).toBe(3)
     // Why: a bar cursor's inactive style must not become xterm's block outline.
     expect(options.cursorInactiveStyle).toBe('bar')

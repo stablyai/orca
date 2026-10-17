@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import { normalizeTerminalWordSeparator } from '../../../../shared/terminal-word-separator-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import {
@@ -167,7 +168,7 @@ export function createTerminalPaneManagerOptions(
         ),
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),
-        wordSeparator: currentSettings?.terminalWordSeparator
+        wordSeparator: normalizeTerminalWordSeparator(currentSettings?.terminalWordSeparator)
       }
     },
     terminalTuiScrollSensitivity: () =>

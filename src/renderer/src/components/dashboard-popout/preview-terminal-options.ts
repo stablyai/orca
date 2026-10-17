@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
+import { normalizeTerminalWordSeparator } from '../../../../shared/terminal-word-separator-settings'
 import {
   buildDefaultTerminalOptions,
   normalizeTerminalFastScrollSensitivity,
@@ -36,7 +37,7 @@ export function buildPreviewAppearanceOptions(
       settings?.terminalFastScrollSensitivity
     ),
     lineHeight: normalizeTerminalLineHeight(settings?.terminalLineHeight),
-    wordSeparator: settings?.terminalWordSeparator,
+    wordSeparator: normalizeTerminalWordSeparator(settings?.terminalWordSeparator),
     // Why only 'true': 'left'/'right' are handled by the keydown policy, which needs Option composable at the xterm level.
     macOptionIsMeta,
     // Why: xterm renders an alpha background opaque unless transparency is on (matches applyTerminalAppearance).
