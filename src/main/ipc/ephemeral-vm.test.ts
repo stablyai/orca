@@ -45,6 +45,11 @@ vi.mock('./runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: invalidateRuntimeEnvironmentTransportMock
 }))
 
+// Why: no control connection exists here; the wake check has its own tests.
+vi.mock('../ephemeral-vm-runtime-wake', () => ({
+  ensureEphemeralVmRuntimeControlConnection: vi.fn(async () => ({ ok: true }))
+}))
+
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 
 const tempDirs: string[] = []

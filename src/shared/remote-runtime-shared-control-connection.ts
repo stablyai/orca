@@ -137,7 +137,7 @@ export class RemoteRuntimeSharedControlConnection {
       reconnectAttempt: this.reconnect.attemptCount
     })
   }
-  reconnectNow(): void {
+  reconnectNow(options: { force?: boolean } = {}): void {
     refreshRemoteRuntimeSharedControl({
       intentionallyClosed: this.intentionallyClosed,
       ready: sharedControlReady.isSharedControlReady({
@@ -145,6 +145,7 @@ export class RemoteRuntimeSharedControlConnection {
         ws: this.ws,
         handshake: this.handshake
       }),
+      force: options.force,
       refresh: () => {
         this.closeSocket(
           remoteRuntimeUnavailableError('Refreshing remote runtime control transport.'),

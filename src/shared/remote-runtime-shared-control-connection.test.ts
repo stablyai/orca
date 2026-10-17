@@ -152,6 +152,42 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(open).toHaveBeenCalledOnce()
   })
 
+  it('replaces a ready socket only when the refresh is forced', () => {
+    const connection = new RemoteRuntimeSharedControlConnection(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:1',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+      })
+    )
+    const close = vi.fn()
+    const cleanup = vi.fn()
+    const open = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: seeds a ready socket's private state, which no public API builds.
+    const unsafe = connection as unknown as {
+      state: string
+      ws: { readyState: number; close: () => void } | null
+      handshake: object | null
+      socketCleanup: (() => void) | null
+      open: () => void
+    }
+    unsafe.state = 'ready'
+    unsafe.ws = { readyState: 1, close }
+    unsafe.handshake = {}
+    unsafe.socketCleanup = cleanup
+    unsafe.open = open
+
+    connection.reconnectNow()
+    expect(open).not.toHaveBeenCalled()
+
+    connection.reconnectNow({ force: true })
+
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(close).toHaveBeenCalledOnce()
+    expect(open).toHaveBeenCalledOnce()
+  })
+
   it('keeps a waiting request alive when a reachability probe replaces its pre-ready socket', async () => {
     const server = await createServer({ suppressReadyFrameCount: 1 })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
