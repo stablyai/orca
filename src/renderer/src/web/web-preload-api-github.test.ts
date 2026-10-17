@@ -53,6 +53,7 @@ describe('web GitHub preload API', () => {
         'prCheckDetails',
         'prChecks',
         'prComments',
+        'prRelandings',
         'prFileContents',
         'prForBranch',
         'projectWorkItemDetailsBySlug',
@@ -250,6 +251,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, noCache: true },
         expectedMethod: 'github.prComments',
         expectedParams: withRepo({ repoPath, prNumber: 7, noCache: true })
+      },
+      {
+        key: 'prRelandings',
+        args: { repoPath, prNumber: 7 },
+        expectedMethod: 'github.prRelandings',
+        expectedParams: withRepo({ repoPath, prNumber: 7 })
       },
       {
         key: 'setPRCommentReaction',

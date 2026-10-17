@@ -13,6 +13,7 @@ type GitHubReviewQueryName =
   | 'getRepoPRChecks'
   | 'getRepoPRCheckDetails'
   | 'getRepoPRComments'
+  | 'getRepoPRRelandings'
   | 'getRepoPRFileContents'
 type GitHubReviewMutationName =
   | 'rerunRepoPRChecks'
@@ -87,6 +88,7 @@ export function installRuntimeReviewCommandSurface(
     getRepoPRChecks: ghq.getRepoPRChecks.bind(ghq),
     getRepoPRCheckDetails: ghq.getRepoPRCheckDetails.bind(ghq),
     getRepoPRComments: ghq.getRepoPRComments.bind(ghq),
+    getRepoPRRelandings: ghq.getRepoPRRelandings.bind(ghq),
     getRepoPRFileContents: ghq.getRepoPRFileContents.bind(ghq),
     rerunRepoPRChecks: ghm.rerunRepoPRChecks.bind(ghm),
     setRepoPRCommentReaction: ghm.setRepoPRCommentReaction.bind(ghm),

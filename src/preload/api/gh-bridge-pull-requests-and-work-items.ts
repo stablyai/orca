@@ -150,6 +150,13 @@ export const ghPullRequestsAndWorkItemsApi = {
     prRepo?: GitHubOwnerRepo | null
     noCache?: boolean
   }) => ipcRenderer.invoke('gh:prComments', args),
+  prRelandings: (args: {
+    repoPath: string
+    repoId?: string | null
+    sourceContext?: TaskSourceContext | null
+    prNumber: number
+    prRepo?: GitHubOwnerRepo | null
+  }) => ipcRenderer.invoke('gh:prRelandings', args),
   setPRCommentReaction: (args: {
     repoPath: string
     repoId?: string | null

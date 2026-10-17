@@ -6,6 +6,7 @@ import {
   getPRCheckDetails,
   getPRChecks,
   getPRComments,
+  getPRRelandings,
   getRepoSlug,
   getRepoUpstream,
   resolveReviewThread,
@@ -115,6 +116,29 @@ export function registerGitHubPRReadHandlers(store: Store): void {
         repo.path,
         args.prNumber,
         { noCache: args.noCache, prRepo: args.prRepo ?? null },
+        getGitHubRepoConnectionId(repo),
+        ...getGitHubLocalGitOptionArgs(store, repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:prRelandings',
+    (
+      _event,
+      args: {
+        repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => {
+      const repo = assertRegisteredGitHubRepo(args, store)
+      return getPRRelandings(
+        repo.path,
+        args.prNumber,
+        { prRepo: args.prRepo ?? null },
         getGitHubRepoConnectionId(repo),
         ...getGitHubLocalGitOptionArgs(store, repo)
       )

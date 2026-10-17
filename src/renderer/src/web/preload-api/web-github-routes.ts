@@ -15,6 +15,7 @@ export type WebGitHubRouteKey =
   | 'prCheckDetails'
   | 'rerunPRChecks'
   | 'prComments'
+  | 'prRelandings'
   | 'setPRCommentReaction'
   | 'resolveReviewThread'
   | 'setPRFileViewed'
@@ -68,6 +69,7 @@ export type WebGitHubRuntimeMethod =
   | 'github.prCheckDetails'
   | 'github.rerunPRChecks'
   | 'github.prComments'
+  | 'github.prRelandings'
   | 'github.setPRCommentReaction'
   | 'github.resolveReviewThread'
   | 'github.setPRFileViewed'
@@ -121,6 +123,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   prCheckDetails: 'github.prCheckDetails',
   rerunPRChecks: 'github.rerunPRChecks',
   prComments: 'github.prComments',
+  prRelandings: 'github.prRelandings',
   setPRCommentReaction: 'github.setPRCommentReaction',
   resolveReviewThread: 'github.resolveReviewThread',
   setPRFileViewed: 'github.setPRFileViewed',

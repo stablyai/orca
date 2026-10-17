@@ -73,6 +73,8 @@ export function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'rerunPRChecks'>>(GITHUB_WEB_RPC_METHODS.rerunPRChecks, args),
     prComments: (args) =>
       route<WebGitHubResult<'prComments'>>(GITHUB_WEB_RPC_METHODS.prComments, args),
+    prRelandings: (args) =>
+      route<WebGitHubResult<'prRelandings'>>(GITHUB_WEB_RPC_METHODS.prRelandings, args),
     setPRCommentReaction: (args) =>
       route<WebGitHubResult<'setPRCommentReaction'>>(
         GITHUB_WEB_RPC_METHODS.setPRCommentReaction,

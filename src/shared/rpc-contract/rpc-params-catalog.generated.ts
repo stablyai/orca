@@ -954,6 +954,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.prComments': PullRequest,
   'github.prFileContents': PullRequestFileContents,
   'github.prForBranch': PrForBranch,
+  'github.prRelandings': PullRequest,
   'github.project.addIssueCommentBySlug': SlugIssueComment,
   'github.project.clearItemField': ClearProjectItemField,
   'github.project.deleteIssueCommentBySlug': SlugIssueCommentDelete,

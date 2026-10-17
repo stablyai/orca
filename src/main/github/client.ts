@@ -16,6 +16,7 @@ export { getGitHubPRLookupRateLimitBlock } from './client/lookup/pr-lookup-rate-
 export { getPRCheckDetails } from './client/check/get-pr-check-details'
 export { getPRChecks } from './client/check/get-pr-checks'
 export { getPRComments } from './client/fetch/get-pr-comments'
+export { getPRRelandings } from './client/fetch/get-pr-relandings'
 export { getPRForBranch } from './client/lookup/get-pr-for-branch'
 export { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
 export {
