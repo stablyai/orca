@@ -43,6 +43,17 @@ const requestConnections = new Map<string, CachedRuntimeConnection>()
 const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
 const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
 
+/** Consult owned authenticated transports without acquiring another host channel. */
+export function isRemoteRuntimeConnectionReady(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection
+): boolean {
+  const pairingKey = getPairingKey(pairedConnection)
+  return [sharedControlConnections.get(environmentId), requestConnections.get(environmentId)].some(
+    (cached) => cached?.pairingKey === pairingKey && cached.connection.isReady()
+  )
+}
+
 export function getRuntimeEnvironmentStatusOwner(
   userDataPath: string,
   selector: string

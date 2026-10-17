@@ -392,7 +392,7 @@ describe('WslOrcadLivenessSupervisor', () => {
     h.deferred[0]()
     await h.advance(5_000)
     expect(h.ensure).toHaveBeenCalledTimes(2)
-    expect(h.statuses.map((status) => status.state)).toEqual(['distro-stopped'])
+    expect(h.statuses.map((status) => status.state)).toEqual(['distro-stopped', 'ready'])
   })
 
   it('reports a stop once when both the holder and the watch exit', async () => {

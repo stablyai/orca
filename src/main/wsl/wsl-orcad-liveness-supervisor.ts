@@ -62,8 +62,8 @@ export class WslOrcadLivenessSupervisor {
   /** User-initiated, so it may boot the distro. Resolves once the watch is armed. */
   async connect(distro: string, options: { force?: boolean } = {}): Promise<WslOrcadConnection> {
     const entry = this.entryFor(distro)
-    // A recovery this connect supersedes would have reported ready itself; now nothing will.
-    const supersedesRecovery = entry.busy
+    // An unchanged bridge offer may stay quiet even when an earlier failure needs clearing.
+    const reportReady = entry.busy || (entry.state !== null && entry.state !== 'ready')
     // Supersedes a recovery or deferred re-check: this connect relaunches and re-arms itself.
     const generation = (entry.generation += 1)
     disarmSupervised(entry)
@@ -81,7 +81,7 @@ export class WslOrcadLivenessSupervisor {
     if (entry.generation === generation) {
       entry.backoff.reset()
       await this.arm(entry, connection)
-      if (supersedesRecovery && entry.generation === generation) {
+      if (reportReady && entry.generation === generation) {
         this.publish(entry, { state: 'ready', census: null })
       }
     }

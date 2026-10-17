@@ -22,6 +22,7 @@ import { getWslHostService, setWslHostService } from '../wsl/wsl-host-service-in
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
+import { isRemoteRuntimeConnectionReady } from './runtime-environment-request-connections'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
 import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
@@ -57,6 +58,11 @@ function publish(status: WslHostStatus): void {
 /** Removal reaches orcad the way every other call to the host does: by environment id. */
 function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAccess {
   return {
+    isReady: (environmentId) =>
+      isRemoteRuntimeConnectionReady(
+        environmentId,
+        getPreferredPairedRuntimeConnection(resolveEnvironment(getUserDataPath(), environmentId))
+      ),
     call: async (environmentId, method, params) => {
       const response = await callRuntimeEnvironment(
         getUserDataPath(),

@@ -88,6 +88,7 @@ export async function stopWslHostServer(steps: WslHostServerStopSteps): Promise<
  * saved pairing every other call to the host uses (the bridge's raw pairing offer is not it).
  */
 export type WslHostRuntimeAccess = {
+  isReady?: (environmentId: string) => boolean
   call: (environmentId: string, method: string, params: unknown) => Promise<unknown>
   census: (environmentId: string) => Promise<OrcadTerminalCensus>
 }

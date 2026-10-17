@@ -46,6 +46,7 @@ function makeConnector(distros: WslHostDistroCandidate[]) {
       return opened
     }),
     get: vi.fn((distro: string) => active.get(distro.toLowerCase()) ?? null),
+    isReachable: vi.fn(async (distro: string) => active.has(distro.toLowerCase())),
     disconnect: vi.fn(async (distro: string) => {
       active.delete(distro.toLowerCase())
     }),
@@ -257,12 +258,14 @@ describe('WslHostService', () => {
     })
   })
 
-  it('connects for a runtime call only while an open project or terminal needs the host', async () => {
+  it('reconciles a retained dead connection for user work without booting for passive calls', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
     await service.add({ distro: 'Ubuntu' })
-    await connector.disconnect('Ubuntu')
     connector.connect.mockClear()
+    // No watch/holder event arrived: the bridge object outlived its server.
+    connector.isReachable.mockResolvedValue(false)
+    expect(connector.get('Ubuntu')).not.toBeNull()
 
     // Not a network server: the call learns why, and nothing is booted for it.
     await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow(
@@ -273,11 +276,17 @@ describe('WslHostService', () => {
 
     service.setVisibleWork(['wsl:ubuntu'])
     expect(service.hasUserVisibleWork('ubuntu')).toBe(true)
-    expect(connector.connect).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
 
-    await connector.disconnect('Ubuntu')
+    // Demand did not change, but a later call must still repair another lost server.
     await service.ensureForRuntimeCall('wsl:ubuntu')
     expect(connector.connect).toHaveBeenCalledTimes(2)
+
+    service.setVisibleWork([])
+    await expect(service.ensureForRuntimeCall('wsl:ubuntu')).rejects.toThrow('isn’t connected')
+    expect(connector.connect).toHaveBeenCalledTimes(2)
+    await service.connect('wsl:ubuntu')
+    expect(connector.connect).toHaveBeenCalledTimes(3)
   })
 
   it('refuses a connect while the experiment is off, but still removes the host', async () => {
@@ -391,7 +400,7 @@ describe('WslHostService', () => {
 
     enabled = true
     await service.enabledChanged(true)
-    expect(connector.connect).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(connector.connect).toHaveBeenCalledTimes(1))
     expect(service.hasUserVisibleWork('Ubuntu')).toBe(true)
   })
 
