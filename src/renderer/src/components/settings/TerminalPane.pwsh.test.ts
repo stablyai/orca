@@ -172,6 +172,7 @@ vi.mock('@/lib/terminal-theme', () => ({
 }))
 
 import { TerminalPane } from './TerminalPane'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 type ReactElementLike = {
   type: unknown
@@ -408,6 +409,20 @@ describe('TerminalPane PowerShell version setting', () => {
 
     expect(collectText(element)).toContain('Git Bash')
     expect(hasShellIconFor(element, 'git-bash')).toBe(true)
+  })
+
+  it('offers an installed Niubash shell through the existing settings control', () => {
+    const element = TerminalPane({
+      settings: getDefaultSettings('/tmp'),
+      updateSettings: () => {},
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      wslAvailable: false,
+      pwshAvailable: false,
+      niubashAvailable: true
+    })
+    expect(collectText(element)).toContain('Niubash')
+    expect(hasShellIconFor(element, 'niu.exe')).toBe(true)
   })
 
   it('hides Git Bash as a Windows default shell option when not detected', () => {

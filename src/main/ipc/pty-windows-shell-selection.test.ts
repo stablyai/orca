@@ -126,6 +126,16 @@ describe('registerPtyHandlers', () => {
         expect.any(Object)
       )
     })
+    it('starts a Niubash pane directly rather than nesting it in PowerShell', async () => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The suite's BrowserWindow fixture implements only the IPC methods used here.
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'D:\\Niu Shell\\niu.exe'
+      })
+      expect(spawnMock).toHaveBeenCalledWith('D:\\Niu Shell\\niu.exe', ['-i'], expect.any(Object))
+    })
     it('sets Console encoding for powershell.exe', async () => {
       process.env.COMSPEC = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 

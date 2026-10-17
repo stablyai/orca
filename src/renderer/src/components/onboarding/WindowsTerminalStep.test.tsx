@@ -32,6 +32,18 @@ describe('WindowsTerminalStep', () => {
     expect(html).not.toContain('lucide-terminal')
   })
 
+  it('preserves a selected Niubash shell when the host has not detected it', () => {
+    const html = renderToStaticMarkup(
+      <WindowsTerminalStep
+        settings={createSettings({ terminalWindowsShell: 'niu.exe' })}
+        updateSettings={vi.fn()}
+      />
+    )
+    expect(html).toContain('Niubash')
+    expect(html).toContain('Selected, but Niubash was not detected on this machine.')
+    expect(html).toContain('disabled=""')
+  })
+
   it('keeps the WSL distro control visible when WSL is already selected', () => {
     const html = renderToStaticMarkup(
       <WindowsTerminalStep

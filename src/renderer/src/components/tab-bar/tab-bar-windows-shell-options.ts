@@ -1,5 +1,6 @@
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import { WINDOWS_NIUBASH_SHELL } from '../../../../shared/niubash-shell'
 import { translate } from '@/i18n/i18n'
 import type { getProjectRuntimeShellMenuMode } from './use-tab-bar-runtime-model'
 
@@ -14,6 +15,7 @@ export function buildWindowsShellMenuEntries({
   projectRuntimeShellMenuMode,
   defaultWindowsShell,
   gitBashAvailable,
+  niubashAvailable = false,
   wslAvailable
 }: {
   showWindowsShellMenu: boolean
@@ -21,6 +23,7 @@ export function buildWindowsShellMenuEntries({
   projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
   defaultWindowsShell: string
   gitBashAvailable: boolean
+  niubashAvailable?: boolean
   wslAvailable: boolean
 }): WindowsShellMenuEntry[] | undefined {
   if (!showWindowsShellMenu || !hasShellLauncher) {
@@ -45,6 +48,9 @@ export function buildWindowsShellMenuEntries({
         label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
         shell: WINDOWS_GIT_BASH_SHELL
       })
+    }
+    if (niubashAvailable) {
+      allShells.push({ label: 'Niubash', shell: WINDOWS_NIUBASH_SHELL })
     }
   }
   if (includeWslShell && wslAvailable) {

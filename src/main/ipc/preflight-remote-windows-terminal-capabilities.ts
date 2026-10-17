@@ -5,6 +5,7 @@ export type RemoteWindowsTerminalCapabilities = {
   wslDistros: string[]
   pwshAvailable: boolean
   gitBashAvailable: boolean
+  niubashAvailable?: boolean
   hostPlatform: NodeJS.Platform | null
 }
 
