@@ -45,4 +45,26 @@ describe('git admission tier plumbing', () => {
     )
     expect(options?.localGitExecOptions).toEqual({ wslDistro: 'Ubuntu', admissionTier })
   })
+
+  it('passes the repo gh account binding through PR refresh lookups (#27287)', () => {
+    const [options] = hostedReviewOptionArgs({
+      localGitOptions: {
+        wslDistro: 'Ubuntu',
+        ghAccount: { host: 'github.com', user: 'work' }
+      },
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      fallbackPRSource: null,
+      currentHeadOid: null
+    })
+    expect(options?.localGitExecOptions).toEqual({
+      wslDistro: 'Ubuntu',
+      admissionTier: 'background',
+      ghAccount: { host: 'github.com', user: 'work' }
+    })
+    expect(getHostedReviewLocalGitOptions(options).ghAccount).toEqual({
+      host: 'github.com',
+      user: 'work'
+    })
+  })
 })
