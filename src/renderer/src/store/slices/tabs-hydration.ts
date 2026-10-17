@@ -1,3 +1,4 @@
+import { structuredLaunchSlotIds } from '@/lib/structured-agent-session-launch-persistence'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
@@ -162,13 +163,16 @@ export function buildHydratedTabState(
     const tabIdAliasesByGroup = tabIdAliasesByWorktree[worktreeId]
     const tabOwners = resolveTabGroupOwners(hydratedTabsForWorktree, groups, tabIdAliasesByGroup)
     const validatedGroups = appendOwnedTabIdsToGroups(groups, tabOwners).map((g) => {
+      const slots = structuredLaunchSlotIds(worktreeId, g.id)
       const tabIdAliases = tabIdAliasesByGroup?.get(g.id)
       const canonicalTabId = (tabId: string): string => tabIdAliases?.get(tabId) ?? tabId
       // Why: persisted tabOrder can contain duplicates from older buggy
       // writes. Deduping during hydration restores the store invariant before
       // later group operations branch on tab counts or neighbors.
       const tabOrder = dedupeTabOrder(
-        g.tabOrder.map(canonicalTabId).filter((tid) => tabOwners.get(tid) === g.id)
+        g.tabOrder
+          .map(canonicalTabId)
+          .filter((tid) => tabOwners.get(tid) === g.id || slots.has(tid))
       )
       const canonicalActiveTabId = g.activeTabId ? canonicalTabId(g.activeTabId) : null
       const activeTabId =
@@ -179,7 +183,10 @@ export function buildHydratedTabState(
       // against the live tabOrder, then ensure the current active tab sits at
       // the tail so the first close after restore jumps back to the previous
       // tab rather than falling through to neighbor selection.
-      const sanitizedRecent = sanitizeRecentTabIds(g.recentTabIds?.map(canonicalTabId), tabOrder)
+      const sanitizedRecent = sanitizeRecentTabIds(
+        g.recentTabIds?.map(canonicalTabId),
+        tabOrder.filter((id) => tabOwners.get(id) === g.id)
+      )
       const recentTabIds =
         activeTabId && sanitizedRecent.at(-1) !== activeTabId
           ? [...sanitizedRecent.filter((id) => id !== activeTabId), activeTabId]

@@ -1,3 +1,4 @@
+import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
@@ -94,10 +95,8 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
         )
         // Why: hidden-at-launch PTYs can query before any pane mounts; publish view attributes as soon as settings exist so every PTY owner answers from the composed theme.
-        publishTerminalViewAttributesAtAppStart(
-          useAppStore.getState().settings,
-          getSystemPrefersDark()
-        )
+        const settings = useAppStore.getState().settings
+        publishTerminalViewAttributesAtAppStart(settings, getSystemPrefersDark())
         // Why: start keybindings + onboarding now so their IPC overlaps the local catalog scans; await them at their original spots. The .catch marks rejections handled if an earlier await throws first.
         // Why: browser session profiles are NOT started early — on a remote runtime the RPC may be unconnected and a failed fetch clears the list.
         const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
@@ -214,6 +213,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               useAppStore.getState().reconcileWorktreeTabModels
             )
           })
+          restoreStructuredLaunchSurfaces()
           await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
             window.api.app.prepareTerminalStartupRestoration()
           )
@@ -271,11 +271,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
-          await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () => {
-            return refreshTerminalProviderSnapshotCapabilities(
+          await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () =>
+            refreshTerminalProviderSnapshotCapabilities(
               collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
             )
-          })
+          )
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
             actions.reconnectPersistedTerminals(abortController.signal)

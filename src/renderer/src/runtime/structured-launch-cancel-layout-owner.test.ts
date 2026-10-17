@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 
 const mocks = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
@@ -58,6 +59,11 @@ import {
 const WORKTREE = 'repo-1::worktree-1'
 const SESSION = 'chat-1'
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
+const layoutOwner: StructuredLaunchSlotOwner = {
+  unifiedTabsByWorktree: {},
+  groupsByWorktree: {},
+  reorderUnifiedTabs: vi.fn()
+}
 const SERVER: RuntimeClientTarget = { kind: 'environment', environmentId: 'server-1' }
 const SERVER_HOST = 'runtime:server-1'
 
@@ -140,7 +146,7 @@ describe('this machine, with main owning the layout', () => {
     mocks.callRuntime.mockRejectedValueOnce(new Error('tab_not_found'))
     pendingLaunch('local', LOCAL)
 
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalledWith(...hostTabClose))
 
     expect(mocks.closeSession).toHaveBeenCalledWith(LOCAL, SESSION)
@@ -153,7 +159,7 @@ describe('this machine, with main owning the layout', () => {
   it('create before the cancel (an aborted launch): closes the chat and its published tab', async () => {
     pendingLaunch('local', LOCAL)
 
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
 
     await vi.waitFor(() => expect(mocks.callRuntime).toHaveBeenCalledWith(...hostTabClose))
     expect(mocks.closeSession).toHaveBeenCalledWith(LOCAL, SESSION)
@@ -171,7 +177,7 @@ describe('this machine, with main owning the layout', () => {
       expectedRuntimeFence: null
     })
 
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
 
     expect(mocks.closeSession).toHaveBeenCalledWith(LOCAL, SESSION)
     expect(readStructuredAgentLaunchRecord(SESSION)).toBeUndefined()
@@ -184,7 +190,7 @@ describe('this machine, with main owning the layout', () => {
     const listener = vi.fn()
     subscribeStructuredAgentLaunchStatus(listener)
 
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
     await vi.waitFor(() =>
       expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(true)
     )
@@ -197,7 +203,7 @@ describe('this machine, with main owning the layout', () => {
     mocks.layoutOwnerIsMain = false
     pendingLaunch('local', LOCAL)
 
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, 'local', layoutOwner)
 
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(true)
     expect(mocks.closeSession).not.toHaveBeenCalled()
@@ -208,7 +214,7 @@ describe('a paired server, with main owning the layout', () => {
   it('cancel before the create: keeps the tombstone and hides and closes the late listing', () => {
     pendingLaunch(SERVER_HOST, SERVER)
 
-    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, SERVER_HOST)
+    markStructuredAgentSessionLaunchCancelled(WORKTREE, SESSION, SERVER_HOST, layoutOwner)
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(true)
     expect(mocks.closeSession).not.toHaveBeenCalled()
 
@@ -225,7 +231,8 @@ describe('a paired server, with main owning the layout', () => {
       target: SERVER,
       worktreeId: WORKTREE,
       sessionId: SESSION,
-      provisional: false
+      provisional: false,
+      layoutOwner
     })
 
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE, SESSION)).toBe(false)

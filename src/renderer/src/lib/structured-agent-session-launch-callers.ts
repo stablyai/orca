@@ -1,3 +1,4 @@
+import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
 import { settleStructuredAgentLaunchPrompt } from '@/lib/structured-agent-session-launch-prompt'
 import type {
   StagedStructuredLaunchPrompt,
@@ -24,6 +25,9 @@ export type StructuredAgentLaunchOptions = {
   executionHostId?: ExecutionHostId
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
   hostSeedOptions?: Readonly<Record<string, string>>
+  /** Final admission of a source-bound action, immediately before its first create is sent. */
+  beforeCreate?: () => boolean
+  surfaceAddress?: StructuredLaunchSurfaceAddress
 }
 
 export type StructuredLaunchCaller = {

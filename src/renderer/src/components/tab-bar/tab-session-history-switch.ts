@@ -77,8 +77,7 @@ function canHostOfferTabSessionMove(
   return kind === 'chat' && parseExecutionHostId(hostScope)?.kind === 'runtime'
 }
 
-/** Whether a pane's running agent has a conversation the move could act on, without building the
- *  list request, for a surface that stays rendered. The history lookup still decides on click. */
+/** The pane's known identity and launch route, without a History request. */
 export function canPaneOfferResumeInNewChat(
   state: AppState,
   pane: { worktreeId: string; paneKey: string }

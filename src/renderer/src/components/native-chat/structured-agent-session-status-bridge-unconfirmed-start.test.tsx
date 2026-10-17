@@ -340,7 +340,12 @@ describe('a chat whose start was never confirmed', () => {
     await loseStart(CLAUDE_SESSION, 'claude')
     await loseStart(CODEX_SESSION, 'codex')
     act(() => {
-      markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, CLAUDE_SESSION, 'local')
+      markStructuredAgentSessionLaunchCancelled(
+        WORKTREE_ID,
+        CLAUDE_SESSION,
+        'local',
+        store().getState()
+      )
     })
     const creates = createCalls()
 

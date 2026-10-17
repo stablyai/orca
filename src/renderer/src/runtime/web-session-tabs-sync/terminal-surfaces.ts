@@ -1,3 +1,4 @@
+import { readStructuredAgentLaunchRecord } from '@/lib/structured-agent-session-launch-persistence'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionAgentTab
@@ -104,6 +105,13 @@ export function buildMirroredAgentTabs(
           candidate.contentType === 'agent-session' &&
           candidate.entityId === tab.sessionId
       )
+    const launch = readStructuredAgentLaunchRecord(tab.sessionId)
+    const address =
+      executionHostId === 'local' &&
+      launch?.executionHostId === executionHostId &&
+      launch.surfaceAddress?.worktreeId === snapshot.worktree
+        ? launch.surfaceAddress
+        : undefined
     const baseId = structuredAgentSessionTabId(tab.sessionId)
     let localId = existing?.id ?? baseId
     if (!existing || assignedIds.has(localId)) {
@@ -121,7 +129,11 @@ export function buildMirroredAgentTabs(
         entityId: tab.sessionId,
         // Keep the local group while a provisional tab is promoted; host placement can lag the
         // user's split choice and must not move the mounted pane during adoption.
-        groupId: existing?.groupId ?? hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
+        groupId:
+          existing?.groupId ??
+          address?.targetGroupId ??
+          hostGroupIdByTabId.get(tab.id) ??
+          fallbackGroupId,
         worktreeId: snapshot.worktree,
         executionHostId,
         contentType: 'agent-session',

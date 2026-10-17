@@ -8,27 +8,20 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { resetAiVaultForcedRescanThrottleForTest } from '../right-sidebar/ai-vault-session-refresh'
-import { cacheAiVaultSessionList } from '../right-sidebar/ai-vault-session-list-request'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 
 const mocks = vi.hoisted(() => {
   const state: {
     subject: Record<string, unknown> | null
-    move: { action: string; worktreeId: string } | null
-    launchActionArgs: unknown[]
-  } = { subject: null, move: null, launchActionArgs: [] }
+    cliSource: Record<string, unknown> | null
+  } = { subject: null, cliSource: null }
   return {
     ...state,
     pending: false,
     pendingListeners: new Set<() => void>(),
-    handleResumeInNewChat: vi.fn(),
-    handleResumeInNewCli: vi.fn(),
-    resolveSwitch: vi.fn(),
     runNativeChatCliFork: vi.fn(),
-    listSessions: vi.fn(),
-    cancelListSessions: vi.fn(async () => {})
+    runCliChatResume: vi.fn(async () => {}),
+    listSessions: vi.fn()
   }
 })
 
@@ -44,7 +37,7 @@ vi.mock('./native-chat-cli-fork-run', () => ({
     )
 }))
 
-vi.mock('../../store', () => ({
+vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) => selector({ settings: null }),
     { getState: () => ({}) }
@@ -53,93 +46,32 @@ vi.mock('../../store', () => ({
 
 vi.mock('./tab-session-history-switch', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  resolveTabSessionHistorySubject: () => mocks.subject,
-  resolveTabSessionSwitch: mocks.resolveSwitch
+  resolveTabSessionHistorySubject: () => mocks.subject
 }))
 
-vi.mock('../right-sidebar/ai-vault-session-launch-actions', () => ({
-  useAiVaultSessionLaunchActions: (args: unknown) => {
-    mocks.launchActionArgs.push(args)
-    return {
-      handleResumeInNewChat: mocks.handleResumeInNewChat,
-      handleResumeInNewCli: mocks.handleResumeInNewCli
-    }
-  }
+vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.cliSource }))
+vi.mock('./cli-chat-resume-run', () => ({
+  runCliChatResume: mocks.runCliChatResume,
+  useCliChatResumePending: () => false
 }))
-
-const CHAT_ROW: AiVaultSession = {
-  id: 'row-1',
-  executionHostId: 'local',
-  agent: 'claude',
-  sessionId: 'claude-session-1',
-  title: 'Fix the build',
-  cwd: '/repo/wt',
-  branch: null,
-  model: null,
-  filePath: '/home/.claude/projects/repo/claude-session-1.jsonl',
-  codexHome: null,
-  createdAt: null,
-  updatedAt: null,
-  modifiedAt: '2026-10-08T00:00:00.000Z',
-  messageCount: 2,
-  totalTokens: 10,
-  previewMessages: [],
-  queuedMessageCount: 0,
-  subagentTranscriptCount: 0,
-  resumeCommand: '',
-  subagent: null,
-  structuredSession: { sessionId: 'orca-chat-1', workspaceId: 'wt-1' }
-}
-
-const PANEL_REQUEST = {
-  scopePaths: ['/repo/wt'],
-  executionHostScope: 'local',
-  sessionLimit: 250
-} as const
 
 const CHAT_SUBJECT = {
   kind: 'chat',
   sessionId: 'orca-chat-1',
   workspaceId: 'wt-1',
-  request: PANEL_REQUEST
-}
-
-const CLI_SUBJECT = {
-  kind: 'cli',
-  agent: 'claude',
-  providerSessionId: 'claude-session-1',
-  workspaceId: 'wt-1',
-  request: PANEL_REQUEST
-}
-
-function listResult(sessions: AiVaultSession[]) {
-  return { sessions, issues: [], scannedAt: 'now' }
+  request: { scopePaths: ['/repo/wt'], executionHostScope: 'local', sessionLimit: 250 }
 }
 
 beforeEach(() => {
-  resetAiVaultForcedRescanThrottleForTest()
   mocks.subject = null
+  mocks.cliSource = null
   mocks.pending = false
   mocks.runNativeChatCliFork.mockReset()
-  mocks.move = null
-  mocks.launchActionArgs = []
-  mocks.handleResumeInNewChat.mockReset()
-  mocks.handleResumeInNewCli.mockReset()
-  mocks.resolveSwitch.mockReset()
-  mocks.resolveSwitch.mockImplementation(() => mocks.move)
+  mocks.runCliChatResume.mockClear()
   mocks.listSessions.mockReset()
-  mocks.listSessions.mockResolvedValue({
-    sessions: [CHAT_ROW],
-    issues: [],
-    scannedAt: 'now'
-  })
+  mocks.listSessions.mockReturnValue(new Promise(() => {}))
   Object.assign(window, {
-    api: {
-      aiVault: {
-        listSessions: mocks.listSessions,
-        cancelListSessions: mocks.cancelListSessions
-      }
-    }
+    api: { aiVault: { listSessions: mocks.listSessions, cancelListSessions: vi.fn(async () => {}) } }
   })
 })
 
@@ -179,7 +111,6 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
 
   it('offers the native chat action immediately while History never answers', async () => {
     mocks.subject = CHAT_SUBJECT
-    mocks.listSessions.mockReturnValue(new Promise(() => {}))
     renderItemsNow('orca-chat-1')
     expect(mocks.listSessions).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New CLI' }))
@@ -192,85 +123,21 @@ describe('TabSessionSurfaceSwitchMenuItems', () => {
     )
   })
 
-  it('runs the Session History "Resume in New Native Chat" handler for a CLI tab', async () => {
-    const cliRow = { ...CHAT_ROW, structuredSession: undefined }
-    mocks.listSessions.mockResolvedValue({
-      sessions: [cliRow],
-      issues: [],
-      scannedAt: 'now'
-    })
-    mocks.subject = CLI_SUBJECT
-    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
-    await renderItems()
-
-    expect(screen.queryByText('Resume in New CLI')).toBeNull()
+  it('offers and dispatches a CLI identity while History never answers', async () => {
+    const source = {
+      tabId: 'tab-1',
+      workspaceId: 'wt-1',
+      paneKey: 'tab-1:leaf',
+      agent: 'claude',
+      providerSessionId: 'provider-1',
+      executionHostId: 'local'
+    }
+    mocks.cliSource = source
+    renderItemsNow()
     fireEvent.click(screen.getByRole('menuitem', { name: 'Resume in New Native Chat' }))
-    expect(mocks.handleResumeInNewChat).toHaveBeenCalledWith(cliRow, 'wt-1')
-  })
-
-  it('offers nothing before the fresh answer and never shows a stale cached row', async () => {
-    // The cached row predates a chat taking the conversation; only the fresh reply knows.
-    const cliRow = { ...CHAT_ROW, structuredSession: undefined }
-    cacheAiVaultSessionList(PANEL_REQUEST, listResult([cliRow]), { replaceHostEntries: false })
-    mocks.listSessions.mockResolvedValue(listResult([CHAT_ROW]))
-    mocks.subject = CLI_SUBJECT
-    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
-    // The real gate refuses a chat-owned row (pinned in tab-session-history-switch.parity.test.ts).
-    mocks.resolveSwitch.mockImplementation((_state: unknown, session: AiVaultSession) =>
-      session.structuredSession ? null : mocks.move
-    )
-    renderItemsNow()
-
-    expect(screen.queryByRole('menuitem')).toBeNull()
     await act(async () => {})
-    expect(mocks.listSessions).toHaveBeenCalledWith(expect.objectContaining({ force: undefined }))
-    expect(mocks.resolveSwitch).toHaveBeenCalledWith(expect.anything(), CHAT_ROW, CLI_SUBJECT)
-    expect(screen.queryByRole('menuitem')).toBeNull()
-  })
-
-  it('offers the move once the fresh answer has it', async () => {
-    mocks.subject = CLI_SUBJECT
-    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
-    renderItemsNow()
-
-    expect(screen.queryByRole('menuitem')).toBeNull()
-    await act(async () => {})
-    expect(screen.getByRole('menuitem', { name: 'Resume in New Native Chat' })).toBeTruthy()
-  })
-
-  it('ignores a lookup that settles after the menu closed', async () => {
-    let settle: (result: ReturnType<typeof listResult>) => void = () => {}
-    mocks.listSessions.mockReturnValue(
-      new Promise((resolve) => {
-        settle = resolve
-      })
-    )
-    mocks.subject = CLI_SUBJECT
-    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
-    await renderItems()
-    cleanup()
-    await act(async () => settle(listResult([CHAT_ROW])))
-
-    expect(mocks.resolveSwitch).not.toHaveBeenCalled()
-  })
-
-  it('shows nothing when the lookup fails', async () => {
-    mocks.listSessions.mockRejectedValue(new Error('scanner crashed'))
-    mocks.subject = CLI_SUBJECT
-    mocks.move = { action: 'resume-in-new-chat', worktreeId: 'wt-1' }
-    await renderItems()
-
-    expect(screen.queryByRole('menuitem')).toBeNull()
-  })
-
-  it('cancels its lookup when the menu closes', async () => {
-    mocks.subject = CLI_SUBJECT
-    mocks.listSessions.mockReturnValue(new Promise(() => {}))
-    await renderItems()
-    cleanup()
-    expect(mocks.cancelListSessions).toHaveBeenCalledWith({
-      requestToken: expect.any(String)
-    })
+    expect(mocks.runCliChatResume).toHaveBeenCalledWith(source)
+    expect(mocks.listSessions).not.toHaveBeenCalled()
   })
 })
 

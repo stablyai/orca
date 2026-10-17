@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredLaunchSlotOwner } from '@/lib/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { suppressCancelledStructuredSessionTabs } from '@/runtime/structured-agent-session-tab-retirement'
 import type { StructuredLaunchState } from '../structured-agent-session-launch-registry'
@@ -14,6 +15,12 @@ import {
 import { beginStructuredAgentSessionAuthoritativeInventory } from './structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLaunchPersistenceForTests } from '../structured-agent-session-launch-persistence'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
+
+const layoutOwner: StructuredLaunchSlotOwner = {
+  unifiedTabsByWorktree: {},
+  groupsByWorktree: {},
+  reorderUnifiedTabs: vi.fn()
+}
 
 const WORKTREE_ID = 'repo-1::worktree-1'
 const SESSION_ID = 'session-close-race'
@@ -101,7 +108,7 @@ describe('structured launch cancellation retirement', () => {
         'local'
       )
     ).toBe(false)
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
     const afterCancel = beginStructuredAgentSessionAuthoritativeInventory()
     expect(
       retireAbsentStructuredAgentSessionLaunchCancellationTombstones(
@@ -172,7 +179,7 @@ describe('structured launch cancellation retirement', () => {
       cancelled: false,
       selection: { held: {} }
     } satisfies StructuredLaunchState)
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
     await new Promise((resolve) => setTimeout(resolve, 0))
     const frame = (unverifiable: boolean): RuntimeMobileSessionTabsResult => ({
       ...latePublication(),
@@ -196,7 +203,7 @@ describe('structured launch cancellation retirement', () => {
   })
 
   it('drains a restored cancellation before a newer inventory retires it', async () => {
-    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local')
+    markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
     resetStructuredAgentLaunchRegistryForTests()
     resetStructuredAgentLaunchPersistenceForTests()
 

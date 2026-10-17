@@ -136,8 +136,13 @@ export function pushRecentTabId(recent: string[] | undefined, tabId: string): st
 export function pickNextActiveTab(
   tabOrder: string[],
   recentTabIds: string[] | undefined,
-  closingTabId: string
+  closingTabId: string,
+  tabs?: readonly Pick<Tab, 'id'>[]
 ): string | null {
+  if (tabs) {
+    const realIds = new Set(tabs.map((tab) => tab.id))
+    tabOrder = tabOrder.filter((id) => realIds.has(id))
+  }
   const sanitized = sanitizeRecentTabIds(recentTabIds, tabOrder)
   // The closing tab is typically at the tail (it's the active tab). Walk back
   // from the tail looking for the most-recent *other* tab still present.

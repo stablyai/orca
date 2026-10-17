@@ -15,6 +15,53 @@ export function dedupeTabOrder(tabIds: string[]): string[] {
   return deduped
 }
 
+/** A projected reorder changes current placement without replacing omitted canonical members. */
+export function reorderProjectedTabOrder(
+  order: string[],
+  requestedOrder: readonly string[],
+  movingTabId: string
+): string[] {
+  const currentIds = new Set(order)
+  const requested = requestedOrder.filter((id) => currentIds.has(id))
+  const positions = new Map(requested.map((id, index) => [id, index]))
+  const visible = order.filter((id) => positions.has(id))
+  if (visible.every((id, index) => id === requested[index])) {
+    return order
+  }
+  const candidates = visible.flatMap((id) => {
+    const position = positions.get(id)
+    return id === movingTabId || position === undefined ? [] : [{ id, position }]
+  })
+  const lengths = candidates.map(() => 1)
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    for (let j = i + 1; j < candidates.length; j++) {
+      if (candidates[j].position > candidates[i].position) {
+        lengths[i] = Math.max(lengths[i], 1 + lengths[j])
+      }
+    }
+  }
+  let remaining = Math.max(0, ...lengths)
+  let previousPosition = -1
+  const anchors = new Set<string>()
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i]
+    if (candidate.position > previousPosition && lengths[i] === remaining) {
+      anchors.add(candidate.id)
+      previousPosition = candidate.position
+      remaining--
+    }
+  }
+  const result = order.filter((id) => !positions.has(id) || anchors.has(id))
+  let successor: string | undefined
+  for (const id of requested.toReversed()) {
+    if (!anchors.has(id)) {
+      result.splice(successor === undefined ? result.length : result.indexOf(successor), 0, id)
+    }
+    successor = id
+  }
+  return result
+}
+
 export function partitionPinnedTabOrder(
   tabOrder: string[],
   tabs: readonly PinnedTab[],

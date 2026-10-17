@@ -24,6 +24,9 @@ export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSes
   }
 }
 
+/** The source disappeared before any create was sent; no host cancellation is owed. */
+export class StructuredAgentSessionCreateAbandonedError extends StructuredAgentSessionCreateRefusalError {}
+
 /**
  * Refused with a code that does not prove the session is absent. A sibling opened here would sit
  * beside a session the host may already hold, so this deliberately is NOT a refusal error: it flows

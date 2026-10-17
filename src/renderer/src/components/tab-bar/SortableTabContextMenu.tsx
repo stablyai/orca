@@ -198,10 +198,10 @@ export function SortableTabContextMenu({
         ) : null}
         <TabSessionSurfaceSwitchMenuItems
           key={sessionSwitchOpening}
-          onComplete={onSessionSwitchComplete}
           tab={tab}
           nativeChat={nativeChat}
           leadingSeparator={!showTerminalViewSwitch}
+          onComplete={onSessionSwitchComplete}
         />
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePin}>

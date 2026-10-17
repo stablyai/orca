@@ -72,7 +72,8 @@ export function createTabsCloseActions(
             target,
             worktreeId,
             sessionId: tab.entityId,
-            provisional
+            provisional,
+            layoutOwner: state
           })
         } else {
           // Closing still removes the tab; no host can be named to stop its chat on.
@@ -86,7 +87,12 @@ export function createTabsCloseActions(
         group?.activeTabId === tabId
           ? wasLastTab
             ? null
-            : pickNextActiveTab(dedupedGroupOrder, group.recentTabIds, tabId)
+            : pickNextActiveTab(
+                dedupedGroupOrder,
+                group.recentTabIds,
+                tabId,
+                state.unifiedTabsByWorktree[worktreeId]
+              )
           : (group?.activeTabId ?? null)
       const nextRecentTabIds = sanitizeRecentTabIds(
         (group?.recentTabIds ?? []).filter((id) => id !== tabId),

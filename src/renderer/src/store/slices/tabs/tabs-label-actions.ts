@@ -5,7 +5,8 @@ import { findTabAndWorktree, patchTab, updateGroup } from '../tab-group-state'
 import {
   applyTabOrderSortValues,
   dedupeTabOrder,
-  partitionPinnedTabOrder
+  partitionPinnedTabOrder,
+  reorderProjectedTabOrder
 } from '../../../../../shared/workspace-layout/tab-order'
 import {
   mirrorTabPinnedToHost,
@@ -138,8 +139,13 @@ export function createTabsLabelActions(
           if (!group) {
             continue
           }
-          // Why: dedupe at the store boundary so each tab keeps one canonical position and later group ops don't branch on duplicate ids.
-          const nextTabOrder = dedupeTabOrder(tabIds)
+          // Projected orders own placement; only complete local orders own membership.
+          const nextTabOrder = opts?.projectedMoveTabId
+            ? reorderProjectedTabOrder(group.tabOrder, tabIds, opts.projectedMoveTabId)
+            : dedupeTabOrder(tabIds)
+          if (nextTabOrder === group.tabOrder) {
+            return state
+          }
           reordered = true
           const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
           return {

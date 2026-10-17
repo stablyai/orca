@@ -2998,6 +2998,9 @@
         "resolver": "Answered on {{device}}",
         "unavailable": "Selected answer unavailable"
       },
+      "resumeInNewChat": {
+        "cannotResume": "This {{agent}} conversation can't be resumed in a native chat."
+      },
       "state": {
         "empty": {
           "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change.",

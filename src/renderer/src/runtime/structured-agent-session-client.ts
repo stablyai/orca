@@ -13,6 +13,7 @@ import {
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../shared/agent-session-create-capabilities'
@@ -52,6 +53,15 @@ export function supportsStructuredAgentSessionCreateMessage(
   target: RuntimeClientTarget
 ): Promise<boolean> {
   return structuredAgentSessionHostSupports(target, AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY)
+}
+
+export function supportsStructuredAgentSessionCliSource(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(
+    target,
+    STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY
+  )
 }
 
 /** Whether the host writes no row for a Stop that stopped nothing, so a repeated Stop is quiet. */
