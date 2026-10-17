@@ -2,8 +2,9 @@
 // sample count, spread rule, and Node fetch, and prints why each region passed or failed.
 import { pathToFileURL } from 'node:url'
 import {
-  classifyPublicHttpsOrigin,
   LIVE_ENV_VAR,
+  classifyPublicHttpsOrigin,
+  describeUntrustedText,
   parseArgs,
   requireBoundedInteger,
   requireDirector,
@@ -112,7 +113,7 @@ async function main() {
     console.error(
       timedOut
         ? `director ${director}/v1/regions did not answer within ${CATALOG_TIMEOUT_MS} ms`
-        : `director ${director}/v1/regions failed: ${err.message}`
+        : `director ${director}/v1/regions failed: ${describeUntrustedText(err.code ?? err.message)}`
     )
     process.exitCode = 1
     return

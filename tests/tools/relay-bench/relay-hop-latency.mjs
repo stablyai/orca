@@ -6,6 +6,7 @@ import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import {
   LIVE_ENV_VAR,
+  describeUntrustedText,
   parseArgs,
   requireBoundedInteger,
   requireDirector,
@@ -46,7 +47,9 @@ async function timeResolve(director, relayHostId) {
     return {
       ms: Math.round(performance.now() - started),
       status: null,
-      error: timedOut ? `timeout after ${RESOLVE_TIMEOUT_MS} ms` : err.message
+      error: timedOut
+        ? `timeout after ${RESOLVE_TIMEOUT_MS} ms`
+        : describeUntrustedText(err.code ?? err.message)
     }
   }
 }
@@ -91,7 +94,7 @@ function timeCellHello(cell, relayHostId) {
     })
     ws.on('message', (message) => done({ hello: message.toString().slice(0, 80) }))
     ws.on('close', (code, reason) => done({ close: code, reason: reason.toString() }))
-    ws.on('error', (err) => done({ error: err.message }))
+    ws.on('error', (err) => done({ error: describeUntrustedText(err.code ?? err.message) }))
   })
 }
 
