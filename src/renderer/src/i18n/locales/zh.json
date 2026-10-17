@@ -18715,6 +18715,11 @@
       "visualUnavailable": "可视化不可用",
       "visualLoading": "正在加载可视化",
       "visualOpenInNewTab": "在新标签页中打开",
+      "resumeCommand": {
+        "description": "打开智能体会话历史",
+        "argumentHint": "[搜索]",
+        "workspaceUnavailable": "此聊天的工作区尚未加载。请稍后再试一次 /resume。"
+      },
       "claudeSignIn": {
         "signingIn": "正在登录…"
       }
@@ -19658,6 +19663,10 @@
       "openInSidebarCopy": "输入您记得的内容，或询问智能体：“找到我们修复登录超时的会话。”",
       "open": "打开",
       "enableOnAll": "在所有计算机上启用"
+    },
+    "dialog": {
+      "select": "选择",
+      "open": "打开"
     }
   },
   "aiVault": {

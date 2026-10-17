@@ -52,7 +52,9 @@ const dialogContentSurfaceVariants = cva('', {
       default: '',
       /** The tinted, edge-to-edge panel of the two-column feature tip dialogs. */
       'feature-tip':
-        'gap-0 bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))]'
+        'gap-0 bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))]',
+      /** Edge to edge, for an embedded panel that brings its own header and padding. */
+      panel: 'gap-0 p-0'
     }
   },
   defaultVariants: { surface: 'default' }

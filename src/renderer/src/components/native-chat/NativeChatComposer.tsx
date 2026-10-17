@@ -30,6 +30,7 @@ import { useNativeChatStructuredComposerSend } from './use-native-chat-structure
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
+import { useNativeChatResumeCommand } from './use-native-chat-resume-command'
 
 export type {
   NativeChatComposerHandle,
@@ -113,6 +114,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       agent,
       structuredTransport
     )
+    const editor = { textareaRef, setDraft, setCaret, setActiveSuggestion }
     const picker = useNativeChatPickerState({
       agent,
       terminalTabId,
@@ -122,10 +124,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       agentCommands,
       recalledFromHistory: recall.active,
       sessionSkillNames,
-      textareaRef,
-      setDraft,
-      setCaret,
-      setActiveSuggestion
+      ...editor
     })
     const {
       autocomplete,
@@ -136,6 +135,14 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       dismiss,
       handleDraftOrCaretChange
     } = picker
+    const resume = useNativeChatResumeCommand({
+      structuredTransport,
+      agent,
+      terminalTabId,
+      picker,
+      editor,
+      setNotice
+    })
     const mentionFiles = useNativeChatMentionFiles({
       query: autocomplete.mode === 'mention' ? autocomplete.query : null,
       terminalTabId,
@@ -298,6 +305,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       disabled,
       sendPty,
       sendStructured,
+      consumeOrcaCommand: resume.consume,
       setDraft,
       setCaret
     })
@@ -331,7 +339,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       recall: recall.recall,
       isComposing: imeEnterGesture.isComposing,
       completePickerItem: goalMode.interceptPick(completeItem),
-      dispatchPickerCommand: goalMode.interceptPick(dispatchPickerCommand),
+      dispatchPickerCommand: goalMode.interceptPick(resume.interceptPick(dispatchPickerCommand)),
       dismissPicker: dismiss,
       interrupt,
       send,
@@ -395,7 +403,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         }}
         onPaste={handlePasteEvent}
         pickerListboxId={picker.listboxId}
-        onChoosePickerItem={goalMode.interceptPick(completeItem)}
+        onChoosePickerItem={goalMode.interceptPick(resume.interceptPick(completeItem))}
         goalMode={goalMode}
         onRetrySkills={picker.retrySkills}
         onChooseMentionFile={completeMention}

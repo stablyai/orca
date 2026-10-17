@@ -18750,6 +18750,11 @@
       "visualUnavailable": "ビジュアライゼーションを利用できません",
       "visualLoading": "ビジュアライゼーションを読み込み中",
       "visualOpenInNewTab": "新しいタブで開く",
+      "resumeCommand": {
+        "description": "Agent セッション履歴を開く",
+        "argumentHint": "[検索]",
+        "workspaceUnavailable": "このチャットのワークスペースはまだ読み込まれていません。少し待ってからもう一度 /resume を実行してください。"
+      },
       "claudeSignIn": {
         "signingIn": "サインイン中…"
       }
@@ -19658,6 +19663,10 @@
       "openInSidebarCopy": "覚えていることを入力するか、Agent に「ログインタイムアウトを修正したセッションを見つけてください」と尋ねます。",
       "open": "オープン",
       "enableOnAll": "すべてのコンピュータで有効にする"
+    },
+    "dialog": {
+      "select": "選択",
+      "open": "開く"
     }
   },
   "aiVault": {

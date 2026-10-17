@@ -1,6 +1,10 @@
 // The failed start's refusal and host-composed authentication guidance.
 
-import { readAgentSessionRefusalReference } from '../../../shared/agent-session-wire-refusals'
+import {
+  readAgentSessionRefusalReference,
+  type AgentSessionRefusalReference
+} from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionConversationOwner } from '../../../shared/agent-session-refusal-details'
 import {
   agentSessionRefusalFailure,
   readAgentSessionErrorRefusal,
@@ -11,10 +15,7 @@ export type StructuredLaunchFailure = AgentSessionWriteRefusal & { authStartupMe
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */
 export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure | undefined {
-  const refusal =
-    error instanceof Error && 'refusal' in error
-      ? readAgentSessionRefusalReference(error.refusal)
-      : readAgentSessionErrorRefusal(error)
+  const refusal = launchRefusal(error)
   if (!refusal) {
     return undefined
   }
@@ -26,4 +27,19 @@ export function structuredLaunchFailure(error: unknown): StructuredLaunchFailure
     message !== failure.code
     ? { ...failure, authStartupMessage: message }
     : failure
+}
+
+/** The chat a refused takeover names as already holding the conversation: the host's ownership
+ *  index, which a write failure does not keep. */
+export function structuredLaunchConversationOwner(
+  error: unknown
+): AgentSessionConversationOwner | undefined {
+  const details = launchRefusal(error)?.details
+  return details && 'owner' in details ? details.owner : undefined
+}
+
+function launchRefusal(error: unknown): AgentSessionRefusalReference | undefined {
+  return error instanceof Error && 'refusal' in error
+    ? readAgentSessionRefusalReference(error.refusal)
+    : readAgentSessionErrorRefusal(error)
 }

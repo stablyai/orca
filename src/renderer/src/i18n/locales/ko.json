@@ -18750,6 +18750,11 @@
       "visualUnavailable": "시각화를 사용할 수 없습니다",
       "visualLoading": "시각화 로드 중",
       "visualOpenInNewTab": "새 탭에서 열기",
+      "resumeCommand": {
+        "description": "Agent 세션 기록 열기",
+        "argumentHint": "[검색]",
+        "workspaceUnavailable": "이 채팅의 워크스페이스가 아직 로드되지 않았습니다. 잠시 후 /resume을 다시 실행하세요."
+      },
       "claudeSignIn": {
         "signingIn": "로그인 중…"
       }
@@ -19658,6 +19663,10 @@
       "openInSidebarCopy": "기억나는 내용을 입력하거나 에이전트에게 \"로그인 시간 초과 문제를 해결한 세션을 찾아주세요\"라고 물어보세요.",
       "open": "열기",
       "enableOnAll": "모든 컴퓨터에서 활성화"
+    },
+    "dialog": {
+      "select": "선택",
+      "open": "열기"
     }
   },
   "aiVault": {

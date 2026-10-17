@@ -18970,6 +18970,11 @@
       "claudeSignIn": {
         "signingIn": "Signing in…"
       },
+      "resumeCommand": {
+        "description": "Open Agent Session History",
+        "argumentHint": "[search]",
+        "workspaceUnavailable": "This chat's workspace isn't loaded yet. Try /resume again in a moment."
+      },
       "hostPermission": {
         "checking": "Checking this host's chat permissions…",
         "launchRefused": "Orca did not start a {{value0}} chat",
@@ -19739,6 +19744,10 @@
       "openInSidebarCopy": "Type what you remember, or ask an agent: “find the session where we fixed the login timeout.”",
       "open": "Open",
       "enableOnAll": "Enable on all computers"
+    },
+    "dialog": {
+      "select": "Select",
+      "open": "Open"
     }
   },
   "aiVault": {

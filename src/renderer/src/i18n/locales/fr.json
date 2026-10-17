@@ -18819,6 +18819,11 @@
       "visualUnavailable": "Visualisation indisponible",
       "visualLoading": "Chargement de la visualisation",
       "visualOpenInNewTab": "Ouvrir dans un nouvel onglet",
+      "resumeCommand": {
+        "description": "Ouvrir l'historique des sessions d'agent",
+        "argumentHint": "[recherche]",
+        "workspaceUnavailable": "L'espace de travail de ce chat n'est pas encore chargé. Réessayez /resume dans un instant."
+      },
       "claudeSignIn": {
         "signingIn": "Connexion…"
       }
@@ -19658,6 +19663,10 @@
       "openInSidebarCopy": "Tapez ce dont vous vous souvenez ou demandez à un agent : « recherchez la session où nous avons corrigé le délai d'expiration de la connexion ».",
       "open": "Ouvrir",
       "enableOnAll": "Activer sur tous les ordinateurs"
+    },
+    "dialog": {
+      "select": "Sélectionner",
+      "open": "Ouvrir"
     }
   },
   "aiVault": {

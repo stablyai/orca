@@ -1,4 +1,4 @@
-import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../../shared/ai-vault-types'
+import { isAiVaultAgent, type AiVaultAgent } from '../../../shared/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -40,10 +40,6 @@ let activeAiVaultSessionDragPayload: AiVaultSessionDragPayload | null = null
 type SerializedAiVaultSessionDragPayload = AiVaultSessionDragPayload & {
   kind: 'ai-vault-session'
   version: 1
-}
-
-function isAiVaultAgent(value: unknown): value is AiVaultAgent {
-  return typeof value === 'string' && (AI_VAULT_AGENTS as readonly string[]).includes(value)
 }
 
 function isNonEmptyString(value: unknown): value is string {
