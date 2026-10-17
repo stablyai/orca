@@ -370,4 +370,30 @@ describe('TaskPage GitHub mutation regressions', () => {
     expect(patches.findLast((patch) => patch.state !== undefined)?.state).toBe('closed')
     expect(patches.at(-1)?.assignees).toBeUndefined()
   })
+
+  it('confirms an enqueue as queued rather than auto-merge enabled', () => {
+    const patches: Partial<GitHubWorkItem>[] = []
+    const patchWorkItem = (_id: string, patch: Partial<GitHubWorkItem>): void => {
+      patches.push(patch)
+    }
+    const base = item({ type: 'pr', autoMergeEnabled: false, inMergeQueue: false })
+    const began = beginTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'setAutoMerge', enabled: true },
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      patchWorkItem
+    })
+    confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      item: base,
+      patchWorkItem,
+      serverEntity: { autoMergeEnabled: false, inMergeQueue: true }
+    })
+    expect(patches.at(-1)).toMatchObject({ autoMergeEnabled: false, inMergeQueue: true })
+    expect(getLastConfirmedClientValue(null, base.repoId, base.id, 'autoMerge')).toBe(false)
+  })
 })

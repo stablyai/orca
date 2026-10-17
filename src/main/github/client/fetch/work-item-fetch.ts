@@ -10,6 +10,7 @@ import { githubHostExecOptions, type GitHubApiRepository } from '../../github-ap
 import type { GhExecOptions } from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import { readPullRequestInMergeQueue } from './../lookup/pull-request-merge-queue-membership'
 import {
   WORK_ITEM_PR_DETAIL_JSON_FIELDS,
   usersFromUnknown,
@@ -121,9 +122,14 @@ export async function fetchPullRequestWorkItem(
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       try {
         const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        const inMergeQueue =
+          mergeMetadata.mergeQueueRequired === true
+            ? await readPullRequestInMergeQueue(ownerRepo, number, ghOptions)
+            : undefined
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(inMergeQueue !== undefined ? { inMergeQueue } : {}),
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
             : {}),

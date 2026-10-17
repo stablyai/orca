@@ -49,8 +49,13 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
     item: GitHubWorkItem
     intent: TaskPageGitHubMutationIntent
     sourceContext?: TaskSourceContext | null
-    mutate: () => Promise<{ ok?: boolean; error?: string | { message?: string } } | void>
+    mutate: () => Promise<{
+      ok?: boolean
+      error?: string | { message?: string }
+      enqueued?: boolean
+    } | void>
     successToast?: string
+    successToastFromResult?: (result: { enqueued?: boolean } | void) => string
     errorToast: string
     serverEntityFromResult?: (result: unknown) => Partial<GitHubWorkItem> | undefined
   }) => Promise<'confirmed' | 'rolled_back' | 'stale'>
@@ -104,8 +109,13 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       item: GitHubWorkItem
       intent: TaskPageGitHubMutationIntent
       sourceContext?: TaskSourceContext | null
-      mutate: () => Promise<{ ok?: boolean; error?: string | { message?: string } } | void>
+      mutate: () => Promise<{
+        ok?: boolean
+        error?: string | { message?: string }
+        enqueued?: boolean
+      } | void>
       successToast?: string
+      successToastFromResult?: (result: { enqueued?: boolean } | void) => string
       errorToast: string
       serverEntityFromResult?: (result: unknown) => Partial<GitHubWorkItem> | undefined
     }): Promise<'confirmed' | 'rolled_back' | 'stale'> => {
@@ -127,7 +137,11 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       try {
         const result = await input.mutate()
         const activeQuery = activeQueryRef.current
-        const typed = result as { ok?: boolean; error?: string | { message?: string } } | void
+        const typed = result as {
+          ok?: boolean
+          error?: string | { message?: string }
+          enqueued?: boolean
+        } | void
         if (typed && typeof typed === 'object' && typed.ok === false) {
           const rolled = rollbackTaskPageGitHubWorkItemMutation({
             key: began.key,
@@ -162,8 +176,9 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           scheduleQuiet: false
         })
         if (confirmed === 'confirmed') {
-          if (input.successToast && mountedRef.current) {
-            toast.success(input.successToast)
+          const successToast = input.successToastFromResult?.(typed) ?? input.successToast
+          if (successToast && mountedRef.current) {
+            toast.success(successToast)
           }
           useAppStore.getState().recordFeatureInteraction('github-tasks')
         }

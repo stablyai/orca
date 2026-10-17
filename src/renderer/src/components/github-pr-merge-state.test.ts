@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { githubAutoMergeSuccessToast } from './github-auto-merge-success-toast'
 import { presentGitHubPRMergeState, type GitHubPRMergeStateInput } from './github-pr-merge-state'
 
 function pr(overrides: Partial<GitHubPRMergeStateInput> = {}): GitHubPRMergeStateInput {
@@ -21,6 +22,21 @@ describe('presentGitHubPRMergeState', () => {
     expect(presentGitHubPRMergeState(pr({ reviewDecision: 'CHANGES_REQUESTED' }))).toMatchObject({
       label: 'Changes requested',
       directMergeAvailable: false
+    })
+  })
+
+  it('says a disallowed merge queue was enqueued, not auto-merged', () => {
+    expect(githubAutoMergeSuccessToast(true, { enqueued: true })).toBe('Added to the merge queue')
+    expect(githubAutoMergeSuccessToast(true, {})).toBe('Auto-merge enabled')
+  })
+
+  it('hides enqueue once the pull request is already in the merge queue', () => {
+    expect(
+      presentGitHubPRMergeState(pr({ mergeQueueRequired: true, inMergeQueue: true }))
+    ).toMatchObject({
+      label: 'In merge queue',
+      directMergeAvailable: false,
+      autoMergeAction: null
     })
   })
 

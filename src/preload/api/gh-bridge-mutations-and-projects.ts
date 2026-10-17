@@ -50,7 +50,7 @@ export const ghMutationsAndProjectsApi = {
     enabled: boolean
     method?: 'merge' | 'squash' | 'rebase'
     prRepo?: GitHubOwnerRepo | null
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+  }): Promise<{ ok: true; enqueued?: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gh:setPRAutoMerge', args),
   updatePRState: (args: {
     repoPath: string

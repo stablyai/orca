@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/github/pull-request-types'
 import { canEnableGitHubPRAutoMerge } from '../../../shared/github/pull-request-auto-merge-availability'
 import { translate } from '@/i18n/i18n'
+import { presentPullRequestInMergeQueue } from '@/components/github-auto-merge-success-toast'
 
 export type GitHubPRMergeStateInput = {
   state: PRState | 'open' | 'closed' | 'merged' | 'draft'
@@ -18,6 +19,7 @@ export type GitHubPRMergeStateInput = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  inMergeQueue?: boolean
 }
 
 export type GitHubPRAutoMergeAction = {
@@ -93,43 +95,45 @@ export function presentGitHubPRMergeState(
   const autoMergeAction =
     item.state !== 'open'
       ? null
-      : item.autoMergeEnabled === true
-        ? {
-            kind: 'disable' as const,
-            label: translate(
-              'auto.components.github.pr.merge.state.48d75ae118',
-              'Disable auto-merge'
-            ),
-            tooltip: translate(
-              'auto.components.github.pr.merge.state.62703b1dc4',
-              'GitHub auto-merge is enabled for this pull request'
-            )
-          }
-        : item.mergeQueueRequired === true
+      : item.inMergeQueue === true
+        ? null
+        : item.autoMergeEnabled === true
           ? {
-              kind: 'enable' as const,
+              kind: 'disable' as const,
               label: translate(
-                'auto.components.github.pr.merge.state.b169f943e1',
-                'Merge when ready'
+                'auto.components.github.pr.merge.state.48d75ae118',
+                'Disable auto-merge'
               ),
               tooltip: translate(
-                'auto.components.github.pr.merge.state.331ebe1170',
-                'Add this pull request to the GitHub merge queue'
+                'auto.components.github.pr.merge.state.62703b1dc4',
+                'GitHub auto-merge is enabled for this pull request'
               )
             }
-          : canEnableAutoMerge(item)
+          : item.mergeQueueRequired === true
             ? {
                 kind: 'enable' as const,
                 label: translate(
-                  'auto.components.github.pr.merge.state.4ab19a62ef',
-                  'Enable auto-merge'
+                  'auto.components.github.pr.merge.state.b169f943e1',
+                  'Merge when ready'
                 ),
                 tooltip: translate(
-                  'auto.components.github.pr.merge.state.8f6cb3772f',
-                  'Merge this pull request automatically once requirements are met'
+                  'auto.components.github.pr.merge.state.331ebe1170',
+                  'Add this pull request to the GitHub merge queue'
                 )
               }
-            : null
+            : canEnableAutoMerge(item)
+              ? {
+                  kind: 'enable' as const,
+                  label: translate(
+                    'auto.components.github.pr.merge.state.4ab19a62ef',
+                    'Enable auto-merge'
+                  ),
+                  tooltip: translate(
+                    'auto.components.github.pr.merge.state.8f6cb3772f',
+                    'Merge this pull request automatically once requirements are met'
+                  )
+                }
+              : null
 
   if (item.state === 'merged') {
     return {
@@ -190,6 +194,9 @@ export function presentGitHubPRMergeState(
       directMergeAvailable: false,
       autoMergeAction
     }
+  }
+  if (item.inMergeQueue === true) {
+    return presentPullRequestInMergeQueue(WARNING_TONE)
   }
   if (item.mergeQueueRequired === true) {
     return {

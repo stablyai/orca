@@ -14,6 +14,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { translate } from '@/i18n/i18n'
+import { githubAutoMergeSuccessToast } from '@/components/github-auto-merge-success-toast'
 import type { GitHubPRMergeStatePresentation } from '@/components/github-pr-merge-state'
 
 export async function changePullRequestState(args: {
@@ -252,11 +253,7 @@ export async function setPullRequestAutoMerge(args: {
         { local: false }
       )
     }
-    toast.success(
-      enabled
-        ? translate('auto.components.PullRequestPage.5edbe7eefa', 'Auto-merge enabled')
-        : translate('auto.components.PullRequestPage.0f5821b035', 'Auto-merge disabled')
-    )
+    toast.success(githubAutoMergeSuccessToast(enabled, result))
     args.onMutated()
   } catch (err) {
     toast.error(

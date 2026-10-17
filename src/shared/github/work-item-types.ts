@@ -46,6 +46,7 @@ export type GitHubWorkItem = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  inMergeQueue?: boolean
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean

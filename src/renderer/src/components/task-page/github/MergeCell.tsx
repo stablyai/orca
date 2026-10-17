@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { translate } from '@/i18n/i18n'
+import { githubAutoMergeSuccessToast } from '@/components/github-auto-merge-success-toast'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   resolveGitHubPRMergeMethods,
@@ -152,9 +153,14 @@ export function PRMergeCell({
           enabled
         },
         sourceContext,
-        successToast: enabled
-          ? translate('auto.components.TaskPage.fed317634c', 'Auto-merge enabled')
-          : translate('auto.components.TaskPage.a5bf86defe', 'Auto-merge disabled'),
+        successToastFromResult: (result) => githubAutoMergeSuccessToast(enabled, result),
+        serverEntityFromResult: (result) => {
+          const typed = result as { enqueued?: boolean } | void
+          if (!typed || typed.enqueued !== true) {
+            return undefined
+          }
+          return { autoMergeEnabled: false, inMergeQueue: true }
+        },
         errorToast: enabled
           ? translate('auto.components.TaskPage.a3318684bc', 'Failed to enable auto-merge')
           : translate('auto.components.TaskPage.1a9ea003dc', 'Failed to disable auto-merge'),

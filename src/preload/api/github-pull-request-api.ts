@@ -150,7 +150,7 @@ export type GithubPullRequestApi = {
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: GitHubOwnerRepo | null
     }
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<{ ok: true; enqueued?: true } | { ok: false; error: string }>
   updatePRState: (
     args: GitHubRepoSelectorArgs & {
       prNumber: number

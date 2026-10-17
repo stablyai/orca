@@ -55,6 +55,9 @@ function applyServerEntityIfPresent(
       opts.serverEntity.autoMergeEnabled
     )
   }
+  if (opts.serverEntity.inMergeQueue !== undefined) {
+    entityPatch.inMergeQueue = opts.serverEntity.inMergeQueue
+  }
   if (opts.serverEntity.assignees) {
     const users = freezeTaskPageGitHubUsers(opts.serverEntity.assignees)
     setConfirmedListSnapshot(key.sourceScope, key.repoId, key.itemId, 'assignees', users)
