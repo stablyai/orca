@@ -29,10 +29,10 @@ export type AcpStructuredConnection = Pick<
   | 'processTreeUnproven'
 >
 
-export type ConnectAcpAgent = (
+export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (
   launch: ProviderProcessLaunch,
   options: AcpAgentConnectionOptions
-) => AcpStructuredConnection
+) => Connection
 
 /** Resolves once `connection`'s process exits, `signal` aborts, or `ms` pass, whichever is first. */
 export function waitForAcpExit(

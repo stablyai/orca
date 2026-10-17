@@ -140,7 +140,10 @@ describe('ACP process-owning connection', () => {
     const { connection, child } = fixture({
       onExit,
       onDiagnostic: (message) => said.push(message),
-      signInPrompt: (line) => line.startsWith('Open the following link to authenticate')
+      signIn: {
+        read: (line) =>
+          line.startsWith('Open the following link to authenticate') ? 'link' : undefined
+      }
     })
     await connection.start(start)
     const turn = connection.prompt([...prompt]).catch((error: unknown) => error)
@@ -157,9 +160,11 @@ describe('ACP process-owning connection', () => {
   })
 
   it('drops an overlong stderr line it could not classify instead of keeping its prefix', async () => {
-    const { connection, child } = fixture({ signInPrompt: (line) => line.endsWith('authenticate') })
+    const { connection, child } = fixture({
+      signIn: { read: (line) => (line.endsWith('authenticate') ? 'link' : undefined) }
+    })
     await connection.start(start)
-    const link = `https://accounts.example/auth?state=${'x'.repeat(9000)}`
+    const link = `https://accounts.example/auth?state=${'x'.repeat(33_000)}`
     child.stderr.write(`warming up\nplease visit ${link}`)
     child.stderr.write('s3cret\nready\n')
     await vi.waitFor(() => expect(connection.stderrTail()).toContain('ready'))

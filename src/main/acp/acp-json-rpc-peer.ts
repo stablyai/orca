@@ -26,6 +26,8 @@ export type AcpPeerHandlers = {
   onNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
+  /** A line on the input that is not a protocol message, including an unterminated last one. */
+  onOtherLine?: (line: string) => void
 }
 type Pending = {
   method: string
@@ -80,7 +82,7 @@ export class AcpJsonRpcPeer {
               close: (error) => this.close(error),
               diagnose: (message) => this.diagnose(message)
             })
-          : this.diagnose(`Ignored ACP line: ${rejected.kind}`),
+          : this.otherLine(rejected.line),
       { maxLineBytes: this.maxLineBytes }
     )
     input.setEncoding('utf8')
@@ -208,11 +210,19 @@ export class AcpJsonRpcPeer {
   }
   private readonly onEnd = (): void => this.close()
   private readonly onInputEnd = (): void => {
+    const tail = this.framer.takeTail()
+    if (tail.trim()) {
+      this.otherLine(tail)
+    }
     if (this.closeOnInputEnd) {
       this.close()
     }
   }
   private readonly onError = (error: Error): void => this.close(error)
+  private otherLine(line: string): void {
+    this.handlers.onOtherLine?.(line)
+    this.diagnose('Ignored ACP line: invalid-json')
+  }
   private diagnose(message: string): void {
     try {
       this.handlers.onDiagnostic?.(message)

@@ -7,11 +7,7 @@ import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 import { ANTIGRAVITY_ACP_DIALECT } from './acp-dialects/antigravity-dialect'
-import {
-  directoryAccountBinding,
-  hostFolderAccountBinding,
-  type AcpAccountBinding
-} from './acp-account-binding'
+import { directoryAccountBinding, type AcpAccountBinding } from './acp-account-binding'
 import { openCodeAcpAccountBinding } from '../opencode/opencode-structured-account-home'
 import { scrubOpenCodeAcpEnvironment } from '../opencode/opencode-acp-environment'
 import { openCodeStoredUserMessagesReader } from '../opencode/opencode-acp-stored-messages'
@@ -52,6 +48,12 @@ import {
   ANTIGRAVITY_ACP_ENV,
   scrubAntigravityAcpEnvironment
 } from '../antigravity/antigravity-acp-environment'
+import {
+  answerAntigravityChatAuth,
+  antigravityChatAccount
+} from '../antigravity/antigravity-chat-account'
+import { readAntigravitySignInLine } from '../antigravity/antigravity-sign-in-url'
+import type { AcpSignInWatch } from './acp-agent-connection'
 import { AcpLaunchGate } from './acp-launch-gate'
 
 /** How an agent lists its models without a session: from its `initialize` answer (plus extension
@@ -99,8 +101,8 @@ export type AcpLaunchSpec = {
     advertised: readonly string[]
     env: Readonly<Record<string, string>>
   }): string | undefined
-  /** Matches the stderr line where the agent waits for browser sign-in: the chat is signed out. */
-  signInPrompt?(line: string): boolean
+  /** The agent's browser sign-in on its output: a valid sign-in line ends the chat signed out. */
+  signIn?: Omit<AcpSignInWatch, 'link'>
   /** The account each chat pins, and how a launch points the agent at it. */
   account: AcpAccountBinding
   /** The `--version` releases a structured chat runs on, asked before a create and again at every
@@ -251,7 +253,7 @@ const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
 
 // Google's Antigravity ACP server, which Orca installs (the `agy` CLI has no ACP mode). Its chats
 // sign in to a folder of their own on each host; an `agy` login is not theirs.
-const ANTIGRAVITY_LAUNCH_SPEC: AcpLaunchSpec = {
+export const ANTIGRAVITY_LAUNCH_SPEC = {
   agent: 'antigravity',
   command: ANTIGRAVITY_ACP_COMMAND,
   ignoreAgentCommandSetting: true,
@@ -264,9 +266,12 @@ const ANTIGRAVITY_LAUNCH_SPEC: AcpLaunchSpec = {
   // Signs in with the Google account the folder saved; without one, the server prints a sign-in link.
   authMethod: ({ advertised }) =>
     advertised.includes('oauth-personal') ? 'oauth-personal' : undefined,
-  signInPrompt: (line) =>
-    line.trimStart().startsWith('Open the following link to authenticate the ACP server:'),
-  account: hostFolderAccountBinding('GEMINI_HOME', 'antigravity-chat', ['antigravity-acp']),
+  signIn: {
+    read: readAntigravitySignInLine,
+    // The host's sign-in status is the server's latest answer, as chats meet it.
+    answered: answerAntigravityChatAuth
+  },
+  account: antigravityChatAccount,
   installDirectories: () => [],
   managedRuntime: ANTIGRAVITY_ACP_RUNTIME,
   // Its yolo mode still asks the person questions and administrative reviews.
@@ -284,7 +289,7 @@ const ANTIGRAVITY_LAUNCH_SPEC: AcpLaunchSpec = {
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   launchGate: new AcpLaunchGate('Antigravity')
-}
+} satisfies AcpLaunchSpec
 
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,

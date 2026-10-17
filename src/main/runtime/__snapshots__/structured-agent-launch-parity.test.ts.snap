@@ -9,7 +9,7 @@ exports[`native-chat launch parity > antigravity floating fresh 1`] = `
     "env": {
       "AGY_ACP_FORCE_FILE_STORAGE": "1",
       "ANTHROPIC_API_KEY": "parent-api-key",
-      "BROWSER": "true",
+      "BROWSER": "'/usr/bin/env' 'ELECTRON_RUN_AS_NODE=1' '<node>' '-e' 'process.stderr.on("error",()=>process.exit(0)).write("__ORCA_ANTIGRAVITY_AUTH_URL__"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))' '--' '%s'",
       "CLAUDE_CODE_SESSION_ID": "parent-claude-session",
       "CLAUDE_CONFIG_DIR": "/parent/claude",
       "CODEX_HOME": "/parent/codex",
@@ -82,7 +82,7 @@ exports[`native-chat launch parity > antigravity floating resumed 1`] = `
     "env": {
       "AGY_ACP_FORCE_FILE_STORAGE": "1",
       "ANTHROPIC_API_KEY": "parent-api-key",
-      "BROWSER": "true",
+      "BROWSER": "'/usr/bin/env' 'ELECTRON_RUN_AS_NODE=1' '<node>' '-e' 'process.stderr.on("error",()=>process.exit(0)).write("__ORCA_ANTIGRAVITY_AUTH_URL__"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))' '--' '%s'",
       "CLAUDE_CODE_SESSION_ID": "parent-claude-session",
       "CLAUDE_CONFIG_DIR": "/parent/claude",
       "CODEX_HOME": "/parent/codex",
@@ -153,7 +153,7 @@ exports[`native-chat launch parity > antigravity worktree fresh 1`] = `
     "env": {
       "AGY_ACP_FORCE_FILE_STORAGE": "1",
       "ANTHROPIC_API_KEY": "parent-api-key",
-      "BROWSER": "true",
+      "BROWSER": "'/usr/bin/env' 'ELECTRON_RUN_AS_NODE=1' '<node>' '-e' 'process.stderr.on("error",()=>process.exit(0)).write("__ORCA_ANTIGRAVITY_AUTH_URL__"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))' '--' '%s'",
       "CLAUDE_CODE_SESSION_ID": "parent-claude-session",
       "CLAUDE_CONFIG_DIR": "/parent/claude",
       "CODEX_HOME": "/parent/codex",
@@ -224,7 +224,7 @@ exports[`native-chat launch parity > antigravity worktree fresh configured 1`] =
     "env": {
       "AGY_ACP_FORCE_FILE_STORAGE": "1",
       "ANTHROPIC_API_KEY": "parent-api-key",
-      "BROWSER": "true",
+      "BROWSER": "'/usr/bin/env' 'ELECTRON_RUN_AS_NODE=1' '<node>' '-e' 'process.stderr.on("error",()=>process.exit(0)).write("__ORCA_ANTIGRAVITY_AUTH_URL__"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))' '--' '%s'",
       "CLAUDE_CODE_SESSION_ID": "parent-claude-session",
       "CLAUDE_CONFIG_DIR": "/parent/claude",
       "CODEX_HOME": "/parent/codex",
@@ -294,7 +294,7 @@ exports[`native-chat launch parity > antigravity worktree fresh worker 1`] = `
     "env": {
       "AGY_ACP_FORCE_FILE_STORAGE": "1",
       "ANTHROPIC_API_KEY": "parent-api-key",
-      "BROWSER": "true",
+      "BROWSER": "'/usr/bin/env' 'ELECTRON_RUN_AS_NODE=1' '<node>' '-e' 'process.stderr.on("error",()=>process.exit(0)).write("__ORCA_ANTIGRAVITY_AUTH_URL__"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))' '--' '%s'",
       "CLAUDE_CODE_SESSION_ID": "parent-claude-session",
       "CLAUDE_CONFIG_DIR": "/parent/claude",
       "CODEX_HOME": "/parent/codex",
@@ -365,7 +365,7 @@ exports[`native-chat launch parity > antigravity worktree resumed 1`] = `
     "env": {
       "AGY_ACP_FORCE_FILE_STORAGE": "1",
       "ANTHROPIC_API_KEY": "parent-api-key",
-      "BROWSER": "true",
+      "BROWSER": "'/usr/bin/env' 'ELECTRON_RUN_AS_NODE=1' '<node>' '-e' 'process.stderr.on("error",()=>process.exit(0)).write("__ORCA_ANTIGRAVITY_AUTH_URL__"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))' '--' '%s'",
       "CLAUDE_CODE_SESSION_ID": "parent-claude-session",
       "CLAUDE_CONFIG_DIR": "/parent/claude",
       "CODEX_HOME": "/parent/codex",
@@ -436,7 +436,7 @@ exports[`native-chat launch parity > antigravity worktree resumed configured 1`]
     "env": {
       "AGY_ACP_FORCE_FILE_STORAGE": "1",
       "ANTHROPIC_API_KEY": "parent-api-key",
-      "BROWSER": "true",
+      "BROWSER": "'/usr/bin/env' 'ELECTRON_RUN_AS_NODE=1' '<node>' '-e' 'process.stderr.on("error",()=>process.exit(0)).write("__ORCA_ANTIGRAVITY_AUTH_URL__"+JSON.stringify(process.argv[1])+"\\n",()=>process.exit(0))' '--' '%s'",
       "CLAUDE_CODE_SESSION_ID": "parent-claude-session",
       "CLAUDE_CONFIG_DIR": "/parent/claude",
       "CODEX_HOME": "/parent/codex",

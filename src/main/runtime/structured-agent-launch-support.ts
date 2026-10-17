@@ -9,12 +9,17 @@ import {
   type StructuredAgentSessionCreateSupport
 } from '../native-chat/structured-agent-session-create-support'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { resolveAgainAfterRefreshOnMissingProgram } from '../native-chat/structured-agent-command-resolution'
+import {
+  resolveAgainAfterRefreshOnMissingProgram,
+  type StructuredAgentCommandSettings
+} from '../native-chat/structured-agent-command-resolution'
 import { structuredAgentRuntimeMetadata } from './structured-agent-runtime-metadata'
 import {
   refreshHostAgentBaseEnvironmentAfterMiss,
   resolveHostAgentBaseEnvironment
 } from './structured-agent-shell-environment'
+import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 
 type LaunchEnvironmentSettings = Pick<
   GlobalSettings,
@@ -77,6 +82,28 @@ export async function resolveHostStructuredAgentLaunchEnvironment(
   return {
     ...(await resolveHostAgentBaseEnvironment(settings)),
     ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv) : {})
+  }
+}
+
+/** What a chat start of `agent` on this host launches from, for a child that serves no chat. */
+export async function structuredAgentHostLaunchSources(
+  agent: StructuredAgentId,
+  runtime: Pick<LaunchSupportRuntime, 'requireStore'> & {
+    resolveStructuredAgentAccountHome(agent: StructuredAgentId): Promise<AgentSessionAccountHome>
+  }
+): Promise<{
+  accountHome: AgentSessionAccountHome
+  env: Record<string, string>
+  commandSettings: StructuredAgentCommandSettings
+  dataDirectory: string
+}> {
+  const settings = runtime.requireStore().getSettings()
+  return {
+    accountHome: await runtime.resolveStructuredAgentAccountHome(agent),
+    env: await resolveHostStructuredAgentLaunchEnvironment(agent, settings),
+    commandSettings: settings,
+    // The chat host's own state root (ensureStructuredAgentSessionHost).
+    dataDirectory: getProfileUserDataPath()
   }
 }
 

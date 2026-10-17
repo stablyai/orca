@@ -13,11 +13,8 @@ import {
   type AcpPermissionHandler
 } from './acp-permission-requests'
 import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
-import {
-  setupAcpSession,
-  type AcpSessionStarted,
-  type AcpSessionStartOptions
-} from './acp-session-setup'
+import { setupAcpSession } from './acp-session-setup'
+import type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
 export type { AcpSessionStarted, AcpSessionStartOptions } from './acp-session-setup'
 export type { AcpSessionEvent } from './acp-session-events'
 import {
@@ -61,6 +58,10 @@ export type AcpSessionRuntimeOptions = {
   onExtensionNotification?: (method: string, params: unknown) => void
   onDiagnostic?: (message: string) => void
   onClose?: (error: Error) => void
+  /** A stdout line that is not a protocol message. */
+  onOtherLine?: (line: string) => void
+  /** The agent answered a request that it needs a sign-in. */
+  onAuthRequired?: () => void
 }
 
 /** Stream-level protocol seam; production agents use createAcpAgentConnection. */
@@ -85,7 +86,8 @@ export class AcpSessionRuntime {
         onRequest: (method, params, context) => this.handleRequest(method, params, context),
         onNotification: (method, params) => this.handleNotification(method, params),
         onDiagnostic: options.onDiagnostic,
-        onClose: options.onClose
+        onClose: options.onClose,
+        onOtherLine: options.onOtherLine
       },
       options.peer
     )
@@ -265,6 +267,7 @@ export class AcpSessionRuntime {
   private async call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T> {
     const result = await this.peer.request(method, params, { timeoutMs: null }).catch((error) => {
       if (error instanceof AcpAgentError && error.code === -32000) {
+        this.options.onAuthRequired?.()
         throw new AcpAuthRequiredError(error.message, error.data)
       }
       throw error

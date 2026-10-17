@@ -5,16 +5,20 @@
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { ConnectAcpAgent } from './acp-structured-connection'
+import type { AcpStructuredConnection, ConnectAcpAgent } from './acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 
 const wipes = new Map<string, Promise<void>>()
 
 /** `deps.connect`, giving the child a new folder as its temp and removing it once the child exits. */
-export async function acpPrivateTempConnect(
-  deps: Pick<AcpStructuredSessionAdapterDeps, 'spec' | 'dataDirectory' | 'connect' | 'logger'>,
+export async function acpPrivateTempConnect<
+  Connection extends Pick<AcpStructuredConnection, 'onExit'> = AcpStructuredConnection
+>(
+  deps: Pick<AcpStructuredSessionAdapterDeps, 'spec' | 'dataDirectory' | 'logger'> & {
+    connect: ConnectAcpAgent<Connection>
+  },
   closedBeforeSpawn: () => void
-): Promise<ConnectAcpAgent> {
+): Promise<ConnectAcpAgent<Connection>> {
   const root = join(deps.dataDirectory, 'acp-temp', deps.spec.agent)
   // Best effort: Windows can hold a handle past the kill; the next host start clears what stays.
   const remove = (path: string): Promise<void> =>

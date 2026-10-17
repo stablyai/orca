@@ -171,7 +171,10 @@ export class StructuredAgentSessionHost {
   private now = (): number => this.deps.now?.() ?? Date.now()
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
-  hasLoadedProviders = () => [...this.sessions.values()].some(({ child }) => child !== null)
+  /** Sessions whose agent child is starting or running. */
+  loadedSessionIds = (): string[] =>
+    [...this.sessions].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
+  hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
   sessionAgent = (sessionId: string) => this.deps.store.getRecord(sessionId)?.provider ?? null
 
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
