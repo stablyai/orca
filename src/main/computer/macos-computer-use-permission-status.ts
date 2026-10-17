@@ -13,12 +13,22 @@ import {
   resolveMacOSComputerUseExecutablePath
 } from './macos-native-provider-paths'
 import { RuntimeClientError } from './runtime-client-error'
-import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission-status-cleanup'
+import {
+  PERMISSION_STATUS_TEMP_DIR_PREFIX,
+  reapOrphanedMacOSPermissionStatusHelpers,
+  stopMacOSPermissionStatusHelper
+} from './macos-computer-use-permission-status-cleanup'
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
 
+let inFlightPermissionStatus: Promise<ComputerUsePermissionStatusResult> | null = null
+
 export function getComputerUsePermissionStatus(): Promise<ComputerUsePermissionStatusResult> {
-  return getComputerUsePermissionStatusAsync()
+  // Why: settings, onboarding and the setup guide often ask at once; each probe launches a helper app.
+  inFlightPermissionStatus ??= getComputerUsePermissionStatusAsync().finally(() => {
+    inFlightPermissionStatus = null
+  })
+  return inFlightPermissionStatus
 }
 
 async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermissionStatusResult> {
@@ -78,7 +88,8 @@ function createUnavailablePermissionStatus(
 async function readPermissionStatusFromHelperApp(
   helperAppPath: string
 ): Promise<Partial<Record<ComputerUsePermissionId, ComputerUsePermissionStatus>>> {
-  const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-use-permissions-'))
+  await reapOrphanedMacOSPermissionStatusHelpers()
+  const tempDir = await mkdtemp(join(tmpdir(), PERMISSION_STATUS_TEMP_DIR_PREFIX))
   const statusPath = join(tempDir, 'status.json')
   try {
     // Why: TCC status must be checked through the helper app identity. Directly
