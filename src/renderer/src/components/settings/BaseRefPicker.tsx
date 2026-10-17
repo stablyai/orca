@@ -18,6 +18,7 @@ type BaseRefPickerProps = {
   currentBaseRef?: string
   onSelect: (ref: string) => void
   onUsePrimary?: () => void
+  usePrimaryLabel?: string
 }
 
 export function BaseRefPicker({
@@ -25,7 +26,8 @@ export function BaseRefPicker({
   hostId,
   currentBaseRef,
   onSelect,
-  onUsePrimary
+  onUsePrimary,
+  usePrimaryLabel
 }: BaseRefPickerProps): React.JSX.Element {
   // Why: refs live on the repo's own host; with no host given, the repo row names it.
   const ownerHostId = useAppStore((state) => {
@@ -207,7 +209,8 @@ export function BaseRefPicker({
         </div>
         {onUsePrimary && (
           <Button variant="outline" size="sm" onClick={onUsePrimary} disabled={!currentBaseRef}>
-            {translate('auto.components.settings.BaseRefPicker.773a5687a3', 'Use Primary')}
+            {usePrimaryLabel ??
+              translate('auto.components.settings.BaseRefPicker.773a5687a3', 'Use Primary')}
           </Button>
         )}
       </div>
