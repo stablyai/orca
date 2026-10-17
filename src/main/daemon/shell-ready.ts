@@ -116,10 +116,25 @@ export function resolveUnixPaneShellPath(
 }
 
 export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
+  // Why win32 first: Windows pwsh startup commands ride the launch args, so
+  // gating its stdin would hold the pane with no marker ever coming.
+  if (process.platform === 'win32') {
+    return false
+  }
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
   // Why fish: markerless, its startup command is written before fish's reader owns
   // the PTY and the launch is lost under slow prompts like Starship (STA-3417).
-  return shellName === 'zsh' || shellName === 'bash' || shellName === 'fish'
+  // Why pwsh: its .NET console queries the cursor position during startup and
+  // reads stdin while waiting for the reply, so a command typed into the startup
+  // window loses its Enter and never runs (#27293). The OSC 133 bootstrap emits
+  // the ready marker from the prompt function, so the queue releases only once
+  // PSReadLine owns the input.
+  return (
+    shellName === 'zsh' ||
+    shellName === 'bash' ||
+    shellName === 'fish' ||
+    isPowerShellExecutableName(shellName)
+  )
 }
 
 export type ShellLaunchConfig = {
@@ -183,6 +198,9 @@ export function getShellLaunchConfig(
   }
 
   if (isPowerShellExecutableName(shellName)) {
+    // Why no marker on win32: Windows pwsh startup commands ride the launch args
+    // (see windows-shell-args.ts), so nothing queues behind a marker there.
+    const supportsReadyMarker = process.platform !== 'win32' && features.includes('ready')
     return {
       args: [
         '-NoLogo',
@@ -191,8 +209,13 @@ export function getShellLaunchConfig(
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
-      env: {},
-      supportsReadyMarker: false
+      // Why feature-gated: the bootstrap reads this to decide whether the prompt
+      // function publishes the ready marker, and removes the variable before any
+      // child process can inherit it.
+      env: supportsReadyMarker
+        ? { [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features) }
+        : {},
+      supportsReadyMarker
     }
   }
 

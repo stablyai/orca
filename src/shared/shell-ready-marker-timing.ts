@@ -9,10 +9,22 @@
 
 /**
  * True when the marker rides the shell's line editor (zsh `precmd`, bash
- * `PROMPT_COMMAND`), so it arrives at the same moment the prompt can accept input.
- * Every other wrapped shell emits it from startup, ahead of the reader.
+ * `PROMPT_COMMAND`, pwsh's wrapped `prompt` function invoked right before
+ * `PSConsoleHostReadLine` reads), so it arrives at the same moment the prompt can
+ * accept input. Every other wrapped shell emits it from startup, ahead of the
+ * reader. The pwsh case is Unix-only: Windows pwsh startup commands ride the
+ * launch args and never queue behind the marker.
  */
 export function shellReadyMarkerComesFromLineEditor(shellPath: string): boolean {
   const shellName = shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
-  return shellName === 'bash' || shellName === 'zsh'
+  if (shellName === 'bash' || shellName === 'zsh') {
+    return true
+  }
+  return (
+    process.platform !== 'win32' &&
+    (shellName === 'pwsh' ||
+      shellName === 'pwsh.exe' ||
+      shellName === 'powershell' ||
+      shellName === 'powershell.exe')
+  )
 }
