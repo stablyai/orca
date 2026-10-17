@@ -216,7 +216,10 @@ export function removeManagedCommands(
   })
 }
 
-function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
+export function hookHasManagedCommand(
+  hook: HookCommandConfig,
+  matches: (value?: string) => boolean
+) {
   const args = Array.isArray(hook.args) ? hook.args : []
   return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
 }

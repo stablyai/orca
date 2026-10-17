@@ -828,7 +828,8 @@ describe('ClaudeHookService.installRemote', () => {
                 {
                   type: 'command',
                   command:
-                    'if [ -x /home/dev/.orca/agent-hooks/claude-hook.sh ]; then /bin/sh /home/dev/.orca/agent-hooks/claude-hook.sh; fi'
+                    'if [ -x /home/dev/.orca/agent-hooks/claude-hook.sh ]; then /bin/sh /home/dev/.orca/agent-hooks/claude-hook.sh; fi',
+                  async: true
                 }
               ]
             }
@@ -844,6 +845,9 @@ describe('ClaudeHookService.installRemote', () => {
     const userCmds = stopDefs.flatMap((d) => d.hooks.map((h) => h.command))
     expect(userCmds).toContain('/usr/local/bin/my-user-hook')
     expect(userCmds.filter((c) => c.includes('claude-hook.sh'))).toHaveLength(1)
+    expect(parsed.hooks.Stop).toContainEqual({
+      hooks: [expect.objectContaining({ async: true })]
+    })
   })
 })
 
