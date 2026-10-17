@@ -5,6 +5,7 @@ import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port
 import { RpcClientProvider } from '../transport/client-context.web'
 import type { MobileSessionController } from '../session/use-mobile-session-controller'
 import { MobileSessionHeader } from '../session/MobileSessionHeader'
+import type { WorkspaceSwitcher } from '../session/use-workspace-switcher'
 import HostGroupLayout from '../../app/h/_layout'
 
 vi.mock('react-native', () => ({
@@ -21,6 +22,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
 vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   Folder: 'Folder',
   File: 'File',
@@ -57,7 +59,10 @@ vi.mock('../host-screen/HostScreen', () => ({
     })
 }))
 vi.mock('../navigation/host-stack', () => ({
-  HostStack: () => createElement(MobileSessionHeader, { controller: headerController() })
+  HostStack: () => createElement(MobileSessionHeader, {
+      controller: headerController(),
+      switcher: headerSwitcher()
+    })
 }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: () => {} }))
@@ -90,6 +95,19 @@ function headerController(): MobileSessionController {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This header fixture supplies every rendered field; no tab or panel actions are exercised.
   return controller as MobileSessionController
+}
+
+function headerSwitcher(): WorkspaceSwitcher {
+  return {
+    visible: false,
+    open: vi.fn(),
+    close: vi.fn(),
+    groups: [],
+    flipTarget: null,
+    swipeHandlers: {},
+    switchToWorkspace: vi.fn(),
+    switchToHost: vi.fn()
+  }
 }
 
 describe('host sidebar reveal in the session header', () => {
