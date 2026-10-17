@@ -8,6 +8,8 @@ export type NotificationSettings = {
   agentTaskComplete: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
+  /** macOS Dock icon unread badge; hiding it must not touch in-app unread state. */
+  showDockBadge: boolean
   customSoundId:
     | 'system'
     | 'two-tone'

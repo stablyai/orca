@@ -34,6 +34,14 @@ export const readAuthorizationStatusMock = vi.fn(
   (): Promise<'authorized' | 'denied' | 'not-determined' | 'unknown' | null> =>
     Promise.resolve(null)
 )
+export const setDockBadgeVisibleMock: NotificationSpy = vi.fn()
+
+export function createUnreadBadgeModuleMock(): Record<string, unknown> {
+  return {
+    setUnreadDockBadgeCount: vi.fn(),
+    setDockBadgeVisible: setDockBadgeVisibleMock
+  }
+}
 
 export function createElectronModuleMock(): Record<string, unknown> {
   return {
@@ -94,6 +102,7 @@ export function resetNotificationDispatchMocks(): void {
   getTrustedUIRendererWindowMock.mockReturnValue(null)
   shellOpenExternalMock.mockClear()
   setTrayAttentionMock.mockClear()
+  setDockBadgeVisibleMock.mockClear()
 }
 
 function findRegisteredHandler(channel: string): unknown {
