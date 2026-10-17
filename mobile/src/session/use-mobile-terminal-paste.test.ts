@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
+import type { TerminalModes } from '../terminal/terminal-webview-contract'
+import {
+  buildMobileTerminalClipboardTextPayload,
+  useMobileTerminalPaste
+} from './use-mobile-terminal-paste'
 
 // `useMemo` joins `useCallback` because the paste now reads the clipboard through the platform
 // seam, which is a hook. Called rather than cached: this test mounts nothing, so there is no
@@ -11,8 +15,9 @@ vi.mock('react', () => ({
 }))
 // The clipboard seam's native half is what the hook calls, so the pasteboard is what a test stands
 // in for: text, image and the two probes behind `contents`.
+const clipboardText = vi.hoisted(() => ({ current: '' }))
 vi.mock('expo-clipboard', () => ({
-  getStringAsync: async () => '',
+  getStringAsync: async () => clipboardText.current,
   getImageAsync: async () => ({ data: 'png' })
 }))
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: {} }))
@@ -25,46 +30,106 @@ vi.mock('./mobile-clipboard-image', async (importOriginal) => ({
   saveMobileClipboardImageAsTempFile: async () => '/tmp/shot.png'
 }))
 
+function usePasteUnderTest(agent: string, modes?: TerminalModes) {
+  const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
+  const client: RpcClient = {
+    sendRequest,
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: vi.fn(),
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: vi.fn(),
+    close: vi.fn()
+  }
+  const paste = useMobileTerminalPaste({
+    agent,
+    activeHandle: 'term-1',
+    activeHandleRef: { current: 'term-1' },
+    activeSessionTabTypeRef: { current: 'terminal' },
+    canSend: true,
+    client,
+    clientRef: { current: client },
+    connState: 'connected',
+    connStateRef: { current: 'connected' },
+    deviceTokenRef: { current: null },
+    flushPendingLiveInputBeforeExternalSend: async () => true,
+    getActiveWorktreeConnectionId: async () => null,
+    onError: vi.fn(),
+    onSuccess: vi.fn(),
+    ptyModesRef: { current: new Map(modes ? [['term-1', modes]] : []) },
+    refreshCanPaste: vi.fn(),
+    showToast: vi.fn()
+  })
+  return { paste, sendRequest }
+}
+
+const modes = (overrides: Partial<TerminalModes>): TerminalModes => ({
+  bracketedPasteMode: false,
+  altScreen: false,
+  mouseTrackingMode: 'none',
+  sgrMouseMode: false,
+  sgrMousePixelsMode: false,
+  ...overrides
+})
+
 describe('mobile clipboard image followed by typing', () => {
   it.each(['omp', 'claude'])('separates a pasted image from subsequent %s input', async (agent) => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
-    const client: RpcClient = {
-      sendRequest,
-      subscribe: () => () => {},
-      updateTerminalSubscriptionViewport: vi.fn(),
-      getState: () => 'connected',
-      getReconnectAttempt: () => 0,
-      getLastConnectedAt: () => null,
-      onStateChange: () => () => {},
-      notifyForeground: vi.fn(),
-      close: vi.fn()
-    }
-    const paste = useMobileTerminalPaste({
-      agent,
-      activeHandle: 'term-1',
-      activeHandleRef: { current: 'term-1' },
-      activeSessionTabTypeRef: { current: 'terminal' },
-      canSend: true,
-      client,
-      clientRef: { current: client },
-      connState: 'connected',
-      connStateRef: { current: 'connected' },
-      deviceTokenRef: { current: null },
-      flushPendingLiveInputBeforeExternalSend: async () => true,
-      getActiveWorktreeConnectionId: async () => null,
-      onError: vi.fn(),
-      onSuccess: vi.fn(),
-      ptyModesRef: { current: new Map() },
-      refreshCanPaste: vi.fn(),
-      showToast: vi.fn()
-    })
+    clipboardText.current = ''
+    const { paste, sendRequest } = usePasteUnderTest(agent)
     await paste()
     expect(sendRequest).toHaveBeenCalledWith('terminal.send', {
       terminal: 'term-1',
       text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/shot.png\x1b[201~ `,
       enter: false
     })
+  })
+})
+
+describe('mobile clipboard text paste', () => {
+  const paragraph = 'This sentence is filler text that mimics ordinary dictated prose. '.repeat(8)
+  const longText = [paragraph, paragraph, paragraph, paragraph].join('\n\n')
+
+  // #13332: Claude enables bracketed paste on the alternate screen; sent unframed, it kept
+  // only the final ~1 KiB piece of a long paste.
+  it('frames a long multi-paragraph paste on the alternate screen', async () => {
+    clipboardText.current = longText
+    const { paste, sendRequest } = usePasteUnderTest(
+      'claude',
+      modes({ bracketedPasteMode: true, altScreen: true })
+    )
+    await paste()
+    expect(sendRequest).toHaveBeenCalledWith('terminal.send', {
+      terminal: 'term-1',
+      text: `\x1b[200~${longText.replace(/\n/g, '\r')}\x1b[201~`,
+      enter: false
+    })
+  })
+
+  it('sends text unframed when the program has not enabled bracketed paste', () => {
+    expect(buildMobileTerminalClipboardTextPayload('a\nb', modes({}), 'claude')).toBe('a\nb')
+    expect(buildMobileTerminalClipboardTextPayload('a\nb', undefined, null)).toBe('a\nb')
+  })
+
+  it('neutralizes escape bytes so pasted text cannot close the frame early', () => {
+    expect(
+      buildMobileTerminalClipboardTextPayload(
+        'safe\x1b[201~rm -rf ~',
+        modes({ bracketedPasteMode: true }),
+        null
+      )
+    ).toBe('\x1b[200~safe␛[201~rm -rf ~\x1b[201~')
+  })
+
+  // Codex on a Windows host reads console input records, where frame markers arrive as keys.
+  it('keeps the previous unframed bytes for Codex on the alternate screen', () => {
+    const bracketed = modes({ bracketedPasteMode: true })
+    expect(
+      buildMobileTerminalClipboardTextPayload('a\nb', { ...bracketed, altScreen: true }, 'codex')
+    ).toBe('a\nb')
+    expect(buildMobileTerminalClipboardTextPayload('a\nb', bracketed, 'codex')).toBe(
+      '\x1b[200~a\rb\x1b[201~'
+    )
   })
 })
