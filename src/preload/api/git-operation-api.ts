@@ -1,4 +1,10 @@
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
+  WorktreeMergeReviewAcceptOutcome,
+  WorktreeMergeReviewRejectOutcome,
+  WorktreeMergeReviewState,
+  WorktreeMergeReviewSyncOutcome
+} from '../../shared/git-merge-review'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
@@ -124,4 +130,22 @@ export type GitOperationApi = {
     filePaths: string[]
     connectionId?: string
   }) => Promise<void>
+  worktreeMergeReviewState: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<WorktreeMergeReviewState>
+  worktreeMergeReviewSync: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<WorktreeMergeReviewSyncOutcome>
+  worktreeMergeReviewAccept: (args: {
+    worktreePath: string
+    connectionId?: string
+    message?: string
+  }) => Promise<WorktreeMergeReviewAcceptOutcome>
+  worktreeMergeReviewReject: (args: {
+    worktreePath: string
+    connectionId?: string
+    assumeYes?: boolean
+  }) => Promise<WorktreeMergeReviewRejectOutcome>
 }
