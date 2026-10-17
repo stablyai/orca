@@ -8,10 +8,12 @@ import { translate } from '@/i18n/i18n'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import { DiffLineCounts } from './diff-line-counts'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
+import { TabHoverCard } from '../../../tab-bar/TabHoverCard'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
 import { SOURCE_CONTROL_TREE_FILE_PADDING_PX, SOURCE_CONTROL_TREE_INDENT_PX } from './row-layout'
 import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
 
+/** Renders one committed branch-compare row: file identity, note count, diff counts and status. */
 export function BranchEntryRow({
   entry,
   currentWorktreeId,
@@ -67,12 +69,28 @@ export function BranchEntryRow({
           className: 'size-3.5 shrink-0',
           style: { color: STATUS_COLORS[entry.status] }
         })}
-        <span className="min-w-0 flex-1 truncate text-xs">
-          <span className="text-foreground">{fileName}</span>
-          {showPathHint && dirPath && (
-            <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+        <TabHoverCard
+          title={fileName}
+          description={entry.path}
+          programName={translate(
+            'auto.components.right.sidebar.index.0314901467',
+            'Source Control'
           )}
-        </span>
+          icon={React.createElement(FileIcon, {
+            className: 'size-4',
+            style: { color: STATUS_COLORS[entry.status] }
+          })}
+        >
+          <span
+            className="min-w-0 flex-1 truncate rounded-sm text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            tabIndex={0}
+          >
+            <span className="text-foreground">{fileName}</span>
+            {showPathHint && dirPath && (
+              <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+            )}
+          </span>
+        </TabHoverCard>
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"

@@ -12,6 +12,7 @@ import { ConflictBadge } from './conflict-badge'
 import { getLocalizedConflictKindLabel } from './conflict-label'
 import { DiffLineCounts } from './diff-line-counts'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
+import { TabHoverCard } from '../../../tab-bar/TabHoverCard'
 import { canDiscardStatusEntry, canStageStatusEntry, canUnstageStatusEntry } from './entry-actions'
 import { isSubmoduleWorktreeOnlyChange } from '../commit/discard-all-sequence'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
@@ -162,12 +163,28 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           style: { color: STATUS_COLORS[entry.status] }
         })}
         <div className="min-w-0 flex-1 text-xs">
-          <span className="min-w-0 block truncate">
-            <span className="text-foreground">{fileName}</span>
-            {showPathHint && dirPath && (
-              <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+          <TabHoverCard
+            title={fileName}
+            description={entry.path}
+            programName={translate(
+              'auto.components.right.sidebar.index.0314901467',
+              'Source Control'
             )}
-          </span>
+            icon={React.createElement(FileIcon, {
+              className: 'size-4',
+              style: { color: STATUS_COLORS[entry.status] }
+            })}
+          >
+            <span
+              className="min-w-0 block truncate rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              tabIndex={0}
+            >
+              <span className="text-foreground">{fileName}</span>
+              {showPathHint && dirPath && (
+                <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
+              )}
+            </span>
+          </TabHoverCard>
           {conflictLabel && (
             <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
           )}
