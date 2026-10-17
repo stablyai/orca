@@ -113,6 +113,14 @@ async function startCanary(getStableActivityRevision: () => number | null): Prom
 }
 
 function main(): void {
+  // Why: an EPIPE on a dying IPC channel surfaces as an async 'error' event on
+  // process (not a synchronous throw), so the try/catch in send() cannot catch
+  // it; unhandled, it crash-exits the child during a host teardown race.
+  process.on('error', () => {
+    if (!process.connected) {
+      process.exit(0)
+    }
+  })
   const send = (message: WatcherToHostMessage): void => {
     try {
       process.send?.(message, () => undefined)
