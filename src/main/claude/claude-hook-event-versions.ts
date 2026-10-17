@@ -18,6 +18,10 @@ export const CLAUDE_HOOK_EVENT_FIRST_VERSIONS = {
   PermissionRequest: '2.0.45',
   PostToolUseFailure: '2.0.56',
   TeammateIdle: '2.1.33',
+  // Why: the packed hook enum names Elicitation and ElicitationResult from 2.1.63 (2.1.62 does
+  // not). Writing them earlier makes Claude 1.0.23–2.1.100 discard the whole settings file.
+  Elicitation: '2.1.63',
+  ElicitationResult: '2.1.63',
   PostCompact: '2.1.76',
   StopFailure: '2.1.78'
 } as const
