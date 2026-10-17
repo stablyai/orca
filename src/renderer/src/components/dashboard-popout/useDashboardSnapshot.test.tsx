@@ -43,14 +43,43 @@ let apply: (next: DashboardSnapshot) => void
 let applyStatus: (next: AgentStatusIpcPayload) => void
 let applyClear: (next: AgentStatusClearIpcPayload) => void
 const requestSnapshot = vi.fn(async () => {})
+let readyRejection: unknown = null
+let hideDocumentAfterTransitionStart = false
 const startViewTransition = vi.fn((cb: () => void) => {
   cb()
+  if (hideDocumentAfterTransitionStart) {
+    hideDocument()
+  }
   return {
     finished: Promise.resolve(),
-    ready: Promise.resolve(),
+    ready: readyRejection !== null ? Promise.reject(readyRejection) : Promise.resolve(),
     updateCallbackDone: Promise.resolve()
   }
 })
+
+const UNHANDLED_REJECTION_SETTLE_MS = 20
+
+async function collectUnhandledRejections(run: () => void): Promise<unknown[]> {
+  const reasons: unknown[] = []
+  const onUnhandledRejection = (reason: unknown): void => {
+    reasons.push(reason)
+  }
+
+  process.on('unhandledRejection', onUnhandledRejection)
+  try {
+    run()
+    await new Promise((resolve) => setTimeout(resolve, UNHANDLED_REJECTION_SETTLE_MS))
+  } finally {
+    process.off('unhandledRejection', onUnhandledRejection)
+  }
+
+  return reasons
+}
+
+/** The pop-out is hidden whenever the main window covers it or it is minimized. */
+function hideDocument(): void {
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+}
 
 /** A Radix dialog marks its open content with role + data-state; mimic that so
  *  the hook's top-layer-conflict guard sees an "open terminal". */
@@ -89,6 +118,9 @@ describe('useDashboardSnapshot', () => {
   })
   afterEach(() => {
     document.body.innerHTML = ''
+    readyRejection = null
+    hideDocumentAfterTransitionStart = false
+    delete (document as { visibilityState?: string }).visibilityState
     vi.clearAllMocks()
   })
 
@@ -112,6 +144,53 @@ describe('useDashboardSnapshot', () => {
     // Why: the card's View Transition snapshot would paint in the browser top
     // layer, above the z-50 dialog — so we jump instead of morphing.
     expect(startViewTransition).not.toHaveBeenCalled()
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('skips the view transition — but still applies the update — while the window is hidden', () => {
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    startViewTransition.mockClear()
+    hideDocument()
+
+    act(() => apply(snapshot([card({ bucket: 'working' })])))
+    expect(startViewTransition).not.toHaveBeenCalled()
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('swallows the ready rejection when the window is occluded mid-transition', async () => {
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    readyRejection = new DOMException(
+      'Transition was aborted because of invalid state',
+      'InvalidStateError'
+    )
+    hideDocumentAfterTransitionStart = true
+
+    const reasons = await collectUnhandledRejections(() => {
+      act(() => apply(snapshot([card({ bucket: 'working' })])))
+    })
+
+    expect(startViewTransition).toHaveBeenCalled()
+    expect(reasons).toEqual([])
+    expect(result.current.cards[0].bucket).toBe('working')
+  })
+
+  it('reports an InvalidStateError when the visible transition fails', async () => {
+    const { result } = renderHook(() => useDashboardSnapshot())
+    act(() => apply(snapshot([card({ bucket: 'idle' })])))
+    const readyError = new DOMException(
+      'Duplicate transition names are not allowed',
+      'InvalidStateError'
+    )
+    readyRejection = readyError
+
+    const reasons = await collectUnhandledRejections(() => {
+      act(() => apply(snapshot([card({ bucket: 'working' })])))
+    })
+
+    expect(startViewTransition).toHaveBeenCalled()
+    expect(reasons).toEqual([readyError])
     expect(result.current.cards[0].bucket).toBe('working')
   })
 
