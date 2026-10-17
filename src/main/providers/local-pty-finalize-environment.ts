@@ -21,6 +21,11 @@ import {
   type HistoryInjectionResult
 } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
+import {
+  requestWslShellReadyMarker,
+  WSL_SHELL_READY_TIMEOUT_MS,
+  wslStartupCommandWaitsForShellReady
+} from '../pty/wsl-startup-shell-ready'
 import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
 import { promoteAgentTeamsShimPath } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
@@ -38,6 +43,21 @@ export function finalizeLocalPtySpawnEnvironment(args: {
   const { spawn, getOptions, plan, env } = args
   if (process.platform === 'win32') {
     finalizeWindowsLocalPtySpawnEnvironment({ spawn, plan, env })
+    if (
+      wslStartupCommandWaitsForShellReady({
+        shellPath: plan.shellPath,
+        command: spawn.command,
+        startupCommandDeliveredInShellArgs: plan.startupCommandDeliveredInShellArgs
+      })
+    ) {
+      requestWslShellReadyMarker(env)
+      plan.shellReadyLaunch = {
+        args: null,
+        env: {},
+        supportsReadyMarker: true,
+        readyTimeoutMs: WSL_SHELL_READY_TIMEOUT_MS
+      }
+    }
   }
   seedPowerlevel10kWizardEnv(env, { envToDelete: spawn.envToDelete })
   if (
