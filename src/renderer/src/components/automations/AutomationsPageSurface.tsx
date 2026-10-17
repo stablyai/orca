@@ -152,6 +152,7 @@ export function AutomationsPageSurface({
         isEditing={editingAutomationId !== null}
         isSaving={isSaving}
         canSave={presentation.canSaveDraft}
+        hasUnsavedChanges={presentation.hasUnsavedChanges}
         createDestination={destination.createDestination.control}
         editDestination={destinationForm.editDestinationControl}
         notice={editorNotice}

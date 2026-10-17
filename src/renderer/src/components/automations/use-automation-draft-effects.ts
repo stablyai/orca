@@ -15,15 +15,31 @@ export function useAutomationDraftEffects({
   destinationForm,
   pageRefresh
 }: {
-  local: AutomationsPageLocalState
-  setup: AutomationsPageSetupState
-  destination: AutomationsPageDestinationState
-  destinationForm: AutomationsPageDestinationFormState
-  pageRefresh: AutomationsPageRefresh
+  local: Pick<
+    AutomationsPageLocalState,
+    | 'draft'
+    | 'setDraft'
+    | 'setDraftAtOpen'
+    | 'createOpen'
+    | 'editingAutomationId'
+    | 'setupDecisionPolicyDefaultRef'
+    | 'setupDecisionDefaultSignatureRef'
+    | 'setupDecisionTouchedRef'
+  >
+  setup: Pick<
+    AutomationsPageSetupState,
+    | 'loadAutomationYamlHooksForRepo'
+    | 'getDraftSetupDecisionDefault'
+    | 'getDraftSetupDecisionDefaultSignature'
+  >
+  destination: Pick<AutomationsPageDestinationState, 'createDestinationHostId'>
+  destinationForm: Pick<AutomationsPageDestinationFormState, 'dialogWorktrees'>
+  pageRefresh: Pick<AutomationsPageRefresh, 'getDefaultTarget'>
 }) {
   const {
     draft,
     setDraft,
+    setDraftAtOpen,
     createOpen,
     editingAutomationId,
     setupDecisionPolicyDefaultRef,
@@ -50,8 +66,13 @@ export function useAutomationDraftEffects({
         projectId: target.projectId,
         workspaceId: target.workspaceId
       }))
+      setDraftAtOpen((baseline) =>
+        baseline && !baseline.projectId
+          ? { ...baseline, projectId: target.projectId, workspaceId: target.workspaceId }
+          : baseline
+      )
     }
-  }, [draft.projectId, editingAutomationId, getDefaultTarget, setDraft])
+  }, [draft.projectId, editingAutomationId, getDefaultTarget, setDraft, setDraftAtOpen])
   useEffect(() => {
     if (!draft.projectId) {
       return
@@ -59,8 +80,15 @@ export function useAutomationDraftEffects({
     const defaultWorktree = getDefaultWorktree(dialogWorktrees)
     if (!draft.workspaceId && defaultWorktree) {
       setDraft((current) => ({ ...current, workspaceId: defaultWorktree.id }))
+      setDraftAtOpen((baseline) =>
+        baseline &&
+        baseline.projectId === draft.projectId &&
+        baseline.workspaceId === draft.workspaceId
+          ? { ...baseline, workspaceId: defaultWorktree.id }
+          : baseline
+      )
     }
-  }, [dialogWorktrees, draft.projectId, draft.workspaceId, setDraft])
+  }, [dialogWorktrees, draft.projectId, draft.workspaceId, setDraft, setDraftAtOpen])
   useEffect(() => {
     if (!createOpen || draft.workspaceMode !== 'new_per_run' || !draft.projectId) {
       return
@@ -97,12 +125,21 @@ export function useAutomationDraftEffects({
       return
     }
     setDraft((current) => ({ ...current, setupDecision: nextDefault }))
+    setDraftAtOpen((baseline) =>
+      baseline &&
+      baseline.projectId === draft.projectId &&
+      baseline.workspaceMode === draft.workspaceMode &&
+      baseline.setupDecision === draft.setupDecision
+        ? { ...baseline, setupDecision: nextDefault }
+        : baseline
+    )
   }, [
     createOpen,
     draft,
     getDraftSetupDecisionDefault,
     getDraftSetupDecisionDefaultSignature,
     setDraft,
+    setDraftAtOpen,
     setupDecisionDefaultSignatureRef,
     setupDecisionPolicyDefaultRef,
     setupDecisionTouchedRef

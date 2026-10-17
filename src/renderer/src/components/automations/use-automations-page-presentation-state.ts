@@ -61,12 +61,12 @@ export function useAutomationsPagePresentationState({
         sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(selectedRow.key)
       })
     : null
-  const canSaveDraft =
-    editingAutomationId === null ||
-    !draftAtOpen ||
-    JSON.stringify(draft) !== JSON.stringify(draftAtOpen) ||
+  const hasUnsavedChanges =
+    (!!draftAtOpen && JSON.stringify(draft) !== JSON.stringify(draftAtOpen)) ||
+    destination.createDestination.hasUnsavedChanges ||
     (editingAutomationId !== null &&
       local.editingHostStableKey !== destination.rowRecoveryHost(local.editingRowKey)?.stableKey)
+  const canSaveDraft = editingAutomationId === null || !draftAtOpen || hasUnsavedChanges
   const getAutomationRepoHostLabel = useCallback(
     (repo: Repo): string => {
       const hostId = getRepoExecutionHostId(repo)
@@ -108,6 +108,7 @@ export function useAutomationsPagePresentationState({
     selectedRepo,
     selectedWorktree,
     selectedRunNowAvailability,
+    hasUnsavedChanges,
     canSaveDraft,
     getAutomationRepoHostLabel,
     hostLabelById,
