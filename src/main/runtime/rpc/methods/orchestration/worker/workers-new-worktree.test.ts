@@ -11,6 +11,7 @@ import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { FederationAttachStartParams } from '../federation/federation-start-schema'
+import { WorkerStartParams } from './worker-start-schema'
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
@@ -134,6 +135,54 @@ describe('orchestration new-worktree workers', () => {
       } as never)
     }
   }
+
+  it.each(['repo::integration', 'folder:integration'])(
+    'uses the resolved explicit parent %s without changing the Git base',
+    async (id) => {
+      mockCreatedWorktree()
+      const resolveParent = vi
+        .spyOn(runtime, 'showManagedTerminalWorkspace')
+        .mockResolvedValue({ id, repoId: 'repo' })
+      await startWorker({ parentWorktree: 'id:integration', baseBranch: 'integration-base' })
+      expect(resolveParent).toHaveBeenCalledWith('id:integration')
+      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repoSelector: 'repo',
+          baseBranch: 'integration-base',
+          lineage: expect.objectContaining({
+            parentWorkspace: id.startsWith('folder:') ? id : `worktree:${id}`,
+            noParent: false
+          })
+        })
+      )
+    }
+  )
+
+  it('rejects an unresolved parent before creating a worker dispatch or worktree', async () => {
+    mockCreatedWorktree()
+    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockRejectedValue(
+      new Error('Parent not found')
+    )
+    await expect(startWorker({ parentWorktree: 'id:missing' })).rejects.toThrow('Parent not found')
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+    expect(db.getDispatchContext(db.listTasks()[0]!.id)).toBeFalsy()
+  })
+
+  it.each([
+    { worktree: 'current' },
+    { worktree: 'new-top-level' },
+    { worktree: 'id:existing' },
+    { worktree: 'new-child', on: 'other-host' }
+  ])('rejects an explicit parent for incompatible placement %j', (placement) => {
+    expect(
+      WorkerStartParams.safeParse({
+        spec: 'work',
+        from: 'term_coord',
+        parentWorktree: 'id:integration',
+        ...placement
+      }).success
+    ).toBe(false)
+  })
 
   it('creates an independent top-level worktree and reuses its agent terminal', async () => {
     mockCreatedWorktree()
