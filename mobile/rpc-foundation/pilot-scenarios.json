@@ -11646,7 +11646,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -11689,7 +11692,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -12524,7 +12530,10 @@
           "params": {
             "body": "a comment",
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12565,7 +12574,10 @@
           "params": {
             "body": "a comment",
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12861,7 +12873,10 @@
           "params": {
             "iid": 7,
             "method": "squash",
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12895,7 +12910,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "state": "closed"
@@ -12957,7 +12975,10 @@
           "complete": "gitlab.updateMRState#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "state": "closed"
           },
@@ -13029,7 +13050,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -13067,7 +13091,10 @@
           "complete": "gitlab.updateMR#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -22095,6 +22122,11 @@
           }
         },
         {
+          "complete": "agentSession.createSupport#1",
+          "params": { "worktree": "id:wt-1", "agent": "claude" },
+          "reply": { "ok": true, "result": { "supported": false } }
+        },
+        {
           "checkpoint": "creating"
         },
         {
@@ -22107,7 +22139,8 @@
               "worktree": "id:wt-1"
             },
             "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
-            "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003",
+            "nativeChatDefault": true
           },
           "reply": {
             "ok": true,
@@ -22162,6 +22195,11 @@
           }
         },
         {
+          "complete": "agentSession.createSupport#1",
+          "params": { "worktree": "id:wt-1", "agent": "claude" },
+          "reply": { "ok": true, "result": { "supported": false } }
+        },
+        {
           "checkpoint": "creating"
         },
         {
@@ -22174,7 +22212,8 @@
               "worktree": "id:wt-1"
             },
             "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
-            "sessionId": "claude_00000000_0000_4000_8000_000000000003"
+            "sessionId": "claude_00000000_0000_4000_8000_000000000003",
+            "nativeChatDefault": true
           },
           "reply": {
             "ok": true,
@@ -22203,7 +22242,10 @@
         {
           "checkpoint": "tabs-refreshed"
         }
-      ]
+      ],
+      "deviceStore": {
+        "orca:defaultSessionView": "chat"
+      }
     },
     {
       "id": "session-create-terminal-diff-notes-launched",
@@ -22249,7 +22291,8 @@
             },
             "launchSource": "diff_notes_send",
             "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
-            "sessionId": "codex_00000000_0000_4000_8000_000000000003"
+            "sessionId": "codex_00000000_0000_4000_8000_000000000003",
+            "nativeChatDefault": true
           },
           "reply": {
             "ok": true,
@@ -22327,7 +22370,8 @@
             },
             "launchSource": "diff_notes_send",
             "paneKey": "00000000-0000-4000-8000-000000000001:00000000-0000-4000-8000-000000000002",
-            "sessionId": "codex_00000000_0000_4000_8000_000000000003"
+            "sessionId": "codex_00000000_0000_4000_8000_000000000003",
+            "nativeChatDefault": true
           },
           "reply": {
             "ok": true,

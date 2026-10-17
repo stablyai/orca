@@ -177,7 +177,7 @@ describe('mobile + Codex tab creation routing', () => {
     expect(scope.nativeChatController.setTabView).not.toHaveBeenCalled()
   })
 
-  it('falls back to a terminal when structured creation is definitively refused', async () => {
+  it('reports a structured create refusal without silently changing the session type', async () => {
     const client = clientReturning(
       { ok: true, result: { supported: true } },
       {
@@ -205,12 +205,9 @@ describe('mobile + Codex tab creation routing', () => {
       await actions?.handleCreateTerminal('codex')
     })
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(
-      3,
-      'session.tabs.createTerminal',
-      expect.objectContaining({ worktree: 'id:workspace-1', agent: 'codex' })
-    )
-    expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
+    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+    expect(scope.setCreateError).toHaveBeenCalledWith('provider unavailable')
+    expect(scope.setActiveSessionTabId).not.toHaveBeenCalled()
   })
 
   it('keeps prompted Codex launches on the legacy terminal path', async () => {

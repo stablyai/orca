@@ -98,6 +98,7 @@ export async function launchAgentInExistingWorkspace(args: {
   prompt?: AgentLaunchPrompt
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
+  nativeChatDefault?: boolean
   placement?: AgentLaunchPlacement
   // Injected in tests; each call is one new operation, so a later tap never replays this one.
   mintOperationId?: () => string
@@ -109,6 +110,7 @@ export async function launchAgentInExistingWorkspace(args: {
     agent: args.agent,
     worktreeId: args.worktreeId,
     operationId: (args.mintOperationId ?? structuredSessionOperationId)(),
+    ...(args.nativeChatDefault !== undefined ? { nativeChatDefault: args.nativeChatDefault } : {}),
     ...(args.prompt ? { prompt: args.prompt } : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.placement ? { placement: args.placement } : {}),

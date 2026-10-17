@@ -2,7 +2,10 @@ import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  type RuntimeCapability
+} from '../../../shared/protocol-version'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
 import {
   openRemoteRuntimePassthroughSocket,
@@ -123,7 +126,10 @@ export class MobileDesktopRelay {
         const outgoing = withRelayedLaunchChatDefault(
           rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
           request.method,
-          this.options.nativeChatDefault
+          this.options.nativeChatDefault,
+          phone
+            .clientCapabilities()
+            .includes(STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY)
         )
         if (!socket.send(outgoing)) {
           this.endLink(link, unavailable('The server connection could not take the request.'))

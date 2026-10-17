@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
 import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime-passthrough-socket'
@@ -56,7 +59,7 @@ function relayWithPhone(
 ) {
   const syncCalls: unknown[] = []
   const server = { capable: true }
-  const desktop: { nativeChatDefault: boolean } = { nativeChatDefault: true }
+  const desktop = { nativeChatDefault: true, agentDefaults: new Map<string, boolean>() }
   const hosts: MobileDesktopRelayHosts = {
     list: () => ({
       environments: [],
@@ -90,7 +93,7 @@ function relayWithPhone(
       { phoneKey: 'phone-2', name: 'iPad via Mac' }
     ],
     allocateStreamId: () => 1,
-    nativeChatDefault: () => desktop.nativeChatDefault
+    nativeChatDefault: (agent) => desktop.agentDefaults.get(agent) ?? desktop.nativeChatDefault
   })
   const replies: string[] = []
   let capabilities: readonly string[] = ['cap.a']
@@ -114,6 +117,69 @@ function relayWithPhone(
 }
 
 describe('MobileDesktopRelay', () => {
+  it('resolves legacy phone defaults per agent without overriding a capable phone choice', async () => {
+    sockets.length = 0
+    const { relay, phone, desktop, setCapabilities } = relayWithPhone()
+    desktop.agentDefaults.set('codex', false)
+    const target = { kind: 'existing', worktree: 'id:wt-1' }
+    const frame = (id: string, method: string, params: Record<string, unknown>) =>
+      JSON.stringify({ id, method, params })
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'a', method: 'agent.launch' },
+      frame('a', 'agent.launch', { agent: 'claude', target })
+    )
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'b', method: 'agent.launch' },
+      frame('b', 'agent.launch', { agent: 'codex', target })
+    )
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(2))
+    expect(JSON.parse(sockets[0]!.sent[0]!).params.nativeChatDefault).toBe(true)
+    expect(JSON.parse(sockets[0]!.sent[1]!).params.nativeChatDefault).toBe(false)
+    setCapabilities([STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY])
+    relay.forward(
+      phone,
+      'env-1',
+      { id: 'c', method: 'agent.launch' },
+      frame('c', 'agent.launch', { agent: 'codex', target, nativeChatDefault: true })
+    )
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(3))
+    expect(JSON.parse(sockets[0]!.sent[2]!).params.nativeChatDefault).toBe(true)
+    relay.dispose()
+  })
+
+  it.each([true, false])(
+    'preserves an explicit launch mode from a capable phone: %s',
+    async (nativeChatDefault) => {
+      sockets.length = 0
+      const { relay, phone, desktop, setCapabilities } = relayWithPhone()
+      desktop.nativeChatDefault = !nativeChatDefault
+      setCapabilities([STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY])
+      const request = { id: 'chosen', method: 'agent.launchReplay' }
+      relay.forward(
+        phone,
+        'env-1',
+        request,
+        JSON.stringify({
+          ...request,
+          deviceToken: 'desktop-token',
+          params: {
+            agent: 'codex',
+            target: { kind: 'existing', worktree: 'id:wt-1' },
+            operationId: 'op',
+            nativeChatDefault
+          }
+        })
+      )
+      await vi.waitFor(() => expect(sockets[0]?.sent.length).toBe(1))
+      expect(JSON.parse(sockets[0]!.sent[0]!).params.nativeChatDefault).toBe(nativeChatDefault)
+      relay.dispose()
+    }
+  )
+
   it("stamps the desktop's chat default onto relayed launches only", async () => {
     sockets.length = 0
     const { relay, phone, desktop } = relayWithPhone()

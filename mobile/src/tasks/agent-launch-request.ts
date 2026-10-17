@@ -86,9 +86,11 @@ export function agentLaunchExistingParams(args: {
   paneKey?: string
   sessionId?: string
   placement?: AgentLaunchPlacement
+  nativeChatDefault?: boolean
 }): RpcSendParams<'agent.launchReplay'> {
   return {
     agent: args.agent,
+    ...(args.nativeChatDefault !== undefined ? { nativeChatDefault: args.nativeChatDefault } : {}),
     operationId: args.operationId,
     target: { kind: 'existing', worktree: `id:${args.worktreeId}` },
     ...(args.prompt ? { prompt: args.prompt } : {}),

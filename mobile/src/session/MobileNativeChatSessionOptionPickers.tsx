@@ -53,7 +53,7 @@ function permissionChoiceColor(value: string | undefined): string | undefined {
   return value === 'full-access' ? colors.statusAmber : undefined
 }
 
-/** The permission pill, then the combined model/session-option pill, sharing one bottom drawer. */
+/** One composer entry for models and session settings; permissions live in its drawer. */
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
@@ -78,6 +78,8 @@ export function MobileNativeChatSessionOptionPickers({
   // The permission mode applies from the next send, so a running turn never locks it.
   const disabled = (!permissionView && isWorking) || pendingId !== null || sendInFlight
   const modelView = model !== undefined && activeDescriptor?.id === model.id
+  const rootView = modelView || (permissionView && !model)
+  const settings = permission ? [...options, permission] : options
   const modelLabel = model ? mobileModelPillLabel(model) : ''
   const optionsLabel = options.length > 0 ? mobileOptionsPillLabel(options) : null
   const pillLabel = optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel
@@ -124,9 +126,9 @@ export function MobileNativeChatSessionOptionPickers({
   const pillsBusy = pendingId !== null || sendInFlight
 
   return (
-    // One tree in both modes: re-parenting the drawer would remount an open sheet.
+    // One tree keeps an open drawer mounted when the composer collapses.
     <View style={pillsHidden ? styles.pillsHidden : styles.pills}>
-      {!pillsHidden && permission && permissionChoice ? (
+      {!pillsHidden && !model && permission && permissionChoice ? (
         <Pill
           label={permissionChoice.label}
           accessibleName={`Permissions, ${permissionChoice.label}`}
@@ -139,7 +141,7 @@ export function MobileNativeChatSessionOptionPickers({
         <Pill
           label={pillLabel}
           accessibleName={`Model, ${pillLabel}`}
-          disabled={isWorking || pillsBusy}
+          disabled={(isWorking && !permission) || pillsBusy}
           onPress={() => openPicker(model.id)}
         />
       ) : null}
@@ -152,15 +154,13 @@ export function MobileNativeChatSessionOptionPickers({
           <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
               <Pressable
-                accessibilityLabel={modelView || permissionView ? 'Close picker' : 'Back to models'}
+                accessibilityLabel={rootView ? 'Close picker' : 'Back to models'}
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.sheetNav, pressed && styles.pressed]}
-                onPress={
-                  modelView || permissionView ? closePicker : () => onNavigate(model?.id ?? null)
-                }
+                onPress={rootView ? closePicker : () => onNavigate(model?.id ?? null)}
                 hitSlop={8}
               >
-                {modelView || permissionView ? (
+                {rootView ? (
                   <X size={18} color={colors.textSecondary} strokeWidth={2.2} />
                 ) : (
                   <ChevronLeft size={18} color={colors.textSecondary} strokeWidth={2.2} />
@@ -189,15 +189,15 @@ export function MobileNativeChatSessionOptionPickers({
                 {...(permissionView ? { choiceLabelColor: permissionChoiceColor } : {})}
               />
             </View>
-            {modelView && options.length > 0 ? (
+            {modelView && settings.length > 0 ? (
               <View style={styles.optionGroup}>
-                {options.map((descriptor, index) => (
+                {settings.map((descriptor, index) => (
                   <SessionOptionSummaryRow
                     key={descriptor.id}
                     label={descriptor.label}
                     value={mobileSessionOptionSummaryValue(descriptor)}
-                    disabled={disabled}
-                    divided={index < options.length - 1}
+                    disabled={descriptor === permission ? pillsBusy : disabled}
+                    divided={index < settings.length - 1}
                     onPress={() => onNavigate(descriptor.id)}
                   />
                 ))}

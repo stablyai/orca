@@ -304,6 +304,31 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(pill('Model').props).toMatchObject({ disabled: true })
   })
 
+  it('keeps permissions inside the model menu instead of adding a second composer pill', async () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR, PERMISSION_DESCRIPTOR])
+    expect(
+      renderer!.root.findAll(
+        (node) =>
+          node.type === 'Pressable' && node.props.accessibilityLabel?.startsWith('Permissions,')
+      )
+    ).toHaveLength(0)
+    await act(async () => pill('Model').props.onPress())
+    await act(async () => rowByText('Permissions').props.onPress())
+    expect(pill('Back to models').props.accessibilityLabel).toBe('Back to models')
+    await act(async () => rowByText('Full access').props.onPress())
+    expect(setOption).toHaveBeenCalledWith('permissionMode', 'full-access')
+  })
+
+  it('allows permission changes through the menu while working but keeps model choices locked', async () => {
+    mount([MODEL_DESCRIPTOR, PERMISSION_DESCRIPTOR], true)
+    expect(pill('Model').props.disabled).toBe(false)
+    await act(async () => pill('Model').props.onPress())
+    expect(rowByText('Opus 4.8').props.accessibilityState?.disabled).toBe(true)
+    expect(rowByText('Permissions').props.accessibilityState?.disabled).toBe(false)
+    await act(async () => rowByText('Permissions').props.onPress())
+    expect(rowByText('Full access').props.accessibilityState?.disabled).toBe(false)
+  })
+
   it('shows the permission pill before any model pill, and closes at once on a pick', async () => {
     mount([PERMISSION_DESCRIPTOR], true)
     expect(pill('Permissions').props).toMatchObject({
