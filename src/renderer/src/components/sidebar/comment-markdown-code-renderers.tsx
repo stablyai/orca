@@ -62,7 +62,10 @@ export function CommentMarkdownDocumentPre({
       {children}
     </CodeBlock>
   ) : (
-    <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
+    <pre
+      dir="ltr"
+      className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]"
+    >
       {children}
     </pre>
   )

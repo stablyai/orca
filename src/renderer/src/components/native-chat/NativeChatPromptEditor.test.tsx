@@ -33,6 +33,25 @@ function setup(value = '') {
   }
 }
 
+describe('native chat prompt direction', () => {
+  it('turns each line by the language most of its words are in', () => {
+    const { container } = setup('React هو مكتبة لبناء الواجهات\nI want to say مرحبا to the team')
+    const lines = [...container.querySelectorAll('[role="textbox"] p')]
+    expect(lines.map((line) => line.getAttribute('dir'))).toEqual(['rtl', 'ltr'])
+  })
+
+  it('starts a new line on Shift+Enter that turns on its own, sending the same text', () => {
+    const { input, container } = setup('React هو مكتبة لبناء الواجهات')
+    const textbox = within(container).getByRole('textbox')
+    act(() => input.setSelectionRange(input.value.length, input.value.length))
+    fireEvent.keyDown(textbox, { key: 'Enter', shiftKey: true })
+    act(() => input.insertText!('I want to say hello'))
+    const lines = [...container.querySelectorAll('[role="textbox"] p')]
+    expect(lines.map((line) => line.getAttribute('dir'))).toEqual(['rtl', 'ltr'])
+    expect(input.value).toBe('React هو مكتبة لبناء الواجهات\nI want to say hello')
+  })
+})
+
 describe('native chat skill editor', () => {
   it('renders only picker insertions as pills and serializes the exact invocation', async () => {
     const { input, container } = setup('Please $rev')

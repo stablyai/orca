@@ -27,6 +27,7 @@ import {
   promptTextPosition
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { NativeChatPromptDirection } from './native-chat-prompt-direction'
 
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   scopeKey?: string
@@ -74,6 +75,7 @@ export function NativeChatPromptEditor({
         }),
         NativeChatSkill,
         NativeChatFileReference,
+        NativeChatPromptDirection,
         Placeholder.configure({ placeholder: () => placeholderRef.current })
       ],
       content:

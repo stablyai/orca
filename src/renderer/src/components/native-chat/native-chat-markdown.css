@@ -38,6 +38,11 @@
   color: var(--chat-code-foreground);
 }
 
+/* Inline code in an Arabic sentence keeps its own direction, so `foo()` does not read `()foo`. */
+.native-chat-markdown :not(pre) > code {
+  unicode-bidi: plaintext;
+}
+
 .native-chat-markdown pre code {
   border: none;
   border-radius: 0;

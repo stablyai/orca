@@ -44,6 +44,7 @@ export function NativeChatCodeBlock({
 
   return (
     <div
+      dir="ltr"
       data-native-chat-code-block={code ? '' : undefined}
       className="group/code relative my-3 min-w-0 max-w-full overflow-hidden rounded-lg border border-chat-code-border bg-chat-code-surface"
     >
