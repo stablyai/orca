@@ -79,9 +79,8 @@ export function useFileExplorerIgnoredPaths({
           }
         })
         .catch(() => {
-          if (!canceled) {
-            setIgnoredPathResult({ activeWorktreeId, paths: [], worktreePath })
-          }
+          // A failed query is not an empty result. Keep the last successful
+          // result; getEffectiveFileExplorerIgnoredPaths guards worktree changes.
         })
     }
 
