@@ -109,6 +109,7 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {}
     } satisfies CmdJQuickActionContext
 
@@ -131,7 +132,7 @@ describe('Cmd+J quick action context', () => {
 
   it('applies the availability matrix across curated actions', () => {
     const workspaceActions = ['new-browser-tab', 'new-markdown-file', 'new-terminal-tab']
-    const currentWorkspaceActions = ['delete-workspace']
+    const currentWorkspaceActions = ['delete-workspace', 'toggle-pin-workspace']
     const workspaceAgnosticActions = ['create-workspace', 'add-quick-command']
     const actionById = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
     const baseContext = {
@@ -144,6 +145,7 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {}
     } satisfies CmdJQuickActionContext
 
@@ -225,6 +227,7 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {}
     })
 
@@ -252,6 +255,7 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {}
     })
 
@@ -308,6 +312,7 @@ describe('Cmd+J quick action context', () => {
         openNewTerminalTab: async () => {},
         openCreateWorkspace: () => {},
         deleteActiveWorkspace: () => {},
+        toggleActiveWorkspacePin: () => {},
         openAddQuickCommand: () => {}
       })
 
@@ -330,6 +335,7 @@ describe('Cmd+J quick action context', () => {
       },
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {}
     } satisfies CmdJQuickActionContext
 
@@ -362,6 +368,7 @@ describe('Cmd+J quick action context', () => {
       },
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {}
     } satisfies CmdJQuickActionContext
 
@@ -395,11 +402,35 @@ describe('Cmd+J quick action context', () => {
       deleteActiveWorkspace: () => {
         calls.push('delete')
       },
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {}
     } satisfies CmdJQuickActionContext
 
     await expect(action?.run(context)).resolves.toEqual({ status: 'ok' })
     expect(calls).toEqual(['delete'])
+  })
+
+  it('runs the pin toggle for the current workspace', async () => {
+    const calls: string[] = []
+    const action = getCmdJQuickActions().find((entry) => entry.id === 'toggle-pin-workspace')
+    const context = {
+      ...ctx({ activeGroupId: null }),
+      activeWorktree: null,
+      runtimeMode: 'local-desktop' as const,
+      openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
+      openNewMarkdownFile: async () => {},
+      openNewTerminalTab: async () => {},
+      openCreateWorkspace: () => {},
+      deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {
+        calls.push('toggle-pin')
+      },
+      openAddQuickCommand: () => {}
+    } satisfies CmdJQuickActionContext
+
+    await expect(action?.run(context)).resolves.toEqual({ status: 'ok' })
+    expect(calls).toEqual(['toggle-pin'])
   })
 
   it('offers and runs split actions only for an active movable chat', async () => {
@@ -415,6 +446,7 @@ describe('Cmd+J quick action context', () => {
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
       deleteActiveWorkspace: () => {},
+      toggleActiveWorkspacePin: () => {},
       openAddQuickCommand: () => {},
       canSplitActiveChat: true,
       splitActiveChat: (direction: string) => {

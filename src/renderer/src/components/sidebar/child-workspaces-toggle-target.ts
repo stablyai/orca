@@ -6,7 +6,7 @@ import {
 import type { AppState } from '@/store/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getHoveredWorkspaceIdentity } from './hovered-workspace-delete'
+import { getHoveredWorkspaceIdentity } from './hovered-sidebar-workspace-identity'
 import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import {
   computeVisibleWorktrees,

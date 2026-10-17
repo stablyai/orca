@@ -55,7 +55,16 @@ export function useWorktreeContextMenuCommands(args: {
     )
   }, [args])
   const handleTogglePin = useCallback(() => {
-    args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
+    // Qualify the write by the row's own host; a row without one keeps the bare-id lookup, since
+    // the owner index has no 'local' entry for a runtime-owned row that names no host.
+    args.setWorktreesPinnedAndReveal(
+      [
+        args.worktree.hostId
+          ? { worktreeId: args.worktree.id, executionHostId: args.worktree.hostId }
+          : args.worktree.id
+      ],
+      !args.worktree.isPinned
+    )
   }, [args])
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!args.repo) {

@@ -11,6 +11,10 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { runWorktreeDelete } from './delete-worktree-flow'
+import {
+  getHoveredWorkspaceIdentity,
+  type HoveredWorkspaceDocument
+} from './hovered-sidebar-workspace-identity'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
 const pendingFolderDeletes = new Set<string>()
@@ -32,8 +36,6 @@ type HoveredWorkspaceDeleteDependencies = {
   deleteWorktree: DeleteWorktree
   getCurrentState: () => CurrentWorkspaceState
 }
-type HoveredWorkspaceDocument = Pick<Document, 'activeElement' | 'querySelectorAll'>
-
 export type HoveredWorkspaceDeleteTarget =
   | {
       kind: 'folder'
@@ -42,18 +44,6 @@ export type HoveredWorkspaceDeleteTarget =
       workspaceKey: string
     }
   | { kind: 'worktree'; worktree: Worktree }
-
-export function getHoveredWorkspaceIdentity(
-  doc: HoveredWorkspaceDocument = document
-): { hostIdentity: string; workspaceId: string } | null {
-  const hoveredRows = doc.querySelectorAll<HTMLElement>(
-    '[data-worktree-sidebar] [role="option"][data-worktree-id]:hover'
-  )
-  const row = hoveredRows.item(hoveredRows.length - 1)
-  const workspaceId = row?.dataset.worktreeId
-  const hostIdentity = row?.dataset.worktreeHostIdentity
-  return workspaceId && hostIdentity ? { workspaceId, hostIdentity } : null
-}
 
 export function resolveHoveredWorkspaceDeleteTarget(
   state: HoveredWorkspaceDeleteState,
