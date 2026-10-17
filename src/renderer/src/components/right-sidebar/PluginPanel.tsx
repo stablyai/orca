@@ -10,7 +10,8 @@ import {
 } from '../../../../shared/plugins/plugin-panel-shell'
 import {
   callPanelActionViaPreload,
-  createPanelBridgeMessageHandler
+  createPanelBridgeMessageHandler,
+  subscribePanelMessages
 } from './plugin-panel-bridge-host'
 import { createPanelWatchdog } from './plugin-panel-watchdog'
 import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
@@ -108,6 +109,18 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     watchdog.start()
     return () => watchdog.stop()
   }, [loadedFrameKey, panelFrameKey, watchdog])
+
+  useEffect(() => {
+    const subscribe = window.api?.plugins?.onPanelMessage
+    if (!subscribe || !sessionToken || !panelFrameKey || loadedFrameKey !== panelFrameKey) {
+      return
+    }
+    return subscribePanelMessages({
+      sessionToken,
+      getPanelWindow: () => iframeRef.current?.contentWindow ?? null,
+      subscribe
+    })
+  }, [sessionToken, panelFrameKey, loadedFrameKey])
 
   useEffect(() => {
     if (!pluginKey || !panelId) {

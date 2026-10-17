@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { PluginPanelMessage } from '../../shared/plugins/plugin-panel-bridge'
 
 export type PluginPanelSessionBinding = {
   pluginKey: string
@@ -9,6 +10,7 @@ export type PluginPanelSessionBinding = {
 
 type PluginPanelSession = PluginPanelSessionBinding & {
   ownerKey: string
+  delivery?: { id: string; send: (message: PluginPanelMessage) => void }
 }
 
 const MAX_PANEL_SESSIONS = 1_024
@@ -67,6 +69,70 @@ export class PluginPanelSessions {
   revokeOwner(ownerKey: string): void {
     for (const [token, session] of this.sessions) {
       if (session.ownerKey === ownerKey) {
+        this.delete(token, session)
+      }
+    }
+  }
+
+  connect(
+    ownerKey: string,
+    token: string,
+    id: string,
+    send: (message: PluginPanelMessage) => void
+  ): boolean {
+    const session = this.sessions.get(token)
+    if (!session || session.ownerKey !== ownerKey) {
+      return false
+    }
+    session.delivery = { id, send }
+    return true
+  }
+
+  disconnect(ownerKey: string, token: string, id: string): void {
+    const session = this.sessions.get(token)
+    if (session?.ownerKey === ownerKey && session.delivery?.id === id) {
+      delete session.delivery
+    }
+  }
+
+  deliver(
+    pluginKey: string,
+    panelId: string,
+    message: PluginPanelMessage,
+    isCurrent: (binding: PluginPanelSessionBinding) => boolean
+  ): number {
+    let delivered = 0
+    for (const [token, session] of this.sessions) {
+      if (session.pluginKey !== pluginKey || session.panelId !== panelId) {
+        continue
+      }
+      if (!isCurrent(session)) {
+        this.delete(token, session)
+        continue
+      }
+      if (session.delivery) {
+        try {
+          session.delivery.send(message)
+          delivered += 1
+        } catch {
+          delete session.delivery
+        }
+      }
+    }
+    return delivered
+  }
+
+  revokePlugin(pluginKey: string): void {
+    for (const [token, session] of this.sessions) {
+      if (session.pluginKey === pluginKey) {
+        this.delete(token, session)
+      }
+    }
+  }
+
+  reconcile(isCurrent: (binding: PluginPanelSessionBinding) => boolean): void {
+    for (const [token, session] of this.sessions) {
+      if (!isCurrent(session)) {
         this.delete(token, session)
       }
     }

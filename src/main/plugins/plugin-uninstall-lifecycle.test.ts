@@ -179,3 +179,21 @@ it('preserves installed crash history while cancelling the existing restart back
   expect(service.findValidPlugin(key)).not.toBeNull()
   expect(service.getLogs(key)).toHaveLength(200)
 })
+
+it('revokes panel delivery and replay before reinstalling the same plugin', async () => {
+  const { service, install } = await createUninstallFixture()
+  const panels = [{ id: 'panel', title: 'Panel', entry: 'panel.html' }]
+  const key = await install('panel-messages', { panels })
+  service.panels.postMessage(key, 'panel', 'old installation')
+  const entry = await service.panels.open('owner', key, 'panel')
+  const receive = vi.fn()
+  expect(service.panels.connect('owner', entry!.sessionToken, 'sub', receive)).toBe(true)
+  expect(receive).toHaveBeenCalledOnce()
+  receive.mockClear()
+  await removeThroughPluginIpc(key)
+  expect(service.panels.connect('owner', entry!.sessionToken, 'sub', receive)).toBe(false)
+  await install('panel-messages', { panels })
+  const next = await service.panels.open('owner', key, 'panel')
+  expect(service.panels.connect('owner', next!.sessionToken, 'sub', receive)).toBe(true)
+  expect(receive).not.toHaveBeenCalled()
+})

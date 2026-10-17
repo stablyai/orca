@@ -1,3 +1,4 @@
+import { admitPluginPanelCall } from '../../shared/plugins/plugin-panel-call-admission'
 import { getBoundPluginHostMethod, type PluginHostServices } from './plugin-host-method-bindings'
 import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import { gatePluginHostCall as decidePluginHostCall } from '../../shared/plugins/plugin-capability-gate'
@@ -44,6 +45,16 @@ export async function executePluginHostCall(
   const bound = getBoundPluginHostMethod(input.method)
   if (!bound) {
     return { ok: false, code: 'unknown_method', error: `unknown host method: ${input.method}` }
+  }
+  if (input.method === 'panel.postMessage') {
+    const admission = input.services?.panelMessageAdmission
+    if (!admission) {
+      return { ok: false, code: 'unavailable', error: 'panel messages are not available' }
+    }
+    const refusal = admitPluginPanelCall(admission, input.pluginId, input.params)
+    if (refusal) {
+      return refusal
+    }
   }
   const parsedParams = bound.spec.params.safeParse(input.params)
   if (!parsedParams.success) {

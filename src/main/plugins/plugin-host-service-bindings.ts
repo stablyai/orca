@@ -33,6 +33,8 @@ export type PluginRuntimeDelegate = {
 export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
+  panelMessageAdmission?: PluginHostServices['panelMessageAdmission']
+  postPanelMessage?: PluginHostServices['postPanelMessage']
   subscribeEvents: (pluginKey: string, events: PluginEventName[]) => PluginEventName[]
 }): PluginHostServices {
   const { delegate, pluginsDataDir, subscribeEvents } = input
@@ -83,6 +85,8 @@ export function bindPluginHostServices(input: {
       set: (key, itemKey, value) =>
         new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
     },
+    panelMessageAdmission: input.panelMessageAdmission,
+    postPanelMessage: input.postPanelMessage,
     subscribeEvents
   }
 }

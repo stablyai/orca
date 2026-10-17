@@ -3,6 +3,17 @@
 // default export receives the `orca` API: command registration, event
 // handlers, and the capability-gated host API.
 export default function activate(orca) {
+  let ticks = 0
+  const publish = () =>
+    orca.host
+      .call('panel.postMessage', {
+        panelId: 'hello',
+        data: { ticks: ++ticks, time: new Date().toISOString() }
+      })
+      .catch((error) => orca.log(`Panel update failed: ${error.message}`))
+  void publish()
+  const timer = setInterval(publish, 3000)
+
   orca.commands.register('hello-ping', async (args) => {
     const stored = await orca.host.call('storage.get', { key: 'pings' })
     const count = (typeof stored?.value === 'number' ? stored.value : 0) + 1
@@ -21,4 +32,5 @@ export default function activate(orca) {
   orca.events.on('agent.status.changed', (payload) => {
     orca.log(`agent status: ${payload.state} in ${payload.worktreeId ?? 'unknown worktree'}`)
   })
+  return () => clearInterval(timer)
 }

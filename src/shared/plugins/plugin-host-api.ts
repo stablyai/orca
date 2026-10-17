@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isPluginPanelData, type PluginPanelJsonValue } from './plugin-panel-data'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
 
@@ -69,6 +70,17 @@ export const PLUGIN_STORAGE_VALUE_MAX_BYTES = 256 * 1024
 export const PLUGIN_STORAGE_TOTAL_MAX_BYTES = 5 * 1024 * 1024
 export const PLUGIN_STORAGE_KEY_LIMIT = 1024
 
+export const panelPostMessageParams = z
+  .object({
+    panelId: z.string().min(1).max(128),
+    data: z.custom<PluginPanelJsonValue>(
+      isPluginPanelData,
+      'expected JSON data within the panel size limit'
+    )
+  })
+  .strict()
+const panelPostMessageResult = z.object({ delivered: z.number().int().nonnegative() })
+
 const storageGetParams = z.object({ key: storageKeySchema })
 const storageGetResult = z.object({ value: pluginJsonValueSchema })
 const storageSetParams = z.object({ key: storageKeySchema, value: pluginJsonValueSchema })
@@ -102,7 +114,7 @@ export type PluginHostMethodSpec = {
   /** Machine-readable resource boundary enforced by the host binding. */
   scope: 'active-worktree' | 'explicit-terminal' | 'plugin-private' | 'desktop' | 'host-events'
   stability: 'experimental'
-  capability: PluginCapabilityKind
+  capability: PluginCapabilityKind | null
   /** Mutations are audit-logged with actor `plugin:<id>`. */
   mutation: boolean
   /** Whether sandboxed panels may call this over the postMessage bridge.
@@ -149,6 +161,16 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: true,
     params: notificationsShowParams,
     result: notificationsShowResult
+  }),
+  spec({
+    name: 'panel.postMessage',
+    since: '1.0',
+    scope: 'plugin-private',
+    capability: null,
+    mutation: false,
+    panel: false,
+    params: panelPostMessageParams,
+    result: panelPostMessageResult
   }),
   spec({
     name: 'storage.get',

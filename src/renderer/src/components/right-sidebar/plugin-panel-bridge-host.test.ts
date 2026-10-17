@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PluginPanelActionOutcome } from '../../../../shared/plugins/plugin-panel-bridge'
+import type {
+  PluginPanelActionOutcome,
+  PluginPanelMessage
+} from '../../../../shared/plugins/plugin-panel-bridge'
 import {
   createPanelMessageBudget,
   type PanelMessageBudget
 } from '../../../../shared/plugins/plugin-panel-message-budget'
-import { createPanelBridgeMessageHandler } from './plugin-panel-bridge-host'
+import { createPanelBridgeMessageHandler, subscribePanelMessages } from './plugin-panel-bridge-host'
 
 type FakePanelWindow = Window & { postMessage: ReturnType<typeof vi.fn> }
 
@@ -326,5 +329,36 @@ describe('createPanelBridgeMessageHandler', () => {
     )
 
     expect(onPong).not.toHaveBeenCalled()
+  })
+})
+
+describe('subscribePanelMessages', () => {
+  it('relays replay and live data only into the attached iframe', () => {
+    const panel = createFakePanelWindow()
+    let current: Window | null = panel
+    let receive: ((message: PluginPanelMessage) => void) | undefined
+    const unsubscribe = vi.fn()
+    const message: PluginPanelMessage = { type: 'orca-panel-message', data: { counter: 1 } }
+    const close = subscribePanelMessages({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => current,
+      subscribe: (token, callback) => {
+        expect(token).toBe(SESSION_TOKEN)
+        receive = callback
+        callback(message)
+        return unsubscribe
+      }
+    })
+    expect(panel.postMessage).toHaveBeenCalledExactlyOnceWith(message, '*')
+    receive?.(message)
+    expect(panel.postMessage).toHaveBeenCalledTimes(2)
+    current = createFakePanelWindow()
+    receive?.(message)
+    expect(panel.postMessage).toHaveBeenCalledTimes(2)
+    close()
+    current = panel
+    receive?.(message)
+    expect(panel.postMessage).toHaveBeenCalledTimes(2)
+    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 })

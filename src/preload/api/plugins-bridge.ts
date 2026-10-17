@@ -1,7 +1,8 @@
 import { ipcRenderer } from 'electron'
 import type {
   PluginPanelActionOutcome,
-  PluginPanelEntry
+  PluginPanelEntry,
+  PluginPanelMessage
 } from '../../shared/plugins/plugin-panel-bridge'
 import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
@@ -31,6 +32,34 @@ export const pluginsApi = {
     action: string
     params?: unknown
   }): Promise<PluginPanelActionOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
+  onPanelMessage: (
+    sessionToken: string,
+    callback: (message: PluginPanelMessage) => void
+  ): (() => void) => {
+    const subscriptionId = crypto.randomUUID()
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      frame: { sessionToken: string; subscriptionId: string; message: PluginPanelMessage }
+    ): void => {
+      if (frame.sessionToken === sessionToken && frame.subscriptionId === subscriptionId) {
+        callback(frame.message)
+      }
+    }
+    ipcRenderer.on('plugins:panelMessage', listener)
+    ipcRenderer.send('plugins:panelMessageSubscription', {
+      sessionToken,
+      subscriptionId,
+      enabled: true
+    })
+    return () => {
+      ipcRenderer.removeListener('plugins:panelMessage', listener)
+      ipcRenderer.send('plugins:panelMessageSubscription', {
+        sessionToken,
+        subscriptionId,
+        enabled: false
+      })
+    }
+  },
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),
   listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),

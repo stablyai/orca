@@ -153,8 +153,10 @@ export class PluginWorkerManager {
           slots: this.slots,
           entryPath: this.options.entryPath,
           factory: this.options.workerFactory,
-          executeHostCall: (method, params) =>
-            this.options.executeHostCall(spec.pluginKey, method, params),
+          executeHostCall: async (method, params) => {
+            this.throwIfCancelled(spec.pluginKey, generation, signal)
+            return this.options.executeHostCall(spec.pluginKey, method, params)
+          },
           log,
           assertActive: () => this.throwIfCancelled(spec.pluginKey, generation, signal),
           onExit: (record, code) => this.handleUnexpectedExit(spec.pluginKey, record, code)

@@ -47,6 +47,7 @@
     <select id="terms" hidden></select>
     <button id="send" hidden>Type "echo hi from plugin" into selected terminal</button>
     <button id="notify">Show a notification</button>
+    <p id="live">Run Hello: Ping to start the live worker counter.</p>
     <p class="status" id="status"></p>
     <script>
       'use strict'
@@ -69,7 +70,12 @@
       }
 
       window.addEventListener('message', function (event) {
+        if (event.source !== window.parent) return
         var data = event.data
+        if (data && data.type === 'orca-panel-message') {
+          document.getElementById('live').textContent = 'Worker tick ' + data.data.ticks + ' at ' + data.data.time
+          return
+        }
         if (!data || data.type !== 'orca-panel-action-result') return
         var resolve = pending[data.requestId]
         if (!resolve) return

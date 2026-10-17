@@ -5,6 +5,7 @@ import {
   parsePanelActionRequest,
   readPanelPongId,
   type PluginPanelActionOutcome,
+  type PluginPanelMessage,
   type PluginPanelActionResultMessage
 } from '../../../../shared/plugins/plugin-panel-bridge'
 import {
@@ -179,5 +180,24 @@ export function createPanelBridgeMessageHandler(
           error: error instanceof Error ? error.message : String(error)
         })
       })
+  }
+}
+
+/** Attach after iframe load so retained state reaches the panel's listener. */
+export function subscribePanelMessages(options: {
+  sessionToken: string
+  getPanelWindow: () => Window | null
+  subscribe: (sessionToken: string, callback: (message: PluginPanelMessage) => void) => () => void
+}): () => void {
+  let active = true
+  const panelWindow = options.getPanelWindow()
+  const unsubscribe = options.subscribe(options.sessionToken, (message) => {
+    if (active && panelWindow && options.getPanelWindow() === panelWindow) {
+      panelWindow.postMessage(message, '*')
+    }
+  })
+  return () => {
+    active = false
+    unsubscribe()
   }
 }
