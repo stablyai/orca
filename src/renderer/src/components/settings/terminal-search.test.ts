@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
-import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
+import {
+  getAppearancePaneSearchEntries,
+  getCodeEditorAppearanceSearchEntries,
+  getSidebarEntries
+} from './appearance-search'
 import {
   getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('indexes desktop administrator mode only for Windows clients', () => {
@@ -180,8 +184,15 @@ describe('getTerminalPaneSearchEntries', () => {
   it.each(['ghostty', 'warp', 'yaml'])(
     'omits desktop-only %s search results on web clients',
     (query) => {
-      const desktopEntries = getAppearancePaneSearchEntries()
-      const webEntries = getAppearancePaneSearchEntries({ showDesktopThemeImports: false })
+      // Why: editor theme labels (e.g. "Ghostty Default Style Dark") are searchable on every
+      // client; only the desktop theme-import entries must disappear on web.
+      const codeEditorTitles = new Set(getCodeEditorAppearanceSearchEntries().map((e) => e.title))
+      const withoutCodeEditor = (entries: SettingsSearchEntry[]): SettingsSearchEntry[] =>
+        entries.filter((entry) => !codeEditorTitles.has(entry.title))
+      const desktopEntries = withoutCodeEditor(getAppearancePaneSearchEntries())
+      const webEntries = withoutCodeEditor(
+        getAppearancePaneSearchEntries({ showDesktopThemeImports: false })
+      )
 
       expect(matchesSettingsSearch(query, desktopEntries)).toBe(true)
       expect(matchesSettingsSearch(query, webEntries)).toBe(false)
