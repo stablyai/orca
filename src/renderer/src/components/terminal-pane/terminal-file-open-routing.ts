@@ -37,6 +37,7 @@ export {
   type TerminalFileContext
 } from './terminal-file-path-mapping'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { ShellFileLocation } from '../../../../shared/shell-open-types'
 
 export type FileOpenFailure = {
   /** `missing` is a verified absence; `unverifiable` means the host could not answer (dropped SSH, timeout, denied path). */
@@ -208,9 +209,14 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && canOpenWithSystemDefault) {
       // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
       // user's OS file associations without adding editor-specific settings.
+      const location: ShellFileLocation | undefined =
+        line !== null && !statResult.isDirectory
+          ? { line, ...(column !== null ? { column } : {}) }
+          : undefined
       const openedWithSystemDefault = await window.api.shell.openFilePath(
         mappedFilePath,
-        LOCAL_EXECUTION_HOST_ID
+        LOCAL_EXECUTION_HOST_ID,
+        location
       )
       if (openedWithSystemDefault || statResult.isDirectory) {
         return

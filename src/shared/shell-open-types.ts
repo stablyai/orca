@@ -1,5 +1,10 @@
 import type { ExecutionHostId } from './execution-host'
 
+export type ShellFileLocation = {
+  line: number
+  column?: number
+}
+
 export type ShellOpenExternalEditorRequest = {
   path: string
   command?: string

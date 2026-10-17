@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellFileLocation
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import type { Store } from '../persistence'
@@ -17,6 +18,7 @@ import {
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
+import { openDefaultEditorAtLocation } from '../default-editor-file-location'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isLocallyOwned,
@@ -101,7 +103,11 @@ async function openInExternalEditor(
   }
 }
 
-async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): Promise<boolean> {
+async function openWithSystemDefault(
+  pathValue: string,
+  ownerHostId: unknown,
+  location?: ShellFileLocation
+): Promise<boolean> {
   if (!isLocallyOwned(ownerHostId)) {
     return false
   }
@@ -110,6 +116,9 @@ async function openWithSystemDefault(pathValue: string, ownerHostId: unknown): P
     return false
   }
   try {
+    if (await openDefaultEditorAtLocation(target.path, location)) {
+      return true
+    }
     const errorMessage = await shell.openPath(target.path)
     return errorMessage.length === 0
   } catch {
@@ -156,44 +165,51 @@ export function registerShellHandlers(store: Pick<Store, 'getSshTarget'>): void 
 
   ipcMain.handle(
     'shell:openFilePath',
-    async (_event, filePath: string, ownerHostId: unknown): Promise<boolean> =>
-      openWithSystemDefault(filePath, ownerHostId)
+    async (
+      _event,
+      filePath: string,
+      ownerHostId: unknown,
+      location?: ShellFileLocation
+    ): Promise<boolean> => openWithSystemDefault(filePath, ownerHostId, location)
   )
 
-  ipcMain.handle('shell:openFileUri', async (_event, rawUri: string, ownerHostId: unknown) => {
-    if (!isLocallyOwned(ownerHostId)) {
-      return
-    }
-    let parsed: URL
-    try {
-      parsed = new URL(rawUri)
-    } catch {
-      return
-    }
+  ipcMain.handle(
+    'shell:openFileUri',
+    async (_event, rawUri: string, ownerHostId: unknown, location?: ShellFileLocation) => {
+      if (!isLocallyOwned(ownerHostId)) {
+        return
+      }
+      let parsed: URL
+      try {
+        parsed = new URL(rawUri)
+      } catch {
+        return
+      }
 
-    if (parsed.protocol !== 'file:') {
-      return
-    }
+      if (parsed.protocol !== 'file:') {
+        return
+      }
 
-    // Only local files are supported. Remote hosts are intentionally rejected.
-    if (parsed.hostname && parsed.hostname !== 'localhost') {
-      return
-    }
+      // Only local files are supported. Remote hosts are intentionally rejected.
+      if (parsed.hostname && parsed.hostname !== 'localhost') {
+        return
+      }
 
-    let filePath: string
-    try {
-      filePath = fileURLToPath(parsed)
-    } catch {
-      return
-    }
+      let filePath: string
+      try {
+        filePath = fileURLToPath(parsed)
+      } catch {
+        return
+      }
 
-    const target = await validateLocalPathTarget(filePath)
-    if (!target.ok) {
-      return
-    }
+      const target = await validateLocalPathTarget(filePath)
+      if (!target.ok) {
+        return
+      }
 
-    await openWithSystemDefault(target.path, ownerHostId)
-  })
+      await openWithSystemDefault(target.path, ownerHostId, location)
+    }
+  )
 
   ipcMain.handle('shell:pathsExist', async (_event, paths: string[]): Promise<boolean[]> => {
     validatePathExistenceBatch(paths)
