@@ -1,4 +1,5 @@
 import { net } from 'electron'
+import { cancelUnreadResponseBody } from './lib/unread-response-body'
 import { compareVersions, isValidVersion } from './updater-fallback'
 import { parseRolloutConfig, recordRolloutConfig } from './updater/rollout-flags'
 
@@ -14,6 +15,7 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
       signal: AbortSignal.timeout(5000)
     })
     if (!res.ok) {
+      await cancelUnreadResponseBody(res)
       return null
     }
 
