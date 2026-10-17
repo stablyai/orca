@@ -1,38 +1,23 @@
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
-import { translate } from '@/i18n/i18n'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
-import type { FileExplorerOperationOwner } from './file-explorer-types'
 import {
-  captureFileExplorerOperationGuard,
-  type FileExplorerOperationGuard
-} from './file-explorer-operation-owner'
+  useFileExplorerImportOperation,
+  type FileExplorerImportParams,
+  type FileExplorerImportDestination
+} from './use-file-explorer-import-operation'
 
 /** Row attribute naming the folder an OS file dropped on that row imports into. */
 export const FILE_EXPLORER_DROP_DIR_ATTRIBUTE = 'data-file-explorer-drop-dir'
 
-type UseFileExplorerImportParams = {
-  worktreeId: string | null
-  worktreePath: string | null
-  displayRootPath?: string | null
-  refreshDir: (dirPath: string) => Promise<void>
+type UseFileExplorerImportParams = FileExplorerImportParams & {
   clearNativeDragState: () => void
-  setSelectedPath: (path: string | null) => void
-  operationOwner?: FileExplorerOperationOwner
 }
 
-type FileExplorerDropDestination =
-  | {
-      worktreeId: string
-      worktreePath: string
-      destinationDir: string
-      guard: FileExplorerOperationGuard
-    }
-  | { error: unknown }
+type FileExplorerDropDestination = FileExplorerImportDestination | { error: unknown }
 
 function readDropDir(root: HTMLElement | null, target: EventTarget | null): string | null {
   const row =
@@ -55,11 +40,14 @@ export function useFileExplorerImport({
 }: UseFileExplorerImportParams): (root: HTMLElement | null) => void {
   const rootRef = useRef<HTMLElement | null>(null)
   const [sequence] = useState(createOsFileDropSequence)
-  // Committed scope, read after the import to decide whether to select the result.
-  const shownRef = useRef({ worktreeId, displayRootPath })
-  useLayoutEffect(() => {
-    shownRef.current = { worktreeId, displayRootPath }
-  }, [worktreeId, displayRootPath])
+  const { captureDestination, importPaths } = useFileExplorerImportOperation({
+    worktreeId,
+    worktreePath,
+    displayRootPath,
+    refreshDir,
+    setSelectedPath,
+    operationOwner
+  })
   const resolveDropDir = (event: DragEvent): string | null => {
     // Why: worktreePath is null while the files view is hidden behind search or a closed sidebar.
     if (!worktreeId || !worktreePath || !displayRootPath) {
@@ -79,8 +67,7 @@ export function useFileExplorerImport({
         return null
       }
       try {
-        const guard = captureFileExplorerOperationGuard(worktreeId, operationOwner)
-        return { worktreeId, worktreePath, destinationDir, guard }
+        return captureDestination(destinationDir)
       } catch (error) {
         return { error }
       }
@@ -98,61 +85,7 @@ export function useFileExplorerImport({
         if ('error' in destination) {
           throw destination.error
         }
-        const { destinationDir, guard } = destination
-        guard.assertCurrent()
-        const { results } = await importExternalPathsToRuntime(
-          {
-            target: guard.route.target,
-            worktreeId: destination.worktreeId,
-            worktreePath: destination.worktreePath,
-            connectionId: guard.route.connectionId,
-            expectedExecutionHostId: guard.route.expectedExecutionHostId,
-            expectedSshTargetId: guard.route.expectedSshTargetId,
-            expectedSshConnectionGeneration: guard.route.expectedSshConnectionGeneration
-          },
-          prepared.paths,
-          destinationDir,
-          { assertCurrent: guard.assertCurrent }
-        )
-
-        // Refresh the destination directory once per gesture
-        await refreshDir(destinationDir)
-
-        // Why: only select (highlight) the first imported file — don't trigger
-        // the full reveal machinery because watcher refreshes can otherwise
-        // snap the tree viewport away from the user's drop target.
-        const imported = results.filter((r) => r.status === 'imported')
-        const skipped = results.filter((r) => r.status === 'skipped')
-        const failed = results.filter((r) => r.status === 'failed')
-
-        const shown = shownRef.current
-        if (
-          imported.length > 0 &&
-          shown.worktreeId === destination.worktreeId &&
-          getRelativePathInsideRoot(imported[0].destPath, shown.displayRootPath) !== null
-        ) {
-          setSelectedPath(imported[0].destPath)
-        }
-
-        if (failed.length > 0) {
-          const noun = failed.length === 1 ? 'file' : 'files'
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.useFileExplorerImport.132fd0e1e9',
-              'Failed to import {{value0}} {{value1}}.',
-              { value0: failed.length, value1: noun }
-            )
-          )
-        } else if (skipped.length > 0 && imported.length === 0) {
-          const noun = skipped.length === 1 ? 'file' : 'files'
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.useFileExplorerImport.25919b2050',
-              'Skipped {{value0}} {{value1}}.',
-              { value0: skipped.length, value1: noun }
-            )
-          )
-        }
+        await importPaths(destination, prepared.paths)
       } catch (err) {
         toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))
       } finally {

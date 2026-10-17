@@ -221,6 +221,12 @@ export function FileExplorerFilesTreePane({
           onStartNew={startNew}
           onStartRename={handleStartRename}
           onDuplicate={handleDuplicate}
+          onPasteImage={
+            paneState.imagePaste.canPasteImage || paneState.imagePaste.isPastingImage
+              ? paneState.imagePaste.pasteImage
+              : undefined
+          }
+          isPastingImage={paneState.imagePaste.isPastingImage}
           onAddFolderAsProject={handleAddFolderAsProject}
           canAddFolderAsProject={(node) => canShowAddAsProjectAction(node, activeRepo)}
           onOpenInTerminal={handleOpenInTerminal}

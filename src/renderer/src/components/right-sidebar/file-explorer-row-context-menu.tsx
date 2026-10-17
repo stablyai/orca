@@ -11,6 +11,7 @@ import {
   Globe,
   ListCollapse,
   Pencil,
+  ClipboardPaste,
   Search,
   SquareTerminal,
   Trash2
@@ -24,6 +25,8 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { formatKeybindingList } from '../../../../shared/keybindings'
 import { detectLanguage } from '@/lib/language-detect'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { translate } from '@/i18n/i18n'
@@ -76,6 +79,8 @@ type FileExplorerRowContextMenuProps = Pick<
   | 'onStartNew'
   | 'onStartRename'
   | 'onDuplicate'
+  | 'onPasteImage'
+  | 'isPastingImage'
   | 'onAddFolderAsProject'
   | 'canAddAsProject'
   | 'onOpenInTerminal'
@@ -101,6 +106,8 @@ export function FileExplorerRowContextMenu({
   onStartNew,
   onStartRename,
   onDuplicate,
+  onPasteImage,
+  isPastingImage,
   onAddFolderAsProject,
   canAddAsProject,
   onOpenInTerminal,
@@ -166,6 +173,15 @@ export function FileExplorerRowContextMenu({
         <ContextMenuItem onSelect={handleCopyFile}>
           <Copy />
           {translate('auto.components.right.sidebar.FileExplorerRow.98a79948b3', 'Copy')}
+        </ContextMenuItem>
+      )}
+      {onPasteImage && (
+        <ContextMenuItem disabled={isPastingImage} onSelect={() => onPasteImage(node)}>
+          <ClipboardPaste />
+          {translate('fileExplorer.pasteImage', 'Paste Image')}
+          <ContextMenuShortcut>
+            {formatKeybindingList(['Mod+V'], getShortcutPlatform())}
+          </ContextMenuShortcut>
         </ContextMenuItem>
       )}
       <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>

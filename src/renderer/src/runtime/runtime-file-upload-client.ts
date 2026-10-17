@@ -30,7 +30,8 @@ export async function uploadRuntimeFileWithoutClobber(
   source: RuntimeUploadSource,
   expectedSshConnectionGeneration?: number,
   expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
+  expectedExecutionHostId?: 'local' | `ssh:${string}`,
+  requireExistingParent?: boolean
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
@@ -45,6 +46,7 @@ export async function uploadRuntimeFileWithoutClobber(
         expected: source.expected,
         worktree: toRuntimeWorktreeSelector(worktreeId),
         relativePath: tempRelativePath,
+        ...(requireExistingParent ? { requireExistingParent: true } : {}),
         expectedSshTargetId,
         expectedSshConnectionGeneration,
         expectedExecutionHostId,
@@ -63,6 +65,7 @@ export async function uploadRuntimeFileWithoutClobber(
         worktree: toRuntimeWorktreeSelector(worktreeId),
         tempRelativePath,
         finalRelativePath: relativePath,
+        ...(requireExistingParent ? { requireExistingParent: true } : {}),
         expectedSshTargetId,
         expectedSshConnectionGeneration,
         expectedExecutionHostId

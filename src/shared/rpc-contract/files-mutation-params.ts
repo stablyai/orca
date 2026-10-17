@@ -37,6 +37,7 @@ export const FileWriteBase64 = FileMutationOpen.extend({
 })
 
 export const FileWriteBase64Chunk = FileWriteBase64.extend({
+  requireExistingParent: z.boolean().optional(),
   append: z.boolean().optional()
 })
 
@@ -69,6 +70,7 @@ export const FileCopy = WorktreeSelector.extend({
 })
 
 export const FileCommitUpload = WorktreeSelector.extend({
+  requireExistingParent: z.boolean().optional(),
   expectedExecutionHostId: z.string().min(1).optional(),
   expectedSshTargetId: z.string().min(1).optional(),
   expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),

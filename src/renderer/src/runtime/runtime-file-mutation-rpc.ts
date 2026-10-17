@@ -1,5 +1,6 @@
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
+import { FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import {
   captureRuntimeEnvironmentRequestRevision,
@@ -18,13 +19,20 @@ export type RuntimeFileImportSession = {
 
 export async function assertRuntimeFileMutationCapability(
   target: RuntimeFileMutationTarget,
-  expectedEnvironmentPairingRevision: number | undefined
+  expectedEnvironmentPairingRevision: number | undefined,
+  requireExistingParent = false
 ): Promise<string> {
   const status = await callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, {
     timeoutMs: 15_000,
     expectedEnvironmentPairingRevision
   })
   assertFileMutationOwnershipCapability(status)
+  if (
+    requireExistingParent &&
+    !status.capabilities?.includes(FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY)
+  ) {
+    throw new Error('Pasting images requires a newer Orca server. Update the HUB and try again.')
+  }
   return status.runtimeId
 }
 

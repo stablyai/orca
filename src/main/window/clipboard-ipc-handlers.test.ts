@@ -255,6 +255,12 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     const untrustedEvent = makeClipboardEvent({ id: 42 })
+    expect(() => handlers.get('clipboard:stageImageForImport')?.(untrustedEvent)).toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
+    expect(() => handlers.get('clipboard:releaseImageImport')?.(untrustedEvent, 'handle')).toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
     await expect(handlers.get('clipboard:readText')?.(untrustedEvent)).rejects.toThrow(
       'Unauthorized clipboard IPC sender'
     )

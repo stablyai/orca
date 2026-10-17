@@ -9,42 +9,82 @@ const MAX_STEPS = 50
 type ExplorerOp = {
   undo: () => Promise<void>
   redo: () => Promise<void>
+  dispose?: () => Promise<unknown> | void
 }
 
 const past: ExplorerOp[] = []
 const future: ExplorerOp[] = []
+let running = false
+let revision = 0
+
+function dispose(op: ExplorerOp | undefined): void {
+  if (op?.dispose) {
+    void Promise.resolve()
+      .then(op.dispose)
+      .catch((error) => {
+        console.error('Failed to release file explorer undo resources:', error)
+      })
+  }
+}
 
 export function commitFileExplorerOp(op: ExplorerOp): void {
+  revision += 1
   past.push(op)
   if (past.length > MAX_STEPS) {
-    past.shift()
+    dispose(past.shift())
   }
+  future.forEach(dispose)
   future.length = 0
 }
 
 export function clearFileExplorerUndoHistory(): void {
+  revision += 1
+  past.forEach(dispose)
+  future.forEach(dispose)
   past.length = 0
   future.length = 0
 }
 
-export async function undoFileExplorer(): Promise<boolean> {
-  const op = past.pop()
+async function runOperation(
+  source: ExplorerOp[],
+  destination: ExplorerOp[],
+  action: 'undo' | 'redo'
+): Promise<boolean> {
+  if (running) {
+    return false
+  }
+  const op = source.pop()
   if (!op) {
     return false
   }
-  await op.undo()
-  future.push(op)
-  return true
+  running = true
+  const startedAt = revision
+  try {
+    await op[action]()
+    if (revision === startedAt) {
+      destination.push(op)
+    } else {
+      dispose(op)
+    }
+    return true
+  } catch (error) {
+    if (revision === startedAt) {
+      source.push(op)
+    } else {
+      dispose(op)
+    }
+    throw error
+  } finally {
+    running = false
+  }
 }
 
-export async function redoFileExplorer(): Promise<boolean> {
-  const op = future.pop()
-  if (!op) {
-    return false
-  }
-  await op.redo()
-  past.push(op)
-  return true
+export function undoFileExplorer(): Promise<boolean> {
+  return runOperation(past, future, 'undo')
+}
+
+export function redoFileExplorer(): Promise<boolean> {
+  return runOperation(future, past, 'redo')
 }
 
 export function fileExplorerHasUndo(): boolean {

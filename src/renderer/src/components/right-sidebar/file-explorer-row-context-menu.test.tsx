@@ -76,7 +76,10 @@ const fileNode: TreeNode = {
 
 function renderRevealItem(
   owner: Partial<
-    Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId' | 'node'>
+    Pick<
+      React.ComponentProps<typeof FileExplorerRowContextMenu>,
+      'connectionId' | 'node' | 'onPasteImage' | 'isPastingImage'
+    >
   > = {}
 ): ItemProps | undefined {
   renderToStaticMarkup(
@@ -119,6 +122,33 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
     storeState.activeWorkspaceExecutionHostId = null
     storeState.settings.activeRuntimeEnvironmentId = null
     revealInFileManager.mockReset()
+  })
+
+  it('hides image paste when the desktop capability is unavailable', () => {
+    renderRevealItem()
+    expect(items.list.flatMap((item) => React.Children.toArray(item.children))).not.toContain(
+      'Paste Image'
+    )
+  })
+
+  it.each([false, true])('pastes into the context row, including folders (%s)', (isDirectory) => {
+    const node = { ...fileNode, isDirectory }
+    const onPasteImage = vi.fn()
+    renderRevealItem({ node, onPasteImage })
+    const paste = items.list.find((item) =>
+      React.Children.toArray(item.children).includes('Paste Image')
+    )
+    expect(paste).toBeDefined()
+    paste?.onSelect?.()
+    expect(onPasteImage).toHaveBeenCalledExactlyOnceWith(node)
+  })
+
+  it('keeps image paste visible and disabled during an import', () => {
+    renderRevealItem({ onPasteImage: vi.fn(), isPastingImage: true })
+    const paste = items.list.find((item) =>
+      React.Children.toArray(item.children).includes('Paste Image')
+    )
+    expect(paste?.disabled).toBe(true)
   })
 
   it.each(['runtime:remote', 'ssh:nested'] as const)(

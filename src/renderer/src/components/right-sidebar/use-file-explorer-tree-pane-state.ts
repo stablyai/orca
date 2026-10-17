@@ -13,6 +13,8 @@ import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { useFileExplorerImport } from './useFileExplorerImport'
+import { useFileExplorerImagePaste } from './use-file-explorer-image-paste'
+import { useFileExplorerPasteEvents } from './use-file-explorer-paste-events'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'
 import { useFileExplorerNodeCommands } from './use-file-explorer-node-commands'
 import { useFileExplorerRowScrolling } from './use-file-explorer-row-scrolling'
@@ -58,6 +60,7 @@ type UseFileExplorerTreePaneStateResult = {
   handlers: ReturnType<typeof useFileExplorerHandlers>
   nodeCommands: ReturnType<typeof useFileExplorerNodeCommands>
   fileDropOwnerRef: (root: HTMLElement | null) => void
+  imagePaste: ReturnType<typeof useFileExplorerImagePaste>
 }
 
 /**
@@ -229,6 +232,21 @@ export function useFileExplorerTreePaneState({
     operationOwner: rootCache?.operationOwner
   })
 
+  const imagePaste = useFileExplorerImagePaste({
+    displayRootPath,
+    worktreePath: visibleFilesWorktreePath,
+    worktreeId: activeWorktreeId,
+    refreshDir,
+    setSelectedPath: setSingleSelectedPath,
+    revealPath: (path) => {
+      if (activeWorktreeId) {
+        useAppStore.getState().revealInExplorer(activeWorktreeId, path)
+      }
+    },
+    operationOwner: rootCache?.operationOwner,
+    selectedNode
+  })
+
   const rowScrolling = useFileExplorerRowScrolling({
     onRevealOutsideRoot,
     displayRootPath,
@@ -246,6 +264,14 @@ export function useFileExplorerTreePaneState({
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
     openFiles
+  })
+
+  useFileExplorerPasteEvents({
+    containerRef: rowScrolling.explorerShellRef,
+    rowProjection,
+    selectedNode,
+    isEditing: inlineInputState.inlineInput !== null,
+    imagePaste
   })
 
   const handlers = useFileExplorerHandlers({
@@ -295,6 +321,7 @@ export function useFileExplorerTreePaneState({
     rowScrolling,
     handlers,
     nodeCommands,
-    fileDropOwnerRef
+    fileDropOwnerRef,
+    imagePaste
   }
 }

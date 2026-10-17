@@ -219,6 +219,9 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
+// Older hosts create upload parents even when the destination was removed.
+export const FILE_UPLOAD_EXISTING_PARENT_RUNTIME_CAPABILITY =
+  'files.upload-existing-parent.v1' as const
 export const GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY = 'github.markPRReadyForReview' as const
 export const GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE =
   'Marking a pull request ready requires a newer Orca server. Update the server and try again.'

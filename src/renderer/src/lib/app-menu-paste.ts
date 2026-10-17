@@ -9,7 +9,7 @@ import { findOwnedTextControlPasteTarget } from './text-control-paste-ownership'
 export const APP_MENU_PASTE_EVENT = 'orca-app-menu-paste'
 
 export type AppMenuPasteRequestResult =
-  | { status: 'handled'; target: 'terminal' | 'text-control' }
+  | { status: 'handled'; target: 'owned-target' | 'text-control' }
   | { status: 'native-fallback'; reason: 'no-owned-target' | 'clipboard-read-failed' }
   | {
       status: 'rejected'
@@ -69,7 +69,7 @@ export async function handleAppMenuPasteRequest({
 }: AppMenuPasteRequestDeps): Promise<AppMenuPasteRequestResult> {
   const startedAtMs = getNowMs()
   if (dispatchOwnedPasteEvent()) {
-    return { status: 'handled', target: 'terminal' }
+    return { status: 'handled', target: 'owned-target' }
   }
 
   const target = findFocusedAppMenuTextControlPasteTarget(getActiveElement())

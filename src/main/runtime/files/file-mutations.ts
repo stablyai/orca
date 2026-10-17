@@ -69,7 +69,8 @@ export class RuntimeFileMutations {
     append: boolean,
     expectedSshConnectionGeneration?: number,
     expectedSshTargetId?: string,
-    expectedExecutionHostId?: string
+    expectedExecutionHostId?: string,
+    requireExistingParent?: boolean
   ): Promise<{ ok: true }> {
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
@@ -82,7 +83,8 @@ export class RuntimeFileMutations {
       requireRuntimeFileProvider(target, this.host).writeFileBase64Chunk(
         target.path,
         contentBase64,
-        append
+        append,
+        requireExistingParent
       )
     )
     return { ok: true }
@@ -148,7 +150,8 @@ export class RuntimeFileMutations {
     finalRelativePath: string,
     expectedSshConnectionGeneration?: number,
     expectedSshTargetId?: string,
-    expectedExecutionHostId?: string
+    expectedExecutionHostId?: string,
+    requireExistingParent?: boolean
   ): Promise<{ ok: true }> {
     const [tempTarget, finalTarget] = await resolveFileExplorerPaths(this.host, worktreeSelector, [
       tempRelativePath,
@@ -165,7 +168,9 @@ export class RuntimeFileMutations {
     const store = this.host.requireStore()
     const tempPath = await resolveRuntimeAuthorizedPath(tempTarget.path, store)
     const finalPath = await resolveRuntimeAuthorizedPath(finalTarget.path, store)
-    await mkdir(dirname(finalPath), { recursive: true })
+    if (!requireExistingParent) {
+      await mkdir(dirname(finalPath), { recursive: true })
+    }
     await copyFile(tempPath, finalPath, constants.COPYFILE_EXCL)
     await rm(tempPath, { force: true })
     return { ok: true }

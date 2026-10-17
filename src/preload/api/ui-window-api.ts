@@ -1,5 +1,6 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
+import type { ClipboardImageImport } from '../../shared/clipboard-image-import'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type {
   RichMarkdownContextMenuCommandPayload,
@@ -17,6 +18,9 @@ export type UiWindowApi = {
     forNativeChatDraft?: boolean
   }) => Promise<string | null>
   clipboardHasImage: () => Promise<boolean | null>
+  /** Desktop only. Release in a finally block after the destination import settles. */
+  stageClipboardImageForImport?: () => Promise<ClipboardImageImport | null>
+  releaseClipboardImageImport?: (handle: string) => Promise<boolean>
   /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>
   /** Which restored draft pastes are still kept: files really in Orca's paste folder. */

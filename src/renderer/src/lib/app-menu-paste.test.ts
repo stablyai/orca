@@ -42,7 +42,7 @@ describe('app menu paste', () => {
     })
 
     window.removeEventListener(APP_MENU_PASTE_EVENT, onPaste)
-    expect(result).toEqual({ status: 'handled', target: 'terminal' })
+    expect(result).toEqual({ status: 'handled', target: 'owned-target' })
     expect(readClipboardText).not.toHaveBeenCalled()
     expect(performNativePaste).not.toHaveBeenCalled()
   })

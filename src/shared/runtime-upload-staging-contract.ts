@@ -45,6 +45,8 @@ export type RuntimeUploadFileStreamRequest = {
   worktree: string
   /** Destination path on the runtime, relative to the worktree. */
   relativePath: string
+  /** Refuse missing upload parents instead of recreating them. */
+  requireExistingParent?: boolean
   expectedEnvironmentPairingRevision?: number
   expectedEnvironmentRuntimeId?: string
 } & SshMutationExpectation
