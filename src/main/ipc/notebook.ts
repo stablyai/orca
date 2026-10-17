@@ -25,26 +25,32 @@ import type {
 } from '../../shared/notebook-kernel-types'
 
 /** Each renderer document's kernels, by notebook file. */
-const kernelsByOwner = new Map<WebContents, Map<string, NotebookKernel>>()
+type OwnedKernel = { kernel: NotebookKernel; producerId: string }
+const kernelsByOwner = new Map<WebContents, Map<string, OwnedKernel>>()
 const startCancellations = createSenderScopedRequestCancellations()
-const startsByOwner = new WeakMap<WebContents, Map<string, Set<AbortController>>>()
+const startsByOwner = new WeakMap<WebContents, Map<string, Map<AbortController, string>>>()
 
-function cancelPendingStarts(owner: WebContents, filePath: string): void {
+function cancelPendingStarts(owner: WebContents, filePath: string, producerId?: string): void {
   const starts = startsByOwner.get(owner)
   const pending = starts?.get(filePath)
-  starts?.delete(filePath)
-  for (const controller of pending ?? []) {
-    controller.abort()
+  for (const [controller, id] of pending ?? []) {
+    if (producerId === undefined || id === producerId) {
+      controller.abort()
+      pending?.delete(controller)
+    }
+  }
+  if (pending?.size === 0) {
+    starts?.delete(filePath)
   }
 }
 
 // Why: a reloaded, crashed or closed renderer has lost its sessions, so its kernels go with it.
-function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
+function kernelsOf(owner: WebContents): Map<string, OwnedKernel> {
   let kernels = kernelsByOwner.get(owner)
   if (!kernels) {
-    const owned = new Map<string, NotebookKernel>()
+    const owned = new Map<string, OwnedKernel>()
     const stopAll = (): void => {
-      for (const kernel of owned.values()) {
+      for (const { kernel } of owned.values()) {
         kernel.shutdown()
       }
       owned.clear()
@@ -85,7 +91,10 @@ export function registerNotebookHandlers(store: Store): void {
 
   ipcMain.handle(
     'notebook:startKernel',
-    async (event, args: { filePath: string; python: string }): Promise<KernelStartResult> => {
+    async (
+      event,
+      args: { filePath: string; python: string; producerId: string }
+    ): Promise<KernelStartResult> => {
       const owner = event.sender
       if (owner.isDestroyed()) {
         return { status: 'failed', detail: 'The notebook closed before its kernel started.' }
@@ -96,11 +105,16 @@ export function registerNotebookHandlers(store: Store): void {
       if (!controller) {
         return { status: 'failed', detail: 'The notebook closed before its kernel started.' }
       }
-      const starts = startsByOwner.get(owner) ?? new Map<string, Set<AbortController>>()
+      const starts = startsByOwner.get(owner) ?? new Map<string, Map<AbortController, string>>()
       startsByOwner.set(owner, starts)
-      const pending = starts.get(args.filePath) ?? new Set<AbortController>()
+      const pending = starts.get(args.filePath) ?? new Map<AbortController, string>()
       starts.set(args.filePath, pending)
-      pending.add(controller)
+      for (const [older, producerId] of pending) {
+        if (producerId !== args.producerId) {
+          older.abort()
+        }
+      }
+      pending.set(controller, args.producerId)
       try {
         // Why the real file's folder: relative imports and data paths resolve as on disk, even when
         // the notebook was opened through a link.
@@ -109,7 +123,7 @@ export function registerNotebookHandlers(store: Store): void {
           return { status: 'failed', detail: 'The notebook closed before its kernel started.' }
         }
         const kernels = kernelsOf(owner)
-        kernels.get(args.filePath)?.shutdown()
+        kernels.get(args.filePath)?.kernel.shutdown()
         const { kernel, ready, exited } = startNotebookKernel({
           python: args.python,
           cwd,
@@ -117,14 +131,15 @@ export function registerNotebookHandlers(store: Store): void {
             if (!owner.isDestroyed()) {
               owner.send('notebook:kernelFrame', {
                 filePath: args.filePath,
+                producerId: args.producerId,
                 frame
               } satisfies KernelFrameEvent)
             }
           }
         })
-        kernels.set(args.filePath, kernel)
+        kernels.set(args.filePath, { kernel, producerId: args.producerId })
         void exited.then(() => {
-          if (kernels.get(args.filePath) === kernel) {
+          if (kernels.get(args.filePath)?.kernel === kernel) {
             kernels.delete(args.filePath)
           }
         })
@@ -160,17 +175,32 @@ export function registerNotebookHandlers(store: Store): void {
   )
 
   ipcMain.handle('notebook:execute', (event, args: { filePath: string; code: string }): void => {
-    kernelsOf(event.sender).get(args.filePath)?.execute(args.code)
+    kernelsOf(event.sender).get(args.filePath)?.kernel.execute(args.code)
   })
 
   ipcMain.handle('notebook:interrupt', (event, args: { filePath: string }): void => {
-    kernelsOf(event.sender).get(args.filePath)?.interrupt()
+    kernelsOf(event.sender).get(args.filePath)?.kernel.interrupt()
   })
 
-  ipcMain.handle('notebook:shutdownKernel', (event, args: { filePath: string }): void => {
-    cancelPendingStarts(event.sender, args.filePath)
-    const kernels = kernelsOf(event.sender)
-    kernels.get(args.filePath)?.shutdown()
-    kernels.delete(args.filePath)
-  })
+  ipcMain.handle(
+    'notebook:shutdownKernel',
+    (event, args: { filePath: string; producerId?: string; drain?: boolean }): void => {
+      cancelPendingStarts(event.sender, args.filePath, args.producerId)
+      const kernels = kernelsOf(event.sender)
+      const owned = kernels.get(args.filePath)
+      if (owned && (args.producerId === undefined || owned.producerId === args.producerId)) {
+        try {
+          owned.kernel.shutdown(args.drain === true)
+        } finally {
+          kernels.delete(args.filePath)
+        }
+      } else if (args.drain && args.producerId && !event.sender.isDestroyed()) {
+        event.sender.send('notebook:kernelFrame', {
+          filePath: args.filePath,
+          producerId: args.producerId,
+          frame: { type: 'stopped' }
+        } satisfies KernelFrameEvent)
+      }
+    }
+  )
 }

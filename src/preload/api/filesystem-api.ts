@@ -221,7 +221,11 @@ export type FilesystemApi = {
       runWorkspaceInterpreters: boolean
     }) => Promise<PythonEnvironments>
     describePython: (args: { path: string }) => Promise<PythonEnvironment | null>
-    startKernel: (args: { filePath: string; python: string }) => Promise<KernelStartResult>
+    startKernel: (args: {
+      filePath: string
+      python: string
+      producerId: string
+    }) => Promise<KernelStartResult>
     installIpykernel: (args: { python: string }) => Promise<{ ok: boolean; detail: string }>
     createVenv: (args: {
       filePath: string
@@ -230,7 +234,11 @@ export type FilesystemApi = {
     }) => Promise<CreateVenvResult>
     execute: (args: { filePath: string; code: string }) => Promise<void>
     interrupt: (args: { filePath: string }) => Promise<void>
-    shutdownKernel: (args: { filePath: string }) => Promise<void>
+    shutdownKernel: (args: {
+      filePath: string
+      producerId?: string
+      drain?: boolean
+    }) => Promise<void>
     onKernelFrame: (callback: (event: KernelFrameEvent) => void) => () => void
   }
   export: ExportApi

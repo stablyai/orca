@@ -1,12 +1,12 @@
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { KernelFrame } from '../../shared/notebook-kernel-types'
+import type { KernelFrame, KernelIpcFrame } from '../../shared/notebook-kernel-types'
 
 vi.mock('../../../resources/notebook/kernel-bridge.py?asset&asarUnpack', () => ({
   default: join(__dirname, '../../../resources/notebook/kernel-bridge.py')
 }))
 
-import { createFrameReader, startNotebookKernel } from './notebook-kernel'
+import { createFrameBatcher, createFrameReader, startNotebookKernel } from './notebook-kernel'
 
 function collect(chunks: string[]): unknown[] {
   const frames: unknown[] = []
@@ -194,6 +194,46 @@ describe('createFrameReader', () => {
   })
 })
 
+describe('createFrameBatcher', () => {
+  const stdout = (text: string): KernelFrame => ({
+    type: 'stream',
+    content: { name: 'stdout', text }
+  })
+
+  it('sends distinct raw frames in timed batches before done', () => {
+    vi.useFakeTimers()
+    try {
+      const sent: KernelIpcFrame[] = []
+      const { add, drop } = createFrameBatcher((frame) => sent.push(frame))
+      const stderr: KernelFrame = { type: 'stream', content: { name: 'stderr', text: 'warn' } }
+      const clear: KernelFrame = { type: 'clear_output', content: { wait: false } }
+      for (const frame of [stdout('abc\r\r'), stdout('\n'), stderr, clear, stdout('c')]) {
+        add(frame)
+      }
+      vi.advanceTimersByTime(9)
+      expect(sent).toEqual([])
+      vi.advanceTimersByTime(1)
+      add(stdout('d'))
+      // A long synchronous read: the clock moves on before the timer gets a turn.
+      vi.setSystemTime(Date.now() + 11)
+      add(stdout('e'))
+      add(stdout('f'))
+      add({ type: 'done', status: 'ok', execution_count: 1 })
+      add(stdout('g'))
+      drop()
+      vi.runAllTimers()
+      expect(sent).toEqual([
+        { type: 'outputs', outputs: [stdout('abc\r\r'), stdout('\n'), stderr, clear, stdout('c')] },
+        { type: 'outputs', outputs: [stdout('d'), stdout('e')] },
+        { type: 'outputs', outputs: [stdout('f')] },
+        { type: 'done', status: 'ok', execution_count: 1 }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 // Needs an interpreter with ipykernel, e.g. ORCA_TEST_IPYKERNEL_PYTHON=/path/to/.venv/bin/python.
 const python = process.env.ORCA_TEST_IPYKERNEL_PYTHON
 
@@ -215,7 +255,10 @@ describe.skipIf(!python)('notebook kernel against a real ipykernel', () => {
       python: python!,
       cwd: __dirname,
       onFrame: (frame) => {
-        frames.push(frame)
+        if (frame.type === 'stopped') {
+          return
+        }
+        frames.push(...(frame.type === 'outputs' ? frame.outputs : [frame]))
         onFrame()
       }
     })

@@ -1,14 +1,15 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '@/store'
 import type {
   CreateVenvResult,
   KernelFrameEvent,
-  KernelStartResult,
   PythonEnvironment
 } from '../../../../shared/notebook-kernel-types'
-import { applyKernelOutput } from './ipynb-kernel-outputs'
-import { fenced, noticeOutput, startRun, stopRuns } from './ipynb-kernel-runs'
+import { applyKernelOutputs } from './ipynb-kernel-outputs'
+import { fenced, noticeOutput, stopRuns } from './ipynb-kernel-runs'
+import { errorDetail, pump, startKernelSession } from './ipynb-kernel-start'
 import {
   getSession,
   runningCellKey,
@@ -20,123 +21,36 @@ import {
 } from './ipynb-kernel-store'
 
 const INTERRUPT_STALL_MS = 10_000
-const sessionLifetimes = new Map<string, symbol>()
-
-/** Reports a failure in the first queued cell (a toast when nothing was queued) and drops the queue. */
-function failQueue(filePath: string, message: string, detail = ''): void {
-  const [head] = getSession(filePath).queue
-  if (!head) {
-    toast.error(message, { description: detail.slice(-500) })
-  }
-  updateSession(filePath, ({ runs }) => ({
-    status: 'off',
-    queue: [],
-    setup: null,
-    runs: head
-      ? {
-          ...runs,
-          [head.key]: {
-            ...startRun(),
-            outputs: [noticeOutput(message + fenced(detail))],
-            finishedAt: Date.now()
-          }
-        }
-      : runs
-  }))
+const RESTART_DEADLINE_MS = 10_000
+type SessionLifetime = {
+  producerId: string
+  pendingRestart?: { timer: ReturnType<typeof setTimeout>; failure: string | null }
 }
-
-function pump(filePath: string): void {
-  const session = getSession(filePath)
-  const [next, ...queue] = session.queue
-  if (session.status !== 'ready' || !next || runningCellKey(session) !== null) {
-    return
-  }
-  updateSession(filePath, ({ runs }) => ({ queue, runs: { ...runs, [next.key]: startRun() } }))
-  void window.api.notebook.execute({ filePath, code: next.code })
-}
+const sessionLifetimes = new Map<string, SessionLifetime>()
 
 /** False once the notebook's tab has closed, which ends its session mid-await. */
 function isOpen(filePath: string): boolean {
   return filePath in store.getState().sessions
 }
 
-const isCurrentSession = (filePath: string, lifetime: symbol): boolean =>
+const isCurrentSession = (filePath: string, lifetime: SessionLifetime): boolean =>
   isOpen(filePath) && sessionLifetimes.get(filePath) === lifetime
-
-/** Picks the nearest Python for a notebook that has none: a workspace env, else one on PATH. */
-async function discoverEnvironment(
-  filePath: string,
-  rootPath: string | null,
-  lifetime: symbol
-): Promise<PythonEnvironment | undefined> {
-  const found = await window.api.notebook.listPythonEnvironments({
-    filePath,
-    rootPath,
-    runWorkspaceInterpreters: true
-  })
-  const recommended = found.workspace[0] ?? found.path[0]
-  if (recommended && isCurrentSession(filePath, lifetime)) {
-    setEnvironment(filePath, recommended)
-  }
-  return recommended
-}
 
 /** Starts the notebook's kernel; the one place a notebook's Python runs, so it refuses until trusted. */
 async function start(filePath: string, rootPath: string | null = null): Promise<void> {
   if (!getSession(filePath).trusted) {
     return
   }
-  const lifetime = sessionLifetimes.get(filePath) ?? Symbol()
+  const lifetime: SessionLifetime = { producerId: createBrowserUuid() }
   sessionLifetimes.set(filePath, lifetime)
   // Why 'starting' before discovery: a second run meanwhile must queue, not start another kernel.
   updateSession(filePath, () => ({ status: 'starting' }))
-  let result: KernelStartResult | null
-  try {
-    const environment =
-      store.getState().environments[filePath] ??
-      (await discoverEnvironment(filePath, rootPath, lifetime))
-    result =
-      environment && isCurrentSession(filePath, lifetime)
-        ? await window.api.notebook.startKernel({ filePath, python: environment.path })
-        : null
-  } catch (error) {
-    result = { status: 'failed', detail: error instanceof Error ? error.message : String(error) }
-  }
-  if (!isCurrentSession(filePath, lifetime)) {
-    return
-  }
-  if (!result) {
-    failQueue(
-      filePath,
-      translate(
-        'auto.components.editor.IpynbViewer.noPython',
-        'Python was not found on this computer. Install it from [python.org](https://www.python.org/downloads/), then run the cell again.'
-      )
-    )
-    return
-  }
-  if (result.status === 'ready') {
-    updateSession(filePath, () => ({ status: 'ready', setup: null }))
-    pump(filePath)
-  } else if (result.status === 'missing-ipykernel') {
-    // The kernel was started in this notebook's chosen environment, so it is set.
-    const base = store.getState().environments[filePath]
-    updateSession(filePath, () => ({
-      status: 'off',
-      setup: base
-        ? { base, offer: result.externallyManaged ? 'venv' : 'install', phase: 'idle', error: null }
-        : null
-    }))
-  } else {
-    failQueue(
-      filePath,
-      translate(
-        'auto.components.editor.IpynbViewer.kernelStartFailed',
-        'The kernel failed to start.'
-      ),
-      result.detail
-    )
-  }
+  await startKernelSession(
+    filePath,
+    rootPath,
+    lifetime.producerId,
+    () => isCurrentSession(filePath, lifetime) && !lifetime.pendingRestart
+  )
 }
 
 export function trustNotebook(filePath: string): void {
@@ -152,7 +66,9 @@ export async function runCells(
   updateSession(filePath, (session) => {
     const running = runningCellKey(session)
     const fresh = cells.filter(
-      (cell) => cell.key !== running && !session.queue.some((queued) => queued.key === cell.key)
+      (cell) =>
+        (cell.key !== running || sessionLifetimes.get(filePath)?.pendingRestart) &&
+        !session.queue.some((queued) => queued.key === cell.key)
     )
     return { queue: [...session.queue, ...fresh] }
   })
@@ -167,9 +83,50 @@ export async function runCells(
   await start(filePath, rootPath)
 }
 
+function failRestart(filePath: string, lifetime: SessionLifetime): void {
+  const pending = lifetime.pendingRestart
+  if (!pending || !isCurrentSession(filePath, lifetime)) {
+    return
+  }
+  clearTimeout(pending.timer)
+  delete lifetime.pendingRestart
+  sessionLifetimes.delete(filePath)
+  updateSession(filePath, (current) => ({
+    ...stopRuns(current),
+    queue: current.queue,
+    status: 'off'
+  }))
+  toast.error(
+    translate(
+      'auto.components.editor.IpynbViewer.kernelRestartFailed',
+      'The kernel could not restart. Run all to try again.'
+    ),
+    { description: pending.failure?.slice(-500) }
+  )
+}
+
 export function restartKernel(filePath: string): void {
-  updateSession(filePath, stopRuns)
-  void start(filePath)
+  const lifetime = sessionLifetimes.get(filePath)
+  if (lifetime?.pendingRestart) {
+    return
+  }
+  if (!lifetime) {
+    updateSession(filePath, stopRuns)
+    void start(filePath)
+    return
+  }
+  lifetime.pendingRestart = {
+    timer: setTimeout(() => failRestart(filePath, lifetime), RESTART_DEADLINE_MS),
+    failure: null
+  }
+  updateSession(filePath, () => ({ status: 'starting', queue: [], interruptStalled: false }))
+  void window.api.notebook
+    .shutdownKernel({ filePath, producerId: lifetime.producerId, drain: true })
+    .catch((error: unknown) => {
+      if (lifetime.pendingRestart) {
+        lifetime.pendingRestart.failure = errorDetail(error)
+      }
+    })
 }
 
 /** Switching interpreters restarts a running kernel; before trust it only records the choice. */
@@ -214,10 +171,6 @@ function failSetup(filePath: string, detail: string): void {
   updateSession(filePath, ({ setup }) => ({
     setup: setup && { ...setup, phase: 'idle', error: detail }
   }))
-}
-
-function errorDetail(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 export async function installIpykernel(filePath: string): Promise<void> {
@@ -287,38 +240,70 @@ export function forgetFinishedRuns(filePath: string): void {
   }))
 }
 
-function handleFrame({ filePath, frame }: KernelFrameEvent): void {
-  if (!isOpen(filePath)) {
+function handleFrame({ filePath, producerId, frame }: KernelFrameEvent): void {
+  const lifetime = sessionLifetimes.get(filePath)
+  if (!lifetime || !isOpen(filePath) || lifetime.producerId !== producerId) {
+    return
+  }
+  if (frame.type === 'stopped') {
+    if (!lifetime.pendingRestart) {
+      return
+    }
+    clearTimeout(lifetime.pendingRestart.timer)
+    delete lifetime.pendingRestart
+    updateSession(filePath, (current) => ({ ...stopRuns(current), queue: current.queue }))
+    sessionLifetimes.delete(filePath)
+    void start(filePath)
     return
   }
   const session = getSession(filePath)
+  const key = runningCellKey(session)
   if (frame.type === 'exit') {
     const died = translate('auto.components.editor.IpynbViewer.kernelDied', 'The kernel died.')
+    if (lifetime.pendingRestart) {
+      updateSession(filePath, ({ runs }) => ({
+        runs:
+          key === null
+            ? runs
+            : {
+                ...runs,
+                [key]: {
+                  ...runs[key],
+                  outputs: [...runs[key].outputs, noticeOutput(died + fenced(frame.detail))]
+                }
+              }
+      }))
+      return
+    }
     updateSession(filePath, (current) => ({
       ...stopRuns(current, [noticeOutput(died + fenced(frame.detail))]),
       status: 'dead'
     }))
     return
   }
-  const key = runningCellKey(session)
   if (key === null) {
     return
   }
   if (frame.type === 'done') {
     updateSession(filePath, ({ queue, runs }) => ({
       // Like Jupyter, an error (including an interrupt) cancels the cells queued after it.
-      queue: frame.status === 'ok' ? queue : [],
+      queue: frame.status === 'ok' || lifetime.pendingRestart ? queue : [],
       interruptStalled: false,
       runs: {
         ...runs,
-        [key]: { ...runs[key], executionCount: frame.execution_count, finishedAt: Date.now() }
+        [key]: {
+          ...runs[key],
+          executionCount: frame.execution_count,
+          finishedAt: lifetime.pendingRestart ? null : Date.now()
+        }
       }
     }))
     pump(filePath)
     return
   }
+  // Why one update per batch: each store update redraws the running cell's outputs.
   updateSession(filePath, ({ runs }) => ({
-    runs: { ...runs, [key]: applyKernelOutput(runs[key], frame.type, frame.content) }
+    runs: { ...runs, [key]: applyKernelOutputs(runs[key], frame.outputs) }
   }))
 }
 
@@ -331,6 +316,10 @@ useAppStore.subscribe((state, previous) => {
   }
   for (const filePath of Object.keys(store.getState().sessions)) {
     if (!state.openFiles.some((file) => file.filePath === filePath)) {
+      const lifetime = sessionLifetimes.get(filePath)
+      if (lifetime?.pendingRestart) {
+        clearTimeout(lifetime.pendingRestart.timer)
+      }
       sessionLifetimes.delete(filePath)
       void window.api.notebook.shutdownKernel({ filePath })
       store.setState(({ sessions }) => {

@@ -1,4 +1,4 @@
-import type { KernelOutputType } from '../../../../shared/notebook-kernel-types'
+import type { KernelOutputFrame, KernelOutputType } from '../../../../shared/notebook-kernel-types'
 import { isRecord } from './ipynb-parse'
 
 /** An nbformat v4 output; while live it may also carry the kernel's `transient.display_id`. */
@@ -115,6 +115,10 @@ export function applyKernelOutput<T extends LiveOutputs>(
   }
   const output = type === 'stream' ? streamOutput(content) : toOutput(type, content)
   return { ...live, outputs: [...outputs, output], clearOnNextOutput: false }
+}
+
+export function applyKernelOutputs<T extends LiveOutputs>(live: T, frames: KernelOutputFrame[]): T {
+  return frames.reduce((next, { type, content }) => applyKernelOutput(next, type, content), live)
 }
 
 /** Drops live-only fields so the outputs are valid nbformat. */

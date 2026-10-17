@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { KernelFrame, KernelFrameEvent } from '../../../../shared/notebook-kernel-types'
 
 type Listener = (state: unknown, previous: unknown) => void
@@ -39,16 +40,26 @@ Object.defineProperty(globalThis, 'window', {
 })
 
 const session = await import('./ipynb-kernel-session')
-const { getCellRun, getSession } = await import('./ipynb-kernel-store')
+const { getCellRun, getSession, store } = await import('./ipynb-kernel-store')
 
 function frame(value: KernelFrame): void {
-  emitFrame({ filePath: FILE, frame: value })
+  emitFrame({
+    filePath: FILE,
+    producerId: notebookApi.startKernel.mock.lastCall?.[0].producerId,
+    frame:
+      value.type === 'done' || value.type === 'exit' ? value : { type: 'outputs', outputs: [value] }
+  })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   notebookApi.listPythonEnvironments.mockResolvedValue({ workspace: [VENV], path: [] })
   notebookApi.startKernel.mockResolvedValue({ status: 'ready' })
+  notebookApi.shutdownKernel.mockImplementation(async ({ filePath, producerId, drain }) => {
+    if (drain) {
+      emitFrame({ filePath, producerId, frame: { type: 'stopped' } })
+    }
+  })
   // Closing the tab drops the session, giving each test a fresh one.
   openFiles.current = []
   for (const listener of appStoreListeners) {
@@ -83,7 +94,8 @@ describe('notebook kernel session', () => {
     await session.runCells(untrusted, [{ key: 'a', code: 'x' }], '/untrusted')
     expect(notebookApi.startKernel).toHaveBeenCalledWith({
       filePath: untrusted,
-      python: shipped.path
+      python: shipped.path,
+      producerId: expect.any(String)
     })
     expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: untrusted, code: 'x' })
   })
@@ -109,7 +121,11 @@ describe('notebook kernel session', () => {
       ],
       '/proj'
     )
-    expect(notebookApi.startKernel).toHaveBeenCalledWith({ filePath: FILE, python: VENV.path })
+    expect(notebookApi.startKernel).toHaveBeenCalledWith({
+      filePath: FILE,
+      python: VENV.path,
+      producerId: expect.any(String)
+    })
     expect(notebookApi.execute).toHaveBeenCalledTimes(1)
     expect(notebookApi.execute).toHaveBeenLastCalledWith({ filePath: FILE, code: 'x = 1' })
 
@@ -126,6 +142,32 @@ describe('notebook kernel session', () => {
     expect(notebookApi.execute).toHaveBeenCalledTimes(2)
     expect(getCellRun(FILE, 'c')).toBeUndefined()
     expect(getCellRun(FILE, 'b')?.finishedAt).not.toBeNull()
+  })
+
+  it('applies a batch of outputs as one store update', async () => {
+    await session.runCells(FILE, [{ key: 'a', code: 'x' }], '/proj')
+    const updates = vi.fn()
+    const unsubscribe = store.subscribe(updates)
+    emitFrame({
+      filePath: FILE,
+      producerId: notebookApi.startKernel.mock.lastCall?.[0].producerId,
+      frame: {
+        type: 'outputs',
+        outputs: [
+          { type: 'stream', content: { name: 'stdout', text: 'abc\r\r' } },
+          { type: 'stream', content: { name: 'stdout', text: '\n' } },
+          { type: 'display_data', content: { data: { 'text/plain': '1' } } },
+          { type: 'stream', content: { name: 'stdout', text: 'b\n' } }
+        ]
+      }
+    })
+    unsubscribe()
+    expect(updates).toHaveBeenCalledOnce()
+    expect(getCellRun(FILE, 'a')?.outputs).toMatchObject([
+      { output_type: 'stream', text: '\n' },
+      { output_type: 'display_data', data: { 'text/plain': '1' } },
+      { output_type: 'stream', text: 'b\n' }
+    ])
   })
 
   it('reports a dead kernel in the running cell and drops the queue', async () => {
@@ -145,6 +187,97 @@ describe('notebook kernel session', () => {
     expect(getCellRun(FILE, 'b')).toBeUndefined()
     expect(notebookApi.execute).toHaveBeenCalledTimes(1)
   })
+
+  it('settles accepted output at the stop marker and runs a newly queued same cell', async () => {
+    await session.runCells(FILE, [{ key: 'a', code: 'old' }], null)
+    const oldProducerId = notebookApi.startKernel.mock.lastCall?.[0].producerId
+    const replacement = Promise.withResolvers<{ status: 'ready' }>()
+    notebookApi.startKernel.mockReturnValueOnce(replacement.promise)
+    notebookApi.shutdownKernel.mockRejectedValueOnce(new Error('marker send failed'))
+    session.restartKernel(FILE)
+    await Promise.resolve() // The invoke reply may arrive before its output event.
+    expect(getSession(FILE).status).toBe('starting')
+    await session.runCells(FILE, [{ key: 'a', code: 'new' }], null)
+    emitFrame({
+      filePath: FILE,
+      producerId: oldProducerId,
+      frame: {
+        type: 'outputs',
+        outputs: [
+          { type: 'stream', content: { name: 'stdout', text: 'discarded' } },
+          { type: 'clear_output', content: { wait: false } },
+          { type: 'display_data', content: { data: { 'text/plain': 'kept' } } }
+        ]
+      }
+    })
+    frame({ type: 'done', status: 'error', execution_count: 7 })
+    frame({ type: 'exit', detail: 'segfault' })
+    expect(getCellRun(FILE, 'a')?.finishedAt).toBeNull()
+    expect(JSON.stringify(getCellRun(FILE, 'a')?.outputs)).toContain('segfault')
+    emitFrame({ filePath: FILE, producerId: oldProducerId, frame: { type: 'stopped' } })
+    expect(getCellRun(FILE, 'a')).toMatchObject({
+      executionCount: 7,
+      outputs: [
+        { output_type: 'display_data', data: { 'text/plain': 'kept' } },
+        { output_type: 'display_data' }
+      ]
+    })
+    replacement.resolve({ status: 'ready' })
+    await vi.waitFor(() =>
+      expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: FILE, code: 'new' })
+    )
+  })
+
+  it.each([false, true])(
+    'releases a restart with no marker (rejected: %s) so Run retries',
+    async (rejected) => {
+      await session.runCells(FILE, [{ key: 'a', code: 'old' }], null)
+      const producerId = notebookApi.startKernel.mock.lastCall?.[0].producerId
+      vi.useFakeTimers()
+      try {
+        if (rejected) {
+          notebookApi.shutdownKernel.mockRejectedValue(new Error('transport unavailable'))
+        } else {
+          notebookApi.shutdownKernel.mockResolvedValue(undefined)
+        }
+        session.restartKernel(FILE)
+        await session.runCells(FILE, [{ key: 'b', code: 'new' }], null)
+        await Promise.resolve()
+        vi.advanceTimersByTime(10_000)
+        expect(getSession(FILE)).toMatchObject({
+          status: 'off',
+          queue: [{ key: 'b', code: 'new' }]
+        })
+        expect(toast.error).toHaveBeenCalledWith(
+          'The kernel could not restart. Run all to try again.',
+          { description: rejected ? 'transport unavailable' : undefined }
+        )
+        emitFrame({ filePath: FILE, producerId, frame: { type: 'stopped' } })
+        expect(getSession(FILE).status).toBe('off')
+        if (!rejected) {
+          for (const listener of appStoreListeners) {
+            listener({ openFiles: [] }, { openFiles: openFiles.current })
+          }
+          expect(notebookApi.shutdownKernel).toHaveBeenCalledWith({ filePath: FILE })
+          return
+        }
+        await session.runCells(FILE, [{ key: 'c', code: 'later' }], null)
+        expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: FILE, code: 'new' })
+        emitFrame({
+          filePath: FILE,
+          producerId,
+          frame: {
+            type: 'outputs',
+            outputs: [{ type: 'stream', content: { name: 'stdout', text: 'stale' } }]
+          }
+        })
+        emitFrame({ filePath: FILE, producerId, frame: { type: 'stopped' } })
+        expect(getCellRun(FILE, 'b')?.outputs).toEqual([])
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('keeps cells queued through a missing-ipykernel install, then runs them', async () => {
     notebookApi.startKernel.mockResolvedValueOnce({
@@ -202,7 +335,8 @@ describe('notebook kernel session', () => {
     })
     expect(notebookApi.startKernel).toHaveBeenLastCalledWith({
       filePath: '/repo/nb.ipynb',
-      python: created.path
+      python: created.path,
+      producerId: expect.any(String)
     })
     expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: '/repo/nb.ipynb', code: 'x' })
   })
@@ -223,7 +357,8 @@ describe('notebook kernel session', () => {
     await session.createVirtualEnvironment(FILE, null)
     expect(notebookApi.startKernel).toHaveBeenLastCalledWith({
       filePath: FILE,
-      python: created.path
+      python: created.path,
+      producerId: expect.any(String)
     })
     expect(getSession(FILE)).toMatchObject({ status: 'ready', setup: null })
   })
@@ -238,7 +373,11 @@ describe('notebook kernel session', () => {
     session.selectEnvironment(FILE, other)
     expect(getSession(FILE).setup).toBeNull()
     await vi.waitFor(() => expect(getSession(FILE).status).toBe('ready'))
-    expect(notebookApi.startKernel).toHaveBeenLastCalledWith({ filePath: FILE, python: other.path })
+    expect(notebookApi.startKernel).toHaveBeenLastCalledWith({
+      filePath: FILE,
+      python: other.path,
+      producerId: expect.any(String)
+    })
     expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: FILE, code: 'x' })
   })
 
@@ -267,7 +406,8 @@ describe('notebook kernel session', () => {
     await session.runCells('/other.ipynb', [{ key: 'a', code: 'x' }], null)
     expect(notebookApi.startKernel).toHaveBeenCalledWith({
       filePath: '/other.ipynb',
-      python: VENV.path
+      python: VENV.path,
+      producerId: expect.any(String)
     })
   })
 

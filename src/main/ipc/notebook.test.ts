@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromises from 'node:fs/promises'
-import type { KernelFrame } from '../../shared/notebook-kernel-types'
+import type { KernelIpcFrame } from '../../shared/notebook-kernel-types'
 
 const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 const { startNotebookKernelMock, resolveAuthorizedPathMock } = vi.hoisted(() => ({
@@ -37,14 +37,14 @@ import type { Store } from '../persistence'
 import type * as FileAccessResolution from './local-file-access-resolution'
 
 function fakeKernel() {
-  let onFrame: (frame: KernelFrame) => void = () => {}
+  let onFrame: (frame: KernelIpcFrame) => void = () => {}
   const exited = Promise.withResolvers<void>()
   const kernel = { execute: vi.fn(), interrupt: vi.fn(), shutdown: vi.fn() }
   startNotebookKernelMock.mockImplementationOnce((options) => {
     onFrame = options.onFrame
     return { kernel, ready: Promise.resolve({ status: 'ready' }), exited: exited.promise }
   })
-  return { kernel, emit: (frame: KernelFrame) => onFrame(frame), exit: () => exited.resolve() }
+  return { kernel, emit: (frame: KernelIpcFrame) => onFrame(frame), exit: () => exited.resolve() }
 }
 
 let nextOwnerId = 0
@@ -81,7 +81,10 @@ describe('notebook IPC', () => {
     const owner = fakeOwner()
     const start = handlers.get('notebook:startKernel')!
     await expect(
-      start({ sender: owner }, { filePath: '/repo/nb.ipynb', python: '/py' })
+      start(
+        { sender: owner },
+        { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
+      )
     ).resolves.toEqual({ status: 'ready' })
     expect(startNotebookKernelMock).toHaveBeenCalledWith(
       expect.objectContaining({ python: '/py', cwd: '/real/repo' })
@@ -95,12 +98,49 @@ describe('notebook IPC', () => {
     first.emit({ type: 'done', status: 'ok', execution_count: 1 })
     expect(owner.send).toHaveBeenCalledWith('notebook:kernelFrame', {
       filePath: '/repo/nb.ipynb',
+      producerId: 'test-producer',
       frame: { type: 'done', status: 'ok', execution_count: 1 }
     })
 
     fakeKernel()
-    await start({ sender: owner }, { filePath: '/repo/nb.ipynb', python: '/py' })
+    await start(
+      { sender: owner },
+      { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
+    )
     expect(first.kernel.shutdown).toHaveBeenCalledOnce()
+  })
+
+  it('does not let an old drain cancel a replacement authorization', async () => {
+    const oldAuthorization = Promise.withResolvers<string>()
+    const newAuthorization = Promise.withResolvers<string>()
+    resolveAuthorizedPathMock
+      .mockReturnValueOnce(oldAuthorization.promise)
+      .mockReturnValueOnce(newAuthorization.promise)
+    const replacement = fakeKernel()
+    const owner = fakeOwner()
+    const filePath = '/repo/nb.ipynb'
+    const start = handlers.get('notebook:startKernel')!
+    const old = start({ sender: owner }, { filePath, python: '/py', producerId: 'old' })
+    const fresh = start({ sender: owner }, { filePath, python: '/py', producerId: 'new' })
+    handlers.get('notebook:shutdownKernel')!(
+      { sender: owner },
+      { filePath, producerId: 'old', drain: true }
+    )
+    expect(owner.send.mock.lastCall?.[1]).toMatchObject({
+      producerId: 'old',
+      frame: { type: 'stopped' }
+    })
+    oldAuthorization.resolve('/real/repo/nb.ipynb')
+    await expect(old).resolves.toMatchObject({ status: 'failed' })
+    newAuthorization.resolve('/real/repo/nb.ipynb')
+    await expect(fresh).resolves.toEqual({ status: 'ready' })
+    handlers.get('notebook:shutdownKernel')!(
+      { sender: owner },
+      { filePath, producerId: 'old', drain: true }
+    )
+    expect(replacement.kernel.shutdown).not.toHaveBeenCalled()
+    handlers.get('notebook:shutdownKernel')!({ sender: owner }, { filePath })
+    expect(replacement.kernel.shutdown).toHaveBeenCalledOnce()
   })
 
   it.each(['destroyed', 'render-process-gone', 'did-navigate'])(
@@ -110,7 +150,7 @@ describe('notebook IPC', () => {
       const owner = fakeOwner()
       await handlers.get('notebook:startKernel')!(
         { sender: owner },
-        { filePath: '/repo/nb.ipynb', python: '/py' }
+        { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
       )
       owner.emit(lifecycleEvent)
       expect(kernel.shutdown).toHaveBeenCalledOnce()
@@ -127,8 +167,14 @@ describe('notebook IPC', () => {
     const second = fakeKernel()
     const [a, b] = [fakeOwner(), fakeOwner()]
     const start = handlers.get('notebook:startKernel')!
-    await start({ sender: a }, { filePath: '/repo/nb.ipynb', python: '/py' })
-    await start({ sender: b }, { filePath: '/repo/nb.ipynb', python: '/py' })
+    await start(
+      { sender: a },
+      { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
+    )
+    await start(
+      { sender: b },
+      { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
+    )
     expect(first.kernel.shutdown).not.toHaveBeenCalled()
     await handlers.get('notebook:execute')!(
       { sender: b },
@@ -151,11 +197,17 @@ describe('notebook IPC', () => {
       const start = handlers.get('notebook:startKernel')!
 
       await expect(
-        start({ sender: fakeOwner() }, { filePath: notebook, python: '/py' })
+        start(
+          { sender: fakeOwner() },
+          { filePath: notebook, python: '/py', producerId: 'test-producer' }
+        )
       ).resolves.toEqual({ status: 'ready' })
       expect(startNotebookKernelMock).toHaveBeenCalledWith(expect.objectContaining({ cwd: folder }))
       await expect(
-        start({ sender: fakeOwner() }, { filePath: 'analysis.ipynb', python: '/py' })
+        start(
+          { sender: fakeOwner() },
+          { filePath: 'analysis.ipynb', python: '/py', producerId: 'test-producer' }
+        )
       ).rejects.toThrow('absolute path')
     } finally {
       await rm(folder, { recursive: true, force: true })
@@ -169,7 +221,7 @@ describe('notebook IPC', () => {
       resolveAuthorizedPathMock.mockReturnValueOnce(authorization.promise)
       fakeKernel()
       const owner = fakeOwner()
-      const args = { filePath: '/repo/nb.ipynb', python: '/py' }
+      const args = { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
       const pending = handlers.get('notebook:startKernel')!({ sender: owner }, args)
       if (boundary === 'shutdown') {
         handlers.get('notebook:shutdownKernel')!({ sender: owner }, args)
@@ -192,7 +244,7 @@ describe('notebook IPC', () => {
     await expect(
       handlers.get('notebook:startKernel')!(
         { sender: owner },
-        { filePath: '/repo/nb.ipynb', python: '/py' }
+        { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
       )
     ).resolves.toMatchObject({ status: 'failed' })
     expect(resolveAuthorizedPathMock).not.toHaveBeenCalled()
@@ -208,7 +260,7 @@ describe('notebook IPC', () => {
     fakeKernel()
     fakeKernel()
     const owner = fakeOwner()
-    const args = { filePath: '/repo/nb.ipynb', python: '/py' }
+    const args = { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
     const start = handlers.get('notebook:startKernel')!
     const shutdown = handlers.get('notebook:shutdownKernel')!
     const old = start({ sender: owner }, args)
@@ -235,7 +287,7 @@ describe('notebook IPC', () => {
       const lastConstructed = fakeKernel()
       const owner = fakeOwner()
       const start = handlers.get('notebook:startKernel')!
-      const args = { filePath: '/repo/nb.ipynb', python: '/py' }
+      const args = { filePath: '/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
       const pending = [start({ sender: owner }, args), start({ sender: owner }, args)]
       authorizations[firstIndex].resolve('/real/repo/nb.ipynb')
       await expect(pending[firstIndex]).resolves.toEqual({ status: 'ready' })
@@ -264,8 +316,12 @@ describe('notebook IPC', () => {
     const current = fakeKernel()
     const owner = fakeOwner()
     const start = handlers.get('notebook:startKernel')!
-    const alias = { filePath: '/tmp/repo/nb.ipynb', python: '/py' }
-    const canonical = { filePath: '/private/tmp/repo/nb.ipynb', python: '/py' }
+    const alias = { filePath: '/tmp/repo/nb.ipynb', python: '/py', producerId: 'test-producer' }
+    const canonical = {
+      filePath: '/private/tmp/repo/nb.ipynb',
+      python: '/py',
+      producerId: 'test-producer'
+    }
     const old = start({ sender: owner }, alias)
     const fresh = start({ sender: owner }, canonical)
     handlers.get('notebook:shutdownKernel')!({ sender: owner }, alias)

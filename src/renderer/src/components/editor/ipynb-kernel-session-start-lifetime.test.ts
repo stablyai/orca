@@ -35,7 +35,14 @@ const ENVIRONMENT = { path: '/workspace/.venv/bin/python', name: '.venv' }
 let emitFrame: (event: KernelFrameEvent) => void = () => {}
 const notebookApi = {
   listPythonEnvironments: vi.fn<() => Promise<PythonEnvironments>>(),
-  startKernel: vi.fn<() => Promise<KernelStartResult>>(),
+  startKernel:
+    vi.fn<
+      (_args: {
+        filePath: string
+        python: string
+        producerId: string
+      }) => Promise<KernelStartResult>
+    >(),
   execute: vi.fn(),
   shutdownKernel: vi.fn(),
   onKernelFrame: (listener: (event: KernelFrameEvent) => void) => {
@@ -62,13 +69,27 @@ function reopenNotebook(): void {
   setEnvironment(FILE, ENVIRONMENT)
 }
 
+function currentProducerId(): string {
+  const call = notebookApi.startKernel.mock.lastCall
+  if (!call) {
+    throw new Error('Expected a kernel start')
+  }
+  return call[0].producerId
+}
+
 function finishFreshCell(): void {
+  const producerId = currentProducerId()
   emitFrame({
     filePath: FILE,
-    frame: { type: 'stream', content: { name: 'stdout', text: 'fresh output\n' } }
+    producerId,
+    frame: {
+      type: 'outputs',
+      outputs: [{ type: 'stream', content: { name: 'stdout', text: 'fresh output\n' } }]
+    }
   })
   emitFrame({
     filePath: FILE,
+    producerId,
     frame: { type: 'done', status: 'ok', execution_count: 1 }
   })
 }
@@ -78,6 +99,7 @@ beforeEach(() => {
   store.setState({ environments: {} })
   vi.clearAllMocks()
   notebookApi.startKernel.mockReset().mockResolvedValue({ status: 'ready' })
+  notebookApi.shutdownKernel.mockReset().mockResolvedValue(undefined)
   notebookApi.listPythonEnvironments.mockReset().mockResolvedValue({
     workspace: [ENVIRONMENT],
     path: []
@@ -88,6 +110,61 @@ beforeEach(() => {
 afterEach(() => closeNotebook())
 
 describe('notebook start request session ownership', () => {
+  it.each(['ready', 'failed', 'missing', 'rejected'] as const)(
+    'keeps replacement work while a draining start resolves %s',
+    async (outcome) => {
+      const oldReply = Promise.withResolvers<KernelStartResult>()
+      notebookApi.startKernel.mockReturnValueOnce(oldReply.promise)
+      const old = session.runCells(FILE, [{ key: 'old', code: 'old cell' }], null)
+      const producerId = currentProducerId()
+      session.restartKernel(FILE)
+      await session.runCells(FILE, [{ key: 'new', code: 'new cell' }], null)
+      if (outcome === 'rejected') {
+        oldReply.reject(new Error('old failed'))
+      } else {
+        oldReply.resolve(
+          outcome === 'missing'
+            ? { status: 'missing-ipykernel', externallyManaged: false }
+            : outcome === 'failed'
+              ? { status: 'failed', detail: 'old failed' }
+              : { status: 'ready' }
+        )
+      }
+      await old
+      expect(getSession(FILE)).toMatchObject({
+        status: 'starting',
+        queue: [{ key: 'new', code: 'new cell' }],
+        setup: null
+      })
+      expect(notebookApi.execute).not.toHaveBeenCalled()
+      emitFrame({ filePath: FILE, producerId, frame: { type: 'stopped' } })
+      await vi.waitFor(() =>
+        expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: FILE, code: 'new cell' })
+      )
+    }
+  )
+
+  it('keeps the chosen interpreter when old discovery resolves during drain', async () => {
+    const discovery = Promise.withResolvers<PythonEnvironments>()
+    store.setState({ environments: {} })
+    notebookApi.listPythonEnvironments.mockReturnValueOnce(discovery.promise)
+    const old = session.runCells(FILE, [{ key: 'old', code: 'old cell' }], '/workspace')
+    session.selectEnvironment(FILE, ENVIRONMENT)
+    discovery.resolve({ workspace: [{ path: '/old/python', name: 'old' }], path: [] })
+    await old
+    expect(store.getState().environments[FILE]).toEqual(ENVIRONMENT)
+    expect(notebookApi.startKernel).not.toHaveBeenCalled()
+    const producerId = notebookApi.shutdownKernel.mock.lastCall?.[0].producerId
+    emitFrame({ filePath: FILE, producerId, frame: { type: 'stopped' } })
+    await vi.waitFor(() =>
+      expect(notebookApi.startKernel).toHaveBeenCalledWith({
+        filePath: FILE,
+        python: ENVIRONMENT.path,
+        producerId: expect.any(String)
+      })
+    )
+  })
+
   it.each([
     ['ready', false],
     ['ready', true],
@@ -106,9 +183,29 @@ describe('notebook start request session ownership', () => {
         .mockReturnValueOnce(oldReply.promise)
         .mockReturnValueOnce(freshReply.promise)
       const old = session.runCells(FILE, [{ key: 'old', code: 'old cell' }], null)
+      const oldProducerId = currentProducerId()
       closeNotebook()
       reopenNotebook()
       const fresh = session.runCells(FILE, [{ key: 'fresh', code: 'fresh cell' }], null)
+      emitFrame({
+        filePath: FILE,
+        producerId: oldProducerId,
+        frame: {
+          type: 'outputs',
+          outputs: [{ type: 'stream', content: { name: 'stdout', text: 'stale' } }]
+        }
+      })
+      emitFrame({
+        filePath: FILE,
+        producerId: oldProducerId,
+        frame: { type: 'done', status: 'error', execution_count: 1 }
+      })
+      emitFrame({
+        filePath: FILE,
+        producerId: oldProducerId,
+        frame: { type: 'exit', detail: 'stale death' }
+      })
+      emitFrame({ filePath: FILE, producerId: oldProducerId, frame: { type: 'stopped' } })
       if (freshReadyFirst) {
         freshReply.resolve({ status: 'ready' })
         await fresh
