@@ -380,6 +380,7 @@ export class PtyStartupIngress {
       this.kittyModes.scan(data)
     }
     this.colorQueries.observe(data)
+    this.delivery.observeEmitted(data)
     this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 

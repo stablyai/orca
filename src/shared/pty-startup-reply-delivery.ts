@@ -6,6 +6,7 @@ import {
   type EchoProjection,
   type PtyStartupReplyEchoMatch
 } from './pty-startup-reply-echo-shapes'
+import { oscStringOpenAfter } from './terminal-osc-string-state'
 
 export type { PtyStartupReplyEchoMatch } from './pty-startup-reply-echo-shapes'
 
@@ -59,6 +60,8 @@ export class PtyStartupReplyDelivery {
   private readonly expectedEchoes: ExpectedEcho[] = []
   private closed = false
   private startupWindowOpen = true
+  // Why only while an echo is expected: a reply follows its query, which closed any OSC string.
+  private oscOpenInOutput = false
 
   /** Why a clock and not a timer: a timer per PTY for the whole session would outlive its use. */
   constructor(
@@ -125,7 +128,22 @@ export class PtyStartupReplyDelivery {
       this.expectedEchoes.splice(bestIndex, 1)
       return best
     }
+    // A BEL that ends the program's own OSC string (a title, a colour query) is its terminator,
+    // never the start of a readline echo: holding it would stall that sequence for the hold.
+    if (
+      best.kind === 'partial' &&
+      data.charCodeAt(best.offset) === 0x07 &&
+      oscStringOpenAfter(data.slice(0, best.offset), this.oscOpenInOutput)
+    ) {
+      return { kind: 'none' }
+    }
     return best
+  }
+
+  /** Output passed on downstream, in order: tracks an open OSC string while echoes are expected. */
+  observeEmitted(data: string): void {
+    this.oscOpenInOutput =
+      this.expectedEchoes.length > 0 && oscStringOpenAfter(data, this.oscOpenInOutput)
   }
 
   /**
