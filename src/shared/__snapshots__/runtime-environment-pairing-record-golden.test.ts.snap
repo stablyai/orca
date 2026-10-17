@@ -1,0 +1,414 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`pairing record golden files > keeps the SSH-managed store byte-identical across add, refresh and remove > files 1`] = `
+[
+  {
+    "files": {
+      "orca-environment-sidecar.json": null,
+      "orca-environments.json": "{"version":1,"environments":[{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "store[<uuid>]",
+    ],
+    "step": "add paired neighbour",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": null,
+      "orca-environments.json": "{"version":1,"environments":[{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add invalid code",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": null,
+      "orca-environments.json": "{"version":1,"environments":[{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add wrong port",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "sidecar[managed-1:set]",
+      "store[managed-1,<uuid>]",
+    ],
+    "step": "add",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add duplicate id",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add duplicate name",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add bad code with a taken id",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add taken id and name with the wrong port",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add taken name with the wrong port",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "sidecar[managed-0:set]",
+      "store[managed-0,managed-1,<uuid>]",
+    ],
+    "step": "add second sorts first",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "store[managed-0,managed-1,<uuid>]",
+    ],
+    "step": "mark used with a runtime",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "refresh invalid code",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "refresh unchanged",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-1":{"binding":{"createdAt":100,"pairingRevision":300,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":300,"pairingRevision":300,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "sidecar[managed-1:set]",
+      "store[managed-0,managed-1,<uuid>]",
+      "sidecar[managed-1:set]",
+    ],
+    "step": "refresh rotated token",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-1":{"binding":{"createdAt":100,"pairingRevision":301,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":50,"pairingRevision":301,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-3","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "sidecar[managed-1:set]",
+      "store[managed-0,managed-1,<uuid>]",
+      "sidecar[managed-1:set]",
+    ],
+    "step": "refresh revision bump below previous",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-1":{"binding":{"createdAt":100,"pairingRevision":301,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":50,"pairingRevision":301,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-3","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "refresh wrong port",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}},"managed-1":{"binding":{"createdAt":100,"pairingRevision":301,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":50,"pairingRevision":301,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-3","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "refresh unmanaged",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-0":{"binding":{"createdAt":100,"pairingRevision":100,"preferredEndpointId":"ws-managed-0"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0"},{"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "store[managed-0,<uuid>]",
+      "sidecar[managed-1:clear]",
+    ],
+    "step": "remove",
+  },
+]
+`;
+
+exports[`pairing record golden files > keeps the SSH-managed store byte-identical across add, refresh and remove > outcomes 1`] = `
+[
+  "add paired neighbour -> ok {"id":"<uuid>","name":"Zeta","createdAt":10,"updatedAt":10,"pairingRevision":10,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-<uuid>","kind":"websocket","label":"WebSocket","endpoint":"ws://203.0.113.5:7000","deviceToken":"zeta-token","publicKeyB64":"CQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQk="}],"preferredEndpointId":"ws-<uuid>"}",
+  "add invalid code -> threw RuntimeEnvironmentStoreError(invalid_argument): Invalid managed pairing code.",
+  "add wrong port -> threw RuntimeEnvironmentStoreError(invalid_argument): The managed pairing does not point at its SSH tunnel.",
+  "add -> ok {"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1","orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}",
+  "add duplicate id -> threw RuntimeEnvironmentStoreError(invalid_argument): A server with id "managed-1" already exists.",
+  "add duplicate name -> threw RuntimeEnvironmentStoreError(invalid_argument): A server named "Managed" already exists.",
+  "add bad code with a taken id -> threw RuntimeEnvironmentStoreError(invalid_argument): Invalid managed pairing code.",
+  "add taken id and name with the wrong port -> threw RuntimeEnvironmentStoreError(invalid_argument): A server with id "managed-1" already exists.",
+  "add taken name with the wrong port -> threw RuntimeEnvironmentStoreError(invalid_argument): A server named "Managed" already exists.",
+  "add second sorts first -> ok {"id":"managed-0","name":"Alpha","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-0","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"alpha","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-0","orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}",
+  "mark used with a runtime -> ok",
+  "refresh invalid code -> threw RuntimeEnvironmentStoreError(invalid_argument): Invalid managed pairing code.",
+  "refresh unchanged -> ok {"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1","orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}",
+  "refresh rotated token -> ok {"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":300,"pairingRevision":300,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1","orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}",
+  "refresh revision bump below previous -> ok {"id":"managed-1","name":"Managed","createdAt":100,"updatedAt":50,"pairingRevision":301,"lastUsedAt":150,"runtimeId":"runtime-a","connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-3","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1","orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}",
+  "refresh wrong port -> threw RuntimeEnvironmentStoreError(invalid_argument): The managed pairing does not point at its SSH tunnel.",
+  "refresh unmanaged -> threw RuntimeEnvironmentStoreError(invalid_argument): This server is not managed.",
+  "remove -> ok",
+]
+`;
+
+exports[`pairing record golden files > keeps the WSL host store byte-identical across add, refresh and remove > files 1`] = `
+[
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [
+      "sidecar[managed-1:set]",
+      "store[managed-1]",
+    ],
+    "step": "add SSH-managed neighbour",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add invalid code",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"}]}",
+      "orca-wsl-host-deployments.json": null,
+    },
+    "order": [],
+    "step": "add wrong port",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [
+      "wsl[wsl:ubuntu:set]",
+      "store[managed-1,wsl:ubuntu]",
+    ],
+    "step": "add",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [],
+    "step": "add duplicate id",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [],
+    "step": "add duplicate name",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [],
+    "step": "refresh invalid code",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [
+      "store[managed-1,wsl:ubuntu]",
+    ],
+    "step": "mark used with a runtime",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [],
+    "step": "refresh unchanged",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6769,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [
+      "wsl[wsl:ubuntu:set]",
+    ],
+    "step": "refresh moved remote port only",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":300,"pairingRevision":300,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6769,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [
+      "store[managed-1,wsl:ubuntu]",
+    ],
+    "step": "refresh rotated token",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":50,"pairingRevision":301,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42001","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42001,"remotePort":6769,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [
+      "wsl[wsl:ubuntu:set]",
+      "store[managed-1,wsl:ubuntu]",
+    ],
+    "step": "refresh moved bridge",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":50,"pairingRevision":301,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42001","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42001,"remotePort":6769,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [],
+    "step": "managed refresh of a WSL host",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":50,"pairingRevision":301,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42001","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42002,"remotePort":6769,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [
+      "wsl[wsl:ubuntu:set]",
+    ],
+    "step": "refresh wrong port",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"},{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":50,"pairingRevision":301,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42001","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42002,"remotePort":6769,"environmentId":"wsl:ubuntu","createdAt":100}]}",
+    },
+    "order": [],
+    "step": "refresh not a WSL host",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[]}",
+    },
+    "order": [
+      "store[managed-1]",
+      "wsl[wsl:ubuntu:clear]",
+    ],
+    "step": "remove",
+  },
+  {
+    "files": {
+      "orca-environment-sidecar.json": "{"version":1,"entries":{"managed-1":{"binding":{"createdAt":90,"pairingRevision":90,"preferredEndpointId":"ws-managed-1"},"orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}}}",
+      "orca-environments.json": "{"version":1,"environments":[{"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1"}]}",
+      "orca-wsl-host-deployments.json": "{"version":1,"deployments":[]}",
+    },
+    "order": [
+      "wsl[wsl:ubuntu:clear]",
+    ],
+    "step": "remove again",
+  },
+]
+`;
+
+exports[`pairing record golden files > keeps the WSL host store byte-identical across add, refresh and remove > outcomes 1`] = `
+[
+  "add SSH-managed neighbour -> ok {"id":"managed-1","name":"Managed","createdAt":90,"updatedAt":90,"pairingRevision":90,"lastUsedAt":null,"runtimeId":null,"connectionDependency":"ssh-tunnel","endpoints":[{"id":"ws-managed-1","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:46768","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-managed-1","orcadDeployment":{"sshTargetId":"ssh-1","sshTargetGeneration":4,"localPort":46768,"remotePort":6768}}",
+  "add invalid code -> threw RuntimeEnvironmentStoreError(invalid_argument): Invalid WSL host pairing code.",
+  "add wrong port -> threw RuntimeEnvironmentStoreError(invalid_argument): The WSL host pairing does not point at its bridge.",
+  "add -> ok {"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":100,"pairingRevision":100,"lastUsedAt":null,"runtimeId":null,"endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu","orcadDeployment":{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768}}",
+  "add duplicate id -> threw RuntimeEnvironmentStoreError(invalid_argument): A server with id "wsl:ubuntu" already exists.",
+  "add duplicate name -> threw RuntimeEnvironmentStoreError(invalid_argument): A server named "Ubuntu (WSL)" already exists.",
+  "refresh invalid code -> threw RuntimeEnvironmentStoreError(invalid_argument): Invalid WSL host pairing code.",
+  "mark used with a runtime -> ok",
+  "refresh unchanged -> ok {"environment":{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu","orcadDeployment":{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6768}},"pairingChanged":false}",
+  "refresh moved remote port only -> ok {"environment":{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":150,"pairingRevision":100,"lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-1","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu","orcadDeployment":{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6769}},"pairingChanged":false}",
+  "refresh rotated token -> ok {"environment":{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":300,"pairingRevision":300,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42000","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu","orcadDeployment":{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42000,"remotePort":6769}},"pairingChanged":true}",
+  "refresh moved bridge -> ok {"environment":{"id":"wsl:ubuntu","name":"Ubuntu (WSL)","createdAt":100,"updatedAt":50,"pairingRevision":301,"pairedDeviceId":"device-9","lastUsedAt":150,"runtimeId":"runtime-w","endpoints":[{"id":"ws-wsl:ubuntu","kind":"websocket","label":"WebSocket","endpoint":"ws://127.0.0.1:42001","deviceToken":"token-2","publicKeyB64":"BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc="}],"preferredEndpointId":"ws-wsl:ubuntu","orcadDeployment":{"kind":"wsl","distro":"Ubuntu","distroId":"0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f","localPort":42001,"remotePort":6769}},"pairingChanged":true}",
+  "managed refresh of a WSL host -> threw RuntimeEnvironmentStoreError(invalid_argument): This server is not managed over SSH.",
+  "refresh wrong port -> threw RuntimeEnvironmentStoreError(invalid_argument): The WSL host pairing does not point at its bridge.",
+  "refresh not a WSL host -> threw RuntimeEnvironmentStoreError(invalid_argument): This server is not a WSL host.",
+  "remove -> ok",
+  "remove again -> ok",
+]
+`;

@@ -2,14 +2,21 @@
  * The runtime environment behind a WSL host (C7): a plain paired environment whose pairing points
  * at the desktop end of the `wsl.exe` stdio bridge, plus its record in the WSL deployment store.
  */
-import { parsePairingCode, type PairingOffer } from './pairing'
 import {
   createEnvironmentFromPairingOffer,
-  getPreferredLoopbackRuntimePort,
   getPreferredPairingOffer,
   PersistedRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment
 } from './runtime-environments'
+import {
+  assertNewEnvironmentIdAndName,
+  assertPairingUsesLoopbackPort,
+  isSamePairingOffer,
+  parseLoopbackPairingCode,
+  repairedPersistedEnvironment,
+  withEnvironmentAddedByName,
+  withEnvironmentReplaced
+} from './runtime-environment-pairing-record'
 import {
   readEnvironmentStore,
   readPersistedEnvironmentStore,
@@ -25,22 +32,8 @@ import {
 
 type WslHostPorts = Pick<WslHostDeploymentRecord, 'localPort' | 'remotePort'>
 
-function parseBridgedPairing(pairingCode: string): PairingOffer {
-  const offer = parsePairingCode(pairingCode)
-  if (!offer) {
-    throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid WSL host pairing code.')
-  }
-  return offer
-}
-
-function assertPairingUsesBridge(environment: KnownRuntimeEnvironment, localPort: number): void {
-  if (getPreferredLoopbackRuntimePort(environment) !== localPort) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'The WSL host pairing does not point at its bridge.'
-    )
-  }
-}
+const INVALID_WSL_PAIRING = 'Invalid WSL host pairing code.'
+const WSL_PORT_MISMATCH = 'The WSL host pairing does not point at its bridge.'
 
 export function findWslHostDeployment(
   userDataPath: string,
@@ -64,20 +57,8 @@ export function addWslHostEnvironment(
     now?: number
   }
 ): KnownRuntimeEnvironment {
-  const offer = parseBridgedPairing(args.pairingCode)
-  const known = readEnvironmentStore(userDataPath).environments
-  if (known.some((entry) => entry.id === args.id)) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `A server with id "${args.id}" already exists.`
-    )
-  }
-  if (known.some((entry) => entry.name === args.name)) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `A server named "${args.name}" already exists.`
-    )
-  }
+  const offer = parseLoopbackPairingCode(args.pairingCode, INVALID_WSL_PAIRING)
+  assertNewEnvironmentIdAndName(readEnvironmentStore(userDataPath).environments, args.id, args.name)
   const now = args.now ?? Date.now()
   // No connectionDependency: the overlay treats SSH-dependent environments as conflicting.
   const environment = createEnvironmentFromPairingOffer({
@@ -87,7 +68,7 @@ export function addWslHostEnvironment(
     offer,
     runtimeId: null
   })
-  assertPairingUsesBridge(environment, args.record.localPort)
+  assertPairingUsesLoopbackPort(environment, args.record.localPort, WSL_PORT_MISMATCH)
   writeWslHostDeployment(userDataPath, args.id, {
     ...args.record,
     environmentId: args.id,
@@ -96,8 +77,9 @@ export function addWslHostEnvironment(
   const persisted = PersistedRuntimeEnvironmentSchema.parse(environment)
   writeEnvironmentStore(userDataPath, {
     version: 1,
-    environments: [...readPersistedEnvironmentStore(userDataPath).environments, persisted].sort(
-      (a, b) => a.name.localeCompare(b.name)
+    environments: withEnvironmentAddedByName(
+      readPersistedEnvironmentStore(userDataPath).environments,
+      persisted
     )
   })
   return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), args.id)
@@ -113,7 +95,7 @@ export function refreshWslHostPairing(
   args: { pairingCode: string } & WslHostPorts,
   now = Date.now()
 ): { environment: KnownRuntimeEnvironment; pairingChanged: boolean } {
-  const offer = parseBridgedPairing(args.pairingCode)
+  const offer = parseLoopbackPairingCode(args.pairingCode, INVALID_WSL_PAIRING)
   const record = findWslHostDeployment(userDataPath, environmentId)
   if (!record) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not a WSL host.')
@@ -126,29 +108,16 @@ export function refreshWslHostPairing(
     })
   }
   const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
-  if (samePairing(getPreferredPairingOffer(current), offer)) {
+  if (isSamePairingOffer(getPreferredPairingOffer(current), offer)) {
     return { environment: current, pairingChanged: false }
   }
   const store = readPersistedEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, environmentId)
-  const next = PersistedRuntimeEnvironmentSchema.parse({
-    ...createEnvironmentFromPairingOffer({
-      id: existing.id,
-      name: existing.name,
-      now: existing.createdAt,
-      offer,
-      runtimeId: existing.runtimeId
-    }),
-    updatedAt: now,
-    pairingRevision: Math.max(now, (existing.pairingRevision ?? existing.createdAt) + 1),
-    lastUsedAt: existing.lastUsedAt
-  })
-  assertPairingUsesBridge(next, args.localPort)
+  const next = repairedPersistedEnvironment(existing, offer, now)
+  assertPairingUsesLoopbackPort(next, args.localPort, WSL_PORT_MISMATCH)
   writeEnvironmentStore(userDataPath, {
     version: 1,
-    environments: store.environments.map((candidate) =>
-      candidate.id === existing.id ? next : candidate
-    )
+    environments: withEnvironmentReplaced(store.environments, next)
   })
   return {
     environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
@@ -166,13 +135,4 @@ export function removeWslHostEnvironment(userDataPath: string, environmentId: st
     })
   }
   writeWslHostDeployment(userDataPath, environmentId, null)
-}
-
-function samePairing(left: PairingOffer, right: PairingOffer): boolean {
-  return (
-    left.endpoint === right.endpoint &&
-    left.deviceToken === right.deviceToken &&
-    left.publicKeyB64 === right.publicKeyB64 &&
-    left.pairedDeviceId === right.pairedDeviceId
-  )
 }

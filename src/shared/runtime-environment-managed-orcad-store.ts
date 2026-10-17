@@ -1,13 +1,20 @@
-import { parsePairingCode, type PairingOffer } from './pairing'
 import {
   createEnvironmentFromPairingOffer,
-  getPreferredLoopbackRuntimePort,
   getOrcadSshDeployment,
   getPreferredPairingOffer,
   PersistedRuntimeEnvironmentSchema,
   type KnownRuntimeEnvironment,
   type OrcadSshDeploymentLink
 } from './runtime-environments'
+import {
+  assertNewEnvironmentIdAndName,
+  assertPairingUsesLoopbackPort,
+  isSamePairingOffer,
+  parseLoopbackPairingCode,
+  repairedPersistedEnvironment,
+  withEnvironmentAddedByName,
+  withEnvironmentReplaced
+} from './runtime-environment-pairing-record'
 import {
   readEnvironmentStore,
   readPersistedEnvironmentStore,
@@ -20,6 +27,9 @@ import {
 } from './runtime-environment-sidecar'
 import { resolveEnvironmentFromStore } from './runtime-environment-store'
 
+const INVALID_MANAGED_PAIRING = 'Invalid managed pairing code.'
+const MANAGED_PORT_MISMATCH = 'The managed pairing does not point at its SSH tunnel.'
+
 /** Registers a server Orca deployed over SSH, paired through its own loopback tunnel. */
 export function addManagedOrcadEnvironment(
   userDataPath: string,
@@ -31,23 +41,8 @@ export function addManagedOrcadEnvironment(
     now?: number
   }
 ): KnownRuntimeEnvironment {
-  const offer = parsePairingCode(args.pairingCode)
-  if (!offer) {
-    throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid managed pairing code.')
-  }
-  const known = readEnvironmentStore(userDataPath).environments
-  if (known.some((entry) => entry.id === args.id)) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `A server with id "${args.id}" already exists.`
-    )
-  }
-  if (known.some((entry) => entry.name === args.name)) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      `A server named "${args.name}" already exists.`
-    )
-  }
+  const offer = parseLoopbackPairingCode(args.pairingCode, INVALID_MANAGED_PAIRING)
+  assertNewEnvironmentIdAndName(readEnvironmentStore(userDataPath).environments, args.id, args.name)
   const environment = createEnvironmentFromPairingOffer({
     id: args.id,
     name: args.name,
@@ -56,17 +51,12 @@ export function addManagedOrcadEnvironment(
     runtimeId: null,
     connectionDependency: 'ssh-tunnel'
   })
-  if (getPreferredLoopbackRuntimePort(environment) !== args.orcadDeployment.localPort) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'The managed pairing does not point at its SSH tunnel.'
-    )
-  }
+  assertPairingUsesLoopbackPort(environment, args.orcadDeployment.localPort, MANAGED_PORT_MISMATCH)
   const persisted = PersistedRuntimeEnvironmentSchema.parse(environment)
-  const environments = [
-    ...readPersistedEnvironmentStore(userDataPath).environments,
+  const environments = withEnvironmentAddedByName(
+    readPersistedEnvironmentStore(userDataPath).environments,
     persisted
-  ].sort((a, b) => a.name.localeCompare(b.name))
+  )
   // Sidecar first: a crash between the writes leaves an ownerless entry the next write prunes,
   // never a registered server that has lost its deployment link.
   writeRuntimeEnvironmentSidecarEntry(userDataPath, environments, persisted, {
@@ -106,10 +96,7 @@ export function refreshManagedOrcadPairing(
   pairingCode: string,
   now = Date.now()
 ): KnownRuntimeEnvironment {
-  const offer = parsePairingCode(pairingCode)
-  if (!offer) {
-    throw new RuntimeEnvironmentStoreError('invalid_argument', 'Invalid managed pairing code.')
-  }
+  const offer = parseLoopbackPairingCode(pairingCode, INVALID_MANAGED_PAIRING)
   const current = resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
   if (!current.orcadDeployment) {
     throw new RuntimeEnvironmentStoreError('invalid_argument', 'This server is not managed.')
@@ -123,34 +110,15 @@ export function refreshManagedOrcadPairing(
   }
   // Why skip: orcad keeps its pairing state across versions, so an unchanged offer needs no
   // rewrite, and every rewrite re-binds the sidecar entry.
-  if (samePairing(getPreferredPairingOffer(current), offer)) {
+  if (isSamePairingOffer(getPreferredPairingOffer(current), offer)) {
     return current
   }
   const store = readPersistedEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, environmentId)
   const entry = readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, existing)
-  const next = PersistedRuntimeEnvironmentSchema.parse({
-    ...createEnvironmentFromPairingOffer({
-      id: existing.id,
-      name: existing.name,
-      now: existing.createdAt,
-      offer,
-      runtimeId: existing.runtimeId,
-      connectionDependency: 'ssh-tunnel'
-    }),
-    updatedAt: now,
-    pairingRevision: Math.max(now, (existing.pairingRevision ?? existing.createdAt) + 1),
-    lastUsedAt: existing.lastUsedAt
-  })
-  if (getPreferredLoopbackRuntimePort(next) !== deployment.localPort) {
-    throw new RuntimeEnvironmentStoreError(
-      'invalid_argument',
-      'The managed pairing does not point at its SSH tunnel.'
-    )
-  }
-  const environments = store.environments.map((candidate) =>
-    candidate.id === existing.id ? next : candidate
-  )
+  const next = repairedPersistedEnvironment(existing, offer, now, 'ssh-tunnel')
+  assertPairingUsesLoopbackPort(next, deployment.localPort, MANAGED_PORT_MISMATCH)
+  const environments = withEnvironmentReplaced(store.environments, next)
   const { binding: _binding, ...rest } = entry ?? {}
   const state = { ...rest, orcadDeployment: deployment }
   // Why three writes: the entry stays current for both store states, so a failed or interrupted
@@ -159,15 +127,6 @@ export function refreshManagedOrcadPairing(
   writeEnvironmentStore(userDataPath, { version: 1, environments })
   writeRuntimeEnvironmentSidecarEntry(userDataPath, environments, next, state)
   return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId)
-}
-
-function samePairing(left: PairingOffer, right: PairingOffer): boolean {
-  return (
-    left.endpoint === right.endpoint &&
-    left.deviceToken === right.deviceToken &&
-    left.publicKeyB64 === right.publicKeyB64 &&
-    left.pairedDeviceId === right.pairedDeviceId
-  )
 }
 
 /**
