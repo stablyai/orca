@@ -24,6 +24,8 @@ export type ScreenRuledAgentSuite = {
   notReady: readonly ScreenRuledFixture[]
   /** Ready recordings the text rules or the quiet-process lane settle with no screen. */
   readyWithoutScreen: readonly string[]
+  /** Its rest screen keeps repainting (DSH's whale), so its rules settle a wait without quiet. */
+  repaintsAtRest?: boolean
 }
 
 // Why these: grids out of step with the recording garble cursor-addressed chrome (#23475 review).
@@ -82,6 +84,7 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
       ]
       for (const { ruledScreenLines, waitText } of frames) {
         expect(isQuietReadyScreenBody(waitText, agent, () => ruledScreenLines)).toBe(false)
+        expect(isKnownReadyPromptBody(waitText, agent, () => ruledScreenLines, true)).toBe(false)
       }
     })
   })
@@ -221,7 +224,37 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
       15_000
     )
 
-    it('waits for quiet again after a ready pane repaints', async () => {
+    it.skipIf(suite.repaintsAtRest)(
+      'waits for quiet again after a ready pane repaints',
+      async () => {
+        const { runtime, handle } = await pane(firstReady)
+        vi.useFakeTimers({
+          toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
+        })
+        try {
+          const settled = vi.fn()
+          const waiting = runtime.waitForTerminal(handle, {
+            condition: 'tui-idle',
+            timeoutMs: READY_TIMEOUT_MS
+          })
+          void waiting.then(settled, () => {})
+          await vi.advanceTimersByTimeAsync(2_000)
+          expect(settled).not.toHaveBeenCalled()
+
+          runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, readRuntimeFixture(firstReady.name), Date.now())
+          await runtime.readTerminal(handle, { screen: true })
+          await vi.advanceTimersByTimeAsync(2_000)
+          expect(settled).not.toHaveBeenCalled()
+
+          await vi.advanceTimersByTimeAsync(2_000)
+          await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
+        } finally {
+          vi.useRealTimers()
+        }
+      }
+    )
+
+    it.runIf(suite.repaintsAtRest)('settles a ready pane while it keeps repainting', async () => {
       const { runtime, handle } = await pane(firstReady)
       vi.useFakeTimers({
         toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval']
@@ -233,15 +266,11 @@ export function describeScreenRuledAgentTranscripts(suite: ScreenRuledAgentSuite
           timeoutMs: READY_TIMEOUT_MS
         })
         void waiting.then(settled, () => {})
-        await vi.advanceTimersByTimeAsync(2_000)
-        expect(settled).not.toHaveBeenCalled()
-
         runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, readRuntimeFixture(firstReady.name), Date.now())
         await runtime.readTerminal(handle, { screen: true })
+        // Why 2s: one poll tick, well inside the quiescence window the repaint just reset.
         await vi.advanceTimersByTimeAsync(2_000)
-        expect(settled).not.toHaveBeenCalled()
-
-        await vi.advanceTimersByTimeAsync(2_000)
+        expect(settled).toHaveBeenCalled()
         await expect(waiting).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
       } finally {
         vi.useRealTimers()
