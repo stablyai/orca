@@ -82,7 +82,8 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
   }
 
   async function runSetupBridge(
-    events: { type: string; data: Record<string, unknown> }[]
+    events: { type: string; data: Record<string, unknown> }[],
+    failSessionIDs: ReadonlySet<string> = new Set()
   ): Promise<{
     posts: Post[]
     lookups: string[]
@@ -105,6 +106,9 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
             throw new Error('Missing key at ["sessionID"]')
           }
           lookups.push(sessionID)
+          if (failSessionIDs.has(sessionID)) {
+            throw new Error('session lookup unavailable')
+          }
           const session = LIVE_SESSIONS[sessionID]
           if (!session) {
             throw new Error('unknown session')
@@ -204,6 +208,37 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin OpenCode 2 lineage'
       { type: 'form.created', data: { form: questionForm('form-child', CHILD) } },
       { type: 'session.execution.succeeded', data: { sessionID: ROOT } }
     ])
+    await vi.waitFor(() => {
+      expect(posts.map((post) => post.hook_event_name)).toContain('AskUserQuestion')
+    })
+    await vi.waitFor(() => {
+      expect(posts.at(-1)?.hook_event_name).toBe('SessionIdle')
+    })
+    expect(posts.at(-1)).toEqual(expect.objectContaining({ sessionID: ROOT }))
+    await cleanup?.()
+  })
+
+  // Why this case: the root's resolved ancestry is evictable — rootSessionById caps
+  // at 128 and a live blocker does not pin it — so a long-lived OpenCode process can
+  // drop the root mapping. If the root's idle then re-looks it up while the SDK is
+  // failing, control reaches the unknown-lineage branch; the blocker rolled up from
+  // the child must still retire there, or the pane stays blocked after the turn.
+  it('retires a root displayed child blocker when the root idle cannot resolve lineage', async () => {
+    const fillerSessions = Array.from({ length: 130 }, (_, index) => ({
+      type: 'session.created',
+      data: { sessionID: `ses_filler_${index}` }
+    }))
+    const { posts, cleanup } = await runSetupBridge(
+      [
+        created(ROOT),
+        created(CHILD),
+        { type: 'session.execution.started', data: { sessionID: ROOT } },
+        { type: 'form.created', data: { form: questionForm('form-child', CHILD) } },
+        ...fillerSessions,
+        { type: 'session.execution.succeeded', data: { sessionID: ROOT } }
+      ],
+      new Set([ROOT])
+    )
     await vi.waitFor(() => {
       expect(posts.map((post) => post.hook_event_name)).toContain('AskUserQuestion')
     })
