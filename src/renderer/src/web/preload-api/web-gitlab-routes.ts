@@ -10,6 +10,7 @@ export type WebGitLabRouteKey =
   | 'listLabels'
   | 'listAssignableUsers'
   | 'todos'
+  | 'knownHosts'
   | 'workItemDetails'
   | 'closeMR'
   | 'reopenMR'
@@ -35,6 +36,7 @@ export type WebGitLabRuntimeMethod =
   | 'gitlab.listLabels'
   | 'gitlab.listAssignableUsers'
   | 'gitlab.todos'
+  | 'gitlab.knownHosts'
   | 'gitlab.workItemDetails'
   | 'gitlab.updateMRState'
   | 'gitlab.mergeMR'
@@ -59,6 +61,7 @@ export const GITLAB_WEB_RPC_METHODS = {
   listLabels: 'gitlab.listLabels',
   listAssignableUsers: 'gitlab.listAssignableUsers',
   todos: 'gitlab.todos',
+  knownHosts: 'gitlab.knownHosts',
   workItemDetails: 'gitlab.workItemDetails',
   closeMR: 'gitlab.updateMRState',
   reopenMR: 'gitlab.updateMRState',

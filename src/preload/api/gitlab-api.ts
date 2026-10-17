@@ -96,6 +96,8 @@ export type GitLabApi = {
   listAssignableUsers: (args: GitLabRepoSelectorArgs) => Promise<GitLabAssignableUser[]>
   /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
   todos: (args: GitLabRepoSelectorArgs) => Promise<GitLabTodo[]>
+  /** Hosts glab is signed in to (plus gitlab.com) on the machine that runs the repo's glab. */
+  knownHosts: (args: GitLabRepoSelectorArgs) => Promise<string[]>
   workItemDetails: (
     args: GitLabRepoSelectorArgs & {
       iid: number

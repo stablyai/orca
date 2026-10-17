@@ -2,12 +2,10 @@ import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-me
 import { useEffect } from 'react'
 import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
-import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
 import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
 import {
-  getTaskPageRepoSourceContext,
+  gitLabTaskRepoSelector,
   isGitLabIssueFilter,
   isGitLabMRFilter
 } from '../task-page-source-context'
@@ -15,20 +13,11 @@ import {
 // Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
 
-function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
-  return {
-    repoPath: repo.path,
-    repoId: repo.id,
-    sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
-    repoOwnerExecutionHostId: getRepoExecutionHostId(repo)
-  }
-}
-
 type GitLabLoadingInput = Pick<
   TaskPageProviderMetadataModel,
-  | 'selectedRepos'
-  | 'selectedReposKey'
-  | 'primaryRepo'
+  | 'gitlabTaskRepos'
+  | 'gitlabTaskReposKey'
+  | 'gitlabPrimaryRepo'
   | 'taskSource'
   | 'setGitlabItems'
   | 'setGitlabLoading'
@@ -42,9 +31,9 @@ type GitLabLoadingInput = Pick<
 
 export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
   const {
-    selectedRepos,
-    selectedReposKey,
-    primaryRepo,
+    gitlabTaskRepos,
+    gitlabTaskReposKey,
+    gitlabPrimaryRepo,
     taskSource,
     setGitlabItems,
     setGitlabLoading,
@@ -73,8 +62,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     ) {
       return
     }
-    // Exclude folder workspaces without project remotes; read each repo on the host holding its GitLab sign-in.
-    const eligibleRepos = selectedRepos
+    // Leave out projects hosted on GitHub before glab sees them (#15784); read each repo on the host holding its GitLab sign-in.
+    const eligibleRepos = gitlabTaskRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
@@ -181,13 +170,13 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     return () => {
       stale = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above (see its GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gitlabTaskReposKey covers every gitlabTaskRepos field read above (see selectedReposKey's GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
   }, [
     taskSource,
     gitlabView,
     activeGitlabFilter,
     gitlabRefreshNonce,
-    selectedReposKey,
+    gitlabTaskReposKey,
     setGitlabError,
     setGitlabItems,
     setGitlabLoading
@@ -198,14 +187,14 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     if (taskSource !== 'gitlab' || gitlabView !== 'todos') {
       return
     }
-    if (!primaryRepo?.path) {
+    if (!gitlabPrimaryRepo?.path) {
       setGitlabTodos([])
       setGitlabTodosLoading(false)
       return
     }
     let stale = false
     setGitlabTodosLoading(true)
-    const selector = gitLabTaskRepoSelector(primaryRepo)
+    const selector = gitLabTaskRepoSelector(gitlabPrimaryRepo)
     void gitLabApiFor(selector)
       .todos(selector)
       .then((todos) => {
@@ -230,7 +219,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     taskSource,
     gitlabView,
     gitlabRefreshNonce,
-    primaryRepo,
+    gitlabPrimaryRepo,
     setGitlabTodosLoading,
     setGitlabTodos
   ])

@@ -2506,7 +2506,9 @@
         "jiraColumnStoryPoints": "포인트",
         "jiraColumnOriginalEstimate": "예상",
         "jiraColumnRemainingEstimate": "남음",
-        "jiraBoardEmptyColumn": "이슈 없음"
+        "jiraBoardEmptyColumn": "이슈 없음",
+        "skippedReposHostedOnGitLab": "건너뜀 — GitLab에 호스팅됨 ({{value0}})",
+        "skippedReposHostedOnGitHub": "건너뜀 — GitHub에 호스팅됨 ({{value0}})"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -18064,7 +18066,11 @@
         "noGitLabMrsTitle": "GitLab MR 없음",
         "noGitLabMrsDescription": "이 필터와 일치하는 GitLab MR이 없습니다.",
         "noGitLabWorkTitle": "GitLab 작업 없음",
-        "noGitLabWorkDescription": "이 필터와 일치하는 GitLab 작업이 없습니다."
+        "noGitLabWorkDescription": "이 필터와 일치하는 GitLab 작업이 없습니다.",
+        "noGitHubProjectsTitle": "선택한 GitHub 프로젝트 없음",
+        "noGitHubProjectsDescription": "선택한 프로젝트는 GitLab에 호스팅되어 있습니다. GitHub에 호스팅된 프로젝트를 선택하세요.",
+        "noGitLabProjectsTitle": "선택한 GitLab 프로젝트 없음",
+        "noGitLabProjectsDescription": "선택한 프로젝트는 GitHub에 호스팅되어 있습니다. GitLab에 호스팅된 프로젝트를 선택하세요."
       },
       "taskSourceContextSummary": {
         "sourceUnavailable": "{{value0}} 소스를 사용할 수 없음: {{value1}}",

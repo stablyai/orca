@@ -1,7 +1,7 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { glabExecFileAsync } from '../git/runner'
-import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
+import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from '../../shared/gitlab-project-ref-parser'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
 export type LocalGitExecOptions = {

@@ -30,7 +30,8 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     openTaskPage,
     repos,
     selectedRepos,
-    primaryRepo,
+    githubTaskRepos,
+    gitlabPrimaryRepo,
     setGithubMode,
     gitlabDialogItem,
     setGitlabDialogItem,
@@ -65,7 +66,7 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
     useShallow((s) =>
       selectTaskPageWorkItemsCacheEntries(
         s.workItemsCache,
-        selectedRepos.map(getTaskPageRepoCacheInput),
+        githubTaskRepos.map(getTaskPageRepoCacheInput),
         githubPerRepoPageLimit,
         appliedWorkItemsCacheQuery
       )
@@ -127,8 +128,10 @@ export function useTaskPageGitHubDetail(model: TaskPageGitHubListStateModel) {
   }, [dialogRepo, dialogWorkItem, pageData.openGitHubSourceContext, pageData.openGitHubWorkItem])
   const gitlabDialogRepo = useMemo(
     () =>
-      gitlabDialogItem ? (getWorkItemRepo(selectedRepos, gitlabDialogItem) ?? primaryRepo) : null,
-    [gitlabDialogItem, primaryRepo, selectedRepos]
+      gitlabDialogItem
+        ? (getWorkItemRepo(selectedRepos, gitlabDialogItem) ?? gitlabPrimaryRepo)
+        : null,
+    [gitlabDialogItem, gitlabPrimaryRepo, selectedRepos]
   )
   const gitlabDialogSourceContext = useMemo(() => {
     if (!gitlabDialogItem) {

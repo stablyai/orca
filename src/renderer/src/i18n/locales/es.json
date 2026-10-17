@@ -2521,7 +2521,9 @@
         "jiraColumnStoryPoints": "Puntos",
         "jiraColumnOriginalEstimate": "Estimación",
         "jiraColumnRemainingEstimate": "Restante",
-        "jiraBoardEmptyColumn": "Sin incidencias"
+        "jiraBoardEmptyColumn": "Sin incidencias",
+        "skippedReposHostedOnGitLab": "Omitidos — alojados en GitLab ({{value0}})",
+        "skippedReposHostedOnGitHub": "Omitidos — alojados en GitHub ({{value0}})"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -18080,7 +18082,11 @@
         "noGitLabMrsTitle": "No hay merge requests de GitLab",
         "noGitLabMrsDescription": "Ningún MR de GitLab coincide con este filtro.",
         "noGitLabWorkTitle": "No hay trabajo de GitLab",
-        "noGitLabWorkDescription": "Ningún trabajo de GitLab coincide con este filtro."
+        "noGitLabWorkDescription": "Ningún trabajo de GitLab coincide con este filtro.",
+        "noGitHubProjectsTitle": "No hay proyectos de GitHub seleccionados",
+        "noGitHubProjectsDescription": "Los proyectos seleccionados están alojados en GitLab. Selecciona un proyecto alojado en GitHub.",
+        "noGitLabProjectsTitle": "No hay proyectos de GitLab seleccionados",
+        "noGitLabProjectsDescription": "Los proyectos seleccionados están alojados en GitHub. Selecciona un proyecto alojado en GitLab."
       },
       "taskSourceContextSummary": {
         "sourceUnavailable": "Origen {{value0}} no disponible: {{value1}}",

@@ -4,7 +4,7 @@ import { runTaskPageGitHubLandingRefresh } from './task-page-github-landing-refr
 export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
   const {
     workItemsInvalidationNonce,
-    selectedReposKey,
+    githubTaskReposKey,
     taskSource,
     taskResumeApplied,
     githubMode,
@@ -14,10 +14,10 @@ export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   } = model
   useEffect(() => {
     return runTaskPageGitHubLandingRefresh(model)
-    // Why: selectedReposKey covers every repo field read by the request.
+    // Why: githubTaskReposKey covers every repo field read by the request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    selectedReposKey,
+    githubTaskReposKey,
     appliedTaskSearch,
     taskRefreshNonce,
     taskSource,

@@ -9,6 +9,7 @@ import {
   getGitLabJobTraceMock,
   getGitLabWorkItemByProjectRefMock,
   getGitLabWorkItemDetailsMock,
+  getGlabKnownHostsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
   listGitLabAssignableUsersMock,
@@ -90,6 +91,7 @@ describe('OrcaRuntimeService', () => {
     await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
     const issues = await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', '@me', 50, 3)
     await runtime.listGitLabRepoTodos(TEST_REPO_ID)
+    await runtime.listGitLabRepoKnownHosts(TEST_REPO_ID)
     await runtime.listGitLabRepoLabels(TEST_REPO_ID)
     await runtime.listGitLabRepoAssignableUsers(TEST_REPO_ID)
     await runtime.createGitLabRepoIssue(TEST_REPO_ID, 'New issue', 'Body')
@@ -120,6 +122,7 @@ describe('OrcaRuntimeService', () => {
       'issue'
     )
 
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith('ssh-1')
     expect(listGitLabMergeRequestsMock).toHaveBeenCalledWith(
       '/remote/repo',
       'closed',
@@ -315,6 +318,7 @@ describe('OrcaRuntimeService', () => {
     await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'opened', 1, 20)
     await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', undefined, 20)
     await runtime.listGitLabRepoTodos(TEST_REPO_ID)
+    await runtime.listGitLabRepoKnownHosts(TEST_REPO_ID)
     await runtime.listGitLabRepoLabels(TEST_REPO_ID)
     await runtime.createGitLabRepoIssue(TEST_REPO_ID, 'Title', 'Body')
     await runtime.updateGitLabRepoIssue(TEST_REPO_ID, 7, { body: 'Updated' })
@@ -351,6 +355,7 @@ describe('OrcaRuntimeService', () => {
       1
     )
     expect(listGitLabTodosMock).toHaveBeenCalledWith(TEST_REPO_PATH, null, localGitOptions)
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith(null, localGitOptions)
     expect(listGitLabLabelsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       undefined,

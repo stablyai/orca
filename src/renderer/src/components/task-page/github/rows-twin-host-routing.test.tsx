@@ -61,7 +61,7 @@ function renderRows(item: GitHubWorkItem, showPRManagementColumns: boolean) {
     // By id a map keeps the last twin, which is the row that did not return the item.
     repoMap: new Map(repos.map((repo) => [repo.id, repo])),
     allWorktrees: [],
-    selectedRepos: repos,
+    githubTaskRepos: repos,
     openGitHubDetailPage: vi.fn(),
     githubWorkItemMutation: vi.fn(),
     filteredWorkItems: [item],

@@ -184,7 +184,6 @@ describe('Electron Vite output contract', () => {
       electronBuilderConfig.asarUnpack
     ).createFilter()
     for (const name of [
-      'gitlab/project-ref-parser',
       'macos-tree-clone',
       'orca-profiles/profile-index-store',
       'persistence/profile-state/profile-state-access',

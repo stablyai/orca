@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/repo-types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
+import type * as GitLabUtils from '../gitlab/gl-utils'
 
 const ORIGINAL_PLATFORM = process.platform
 
@@ -38,7 +39,8 @@ const {
   getWorkItemByProjectRefMock,
   getMergeRequestMock,
   getMergeRequestForBranchMock,
-  getProjectSlugMock
+  getProjectSlugMock,
+  getGlabKnownHostsMock
 } = vi.hoisted(() => ({
   ipcHandlers: new Map<string, (...args: unknown[]) => unknown>(),
   listMergeRequestsMock: vi.fn(),
@@ -65,7 +67,8 @@ const {
   getWorkItemByProjectRefMock: vi.fn(),
   getMergeRequestMock: vi.fn(),
   getMergeRequestForBranchMock: vi.fn(),
-  getProjectSlugMock: vi.fn()
+  getProjectSlugMock: vi.fn(),
+  getGlabKnownHostsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -104,6 +107,11 @@ vi.mock('../gitlab/client', () => ({
   updateIssue: updateIssueMock,
   updateMR: updateMRMock,
   updateMRReviewers: updateMRReviewersMock
+}))
+
+vi.mock('../gitlab/gl-utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof GitLabUtils>()),
+  getGlabKnownHosts: getGlabKnownHostsMock
 }))
 
 vi.mock('../gitlab/work-item-details', () => ({
@@ -171,7 +179,8 @@ describe('GitLab IPC handlers', () => {
       getWorkItemByProjectRefMock,
       getMergeRequestMock,
       getMergeRequestForBranchMock,
-      getProjectSlugMock
+      getProjectSlugMock,
+      getGlabKnownHostsMock
     ]) {
       mock.mockReset()
     }
@@ -274,6 +283,46 @@ describe('GitLab IPC handlers', () => {
     )
   })
 
+  it("answers glab's known hosts from the repo's own execution context", async () => {
+    const remoteRepo = repo({
+      id: 'repo-ssh',
+      path: '/ssh/orca',
+      connectionId: 'builder',
+      executionHostId: toSshExecutionHostId('builder')
+    })
+    getGlabKnownHostsMock.mockResolvedValueOnce(['gitlab.com', 'git.example.co.jp'])
+    registerGitLabHandlers(storeWithRepos([repo(), remoteRepo]) as Store)
+
+    const handler = ipcHandlers.get('gitlab:knownHosts')
+    await expect(handler?.(null, { repoPath: '/ssh/orca', repoId: 'repo-ssh' })).resolves.toEqual([
+      'gitlab.com',
+      'git.example.co.jp'
+    ])
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith('builder')
+
+    await expect(handler?.(null, { repoPath: '/not/registered' })).rejects.toThrow(
+      'Access denied: unknown repository path'
+    )
+    expect(getGlabKnownHostsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks the SSH host of a row that names it only as its execution host', async () => {
+    const remoteRepo = repo({
+      id: 'repo-ssh',
+      path: '/ssh/orca',
+      executionHostId: toSshExecutionHostId('builder')
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The knownHosts handler reads only the store methods stubbed here.
+    registerGitLabHandlers(storeWithRepos([remoteRepo]) as Store)
+
+    await ipcHandlers.get('gitlab:knownHosts')?.(null, {
+      repoPath: '/ssh/orca',
+      repoId: 'repo-ssh'
+    })
+
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith('builder')
+  })
+
   it('rejects source context for a different host', async () => {
     registerGitLabHandlers(
       storeWithRepos([repo({ id: 'repo-local', path: '/local/orca' })]) as Store
@@ -360,6 +409,7 @@ describe('GitLab IPC handlers', () => {
     listLabelsMock.mockResolvedValue([])
     listAssignableUsersMock.mockResolvedValue([])
     listTodosMock.mockResolvedValue([])
+    getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'stablyai/orca' })
     getMergeRequestForBranchMock.mockResolvedValue(null)
     getMergeRequestMock.mockResolvedValue(null)
@@ -409,6 +459,7 @@ describe('GitLab IPC handlers', () => {
     await ipcHandlers.get('gitlab:listLabels')?.(null, { repoPath: '/local/orca' })
     await ipcHandlers.get('gitlab:listAssignableUsers')?.(null, { repoPath: '/local/orca' })
     await ipcHandlers.get('gitlab:todos')?.(null, { repoPath: '/local/orca' })
+    await ipcHandlers.get('gitlab:knownHosts')?.(null, { repoPath: '/local/orca' })
 
     const hostedReviewOptions = { localGitExecOptions: localGitOptions }
     expect(getProjectSlugMock).toHaveBeenCalledWith('/local/orca', null, hostedReviewOptions)
@@ -486,6 +537,7 @@ describe('GitLab IPC handlers', () => {
       localGitOptions
     )
     expect(listTodosMock).toHaveBeenCalledWith('/local/orca', null, localGitOptions)
+    expect(getGlabKnownHostsMock).toHaveBeenCalledWith(null, localGitOptions)
   })
 
   it('routes local WSL project GitLab MR details, review, job, and pasted URL IPC through project git options', async () => {

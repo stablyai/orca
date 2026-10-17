@@ -72,6 +72,12 @@ export const GITLAB_METHODS = [
     handler: async (params, { runtime }) => runtime.listGitLabRepoTodos(params.repo)
   }),
   defineMethod({
+    name: 'gitlab.knownHosts',
+    permission: 'workspace',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.listGitLabRepoKnownHosts(params.repo)
+  }),
+  defineMethod({
     name: 'gitlab.diagnoseAuth',
     permission: 'workspace',
     params: EmptyParams,

@@ -2506,7 +2506,9 @@
         "jiraColumnStoryPoints": "ポイント",
         "jiraColumnOriginalEstimate": "見積もり",
         "jiraColumnRemainingEstimate": "残り",
-        "jiraBoardEmptyColumn": "Issue はありません"
+        "jiraBoardEmptyColumn": "Issue はありません",
+        "skippedReposHostedOnGitLab": "リモートが GitLab のため対象外: {{value0}} 件",
+        "skippedReposHostedOnGitHub": "リモートが GitHub のため対象外: {{value0}} 件"
       },
       "Terminal": {
         "73768427cf": "閉じる",
@@ -18064,7 +18066,11 @@
         "noGitLabMrsTitle": "GitLab の MR はありません",
         "noGitLabMrsDescription": "このフィルターに一致する GitLab の MR はありません。",
         "noGitLabWorkTitle": "GitLab の作業はありません",
-        "noGitLabWorkDescription": "このフィルターに一致する GitLab の作業はありません。"
+        "noGitLabWorkDescription": "このフィルターに一致する GitLab の作業はありません。",
+        "noGitHubProjectsTitle": "GitHub のプロジェクトが選択されていません",
+        "noGitHubProjectsDescription": "選択中のプロジェクトは GitLab にあります。GitHub にあるプロジェクトを選択してください。",
+        "noGitLabProjectsTitle": "GitLab のプロジェクトが選択されていません",
+        "noGitLabProjectsDescription": "選択中のプロジェクトは GitHub にあります。GitLab にあるプロジェクトを選択してください。"
       },
       "taskSourceContextSummary": {
         "sourceUnavailable": "{{value0}} のソースを利用できません: {{value1}}",

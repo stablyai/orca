@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseGitLabProjectRef, parseRemoteProjectRefCandidate } from './project-ref-parser'
+import { parseGitLabProjectRef, parseRemoteProjectRefCandidate } from './gitlab-project-ref-parser'
 
 describe('gitlab project ref parsing', () => {
   it('parses HTTPS and SSH GitLab.com remotes', () => {

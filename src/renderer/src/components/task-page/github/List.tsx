@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { LoaderCircle } from 'lucide-react'
 import { TaskPageGitHubRows } from './Rows'
 import { PaginationBar } from '../PaginationBar'
+import { TaskPageSkippedReposNotice } from '../SkippedReposNotice'
 import { supersedeGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
 export function TaskPageGitHubList({
   model
@@ -20,7 +21,8 @@ export function TaskPageGitHubList({
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
   const {
-    selectedRepos,
+    githubTaskRepos,
+    githubExcludedRepos,
     githubEmptyState,
     tasksLoading,
     tasksError,
@@ -137,7 +139,7 @@ export function TaskPageGitHubList({
           // Why: per-repo partial-failure signal, distinct from a hard IPC reject (tasksError); the two are mutually exclusive.
           <div className="border-b border-border/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-200">
             {failedCount} {translate('auto.components.TaskPage.7762f4b03a', 'of')}{' '}
-            {selectedRepos.length}{' '}
+            {githubTaskRepos.length}{' '}
             {translate('auto.components.TaskPage.d1766fd62d', 'projects failed to load')}
           </div>
         ) : null}
@@ -217,6 +219,8 @@ export function TaskPageGitHubList({
             </Button>
           </div>
         ))}
+
+        <TaskPageSkippedReposNotice provider="github" repos={githubExcludedRepos} />
 
         {showGitHubTaskSkeletons ? (
           // Fill a typical viewport with shimmer rows to avoid a height jump when results arrive.
