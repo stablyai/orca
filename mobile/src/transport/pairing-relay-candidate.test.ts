@@ -4,6 +4,7 @@ import { RelayOuterError } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { RelayDirectorMoveNotNewerError } from './mobile-relay-invite-director'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import type { ConnectionLogEntry } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -223,8 +224,8 @@ describe('recovering pairing relay candidate', () => {
     })
 
     await expect(candidate.sendRequest('status.get')).rejects.toEqual(new RelayOuterError(1006))
-    expect(resolveDirector).toHaveBeenCalledTimes(3)
-    expect(connects).toBe(4)
+    expect(resolveDirector).toHaveBeenCalledTimes(16)
+    expect(connects).toBe(17)
   })
 
   it('keeps a cell load refusal out of director recovery', async () => {
@@ -295,7 +296,7 @@ describe('recovering pairing relay candidate', () => {
     expect(resolveDirector).toHaveBeenCalledOnce()
   })
 
-  it('bounds director recovery and applies full jitter to failures and target retries', async () => {
+  it('bounds director recovery and applies equal jitter to failures and target retries', async () => {
     const stale = client(Promise.reject(new Error('HTTP 503')))
     const target = client(Promise.resolve(success()))
     const resolveDirector = vi
@@ -322,7 +323,7 @@ describe('recovering pairing relay candidate', () => {
 
     await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
     expect(resolveDirector).toHaveBeenCalledTimes(3)
-    expect(sleep.mock.calls.map(([delay]) => delay)).toEqual([50, 100, 200])
+    expect(sleep.mock.calls.map(([delay]) => delay)).toEqual([187, 375, 750])
   })
 
   it('narrates every director attempt, cell move and backoff to the pairing log', async () => {
@@ -352,12 +353,12 @@ describe('recovering pairing relay candidate', () => {
     await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
     expect(entries.map((entry) => `${entry.level}|${entry.message}`)).toEqual([
       'warn|Relay: cell dial failed',
-      'info|Relay: resolving director (attempt 1/3)',
+      'info|Relay: resolving director (attempt 1/16)',
       'warn|Relay: recovery attempt 1 failed',
-      'info|Relay: backing off 50ms',
-      'info|Relay: resolving director (attempt 2/3)',
+      'info|Relay: backing off 187ms',
+      'info|Relay: resolving director (attempt 2/16)',
       'info|Relay: cell moved',
-      'info|Relay: backing off 100ms'
+      'info|Relay: backing off 375ms'
     ])
     expect(entries[0]!.detail).toBe('Error: HTTP 503')
     expect(entries[1]!.detail).toBe('relay.onorca.dev')
@@ -395,5 +396,69 @@ describe('recovering pairing relay candidate', () => {
         detail: 'after 2 attempt(s)'
       })
     ])
+  })
+
+  describe('director stall window', () => {
+    // The shared fixture's invite expires at 10 s, which would end recovery first.
+    const freshJournal: MobileRelayPairingJournal = {
+      ...journal,
+      metadata: {
+        ...journal.metadata,
+        relay: { ...journal.metadata.relay, inviteExpiresAt: 10 * 60_000 }
+      }
+    }
+
+    function stalledDirector(stallMs: number) {
+      let clock = 0
+      const resolveDirector = vi.fn(async (relay: PairingRelay) => {
+        if (clock < stallMs) {
+          throw new Error('HTTP 503')
+        }
+        return { ...relay, cellUrl: 'https://relay-c2.onorca.dev', assignmentEpoch: 8 }
+      })
+      return {
+        resolveDirector,
+        now: () => clock,
+        sleep: async (delayMs: number) => {
+          clock += delayMs
+        }
+      }
+    }
+
+    it('rides out a 7 s director stall that fails fast', async () => {
+      const director = stalledDirector(7_000)
+      const target = client(Promise.resolve(success()))
+      let connects = 0
+      const candidate = createRecoveringPairingRelayCandidate({
+        journal: freshJournal,
+        connect: () =>
+          connects++ === 0 ? client(Promise.reject(new RelayOuterError(1006))) : target,
+        resolveDirector: director.resolveDirector,
+        persistMove: vi.fn(async () => {}),
+        now: director.now,
+        random: () => 0,
+        sleep: director.sleep
+      })
+
+      await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
+    })
+
+    it('gives up once the window passes, inside the overall pairing cap', async () => {
+      const director = stalledDirector(Number.POSITIVE_INFINITY)
+      const candidate = createRecoveringPairingRelayCandidate({
+        journal: freshJournal,
+        connect: () => client(Promise.reject(new RelayOuterError(1006))),
+        resolveDirector: director.resolveDirector,
+        persistMove: vi.fn(async () => {}),
+        now: director.now,
+        random: () => 1,
+        sleep: director.sleep,
+        maxRecoveryAttempts: 100
+      })
+
+      await expect(candidate.sendRequest('status.get')).rejects.toThrow('HTTP 503')
+      expect(director.now()).toBeGreaterThanOrEqual(12_000)
+      expect(director.now()).toBeLessThan(25_000)
+    })
   })
 })
