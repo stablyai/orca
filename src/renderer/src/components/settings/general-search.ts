@@ -56,6 +56,32 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.general.search.askProjectKindOnAdd',
+      'Ask Git or Folder When Adding Projects'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.askProjectKindOnAddDescription',
+      'Choose Git or folder mode when a picked folder is inside a Git repository.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.projectKindProject',
+        'project'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.projectKindFolder',
+        'folder'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.projectKindGit', 'git'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.projectKindMonorepo',
+        'monorepo'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.9bde064915', 'subfolder')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.general.search.913242091d',
       'Ask Before Deleting Workspaces'
     ),

@@ -208,6 +208,7 @@ export function buildDefaultSettings(args: {
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
     skipCodexRateLimitResetConfirm: false,
+    askProjectKindOnAdd: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: [...TASK_PROVIDERS],

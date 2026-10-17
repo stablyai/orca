@@ -4,29 +4,17 @@ import { track } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
-  createNestedRepoTelemetryAttemptId,
-  type NestedRepoTelemetryRuntimeKind
+  createNestedRepoTelemetryAttemptId
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import type { RepoSlice } from '@/store/repos/repo-state'
-import { createNestedRepoScanId } from './add-repo-dialog-types'
+import { createNestedRepoScanId, type ShowNestedRepoReview } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-
-type ShowNestedRepoReview = (args: {
-  scan: NestedRepoScanResult
-  selectedPath: string
-  connectionId: string | null
-  attemptId: string
-  runtimeKind: NestedRepoTelemetryRuntimeKind
-  inProgress: boolean
-  scanId: string | null
-  runtimeEnvironmentId?: string | null
-}) => void
+import { useProjectKindChoice, type ProjectKindChoiceState } from './use-project-kind-choice'
 
 type LocalPathAddResult =
   | { status: 'completed'; repo: Repo }
@@ -69,7 +57,10 @@ export function useAddRepoLocalFolderFlow({
 }): {
   handleBrowse: () => Promise<void>
   resetLocalFolderFlow: () => void
+  projectKindChoice: ProjectKindChoiceState
 } {
+  const projectKindChoice = useProjectKindChoice(closeModal)
+  const { chooseProjectKind } = projectKindChoice
   const localAddGenRef = useRef(0)
   const droppedLocalPathHandledRef = useRef<string | null>(null)
 
@@ -160,6 +151,15 @@ export function useAddRepoLocalFolderFlow({
           })
           return { status: 'paused' }
         }
+        if (chooseProjectKind && mode === 'single' && scan?.selectedPathKind === 'git_repo') {
+          const chosen = await chooseProjectKind(path)
+          if (gen !== localAddGenRef.current) {
+            return { status: 'cancelled' }
+          }
+          if (chosen !== 'git') {
+            return chosen
+          }
+        }
         setAddProjectBusyLabel('Opening project...')
         const repo = await addRepoPath(path, undefined, {
           runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
@@ -196,6 +196,7 @@ export function useAddRepoLocalFolderFlow({
     [
       activeRuntimeEnvironmentId,
       addRepoPath,
+      chooseProjectKind,
       clearNestedScanState,
       closeModal,
       fetchWorktrees,
@@ -310,5 +311,5 @@ export function useAddRepoLocalFolderFlow({
     }
   }, [clearNestedScanState, handleAddLocalPaths, setAddProjectBusyLabel, setIsAdding])
 
-  return { handleBrowse, resetLocalFolderFlow }
+  return { handleBrowse, resetLocalFolderFlow, projectKindChoice }
 }

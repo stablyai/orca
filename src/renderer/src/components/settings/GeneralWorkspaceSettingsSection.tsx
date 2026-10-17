@@ -101,6 +101,31 @@ export function GeneralWorkspaceSettingsSection({
         />
       </SearchableSetting>
 
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.askProjectKindOnAdd',
+          'Ask Git or Folder When Adding Projects'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.askProjectKindOnAddDescription',
+          'Choose Git or folder mode when a picked folder is inside a Git repository.'
+        )}
+        keywords={['project', 'folder', 'git', 'monorepo', 'subfolder', 'add', 'kind', 'mode']}
+      >
+        <SettingsSwitchRow
+          label={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.askProjectKindOnAdd',
+            'Ask Git or Folder When Adding Projects'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.askProjectKindOnAddDetail',
+            'When a picked folder is inside a Git repository, ask whether to add it as a Git project or as a plain folder. Folder mode lets you add monorepo subfolders as separate projects, without worktrees or source control.'
+          )}
+          checked={settings.askProjectKindOnAdd}
+          onChange={() => updateSettings({ askProjectKindOnAdd: !settings.askProjectKindOnAdd })}
+        />
+      </SearchableSetting>
+
       {/* Why: the "Don't ask again" toast in the delete-worktree dialog
           deep-links here, so the wrapper id must stay stable. Renaming it
           breaks that toast action even though this pane still renders fine. */}

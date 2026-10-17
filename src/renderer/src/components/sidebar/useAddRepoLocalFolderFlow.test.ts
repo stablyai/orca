@@ -24,6 +24,14 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn()
 }))
 
+const projectKindChoice: { chooseProjectKind: ReturnType<typeof vi.fn> | undefined } = {
+  chooseProjectKind: undefined
+}
+
+vi.mock('./use-project-kind-choice', () => ({
+  useProjectKindChoice: () => projectKindChoice
+}))
+
 function makeScan(
   path: string,
   overrides: Partial<NestedRepoScanResult> = {}
@@ -78,6 +86,7 @@ describe('useAddRepoLocalFolderFlow', () => {
       }
     })
     addRepoPath.mockImplementation(async (path: string) => makeRepo(path))
+    projectKindChoice.chooseProjectKind = undefined
     fetchWorktrees.mockResolvedValue(true)
     scanNestedRepos.mockImplementation(async (path: string) => makeScan(path))
     onGitRepoReady.mockResolvedValue(undefined)
@@ -238,5 +247,83 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(addRepoPath).not.toHaveBeenCalled()
     expect(onGitRepoReady).not.toHaveBeenCalled()
+  })
+
+  describe('when asking for the project kind', () => {
+    const chooseProjectKind = vi.fn()
+
+    function flowArgs() {
+      return {
+        isOpen: true,
+        droppedLocalPath: '',
+        activeRuntimeEnvironmentId: null,
+        addRepoPath,
+        closeModal,
+        fetchWorktrees,
+        scanNestedRepos,
+        setActiveNestedScanId,
+        setNestedScanInProgress,
+        showNestedRepoReview,
+        onGitRepoReady,
+        setIsAdding,
+        setAddProjectBusyLabel
+      }
+    }
+
+    beforeEach(() => {
+      projectKindChoice.chooseProjectKind = chooseProjectKind
+    })
+
+    it('stops the git add when the chooser adds a folder project', async () => {
+      const folderRepo = { ...makeRepo('/projects/monorepo/apps/web'), kind: 'folder' as const }
+      chooseProjectKind.mockResolvedValue({ status: 'completed', repo: folderRepo })
+      pickFolders.mockResolvedValue(['/projects/monorepo/apps/web'])
+      const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+      await useAddRepoLocalFolderFlow(flowArgs()).handleBrowse()
+
+      expect(chooseProjectKind).toHaveBeenCalledWith('/projects/monorepo/apps/web')
+      expect(addRepoPath).not.toHaveBeenCalled()
+      expect(onGitRepoReady).not.toHaveBeenCalled()
+    })
+
+    it('keeps the git flow when git is chosen', async () => {
+      chooseProjectKind.mockResolvedValue('git')
+      pickFolders.mockResolvedValue(['/projects/alpha'])
+      const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+      await useAddRepoLocalFolderFlow(flowArgs()).handleBrowse()
+
+      expect(addRepoPath).toHaveBeenCalledWith('/projects/alpha', undefined, {
+        runtimeEnvironmentId: null
+      })
+      expect(onGitRepoReady).toHaveBeenCalledWith('alpha', 'local_folder_picker', 'local')
+    })
+
+    it('adds nothing when the choice is dismissed', async () => {
+      chooseProjectKind.mockResolvedValue({ status: 'paused' })
+      pickFolders.mockResolvedValue(['/projects/alpha'])
+      const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+      await useAddRepoLocalFolderFlow(flowArgs()).handleBrowse()
+
+      expect(addRepoPath).not.toHaveBeenCalled()
+      expect(closeModal).not.toHaveBeenCalled()
+    })
+
+    it('does not ask for non-git folders or multi-folder adds', async () => {
+      scanNestedRepos.mockImplementation(async (path: string) =>
+        makeScan(path, path === '/projects/plain' ? { selectedPathKind: 'non_git_folder' } : {})
+      )
+      const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+      pickFolders.mockResolvedValue(['/projects/plain'])
+      await useAddRepoLocalFolderFlow(flowArgs()).handleBrowse()
+      pickFolders.mockResolvedValue(['/projects/alpha', '/projects/beta'])
+      await useAddRepoLocalFolderFlow(flowArgs()).handleBrowse()
+
+      expect(chooseProjectKind).not.toHaveBeenCalled()
+      expect(addRepoPath).toHaveBeenCalledTimes(3)
+    })
   })
 })
