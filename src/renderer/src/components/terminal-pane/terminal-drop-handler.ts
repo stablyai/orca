@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
+import { useAppStore } from '@/store'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import {
@@ -9,7 +10,10 @@ import {
   readWorkspaceFileDragSource
 } from '@/lib/workspace-file-drag'
 import { captureTerminalDropTarget } from './terminal-drop-target'
-import { resolveTerminalDropTargetShell } from './terminal-drop-shell'
+import {
+  resolveTerminalDropInputShell,
+  resolveTerminalDropTargetShell
+} from './terminal-drop-shell'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 import { resolveInternalTerminalDropPane } from './terminal-drop-pane-resolution'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
@@ -118,13 +122,25 @@ export async function handleInternalTerminalFileDrop({
     worktreePath,
     connectionId
   })
+  const inputShell = resolveTerminalDropInputShell({
+    targetShell,
+    remoteHost:
+      runtimeEnvironmentId || connectionId
+        ? { runtimeEnvironmentId: runtimeEnvironmentId ?? null }
+        : null,
+    state: useAppStore.getState(),
+    worktreeId,
+    tabId,
+    transport
+  })
 
   const writeResult = await writeTerminalDropPathsToCapturedTarget({
     dropTarget: dropTargetSnapshot,
     manager,
     paneTransports,
     paths,
-    targetShell
+    targetShell,
+    inputShell
   })
   showTerminalDropWriteFailure(writeResult.failureReason)
   if (writeResult.sentAnyPath) {

@@ -3598,7 +3598,8 @@
                 "internalHostMismatch": "Drop files from the same host as this terminal.",
                 "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
-                "writeRejected": "File drop cancelled: terminal could not accept the path."
+                "writeRejected": "File drop cancelled: terminal could not accept the path.",
+                "controlCharacterPath": "File drop cancelled: a path contains control characters."
               }
             }
           },

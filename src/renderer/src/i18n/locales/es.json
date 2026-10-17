@@ -3346,7 +3346,8 @@
                 "internalHostMismatch": "Arrastra archivos del mismo host que este terminal.",
                 "b4cf68e889": "Se omitió {{value0}} {{value1}}.",
                 "writeTimeout": "Se canceló el drop de archivos: el terminal no aceptó la ruta antes del tiempo límite de seguridad.",
-                "writeRejected": "Se canceló el drop de archivos: el terminal no pudo aceptar la ruta."
+                "writeRejected": "Se canceló el drop de archivos: el terminal no pudo aceptar la ruta.",
+                "controlCharacterPath": "Se canceló el drop de archivos: una ruta contiene caracteres de control."
               }
             }
           },

@@ -38,7 +38,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/a.ts', '/repo/b.ts'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     expect(result).toEqual({
@@ -65,7 +66,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/tmp/orca-paste-1-abc.png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     expect(result).toEqual({ sentAnyPath: true, targetCurrent: true, pathsWritten: 1 })
@@ -89,7 +91,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/tmp/drag/Screenshot 2026-09-28 at 4.03.11\u202fPM.png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     // Why: pasted raw, Codex shlex-splits the ASCII spaces and keeps the path as text.
@@ -114,7 +117,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['C:\\Users\\me\\My Pictures\\shot.png'],
-      targetShell: 'windows'
+      targetShell: 'windows',
+      inputShell: 'powershell'
     })
 
     expect(sendInputAccepted).toHaveBeenCalledWith(
@@ -135,7 +139,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/Screenshot 1.png', '/repo/Screenshot 2.png', '/repo/a.ts'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
@@ -166,7 +171,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/a.ts', '/repo/shot.png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ', 'driving', {
@@ -191,7 +197,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/shot.png', '/repo/a.ts'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     // Why: the image paste carries no trailing space of its own, so a following
@@ -218,7 +225,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/one.png', '/repo/two.png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     // Why: bracketed pastes are self-delimiting; a stray space would land in the
@@ -248,7 +256,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/a.png; touch /tmp/pwned #.png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     // Why: the text stays escaped so a shell still gets one argument; the
@@ -272,7 +281,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/.orca/drops/download (1).png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     // Why: browser download names like `download (1).png` were written as
@@ -296,7 +306,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/download (1).png', "/repo/it's.png", '/repo/shot.png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     // Why: a shell ignores paste boundaries, so without the space
@@ -332,7 +343,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/download (1).png', '/repo/a.ts'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
@@ -357,7 +369,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['C:\\Users\\me\\Pictures\\a&b.png'],
-      targetShell: 'windows'
+      targetShell: 'windows',
+      inputShell: 'powershell'
     })
 
     expect(sendInputAccepted).toHaveBeenCalledWith(
@@ -378,7 +391,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/shot.png', '/repo/a.png; touch /tmp/pwned #.png'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
@@ -395,7 +409,40 @@ describe('terminal drop path writer', () => {
     )
   })
 
-  it('types image paths with control bytes instead of pasting them', async () => {
+  it.each([
+    ['/repo/a\nb.png', 'an image'],
+    ['/repo/a\u0015b.txt', 'a non-image']
+  ])('refuses the whole drop when %j (%s path) contains control bytes', async (unsafePath) => {
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const { manager, pane } = createManager()
+    const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
+
+    const result = await writeTerminalDropPathsToCapturedTarget({
+      dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+      manager: manager as never,
+      paneTransports: new Map([[pane.id, transport]]) as never,
+      paths: ['/repo/safe.ts', unsafePath],
+      targetShell: 'posix',
+      inputShell: 'posix'
+    })
+
+    // Why: typed, C-u would discard the open quote and LF would submit the line.
+    expect(result).toEqual({
+      sentAnyPath: false,
+      targetCurrent: true,
+      pathsWritten: 0,
+      failureReason: 'control-character-path'
+    })
+    expect(sendInputAccepted).not.toHaveBeenCalled()
+    expect(sendInput).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['powershell', "'C:\\Users\\me\\$(calc) a&b.txt' "],
+    ['cmd', '"C:\\Users\\me\\$(calc) a&b.txt" '],
+    ['posix', `'C:'"\\\\"'Users'"\\\\"'me'"\\\\"'$(calc) a&b.txt' `]
+  ] as const)('types a Windows path quoted for a %s pane', async (inputShell, typed) => {
     const sendInput = vi.fn(() => true)
     const sendInputAccepted = vi.fn(async () => true)
     const { manager, pane } = createManager()
@@ -405,12 +452,39 @@ describe('terminal drop path writer', () => {
       dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
-      paths: ['/repo/a\nb.png'],
-      targetShell: 'posix'
+      paths: ['C:\\Users\\me\\$(calc) a&b.txt'],
+      targetShell: 'windows',
+      inputShell
     })
 
-    // Why: the paste frame rewrites LF to CR and ESC to a symbol, changing the path.
-    expect(sendInputAccepted).toHaveBeenCalledWith("'/repo/a\nb.png' ", 'driving', {
+    expect(sendInputAccepted).toHaveBeenCalledWith(typed, 'driving', {
+      signal: expect.any(AbortSignal)
+    })
+  })
+
+  it('types a Windows image path a double-quoted paste would expand, after a separating space', async () => {
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const { manager, pane } = createManager()
+    const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
+
+    await writeTerminalDropPathsToCapturedTarget({
+      dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+      manager: manager as never,
+      paneTransports: new Map([[pane.id, transport]]) as never,
+      paths: ['C:\\t\\shot.png', 'C:\\t\\$(calc).png'],
+      targetShell: 'windows',
+      inputShell: 'powershell'
+    })
+
+    // Why: pasted as `"…$(calc)…"`, PowerShell would run calc once the user presses Enter.
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(
+      1,
+      `${wrapTerminalBracketedPasteText('C:\\t\\shot.png')} `,
+      'driving',
+      { signal: expect.any(AbortSignal) }
+    )
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, "'C:\\t\\$(calc).png' ", 'driving', {
       signal: expect.any(AbortSignal)
     })
   })
@@ -429,6 +503,7 @@ describe('terminal drop path writer', () => {
         paneTransports: new Map([[pane.id, transport]]) as never,
         paths: ['/repo/a.ts'],
         targetShell: 'posix',
+        inputShell: 'posix',
         operationTimeoutMs: 25
       })
 
@@ -463,7 +538,8 @@ describe('terminal drop path writer', () => {
       manager: manager as never,
       paneTransports: new Map([[pane.id, transport]]) as never,
       paths: ['/repo/a.ts', '/repo/b.ts'],
-      targetShell: 'posix'
+      targetShell: 'posix',
+      inputShell: 'posix'
     })
 
     expect(result).toEqual({

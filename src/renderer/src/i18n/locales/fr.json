@@ -3478,7 +3478,8 @@
                 "internalHostMismatch": "Déposez des fichiers provenant du même hôte que ce terminal.",
                 "b4cf68e889": "Ignoré : {{value0}} {{value1}}.",
                 "writeTimeout": "Glisser-déposer de fichiers annulé : le terminal n'a pas accepté le chemin avant le délai de sécurité.",
-                "writeRejected": "Glisser-déposer de fichiers annulé : le terminal n'a pas pu accepter le chemin."
+                "writeRejected": "Glisser-déposer de fichiers annulé : le terminal n'a pas pu accepter le chemin.",
+                "controlCharacterPath": "Glisser-déposer de fichiers annulé : un chemin contient des caractères de contrôle."
               }
             }
           },

@@ -1,18 +1,15 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../shared/image-paste-following-text'
-import { shellEscapePath } from './pane-helpers'
+import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 import type { PtyTransport } from './pty-transport-types'
 import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
-import {
-  canPasteImageDropPathRaw,
-  formatImageDropPasteText,
-  isImageDropPath
-} from './terminal-drop-image-path'
+import { formatTerminalImageDropPasteText, isImageDropPath } from './terminal-drop-image-path'
 import {
   type CapturedTerminalDropTarget,
   getCurrentTerminalDropTransport
 } from './terminal-drop-target'
 import type { TerminalTargetShell } from './terminal-drop-shell'
+import { hasTerminalDropControlByte, quoteTerminalDropPath } from './terminal-drop-path-quoting'
 import { TERMINAL_PASTE_OPERATION_TIMEOUT_MS } from './terminal-paste-limits'
 import { runTerminalPasteOperationWithTimeout } from './terminal-paste-operation-timeout'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
@@ -31,15 +28,30 @@ export async function writeTerminalDropPathsToCapturedTarget({
   paneTransports,
   paths,
   targetShell,
+  inputShell,
   operationTimeoutMs = TERMINAL_PASTE_OPERATION_TIMEOUT_MS
 }: {
   dropTarget: CapturedTerminalDropTarget
   manager: PaneManager
   paneTransports: Map<number, PtyTransport>
   paths: readonly string[]
+  /** Path conventions of `paths`; picks the image-paste spelling. */
   targetShell: TerminalTargetShell
+  /** Grammar of the shell reading the pane; quotes typed paths. */
+  inputShell: AgentStartupShell
   operationTimeoutMs?: number
 }): Promise<TerminalDropPathWriteResult> {
+  // Why refuse the whole drop: typed control bytes act as editing keys (C-u
+  // drops the open quote, LF submits), and skipping one path would silently
+  // change the argument list the user dropped.
+  if (paths.some(hasTerminalDropControlByte)) {
+    return {
+      sentAnyPath: false,
+      targetCurrent: Boolean(getCurrentTerminalDropTransport(manager, paneTransports, dropTarget)),
+      pathsWritten: 0,
+      failureReason: 'control-character-path'
+    }
+  }
   let sentAnyPath = false
   let pathsWritten = 0
   for (const [index, path] of paths.entries()) {
@@ -57,8 +69,8 @@ export async function writeTerminalDropPathsToCapturedTarget({
     // metacharacters (`download (1).png`) are pasted escaped so a shell still
     // gets one argument; agent TUIs undo that escaping before the check.
     // Unframed, the escaped text reaches the TUI as typed keystrokes and stays
-    // plain text. Paths a paste frame would alter (control bytes) and non-image
-    // drops keep the original shell-escaped, space-separated typed input.
+    // plain text. Non-image drops, and Windows image paths a shell would expand
+    // inside double quotes, are typed shell-quoted and space-separated.
     //
     // Image payloads carry no trailing space of their own, so when an image is
     // immediately followed by another path the two would otherwise collide
@@ -68,14 +80,14 @@ export async function writeTerminalDropPathsToCapturedTarget({
     // either side is escaped: a shell ignores paste boundaries, so
     // `/a\ \(1\).png/b\ \(2\).png` would otherwise become one argument.
     const imagePasteText = isImageDropPath(path)
-      ? formatImageDropPasteText(path, targetShell)
+      ? formatTerminalImageDropPasteText(path, targetShell)
       : null
     const pathIsRawPasteImage = imagePasteText === path
     const nextPath = paths[index + 1]
     const nextPathIsRawPasteImage =
       nextPath !== undefined &&
       isImageDropPath(nextPath) &&
-      canPasteImageDropPathRaw(nextPath, targetShell)
+      formatTerminalImageDropPasteText(nextPath, targetShell) === nextPath
     const needsSeparatorAfterImage =
       nextPath !== undefined && !(pathIsRawPasteImage && nextPathIsRawPasteImage)
     const payload =
@@ -84,7 +96,7 @@ export async function writeTerminalDropPathsToCapturedTarget({
             wrapTerminalBracketedPasteText(imagePasteText),
             needsSeparatorAfterImage
           )
-        : `${shellEscapePath(path, targetShell)} `
+        : `${quoteTerminalDropPath(path, inputShell)} `
     const writeResult = await runTerminalPasteOperationWithTimeout(
       (signal) => writeTerminalPastePtyInput(liveTransport, payload, 'driving', signal),
       operationTimeoutMs

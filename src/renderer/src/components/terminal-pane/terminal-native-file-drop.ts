@@ -3,6 +3,7 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { PtyTransport } from './pty-transport-types'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -14,9 +15,13 @@ import {
 import {
   getTerminalTargetShellForWorktreePath,
   isTerminalDropWindowsPathLike,
-  resolveTerminalDropTargetShell
+  resolveTerminalDropInputShell,
+  resolveTerminalDropTargetShell,
+  type TerminalDropRemoteHost,
+  type TerminalTargetShell
 } from './terminal-drop-shell'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
+import { hasTerminalDropControlByte } from './terminal-drop-path-quoting'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
@@ -26,7 +31,6 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-targe
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {
     owner: ReturnType<typeof captureTerminalDropTransportOwner>
-    worktreeId: string
     localWslDrop: boolean
   }
 ): Promise<void> {
@@ -42,6 +46,12 @@ export async function deliverNativeTerminalFileDrop(
     worktreePath,
     localWslDrop
   } = args
+  // Why before upload: the writer refuses these anyway, and an upload would
+  // leave the copies in the worktree's drop folder after a "cancelled" toast.
+  if (dataPaths.some(hasTerminalDropControlByte)) {
+    showTerminalDropWriteFailure('control-character-path')
+    return
+  }
   if (owner?.runtimeEnvironmentId) {
     await uploadRuntimeDropPaths({
       dataPaths,
@@ -84,6 +94,7 @@ export async function deliverNativeTerminalFileDrop(
       paneTransports,
       pane,
       assertCurrent: owner?.assertCurrent,
+      worktreeId,
       tabId,
       targetShell: localWslDrop ? 'posix' : targetShell,
       worktreePath
@@ -99,6 +110,7 @@ export async function deliverNativeTerminalFileDrop(
     manager,
     paneTransports,
     pane,
+    worktreeId,
     tabId,
     targetShell,
     worktreePath
@@ -111,6 +123,7 @@ export type NativeDropFlowArgs = {
   manager: PaneManager
   paneTransports: Map<number, PtyTransport>
   pane: { id: number; leafId: string }
+  worktreeId: string
   tabId: string
   worktreePath: string
   expectedSshTargetId?: string
@@ -122,7 +135,6 @@ export type NativeDropFlowArgs = {
 async function uploadRuntimeDropPaths(
   args: NativeDropFlowArgs & {
     runtimeEnvironmentId: string
-    worktreeId: string
   }
 ): Promise<void> {
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
@@ -156,7 +168,12 @@ async function uploadRuntimeDropPaths(
         ? result.destPath.replace(/\//g, '\\')
         : result.destPath
     )
-    await pasteResolvedDropPaths({ ...args, paths: importedPaths, targetShell })
+    await pasteResolvedDropPaths({
+      ...args,
+      paths: importedPaths,
+      targetShell,
+      remoteHost: { runtimeEnvironmentId: args.runtimeEnvironmentId }
+    })
     reportTerminalDropUploadSkipsAndFailures(
       results.filter((result) => result.status === 'skipped'),
       results.filter((result) => result.status === 'failed')
@@ -169,7 +186,7 @@ async function uploadRuntimeDropPaths(
 }
 
 async function pasteLocalDropPaths(
-  args: NativeDropFlowArgs & { localWslDrop: boolean; targetShell: 'posix' | 'windows' }
+  args: NativeDropFlowArgs & { localWslDrop: boolean; targetShell: TerminalTargetShell }
 ): Promise<void> {
   // Why: local WSL worktrees run POSIX shells despite a Windows host, so
   // dropped paths must use the distro-aware resolver before terminal paste.
@@ -179,7 +196,12 @@ async function pasteLocalDropPaths(
         paths: args.dataPaths,
         worktreePath: args.worktreePath
       })
-      await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: 'posix' })
+      await pasteResolvedDropPaths({
+        ...args,
+        paths: resolvedPaths,
+        targetShell: 'posix',
+        remoteHost: null
+      })
       reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
@@ -192,12 +214,13 @@ async function pasteLocalDropPaths(
   await pasteResolvedDropPaths({
     ...args,
     paths: args.localWslDrop ? args.dataPaths.map(toLocalWslDropPath) : args.dataPaths,
-    targetShell: args.targetShell
+    targetShell: args.targetShell,
+    remoteHost: null
   })
 }
 
 async function uploadRemoteDropPaths(
-  args: NativeDropFlowArgs & { connectionId: string; targetShell: 'posix' | 'windows' }
+  args: NativeDropFlowArgs & { connectionId: string; targetShell: TerminalTargetShell }
 ): Promise<void> {
   const pending = toast.loading(
     translate(
@@ -215,7 +238,12 @@ async function uploadRemoteDropPaths(
       expectedSshTargetId: args.expectedSshTargetId,
       expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
     })
-    await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: args.targetShell })
+    await pasteResolvedDropPaths({
+      ...args,
+      paths: resolvedPaths,
+      targetShell: args.targetShell,
+      remoteHost: { runtimeEnvironmentId: null }
+    })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
@@ -225,7 +253,11 @@ async function uploadRemoteDropPaths(
 }
 
 async function pasteResolvedDropPaths(
-  args: NativeDropFlowArgs & { paths: string[]; targetShell: 'posix' | 'windows' }
+  args: NativeDropFlowArgs & {
+    paths: string[]
+    targetShell: TerminalTargetShell
+    remoteHost: TerminalDropRemoteHost
+  }
 ): Promise<void> {
   args.assertCurrent?.()
   // Why: pane may have unmounted during upload/resolution (tab closed,
@@ -244,7 +276,15 @@ async function pasteResolvedDropPaths(
     manager: args.manager,
     paneTransports: args.paneTransports,
     paths: args.paths,
-    targetShell: args.targetShell
+    targetShell: args.targetShell,
+    inputShell: resolveTerminalDropInputShell({
+      targetShell: args.targetShell,
+      remoteHost: args.remoteHost,
+      state: useAppStore.getState(),
+      worktreeId: args.worktreeId,
+      tabId: args.tabId,
+      transport: args.dropTarget.transport
+    })
   })
   showTerminalDropWriteFailure(writeResult.failureReason)
   if (writeResult.sentAnyPath) {

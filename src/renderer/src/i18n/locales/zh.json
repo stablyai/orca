@@ -3351,7 +3351,8 @@
                 "internalHostMismatch": "请拖放与此终端位于同一主机的文件。",
                 "b4cf68e889": "已跳过 {{value0}} {{value1}}。",
                 "writeTimeout": "文件拖放已取消：终端在安全超时前未接受路径。",
-                "writeRejected": "文件拖放已取消：终端无法接受路径。"
+                "writeRejected": "文件拖放已取消：终端无法接受路径。",
+                "controlCharacterPath": "文件拖放已取消：路径包含控制字符。"
               }
             }
           },

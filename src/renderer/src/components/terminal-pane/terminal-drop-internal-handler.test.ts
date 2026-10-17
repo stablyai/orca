@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => {
   > = {
     repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo', hostId: 'runtime:env-1' }]
   }
+  const settings: { activeRuntimeEnvironmentId: string | null; terminalWindowsShell?: string } = {
+    activeRuntimeEnvironmentId: 'env-1'
+  }
+  const tabsByWorktree: Record<string, { id: string; shellOverride?: string }[]> = {}
   return {
     toastLoading: vi.fn(() => 'toast-1'),
     toastDismiss: vi.fn(),
@@ -19,7 +23,7 @@ const mocks = vi.hoisted(() => {
     storeState: {
       activeRepoId: 'repo1',
       activeWorktreeId: 'wt-1',
-      settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
+      settings,
       projects: [
         {
           id: 'repo1',
@@ -41,6 +45,11 @@ const mocks = vi.hoisted(() => {
         }
       ],
       worktreesByRepo,
+      tabsByWorktree,
+      runtimeStatusByEnvironmentId: new Map<
+        string,
+        { status: { terminalWindowsShell?: string | null } | null; checkedAt: number }
+      >(),
       sshConnectionStates: new Map<string, { remotePlatform?: NodeJS.Platform }>()
     }
   }
@@ -128,6 +137,7 @@ describe('handleInternalTerminalFileDrop', () => {
       ]
     }
     mocks.storeState.sshConnectionStates = new Map()
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map()
   })
 
   it('pastes every selected internal file path with shell spacing', async () => {
@@ -312,6 +322,69 @@ describe('handleInternalTerminalFileDrop', () => {
     expect(sendInput).toHaveBeenCalledWith('"C:\\repo\\a&b.txt" ', 'driving')
   })
 
+  it.each([
+    ['cmd.exe', '"C:\\repo\\100"^%" $x.txt" '],
+    [null, "'C:\\repo\\100% $x.txt' "]
+  ])('quotes for the shell a Windows runtime host publishes (%s)', async (hostShell, typed) => {
+    mocks.storeState.settings = {
+      activeRuntimeEnvironmentId: 'focused-runtime',
+      terminalWindowsShell: 'git-bash'
+    }
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
+      ['owner-runtime', { status: { terminalWindowsShell: hostShell }, checkedAt: 1 }]
+    ])
+    mocks.storeState.repos = [
+      {
+        id: 'repo1',
+        connectionId: null,
+        path: 'C:\\repo',
+        executionHostId: 'runtime:owner-runtime'
+      }
+    ]
+    mocks.storeState.worktreesByRepo = {
+      repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\repo', hostId: 'runtime:owner-runtime' }]
+    }
+    const sendInput = vi.fn(() => true)
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+
+    const result = await handleInternalTerminalFileDrop({
+      manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
+      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      paneLeafId: 'leaf-1',
+      dataTransfer: { getData: sameHostDragData(['C:\\repo\\100% $x.txt']) }
+    })
+
+    // Why: this client's Git Bash setting does not describe the host's terminals.
+    expect(result).toEqual({ status: 'pasted', pathCount: 1 })
+    expect(sendInput).toHaveBeenCalledWith(typed, 'driving')
+  })
+
+  it('refuses internal drops whose path contains control bytes', async () => {
+    const sendInput = vi.fn(() => true)
+    const focus = vi.fn()
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
+    const result = await handleInternalTerminalFileDrop({
+      manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
+      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      paneLeafId: 'leaf-1',
+      dataTransfer: { getData: sameHostDragData(['/repo/a.ts', '/repo/x\u0015\n.txt']) }
+    })
+
+    expect(result).toEqual({ status: 'cancelled', reason: 'control-character-path', pathCount: 0 })
+    expect(sendInput).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'File drop cancelled: a path contains control characters.'
+    )
+    expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
+  })
+
   it('keeps SSH Linux internal file drops on POSIX shell escaping', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
     mocks.storeState.repos = [
@@ -354,7 +427,7 @@ describe('handleInternalTerminalFileDrop', () => {
     })
 
     expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-    expect(sendInput).toHaveBeenCalledWith("'/remote/repo/it'\\''s here.txt' ", 'driving')
+    expect(sendInput).toHaveBeenCalledWith(`'/remote/repo/it'"'"'s here.txt' `, 'driving')
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(focus).toHaveBeenCalled()
   })

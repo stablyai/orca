@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canPasteImageDropPathRaw,
   formatImageDropPasteText,
+  formatTerminalImageDropPasteText,
   isImageDropPath
 } from './terminal-drop-image-path'
 
@@ -130,6 +131,25 @@ describe('formatImageDropPasteText', () => {
     expect(formatImageDropPasteText('/t/a\nb.png', 'posix')).toBeNull()
     expect(formatImageDropPasteText('/t/a\u001bb.png', 'posix')).toBeNull()
     expect(formatImageDropPasteText('C:\\t\\a\u0007b.png', 'windows')).toBeNull()
+  })
+})
+
+describe('formatTerminalImageDropPasteText', () => {
+  it('keeps the paste spelling when a shell would read it literally', () => {
+    expect(formatTerminalImageDropPasteText('C:\\My Pictures\\a&b.png', 'windows')).toBe(
+      '"C:\\My Pictures\\a&b.png"'
+    )
+    expect(formatTerminalImageDropPasteText('/t/$(x) 1.png', 'posix')).toBe('/t/\\$\\(x\\)\\ 1.png')
+  })
+
+  it.each([
+    'C:\\t\\$(calc).png',
+    'C:\\t\\`$x.png',
+    'C:\\t\\%PATH%.png',
+    'C:\\t\\a!b.png',
+    'C:\\t\\\u201c$x\u201d.png'
+  ])('refuses the double-quoted Windows paste for %j so it is typed shell-quoted', (path) => {
+    expect(formatTerminalImageDropPasteText(path, 'windows')).toBeNull()
   })
 })
 

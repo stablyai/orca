@@ -18,7 +18,8 @@ vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
 vi.mock('./terminal-drop-worktree-path', () => ({ resolveTerminalDropWorktreePath: () => '/repo' }))
 vi.mock('./terminal-drop-shell', () => ({
-  resolveTerminalDropTargetShell: () => ({ kind: 'posix' })
+  resolveTerminalDropTargetShell: () => 'posix',
+  resolveTerminalDropInputShell: () => 'posix'
 }))
 vi.mock('./terminal-drop-path-writer', () => ({
   writeTerminalDropPathsToCapturedTarget: mocks.write

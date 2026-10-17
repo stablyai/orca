@@ -1,6 +1,9 @@
 import { IMAGE_FILE_EXTENSIONS } from '../../../../shared/image-file-extensions'
-import { shellEscapePath } from './pane-helpers'
 import type { TerminalTargetShell } from './terminal-drop-shell'
+import {
+  hasTerminalDropControlByte,
+  isWindowsDoubleQuoteLiteralPath
+} from './terminal-drop-path-quoting'
 
 // Why: dropped image files should be handed to terminal TUIs (Claude Code,
 // Codex, etc.) as image attachments, which those tools detect from a
@@ -30,7 +33,7 @@ export function isImageDropPath(path: string): boolean {
 }
 
 export function canPasteImageDropPathRaw(path: string, targetShell: TerminalTargetShell): boolean {
-  if (hasControlByte(path)) {
+  if (hasTerminalDropControlByte(path)) {
     return false
   }
   const unsafeRe =
@@ -46,7 +49,7 @@ export function formatImageDropPasteText(
   path: string,
   targetShell: TerminalTargetShell
 ): string | null {
-  if (hasControlByte(path)) {
+  if (hasTerminalDropControlByte(path)) {
     return null
   }
   if (canPasteImageDropPathRaw(path, targetShell)) {
@@ -54,21 +57,24 @@ export function formatImageDropPasteText(
   }
   // Why: Claude Code strips only one outer quote pair, so a POSIX `'\''` splice
   // leaks quotes into the path; backslash escapes round-trip in Claude, Codex, and shells.
-  return targetShell === 'windows'
-    ? shellEscapePath(path, 'windows')
-    : backslashEscapePosixPath(path)
+  return targetShell === 'windows' ? `"${path}"` : backslashEscapePosixPath(path)
 }
 
 function backslashEscapePosixPath(path: string): string {
   return path.replace(/[^a-zA-Z0-9_./@:\-\u0080-\uffff]/g, '\\$&')
 }
 
-function hasControlByte(path: string): boolean {
-  for (let i = 0; i < path.length; i += 1) {
-    const code = path.charCodeAt(i)
-    if (code < 0x20 || code === 0x7f) {
-      return true
-    }
+/**
+ * formatImageDropPasteText for a terminal pane, where a shell prompt may read
+ * the pasted line: null when the Windows spelling would not stay literal there
+ * (`$(…)`, `%VAR%`), so the caller types the path quoted for the pane's shell.
+ */
+export function formatTerminalImageDropPasteText(
+  path: string,
+  targetShell: TerminalTargetShell
+): string | null {
+  if (targetShell === 'windows' && !isWindowsDoubleQuoteLiteralPath(path)) {
+    return null
   }
-  return false
+  return formatImageDropPasteText(path, targetShell)
 }

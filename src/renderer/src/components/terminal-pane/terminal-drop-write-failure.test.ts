@@ -34,6 +34,14 @@ describe('terminal drop write failure notification', () => {
     )
   })
 
+  it('shows a control-character refusal without dropped path content', () => {
+    showTerminalDropWriteFailure('control-character-path')
+
+    expect(toastError).toHaveBeenCalledWith(
+      'File drop cancelled: a path contains control characters.'
+    )
+  })
+
   it('shows a rejected-write error without dropped path content', () => {
     showTerminalDropWriteFailure('write-rejected')
 

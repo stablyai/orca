@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const worktreesByRepo: Record<
@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => {
   > = {
     repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo', hostId: 'runtime:env-1' }]
   }
+  const settings: { activeRuntimeEnvironmentId: string | null; terminalWindowsShell?: string } = {
+    activeRuntimeEnvironmentId: 'env-1'
+  }
+  const tabsByWorktree: Record<string, { id: string; shellOverride?: string }[]> = {}
   return {
     toastLoading: vi.fn(() => 'toast-1'),
     toastDismiss: vi.fn(),
@@ -18,7 +22,8 @@ const mocks = vi.hoisted(() => {
     storeState: {
       activeRepoId: 'repo1',
       activeWorktreeId: 'wt-1',
-      settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
+      settings,
+      tabsByWorktree,
       projects: [
         {
           id: 'repo1',
@@ -40,6 +45,10 @@ const mocks = vi.hoisted(() => {
         }
       ],
       worktreesByRepo,
+      runtimeStatusByEnvironmentId: new Map<
+        string,
+        { status: { terminalWindowsShell?: string | null } | null; checkedAt: number }
+      >(),
       sshConnectionStates: new Map<
         string,
         { remotePlatform?: NodeJS.Platform; connectionGeneration?: number }
@@ -95,6 +104,10 @@ function createTerminalTransport(
 }
 
 describe('handleTerminalFileDrop', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.storeState.activeRepoId = 'repo1'
@@ -107,6 +120,8 @@ describe('handleTerminalFileDrop', () => {
       }
     })
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'env-1' }
+    mocks.storeState.tabsByWorktree = {}
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map()
     mocks.storeState.projects = [
       {
         id: 'repo1',
@@ -506,6 +521,78 @@ describe('handleTerminalFileDrop', () => {
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
   })
 
+  it("types local Windows drops quoted for the pane's cmd shell", async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
+    mocks.storeState.settings = {
+      activeRuntimeEnvironmentId: null,
+      terminalWindowsShell: 'cmd.exe'
+    }
+    mocks.storeState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
+    mocks.storeState.repos = [
+      { id: 'repo1', connectionId: null, path: 'C:\\repo', executionHostId: 'local' }
+    ]
+    mocks.storeState.worktreesByRepo = {
+      repo1: [{ id: 'wt-1', repoId: 'repo1', path: 'C:\\repo', hostId: 'local' }]
+    }
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+
+    await handleTerminalFileDrop({
+      manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
+      paneTransports: new Map([
+        [1, createTerminalTransport(sendInput, 'pty-1', sendInputAccepted)]
+      ]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      pane,
+      paths: ['C:\\Users\\me\\100% $(calc).txt']
+    })
+
+    // Why: bare double quotes would let cmd expand %VAR% and PowerShell run $(…).
+    expect(sendInputAccepted).toHaveBeenCalledWith(
+      '"C:\\Users\\me\\100"^%" $(calc).txt" ',
+      'driving',
+      { signal: expect.any(AbortSignal) }
+    )
+  })
+
+  it.each(['local', 'runtime:env-1'])(
+    'refuses a %s native drop with control bytes before upload',
+    async (hostId) => {
+      mocks.storeState.repos = [
+        { id: 'repo1', connectionId: null, path: '/repo', executionHostId: hostId }
+      ]
+      mocks.storeState.worktreesByRepo = {
+        repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/repo', hostId }]
+      }
+      const sendInput = vi.fn(() => true)
+      const sendInputAccepted = vi.fn(async () => true)
+      const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+
+      await handleTerminalFileDrop({
+        manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
+        paneTransports: new Map([
+          [1, createTerminalTransport(sendInput, 'pty-1', sendInputAccepted)]
+        ]) as never,
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        cwd: undefined,
+        pane,
+        paths: ["/Users/me/x\u0015'; touch pwned\n.txt"]
+      })
+
+      expect(mocks.importExternalPathsToRuntime).not.toHaveBeenCalled()
+      expect(sendInputAccepted).not.toHaveBeenCalled()
+      expect(sendInput).not.toHaveBeenCalled()
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        'File drop cancelled: a path contains control characters.'
+      )
+      expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
+    }
+  )
+
   it('pastes native file drops into the pane captured by its element', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
     mocks.storeState.repos = [
@@ -743,6 +830,6 @@ describe('handleTerminalFileDrop', () => {
       paths: ["/Users/me/it's here.txt"]
     })
 
-    expect(sendInput).toHaveBeenCalledWith("'/remote/repo/it'\\''s here.txt' ", 'driving')
+    expect(sendInput).toHaveBeenCalledWith(`'/remote/repo/it'"'"'s here.txt' `, 'driving')
   })
 })
