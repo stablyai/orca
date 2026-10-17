@@ -99,7 +99,7 @@ const defaultStoreState = {
   ptyIdsByTabId: {},
   browserTabsByWorktree: {},
   worktreesByRepo: {},
-  repos: []
+  repos: ['repo', 'repo-1'].map((id) => ({ id, name: id, displayName: id }))
 }
 
 vi.mock('@/store', () => ({
@@ -114,7 +114,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/store/selectors', () => ({
   useAllWorktrees: () => [],
   useRepoById: (repoId?: string) =>
-    repoId ? { id: repoId, name: repoId, displayName: repoId } : undefined,
+    defaultStoreState.repos.find((repo) => repo.id === repoId) ?? null,
   useRepoMap: () => new Map(),
   useWorktreeMap: () => new Map()
 }))

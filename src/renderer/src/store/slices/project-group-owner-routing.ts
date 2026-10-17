@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -63,6 +64,28 @@ export function resolveProjectGroupOwnerHostId(
     return null
   }
   return getProjectGroupHostId(owner)
+}
+
+function catalogHostIdFor(hostId: ExecutionHostId): ExecutionHostId | null {
+  const target = ipcOrRuntimeTargetForHostId(hostId)
+  return target ? getRuntimeTargetHostId(target) : null
+}
+
+/**
+ * Groups `repo` can join. Membership is a field on the repo row, and the repo's host clears an id
+ * missing from its own catalog, so a group stored on another host can never hold it.
+ */
+export function getProjectGroupsForRepoHost<T extends ProjectGroupHostParts>(
+  projectGroups: readonly T[],
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
+): T[] {
+  const repoCatalogHostId = catalogHostIdFor(getRepoExecutionHostId(repo))
+  if (!repoCatalogHostId) {
+    return []
+  }
+  return projectGroups.filter(
+    (group) => catalogHostIdFor(getProjectGroupHostId(group)) === repoCatalogHostId
+  )
 }
 
 /**

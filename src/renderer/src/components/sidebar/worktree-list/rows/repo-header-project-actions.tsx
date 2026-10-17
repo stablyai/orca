@@ -26,6 +26,7 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
+import { getProjectGroupsForRepoHost } from '@/store/slices/project-group-owner-routing'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
@@ -79,6 +80,7 @@ export function RepoHeaderProjectActionsMenu({
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
 }): React.JSX.Element {
+  const movableGroups = getProjectGroupsForRepoHost(projectGroups, repo)
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -140,14 +142,14 @@ export function RepoHeaderProjectActionsMenu({
           <FolderTree className="size-3.5" />
           {translate('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
         </DropdownMenuItem>
-        {projectGroups.length > 0 ? (
+        {movableGroups.length > 0 ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <FolderInput className="size-3.5" />
               {translate('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
-              {projectGroups.map((group) => (
+              {movableGroups.map((group) => (
                 <DropdownMenuItem
                   key={group.id}
                   disabled={repo.projectGroupId === group.id}
