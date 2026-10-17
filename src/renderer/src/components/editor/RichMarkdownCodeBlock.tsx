@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
-import MermaidBlock from './MermaidBlock'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import RichMarkdownMermaidViews from './RichMarkdownMermaidViews'
 import {
   getCodeBlockLanguageLabel,
   getCodeBlockLanguages,
@@ -90,7 +91,12 @@ export function RichMarkdownCodeBlock({
   )
 
   return (
-    <NodeViewWrapper className="rich-markdown-code-block-wrapper">
+    <NodeViewWrapper
+      className={cn(
+        'rich-markdown-code-block-wrapper',
+        isMermaid && 'rich-markdown-mermaid-code-block'
+      )}
+    >
       <select
         className="rich-markdown-code-block-lang"
         contentEditable={false}
@@ -140,16 +146,10 @@ export function RichMarkdownCodeBlock({
           <Copy size={14} />
         )}
       </button>
-      <NodeViewContent<'pre'> as="pre" />
-      {/* Why: mermaid diagrams render as a live SVG preview below the editable
-          source so users can see the result while editing. The code block stays
-          editable — the diagram is read-only output. This preview also goes
-          through MermaidBlock's sanitized SVG path, so it must opt out of
-          Mermaid HTML labels just like markdown preview to keep labels visible. */}
-      {isMermaid && node.textContent.trim() && (
-        <div contentEditable={false} className="mermaid-preview">
-          <MermaidBlock content={node.textContent.trim()} isDark={isDark} htmlLabels={false} />
-        </div>
+      {isMermaid ? (
+        <RichMarkdownMermaidViews content={node.textContent} isDark={isDark} />
+      ) : (
+        <NodeViewContent<'pre'> as="pre" />
       )}
     </NodeViewWrapper>
   )

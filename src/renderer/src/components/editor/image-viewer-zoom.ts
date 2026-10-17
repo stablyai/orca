@@ -1,40 +1,44 @@
-export const MIN_IMAGE_VIEWER_ZOOM = 0.25
-export const MAX_IMAGE_VIEWER_ZOOM = 8
-export const IMAGE_VIEWER_ZOOM_STEP = 1.25
-export const IMAGE_VIEWER_SURFACE_PADDING = 16
+import {
+  type SurfaceContentDimensions,
+  type SurfaceSize,
+  type SurfaceZoomAnchor,
+  clampSurfaceZoom,
+  getAnchoredSurfaceScrollOffset,
+  getNextWheelSurfaceZoom,
+  getSurfacePinchZoomFactor,
+  getZoomedSurfaceLayoutSize,
+  shouldHandleSurfaceZoomWheel
+} from './anchored-surface-zoom'
 
 const DOM_DELTA_LINE = 1
 const DOM_DELTA_PAGE = 2
 const PIXELS_PER_LINE = 16
 const PIXELS_PER_PAGE = 800
-const MAX_NORMALIZED_WHEEL_DELTA = 100
-const WHEEL_ZOOM_SENSITIVITY = 150
+
+export const MIN_IMAGE_VIEWER_ZOOM = 0.25
+export const MAX_IMAGE_VIEWER_ZOOM = 8
+export const IMAGE_VIEWER_ZOOM_STEP = 1.25
+export const IMAGE_VIEWER_SURFACE_PADDING = 16
+export const IMAGE_VIEWER_ZOOM_BOUNDS = {
+  min: MIN_IMAGE_VIEWER_ZOOM,
+  max: MAX_IMAGE_VIEWER_ZOOM
+}
 
 type ImageZoomWheelEventLike = {
   ctrlKey: boolean
+  metaKey?: boolean
 }
 
-export type ImageViewerImageDimensions = {
-  width: number
-  height: number
-}
-
-export type ImageViewerSurfaceSize = {
-  width: number
-  height: number
-}
-
-export type ImageViewerZoomAnchor = {
-  x: number
-  y: number
-}
+export type ImageViewerImageDimensions = SurfaceContentDimensions
+export type ImageViewerSurfaceSize = SurfaceSize
+export type ImageViewerZoomAnchor = SurfaceZoomAnchor
 
 export function clampImageViewerZoom(next: number): number {
-  return Math.min(MAX_IMAGE_VIEWER_ZOOM, Math.max(MIN_IMAGE_VIEWER_ZOOM, next))
+  return clampSurfaceZoom(next, IMAGE_VIEWER_ZOOM_BOUNDS)
 }
 
 export function shouldHandleImageZoomWheel(event: ImageZoomWheelEventLike): boolean {
-  return event.ctrlKey
+  return shouldHandleSurfaceZoomWheel(event)
 }
 
 export function getWheelDeltaPixels(delta: number, deltaMode: number): number {
@@ -46,17 +50,7 @@ export function getWheelDeltaPixels(delta: number, deltaMode: number): number {
 }
 
 export function getPinchZoomFactor(deltaY: number, deltaMode: number): number {
-  if (deltaY === 0) {
-    return 1
-  }
-
-  const normalizedDeltaY = getWheelDeltaPixels(deltaY, deltaMode)
-  const boundedDeltaY = Math.max(
-    -MAX_NORMALIZED_WHEEL_DELTA,
-    Math.min(MAX_NORMALIZED_WHEEL_DELTA, normalizedDeltaY)
-  )
-
-  return Math.exp(-boundedDeltaY / WHEEL_ZOOM_SENSITIVITY)
+  return getSurfacePinchZoomFactor(deltaY, deltaMode)
 }
 
 export function getNextWheelImageViewerZoom(
@@ -64,7 +58,7 @@ export function getNextWheelImageViewerZoom(
   deltaY: number,
   deltaMode: number
 ): number {
-  return clampImageViewerZoom(currentZoom * getPinchZoomFactor(deltaY, deltaMode))
+  return getNextWheelSurfaceZoom(currentZoom, deltaY, deltaMode, IMAGE_VIEWER_ZOOM_BOUNDS)
 }
 
 export function getZoomedImageLayoutSize({
@@ -78,36 +72,15 @@ export function getZoomedImageLayoutSize({
   zoom: number
   padding?: number
 }): ImageViewerImageDimensions | null {
-  if (
-    !imageDimensions ||
-    !surfaceSize ||
-    imageDimensions.width <= 0 ||
-    imageDimensions.height <= 0 ||
-    surfaceSize.width <= 0 ||
-    surfaceSize.height <= 0
-  ) {
-    return null
-  }
-
-  const availableWidth = Math.max(0, surfaceSize.width - padding * 2)
-  const availableHeight = Math.max(0, surfaceSize.height - padding * 2)
-  if (availableWidth <= 0 || availableHeight <= 0) {
-    return null
-  }
-
-  const fitScale = Math.min(
-    1,
-    availableWidth / imageDimensions.width,
-    availableHeight / imageDimensions.height
-  )
-  const boundedZoom = clampImageViewerZoom(zoom)
-
   // Why: transformed images do not change scroll extents, so zoom must resize
   // the layout box for popup panning to reach the full image.
-  return {
-    width: imageDimensions.width * fitScale * boundedZoom,
-    height: imageDimensions.height * fitScale * boundedZoom
-  }
+  return getZoomedSurfaceLayoutSize({
+    contentDimensions: imageDimensions,
+    surfaceSize,
+    zoom,
+    bounds: IMAGE_VIEWER_ZOOM_BOUNDS,
+    padding
+  })
 }
 
 export function getAnchoredImageViewerScrollOffset({
@@ -121,9 +94,10 @@ export function getAnchoredImageViewerScrollOffset({
   currentZoom: number
   nextZoom: number
 }): number {
-  if (currentZoom <= 0) {
-    return scrollOffset
-  }
-
-  return (scrollOffset + anchorOffset) * (nextZoom / currentZoom) - anchorOffset
+  return getAnchoredSurfaceScrollOffset({
+    scrollOffset,
+    anchorOffset,
+    currentZoom,
+    nextZoom
+  })
 }
