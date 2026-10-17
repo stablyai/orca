@@ -11,6 +11,7 @@ import { ActionButton } from './action-button'
 import { ConflictBadge } from './conflict-badge'
 import { getLocalizedConflictKindLabel } from './conflict-label'
 import { DiffLineCounts } from './diff-line-counts'
+import { reviewNoteCountTitle } from './review-note-count-title'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
 import { canDiscardStatusEntry, canStageStatusEntry, canUnstageStatusEntry } from './entry-actions'
 import { isSubmoduleWorktreeOnlyChange } from '../commit/discard-all-sequence'
@@ -185,11 +186,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           // Why: surface a per-row marker so files with review notes are visible without opening the Notes tab.
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={translate(
-              'auto.components.right.sidebar.SourceControl.657e0c90ad',
-              '{{value0}} note{{value1}}',
-              { value0: commentCount, value1: commentCount === 1 ? '' : 's' }
-            )}
+            title={reviewNoteCountTitle(commentCount)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>

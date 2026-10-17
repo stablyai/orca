@@ -73,14 +73,17 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
                 <div className="mt-0.5 text-[11px] text-muted-foreground">
                   {approvalState.approvalsLeft === 0
                     ? translate('auto.components.GitLabItemDialog.22511537d2', 'Approved')
-                    : translate(
-                        'auto.components.GitLabItemDialog.40c56b95e2',
-                        '{{value0}} approval{{value1}} remaining',
-                        {
-                          value0: approvalState.approvalsLeft ?? 0,
-                          value1: approvalState.approvalsLeft === 1 ? '' : 's'
-                        }
-                      )}
+                    : approvalState.approvalsLeft === 1
+                      ? translate(
+                          'auto.components.GitLabItemDialog.approvalsRemainingSingular',
+                          '{{count}} approval remaining',
+                          { count: approvalState.approvalsLeft }
+                        )
+                      : translate(
+                          'auto.components.GitLabItemDialog.approvalsRemainingPlural',
+                          '{{count}} approvals remaining',
+                          { count: approvalState.approvalsLeft ?? 0 }
+                        )}
                   {typeof approvalState.approvalsRequired === 'number'
                     ? translate(
                         'auto.components.GitLabItemDialog.00f3bab87b',

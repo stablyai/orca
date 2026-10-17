@@ -32,10 +32,30 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }, { reason: 'too_large' }], [])
     const mixedSkipKey = mocks.translate.mock.calls[0]?.[0]
 
-    expect(symlinkOnlyKey).toBe('auto.components.terminal.pane.terminal.drop.handler.53f015fd85')
+    expect(symlinkOnlyKey).toBe(
+      'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkSingular'
+    )
     expect(mixedSkipKey).toBe('auto.components.terminal.pane.terminal.drop.handler.b4cf68e889')
     expect(symlinkOnlyKey).not.toBe(mixedSkipKey)
     expect(toast.message).toHaveBeenCalledTimes(2)
+  })
+
+  it('picks a whole sentence per symlink count instead of passing a plural ending', () => {
+    reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }], [])
+    reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }, { reason: 'symlink' }], [])
+
+    expect(mocks.translate.mock.calls).toEqual([
+      [
+        'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkSingular',
+        'Skipped {{count}} symlink.',
+        { count: 1 }
+      ],
+      [
+        'auto.components.terminal.pane.terminal.drop.handler.skippedSymlinkPlural',
+        'Skipped {{count}} symlinks.',
+        { count: 2 }
+      ]
+    ])
   })
 
   it('reports upload failures without leaking individual paths', () => {
