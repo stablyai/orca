@@ -11,6 +11,9 @@ const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
+const { Packager } = require('app-builder-lib/out/packager')
+const { LinuxPackager } = require('app-builder-lib/out/linuxPackager')
+const { LinuxTargetHelper } = require('app-builder-lib/out/targets/LinuxTargetHelper')
 const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
@@ -443,8 +446,25 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })
 
-  it('matches the Linux desktop entry to Electron window class', () => {
-    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
+  it('matches the generated Linux desktop filename and window class to Electron app_id', async () => {
+    const packager = new Packager({
+      projectDir: REPO_ROOT,
+      config: join(REPO_ROOT, 'config', 'electron-builder.config.cjs')
+    })
+    await packager.validateConfig()
+    const linuxPackager = new LinuxPackager(packager)
+    const helper = new LinuxTargetHelper(linuxPackager)
+    const desktopEntry = await helper.computeDesktopEntry(
+      linuxPackager.platformSpecificBuildOptions
+    )
+
+    expect(packager.metadata.desktopName).toBe('orca-ide.desktop')
+    expect(`${helper.getDesktopFileName()}.desktop`).toBe(packager.metadata.desktopName)
+    expect(helper.getDesktopFileName('orca')).toBe('orca-ide')
+    expect(desktopEntry).toMatch(/^StartupWMClass=orca-ide$/m)
+    expect(desktopEntry).toMatch(/^Name=Orca$/m)
+    expect(desktopEntry).toMatch(/^Icon=orca-ide$/m)
+    expect(desktopEntry).toMatch(/^Exec=\/opt\/Orca\/orca-ide %U$/m)
   })
 
   it('uses the release artifact set as local Linux targets without changing existing names', () => {
