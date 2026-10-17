@@ -1,10 +1,15 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { ProjectGroup, ProjectGroupUpdates } from '../../../shared/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
+import {
+  canCreateProjectSubgroup,
+  describeProjectGroupMoveRejection,
+  getProjectGroupMoveRejection
+} from '../../../shared/project-group-nesting'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 
@@ -47,27 +52,58 @@ export class ProjectGroupPersistenceOperations {
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
   }): ProjectGroup {
+    const groups = this.state.projectGroups ?? []
+    let connectionId = input.connectionId
+    // Why: folder imports may nest deeper than the cap, so only hand-made subgroups are checked.
+    if (input.createdFrom === 'manual' && input.parentGroupId != null) {
+      const parent = groups.find((entry) => entry.id === input.parentGroupId)
+      if (!parent) {
+        throw new Error(describeProjectGroupMoveRejection('parent-not-found'))
+      }
+      if (!canCreateProjectSubgroup(groups, parent.id)) {
+        throw new Error(describeProjectGroupMoveRejection('too-deep'))
+      }
+      // Why: a manual subgroup lives on its parent's host, like folder-scan children; null means unspecified.
+      const parentConnectionId = parent.connectionId ?? null
+      if (input.connectionId && input.connectionId !== parentConnectionId) {
+        throw new Error(describeProjectGroupMoveRejection('host-mismatch'))
+      }
+      connectionId = parentConnectionId
+    }
+    const group = createProjectGroup({
+      ...input,
+      connectionId,
+      tabOrder: this.nextProjectGroupTabOrder()
+    })
+    this.state.projectGroups = [...groups, group]
+    this.scheduleSave()
+    return group
+  }
+
+  private nextProjectGroupTabOrder(): number {
     let maxOrder = -1
     // Why: persisted group lists can be large enough to exceed spread limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
       maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
     }
-    const group = createProjectGroup({
-      ...input,
-      tabOrder: maxOrder + 1
-    })
-    this.state.projectGroups = [...(this.state.projectGroups ?? []), group]
-    this.scheduleSave()
-    return group
+    return maxOrder + 1
   }
 
-  updateProjectGroup(
-    groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
-  ): ProjectGroup | null {
-    const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
+  updateProjectGroup(groupId: string, updates: ProjectGroupUpdates): ProjectGroup | null {
+    const groups = this.state.projectGroups ?? []
+    const group = groups.find((entry) => entry.id === groupId)
     if (!group) {
       return null
+    }
+    const parentGroupId = updates.parentGroupId ?? null
+    // Why: only a real move is validated, so renaming a group in a deep imported tree still works.
+    const movesGroup =
+      updates.parentGroupId !== undefined && parentGroupId !== (group.parentGroupId ?? null)
+    if (movesGroup) {
+      const rejection = getProjectGroupMoveRejection(groups, groupId, parentGroupId)
+      if (rejection) {
+        throw new Error(describeProjectGroupMoveRejection(rejection))
+      }
     }
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
@@ -80,6 +116,13 @@ export class ProjectGroupPersistenceOperations {
     }
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
+    }
+    if (movesGroup) {
+      group.parentGroupId = parentGroupId
+      if (updates.tabOrder === undefined) {
+        // Why: a moved group lands last among its new siblings, like a newly created one.
+        group.tabOrder = this.nextProjectGroupTabOrder()
+      }
     }
     group.updatedAt = Date.now()
     this.scheduleSave()

@@ -6,35 +6,44 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getFolderWorkspacePathStatusDescription } from '@/lib/folder-workspace-path-status'
+import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { canCreateProjectSubgroup } from '../../../../../../shared/project-group-nesting'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from '../../repo-header-action-button-class'
+import { ProjectGroupMoveSubmenu } from '../../ProjectGroupMoveSubmenu'
+import { selectProjectGroupCatalog } from '../../project-group-move-targets'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
   stopRepoHeaderMenuEvent
 } from './header-event-guards'
 
-export function ProjectGroupHeaderMenu({
-  groupId,
-  hostId,
-  label,
-  onRename,
-  onDelete
-}: {
-  groupId: string
-  /** Owner host of the group row, so rename/delete route to the host that holds it. */
-  hostId?: ExecutionHostId
-  label: string
+// hostId is the group row's owner host, so each action routes to the host that holds the group.
+export type ProjectGroupHeaderActions = {
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
+  onCreateSubgroup: (parentGroupId: string, parentName: string, hostId?: ExecutionHostId) => void
+  onMove: (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
-}): React.JSX.Element {
+}
+
+type ProjectGroupHeaderMenuProps = {
+  projectGroup: ProjectGroup
+  label: string
+  /** Every host's groups; the menu narrows them to this group's host. */
+  projectGroups: readonly ProjectGroup[]
+  actions: ProjectGroupHeaderActions
+}
+
+export function ProjectGroupHeaderMenu(props: ProjectGroupHeaderMenuProps): React.JSX.Element {
+  const { label } = props
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -68,14 +77,55 @@ export function ProjectGroupHeaderMenu({
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
-        <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
-          {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
-          {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
-        </DropdownMenuItem>
+        <ProjectGroupHeaderMenuItems {...props} />
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+// Why: mounted only while the menu is open, so the catalog walk never runs per sidebar row.
+function ProjectGroupHeaderMenuItems({
+  projectGroup,
+  label,
+  projectGroups,
+  actions
+}: ProjectGroupHeaderMenuProps): React.JSX.Element {
+  const groupId = projectGroup.id
+  const hostId = getProjectGroupHostId(projectGroup)
+  // Why: the level comes from the host's whole catalog; row depth reads 0 when a filter hides a parent.
+  const canCreateSubgroup = canCreateProjectSubgroup(
+    selectProjectGroupCatalog(projectGroups, hostId),
+    groupId
+  )
+  return (
+    <>
+      <DropdownMenuItem onSelect={() => actions.onRename(groupId, label, hostId)}>
+        {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={!canCreateSubgroup}
+        onSelect={() => actions.onCreateSubgroup(groupId, label, hostId)}
+      >
+        {translate(
+          'auto.components.sidebar.worktree.list.rows.project.group.header.actions.dd93986e77',
+          'New subgroup'
+        )}
+      </DropdownMenuItem>
+      <ProjectGroupMoveSubmenu
+        projectGroups={projectGroups}
+        movingGroup={projectGroup}
+        onSelect={(parentGroupId) => actions.onMove(groupId, parentGroupId, hostId)}
+      >
+        {translate('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+      </ProjectGroupMoveSubmenu>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        variant="destructive"
+        onSelect={() => actions.onDelete(groupId, label, hostId)}
+      >
+        {translate('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
+      </DropdownMenuItem>
+    </>
   )
 }
 

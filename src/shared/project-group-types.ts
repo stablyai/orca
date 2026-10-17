@@ -17,6 +17,11 @@ export type ProjectGroup = {
   updatedAt: number
 }
 
+/** `parentGroupId: null` moves the group to the top level; omitted keeps its parent. */
+export type ProjectGroupUpdates = Partial<
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+>
+
 export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number

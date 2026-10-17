@@ -18,9 +18,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -39,6 +36,7 @@ import {
   REPO_HEADER_ACTION_REVEAL_CLASS
 } from '../../repo-header-action-button-class'
 import type { getRepoHeaderCreateState } from '../../repo-header-create-state'
+import { ProjectGroupMoveSubmenu } from '../../ProjectGroupMoveSubmenu'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -140,25 +138,14 @@ export function RepoHeaderProjectActionsMenu({
           <FolderTree className="size-3.5" />
           {translate('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
         </DropdownMenuItem>
-        {projectGroups.length > 0 ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <FolderInput className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {projectGroups.map((group) => (
-                <DropdownMenuItem
-                  key={group.id}
-                  disabled={repo.projectGroupId === group.id}
-                  onSelect={() => actions.onMoveProjectToGroup(repo, group.id)}
-                >
-                  <span className="max-w-48 truncate">{group.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ) : null}
+        <ProjectGroupMoveSubmenu
+          projectGroups={projectGroups}
+          movingProject={repo}
+          onSelect={(groupId) => actions.onMoveProjectToGroup(repo, groupId)}
+        >
+          <FolderInput className="size-3.5" />
+          {translate('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+        </ProjectGroupMoveSubmenu>
         {repo.projectGroupId ? (
           <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(repo)}>
             <CircleX className="size-3.5" />

@@ -28,11 +28,7 @@ export {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
 } from './structured-agent-session-surface-capabilities'
 import { AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES } from './agent-session-attention-capabilities'
-export {
-  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
-  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
-  AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY
-} from './agent-session-attention-capabilities'
+export * from './agent-session-attention-capabilities'
 import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration-runtime-capabilities'
 export {
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
@@ -55,6 +51,7 @@ export { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from './session
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from './agent-session-continue-interrupted-capability'
 import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from './agent-session-permission-modes-capability'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
+import { PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY } from './project-group-nesting-capability'
 import { DEVICE_KEY_RUNTIME_CAPABILITIES } from './device-key-capability'
 import { TERMINAL_QUICK_COMMAND_RUNTIME_CAPABILITIES } from './terminal-quick-command-capabilities'
 // Why a star: every resume capability is part of the runtime contract this module re-exports.
@@ -208,6 +205,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   ...jiraDetailCapabilities.JIRA_DETAIL_RUNTIME_CAPABILITIES,
   JIRA_SAVED_FILTER_RUNTIME_CAPABILITY,

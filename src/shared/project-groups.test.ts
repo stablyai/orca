@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  breakProjectGroupParentCycles,
   clearMissingProjectGroupMemberships,
   createProjectGroup,
   getEffectiveProjectGroupManualRank,
@@ -20,6 +21,12 @@ function repo(overrides: Partial<Repo>): Repo {
     kind: 'git',
     ...overrides
   }
+}
+
+function normalizedParents(value: unknown[]): Record<string, string | null> {
+  return Object.fromEntries(
+    normalizeProjectGroups(value).map((group) => [group.id, group.parentGroupId])
+  )
 }
 
 describe('project-groups', () => {
@@ -70,6 +77,46 @@ describe('project-groups', () => {
       isCollapsed: true,
       parentGroupId: null
     })
+  })
+
+  it('breaks persisted parent cycles at the group that sorts first and keeps every group', () => {
+    const twoCycle = [
+      { id: 'a', name: 'A', tabOrder: 0, parentGroupId: 'b' },
+      { id: 'b', name: 'B', tabOrder: 1, parentGroupId: 'a' }
+    ]
+
+    expect(normalizedParents(twoCycle)).toEqual({ a: null, b: 'a' })
+    expect(normalizedParents(twoCycle.toReversed())).toEqual({ a: null, b: 'a' })
+    expect(
+      normalizedParents([
+        { id: 'a', name: 'A', tabOrder: 2, parentGroupId: 'b' },
+        { id: 'b', name: 'B', tabOrder: 0, parentGroupId: 'c' },
+        { id: 'c', name: 'C', tabOrder: 1, parentGroupId: 'a' }
+      ])
+    ).toEqual({ a: 'b', b: null, c: 'a' })
+  })
+
+  it('cuts a cycle reached through a tail without detaching the tail', () => {
+    expect(
+      normalizedParents([
+        { id: 'tail', name: 'Tail', tabOrder: 0, parentGroupId: 'a' },
+        { id: 'a', name: 'A', tabOrder: 1, parentGroupId: 'b' },
+        { id: 'b', name: 'B', tabOrder: 2, parentGroupId: 'a' }
+      ])
+    ).toEqual({ tail: 'a', a: null, b: 'a' })
+  })
+
+  it('cuts a long parent cycle once without re-walking the chain', () => {
+    const length = 50_000
+    const groups = Array.from({ length }, (_, index) => ({
+      id: `g${index}`,
+      parentGroupId: `g${(index + 1) % length}`
+    }))
+
+    breakProjectGroupParentCycles(groups)
+
+    expect(groups[0].parentGroupId).toBeNull()
+    expect(groups.filter((group) => group.parentGroupId === null)).toHaveLength(1)
   })
 
   it('preserves normalized execution ownership for persisted groups', () => {

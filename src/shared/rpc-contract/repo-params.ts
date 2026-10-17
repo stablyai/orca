@@ -54,7 +54,9 @@ export const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    // Why: omitted keeps the parent, null moves the group to the top level.
+    parentGroupId: OptionalString.nullable().optional()
   })
 })
 
