@@ -171,6 +171,18 @@ describe('terminal path helpers', () => {
       })
     })
 
+    it('links a path typed after a prompt whose cwd is also a path', () => {
+      const links = extractTerminalFileLinks(
+        'root@ubuntu:/mnt/data/sniper_eco_paper_final# echo /root/.claude/settings.json'
+      )
+      expect(links.map((link) => link.pathText)).toContain('/root/.claude/settings.json')
+    })
+
+    it('links every extensionless path in a multi-argument command', () => {
+      const links = extractTerminalFileLinks('cp /a/b /c/d')
+      expect(links.map((link) => link.pathText)).toEqual(['/a/b', '/c/d'])
+    })
+
     it('does not treat mid-line command arguments as line-ending spaced paths', () => {
       const links = extractTerminalFileLinks('run /usr/bin/env node, then continue')
       expect(links.map((link) => link.pathText)).not.toContain('/usr/bin/env node')

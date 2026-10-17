@@ -48,6 +48,52 @@ export function* detectTerminalFileLinkRanges(
   }
 }
 
+// Why: the broad spaced-path scan runs to line end, so a shell prompt cwd or
+// `cp /a/b /c/d` swallows every later path into one nonexistent candidate.
+// Whitespace followed by an explicit root/relative/drive prefix always starts a
+// new path (`Foo Bar/file` is not one, so spaced folder names stay whole).
+const SPACED_PATH_NEXT_START_PATTERN = /\s(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/])/g
+
+export function splitSpacedPathRangeAtNextPathStart(
+  range: DetectedTerminalFileLinkRange
+): DetectedTerminalFileLinkRange[] {
+  const ranges: DetectedTerminalFileLinkRange[] = []
+  let start = 0
+  for (const match of range.text.matchAll(SPACED_PATH_NEXT_START_PATTERN)) {
+    const end = match.index ?? 0
+    if (end > start) {
+      ranges.push({
+        text: range.text.slice(start, end),
+        startIndex: range.startIndex + start,
+        endIndex: range.startIndex + end
+      })
+    }
+    start = end + 1
+  }
+  if (start === 0) {
+    return [range]
+  }
+  if (start < range.text.length) {
+    ranges.push({
+      text: range.text.slice(start),
+      startIndex: range.startIndex + start,
+      endIndex: range.endIndex
+    })
+  }
+  return ranges
+}
+
+export function trimTerminalFileLinkRangeEnd(
+  range: DetectedTerminalFileLinkRange
+): DetectedTerminalFileLinkRange {
+  const text = range.text.trimEnd()
+  return {
+    text,
+    startIndex: range.startIndex,
+    endIndex: range.startIndex + text.length
+  }
+}
+
 export function mergeTerminalFileLinkRanges(ranges: [number, number][]): [number, number][] {
   if (ranges.length <= 1) {
     return ranges

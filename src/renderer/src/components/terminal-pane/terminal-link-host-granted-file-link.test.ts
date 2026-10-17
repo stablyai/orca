@@ -1,7 +1,12 @@
 import type { ILink } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
+import { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
-import { createProviderSetup, makeBufferLine } from './terminal-link-provider-buffer-fixtures'
+import {
+  createProviderSetup,
+  makeBuffer,
+  makeBufferLine
+} from './terminal-link-provider-buffer-fixtures'
 import {
   flushDoubleRaf,
   installTerminalLinkTestEnvironment
@@ -99,6 +104,73 @@ describe('a paired-server terminal path outside its workspace', () => {
       }),
       { forceContentReload: true }
     )
+  })
+
+  it('probes ambiguous clicked paths on the host using the terminal grant', async () => {
+    hostGrants()
+    const gluedPath = `${IMAGE}root@ubuntu`
+    runtimeEnvironmentCallMock.mockImplementation(async (args) => {
+      if (args.params.pathText === gluedPath) {
+        throw new Error('host probe failed')
+      }
+      return {
+        id: 'rpc-1',
+        ok: true,
+        result: {
+          worktree: 'wt-1',
+          relativePath: null,
+          absolutePath: IMAGE,
+          exists: true,
+          isDirectory: false,
+          openTarget: {
+            kind: 'absolute-file',
+            provider: 'local',
+            absolutePath: IMAGE,
+            grantId: 'g-1'
+          }
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      }
+    })
+    const pathExistsCache = new Map<string, boolean>()
+
+    expect(
+      openFilePathLinkAtBufferPosition(
+        makeBuffer([makeBufferLine(IMAGE), makeBufferLine('root@ubuntu:/srv/repo# ')]),
+        { x: 8, y: 1 },
+        80,
+        {
+          startupCwd: '/srv/repo',
+          worktreeId: 'wt-1',
+          worktreePath: '/srv/repo',
+          runtimeEnvironmentId: 'env-1',
+          terminalHandle: 'term-1',
+          pathExistsCache
+        }
+      )
+    ).toBe(true)
+    await flushDoubleRaf()
+
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'files.resolveTerminalPath',
+        params: {
+          worktree: 'id:wt-1',
+          pathText: gluedPath,
+          crossWorkspace: true,
+          terminal: 'term-1'
+        }
+      })
+    )
+    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
+    expect(statMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledTimes(1)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: IMAGE, terminalArtifactGrantId: 'g-1' }),
+      { forceContentReload: true }
+    )
+    expect(pathExistsCache.get(`env-1\0${IMAGE}`)).toBe(true)
+    expect(pathExistsCache.has(`env-1\0${gluedPath}`)).toBe(false)
   })
 
   it('shows no link for a path the host refuses, even when this computer has it', async () => {

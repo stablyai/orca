@@ -5,8 +5,10 @@ import {
   detectTerminalFileLinkRanges,
   insertTerminalFileLinkClaimedRange,
   mergeTerminalFileLinkRanges,
+  splitSpacedPathRangeAtNextPathStart,
   terminalFileLinkRangesOverlap,
   toParsedTerminalFileLink,
+  trimTerminalFileLinkRangeEnd,
   type DetectedTerminalFileLinkRange
 } from './terminal-file-link-detection-ranges'
 import { detectTerminalFileUriLinks } from './terminal-file-uri-link'
@@ -158,17 +160,6 @@ function trimSpacedPathTrailingProse(
   }
 }
 
-function trimTrailingWhitespace(
-  range: DetectedTerminalFileLinkRange
-): DetectedTerminalFileLinkRange {
-  const text = range.text.trimEnd()
-  return {
-    text,
-    startIndex: range.startIndex,
-    endIndex: range.startIndex + text.length
-  }
-}
-
 function buildLineEndingSpacedPathPrefixRanges(
   range: DetectedTerminalFileLinkRange
 ): DetectedTerminalFileLinkRange[] {
@@ -231,7 +222,9 @@ function detectSpacedLocalPathLinks(
   const links: ParsedTerminalFileLink[] = []
   const claimedRanges: [number, number][] = []
   for (const regex of SPACED_LOCAL_PATH_REGEXES) {
-    for (const range of detectTerminalFileLinkRanges(lineText, regex)) {
+    for (const range of Array.from(detectTerminalFileLinkRanges(lineText, regex)).flatMap(
+      splitSpacedPathRangeAtNextPathStart
+    )) {
       if (regex === SPACED_PATH_WITH_SEPARATOR_REGEX && !hasSeparatorAfterWhitespace(range.text)) {
         continue
       }
@@ -258,7 +251,7 @@ function detectSpacedLocalPathLinks(
       const candidateLinks = candidateRanges
         .map((candidateRange) =>
           toParsedTerminalFileLink(
-            trimSpacedPathTrailingProse(trimTrailingWhitespace(candidateRange))
+            trimSpacedPathTrailingProse(trimTerminalFileLinkRangeEnd(candidateRange))
           )
         )
         .filter((link): link is ParsedTerminalFileLink => link !== null)
