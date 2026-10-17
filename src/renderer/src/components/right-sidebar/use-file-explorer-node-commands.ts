@@ -44,6 +44,7 @@ type UseFileExplorerNodeCommandsParams = {
   handleClick: (node: TreeNode, dirToggle?: DirToggleTiming) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   scrollToIndex: (index: number) => void
+  canOpenInOrcaBrowser: (filePath: string) => boolean
 }
 
 type UseFileExplorerNodeCommandsResult = {
@@ -76,7 +77,8 @@ export function useFileExplorerNodeCommands({
   refreshDir,
   handleClick,
   toggleDir,
-  scrollToIndex
+  scrollToIndex,
+  canOpenInOrcaBrowser
 }: UseFileExplorerNodeCommandsParams): UseFileExplorerNodeCommandsResult {
   const collapseDirSubtree = useAppStore((s) => s.collapseDirSubtree)
   const openModal = useAppStore((s) => s.openModal)
@@ -111,7 +113,8 @@ export function useFileExplorerNodeCommands({
     requestDelete,
     requestDeleteAll,
     scrollToIndex,
-    activeWorktreeId
+    activeWorktreeId,
+    canOpenInOrcaBrowser
   })
 
   // Why: context-menu Delete should respect the multi-selection — if the

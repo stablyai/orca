@@ -101,6 +101,7 @@ export type KeybindingActionId =
   | 'fileExplorer.redo'
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
+  | 'fileExplorer.openInOrcaBrowser'
   | 'fileExplorer.delete'
   | 'settings.search'
   | 'terminal.copySelection'

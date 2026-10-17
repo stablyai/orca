@@ -88,7 +88,8 @@ function renderRow(node: TreeNode, toggleDir: (worktreeId: string, dirPath: stri
       refreshDir: vi.fn().mockResolvedValue(undefined),
       handleClick,
       toggleDir,
-      scrollToIndex: vi.fn()
+      scrollToIndex: vi.fn(),
+      canOpenInOrcaBrowser: () => false
     })
     return createElement(
       'button',

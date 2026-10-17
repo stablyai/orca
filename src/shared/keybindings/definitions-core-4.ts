@@ -3,6 +3,19 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'fileExplorer.openInOrcaBrowser',
+    title: 'Open file in Orca Browser',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: ['shortcut', 'file explorer', 'open', 'browser', 'preview', 'html'],
+    // Why the copyPath shape: Ctrl+Alt is AltGr on many Linux/Windows layouts.
+    defaultBindings: {
+      darwin: ['Mod+Alt+B'],
+      linux: ['Alt+Shift+B'],
+      win32: ['Alt+Shift+B']
+    }
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',
