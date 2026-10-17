@@ -139,4 +139,19 @@ describe('TERMINAL_ACCESSORY_KEYS', () => {
   it('rejects control combinations that terminals cannot encode as control bytes', () => {
     expect(buildTerminalShortcutKey({ key: '1', modifiers: ['ctrl'] })).toBeNull()
   })
+
+  it('builds xterm digit-row control codes for Ctrl+2 through Ctrl+8', () => {
+    const digitRowBytes = {
+      '2': '\x00',
+      '3': '\x1b',
+      '4': '\x1c',
+      '5': '\x1d',
+      '6': '\x1e',
+      '7': '\x1f',
+      '8': '\x7f'
+    }
+    for (const [key, bytes] of Object.entries(digitRowBytes)) {
+      expect(buildTerminalShortcutKey({ key, modifiers: ['ctrl'] })?.bytes).toBe(bytes)
+    }
+  })
 })
