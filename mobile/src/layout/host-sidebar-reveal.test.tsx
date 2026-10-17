@@ -1,5 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { Pressable } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createFakeBridgePortPair } from '../mobile-web-shell/bridge/bridge-port-pair-test-harness'
 import { RpcClientProvider } from '../transport/client-context.web'
@@ -124,7 +125,9 @@ describe('host sidebar reveal in the session header', () => {
   }
 
   function buttons(label: string) {
-    return tree().root.findAllByProps({ accessibilityLabel: label })
+    return tree().root.findAll(
+      (node) => node.type === Pressable && node.props.accessibilityLabel === label
+    )
   }
 
   it('offers no reveal in a page beside the native sidebar, which it does not draw', async () => {
