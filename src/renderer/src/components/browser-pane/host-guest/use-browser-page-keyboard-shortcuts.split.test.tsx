@@ -10,7 +10,15 @@ import type { BrowserPageZoomCommand } from '../../../../../shared/browser-page-
 import { paneChannel } from '../client-hosted-browser-pane-test-rig'
 import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
 import { useBrowserPageKeyboardShortcuts } from './use-browser-page-keyboard-shortcuts'
+import { useAppStore } from '@/store'
 
+const { forEachLivePaneForDesyncSentinelMock } = vi.hoisted(() => ({
+  forEachLivePaneForDesyncSentinelMock: vi.fn()
+}))
+
+vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
+  forEachLivePaneForDesyncSentinel: forEachLivePaneForDesyncSentinelMock
+}))
 // Why: the chords are Cmd on macOS and Ctrl elsewhere, so the platform cannot be left to the runner.
 const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
 
@@ -70,7 +78,6 @@ function PaneHarness({
     markupIsActive,
     webviewRef,
     paneZoomLevelRef,
-    setBrowserDefaultZoomLevel: vi.fn(),
     showBrowserZoomFeedback: vi.fn(),
     reloadWebviewOrRecoverGuest: spies.reload,
     startGrabIntent: spies.startGrabIntent,
@@ -144,6 +151,8 @@ beforeEach(() => {
   hardReloadRequests = paneChannel()
   zoomRequests = paneChannel()
   grabModeToggleListeners = []
+  forEachLivePaneForDesyncSentinelMock.mockReset()
+  forEachLivePaneForDesyncSentinelMock.mockImplementation(() => undefined)
   const inert = (): (() => void) => () => {}
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -233,6 +242,66 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(b.startGrabIntent).not.toHaveBeenCalled()
   })
 
+  it('copies a live terminal selection instead of arming grab', () => {
+    const writeTerminalClipboardText = vi.fn(async () => undefined)
+    Object.assign(window.api.ui, { writeTerminalClipboardText })
+    forEachLivePaneForDesyncSentinelMock.mockImplementation((visit) => {
+      visit('m1:p1', {
+        id: 1,
+        terminal: {
+          hasSelection: () => true,
+          getSelection: () => 'terminal selection text'
+        }
+      })
+    })
+    const { a, b } = renderSplit('focused', 'inactive')
+
+    press(document.body, { key: 'c', code: 'KeyC' })
+
+    expect(a.startGrabIntent).not.toHaveBeenCalled()
+    expect(b.startGrabIntent).not.toHaveBeenCalled()
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('terminal selection text')
+  })
+
+  it('still arms grab when terminals report no selection', () => {
+    forEachLivePaneForDesyncSentinelMock.mockImplementation((visit) => {
+      visit('m1:p1', {
+        id: 1,
+        terminal: {
+          hasSelection: () => false,
+          getSelection: () => ''
+        }
+      })
+    })
+    const { a, b } = renderSplit('focused', 'inactive')
+
+    press(document.body, { key: 'c', code: 'KeyC' })
+
+    expect(a.startGrabIntent).toHaveBeenCalledWith('copy')
+    expect(b.startGrabIntent).not.toHaveBeenCalled()
+  })
+
+  it('does not arm grab from a guest-forwarded copy chord when a terminal is selected', () => {
+    const writeTerminalClipboardText = vi.fn(async () => undefined)
+    Object.assign(window.api.ui, { writeTerminalClipboardText })
+    forEachLivePaneForDesyncSentinelMock.mockImplementation((visit) => {
+      visit('m1:p1', {
+        id: 1,
+        terminal: {
+          hasSelection: () => true,
+          getSelection: () => 'from terminal'
+        }
+      })
+    })
+    const { a, b } = renderSplit('focused', 'inactive')
+
+    act(() => grabModeToggleListeners.forEach((listener) => listener('page-a', 'copy')))
+
+    expect(a.startGrabIntent).not.toHaveBeenCalled()
+    expect(b.startGrabIntent).not.toHaveBeenCalled()
+    expect(writeTerminalClipboardText).toHaveBeenCalledWith('from terminal')
+  })
+
   it('arms annotate from the focused pane only, even while text is selected', () => {
     const { a, b } = renderSplit('focused', 'inactive')
     selectText('transcript')
@@ -291,5 +360,31 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(floating.webview.goBack).not.toHaveBeenCalled()
     expect(floating.reload).not.toHaveBeenCalled()
     expect(floating.startGrabIntent).not.toHaveBeenCalled()
+  })
+
+  it('zooms only the targeted pane and does not overwrite default zoom for other tabs', () => {
+    const prior = {
+      browserDefaultZoomLevel: useAppStore.getState().browserDefaultZoomLevel,
+      setBrowserDefaultZoomLevel: useAppStore.getState().setBrowserDefaultZoomLevel
+    }
+    const setBrowserDefaultZoomLevel = vi.fn()
+    const priorDefault = 1.5
+    useAppStore.setState({
+      browserDefaultZoomLevel: priorDefault,
+      setBrowserDefaultZoomLevel
+    })
+
+    try {
+      const { a, b } = renderSplit('focused', 'inactive')
+
+      act(() => zoomRequests.emit({ browserPageId: 'page-b', direction: 'in' }))
+
+      expect(b.webview.setZoomLevel).toHaveBeenCalledTimes(1)
+      expect(a.webview.setZoomLevel).not.toHaveBeenCalled()
+      expect(setBrowserDefaultZoomLevel).not.toHaveBeenCalled()
+      expect(useAppStore.getState().browserDefaultZoomLevel).toBe(priorDefault)
+    } finally {
+      useAppStore.setState(prior)
+    }
   })
 })
