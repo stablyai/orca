@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron'
+import { isLatinShortcutKey } from '../../shared/keybindings'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -103,7 +104,8 @@ export function isMacAppPasteInput(input: Electron.Input): boolean {
     !input.control &&
     !input.alt &&
     !input.shift &&
-    (input.code === 'KeyV' || input.key.toLowerCase() === 'v')
+    // Why: on remapped Latin layouts (Turkish F puts C on KeyV) the produced key wins; only non-Latin keys fall back to the physical code.
+    (isLatinShortcutKey(input.key) ? input.key.toLowerCase() === 'v' : input.code === 'KeyV')
   )
 }
 
