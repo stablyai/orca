@@ -1,6 +1,11 @@
 import type { CrashReportDetailValue } from '../../shared/crash-reporting'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
 import {
+  linuxOomKillDetails,
+  readLinuxOomKillCounters,
+  type LinuxOomKillCounters
+} from './linux-oom-kill-counters'
+import {
   getSystemMemoryDetails,
   SYSTEM_MEMORY_KEY_PREFIX,
   withSwapVolumeFreeSpace
@@ -31,6 +36,22 @@ let preGoneTimer: ReturnType<typeof setInterval> | null = null
 let swapVolumeReadInFlight = false
 let samplingGeneration = 0
 let sampleTick = 0
+
+type OomKillBaseline = { counters: LinuxOomKillCounters; sampledAtMs: number }
+// Why two: a tick can land between the kill and the gone event (main is slow
+// under the very pressure that killed), zeroing the delta; the older one cannot.
+let oomKillBaselines: OomKillBaseline[] = []
+
+function sampleOomKillBaseline(nowMs: number): void {
+  try {
+    const counters = readLinuxOomKillCounters()
+    if (counters) {
+      oomKillBaselines = [...oomKillBaselines.slice(-1), { counters, sampledAtMs: nowMs }]
+    }
+  } catch {
+    // Why: attribution is optional; the memory reading must still commit.
+  }
+}
 
 const PRESSURE_SIGNAL_KEY = `${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`
 
@@ -109,6 +130,7 @@ export async function samplePreGoneSystemMemory(nowMs: number = Date.now()): Pro
   // paging storm this targets it is slowest — it must never delay, or (via an
   // in-flight latch) skip, the cheap synchronous host reading.
   const tick = ++sampleTick
+  sampleOomKillBaseline(nowMs)
   if (!commitHostMemorySample(nowMs)) {
     return
   }
@@ -132,6 +154,7 @@ export function resetPreGoneSystemMemorySamplingForTest(): void {
   }
   preGoneTimer = null
   preGoneSample = null
+  oomKillBaselines = []
   swapVolumeReadInFlight = false
   // Why bump: an already-awaited volume read must not repopulate a reset sample.
   samplingGeneration += 1
@@ -161,4 +184,20 @@ export function preGoneSystemMemoryDetails(nowMs: number): CrashReportDetails {
       value
   }
   return details
+}
+
+/** Linux only: kernel OOM-kill counter deltas since the oldest retained baseline. */
+export function preGoneLinuxOomKillDetails(nowMs: number): CrashReportDetails {
+  const baseline = oomKillBaselines[0]
+  if (!baseline) {
+    return {}
+  }
+  try {
+    const current = readLinuxOomKillCounters(baseline.counters.daemonCgroupPath)
+    return current
+      ? linuxOomKillDetails(baseline.counters, nowMs - baseline.sampledAtMs, current)
+      : {}
+  } catch {
+    return {}
+  }
 }
