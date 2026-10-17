@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
+import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
@@ -63,29 +64,35 @@ export function markCursorWorkspaceTrusted(workspacePath: string, home: string):
  * both read/write this exact key, and folder comparison is done after a
  * realpath() resolution).
  *
- * We append to the array in-place so unrelated config keys (loggedInUsers,
+ * Copilot >=1.0.35 writes a JSONC `//` header, so we parse as JSONC and edit
+ * the original text in place: the header and unrelated keys (loggedInUsers,
  * copilotTokens, etc.) survive untouched.
  */
 export function markCopilotFolderTrusted(workspacePath: string, home: string): void {
   const absPath = canonicalize(workspacePath)
   const configDir = join(home, '.copilot')
   const configPath = join(configDir, 'config.json')
-  let config: Record<string, unknown> = {}
+  let text: string | null = null
+  let existing: unknown[] = []
   try {
     if (existsSync(configPath)) {
-      const raw = readFileSync(configPath, 'utf-8')
-      const parsed: unknown = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        config = Object.fromEntries(Object.entries(parsed))
+      text = readFileSync(configPath, 'utf-8')
+      const errors: ParseError[] = []
+      const parsed: unknown = parseJsonc(text, errors)
+      if (errors.length > 0 || !parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        // Why: path only — the file can hold copilotTokens.
+        console.warn(
+          `Could not parse ${configPath} as a JSONC object; skipping Copilot folder trust`
+        )
+        return
       }
+      const trustedFolders = 'trustedFolders' in parsed ? parsed.trustedFolders : undefined
+      existing = Array.isArray(trustedFolders) ? trustedFolders : []
     }
   } catch {
-    // Why: a corrupted config.json is the user's to fix — refuse to overwrite
-    // it from this side-effect path. Copilot will rewrite the file itself
-    // after the user accepts the trust prompt manually.
+    // Why: an unreadable config.json (permissions, a directory) is the user's to fix — never write.
     return
   }
-  const existing = Array.isArray(config.trustedFolders) ? (config.trustedFolders as unknown[]) : []
   const normalizedExisting = existing.map((entry) =>
     typeof entry === 'string' ? canonicalize(entry) : null
   )
@@ -93,12 +100,20 @@ export function markCopilotFolderTrusted(workspacePath: string, home: string): v
     return
   }
   const next = [...existing.filter((e) => typeof e === 'string'), absPath]
-  config.trustedFolders = next
+  const nextText =
+    text === null
+      ? `${JSON.stringify({ trustedFolders: next }, null, 2)}\n`
+      : applyEdits(
+          text,
+          modify(text, ['trustedFolders'], next, {
+            formattingOptions: { insertSpaces: true, tabSize: 2 }
+          })
+        )
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })
   }
   // Why: config.json can hold copilotTokens, so it must stay owner-only (also on shared SSH hosts).
-  writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 })
+  writeFileAtomically(configPath, nextText, { mode: 0o600 })
 }
 
 /**

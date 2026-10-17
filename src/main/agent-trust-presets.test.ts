@@ -183,6 +183,85 @@ describe('markCopilotFolderTrusted', () => {
       rmSync(workspace, { recursive: true, force: true })
     }
   })
+
+  it.skipIf(process.platform === 'win32')(
+    "appends to a config.json with Copilot's comment header, keeping it owner-only",
+    () => {
+      const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
+      const otherFolder = mkdtempSync(join(tmpdir(), 'orca-copilot-other-'))
+      const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
+      const header =
+        '// User settings belong in settings.json.\n// This file is managed automatically.\n'
+      // Why: a restrictive runner umask would mask a dropped mode.
+      const originalUmask = process.umask(0o022)
+      try {
+        mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
+        writeFileSync(
+          configPath,
+          `${header}${JSON.stringify(
+            { copilotTokens: { a: 'secret' }, trustedFolders: [realpathSync(otherFolder)] },
+            null,
+            2
+          )}\n`,
+          { mode: 0o600 }
+        )
+        markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
+        const text = readFileSync(configPath, 'utf-8')
+        expect(text.startsWith(header)).toBe(true)
+        const parsed = JSON.parse(text.slice(header.length))
+        expect(parsed.copilotTokens).toEqual({ a: 'secret' })
+        expect(parsed.trustedFolders).toEqual([realpathSync(otherFolder), realpathSync(workspace)])
+        expect(statSync(configPath).mode & 0o777).toBe(0o600)
+      } finally {
+        process.umask(originalUmask)
+        rmSync(workspace, { recursive: true, force: true })
+        rmSync(otherFolder, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('adds trustedFolders to a headered config.json that has none yet', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
+    const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
+    const header =
+      '// User settings belong in settings.json.\n// This file is managed automatically.\n'
+    try {
+      mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
+      writeFileSync(
+        configPath,
+        `${header}${JSON.stringify({ copilotTokens: { a: 'secret' } }, null, 2)}\n`
+      )
+      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
+      const text = readFileSync(configPath, 'utf-8')
+      expect(text.startsWith(header)).toBe(true)
+      const parsed = JSON.parse(text.slice(header.length))
+      expect(parsed.copilotTokens).toEqual({ a: 'secret' })
+      expect(parsed.trustedFolders).toEqual([realpathSync(workspace)])
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['malformed JSONC', '// header\n{ "copilotTokens": { "a": "secret" '],
+    ['a non-object root', '[]\n']
+  ])('leaves a config.json with %s untouched', (_label, contents) => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
+    const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
+      writeFileSync(configPath, contents)
+      markCopilotFolderTrusted(workspace, testState.fakeHomeDir)
+      expect(readFileSync(configPath, 'utf-8')).toBe(contents)
+      expect(warn).toHaveBeenCalledOnce()
+      expect(warn.mock.calls[0][0]).toContain(configPath)
+      expect(warn.mock.calls[0][0]).not.toContain('secret')
+    } finally {
+      warn.mockRestore()
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('markAntigravityWorkspaceTrusted', () => {
