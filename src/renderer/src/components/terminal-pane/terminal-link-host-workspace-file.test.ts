@@ -123,7 +123,35 @@ describe('a paired-server link outside its own workspace', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'wt-main', worktreePath: '/repo' }),
-      '/repo/src/index.ts'
+      '/repo/src/index.ts',
+      expect.any(Function)
+    )
+  })
+
+  it('opens a granted archive in Orca, since a grant cannot hand over the whole file', async () => {
+    const archive = '/srv/out/build.zip'
+    hostAnswers({
+      worktree: 'wt-main',
+      relativePath: null,
+      absolutePath: archive,
+      exists: true,
+      isDirectory: false,
+      openTarget: {
+        kind: 'absolute-file',
+        provider: 'local',
+        absolutePath: archive,
+        grantId: 'g-1'
+      }
+    })
+
+    openDetectedFilePath(archive, null, null, featureWorktree)
+    await flushDoubleRaf()
+
+    expect(downloadAndOpenRemoteTerminalFile).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: archive, terminalArtifactGrantId: 'g-1' }),
+      { forceContentReload: true }
     )
   })
 

@@ -1,6 +1,7 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
+import { openOsViewerOnlyTerminalFile } from './terminal-os-viewer-file-open'
 import { detectLanguage } from '@/lib/language-detect'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
@@ -126,6 +127,7 @@ export function openDetectedFilePath(
     terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
   )
   const requestId = ++latestOpenDetectedFilePathRequestId
+  const isRequestCurrent = (): boolean => requestId === latestOpenDetectedFilePathRequestId
   cancelPendingEditorRevealFrames()
 
   void (async () => {
@@ -228,7 +230,7 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && !canOpenWithSystemDefault && hostGrantId === null) {
       // Why: the popover names Shift+Cmd/Ctrl "Download & open with default app", and the OS
       // cannot launch a remote path, so the direct gesture must reach the same download.
-      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
+      await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, isRequestCurrent)
       return
     }
 
@@ -247,6 +249,20 @@ export function openDetectedFilePath(
         openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
         return
       }
+    }
+
+    // Why: a grant serves only text and images, so a granted binary stays in Orca, as upstream does.
+    if (
+      !openWithSystemDefault &&
+      hostGrantId === null &&
+      (await openOsViewerOnlyTerminalFile(
+        fileContext,
+        mappedFilePath,
+        canOpenWithSystemDefault,
+        isRequestCurrent
+      ))
+    ) {
+      return
     }
 
     const store = useAppStore.getState()
