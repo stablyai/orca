@@ -205,6 +205,15 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       // once the minimum supported host version is v1.4.211 or later.
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
+    // Why: a success envelope with a null/empty handle is the worst outcome for
+    // headless callers — later steps fail far from create (#13200). Fail closed.
+    const handle = result.result?.terminal?.handle
+    if (typeof handle !== 'string' || handle.trim() === '') {
+      throw new RuntimeClientError(
+        'invalid_response',
+        'terminal create returned success without a terminal handle'
+      )
+    }
     printResult(result, json, formatTerminalCreate)
   },
   // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
