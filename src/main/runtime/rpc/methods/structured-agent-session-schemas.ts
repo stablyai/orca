@@ -26,6 +26,7 @@ export {
   RestartResumeParams,
   RewindParams,
   SendParams,
+  SleepWorkspaceParams,
   SessionId,
   SetOptionParams,
   SubscribeParams,

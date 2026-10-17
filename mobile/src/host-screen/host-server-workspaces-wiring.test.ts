@@ -385,7 +385,10 @@ describe("a desktop's server workspaces on the phone", () => {
     const client = desktop()
     const screen = await mountScreen(client, RELAYS)
     screen.sleep('mac-wt')
-    expect(client.sendRequest).toHaveBeenCalledWith('worktree.sleep', { worktree: 'id:mac-wt' })
+    expect(client.sendRequest).toHaveBeenCalledWith('worktree.sleep', {
+      worktree: 'id:mac-wt',
+      hostId: 'local'
+    })
     expect(screen.slept()?.size).toBe(1)
   })
 

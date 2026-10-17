@@ -208,7 +208,7 @@ export async function performSend(
     ok: true,
     value: {
       clientMessageId: input.clientMessageId,
-      submission: requireSubmission(ctx, input.clientMessageId)
+      submission: { ...requireSubmission(ctx, input.clientMessageId) }
     }
   }
 }

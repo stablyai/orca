@@ -68,6 +68,18 @@ describe('sidebar worktree activation', () => {
     await activation
   })
 
+  it('passes the clicked host to the VM wake', async () => {
+    const resumeWorkspace = vi.fn().mockResolvedValue(null)
+    vi.stubGlobal('window', { api: { ephemeralVm: { resumeWorkspace } } })
+
+    await activateWorktreeFromSidebar('wt-vm', 'runtime:env-a')
+
+    expect(resumeWorkspace).toHaveBeenCalledWith({
+      workspaceId: 'wt-vm',
+      executionHostId: 'runtime:env-a'
+    })
+  })
+
   it('routes folder workspace activation through the guarded folder path', async () => {
     await activateWorktreeFromSidebar('folder:folder-workspace-1')
 

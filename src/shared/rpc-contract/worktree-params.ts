@@ -86,6 +86,8 @@ export const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+export const WorktreeSleep = WorktreeSelector.extend({ hostId: OptionalExecutionHostId })
+
 export const WorktreeActivate = WorktreeSelector.extend({
   notifyClients: OptionalBoolean,
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()

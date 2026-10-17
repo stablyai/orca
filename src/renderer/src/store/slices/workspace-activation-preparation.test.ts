@@ -55,7 +55,7 @@ it.each([
   ['git', 'ssh:remote']
 ] as const)('wakes a slept %s on %s and restores its explorer mode atomically', (kind, hostId) => {
   const { store, workspaceId, activate } = seedWorkspace(kind, hostId)
-  markWorktreeSleepIntent(workspaceId)
+  markWorktreeSleepIntent(workspaceId, hostId)
   const wake = vi.fn(() => {
     expect(store.getState().activeWorktreeId).toBe(workspaceId)
     expect(store.getState().tabsByWorktree[workspaceId][0].generation).toBe(4)

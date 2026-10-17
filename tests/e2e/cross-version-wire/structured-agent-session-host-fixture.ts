@@ -76,6 +76,7 @@ export function structuredHostStub(
       value: { itemId: 'item-1', epoch: 'rewound-epoch' }
     })),
     close: vi.fn(async () => undefined),
+    sleepWorkspace: vi.fn(async () => ({ stoppedSessionIds: [] })),
     revealSession: vi.fn(async () => ({
       sessionId,
       workspaceId,

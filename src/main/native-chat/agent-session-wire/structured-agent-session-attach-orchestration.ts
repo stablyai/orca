@@ -69,7 +69,10 @@ export function attachStructuredAgentSessionUnderSerialize(
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionAttachOptions = {}
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  return context.tasks.trackAttach(runAttach(context, callerKey, params, options))
+  return context.tasks.trackAttach(runAttach(context, callerKey, params, options), {
+    sessionId: params.envelope.sessionId,
+    location: params.location
+  })
 }
 
 export function attachStructuredAgentSession(
@@ -85,7 +88,8 @@ export function attachStructuredAgentSession(
     context.tasks.trackAttach(
       context.serialize(sessionId, () =>
         runAttach(context, callerKey, params, { ...options, recordPhase })
-      )
+      ),
+      { sessionId, location: params.location }
     )
   if (params.envelope.expectedRuntimeFence !== null) {
     return run()

@@ -262,6 +262,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.afterClose(input.sessionId, () => this.releaseProviderSession(input.sessionId))
+  hasOwnedAcquisition = (sessionId: string): boolean =>
+    this.acquisitions.get(sessionId) !== undefined ||
+    this.sessions.has(sessionId) ||
+    this.exits.has(sessionId)
 
   /** A close clears the session's tasks outside `emit`; its ending still reaches the host. */
   private async afterClose(sessionId: string, close: () => Promise<boolean>): Promise<boolean> {

@@ -28,7 +28,11 @@ import {
   type WorkspacePortExecutionHostDeps
 } from '../../ports/workspace-port-execution-host'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getWorktreeExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
   protected abstract resolveTerminalWorkspaceLaunchTarget(
@@ -210,12 +214,22 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     )
   }
 
-  async sleepManagedWorktree(worktreeSelector: string): Promise<{ worktreeId: string }> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+  async sleepManagedWorktree(
+    worktreeSelector: string,
+    hostId?: ExecutionHostId
+  ): Promise<{ worktreeId: string; executionHostId: ExecutionHostId }> {
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector, hostId)
+    const executionHostId = getWorktreeExecutionHostId(
+      worktree,
+      this.store?.getRepo(worktree.repoId)
+    )
+    if (hostId && hostId !== executionHostId) {
+      throw new Error('selector_not_found')
+    }
     // Why: sleep is renderer-initiated on desktop (it tears down tab state
     // before killing PTYs). The notifier tells the renderer to run its own
     // sleep flow so all cleanup happens in the correct order.
-    this.notifier?.sleepWorktree(worktree.id)
-    return { worktreeId: worktree.id }
+    this.notifier?.sleepWorktree(worktree.id, executionHostId)
+    return { worktreeId: worktree.id, executionHostId }
   }
 }

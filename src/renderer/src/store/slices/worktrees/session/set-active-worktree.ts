@@ -166,7 +166,7 @@ export function createSetActiveWorktree(
     // Why: any activation is an explicit wake (null is the sleep flow clearing selection).
     // Cleared after the set() above so a pane still waiting on the marker connects once,
     // in the remounted generation, instead of connecting and then being remounted.
-    clearWorktreeSleepIntent(worktreeId)
+    clearWorktreeSleepIntent(worktreeId, executionHostId ?? undefined)
 
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {

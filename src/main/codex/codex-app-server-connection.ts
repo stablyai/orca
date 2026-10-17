@@ -51,7 +51,7 @@ export async function openCodexAppServerConnection(
     site: 'codex-app-server-teardown',
     ...(handlers.onOutput ? { onOutput: handlers.onOutput } : {})
   })
-  const { child, terminateTree: terminateProcessTree } = managed
+  const { child } = managed
 
   let nextRequestId = 1
   let closing = false
@@ -71,7 +71,7 @@ export async function openCodexAppServerConnection(
     writeResponse,
     onProtocolFailure: (error) => {
       handleUnexpectedEnd(error)
-      void terminateProcessTree()
+      void managed.close()
     }
   })
 
@@ -108,7 +108,7 @@ export async function openCodexAppServerConnection(
       return
     }
     handleUnexpectedEnd(error)
-    void terminateProcessTree()
+    void managed.close()
   })
 
   const recordReader = createProviderRecordReader({
@@ -129,7 +129,7 @@ export async function openCodexAppServerConnection(
     },
     onFatal: (error) => {
       handleUnexpectedEnd(error)
-      void terminateProcessTree()
+      void managed.close()
     }
   })
 

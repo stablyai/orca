@@ -127,7 +127,9 @@ export function unhandledProviderFrameJournalItem(
   options: UnhandledProviderFrameJournalItemOptions = {}
 ): UnhandledProviderFrameJournalItem | null {
   const classification =
-    options.reportsFailure === true ? 'error-surface' : classifyProviderFrame(provider, kind, payload)
+    options.reportsFailure === true
+      ? 'error-surface'
+      : classifyProviderFrame(provider, kind, payload)
   if (
     classification === 'stream-into-item' ||
     classification === 'status-chrome' ||

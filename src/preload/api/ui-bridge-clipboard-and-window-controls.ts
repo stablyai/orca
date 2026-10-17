@@ -1,5 +1,6 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   RuntimeMobileMarkdownRequest,
   RuntimeMobileMarkdownResponse
@@ -67,7 +68,9 @@ export const uiClipboardAndWindowControlsApi = {
   respondTerminalTabClose: (response) => {
     ipcRenderer.send('ui:terminalTabCloseResponse', response)
   },
-  onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
+  onSleepWorktree: (
+    callback: (data: { worktreeId: string; executionHostId?: ExecutionHostId }) => void
+  ): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
       callback(data)
     ipcRenderer.on('ui:sleepWorktree', listener)

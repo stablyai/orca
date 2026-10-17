@@ -123,8 +123,8 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     if (!enabled) {
       return
     }
-    return window.api.dashboard.onSleepWorkspace?.(({ worktreeId }) => {
-      void runSleepWorktree(worktreeId)
+    return window.api.dashboard.onSleepWorkspace?.(({ worktreeId, executionHostId }) => {
+      void runSleepWorktree(worktreeId, executionHostId)
     })
   }, [enabled])
 

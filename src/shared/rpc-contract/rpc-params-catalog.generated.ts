@@ -542,6 +542,7 @@ import {
   RewindParams,
   SendParams,
   SetOptionParams,
+  SleepWorkspaceParams,
   SubscribeParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
@@ -612,6 +613,7 @@ import {
   WorktreeResolvePrBase,
   WorktreeSelector as WorktreeSelectorOfWorktreeParams,
   WorktreeSet,
+  WorktreeSleep,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
@@ -693,6 +695,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
   'agentSession.setOption': SetOptionParams,
+  'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
   'agentSession.subscribeStatus': null,
   'agentSession.subscribeTurnCompletions': SubscribeTurnCompletionsParams,
@@ -1344,7 +1347,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.rm': WorktreeRemove,
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,
-  'worktree.sleep': WorktreeSelectorOfWorktreeParams,
+  'worktree.sleep': WorktreeSleep,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
 } as const
 

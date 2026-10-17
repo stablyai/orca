@@ -181,7 +181,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   // A chat open before its owner's death was proven revises what its open settled. Queued, never
   // awaited: the writer can hold this session's serialize (an attach recovering its lease).
   const stopResettling = deps.store.onDeathEvidence((sessionId) => {
-    if (sessions.has(sessionId)) {
+    const session = sessions.get(sessionId)
+    // A user close already settles and retires this handle; its next open re-derives any proof.
+    if (session && session.child?.close?.cause !== 'user-close') {
       void input
         .trackStart(
           input.serialize(sessionId, () =>

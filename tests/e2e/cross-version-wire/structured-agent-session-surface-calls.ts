@@ -80,6 +80,11 @@ export const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.close', hostMethod: 'close', result: { ok: true } },
   {
+    method: 'agentSession.sleepWorkspace',
+    hostMethod: 'sleepWorkspace',
+    result: { stoppedSessionIds: [] }
+  },
+  {
     method: 'agentSession.respondToApproval',
     hostMethod: 'respondToPrompt',
     result: { ok: true, replayed: false }

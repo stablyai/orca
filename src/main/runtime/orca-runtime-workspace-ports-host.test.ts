@@ -1,6 +1,7 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeWithListManagedWorktrees } from './workspaces/managed-workspace-operations'
+import { RuntimeWorkspaceSelectors } from './workspaces/workspace-selectors'
 
 const scanWorkspacePortsMock = vi.hoisted(() => vi.fn())
 
@@ -25,6 +26,27 @@ function runtimeResolvingTo(executionHostId: string) {
 }
 
 describe('host-scoped workspace port scans on the server', () => {
+  it('sleeps a host-qualified Windows alias without choosing a foreign or ambiguous row', async () => {
+    const id = 'repo::D:/Agentic/game2/battle-core'
+    const alias = 'repo::D:\\Agentic\\game2\\battle-core'
+    const selected = { id, repoId: 'repo', hostId: 'runtime:hub' }
+    let rows = [selected, { ...selected, id: alias, hostId: 'local' }]
+    const selectors = RuntimeWorkspaceSelectors.prototype
+    const host = {
+      store: { getRepo: () => undefined },
+      notifier: { sleepWorktree: vi.fn() },
+      hasFreshResolvedWorktreeCache: () => true,
+      getValidatedExplicitWorktreeIdSelector: selectors['getValidatedExplicitWorktreeIdSelector'],
+      resolveWorktreeSelector: selectors['resolveWorktreeSelector'],
+      listResolvedWorktrees: async () => rows
+    }
+    const sleep = () => proto.sleepManagedWorktree.call(host, `id:${alias}`, 'runtime:hub')
+    await expect(sleep()).resolves.toEqual({ worktreeId: id, executionHostId: 'runtime:hub' })
+    expect(host.notifier.sleepWorktree).toHaveBeenCalledWith(id, 'runtime:hub')
+    rows = [selected, { ...selected, id: `${id}/` }]
+    await expect(sleep()).rejects.toThrow('selector_ambiguous')
+  })
+
   afterEach(() => {
     scanWorkspacePortsMock.mockReset()
     vi.restoreAllMocks()

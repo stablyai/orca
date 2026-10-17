@@ -217,7 +217,8 @@ export function registerRuntimeWindowLifecycle(
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
-    sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
+    sleepWorktree: (worktreeId, executionHostId) =>
+      send('ui:sleepWorktree', { worktreeId, executionHostId }),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),

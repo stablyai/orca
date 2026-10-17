@@ -1,10 +1,5 @@
-import {
-  isRuntimeOwnedSshTargetId,
-  toRuntimeExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
-import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { isRuntimeOwnedSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
+import { ephemeralVmMatchesWorkspaceHost } from '../../../shared/ephemeral-vm-runtime-host-match'
 
 /**
  * Tear down the ephemeral-VM runtimes backing a set of deleted workspaces (and,
@@ -41,31 +36,14 @@ export async function cleanupEphemeralVmRuntimesForDeleted(args: {
     const sshTargetIdSet = new Set(
       (args.runtimeOwnedSshTargetIds ?? []).filter((id) => isRuntimeOwnedSshTargetId(id))
     )
-    const hostScopedWorkspaceIdentities = new Set(
-      (args.hostScopedWorkspaces ?? []).map((target) =>
-        composeWorktreeHostIdentity(target.executionHostId, target.workspaceId)
-      )
-    )
     const runtimes = await window.api.ephemeralVm.listRuntimes()
     const matchingRuntimes = runtimes.filter(
       (runtime) =>
         (runtime.cleanupStatus !== 'succeeded' || runtime.sshTargetId !== undefined) &&
         ((runtime.workspaceId !== undefined && workspaceIdSet.has(runtime.workspaceId)) ||
-          (runtime.workspaceId !== undefined &&
-            ((runtime.runtimeEnvironmentId !== undefined &&
-              hostScopedWorkspaceIdentities.has(
-                composeWorktreeHostIdentity(
-                  toRuntimeExecutionHostId(runtime.runtimeEnvironmentId),
-                  runtime.workspaceId
-                )
-              )) ||
-              (runtime.sshTargetId !== undefined &&
-                hostScopedWorkspaceIdentities.has(
-                  composeWorktreeHostIdentity(
-                    toSshExecutionHostId(runtime.sshTargetId),
-                    runtime.workspaceId
-                  )
-                )))) ||
+          (args.hostScopedWorkspaces ?? []).some((target) =>
+            ephemeralVmMatchesWorkspaceHost(runtime, target.workspaceId, target.executionHostId)
+          ) ||
           (runtime.sshTargetId !== undefined && sshTargetIdSet.has(runtime.sshTargetId)))
     )
     for (const runtime of matchingRuntimes) {

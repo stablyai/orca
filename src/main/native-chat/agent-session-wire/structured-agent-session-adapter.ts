@@ -285,6 +285,8 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
    *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
    *  exit was observed first-hand but its descendants were not proven gone. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
+  /** Whether this adapter still owns a current child or failed acquisition for this session. */
+  hasOwnedAcquisition?(sessionId: string): boolean
   dispatch(input: {
     sessionId: string
     clientMessageId: string

@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import type { ExecutionHostId } from '../../shared/execution-host'
 
-const handlers = new Map<string, (_event: unknown, args: { runtimeId: string }) => unknown>()
+type HandlerArgs = { runtimeId?: string; workspaceId?: string; executionHostId?: ExecutionHostId }
+const handlers = new Map<string, (_event: unknown, args: HandlerArgs) => unknown>()
 const { getPathMock, handleMock, removeRuntimeOwnedSshTargetMock, removeHandlerMock } = vi.hoisted(
   () => ({
     getPathMock: vi.fn(),
@@ -39,7 +41,7 @@ beforeEach(() => {
   removeRuntimeOwnedSshTargetMock.mockReset().mockResolvedValue(undefined)
   removeHandlerMock.mockReset()
   handleMock.mockImplementation(
-    (channel: string, handler: (_event: unknown, args: { runtimeId: string }) => unknown) => {
+    (channel: string, handler: (_event: unknown, args: HandlerArgs) => unknown) => {
       handlers.set(channel, handler)
     }
   )
@@ -49,6 +51,46 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+it('does not resume a same-id VM on another host or guess between legacy matches', async () => {
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-handler-'))
+  tempDirs.push(userDataPath)
+  getPathMock.mockReturnValue(userDataPath)
+  for (const environmentId of ['env-a', 'env-b']) {
+    upsertEphemeralVmRuntime(userDataPath, {
+      id: `runtime-${environmentId}`,
+      recipeId: 'cloud-sandbox',
+      repoId: 'repo-1',
+      workspaceId: 'same-workspace',
+      runtimeEnvironmentId: environmentId,
+      status: 'suspended',
+      cleanupStatus: 'not_started',
+      createdAt: 1,
+      updatedAt: 1,
+      recipeResult: {
+        schemaVersion: 1,
+        connection: {
+          type: 'ssh',
+          projectRoot: '/workspace/repo',
+          target: { label: 'VM', host: 'host', port: 22, username: 'orca' }
+        }
+      }
+    })
+  }
+  registerEphemeralVmRuntimeHandlers({ getRepo: vi.fn() } as never)
+
+  expect(
+    await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
+      workspaceId: 'same-workspace',
+      executionHostId: 'runtime:other'
+    })
+  ).toBeNull()
+  expect(
+    await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
+      workspaceId: 'same-workspace'
+    })
+  ).toBeNull()
 })
 
 it('removes the hidden SSH target when provider cleanup cannot start', async () => {

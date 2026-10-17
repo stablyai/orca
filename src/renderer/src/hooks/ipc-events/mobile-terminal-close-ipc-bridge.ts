@@ -131,8 +131,8 @@ export function registerMobileAndTerminalCloseIpcBridge(
   }
 
   unsubs.push(
-    window.api.ui.onSleepWorktree(({ worktreeId }) => {
-      void runSleepWorktree(worktreeId)
+    window.api.ui.onSleepWorktree(({ worktreeId, executionHostId }) => {
+      void runSleepWorktree(worktreeId, executionHostId)
     })
   )
 

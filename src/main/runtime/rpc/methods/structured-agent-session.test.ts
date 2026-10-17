@@ -43,6 +43,16 @@ afterEach(() => {
   clearStructuredHostStub()
 })
 
+it('stops a workspace through its host without a dedicated sleep capability', async () => {
+  const response = await call(
+    'agentSession.sleepWorkspace',
+    { workspaceId: 'workspace-1' },
+    { clientKind: 'runtime', clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] }
+  )
+  expect(response).toMatchObject({ ok: true, result: { stoppedSessionIds: [SESSION] } })
+  expect(hostCalls.sleepWorkspace).toHaveBeenCalledWith('workspace-1')
+})
+
 describe('agentSession.reveal', () => {
   it.each(['codex', 'claude'] as const)('republishes a persisted %s chat tab', async (agent) => {
     hostCalls.revealSession.mockResolvedValueOnce({
@@ -175,7 +185,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(37)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(38)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -336,7 +346,7 @@ describe('capability gating', () => {
     }
   )
 
-  it.each(CLEANUP_METHODS)(
+  it.each(CLEANUP_METHODS.filter(({ method }) => method !== 'agentSession.sleepWorkspace'))(
     'does not install a host for cleanup-only method $method',
     async ({ method, params }) => {
       const ensureHost = vi.fn()

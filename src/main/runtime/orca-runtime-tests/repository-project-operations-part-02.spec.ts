@@ -388,7 +388,10 @@ describe('OrcaRuntimeService', () => {
       expect(updates).toEqual([
         {
           id: existing.id,
-          updates: { kind: 'git', folderUpgradeGitRootPath: normalizeRuntimePathSeparators(existing.path) }
+          updates: {
+            kind: 'git',
+            folderUpgradeGitRootPath: normalizeRuntimePathSeparators(existing.path)
+          }
         }
       ])
       expect(repo).toEqual(upgraded)

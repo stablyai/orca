@@ -55,7 +55,8 @@ export function createStructuredAgentSession(
         }
         throw error
       }
-    })
+    }),
+    { sessionId: params.envelope.sessionId, location: params.location }
   )
 }
 

@@ -1,69 +1,150 @@
-// Why: a slept workspace keeps its panes mounted with only dead PTYs behind them.
-// Any pane connect that runs while the marker is set waits here, and the clear
-// that marks the workspace awake resumes every waiting connect.
-const sleepingWorktreeIds = new Set<string>()
-const tearingDownWorktreeIds = new Set<string>()
-const wakeListenersByWorktreeId = new Map<string, Set<() => void>>()
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 
-export function markWorktreeSleepIntent(worktreeId: string): void {
-  sleepingWorktreeIds.add(worktreeId)
+type SleepIntent = { worktreeId: string; hostId: ExecutionHostId }
+const intents = new Map<string, SleepIntent>()
+const teardownCounts = new Map<string, number>()
+const listeners = new Map<string, Set<() => void>>()
+const keyFor = (worktreeId: string, hostId: ExecutionHostId): string => `${hostId}\0${worktreeId}`
+
+function matchingKeys(worktreeId: string, hostId?: ExecutionHostId): string[] {
+  return hostId
+    ? [keyFor(worktreeId, hostId)]
+    : [...intents].filter(([, intent]) => intent.worktreeId === worktreeId).map(([key]) => key)
 }
 
-/**
- * Why: a spawn that resolves while the sleep teardown is still awaiting its host
- * would bind a PTY and clear the marker, waking every waiting pane mid-sleep.
- * Binds during the teardown window are not wakes.
- */
-export async function withWorktreeSleepTeardown<T>(
-  worktreeId: string,
-  teardown: () => Promise<T>
-): Promise<T> {
-  tearingDownWorktreeIds.add(worktreeId)
-  try {
-    return await teardown()
-  } finally {
-    tearingDownWorktreeIds.delete(worktreeId)
+function notifyCleared(key: string, worktreeId: string): void {
+  const keyListeners = [...(listeners.get(key) ?? [])]
+  listeners.delete(key)
+  const allHostsCleared = !matchingKeys(worktreeId).length && !hasWorktreeSleepTeardown(worktreeId)
+  const worktreeListeners = allHostsCleared ? [...(listeners.get(worktreeId) ?? [])] : []
+  if (allHostsCleared) {
+    listeners.delete(worktreeId)
   }
-}
-
-export function clearWorktreeSleepIntent(worktreeId: string | null): void {
-  if (!worktreeId || tearingDownWorktreeIds.has(worktreeId)) {
-    return
-  }
-  if (!sleepingWorktreeIds.delete(worktreeId)) {
-    return
-  }
-  const listeners = wakeListenersByWorktreeId.get(worktreeId)
-  wakeListenersByWorktreeId.delete(worktreeId)
-  for (const listener of listeners ?? []) {
+  for (const listener of [...keyListeners, ...worktreeListeners]) {
     try {
       listener()
     } catch (error) {
-      // Why: one pane's connect failure must not strand its siblings or throw out of a store action.
       console.error('[sleep-intent] wake listener failed', { worktreeId, error })
     }
   }
 }
 
-// Why: a purged worktree must not wake its panes; they are being unmounted.
-export function forgetWorktreeSleepIntent(worktreeId: string): void {
-  sleepingWorktreeIds.delete(worktreeId)
-  tearingDownWorktreeIds.delete(worktreeId)
-  wakeListenersByWorktreeId.delete(worktreeId)
+export function markWorktreeSleepIntent(
+  worktreeId: string,
+  hostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+): SleepIntent {
+  const key = keyFor(worktreeId, hostId)
+  const intent = { worktreeId, hostId }
+  intents.set(key, intent)
+  return intent
 }
 
-export function hasWorktreeSleepIntent(worktreeId: string | null): boolean {
-  return worktreeId !== null && sleepingWorktreeIds.has(worktreeId)
+export function isCurrentWorktreeSleepIntent(
+  worktreeId: string,
+  hostId: ExecutionHostId,
+  intent: SleepIntent
+): boolean {
+  return intents.get(keyFor(worktreeId, hostId)) === intent
 }
 
-export function onWorktreeSleepIntentCleared(worktreeId: string, listener: () => void): () => void {
-  const listeners = wakeListenersByWorktreeId.get(worktreeId) ?? new Set<() => void>()
-  listeners.add(listener)
-  wakeListenersByWorktreeId.set(worktreeId, listeners)
+export async function withWorktreeSleepTeardown<T>(
+  worktreeId: string,
+  teardown: () => Promise<T>,
+  hostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
+): Promise<T> {
+  const finish = beginWorktreeSleepTeardown(worktreeId, hostId)
+  try {
+    return await teardown()
+  } finally {
+    finish()
+  }
+}
+
+export function beginWorktreeSleepTeardown(
+  worktreeId: string,
+  hostId: ExecutionHostId
+): () => void {
+  const key = keyFor(worktreeId, hostId)
+  teardownCounts.set(key, (teardownCounts.get(key) ?? 0) + 1)
+  let finished = false
   return () => {
-    listeners.delete(listener)
-    if (listeners.size === 0 && wakeListenersByWorktreeId.get(worktreeId) === listeners) {
-      wakeListenersByWorktreeId.delete(worktreeId)
+    if (finished) {
+      return
+    }
+    finished = true
+    const remaining = (teardownCounts.get(key) ?? 1) - 1
+    if (remaining > 0) {
+      teardownCounts.set(key, remaining)
+    } else {
+      teardownCounts.delete(key)
+      if (!intents.has(key)) {
+        notifyCleared(key, worktreeId)
+      }
+    }
+  }
+}
+
+export function clearWorktreeSleepIntent(
+  worktreeId: string | null,
+  hostId?: ExecutionHostId,
+  source: 'wake' | 'bind' = 'wake'
+): void {
+  if (!worktreeId) {
+    return
+  }
+  for (const key of matchingKeys(worktreeId, hostId)) {
+    const intent = intents.get(key)
+    if (!intent || (source === 'bind' && (teardownCounts.get(key) ?? 0) > 0)) {
+      continue
+    }
+    intents.delete(key)
+    if (!teardownCounts.has(key)) {
+      notifyCleared(key, worktreeId)
+    }
+  }
+}
+
+export function forgetWorktreeSleepIntent(worktreeId: string): void {
+  for (const key of matchingKeys(worktreeId)) {
+    intents.delete(key)
+    teardownCounts.delete(key)
+    listeners.delete(key)
+  }
+  listeners.delete(worktreeId)
+}
+
+export function hasWorktreeSleepIntent(
+  worktreeId: string | null,
+  hostId?: ExecutionHostId
+): boolean {
+  return worktreeId !== null && matchingKeys(worktreeId, hostId).some((key) => intents.has(key))
+}
+
+export function hasWorktreeSleepTeardown(
+  worktreeId: string | null,
+  hostId?: ExecutionHostId
+): boolean {
+  if (worktreeId === null) {
+    return false
+  }
+  return hostId
+    ? teardownCounts.has(keyFor(worktreeId, hostId))
+    : [...teardownCounts.keys()].some((key) => key.endsWith(`\0${worktreeId}`))
+}
+
+export function onWorktreeSleepIntentCleared(
+  worktreeId: string,
+  listener: () => void,
+  hostId?: ExecutionHostId
+): () => void {
+  const key = hostId ? keyFor(worktreeId, hostId) : worktreeId
+  const group = listeners.get(key) ?? new Set<() => void>()
+  group.add(listener)
+  listeners.set(key, group)
+  return () => {
+    group.delete(listener)
+    if (group.size === 0 && listeners.get(key) === group) {
+      listeners.delete(key)
     }
   }
 }

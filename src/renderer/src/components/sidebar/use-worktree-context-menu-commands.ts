@@ -144,17 +144,17 @@ export function useWorktreeContextMenuCommands(args: {
     })
   }, [args])
   const sleepWorktreesAfterMenuClose = useCallback(
-    (worktreeIds: string[]) => {
+    (worktrees: readonly Worktree[]) => {
       args.setMenuOpenState(false)
-      window.setTimeout(() => void runSleepWorktrees(worktreeIds), 50)
+      window.setTimeout(() => void runSleepWorktrees(worktrees), 50)
     },
     [args]
   )
   const handleCloseTerminals = useCallback(() => {
-    sleepWorktreesAfterMenuClose(args.sleepableWorktrees.map((item) => item.id))
+    sleepWorktreesAfterMenuClose(args.sleepableWorktrees)
   }, [args.sleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleSleepSubtree = useCallback(() => {
-    sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees.map((item) => item.id))
+    sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees)
   }, [args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)

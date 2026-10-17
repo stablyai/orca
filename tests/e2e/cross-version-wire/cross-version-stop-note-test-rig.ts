@@ -139,7 +139,9 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
       items: result.page.items.map((item) => client.AgentJournalRenderItemSchema.parse(item))
     }
   }
-  async function subscribe(cursor: AgentJournalCursor | null = journal.cursor()): Promise<RpcReply[]> {
+  async function subscribe(
+    cursor: AgentJournalCursor | null = journal.cursor()
+  ): Promise<RpcReply[]> {
     return call('agentSession.subscribe', { sessionId: SESSION, ...(cursor ? { cursor } : {}) })
   }
   function events(replies: RpcReply[]): AgentSessionSubscribeEvent[] {

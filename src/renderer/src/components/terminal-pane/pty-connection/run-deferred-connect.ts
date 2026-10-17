@@ -4,7 +4,12 @@ import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/remo
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { useAppStore } from '@/store'
 import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
-import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
+import {
+  clearWorktreeSleepIntent,
+  hasWorktreeSleepIntent,
+  hasWorktreeSleepTeardown,
+  onWorktreeSleepIntentCleared
+} from '@/lib/worktree-sleep-intent'
 
 import { recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { findTerminalTabForPane } from './terminal-tab-id'
@@ -35,10 +40,18 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     if (session.connectStarted) {
       return
     }
+    const executionHostId =
+      session.transport.getExecutionHostId?.() ?? session.tab?.executionHostId ?? undefined
+    if (session.paneStartup) {
+      clearWorktreeSleepIntent(session.deps.worktreeId, executionHostId)
+    }
     // Why: a deliberately slept workspace keeps its panes mounted, so connecting
     // would reattach the retained session id and respawn the shell (#10205).
     // Wait for the wake instead; a queued startup is an explicit launch.
-    if (hasWorktreeSleepIntent(session.deps.worktreeId) && !session.paneStartup) {
+    if (
+      (hasWorktreeSleepIntent(session.deps.worktreeId, executionHostId) && !session.paneStartup) ||
+      hasWorktreeSleepTeardown(session.deps.worktreeId, executionHostId)
+    ) {
       session.cancelScheduledConnectFrame()
       if (session.connectFallbackTimer !== null) {
         clearTimeout(session.connectFallbackTimer)
@@ -47,25 +60,29 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
       if (!wakeWaitStarted) {
         wakeWaitStarted = true
         recordPtyConnectDiagnostic(
-          `pane=${session.pane.id} tab=${session.deps.tabId} -> WAIT FOR WAKE (deliberate sleep)`
+          `pane=${session.pane.id} tab=${session.deps.tabId} -> WAIT FOR SLEEP TEARDOWN OR WAKE`
         )
-        const unsubscribe = onWorktreeSleepIntentCleared(session.deps.worktreeId, () => {
-          wakeWaitStarted = false
-          const index = session.waitTeardowns.indexOf(unsubscribe)
-          if (index !== -1) {
-            session.waitTeardowns.splice(index, 1)
-          }
-          // Why: an activation wake bumps the tab generation in the same tick and the
-          // remounted pane connects on its own; a stale generation must not connect too.
-          const currentTab = findTerminalTabForPane(
-            useAppStore.getState(),
-            session.deps.worktreeId,
-            session.deps.tabId
-          )
-          if (!session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration) {
-            session.runDeferredConnect()
-          }
-        })
+        const unsubscribe = onWorktreeSleepIntentCleared(
+          session.deps.worktreeId,
+          () => {
+            wakeWaitStarted = false
+            const index = session.waitTeardowns.indexOf(unsubscribe)
+            if (index !== -1) {
+              session.waitTeardowns.splice(index, 1)
+            }
+            // Why: an activation wake bumps the tab generation in the same tick and the
+            // remounted pane connects on its own; a stale generation must not connect too.
+            const currentTab = findTerminalTabForPane(
+              useAppStore.getState(),
+              session.deps.worktreeId,
+              session.deps.tabId
+            )
+            if (!session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration) {
+              session.runDeferredConnect()
+            }
+          },
+          executionHostId
+        )
         // Why: disposal unsubscribes so a torn-down pane never connects on a later wake.
         session.waitTeardowns.push(unsubscribe)
       }
