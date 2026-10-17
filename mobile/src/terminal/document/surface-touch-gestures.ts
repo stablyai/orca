@@ -105,6 +105,8 @@ export function attachSurfaceEventHandlers(
       if (scope.touchGesture.momentumId) {
         cancelAnimationFrame(scope.touchGesture.momentumId)
         scope.touchGesture.momentumId = null
+        // Why: this touch stopped a coast; lifting it must not also tap.
+        scope.tapCandidate = null
       }
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
@@ -192,6 +194,8 @@ export function attachSurfaceEventHandlers(
           if (lines !== 0) {
             scope.touchGesture.accumDelta -= lines * effectiveCellH
             routeScrollLines(scope, lines, x, y)
+            // Why: a touch that scrolled a row is a scroll, even inside TAP_SLOP.
+            scope.tapCandidate = null
           }
         } else {
           if (enqueueNormalBufferScrollDelta(scope, deltaY)) {
