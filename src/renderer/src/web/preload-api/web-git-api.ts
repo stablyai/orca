@@ -4,7 +4,9 @@ import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-select
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git-stage-worktree-scope'
+import { WORKTREE_MERGE_REVIEW_UNSUPPORTED_MESSAGE } from '../../../../shared/git-merge-review'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
+import { mutateGitPath, mutateGitPaths } from './web-git-path-mutations'
 import {
   resolveRuntimeFilePath,
   resolveRuntimeWorktreeByPath
@@ -266,6 +268,19 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         await mutateGitPath('git.discard', worktreePath, filePath)
       }
     },
+    // Why: merge review is desktop-only for now — the snapshot step needs a local temp index,
+    // which the runtime wire has no primitive for. Report idle state so no menu item appears,
+    // and answer the actions with an explicit refusal rather than a silent no-op.
+    worktreeMergeReviewState: async () => ({ phase: 'idle' }),
+    worktreeMergeReviewSync: async () => {
+      throw new Error(WORKTREE_MERGE_REVIEW_UNSUPPORTED_MESSAGE)
+    },
+    worktreeMergeReviewAccept: async () => {
+      throw new Error(WORKTREE_MERGE_REVIEW_UNSUPPORTED_MESSAGE)
+    },
+    worktreeMergeReviewReject: async () => {
+      throw new Error(WORKTREE_MERGE_REVIEW_UNSUPPORTED_MESSAGE)
+    },
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {
@@ -282,25 +297,4 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       })
     }
   }
-}
-
-export async function mutateGitPath(
-  method: string,
-  worktreePath: string,
-  filePath: string
-): Promise<void> {
-  const file = await resolveRuntimeFilePath(filePath, worktreePath)
-  await callRuntimeResult(method, {
-    worktree: toRuntimeWorktreeSelector(file.worktree.id),
-    filePath: file.relativePath
-  })
-}
-
-export async function mutateGitPaths(
-  method: string,
-  worktreePath: string,
-  filePaths: string[]
-): Promise<void> {
-  const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-  await callRuntimeResult(method, { worktree: toRuntimeWorktreeSelector(worktree.id), filePaths })
 }

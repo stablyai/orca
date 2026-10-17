@@ -45,6 +45,9 @@ const AddProjectFromFolderDialog = lazy(
 const DiagramViewerModal = lazy(() => import('../components/editor/DiagramViewerModal'))
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
 const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
+const MergeReviewRejectConfirmDialog = lazy(
+  () => import('../components/sidebar/MergeReviewRejectConfirmDialog')
+)
 const PreservedBranchBatchReviewModal = lazy(
   () => import('../components/sidebar/PreservedBranchBatchReviewModal')
 )
@@ -322,6 +325,11 @@ export function AppRootSurfaces(props: {
         {activeModal === 'delete-worktree' ? (
           <ModalBoundary boundaryId="modal.delete-worktree" resetKey>
             <DeleteWorktreeDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'merge-review-reject' ? (
+          <ModalBoundary boundaryId="modal.merge-review-reject" resetKey>
+            <MergeReviewRejectConfirmDialog />
           </ModalBoundary>
         ) : null}
         {activeModal === 'preserved-branch-review' ? (

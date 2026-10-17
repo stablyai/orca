@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { WorktreeRowOpenInSubMenu } from './WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
+import { WorktreeMergeReviewMenuItems } from './WorktreeMergeReviewMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -171,6 +172,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             workspaceStatuses={workspaceStatuses}
           />
           <DropdownMenuSeparator />
+          <WorktreeMergeReviewMenuItems model={model} />
           {!isMultiContext && (
             <>
               <WorktreeRowOpenInSubMenu
