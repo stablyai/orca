@@ -4,6 +4,7 @@ import {
   isWindowlessLaunch,
   showWindowWithoutStealingFocus
 } from './foreground-activation-policy'
+import { isWslgSession } from './wslg-session'
 
 type FocusTimer = (callback: () => void, ms: number) => unknown
 
@@ -18,6 +19,8 @@ export type FocusExistingMainWindowOptions = {
   platform?: NodeJS.Platform
   setTimeout?: FocusTimer
   warn?: (message: string, error?: unknown) => void
+  /** Injected by tests so the WSLg recovery path does not depend on the host running them. */
+  isWslgSession?: () => boolean
 }
 
 function safelyFocusApp(app: Pick<App, 'focus'>): void {
@@ -78,13 +81,41 @@ function retryFocus(window: BrowserWindow, app: Pick<App, 'focus'>, setTimer: Fo
   }, 100)
 }
 
+// Why: long enough for the window manager to answer the reveal above, so a remap
+// only happens once that activation has demonstrably failed.
+const WSLG_REMAP_DELAY_MS = 250
+
+// Why: when WSLg's RDP session reconnects, an already-mapped X11 window keeps
+// running with no surface on screen. show()/focus() are no-ops on a window
+// Electron still considers visible, and only a real unmap/map — hide() then
+// show() — makes WSLg rebuild the surface.
+function remapWslgSurface(
+  window: BrowserWindow,
+  app: Pick<App, 'focus'>,
+  setTimer: FocusTimer
+): void {
+  setTimer(() => {
+    if (window.isDestroyed() || window.isFocused()) {
+      return
+    }
+    try {
+      window.hide()
+    } catch {
+      return
+    }
+    safelyFocusApp(app)
+    safelyRevealWindow(window)
+  }, WSLG_REMAP_DELAY_MS)
+}
+
 // Why: shared so the sync success path and the async retry/adopt callback can't
 // drift on win32 reinforcement (moveTop/pulseAlwaysOnTop) or the 100ms focus retry.
 function activateWindow(
   window: BrowserWindow,
   app: Pick<App, 'focus'>,
   platform: NodeJS.Platform,
-  setTimer: FocusTimer
+  setTimer: FocusTimer,
+  isWslg: () => boolean
 ): void {
   safelyFocusApp(app)
   safelyRevealWindow(window)
@@ -99,6 +130,10 @@ function activateWindow(
     pulseAlwaysOnTop(window, setTimer)
     retryFocus(window, app, setTimer)
   }
+  // Why: the reveal above is all Linux has, and under WSLg it silently does nothing.
+  if (platform === 'linux' && !isBackgroundLaunch() && isWslg()) {
+    remapWslgSurface(window, app, setTimer)
+  }
 }
 
 // Why: a second-instance/activate reopen can race transient startup pressure
@@ -112,7 +147,8 @@ function openWindowWithRetry(
   opts: Pick<FocusExistingMainWindowOptions, 'app' | 'getWindow' | 'openWindow' | 'warn'>,
   platform: NodeJS.Platform,
   setTimer: FocusTimer,
-  attempt: number
+  attempt: number,
+  isWslg: () => boolean
 ): BrowserWindow | null {
   try {
     return opts.openWindow()
@@ -131,9 +167,9 @@ function openWindowWithRetry(
       const window =
         existing && !existing.isDestroyed()
           ? existing
-          : openWindowWithRetry(opts, platform, setTimer, attempt + 1)
+          : openWindowWithRetry(opts, platform, setTimer, attempt + 1, isWslg)
       if (window) {
-        activateWindow(window, opts.app, platform, setTimer)
+        activateWindow(window, opts.app, platform, setTimer, isWslg)
       }
     }, REOPEN_RETRY_DELAY_MS)
     return null
@@ -145,6 +181,7 @@ export function focusExistingMainWindow(
 ): FocusExistingMainWindowResult {
   const platform = opts.platform ?? process.platform
   const setTimer = opts.setTimeout ?? setTimeout
+  const isWslg = opts.isWslgSession ?? (() => isWslgSession())
   let window = opts.getWindow()
   let openedWindow = false
 
@@ -152,13 +189,13 @@ export function focusExistingMainWindow(
     if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
-    window = openWindowWithRetry(opts, platform, setTimer, 1)
+    window = openWindowWithRetry(opts, platform, setTimer, 1, isWslg)
     if (!window) {
       return 'pending'
     }
     openedWindow = true
   }
 
-  activateWindow(window, opts.app, platform, setTimer)
+  activateWindow(window, opts.app, platform, setTimer, isWslg)
   return openedWindow ? 'opened' : 'focused'
 }
