@@ -34,6 +34,8 @@ export type TerminalInitialOscLink = {
  */
 export type TerminalDocumentCell = {
   isBgDefault: () => boolean
+  isBgRGB?: () => boolean
+  getBgColor?: () => number
   extended?: { urlId?: number }
   isInverse: () => number
   isUnderline?: () => number

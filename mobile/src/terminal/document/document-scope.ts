@@ -156,6 +156,8 @@ export type TerminalDocumentState = {
   longPressOrigin: TerminalDocumentTouchOrigin | null
   /** `selection-overlay`: the touch that may still resolve as a tap. */
   tapCandidate: TerminalDocumentTapCandidate | null
+  /** `bottom-row-backdrop`: the fill last painted under the grid, so an unchanged one is not rewritten. */
+  bottomRowBackdrop: string
   /** `surface-swap`: the element xterm is currently mounted on. */
   surface: HTMLElement | null
   /** `surface-swap`: the terminal of a hidden replacement surface that has not committed. */
@@ -304,6 +306,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     longPressOrigin: null,
     tapCandidate: null,
     wheelAccumDeltaY: 0,
+    bottomRowBackdrop: '',
     surface: null,
     pendingTerm: null,
     committedTerm: null,
