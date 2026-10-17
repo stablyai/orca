@@ -18,6 +18,8 @@ const hoverCardContentVariants = cva('', {
   variants: {
     variant: {
       default: 'w-64 p-4',
+      'commit-details':
+        'w-fit max-w-[min(76ch,var(--radix-hover-card-content-available-width))] max-h-[min(28rem,var(--radix-hover-card-content-available-height))] overflow-y-auto p-3 text-xs break-words text-wrap whitespace-pre-wrap scrollbar-sleek',
       'workspace-details':
         'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek'
     }

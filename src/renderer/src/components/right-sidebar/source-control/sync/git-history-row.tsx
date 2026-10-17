@@ -1,6 +1,7 @@
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/utils'
 import type { GitHistoryItem, GitHistoryItemRef } from '../../../../../../shared/git-history'
 import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
@@ -24,7 +25,7 @@ function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.
           {itemRef.name}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+      <TooltipContent variant="surface" side="bottom" sideOffset={6} className="max-w-72">
         {refLabel}
       </TooltipContent>
     </Tooltip>
@@ -66,7 +67,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
     const refs = dedupeRemoteTrackingRefs(item.references ?? [], { preserveRefIds })
     const visibleRefs = refs.slice(0, 2)
     const hiddenRefs = refs.slice(2)
-    const rowTooltip = item.message || item.subject
+    const commitMessage = item.message || item.subject
     const rowClassName = cn(
       'grid min-h-[26px] w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1.5 px-3 py-0.5 text-left text-xs transition-colors',
       isInteractive && 'cursor-pointer hover:bg-accent/40 focus-visible:bg-accent/40',
@@ -87,19 +88,20 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
               )}
             />
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <HoverCard openDelay={400} closeDelay={100}>
+            <HoverCardTrigger asChild>
               <span className="block min-w-0 flex-1 truncate text-foreground">{item.subject}</span>
-            </TooltipTrigger>
-            <TooltipContent
+            </HoverCardTrigger>
+            <HoverCardContent
+              variant="commit-details"
               side="bottom"
               sideOffset={6}
               collisionPadding={8}
-              className="max-w-[min(76ch,var(--radix-tooltip-content-available-width))] break-words text-wrap whitespace-pre-wrap"
+              onClick={(event) => event.stopPropagation()}
             >
-              {rowTooltip}
-            </TooltipContent>
-          </Tooltip>
+              {commitMessage}
+            </HoverCardContent>
+          </HoverCard>
         </div>
         {refs.length > 0 && (
           <div className="flex shrink-0 items-center gap-1 overflow-hidden">
@@ -113,7 +115,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
                     +{hiddenRefs.length}
                   </span>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+                <TooltipContent variant="surface" side="bottom" sideOffset={6} className="max-w-72">
                   {hiddenRefs.map((ref) => ref.name).join(', ')}
                 </TooltipContent>
               </Tooltip>
