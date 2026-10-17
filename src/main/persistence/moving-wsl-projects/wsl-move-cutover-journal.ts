@@ -203,3 +203,21 @@ export function removeWslMoveCutover(userDataPath: string, migrationId: string):
   }
   journals.remove(userDataPath, migrationId)
 }
+
+/**
+ * Resets a move that never reached `destination-committed`; the caller has proved the destination
+ * holds no commit of it (wsl-move-reset). Its fence and session freeze lift with the record.
+ */
+export function removeUncommittedWslMoveCutover(userDataPath: string, migrationId: string): void {
+  const record = listWslMoveCutovers(userDataPath).find(
+    (entry) => entry.migrationId === migrationId
+  )
+  if (
+    record &&
+    WSL_MOVE_CUTOVER_PHASES.indexOf(record.phase) >=
+      WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')
+  ) {
+    throw new Error('wsl_move_committed')
+  }
+  journals.remove(userDataPath, migrationId)
+}
