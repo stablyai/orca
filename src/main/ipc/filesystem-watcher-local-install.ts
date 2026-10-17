@@ -29,12 +29,18 @@ export async function installLocalWatcher(
   try {
     try {
       const s = await stat(rootPath)
+      if (cancelToken.cancelled) {
+        return 'cancelled'
+      }
       if (!s.isDirectory()) {
         console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
         rememberUnwatchableRoot(rootKey)
         return 'unavailable'
       }
     } catch {
+      if (cancelToken.cancelled) {
+        return 'cancelled'
+      }
       console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
       rememberUnwatchableRoot(rootKey)
       return 'unavailable'

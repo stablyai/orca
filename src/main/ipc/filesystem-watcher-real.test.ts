@@ -77,6 +77,27 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
     vi.clearAllMocks()
   })
 
+  it('delivers real filesystem changes after reopening a root that was initially missing', async () => {
+    tempDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-fswatch-recovery-')))
+    const worktreePath = join(tempDir, 'initially-missing')
+    const sendMock = vi.fn<(channel: string, payload: FsChangedCall) => void>()
+    const sender = createWatcherSender(1, sendMock)
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath })
+    await mkdir(worktreePath)
+    await handlers['fs:unwatchWorktree']({ sender }, { worktreePath })
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath })
+
+    const createdFile = join(worktreePath, 'external-edit.md')
+    await writeFile(createdFile, '# External edit\n')
+    await waitFor(() =>
+      sendMock.mock.calls.some(
+        ([channel, payload]) =>
+          channel === 'fs:changed' &&
+          payload.events.some((event) => event.absolutePath === createdFile)
+      )
+    )
+  }, 15_000)
+
   // Why: this integration targets the Linux native watcher path described
   // above; macOS developer sandboxes can load the addon while suppressing
   // subscribe callbacks, which makes this an environment check instead.
