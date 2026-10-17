@@ -40,6 +40,23 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     expect(order).toEqual(['start-first', 'close-first', 'start-second'])
   })
 
+  // Why: a host-kind reclassification at the same revision names a different jar; mixing them
+  // would leave live pages on one partition while new pages land in another.
+  it('restarts the host when its authority identity changes at the same revision', async () => {
+    const order: string[] = []
+    const first = createComposition(order, 'start-first', 'close-first')
+    const second = createComposition(order, 'start-second', 'close-second')
+    const registry = new PairedRuntimeBrowserClientHostRegistry({
+      createComposition: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+    })
+    await registry.start(input(11))
+
+    await registry.start(input(11, 'runtime-a', 'authority-reclassified'))
+
+    expect(order).toEqual(['start-first', 'close-first', 'start-second'])
+    expect(first.replaceAuthority).not.toHaveBeenCalled()
+  })
+
   it('preserves the composition across a runtime authority transition', async () => {
     const composition = createComposition()
     const compositionFactory = vi.fn(() => composition)
@@ -216,10 +233,15 @@ function deferred<T>() {
   return { promise, reject, resolve }
 }
 
-function input(pairingRevision: number, authorityRuntimeId = 'runtime-a') {
+function input(
+  pairingRevision: number,
+  authorityRuntimeId = 'runtime-a',
+  authorityConnectionIdentity = 'authority-a'
+) {
   return {
     environmentId: 'environment-a',
     pairingRevision,
-    authorityRuntimeId
+    authorityRuntimeId,
+    authorityConnectionIdentity
   }
 }

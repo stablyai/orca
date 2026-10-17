@@ -139,6 +139,7 @@ async function importPartition(): Promise<string> {
     // Why: mirrors startPairedRuntimeBrowserClientHost — settings-level operations target the
     // server's own machine, so the identity comes from the same helper the host uses.
     executionHostIdentity: browserAuthorityExecutionHostStorageIdentity(storageScope),
+    adoptableAuthorityConnectionIdentities: [],
     legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
     legacyExecutionHostIdentity:
       legacyBrowserNativeExecutionHostStorageIdentity(authorityRuntimeId),

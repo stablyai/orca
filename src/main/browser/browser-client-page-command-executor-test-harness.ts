@@ -80,6 +80,7 @@ export function createHarness(options: { maxPages?: number } = {}) {
   const dependencies = {
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-record-a',
+    adoptableAuthorityConnectionIdentities: [],
     legacyAuthorityConnectionIdentity: 'legacy-authority-record-a',
     storageScope: 'a'.repeat(64),
     maxPages: options.maxPages,

@@ -54,6 +54,7 @@ const routeIdentity = {
   orcaProfileId: 'orca-profile-a',
   authorityConnectionIdentity: 'paired-runtime:authority-a',
   executionHostIdentity: 'execution-host-a',
+  adoptableAuthorityConnectionIdentities: [],
   legacyAuthorityConnectionIdentity: 'paired-runtime:legacy-authority-a',
   legacyExecutionHostIdentity: 'legacy-execution-host-a',
   storageScope: 'e'.repeat(64)

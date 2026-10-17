@@ -6,6 +6,7 @@ import { encodePairingOffer } from './pairing'
 import { listEnvironments } from './runtime-environment-store'
 import {
   addWslHostEnvironment,
+  backfillWslHostDistroId,
   findWslHostDeployment,
   refreshWslHostPairing,
   removeWslHostEnvironment
@@ -97,9 +98,44 @@ describe('WSL host environment store', () => {
     expect(refreshed.pairingChanged).toBe(true)
     expect(getPreferredPairingOffer(refreshed.environment).deviceToken).toBe('token-2')
     expect(refreshed.environment.pairingRevision).toBe(500)
+    expect(refreshed.environment.previousPairing).toEqual({ pairingRevision: 100 })
     expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')).toMatchObject({
       localPort: 42001,
       remotePort: 6770
+    })
+  })
+
+  it('backfills a missing registration GUID once, and only for the same distro', () => {
+    const { distroId: _absent, ...legacyRecord } = record
+    addWslHostEnvironment(userDataPath, {
+      id: 'wsl:ubuntu',
+      name: 'Ubuntu (WSL)',
+      pairingCode: code(42000),
+      record: legacyRecord
+    })
+    const otherDistroId = '1a2b3c4d-5e6f-4a1b-8c9d-0e1f2a3b4c5d'
+
+    expect(
+      backfillWslHostDistroId(userDataPath, 'wsl:ubuntu', {
+        distro: 'Debian',
+        distroId: otherDistroId
+      })
+    ).toBe(false)
+    expect(findWslHostDeployment(userDataPath, 'wsl:ubuntu')?.distroId).toBeUndefined()
+    expect(
+      backfillWslHostDistroId(userDataPath, 'wsl:ubuntu', {
+        distro: 'Ubuntu',
+        distroId: record.distroId
+      })
+    ).toBe(true)
+    expect(
+      backfillWslHostDistroId(userDataPath, 'wsl:ubuntu', {
+        distro: 'Ubuntu',
+        distroId: otherDistroId
+      })
+    ).toBe(false)
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toMatchObject({
+      distroId: record.distroId
     })
   })
 

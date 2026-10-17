@@ -20,12 +20,14 @@ import type {
   BrowserRouteGuestLifecycleClaim,
   BrowserRoutePageGuestIdentity
 } from './browser-route-page-authority'
+import { supersededBrowserRoutePartitionIdentities } from './browser-route-partition-migration'
 import type { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import type { BrowserRouteSessionHandle } from './browser-route-session-state'
 
 type BrowserClientPageCreationDependencies = {
   orcaProfileId: string
   authorityConnectionIdentity: string
+  adoptableAuthorityConnectionIdentities: readonly string[]
   legacyAuthorityConnectionIdentity: string
   storageScope: string
   retainNetworkRoute(executionHostKey: string, signal: AbortSignal): Promise<RetainedNetworkRoute>
@@ -73,12 +75,14 @@ export async function createReservedBrowserClientPage(
         authorityConnectionIdentity: dependencies.authorityConnectionIdentity,
         executionHostIdentity: route.executionHostIdentity
       },
-      legacyIdentity: {
+      legacyIdentities: supersededBrowserRoutePartitionIdentities({
         orcaProfileId: dependencies.orcaProfileId,
         browserProfileId: event.command.browserProfileId,
-        authorityConnectionIdentity: dependencies.legacyAuthorityConnectionIdentity,
-        executionHostIdentity: route.legacyExecutionHostIdentity
-      },
+        executionHostIdentity: route.executionHostIdentity,
+        adoptableAuthorityConnectionIdentities: dependencies.adoptableAuthorityConnectionIdentities,
+        legacyAuthorityConnectionIdentity: dependencies.legacyAuthorityConnectionIdentity,
+        legacyExecutionHostIdentity: route.legacyExecutionHostIdentity
+      }),
       storageScope: dependencies.storageScope,
       browserPageId: event.browserPageId,
       pageHostGeneration: event.pageHostGeneration,

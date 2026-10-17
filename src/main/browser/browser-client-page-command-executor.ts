@@ -45,14 +45,12 @@ export class BrowserClientPageCommandExecutor {
   private readonly failedPages = new Map<string, BrowserClientHostedPageInventory>()
   private readonly navigationFence = new BrowserClientPageNavigationFence()
   private closePromise: Promise<void> | null = null
-  private authorityConnectionIdentity: string
-  private legacyAuthorityConnectionIdentity: string
+  private authorityIdentity: BrowserClientPageAuthorityIdentity
   private authorityTransitioning = false
   private closed = false
 
   constructor(private readonly dependencies: BrowserClientPageCommandExecutorDependencies) {
-    this.authorityConnectionIdentity = dependencies.authorityConnectionIdentity
-    this.legacyAuthorityConnectionIdentity = dependencies.legacyAuthorityConnectionIdentity
+    this.authorityIdentity = dependencies
     this.maxPages = dependencies.maxPages ?? BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES
     if (
       !Number.isInteger(this.maxPages) ||
@@ -183,8 +181,7 @@ export class BrowserClientPageCommandExecutor {
     if (this.closed || !this.authorityTransitioning || !input.authorityConnectionIdentity) {
       throw new Error('browser_client_page_authority_transition_unavailable')
     }
-    this.authorityConnectionIdentity = input.authorityConnectionIdentity
-    this.legacyAuthorityConnectionIdentity = input.legacyAuthorityConnectionIdentity
+    this.authorityIdentity = input
     this.authorityTransitioning = false
   }
 
@@ -241,8 +238,10 @@ export class BrowserClientPageCommandExecutor {
     await createReservedBrowserClientPage(
       {
         ...this.dependencies,
-        authorityConnectionIdentity: this.authorityConnectionIdentity,
-        legacyAuthorityConnectionIdentity: this.legacyAuthorityConnectionIdentity,
+        authorityConnectionIdentity: this.authorityIdentity.authorityConnectionIdentity,
+        adoptableAuthorityConnectionIdentities:
+          this.authorityIdentity.adoptableAuthorityConnectionIdentities,
+        legacyAuthorityConnectionIdentity: this.authorityIdentity.legacyAuthorityConnectionIdentity,
         retireSupersededExecutionHostPages: (route) =>
           retireSupersededExecutionHostPages(this.pages.values(), route, (id, generation) =>
             this.retirePage(id, generation)

@@ -68,7 +68,7 @@ async function preparePartition(
 ): Promise<string> {
   const handle = await registry.preparePage({
     identity,
-    ...(legacyRuntimeId === null ? {} : { legacyIdentity: legacyIdentityFor(legacyRuntimeId) }),
+    ...(legacyRuntimeId === null ? {} : { legacyIdentities: [legacyIdentityFor(legacyRuntimeId)] }),
     storageScope,
     browserPageId: 'page-a',
     pageHostGeneration: 1,
@@ -158,7 +158,7 @@ describe('route partition identity migration', () => {
         rebind: (partition) => rebound.push(partition)
       },
       identity,
-      legacyIdentity,
+      legacyIdentities: [legacyIdentity],
       storageScope
     })
 

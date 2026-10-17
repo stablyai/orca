@@ -4,6 +4,8 @@ export type PairedRuntimeBrowserClientHostStart = {
   environmentId: string
   pairingRevision: number
   authorityRuntimeId: string
+  /** Names the host's partitions; a change means a different jar, so the host restarts. */
+  authorityConnectionIdentity: string
 }
 
 type RegisteredBrowserClientHost<Start> = {
@@ -23,6 +25,7 @@ type PairedRuntimeBrowserClientHostRegistryOptions<
 
 type EnvironmentHostRecord<Start> = {
   pairingRevision: number
+  authorityConnectionIdentity: string
   authorityRuntimeId: string
   composition: RegisteredBrowserClientHost<Start>
   authority: Promise<BrowserClientHostLeaseAuthority>
@@ -51,13 +54,13 @@ export class PairedRuntimeBrowserClientHostRegistry<
       if (existing?.cleanupPending) {
         throw new Error('paired_runtime_browser_client_host_cleanup_pending')
       }
-      if (
+      const samePairing =
         existing?.pairingRevision === input.pairingRevision &&
-        existing.authorityRuntimeId === input.authorityRuntimeId
-      ) {
+        existing.authorityConnectionIdentity === input.authorityConnectionIdentity
+      if (samePairing && existing.authorityRuntimeId === input.authorityRuntimeId) {
         return existing.authority
       }
-      if (existing?.pairingRevision === input.pairingRevision) {
+      if (samePairing) {
         existing.authorityRuntimeId = input.authorityRuntimeId
         existing.authority = existing.composition.replaceAuthority(input)
         try {
@@ -87,6 +90,7 @@ export class PairedRuntimeBrowserClientHostRegistry<
       const authority = composition.start()
       const record = {
         pairingRevision: input.pairingRevision,
+        authorityConnectionIdentity: input.authorityConnectionIdentity,
         authorityRuntimeId: input.authorityRuntimeId,
         composition,
         authority,

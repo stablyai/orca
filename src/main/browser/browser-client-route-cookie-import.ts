@@ -7,7 +7,10 @@ import {
 } from './browser-cookie-import'
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'
 import { currentBrowserRoutePartitionBindingStore } from './browser-route-partition-binding-runtime'
-import { resolveBrowserRoutePartitionBinding } from './browser-route-partition-migration'
+import {
+  resolveBrowserRoutePartitionBinding,
+  supersededBrowserRoutePartitionIdentities
+} from './browser-route-partition-migration'
 import { browserSessionRegistry } from './browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from './paired-runtime-browser-client-host-runtime'
 
@@ -105,12 +108,10 @@ function bindRoutePartition(
       authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
       executionHostIdentity: routeIdentity.executionHostIdentity
     },
-    legacyIdentity: {
-      orcaProfileId: routeIdentity.orcaProfileId,
-      browserProfileId,
-      authorityConnectionIdentity: routeIdentity.legacyAuthorityConnectionIdentity,
-      executionHostIdentity: routeIdentity.legacyExecutionHostIdentity
-    },
+    legacyIdentities: supersededBrowserRoutePartitionIdentities({
+      ...routeIdentity,
+      browserProfileId
+    }),
     storageScope: routeIdentity.storageScope
   })
   const persisted = bindings.get(derived.partition)

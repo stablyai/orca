@@ -15,11 +15,12 @@ import type {
 /**
  * Storage identity of the connection a page's partition is derived from.
  *
- * The legacy half names the partition an older build already populated, so a client
- * upgrade adopts that jar instead of deriving an empty one.
+ * The adoptable and legacy identities name partitions an older build already populated,
+ * so a client upgrade adopts that jar instead of deriving an empty one.
  */
 export type BrowserClientPageAuthorityIdentity = {
   authorityConnectionIdentity: string
+  adoptableAuthorityConnectionIdentities: readonly string[]
   legacyAuthorityConnectionIdentity: string
 }
 

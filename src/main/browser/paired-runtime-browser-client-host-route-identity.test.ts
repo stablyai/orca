@@ -45,6 +45,7 @@ import {
   getPairedRuntimeBrowserClientRouteIdentity,
   startPairedRuntimeBrowserClientHost
 } from './paired-runtime-browser-client-host-runtime'
+import { pairedRuntimeHostEnvironment } from './paired-runtime-browser-host-environment-fixture'
 
 function pairedEnvironment(
   id: string,
@@ -126,6 +127,24 @@ describe('client host authority connection identity', () => {
 
     expect(new Set(identities.map((entry) => entry.current)).size).toBe(identities.length)
   })
+
+  // Why: orcad updates and relaunches re-pair these hosts; a moved identity would log the user out.
+  it.each(['managed-ssh', 'wsl'] as const)(
+    'keeps a %s host on one identity across an orcad re-pair',
+    async (kind) => {
+      configurePairedRuntimeBrowserClientHostsForOrcaProfile({ orcaProfileId: 'profile-a' })
+      const before = await connectionIdentity(
+        pairedRuntimeHostEnvironment({ kind, pairingRevision: 1_000, pairedDeviceId: 'device-a' }),
+        'runtime-a'
+      )
+      const after = await connectionIdentity(
+        pairedRuntimeHostEnvironment({ kind, pairingRevision: 2_000, pairedDeviceId: 'device-b' }),
+        'runtime-b'
+      )
+
+      expect(after.current).toBe(before.current)
+    }
+  )
 })
 
 describe('client host route identity lifetime', () => {

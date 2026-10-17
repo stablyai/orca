@@ -27,10 +27,12 @@ const replacementAuthority: BrowserClientHostLeaseAuthority = {
 
 const initialInput = {
   authorityConnectionIdentity: 'authority-record-a',
+  adoptableAuthorityConnectionIdentities: [],
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-a'
 }
 const replacementInput = {
   authorityConnectionIdentity: 'authority-record-b',
+  adoptableAuthorityConnectionIdentities: [],
   legacyAuthorityConnectionIdentity: 'legacy-authority-record-b'
 }
 

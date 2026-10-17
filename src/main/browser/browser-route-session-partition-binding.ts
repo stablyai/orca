@@ -15,7 +15,7 @@ export function resolveBrowserRouteSessionPartition(
   const derived = resolveBrowserRoutePartitionBinding({
     bindings: dependencies.bindingStore,
     identity: input.identity,
-    legacyIdentity: input.legacyIdentity ?? null,
+    legacyIdentities: input.legacyIdentities ?? [],
     storageScope: input.storageScope,
     derivePartition
   })

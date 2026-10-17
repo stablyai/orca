@@ -8,6 +8,7 @@ import {
   getPreferredLoopbackRuntimePort,
   getPreferredPairingOffer,
   PersistedRuntimeEnvironmentSchema,
+  runtimeEnvironmentPreviousPairing,
   type KnownRuntimeEnvironment
 } from './runtime-environments'
 import {
@@ -141,6 +142,8 @@ export function refreshWslHostPairing(
     }),
     updatedAt: now,
     pairingRevision: Math.max(now, (existing.pairingRevision ?? existing.createdAt) + 1),
+    // Why: the in-app browser adopts this pairing's jar if no page opened before the re-pair.
+    previousPairing: runtimeEnvironmentPreviousPairing(current),
     lastUsedAt: existing.lastUsedAt
   })
   assertPairingUsesBridge(next, args.localPort)
@@ -154,6 +157,26 @@ export function refreshWslHostPairing(
     environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), environmentId),
     pairingChanged: true
   }
+}
+
+/**
+ * Records the registration GUID a host added before it was captured. Skipped when the record
+ * already has one or now names another distro, so a stale read never overwrites a newer record.
+ */
+export function backfillWslHostDistroId(
+  userDataPath: string,
+  environmentId: string,
+  registration: { distro: string; distroId: string }
+): boolean {
+  const record = findWslHostDeployment(userDataPath, environmentId)
+  if (!record || record.distroId || record.distro !== registration.distro) {
+    return false
+  }
+  writeWslHostDeployment(userDataPath, environmentId, {
+    ...record,
+    distroId: registration.distroId
+  })
+  return true
 }
 
 /** Environment first: a crash between the writes leaves an ownerless record, never a bare server. */

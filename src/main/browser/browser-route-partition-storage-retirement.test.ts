@@ -108,6 +108,7 @@ describe('browser route partition storage retirement', () => {
       pairingRevision: number
       authorityRuntimeId: string
       authorityConnectionIdentity: string
+      adoptableAuthorityConnectionIdentities: readonly string[]
       legacyAuthorityConnectionIdentity: string
     }>({
       createComposition: () =>
@@ -117,6 +118,7 @@ describe('browser route partition storage retirement', () => {
             pairingRevision: 1,
             authorityRuntimeId: 'runtime-a',
             authorityConnectionIdentity: 'authority-a',
+            adoptableAuthorityConnectionIdentities: [],
             legacyAuthorityConnectionIdentity: 'legacy-authority-a'
           },
           createRoutes: () => stubRoutes(),
@@ -134,6 +136,7 @@ describe('browser route partition storage retirement', () => {
       pairingRevision: 1,
       authorityRuntimeId: 'runtime-a',
       authorityConnectionIdentity: 'authority-a',
+      adoptableAuthorityConnectionIdentities: [],
       legacyAuthorityConnectionIdentity: 'legacy-authority-a'
     })
 

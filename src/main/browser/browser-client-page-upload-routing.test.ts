@@ -89,9 +89,13 @@ function createHarness(
   const executor = new BrowserClientPageCommandExecutor({
     orcaProfileId: 'orca-profile-a',
     authorityConnectionIdentity: 'authority-a',
+    adoptableAuthorityConnectionIdentities: [],
+    legacyAuthorityConnectionIdentity: 'legacy-authority-a',
+    storageScope: 'a'.repeat(64),
     retainNetworkRoute: async () => ({
       key: 'execution-a',
       executionHostIdentity: 'execution-record-a',
+      legacyExecutionHostIdentity: 'legacy-execution-record-a',
       proxyEndpoint: { host: '127.0.0.1' as const, port: 43123 },
       release: releaseNetworkRoute
     }),
@@ -120,7 +124,7 @@ function createHarness(
     guestBinding: { bind: () => {}, release: () => {} },
     fileChannel: options.fileChannel,
     uploadStaging
-  } as never)
+  })
   return {
     executor,
     executeAutomation,

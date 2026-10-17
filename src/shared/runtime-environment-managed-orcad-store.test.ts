@@ -132,6 +132,8 @@ describe('managed orcad environment store', () => {
     const refreshed = refreshManagedOrcadPairing(userDataPath, 'environment-1', rotated, 500)
     expect(refreshed.endpoints[0]?.deviceToken).toBe('rotated-token')
     expect(refreshed.pairingRevision).toBe(500)
+    // Why: the in-app browser adopts the replaced pairing's jar after an upgrade-time re-pair.
+    expect(refreshed.previousPairing).toEqual({ pairingRevision: environment.pairingRevision })
     expect(refreshed.orcadDeployment).toEqual(deployment)
     expect(() =>
       refreshManagedOrcadPairing(userDataPath, 'environment-1', pairingCode('ws://127.0.0.1:1'))
