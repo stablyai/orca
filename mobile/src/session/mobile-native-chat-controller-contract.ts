@@ -41,6 +41,8 @@ export type MobileNativeChatController = {
   nativeChatStructured: boolean
   /** Structured lane with a live client: where the transcript's visuals are read from. */
   nativeChatVisualSource: MobileNativeChatVisualSource | null
+  /** The same chat, where its host serves whole items; null before that host. */
+  nativeChatItemSource: MobileNativeChatVisualSource | null
   nativeChatAgentWorking: boolean
   /** What labels the live turn's one indicator row; null off the structured lane. */
   nativeChatTurnIndicator: NativeChatLiveTurnIndicator | null

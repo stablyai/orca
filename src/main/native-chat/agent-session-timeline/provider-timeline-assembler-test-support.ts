@@ -136,6 +136,7 @@ export function messageText(body: AgentJournalItemBody | undefined): string | un
 
 const journals = createTrackedJournalOpener()
 const cleanups: (() => Promise<void>)[] = []
+const roots: string[] = []
 
 /** Call from `afterEach`. */
 export async function closeProviderTimelineRigs(): Promise<void> {
@@ -143,6 +144,9 @@ export async function closeProviderTimelineRigs(): Promise<void> {
     await cleanup()
   }
   await journals.closeAll()
+  for (const root of roots.splice(0)) {
+    await rm(root, { recursive: true, force: true })
+  }
 }
 
 /** An assembler whose sink binds to the rig's journal only when `bind` is called, as a lane that
@@ -228,6 +232,7 @@ export async function openProviderTimelineRig(
   overrides: Partial<ProviderTimelineAssemblerDeps> = {}
 ): Promise<ProviderTimelineRig> {
   const root = await mkdtemp(join(tmpdir(), 'orca-provider-timeline-'))
+  roots.push(root)
   const journalOptions: TestJournalOptions = {
     identity: {
       sessionId: SESSION,
@@ -244,7 +249,6 @@ export async function openProviderTimelineRig(
   deferred.bind({ journal, fence: 1, publish: () => {} })
   cleanups.push(async () => {
     deferred.close()
-    await rm(root, { recursive: true, force: true })
   })
   const sink = providerTimelineSink(deferred.sink)
   if (!sink) {

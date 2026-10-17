@@ -8,10 +8,6 @@ import type {
   AgentJournalItemIdentity,
   AgentJournalThreadGoal
 } from '../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeGoalBackgroundWork } from './claude-background-task-tracker'
@@ -58,15 +54,7 @@ function goalRow(text: string, goal: AgentJournalThreadGoal | null): GoalStatusB
   return {
     kind: 'status',
     text,
-    threadGoal: goal
-      ? {
-          state: 'set',
-          goal: {
-            ...goal,
-            objective: boundInlineText(goal.objective, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-          }
-        }
-      : { state: 'cleared' }
+    threadGoal: goal ? { state: 'set', goal } : { state: 'cleared' }
   }
 }
 

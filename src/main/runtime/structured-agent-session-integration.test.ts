@@ -843,8 +843,9 @@ describe('a structured codex session over agentSession.*', () => {
     ).toBe(false)
   })
 
-  it('persists truncated command output before publishing its journal row', async () => {
+  it('persists complete command output while publishing a shortened copy', async () => {
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const stream = await subscribe('sub-large-output')
     const output = 'large command output\n'.repeat(2_000)
 
     codex.notify('item/completed', {
@@ -861,13 +862,15 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await drainStreamedEvents()
 
-    const host = getStructuredAgentSessionHost()
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
-    const item = journal.snapshot().items.find((candidate) => candidate.body?.kind === 'tool-call')
+    const snapshot = await getStructuredAgentSessionHost()?.journalSnapshot(SESSION)
+    const item = snapshot?.items.find((candidate) => candidate.body?.kind === 'tool-call')
     const bounded = item?.body?.kind === 'tool-call' ? item.body.output : undefined
-    expect(bounded).toMatchObject({ truncated: true, byteLength: Buffer.byteLength(output) })
+    expect(bounded).toMatchObject({ head: output, truncated: false, byteLength: output.length })
+    const published = itemsOf(stream).find((candidate) => candidate.itemId === item?.itemId)
+    expect(published?.shortened).toBe(true)
+    expect(published?.body).toMatchObject({
+      output: { head: output.slice(0, 16 * 1024), truncated: true, byteLength: output.length }
+    })
   })
 
   it('keeps an answered prompt resolved after the provider exits', async () => {
@@ -891,10 +894,8 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await drainStreamedEvents()
     const host = getStructuredAgentSessionHost()
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
-    const approval = journal.snapshot().items.find((item) => item.body?.kind === 'approval')
+    let snapshot = await host?.journalSnapshot(SESSION)
+    const approval = snapshot?.items.find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({
       kind: 'approval',
       resolution: { state: 'pending' }
@@ -917,9 +918,8 @@ describe('a structured codex session over agentSession.*', () => {
     codex.live().handlers.onExit?.(new Error('provider exited after answer'))
     await drainStreamedEvents()
 
-    expect(
-      journal.snapshot().items.find((item) => item.itemId === approval?.itemId)?.body
-    ).toMatchObject({
+    snapshot = await host?.journalSnapshot(SESSION)
+    expect(snapshot?.items.find((item) => item.itemId === approval?.itemId)?.body).toMatchObject({
       kind: 'approval',
       resolution: { state: 'resolved', selectedOptionId: 'accept' }
     })

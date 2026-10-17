@@ -166,6 +166,15 @@ export const styles = StyleSheet.create({
   toolResultError: {
     backgroundColor: colors.diffDeletedBg
   },
+  showFull: {
+    alignSelf: 'flex-start',
+    paddingTop: spacing.xs
+  },
+  showFullText: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   imageRef: {
     color: colors.textSecondary,
     fontSize: TEXT_SIZE

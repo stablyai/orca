@@ -11,6 +11,7 @@ export const ATTENTION_READ = {
 } as const
 export const REWIND_METHOD = 'agentSession.rewind'
 export const CONVERSATION_OUTLINE_METHOD = 'agentSession.conversationOutline'
+export const ITEM_DETAIL_METHOD = 'agentSession.item'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletions'
 
@@ -176,6 +177,11 @@ export const STRUCTURED_CALLS: {
     method: CONVERSATION_OUTLINE_METHOD,
     hostMethod: 'journalSnapshot',
     result: { sessionId: SESSION, entries: [], omittedEntries: 0 }
+  },
+  {
+    method: ITEM_DETAIL_METHOD,
+    hostMethod: 'journalSnapshot',
+    result: { item: null }
   },
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.

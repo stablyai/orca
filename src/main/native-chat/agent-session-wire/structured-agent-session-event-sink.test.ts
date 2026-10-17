@@ -20,7 +20,10 @@ import {
 } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
@@ -484,6 +487,7 @@ describe('deferred structured agent-session event sink', () => {
       agentJournalItemKey(identity(0))
     ])
     await journal.close()
+    closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
 

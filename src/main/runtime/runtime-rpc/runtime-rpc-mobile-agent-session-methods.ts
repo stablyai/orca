@@ -28,6 +28,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.subscribeStatus',
   // One visual from the chat's own scratch folder, for the transcript's `::orca-visual` lines.
   'agentSession.readVisual',
+  // One item whole, for "Show full output" and "Show full message".
+  'agentSession.item',
   // No-ops on a current host; kept until MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION passes the
   // mobile builds that still call them.
   'agentSession.hold',

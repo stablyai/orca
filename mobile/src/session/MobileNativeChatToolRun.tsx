@@ -7,8 +7,7 @@ import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import {
   createToolInputDisplay,
-  summarizeToolRun,
-  truncateToolDetail
+  summarizeToolRun
 } from '../../../src/shared/native-chat-tool-summary'
 import {
   describeActiveToolCall,
@@ -17,10 +16,14 @@ import {
   selectActiveToolCall
 } from '../../../src/shared/native-chat-tool-activity'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
-import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatBlock,
+  NativeChatToolResultBlock
+} from '../../../src/shared/native-chat-types'
 import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool-line-identity'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-message-styles'
+import { MobileNativeChatToolOutput } from './MobileNativeChatFullContent'
 
 const TOOL_PAIR_REVEAL_PAGE = 6
 const MAX_TOOL_RUN_DIFF_ROWS = 240
@@ -50,22 +53,16 @@ function DiffView({ lines }: { lines: DiffLine[] }): React.JSX.Element {
  *  show the call's diff/input or the result's body. Mirrors the reference design
  *  where tool calls read as flat lines in the conversation, not boxed blocks. */
 function ResultBody({
-  output,
-  isError,
+  result,
   diff
 }: {
-  output: string
-  isError?: boolean
+  result: NativeChatToolResultBlock
   diff: DiffLine[] | null
 }): React.JSX.Element {
   if (diff) {
     return <DiffView lines={diff} />
   }
-  return (
-    <View style={[styles.toolResult, isError && styles.toolResultError]}>
-      <Text style={styles.mono}>{truncateToolDetail(output)}</Text>
-    </View>
-  )
+  return <MobileNativeChatToolOutput body={result} />
 }
 
 /** One request: a tool call and its result rendered together as a single
@@ -128,9 +125,7 @@ function ToolLine({
         <View style={styles.toolDetail}>
           {callDiff ? <DiffView lines={callDiff} /> : null}
           {callDetail ? <Text style={styles.mono}>{callDetail}</Text> : null}
-          {result ? (
-            <ResultBody output={result.output} isError={result.isError} diff={resultDiff} />
-          ) : null}
+          {result ? <ResultBody result={result} diff={resultDiff} /> : null}
         </View>
       ) : null}
     </View>

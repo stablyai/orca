@@ -8,7 +8,7 @@ import {
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalAnsweredTurn } from '../../../shared/agent-session-journal-types'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
-import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import type { JournalReducerState } from './journal-reducer'
 import {
   noteTurnAccepted,
@@ -31,7 +31,7 @@ export function applyJournalDispatchRow(
   submission.providerItemId = row.providerItemId
   // Rows written before the write-side bound (#20654) carry the full text; bound them on read too.
   submission.reason =
-    row.reason === null ? null : boundInlineText(row.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+    row.reason === null ? null : boundInlineText(row.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
   const rejection = row.state === 'rejected' ? readStoredRejectionFact(row.rejection) : undefined
   if (rejection) {
     submission.rejection = rejection

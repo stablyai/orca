@@ -78,12 +78,15 @@ describe('Claude child operation output retention', () => {
       if (result?.kind !== 'tool-call') {
         throw new Error('Result did not produce a journal tool-call body')
       }
-      expect(result.output).toEqual({
-        head: 'a'.repeat(16 * 1024),
-        byteLength: first.length + second.length + 1,
-        digest: createHash('sha256').update(first).update('\n').update(second).digest('hex'),
-        truncated: true
-      })
+      expect(result.output?.truncated).toBe(false)
+      expect(result.output?.byteLength).toBe(first.length + second.length + 1)
+      expect(result.output?.digest).toBe(
+        createHash('sha256').update(first).update('\n').update(second).digest('hex')
+      )
+      expect(result.output?.head.length).toBe(first.length + second.length + 1)
+      expect(result.output?.head.startsWith(first)).toBe(true)
+      expect(result.output?.head.charAt(first.length)).toBe('\n')
+      expect(result.output?.head.endsWith(second)).toBe(true)
       expect(joinedOutputUnits).toBe(0)
     } finally {
       vi.restoreAllMocks()

@@ -6,11 +6,7 @@
 
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { CODEX_COLLAB_ROW_AGENTS_KEY } from '../../shared/codex-collab-agent-tools'
-import {
-  boundInlineText,
-  boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { journalPayload } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import {
   codexCollabHelperLabel,
   codexCollabToolName,
@@ -106,16 +102,8 @@ function outputText(call: CodexCollabAgentToolCall, helperName?: CodexHelperName
     .join('\n')
 }
 
-/** The prompt is clipped on its own: bounded with the rest, a long one would clip away the
- *  helper's name and ids the row is read by. */
 function collabRowInput(fields: Record<string, unknown>, prompt: string | null): unknown {
-  const bounded = boundToolInput(fields, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-  if (bounded !== fields) {
-    return bounded
-  }
-  const input = prompt
-    ? { ...fields, prompt: boundInlineText(prompt, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
-    : fields
+  const input = prompt ? { ...fields, prompt } : fields
   return Object.keys(input).length > 0 ? input : null
 }
 
@@ -142,13 +130,12 @@ export function codexCollabAgentToolCallBody(
       : {})
   }
   const text = outputText(call, helperName)
-  const output = text === null ? null : boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
     kind: 'tool-call',
     name: codexCollabToolName(call),
     callId: call.id,
     input: collabRowInput(fields, call.prompt),
     state: codexItemRunState(item),
-    ...(output === null ? {} : { output: output.bounded })
+    ...(text === null ? {} : { output: journalPayload(text) })
   }
 }

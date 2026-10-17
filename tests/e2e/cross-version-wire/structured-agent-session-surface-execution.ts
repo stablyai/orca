@@ -1,4 +1,5 @@
 import { expect, vi } from 'vitest'
+import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session-create-capabilities'
 import {
@@ -132,5 +133,14 @@ export async function expectDeclaredSurfaceExecutes(
         result
       })
     }
+  }
+}
+
+export function expectItemDetailNegotiation(builds: readonly AgentSessionWireBuild[]): void {
+  expect(builds[0]?.capabilities).toContain(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+  for (const build of builds) {
+    expect(build.capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)).toBe(
+      build.methodNames.includes('agentSession.item')
+    )
   }
 }

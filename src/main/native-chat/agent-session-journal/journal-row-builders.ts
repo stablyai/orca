@@ -27,7 +27,7 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
-import { boundInlineText, DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
 import { assertSubmissionIdUnused } from './journal-write-guards'
 import { turnEndAfterStop } from './journal-stop-turn-end'
 import { nextJournalItemRevision } from './journal-item-revision'
@@ -167,7 +167,7 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
     return null
   }
-  return boundInlineText(input.reason, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(input.reason, JOURNAL_DISPATCH_REASON_LIMITS).text
 }
 
 export function journalLifecycleBatchRowBuilder(

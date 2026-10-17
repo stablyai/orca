@@ -1,4 +1,7 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalRenderItem
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent,
@@ -9,6 +12,7 @@ import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/a
 import {
   AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
@@ -89,6 +93,27 @@ export async function readStructuredAgentSessionConversationOutline(
     'agentSession.conversationOutline',
     { sessionId }
   )
+}
+
+export function supportsStructuredAgentSessionItemDetail(
+  target: RuntimeClientTarget
+): Promise<boolean> {
+  return structuredAgentSessionHostSupports(target, AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
+}
+
+/** One item whole, as the host keeps it; null when the host no longer has it. Call only after
+ *  `supportsStructuredAgentSessionItemDetail`; a failed read rejects. */
+export async function readStructuredAgentSessionItem(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  itemId: string
+): Promise<AgentJournalRenderItem | null> {
+  const result = await callRuntimeRpc<{ item: AgentJournalRenderItem | null }>(
+    target,
+    'agentSession.item',
+    { sessionId, itemId }
+  )
+  return result?.item ?? null
 }
 
 const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([

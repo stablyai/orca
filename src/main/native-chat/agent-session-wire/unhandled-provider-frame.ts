@@ -1,9 +1,8 @@
 import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session-journal-types'
 import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../shared/native-chat-provider-frame-summary'
 import {
-  boundInlineText,
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
 import { codexGoalRowText, codexThreadGoalState } from '../../codex/codex-goal-journal-rows'
@@ -118,12 +117,13 @@ function hookFailureFrameText(
   return null
 }
 
-/** Substantive adapter fallbacks become bounded journal rows; a chat draws one only with a sentence. */
+/** Substantive adapter fallbacks become journal rows; a chat draws one only with a sentence. The
+ *  row's readable text is kept whole. */
 export function unhandledProviderFrameJournalItem(
   provider: string,
   kind: string,
   payload: unknown,
-  limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  limits: JournalPayloadLimits = PROVIDER_FRAME_PAYLOAD_LIMITS,
   options: UnhandledProviderFrameJournalItemOptions = {}
 ): UnhandledProviderFrameJournalItem | null {
   const classification =
@@ -179,32 +179,15 @@ export function unhandledProviderFrameJournalItem(
     message = typeof content === 'string' && content.trim() ? content.trim() : message
   }
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
-  const display = message ? boundInlineText(message, limits) : null
-  const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
   const threadGoal = provider === 'codex' ? codexThreadGoalState(method, payload) : null
   return {
     body: {
       kind: 'status',
-      text: compaction
-        ? 'Context compacted'
-        : (goalDisplay?.text ?? display?.text ?? `${provider} · ${kind}`),
+      text: compaction ? 'Context compacted' : goalText || message || `${provider} · ${kind}`,
       ...(compaction ? { presentation: 'compaction' } : {}),
       ...(tone ? { tone } : {}),
       providerFrame: { provider, kind, payload: bounded },
-      ...(threadGoal
-        ? {
-            threadGoal:
-              threadGoal.state === 'set'
-                ? {
-                    state: 'set' as const,
-                    goal: {
-                      ...threadGoal.goal,
-                      objective: boundInlineText(threadGoal.goal.objective, limits).text
-                    }
-                  }
-                : threadGoal
-          }
-        : {})
+      ...(threadGoal ? { threadGoal } : {})
     },
     classification: classification === 'error-surface' ? 'error-surface' : 'timeline-substantive'
   }

@@ -67,7 +67,7 @@ describe('generic ACP translation', () => {
     ).toEqual(['- [x] Read'])
   })
 
-  it('merges tool snapshots, bounds input/output and emits a separately keyed valid diff', async () => {
+  it('merges tool snapshots, settles input and output whole and keys a valid diff', async () => {
     const { rig, translator, apply, update } = await genericRig()
     apply(translator.openPrompt('send-1', 1000).events)
     const oldText = 'same\nbefore\n'
@@ -104,8 +104,9 @@ describe('generic ACP translation', () => {
     expect(body).toMatchObject({
       name: 'edit_file',
       state: 'completed',
-      input: { truncated: true },
-      output: { truncated: true, byteLength: 40000 }
+      // The input came only while the call ran; the settled row still keeps it whole.
+      input: { text: 'x'.repeat(40000) },
+      output: { head: 'y'.repeat(40000), truncated: false, byteLength: 40000 }
     })
     const diff = (await rig.rows()).find((row) => row.body.kind === 'diff')?.body
     if (diff?.kind !== 'diff') {

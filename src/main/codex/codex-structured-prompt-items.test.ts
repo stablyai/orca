@@ -101,7 +101,7 @@ describe('codex approval items', () => {
     })
 
     expect(item.detail).toContain('output truncated')
-    expect(Buffer.byteLength(JSON.stringify(item), 'utf8')).toBeLessThan(32 * 1024)
+    expect(Buffer.byteLength(JSON.stringify(item), 'utf8')).toBeLessThan(160 * 1024)
   })
 })
 

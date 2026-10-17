@@ -1,5 +1,6 @@
 import {
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_COMMANDS_RUNTIME_CAPABILITY,
@@ -32,6 +33,8 @@ export type StructuredAgentSessionHostSupport = {
   conversationStop: boolean
   /** The host applies each chat's permission mode; 1.4.225–1.4.226 do without advertising it. */
   permissionModes: boolean
+  /** The host keeps long output whole and serves it with `agentSession.item`. */
+  itemDetail: boolean
 }
 
 export function structuredAgentSessionHostSupport(
@@ -47,6 +50,7 @@ export function structuredAgentSessionHostSupport(
     quietRepeatedStop: capabilities.includes(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY),
     sendOptions: capabilities.includes(AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY),
     conversationStop: capabilities.includes(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY),
-    permissionModes: capabilities.includes(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY)
+    permissionModes: capabilities.includes(AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY),
+    itemDetail: capabilities.includes(AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY)
   }
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import {
@@ -236,15 +237,18 @@ describe('Pi RPC session ownership and delivery', () => {
     expect(child.rootVerdict).toBe('exited')
   })
 
-  it('retains final events when exit publication times out under journal backpressure', async () => {
-    let blocked = true
-    const h = await setup({}, (sink) => ({
-      ...sink,
-      tryAppendTransition: (transition) =>
-        blocked
-          ? { accepted: false, reason: 'backpressure' }
-          : sink.tryAppendTransition!(transition)
-    }))
+  it('persists final events after exit while journal writes are blocked', async () => {
+    const h = await setup()
+    const gate = Promise.withResolvers<void>()
+    cleanups.unshift(async () => { gate.resolve(); vi.useRealTimers() })
+    const blocked = h.rig.journal.readInOrder(() => {
+      expect(h.rig.eventSink.tryAppendItem?.(
+        { provider: 'legacy', agent: 'pi', sessionId, recordId: 'before' },
+        { kind: 'status', tone: 'info', text: 'before' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )).toEqual({ accepted: true })
+      return gate.promise
+    })
     vi.useFakeTimers()
     h.connection.receive({
       type: 'extension_ui_request',
@@ -253,18 +257,16 @@ describe('Pi RPC session ownership and delivery', () => {
       title: 'Final tail'
     })
     h.connection.exit()
+    let completed = false
+    const written = h.rig.eventSink.written?.().then((result) => { completed = true; return result })
     await vi.advanceTimersByTimeAsync(2_001)
     expect(h.lifecycle).toHaveBeenCalledOnce()
     h.adapter.acknowledgeSessionRelease(sessionId)
-    let completed = false
-    const drained = h.adapter.drainObservedExits().then(() => {
-      completed = true
-    })
-    await Promise.resolve()
+    await h.adapter.drainObservedExits()
     expect(completed).toBe(false)
-    blocked = false
-    await vi.advanceTimersByTimeAsync(250)
-    await drained
+    gate.resolve()
+    await blocked
+    expect(await written).toEqual({ ok: true })
     expect(
       (await h.rig.rows()).some(
         (row) => row.body.kind === 'question' && row.body.question === 'Final tail'
