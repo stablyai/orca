@@ -62,6 +62,12 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   },
+  // Landscape phone: the tab strip takes the row's spare width instead of the title.
+  sessionTitleBlockBesideTabs: {
+    flex: 0,
+    flexShrink: 1,
+    maxWidth: 160
+  },
   sessionTitle: {
     color: colors.textPrimary,
     fontSize: 14,
@@ -84,13 +90,34 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle
   },
+  // Cancels the top bar's vertical padding so tab borders run the bar's full height.
+  tabBarInTopBar: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginVertical: -spacing.xs,
+    // Room between the title's last letter and the strip's edge.
+    marginLeft: spacing.md,
+    // Fixed edge so tabs scrolled past it read as clipped, not as part of the title.
+    borderLeftWidth: 1,
+    borderLeftColor: colors.borderSubtle
+  },
   tabScroll: {
     flex: 1,
     maxHeight: 36
   },
+  tabScrollInTopBar: {
+    alignSelf: 'stretch',
+    maxHeight: 44
+  },
   tabContent: {
     paddingLeft: spacing.sm,
     paddingRight: spacing.sm
+  },
+  tabContentInTopBar: {
+    paddingLeft: 0
   },
   tab: {
     width: 128,
@@ -101,12 +128,20 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
+    borderBottomColor: 'transparent',
+    // Side borders between tabs, as the desktop tab strip draws them.
+    borderRightWidth: 1,
+    borderRightColor: colors.borderSubtle
+  },
+  tabFirst: {
+    borderLeftWidth: 1,
+    borderLeftColor: colors.borderSubtle
   },
   tabActive: {
     // Neutral grey underline, matching the desktop terminal tab's active
     // indicator (a muted foreground/card mix), not a blue accent.
-    borderBottomColor: colors.textSecondary
+    borderBottomColor: colors.textSecondary,
+    backgroundColor: colors.bgRaised
   },
   tabLabelRow: {
     maxWidth: '100%',
