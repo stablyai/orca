@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useAppStore } from '@/store'
 import {
   ArchiveRestore,
   ChevronRight,
@@ -162,9 +163,17 @@ export function VaultHostScopeMenu({
 }): React.JSX.Element {
   const selectedOption = hostOptions.find((option) => option.id === executionHostScope)
   const label = selectedOption?.label ?? getExecutionHostLabel(executionHostScope)
+  const refreshCatalog = useAppStore((state) => state.refreshRuntimeEnvironmentCatalog)
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        // CLI pairing edits the saved catalog without opening Settings.
+        if (open) {
+          void refreshCatalog()
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           type="button"

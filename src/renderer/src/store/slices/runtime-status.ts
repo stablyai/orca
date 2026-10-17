@@ -337,6 +337,13 @@ export const createRuntimeStatusSlice: (
       (snapshot) => get().applyRuntimeHostStatusSnapshot(snapshot)
     ),
 
+  refreshRuntimeEnvironmentCatalog: createRuntimeStatusHydration({
+    listEnvironments: () => window.api.runtimeEnvironments.list(),
+    getCurrentEnvironments: () => get().runtimeEnvironments,
+    publishEnvironments: (environments) => get().setRuntimeEnvironments(environments),
+    markCatalogSettled: () => set({ runtimeEnvironmentCatalogSettled: true })
+  }),
+
   hydrateRuntimeEnvironmentStatuses: createRuntimeStatusHydration({
     listEnvironments: () => window.api.runtimeEnvironments.list(),
     getCurrentEnvironments: () => get().runtimeEnvironments,

@@ -21,7 +21,7 @@ type RuntimeStatusHydrationDependencies = {
   listEnvironments: () => Promise<PublicKnownRuntimeEnvironment[]>
   getCurrentEnvironments: () => readonly PublicKnownRuntimeEnvironment[]
   publishEnvironments: (environments: readonly PublicKnownRuntimeEnvironment[]) => void
-  refreshEnvironmentStatus: (environmentId: string) => Promise<boolean>
+  refreshEnvironmentStatus?: (environmentId: string) => Promise<boolean>
   markCatalogSettled: () => void
 }
 
@@ -91,9 +91,11 @@ export function createRuntimeStatusHydration({
         }
         expectedRevisions = environmentRevisions(environments)
         publishEnvironments(environments)
-        await Promise.allSettled(
-          environments.map((environment) => refreshEnvironmentStatus(environment.id))
-        )
+        if (refreshEnvironmentStatus) {
+          await Promise.allSettled(
+            environments.map((environment) => refreshEnvironmentStatus(environment.id))
+          )
+        }
       } while (
         rerunRequested ||
         (expectedRevisions && !revisionsMatch(getCurrentEnvironments(), expectedRevisions))
