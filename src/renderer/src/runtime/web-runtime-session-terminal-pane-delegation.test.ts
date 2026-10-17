@@ -12,6 +12,7 @@ import {
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { WORKTREE_ID, makeSplitSourceState } from './web-runtime-session-test-harness'
 
 const mocks = vi.hoisted(() => ({
   activateTabAndFocusPane: vi.fn(),
@@ -92,52 +93,15 @@ afterEach(() => {
   replaceRuntimeEnvironmentRevisions([])
 })
 
-const SPLIT_WORKTREE_ID = 'repo::/worktree'
+const SPLIT_WORKTREE_ID = WORKTREE_ID
 const SPLIT_SOURCE = {
   worktreeId: SPLIT_WORKTREE_ID,
   tabId: toWebTerminalSurfaceTabId('tab-1'),
   leafId: 'leaf-1'
 }
 
-function makeSplitSourceState(
-  hostTabId: string,
-  leafId = 'leaf-1',
-  activeHostTabId = hostTabId
-): Record<string, unknown> {
-  const tabId = toWebTerminalSurfaceTabId(hostTabId)
-  const activeTabId = toWebTerminalSurfaceTabId(activeHostTabId)
-  const tabs = [
-    {
-      id: tabId,
-      worktreeId: SPLIT_WORKTREE_ID,
-      contentType: 'terminal',
-      ptyId: 'remote:web-env-1@@terminal-1'
-    },
-    ...(activeTabId === tabId
-      ? []
-      : [{ id: activeTabId, worktreeId: SPLIT_WORKTREE_ID, contentType: 'terminal' }])
-  ]
-  return {
-    activeWorktreeId: SPLIT_WORKTREE_ID,
-    activeWorkspaceExecutionHostId: 'runtime:web-env-1',
-    activeTabType: 'terminal',
-    activeTabTypeByWorktree: { [SPLIT_WORKTREE_ID]: 'terminal' },
-    activeTabIdByWorktree: { [SPLIT_WORKTREE_ID]: activeTabId },
-    tabsByWorktree: { [SPLIT_WORKTREE_ID]: tabs },
-    unifiedTabsByWorktree: { [SPLIT_WORKTREE_ID]: tabs },
-    groupsByWorktree: {},
-    terminalLayoutsByTabId: {
-      [tabId]: {
-        activeLeafId: leafId,
-        ptyIdsByLeafId: { [leafId]: 'remote:web-env-1@@terminal-1' }
-      },
-      ...(activeTabId === tabId ? {} : { [activeTabId]: { activeLeafId: 'active-leaf' } })
-    }
-  }
-}
-
 function stubSplitSourceTab(hostTabId: string): void {
-  mocks.getState.mockReturnValue(makeSplitSourceState(hostTabId))
+  mocks.getState.mockReturnValue(makeSplitSourceState({ hostTabId }))
 }
 
 function makeSplitResult(leafId: string): unknown {
@@ -339,7 +303,7 @@ describe('splitWebRuntimeTerminal', () => {
       }
     ]
     mocks.getState.mockReturnValue({
-      ...makeSplitSourceState('tab-source', 'leaf-source'),
+      ...makeSplitSourceState({ hostTabId: 'tab-source', leafId: 'leaf-source' }),
       tabsByWorktree: { [SPLIT_WORKTREE_ID]: tabs },
       unifiedTabsByWorktree: { [SPLIT_WORKTREE_ID]: tabs },
       ptyIdsByTabId: { [sourceTabId]: ['remote:web-env-1@@terminal-1'] },
@@ -594,7 +558,9 @@ describe('splitWebRuntimeTerminal', () => {
   })
 
   it('focuses a split invoked from a non-focused group tab when the viewer stays put', async () => {
-    mocks.getState.mockReturnValue(makeSplitSourceState('tab-1', 'leaf-1', 'tab-2'))
+    mocks.getState.mockReturnValue(
+      makeSplitSourceState({ hostTabId: 'tab-1', leafId: 'leaf-1', activeHostTabId: 'tab-2' })
+    )
     const runtimeCall = vi.fn((request: { method: string }) =>
       Promise.resolve(
         request.method === 'terminal.split'
@@ -666,7 +632,7 @@ describe('splitWebRuntimeTerminal', () => {
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
     ).toBe(true)
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledOnce())
-    mocks.getState.mockReturnValue(makeSplitSourceState('tab-2'))
+    mocks.getState.mockReturnValue(makeSplitSourceState({ hostTabId: 'tab-2' }))
     resolveSplit({
       id: 'split',
       ok: true,

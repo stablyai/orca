@@ -10,6 +10,10 @@ export function sshPtyOwnerLeaseSecretSlot(targetId: string): string {
   return `sshPtyConsumerRecoveries.ownerLease:${targetId}`
 }
 
+export function sshTargetHttpProxySecretSlot(targetId: string): string {
+  return `sshTargets.httpProxyUrl:${targetId}`
+}
+
 export type ProtectedSecretDecryption = {
   plaintext: string
   status: 'decrypted' | 'failed' | 'unavailable'

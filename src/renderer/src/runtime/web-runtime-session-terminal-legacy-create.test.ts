@@ -32,6 +32,12 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
+/** The `runtimeEnvironments.call` payload the host-side create assertions read. */
+type RuntimeEnvironmentCallRequest = {
+  method: string
+  params: { env?: Record<string, string> }
+}
+
 vi.mock('../store', () => ({
   useAppStore: {
     getState: mocks.getState,
@@ -439,6 +445,45 @@ describe('createWebRuntimeSessionTerminal', () => {
         env: { PI_CODING_AGENT_DIR: '/custom/omp' },
         launchAgent: 'omp'
       }
+    })
+  })
+
+  it('passes the SSH host own proxy down with the host-side create', async () => {
+    const sshTargetId = 'ssh-target-1'
+    const listTargets = vi.fn(async () => [
+      {
+        id: sshTargetId,
+        httpProxyUrl: 'http://proxy.test:3128',
+        httpProxyBypassRules: 'localhost'
+      }
+    ])
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      runtimeEnvironments: [{ id: ENVIRONMENT_ID, orcadDeployment: { sshTargetId } }]
+    })
+    const runtimeCall = vi.fn(async (request: RuntimeEnvironmentCallRequest) => ({
+      id: request.method,
+      ok: true,
+      result:
+        request.method === 'session.tabs.createTerminal'
+          ? { tab: { id: 'host-tab-1::leaf-1' }, publicationEpoch: 'epoch-1', snapshotVersion: 2 }
+          : makeSnapshot()
+    }))
+    vi.stubGlobal('window', {
+      api: { ssh: { listTargets }, runtimeEnvironments: { call: runtimeCall } }
+    })
+
+    await expect(
+      createWebRuntimeSessionTerminal({ worktreeId: WORKTREE_ID, activate: false })
+    ).resolves.toEqual({ status: 'created' })
+
+    const createCall = runtimeCall.mock.calls.find(
+      ([request]) => request.method === 'session.tabs.createTerminal'
+    )?.[0]
+    expect(createCall?.params.env).toMatchObject({
+      HTTP_PROXY: 'http://proxy.test:3128',
+      HTTPS_PROXY: 'http://proxy.test:3128',
+      NO_PROXY: 'localhost'
     })
   })
 })

@@ -1,4 +1,5 @@
 import type { SshConfigHostResolution, SshTarget } from '../../../../shared/ssh-types'
+import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
 import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
 
 export type EditingTarget = {
@@ -11,6 +12,8 @@ export type EditingTarget = {
   gssapiAuthentication: boolean
   proxyCommand: string
   jumpHost: string
+  httpProxyUrl: string
+  httpProxyBypassRules: string
   systemSshConnectionReuse: boolean
   allowRemoteCliControl: boolean
 }
@@ -25,6 +28,8 @@ export const EMPTY_FORM: EditingTarget = {
   gssapiAuthentication: false,
   proxyCommand: '',
   jumpHost: '',
+  httpProxyUrl: '',
+  httpProxyBypassRules: '',
   systemSshConnectionReuse: true,
   allowRemoteCliControl: true
 }
@@ -43,6 +48,8 @@ export function getEditingTargetForSshTarget(target: SshTarget): EditingTarget {
     gssapiAuthentication: target.gssapiAuthentication === true,
     proxyCommand: target.proxyCommand ?? '',
     jumpHost: target.jumpHost ?? '',
+    httpProxyUrl: target.httpProxyUrl ?? '',
+    httpProxyBypassRules: target.httpProxyBypassRules ?? '',
     systemSshConnectionReuse: target.systemSshConnectionReuse !== false,
     allowRemoteCliControl: isRemoteCliControlAllowed(target)
   }
@@ -151,6 +158,8 @@ export function hasAdvancedConnectionValues(form: EditingTarget): boolean {
   return (
     form.proxyCommand.trim().length > 0 ||
     form.jumpHost.trim().length > 0 ||
+    form.httpProxyUrl.trim().length > 0 ||
+    form.httpProxyBypassRules.trim().length > 0 ||
     !form.systemSshConnectionReuse ||
     !form.allowRemoteCliControl
   )
@@ -167,9 +176,28 @@ export function isSshTargetFormDirty(current: EditingTarget, baseline: EditingTa
     current.gssapiAuthentication !== baseline.gssapiAuthentication ||
     current.proxyCommand !== baseline.proxyCommand ||
     current.jumpHost !== baseline.jumpHost ||
+    current.httpProxyUrl !== baseline.httpProxyUrl ||
+    current.httpProxyBypassRules !== baseline.httpProxyBypassRules ||
     current.systemSshConnectionReuse !== baseline.systemSshConnectionReuse ||
     current.allowRemoteCliControl !== baseline.allowRemoteCliControl
   )
+}
+
+/** The proxy fields a save may send: rejects a malformed URL, normalizes both, omits empties. */
+export function readSshTargetProxyFields(
+  form: EditingTarget
+):
+  | { ok: true; httpProxyUrl?: string; httpProxyBypassRules?: string }
+  | { ok: false; error: string } {
+  const httpProxy = normalizeProxyUrl(form.httpProxyUrl)
+  if (form.httpProxyUrl.trim() && !httpProxy.ok) {
+    return { ok: false, error: httpProxy.message }
+  }
+  return {
+    ok: true,
+    httpProxyUrl: httpProxy.value || undefined,
+    httpProxyBypassRules: normalizeProxyBypassRules(form.httpProxyBypassRules) || undefined
+  }
 }
 
 function parseSshUrl(input: string): ParsedSshHostInput | null {
