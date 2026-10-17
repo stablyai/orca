@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
+import { getAppBundleId } from '../shared/app-identity'
 
 /**
  * Turns off the macOS accent picker for Orca's own preferences domain (#14746).
@@ -43,8 +44,6 @@ const DEFAULTS_TIMEOUT_MS = 5_000
 /** Why: `defaults` exits 1 for "does not exist"; anything else means the probe itself failed. */
 const DEFAULTS_MISSING_STATUS = 1
 
-const ORCA_BUNDLE_ID = 'com.stablyai.orca'
-
 export type PressAndHoldDecision =
   /** Not macOS — nothing is read or written. */
   | 'not-macos'
@@ -84,7 +83,8 @@ export type PressAndHoldHost = {
 /** Only Orca's own bundle: an unpackaged run is `com.github.Electron`, shared with every other
  *  unpackaged Electron app on the machine. */
 export function isOrcaPreferencesDomain(domain: string): boolean {
-  return domain === ORCA_BUNDLE_ID || domain.startsWith(`${ORCA_BUNDLE_ID}.`)
+  const own = getAppBundleId()
+  return domain === own || domain.startsWith(`${own}.`)
 }
 
 /** `<bundle>/Contents/MacOS/<exe>` → `<bundle>/Contents/Info.plist`. */
