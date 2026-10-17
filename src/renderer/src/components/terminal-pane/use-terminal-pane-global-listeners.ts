@@ -103,6 +103,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     panePtyBindingsRef,
     isActiveRef,
     isVisibleRef,
+    expandedPaneIdRef,
     toggleExpandPane
   })
 

@@ -93,4 +93,23 @@ describe('createExpandCollapseActions', () => {
 
     expect(state.pendingPaneSizeRefreshFrameIdsRef.current).toEqual([])
   })
+
+  it('restores the pre-expand split styles before persisting a collapse', () => {
+    const sibling = { style: { display: 'none', flex: '1 1 auto' } }
+    const styleAtPersist: string[] = []
+    const state = createState({
+      expandedPaneIdRef: ref(3),
+      expandedStyleSnapshotRef: ref(
+        new Map([[sibling as unknown as HTMLElement, { display: '', flex: '0.7 1 0%' }]])
+      ),
+      persistLayoutSnapshot: vi.fn(() => {
+        styleAtPersist.push(`${sibling.style.display}|${sibling.style.flex}`)
+      })
+    })
+
+    createExpandCollapseActions(state).setExpandedPane(null)
+
+    expect(styleAtPersist).toEqual(['|0.7 1 0%'])
+    expect(state.expandedPaneIdRef.current).toBeNull()
+  })
 })
