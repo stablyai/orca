@@ -82,7 +82,7 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10'],
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({ number: 43, title: 'Hydrated branch PR wins' })
@@ -113,7 +113,7 @@ describe('getPRForBranch', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Afeature%2Ftest&state=all&per_page=10'],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
@@ -159,7 +159,7 @@ describe('getPRForBranch', () => {
         '--state',
         'all',
         '--limit',
-        '1',
+        '10',
         '--json',
         'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
       ],
@@ -167,7 +167,7 @@ describe('getPRForBranch', () => {
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', 'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=1'],
+      ['api', 'repos/stablyai/orca/pulls?head=stablyai%3Afeature%2Ftest&state=all&per_page=10'],
       { cwd: '/repo-root' }
     )
   })
@@ -378,7 +378,7 @@ describe('getPRForBranch', () => {
         '--state',
         'all',
         '--limit',
-        '1',
+        '10',
         '--json',
         'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
       ],

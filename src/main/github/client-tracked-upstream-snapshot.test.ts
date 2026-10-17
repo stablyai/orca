@@ -94,12 +94,12 @@ describe('getPRForBranch', () => {
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Alocal-created-from-pr&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Alocal-created-from-pr&state=all&per_page=10'],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', 'repos/acme/widgets/pulls?head=acme%3Acontributor%2Foriginal&state=all&per_page=1'],
+      ['api', 'repos/acme/widgets/pulls?head=acme%3Acontributor%2Foriginal&state=all&per_page=10'],
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
