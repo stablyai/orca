@@ -9,7 +9,11 @@ import {
   getRenderRowSidebarKey,
   rowKeyMatchesRenderRow
 } from './render-row-lookup'
-import { revealMountedSidebarRowElement, revealMountedWorktreeElement } from './mounted-row-reveal'
+import {
+  createVisibleRevealRowPredicate,
+  revealMountedSidebarRowElement,
+  revealMountedWorktreeElement
+} from './mounted-row-reveal'
 import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
 import { sidebarWorkspaceStillExists } from './folder-reveal'
 import {
@@ -80,6 +84,10 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         argsRef.current.folderWorkspaces,
         pendingRevealWorktree.executionHostId
       )
+      const container = argsRef.current.scrollRef.current
+      // Why: duplicate-in-groups renders one pinned workspace as two rows and the lookup's
+      // natural-group preference would yank the viewport off the visible pinned copy (#24852).
+      const isVisibleRow = createVisibleRevealRowPredicate(container, pendingRevealWorktree)
       const targetIndex = pendingRevealWorktree.executionHostId
         ? findPreferredRenderRowIndexForWorktreeIdentity(
             renderRows,
@@ -87,12 +95,14 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
               id: pendingRevealWorktree.worktreeId,
               hostId: pendingRevealWorktree.executionHostId
             },
-            pinnedDisplayPolicy
+            pinnedDisplayPolicy,
+            isVisibleRow
           )
         : findPreferredRenderRowIndexForWorktree(
             renderRows,
             pendingRevealWorktree.worktreeId,
-            pinnedDisplayPolicy
+            pinnedDisplayPolicy,
+            isVisibleRow
           )
       const outcome = resolvePendingSidebarReveal({ targetIndex, targetWorktreeStillExists })
       if (outcome === 'clear') {
@@ -104,7 +114,6 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         return
       }
       const targetRow = renderRows[targetIndex]
-      const container = argsRef.current.scrollRef.current
       const revealedOption = container
         ? revealMountedWorktreeElement(
             container,
