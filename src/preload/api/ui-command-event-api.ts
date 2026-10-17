@@ -1,6 +1,7 @@
 import type { RuntimeFileOpenPosition } from '../../shared/runtime-file-contracts'
 import type { JiraQuickFilterState } from '../../shared/jira-quick-filters'
 import type { JiraSavedFilterState, JiraSavedFilterMutation } from '../../shared/jira-saved-filters'
+import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -108,17 +109,7 @@ export type UiCommandEventApi = {
   onNewBrowserTab: (callback: () => void) => () => void
   onNewMarkdownTab: (callback: () => void) => () => void
   onNewSimulatorTab: (callback: () => void) => () => void
-  onRequestTabCreate: (
-    callback: (data: {
-      requestId: string
-      url: string
-      worktreeId?: string
-      browserPageId?: string
-      sessionProfileId?: string | null
-      sessionPartition?: string
-      activate?: boolean
-    }) => void
-  ) => () => void
+  onRequestTabCreate: (callback: (data: BrowserTabCreateRequest) => void) => () => void
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
   /** Main asks whether a paired environment owns a workspace before running that host's CLI command. */
   onRequestRemoteCliBrowserScope: (

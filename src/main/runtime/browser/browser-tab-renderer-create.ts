@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
+import type { BrowserTabSplitDirection } from '../../../shared/browser-tab-split-direction'
+import type { BrowserTabCreateRequest } from '../../../shared/browser-tab-create-request'
 
 export async function createBrowserTabInRenderer(
   host: Pick<RuntimeBrowserCommandHost, 'getAuthoritativeWindow'>,
@@ -9,7 +11,8 @@ export async function createBrowserTabInRenderer(
   profileId: string | undefined,
   sessionPartition: string | undefined,
   activate?: boolean,
-  requestedPageId?: string
+  requestedPageId?: string,
+  split?: { direction: BrowserTabSplitDirection; fromTabId?: string }
 ): Promise<{ browserPageId: string }> {
   const win = host.getAuthoritativeWindow()
   const requestId = randomUUID()
@@ -36,7 +39,7 @@ export async function createBrowserTabInRenderer(
       }
     }
     ipcMain.on('browser:tabCreateReply', handler)
-    win.webContents.send('browser:requestTabCreate', {
+    const request: BrowserTabCreateRequest = {
       requestId,
       url,
       worktreeId,
@@ -44,8 +47,10 @@ export async function createBrowserTabInRenderer(
       // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
       sessionProfileId: profileId,
       sessionPartition,
-      activate
-    })
+      activate,
+      ...(split ? { split: split.direction, splitFromTabId: split.fromTabId } : {})
+    }
+    win.webContents.send('browser:requestTabCreate', request)
   })
 
   return { browserPageId }

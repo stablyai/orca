@@ -7,6 +7,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { createBrowserTabSplitGroup } from './browser-tab-split-placement'
 import {
   findBrowserTabWorktreeId,
   isBrowserWorkspaceOwnedByPairedServer,
@@ -68,17 +69,30 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
         // Agent/automation opens stay in the background (activate:false) in the active browser group.
         // A paired device's create is deliberately in that second class now: it must not move this host's
         // view, so it groups with the other browser tabs rather than landing in the UI-active group.
-        const workspace = store.createBrowserTab(worktreeId, data.url, {
-          title: data.url,
-          browserPageId: data.browserPageId,
-          targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
-          sessionProfileId: data.sessionProfileId,
-          sessionPartition: data.sessionPartition,
-          // Why null, not inferred: this desktop's runtime only ever asks for a page this desktop
-          // renders, including one in a managed SSH host's workspace (as the tab bar's + does).
-          browserRuntimeEnvironmentId: null,
-          activate: data.activate === true
-        })
+        const splitGroupId = data.split
+          ? createBrowserTabSplitGroup(store, worktreeId, data.split, data.splitFromTabId)
+          : null
+        let workspace: ReturnType<typeof store.createBrowserTab>
+        try {
+          workspace = store.createBrowserTab(worktreeId, data.url, {
+            title: data.url,
+            browserPageId: data.browserPageId,
+            targetGroupId:
+              splitGroupId ?? (data.activate ? undefined : activeBrowserUnifiedTab?.groupId),
+            sessionProfileId: data.sessionProfileId,
+            sessionPartition: data.sessionPartition,
+            // Why null, not inferred: this desktop's runtime only ever asks for a page this desktop
+            // renders, including one in a managed SSH host's workspace (as the tab bar's + does).
+            browserRuntimeEnvironmentId: null,
+            activate: data.activate === true
+          })
+        } catch (err) {
+          // Why: a failed create must not leave the empty split pane behind.
+          if (splitGroupId) {
+            useAppStore.getState().closeEmptyGroup(worktreeId, splitGroupId)
+          }
+          throw err
+        }
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
         const browserPageId = pages[0]?.id ?? workspace.id

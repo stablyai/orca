@@ -12,6 +12,7 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
+import { isBrowserTabSplitDirection } from '../../shared/browser-tab-split-direction'
 import { getBrowserCommandTarget, getBrowserWorktreeSelector } from '../selectors'
 
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
@@ -69,10 +70,22 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'tab create': async ({ flags, client, cwd, json }) => {
     const url = getOptionalStringFlag(flags, 'url')
     const profileId = getOptionalStringFlag(flags, 'profile')
+    const split = getOptionalStringFlag(flags, 'split')
+    if (split !== undefined && !isBrowserTabSplitDirection(split)) {
+      throw new RuntimeClientError('invalid_argument', '--split must be right, left, down, or up')
+    }
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+    // Why the caller's tab: the split should sit beside the terminal that ran the command, not
+    // wherever the user last clicked. Spread conditionally so a plain create keeps its old payload.
+    const callerTabId = process.env.ORCA_TAB_ID
     const result = await client.call<{ browserPageId: string }>(
       'browser.tabCreate',
-      { url, worktree, profileId },
+      {
+        url,
+        worktree,
+        profileId,
+        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {})
+      },
       { timeoutMs: 60_000 }
     )
     printResult(result, json, (v) => `Created tab ${v.browserPageId}`)
