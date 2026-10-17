@@ -161,6 +161,8 @@ export function createTerminalPaneCreatedHandler(
       getHttpLinkSourceOwnerForPane: context.getHttpLinkSourceOwnerForPane,
       getHttpLinkActionDestinations: context.getHttpLinkActionDestinations,
       getLinkActionContext: context.getLinkActionContext,
+      getTransport: (paneId) => deps.paneTransportsRef.current.get(paneId),
+      tabId: deps.tabId,
       getPaneLinkCwd: context.getPaneLinkCwd,
       getUrlOpenLinkHint: context.getUrlOpenLinkHint,
       onShowSessionRestoredBanner: context.onShowSessionRestoredBanner,

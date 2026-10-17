@@ -1,8 +1,9 @@
 import React, { useContext } from 'react'
-import { WrapText } from 'lucide-react'
+import { TextCursorInput, WrapText } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getCodeFenceLanguageLabel } from './code-fence-language-label'
+import { useNativeChatComposerInsert } from './native-chat-composer-insert-context'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import {
   NativeChatMarkdownRowKeyContext,
@@ -23,6 +24,7 @@ export function NativeChatCodeBlock({
   plain?: boolean
 }): React.JSX.Element {
   const code = extractCodeText(children)
+  const insert = useNativeChatComposerInsert()
   const rowKey = useContext(NativeChatMarkdownRowKeyContext)
   // Off until the reader asks; kept in the transcript's store so the row unmounting under
   // windowing, or a growing reply re-cutting its blocks, does not undo it. Never saved.
@@ -39,6 +41,7 @@ export function NativeChatCodeBlock({
         text={code}
         label={translate('components.native-chat.copyCode', 'Copy code')}
       />
+      {insert && !plain ? <NativeChatInsertCommandButton onInsert={() => insert(code)} /> : null}
     </>
   ) : null
 
@@ -104,6 +107,22 @@ function NativeChatCodeWrapButton({
       className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-accent aria-pressed:text-accent-foreground"
     >
       <WrapText className="size-3.5" />
+    </button>
+  )
+}
+
+/** Looks like the Copy button beside it; drops the block's command at the composer's caret. */
+function NativeChatInsertCommandButton({ onInsert }: { onInsert: () => void }): React.JSX.Element {
+  const label = translate('components.native-chat.insertCommandIntoPrompt', 'Insert into prompt')
+  return (
+    <button
+      type="button"
+      onClick={onInsert}
+      aria-label={label}
+      title={label}
+      className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <TextCursorInput className="size-3.5" />
     </button>
   )
 }

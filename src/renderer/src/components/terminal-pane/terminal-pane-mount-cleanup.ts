@@ -16,6 +16,7 @@ import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
 import { e2eConfig } from '@/lib/e2e-config'
 import { useAppStore } from '@/store'
 
+/** Disposes everything a mounted pane surface owns when it unmounts. */
 export function cleanupTerminalPaneMount(args: {
   manager: PaneManager
   deps: UseTerminalPaneLifecycleDeps
@@ -54,6 +55,7 @@ export function cleanupTerminalPaneMount(args: {
   restoreExpandedLayoutFrom(expandedStyleSnapshots)
   disposeAll(refs.linkProviderDisposablesRef.current)
   disposeAll(refs.terminalHandleLinkDisposablesRef.current)
+  disposeAll(refs.commandLinkDisposablesRef.current)
   disposeAll(refs.linkifierClickPrimingDisposablesRef.current)
   for (const gesture of refs.linkPointerGesturesRef.current.values()) {
     gesture.dispose()
