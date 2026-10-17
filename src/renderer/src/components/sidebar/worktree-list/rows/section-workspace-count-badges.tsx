@@ -31,15 +31,18 @@ export function getSectionCountBadges(
   if (mode === 'off') {
     return { total: null, attention: null }
   }
-  const countedWorkspaceIds = row.countedWorkspaceIds
-  const total = countedWorkspaceIds ? countedWorkspaceIds.length : row.count
+  // Why a set: a project group's subtree can list one workspace under more than one lane.
+  const countedWorkspaceIds = row.countedWorkspaceIds ? new Set(row.countedWorkspaceIds) : null
+  const total = countedWorkspaceIds ? countedWorkspaceIds.size : row.count
   if (total === 0) {
     return { total: null, attention: null }
   }
-  // Why a set: a project group's subtree can list one workspace under more than one lane.
-  const attention = new Set(
-    (countedWorkspaceIds ?? []).filter((workspaceId) => attentionWorkspaceIds.has(workspaceId))
-  ).size
+  let attention = 0
+  for (const workspaceId of countedWorkspaceIds ?? []) {
+    if (attentionWorkspaceIds.has(workspaceId)) {
+      attention += 1
+    }
+  }
   return {
     total: mode === 'all' ? total : null,
     attention: attention > 0 ? attention : null

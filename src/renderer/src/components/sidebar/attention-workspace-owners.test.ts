@@ -105,4 +105,24 @@ describe('buildAttentionWorkspaceIds host ownership', () => {
 
     expect([...ids]).toEqual([composeWorktreeHostIdentity('ssh:box', worktree.id)])
   })
+
+  it('lights the SSH twin a waiting row with no mirrored tab names by its connection', () => {
+    const row = { ...waiting('unmirrored-tab'), worktreeId: worktree.id, connectionId: 'box' }
+    const ids = buildAttentionWorkspaceIds(
+      twinState({ agentStatusByPaneKey: { [row.paneKey]: row } }),
+      NOW
+    )
+
+    expect([...ids]).toEqual([composeWorktreeHostIdentity('ssh:box', worktree.id)])
+  })
+
+  it('lights neither twin for a waiting row with no mirrored tab and no connection', () => {
+    const row = { ...waiting('unmirrored-tab'), worktreeId: worktree.id }
+    const ids = buildAttentionWorkspaceIds(
+      twinState({ agentStatusByPaneKey: { [row.paneKey]: row } }),
+      NOW
+    )
+
+    expect([...ids]).toEqual([])
+  })
 })

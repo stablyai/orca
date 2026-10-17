@@ -4,9 +4,16 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-w
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 
-/** Which tabs of one workspace id wait on the user; `null` marks a hook row whose tab never mirrored. */
-export type AttentionTabsByWorkspaceId = ReadonlyMap<string, readonly (string | null)[]>
+/** A waiting hook row whose tab never mirrored; `connectionId` is its local transport, null when none. */
+export type UnmirroredAttentionRow = { connectionId: string | null }
+
+/** Which tabs of one workspace id wait on the user, plus waiting hook rows with no mirrored tab. */
+export type AttentionTabsByWorkspaceId = ReadonlyMap<
+  string,
+  readonly (string | UnmirroredAttentionRow)[]
+>
 
 export type AttentionOwnerState = Pick<
   AppState,
@@ -52,8 +59,8 @@ function indexWorkspacesById(
  * The attention set in the badge's key space: every workspace as its host identity, so one id on
  * two hosts lights only the host whose tab waits; an id no catalog knows by its bare key.
  *
- * Twins are split by the tab-bar rule (`isUnifiedTabOwnedByWorktree`): a tab with no host stamp,
- * or a hook row with no mirrored tab, cannot be told apart between them and lights neither.
+ * Twins are split by the tab-bar rule (`isUnifiedTabOwnedByWorktree`); a hook row with no mirrored
+ * tab by its SSH connection. A tab with no host stamp, or a row with no connection, lights neither.
  */
 export function resolveAttentionWorkspaceKeys(
   attentionTabs: AttentionTabsByWorkspaceId,
@@ -80,10 +87,16 @@ export function resolveAttentionWorkspaceKeys(
     const unifiedTabs = state.unifiedTabsByWorktree?.[workspaceId] ?? []
     for (const candidate of candidates) {
       const owned = tabIds.some((tabId) => {
-        const unifiedTab =
-          tabId === null
-            ? undefined
-            : unifiedTabs.find((tab) => tab.contentType === 'terminal' && tab.entityId === tabId)
+        if (typeof tabId !== 'string') {
+          // Why: paired rows arrive with connectionId stripped, so null cannot pick a twin.
+          return (
+            tabId.connectionId !== null &&
+            candidate.hostId === getConnectionExecutionHostId(tabId.connectionId)
+          )
+        }
+        const unifiedTab = unifiedTabs.find(
+          (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
+        )
         return unifiedTab ? isUnifiedTabOwnedByWorktree(unifiedTab, candidate, ambiguousIds) : false
       })
       if (owned) {
