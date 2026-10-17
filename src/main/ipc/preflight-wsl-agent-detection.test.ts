@@ -123,6 +123,45 @@ describe('detectWslCommandsOnPath', () => {
     const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
 
     expect(found).toEqual(new Set())
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries once on a timed-out cold-start and returns the second probe result', async () => {
+    runWslProcessMock
+      .mockResolvedValueOnce({
+        environmentResolved: true,
+        code: null,
+        stdout: '',
+        stderr: '',
+        timedOut: true
+      })
+      .mockResolvedValueOnce({
+        environmentResolved: true,
+        code: 0,
+        stdout: '__ORCA_AGENT_PATH__grok\t/home/user/.local/bin/grok\n',
+        stderr: '',
+        timedOut: false
+      })
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['grok'])
+
+    expect(found).toEqual(new Set(['grok']))
+    expect(runWslProcessMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a non-timeout probe failure', async () => {
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: true,
+      code: 1,
+      stdout: '',
+      stderr: "zsh:1: parse error near `done'",
+      timedOut: false
+    })
+
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+
+    expect(found).toEqual(new Set())
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('skips the probe entirely when no commands are requested', async () => {
