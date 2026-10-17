@@ -17,6 +17,10 @@ import {
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
 import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-refresh-scheduler'
 import { processFileExplorerFsPayload } from './file-explorer-watch-reconcile'
+import {
+  adoptSymlinkDirWatchPayload,
+  useFileExplorerSymlinkDirWatch
+} from './file-explorer-symlink-dir-watch'
 
 export {
   canonicalizeFileExplorerWatchPath,
@@ -76,7 +80,7 @@ export function getFileExplorerWatchRuntimeEnvironmentId(
 /**
  * Reconciles File Explorer state on filesystem events for the active worktree.
  *
- * Why: `useEditorExternalWatch` owns the watch IPC lifecycle; this hook only subscribes to fs:changed for tree-cache reconciliation.
+ * Why: `useEditorExternalWatch` owns the worktree's watch IPC lifecycle; this hook subscribes to fs:changed for tree-cache reconciliation and, through `useFileExplorerSymlinkDirWatch`, watches expanded symlinked folders the worktree watch does not reach.
  */
 export function useFileExplorerWatch({
   worktreePath,
@@ -96,6 +100,16 @@ export function useFileExplorerWatch({
   const activeRuntimeEnvironmentId = useAppStore((s) =>
     getFileExplorerWatchRuntimeEnvironmentId(s, activeWorktreeId, operationOwner)
   )
+
+  const symlinkDirWatchesRef = useFileExplorerSymlinkDirWatch({
+    enabled:
+      activeRuntimeEnvironmentId === null &&
+      worktreePath !== null &&
+      activeWorktreeId !== null &&
+      (operationOwner ?? getFileExplorerOperationOwner(activeWorktreeId)).kind === 'local',
+    dirCache,
+    expanded
+  })
 
   // Keep refs for handler-accessed values so the IPC listener isn't re-subscribed on every render.
   const dirCacheRef = useRef(dirCache)
@@ -196,7 +210,12 @@ export function useFileExplorerWatch({
     // Declared before handleFsChanged so its `disposed` read can never hit the temporal dead zone.
     let disposed = false
 
-    const handleFsChanged = (payload: FsChangedPayload): void => {
+    const handleFsChanged = (rawPayload: FsChangedPayload): void => {
+      const payload = adoptSymlinkDirWatchPayload(
+        rawPayload,
+        currentWorktreePath,
+        symlinkDirWatchesRef.current
+      )
       if (disposed) {
         if (
           normalizeRuntimePathForComparison(payload.worktreePath) ===
@@ -260,7 +279,14 @@ export function useFileExplorerWatch({
       deferredRef.current = []
       processPayloadRef.current = null
     }
-  }, [worktreePath, activeWorktreeId, activeRuntimeEnvironmentId, setDirCache, setSelectedPath])
+  }, [
+    worktreePath,
+    activeWorktreeId,
+    activeRuntimeEnvironmentId,
+    setDirCache,
+    setSelectedPath,
+    symlinkDirWatchesRef
+  ])
 
   // ── Flush deferred events when interaction ends ────────────────────
   useEffect(() => {
