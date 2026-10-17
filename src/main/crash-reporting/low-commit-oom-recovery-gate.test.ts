@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { withPlatform } from '../window/createMainWindow-test-harness'
 import {
   createLowCommitOomRecoveryGate,
-  LOW_COMMIT_REPEAT_OOM_WINDOW_MS
+  LOW_COMMIT_REPEAT_OOM_WINDOW_MS,
+  type LowCommitOomVerdict
 } from './low-commit-oom-recovery-gate'
 
 const OOM: Electron.RenderProcessGoneDetails = { reason: 'oom', exitCode: -536870904 }
@@ -122,6 +123,70 @@ describe('createLowCommitOomRecoveryGate', () => {
         expect(observeTwice(sample(60, 5_000), OOM, gapMs, platform, readGoneTime)[1]).toBeNull()
       }
       expect(readGoneTime).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('when both a fresh pre-gone and a gone-time reading exist', () => {
+    type Oom = { at: string; preGoneMB: number; ageMs: number; goneTimeMB: number }
+
+    // Replays each OOM until the first prompt, recovering only the deaths that auto-reloaded.
+    function replay(ooms: Oom[]) {
+      return withPlatform('win32', () => {
+        let current = ooms[0]
+        const gate = createLowCommitOomRecoveryGate(
+          () => ({
+            systemMemoryPreGoneSwapFreeMB: current.preGoneMB,
+            systemMemoryPreGoneSampleAgeMs: current.ageMs
+          }),
+          () => ({ systemMemorySwapFreeMB: current.goneTimeMB })
+        )
+        const verdicts: (LowCommitOomVerdict | null)[] = []
+        for (const oom of ooms) {
+          current = oom
+          const verdict = gate.assess(OOM, Date.parse(oom.at))
+          verdicts.push(verdict)
+          if (verdict) {
+            break
+          }
+          gate.recordRecoveredDeath(OOM, Date.parse(oom.at))
+        }
+        return verdicts
+      })
+    }
+
+    // Scan-36 r07: commit fell from 515 MB at the last tick to 195 MB at gone time, then reloaded into another OOM.
+    it('holds the reload on the lower gone-time reading', () => {
+      expect(
+        replay([
+          { at: '2026-10-02T07:50:56.618Z', preGoneMB: 3_570, ageMs: 768, goneTimeMB: 4_256 },
+          { at: '2026-10-02T07:56:33.770Z', preGoneMB: 722, ageMs: 7_714, goneTimeMB: 48 },
+          { at: '2026-10-02T07:56:39.018Z', preGoneMB: 515, ageMs: 2_961, goneTimeMB: 195 }
+        ])
+      ).toEqual([
+        null,
+        null,
+        { availableCommitMB: 195, sincePreviousOomMs: 5_248, commitReading: 'gone-time' }
+      ])
+    })
+
+    // Scan-36 r13: the pre-gone reading is the lower one, so it still prompts on the second OOM.
+    it('holds the reload on the lower pre-gone reading', () => {
+      expect(
+        replay([
+          { at: '2026-10-02T10:03:54.638Z', preGoneMB: 246, ageMs: 5_516, goneTimeMB: 417 },
+          { at: '2026-10-02T10:04:00.387Z', preGoneMB: 5, ageMs: 1_261, goneTimeMB: 270 },
+          { at: '2026-10-02T10:04:07.882Z', preGoneMB: 5, ageMs: 8_755, goneTimeMB: 362 }
+        ])
+      ).toEqual([
+        null,
+        { availableCommitMB: 5, sincePreviousOomMs: 5_749, commitReading: 'pre-gone' }
+      ])
+    })
+
+    it.each([Number.NaN, -1])('ignores an invalid gone-time reading (%s)', (goneTimeMB) => {
+      expect(observeTwice(sample(60, 1_000), OOM, 3_458, 'win32', goneTime(goneTimeMB))[1]).toEqual(
+        { availableCommitMB: 60, sincePreviousOomMs: 3_458, commitReading: 'pre-gone' }
+      )
     })
   })
 

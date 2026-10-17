@@ -10,10 +10,10 @@ export const LOW_COMMIT_AVAILABLE_MB_THRESHOLD = 512
 const LOW_COMMIT_MAX_SAMPLE_AGE_MS = 30_000
 
 export type LowCommitOomVerdict = {
-  /** Pre-gone MEMORYSTATUSEX.ullAvailPageFile, i.e. commit still available. */
+  /** MEMORYSTATUSEX.ullAvailPageFile, i.e. commit still available: the lower of the usable readings. */
   availableCommitMB: number
   sincePreviousOomMs: number
-  /** 'gone-time' when no sampler tick landed since the previous OOM and the gate read commit itself. */
+  /** Which reading supplied availableCommitMB; 'gone-time' is the gate's own read at gone time. */
   commitReading: 'pre-gone' | 'gone-time'
 }
 
@@ -26,14 +26,16 @@ export type LowCommitOomRecoveryGate = {
 
 type MemoryDetails = Record<string, CrashReportDetailValue>
 
+function usableCommitMB(value: CrashReportDetailValue | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
 function usablePreGoneCommitMB(sample: MemoryDetails, sincePreviousOomMs: number): number | null {
-  const availableCommitMB = sample[`${SYSTEM_MEMORY_KEY_PREFIX}PreGoneSwapFreeMB`]
+  const availableCommitMB = usableCommitMB(sample[`${SYSTEM_MEMORY_KEY_PREFIX}PreGoneSwapFreeMB`])
   const sampleAgeMs = sample[`${SYSTEM_MEMORY_KEY_PREFIX}PreGoneSampleAgeMs`]
   if (
-    typeof availableCommitMB !== 'number' ||
+    availableCommitMB === null ||
     typeof sampleAgeMs !== 'number' ||
-    !Number.isFinite(availableCommitMB) ||
-    availableCommitMB < 0 ||
     !Number.isFinite(sampleAgeMs) ||
     sampleAgeMs < 0 ||
     sampleAgeMs > LOW_COMMIT_MAX_SAMPLE_AGE_MS ||
@@ -66,23 +68,21 @@ export function createLowCommitOomRecoveryGate(
       }
       const sincePreviousOomMs = now - previous
       const preGoneMB = usablePreGoneCommitMB(readPreGoneDetails(now), sincePreviousOomMs)
-      // Why fall back: a 10 s sampler misses most ~3.5 s repeat loops. A gone-time read sees commit the corpse
-      // already released, so it can only over-report and miss a prompt, never raise a false one.
-      const goneTimeMB =
-        preGoneMB === null ? readGoneTimeDetails()[`${SYSTEM_MEMORY_KEY_PREFIX}SwapFreeMB`] : null
-      const availableCommitMB = preGoneMB ?? goneTimeMB
-      if (
-        typeof availableCommitMB !== 'number' ||
-        !Number.isFinite(availableCommitMB) ||
-        availableCommitMB < 0 ||
-        availableCommitMB >= LOW_COMMIT_AVAILABLE_MB_THRESHOLD
-      ) {
+      // Why also read at gone time: a 10 s sampler misses most ~3.5 s repeat loops, and commit can keep falling
+      // after the last tick (Scan-36: 515 MB pre-gone, 195 MB at gone time). A gone-time read sees commit the
+      // corpse already released, so taking the lower reading can only miss a prompt, never raise a false one.
+      const goneTimeMB = usableCommitMB(
+        readGoneTimeDetails()[`${SYSTEM_MEMORY_KEY_PREFIX}SwapFreeMB`]
+      )
+      const useGoneTime = goneTimeMB !== null && (preGoneMB === null || goneTimeMB < preGoneMB)
+      const availableCommitMB = useGoneTime ? goneTimeMB : preGoneMB
+      if (availableCommitMB === null || availableCommitMB >= LOW_COMMIT_AVAILABLE_MB_THRESHOLD) {
         return null
       }
       return {
         availableCommitMB,
         sincePreviousOomMs,
-        commitReading: preGoneMB === null ? 'gone-time' : 'pre-gone'
+        commitReading: useGoneTime ? 'gone-time' : 'pre-gone'
       }
     },
     recordRecoveredDeath: (details, goneAt) => {
