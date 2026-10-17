@@ -509,6 +509,44 @@ variable "relay_gce_cloud_sql_proxy_image" {
   }
 }
 
+# --- Relay dedicated database (step 4) ------------------------------------------------------
+# Only environments/staging.tfvars turns it on until Jinwoo's go for production (G2).
+variable "relay_dedicated_database_enabled" {
+  type        = bool
+  description = "Create the relay's own Cloud SQL instance, the move tool's logins and secrets, and its job identity."
+  default     = false
+}
+
+variable "relay_dedicated_database_tier" {
+  type        = string
+  description = "Enterprise Plus tier for the relay's own instance."
+  default     = "db-perf-optimized-N-2"
+}
+
+variable "relay_dedicated_database_edition" {
+  type        = string
+  description = "ENTERPRISE_PLUS by design; ENTERPRISE only where Enterprise Plus is out of capacity (staging, 10-16)."
+  default     = "ENTERPRISE_PLUS"
+}
+
+variable "relay_dedicated_database_name" {
+  type        = string
+  description = "Instance name override. Cloud SQL reserves a deleted instance's name for about a week."
+  default     = null
+}
+
+variable "relay_dedicated_database_zone" {
+  type        = string
+  description = "Primary zone for the relay's own instance; null lets Cloud SQL choose."
+  default     = null
+}
+
+variable "relay_dedicated_database_secondary_zone" {
+  type        = string
+  description = "Standby zone for the relay's own instance, used with relay_dedicated_database_zone."
+  default     = null
+}
+
 # --- Mobile push gateway ---------------------------------------------------------------------
 # There is no staging push gateway by decision, so this defaults false and only
 # environments/production.tfvars turns it on. Everything in push-gateway.tf is behind it.
