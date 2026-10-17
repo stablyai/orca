@@ -213,6 +213,8 @@ describe('collectAgentTitleEvidence', () => {
     ['Droid - action required', 'droid'],
     ['Hermes ready', 'hermes'],
     ['Devin - action required', 'devin'],
+    ['IBM Bob ready', 'bob'],
+    ['IBM Bob - action required', 'bob'],
     ['Pi ready', 'pi'],
     ['OMP - action required', 'omp']
   ] as const)('recognizes Orca-controlled synthetic title %s', (title, agent) => {

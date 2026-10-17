@@ -3,6 +3,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  IBM_BOB_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
 import {
@@ -253,6 +254,10 @@ function computeAgentLabel(title: string): string | null {
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
   }
+  // Why: Orca's synthesized "⠋ IBM Bob" working title must beat the braille heuristic too.
+  if (IBM_BOB_AGENT_NAME_RE.test(title)) {
+    return 'IBM Bob'
+  }
   if (isClaudeAgent(title)) {
     return 'Claude Code'
   }
@@ -285,6 +290,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',
+  'IBM Bob': 'bob',
   'DeepSeek Build': 'dsb',
   Pi: 'pi',
   OMP: 'omp'

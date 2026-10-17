@@ -11,6 +11,7 @@ import {
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   HERMES_AGENT_NAME_RE,
+  IBM_BOB_AGENT_NAME_RE,
   QUARTER_CIRCLE_SPINNER_RE,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE,
@@ -259,9 +260,16 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   }
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
+  const hasIbmBobAgentName = IBM_BOB_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
-  if (!hasLegacyAgentName && !hasDroidAgentName && !hasHermesAgentName && !hasAgyAgentName) {
+  if (
+    !hasLegacyAgentName &&
+    !hasDroidAgentName &&
+    !hasHermesAgentName &&
+    !hasIbmBobAgentName &&
+    !hasAgyAgentName
+  ) {
     return null
   }
   if (containsAny(title, ['action required', 'permission', 'waiting'])) {

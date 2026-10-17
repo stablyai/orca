@@ -54,7 +54,8 @@ function buildAgentSettingsKeywords(): string[] {
 
   for (const agent of getAgentCatalog()) {
     keywords.push(...expandAgentSearchText(agent.id), ...expandAgentSearchText(agent.label))
-    keywords.push(...expandAgentSearchText(agent.cmd))
+    // Why the executable only: Bob's `bob chat --trust` would index `trust` onto every agent.
+    keywords.push(...expandAgentSearchText(agent.cmd.trim().split(/\s+/)[0]))
   }
 
   return uniqueKeywords(keywords)

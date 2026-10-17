@@ -1,12 +1,9 @@
 import {
-  AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
-  DROID_AGENT_NAME_RE,
   GEMINI_IDLE,
   GEMINI_PERMISSION,
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
-  HERMES_AGENT_NAME_RE,
   containsAgentSpinnerGlyph,
   isClaudeIdentityFrameSegment,
   isClaudeManagementTitle,
@@ -22,6 +19,7 @@ import {
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
 import type { TerminalAgent } from './terminal-agent'
+import { DEDICATED_AGENT_NAME_PATTERNS } from './agent-name-token-match'
 import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 /**
@@ -73,13 +71,6 @@ const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
   ['aider', 'aider'],
   ['grok', 'grok'],
   ['devin', 'devin']
-]
-
-/** Agents whose name is matched by a dedicated pattern rather than a plain token. */
-const PATTERN_NAMES: readonly (readonly [RegExp, TerminalAgent])[] = [
-  [AGY_AGENT_NAME_RE, 'antigravity'],
-  [DROID_AGENT_NAME_RE, 'droid'],
-  [HERMES_AGENT_NAME_RE, 'hermes']
 ]
 
 /** Catalog labels known to be emitted as terminal titles, not merely presented in Orca's UI. */
@@ -143,7 +134,7 @@ function namesIn(text: string): TerminalAgent[] {
       found.add(agent)
     }
   }
-  for (const [pattern, agent] of PATTERN_NAMES) {
+  for (const [pattern, agent] of DEDICATED_AGENT_NAME_PATTERNS) {
     if (pattern.test(text)) {
       found.add(agent)
     }

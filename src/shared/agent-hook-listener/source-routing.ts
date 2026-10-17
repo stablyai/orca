@@ -30,7 +30,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/zcode': 'zcode',
   '/hook/dsh': 'dsh',
   '/hook/jcode': 'jcode',
-  '/hook/kiro': 'kiro'
+  '/hook/kiro': 'kiro',
+  '/hook/bob': 'bob'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

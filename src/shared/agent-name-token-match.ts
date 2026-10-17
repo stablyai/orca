@@ -1,3 +1,4 @@
+import type { TerminalAgent } from './terminal-agent'
 /**
  * Token-matching for agent names inside terminal titles.
  *
@@ -70,3 +71,15 @@ export const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
 // cwd/path titles like `~/hermes/working` would otherwise count as activity.
 export const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
 export const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
+
+// Why the vendor-qualified phrase: bare `bob` is a person's name (`bob@host`) and the
+// Neovim version manager's binary, so only the `IBM Bob` titles Orca writes are identity.
+export const IBM_BOB_AGENT_NAME_RE = /(?<![\w./\\-])ibm[ \t]+bob(?![\w./\\-])/i
+
+/** Agents whose name is matched by a dedicated pattern rather than a plain token. */
+export const DEDICATED_AGENT_NAME_PATTERNS: readonly (readonly [RegExp, TerminalAgent])[] = [
+  [AGY_AGENT_NAME_RE, 'antigravity'],
+  [DROID_AGENT_NAME_RE, 'droid'],
+  [HERMES_AGENT_NAME_RE, 'hermes'],
+  [IBM_BOB_AGENT_NAME_RE, 'bob']
+]

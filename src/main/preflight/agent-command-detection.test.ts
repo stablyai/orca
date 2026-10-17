@@ -5,17 +5,19 @@ const { detectInstallDirs, guestMounts } = vi.hoisted(() => {
   const value: readonly string[] = []
   return {
     detectInstallDirs: vi.fn(
-      (_commands: readonly string[], _pathEnv?: string) => new Set<string>()
+      (_commands: readonly string[], _pathEnv?: string) => new Map<string, string>()
     ),
     guestMounts: { value }
   }
 })
 
+// Why the resolve shape: detection keeps each hit's path for the identity probe, so the
+// fallback it calls is resolveCommandsInInstallDirs.
 vi.mock('../ipc/local-agent-install-dir-detection', () => ({
-  detectCommandsInInstallDirs: detectInstallDirs
+  resolveCommandsInInstallDirs: detectInstallDirs
 }))
 vi.mock('../ipc/preflight-command-exec', () => ({
-  isCommandOnPath: vi.fn(async () => false)
+  resolveLocalCommandPath: vi.fn(async () => null)
 }))
 vi.mock('../ipc/wsl-guest-windows-drive-path', async (importOriginal) => ({
   ...(await importOriginal<typeof DrivePath>()),

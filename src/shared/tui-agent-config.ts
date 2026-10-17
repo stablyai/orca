@@ -1,3 +1,4 @@
+import { BOB_TUI_AGENT_CONFIG } from './bob-tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 import type { TuiAgentConfig } from './tui-agent-config-types'
@@ -187,10 +188,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
     submitLineSettleMsPerLine: 45
   },
-  aider: {
-    detectCmd: 'aider',
-    promptInjectionMode: 'stdin-after-start'
-  },
+  aider: { detectCmd: 'aider', promptInjectionMode: 'stdin-after-start' },
   goose: {
     detectCmd: 'goose',
     promptInjectionMode: 'stdin-after-start'
@@ -301,6 +299,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: first-launch trust menu swallows the bracketed paste; pre-write trust so it skips (see agent-trust-presets.ts).
     preflightTrust: 'copilot'
   },
+  bob: BOB_TUI_AGENT_CONFIG,
   grok: {
     detectCmd: 'grok',
     // Why: argv (grok takes a positional prompt) so multi-line/special-char text isn't mangled as raw PTY keystrokes.

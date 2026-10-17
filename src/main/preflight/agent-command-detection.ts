@@ -1,11 +1,11 @@
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { resolveCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight-runtime-target'
-import { isCommandOnPath } from '../ipc/preflight-command-exec'
+import { resolveLocalCommandPath } from '../ipc/preflight-command-exec'
 import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
 import { readGuestWindowsDriveMounts } from '../ipc/wsl-guest-windows-drive-path'
 
@@ -16,31 +16,40 @@ export async function detectAgentCommandsOnHost(
   if (options.connectionId) {
     throw new SshHostNotServedError(options.connectionId)
   }
-  const context = options.context
+  return new Set((await resolveAgentCommandPathsOnHost(commands, options.context)).keys())
+}
+
+/**
+ * Each found command's executable on a local or WSL host. Why paths: an identity probe must
+ * run the binary detection matched, not a bare name the child's own PATH re-resolves.
+ */
+export async function resolveAgentCommandPathsOnHost(
+  commands: readonly string[],
+  context?: PreflightRuntimeContext
+): Promise<Map<string, string>> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
     return detectWslCommandsOnPath(wslTarget, commands)
   }
   const pathChecks = await Promise.all(
-    commands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
+    commands.map(async (cmd) => ({ cmd, resolvedPath: await resolveLocalCommandPath(cmd) }))
   )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
+  const missedCommands = pathChecks.filter((check) => !check.resolvedPath).map(({ cmd }) => cmd)
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
   // computes user install dirs once instead of blocking once per missed CLI.
   // Same PATH as the walk above: a WSL host's orcad must not re-admit /mnt/<drive> shims.
   // Elsewhere (Windows included) keep the process PATH the fallback always searched.
   const guestMounts = readGuestWindowsDriveMounts()
-  const installDirCommands = detectCommandsInInstallDirs(
+  const installDirPaths = resolveCommandsInInstallDirs(
     missedCommands,
     guestMounts.length > 0 ? buildLocalPreflightEnv(guestMounts)?.PATH : undefined
   )
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
-  )
-  return foundCommands
+  const foundPaths = new Map<string, string>()
+  for (const { cmd, resolvedPath } of pathChecks) {
+    const program = resolvedPath ?? installDirPaths.get(cmd)
+    if (program) {
+      foundPaths.set(cmd, program)
+    }
+  }
+  return foundPaths
 }

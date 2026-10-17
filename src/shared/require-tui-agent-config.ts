@@ -1,5 +1,6 @@
 import type { TuiAgent } from './tui-agent'
-import { isTuiAgent, TUI_AGENT_CONFIG, type TuiAgentConfig } from './tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
+import type { TuiAgentConfig } from './tui-agent-config-types'
 
 /** Why: agent ids persist in automations and settings, so they outlive the build that
  * wrote them — an id a branch build understood reads back as unknown here. Name the id

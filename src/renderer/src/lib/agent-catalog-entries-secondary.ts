@@ -1,3 +1,5 @@
+import { getCatalogPlatform } from './agent-catalog-platform'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { translate } from '@/i18n/i18n'
 import type { AgentCatalogEntry } from './agent-catalog'
 
@@ -61,6 +63,15 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       cmd: 'autohand',
       faviconDomain: 'autohand.ai',
       homepageUrl: 'https://github.com/autohandai/code-cli'
+    },
+    {
+      id: 'bob',
+      label: translate('auto.lib.agent.catalog.ibm_bob_label', 'IBM Bob'),
+      // Why: the Settings override seeds from this; a bare `bob` override would drop
+      // `chat --trust`, and `--auto-approve` is fatal outside the chat subcommand.
+      cmd: getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.bob, getCatalogPlatform()),
+      faviconDomain: 'bob.ibm.com',
+      homepageUrl: 'https://bob.ibm.com/docs/shell/getting-started/bobshell-examples'
     },
     {
       id: 'cline',

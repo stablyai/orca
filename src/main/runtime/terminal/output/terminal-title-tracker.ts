@@ -22,6 +22,9 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
   protected abstract createTerminalSideEffectCommandCodeDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']>
+  protected abstract createTerminalSideEffectBobApprovalDetector(
+    ptyId: string
+  ): NonNullable<RuntimePtyTitleTrackerEntry['bobApprovalDetector']>
 
   protected getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
     if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
@@ -200,7 +203,10 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
+        : null,
+      // Why unconditional: unlike commandCodeDetector, this drives agent status (worktree ps,
+      // mobile, notifications), not a renderer-only side-effect fact, so headless serve needs it too.
+      bobApprovalDetector: this.createTerminalSideEffectBobApprovalDetector(ptyId)
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry
