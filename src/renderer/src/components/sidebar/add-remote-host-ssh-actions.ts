@@ -4,6 +4,7 @@ import {
   getEditingTargetFromSshConfigHost,
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
+  readSshTargetProxyFields,
   type EditingTarget
 } from '../settings/ssh-target-draft'
 import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../../shared/ssh-types'
@@ -73,6 +74,14 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
   const identityFile = form.identityFile.trim() || undefined
   const proxyCommand = form.proxyCommand.trim() || undefined
   const jumpHost = form.jumpHost.trim() || undefined
+  // Why: same validation as the Settings edit path — a malformed URL must be
+  // rejected, not silently dropped when the Advanced form is shared by both.
+  const proxy = readSshTargetProxyFields(form)
+  if (!proxy.ok) {
+    toast.error(proxy.error)
+    return 'validation-failed'
+  }
+  const { httpProxyUrl, httpProxyBypassRules } = proxy
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const target = {
     label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
@@ -84,6 +93,8 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
     ...(identityFile ? { identityFile } : {}),
     ...(proxyCommand ? { proxyCommand } : {}),
     ...(jumpHost ? { jumpHost } : {}),
+    ...(httpProxyUrl ? { httpProxyUrl } : {}),
+    ...(httpProxyBypassRules ? { httpProxyBypassRules } : {}),
     ...(systemSshConnectionReuse === false ? { systemSshConnectionReuse } : {}),
     // Why explicit both ways: absent means on here, and off on a server from before the default flip.
     allowRemoteCliControl: form.allowRemoteCliControl

@@ -301,6 +301,10 @@ export type IpcPtyTransportOptions = {
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null
+  /** The SSH target this pane runs on, when one of this client's own hosts owns it: its target
+   *  settings decide the proxy env every terminal here inherits. The pane layer resolves it, since a
+   *  transport must not read the app store; absent means no per-host proxy reaches this pane. */
+  sshHostTargetId?: string | null
   worktreeId?: string
   tabId?: string
   leafId?: string

@@ -84,6 +84,11 @@ export type TerminalCreateOptions = {
   /** Account routing env merged over `startupAgent`'s plan env; an input to that plan, like
    *  `agentArgs`, so not part of `callerSuppliedLaunch`. */
   accountEnv?: Record<string, string>
+  /** The caller's own env for `startupAgent`'s launch, laid *under* that plan's env — an input to
+   *  the plan like `accountEnv`, so not part of `callerSuppliedLaunch`, and the plan keeps every
+   *  variable it owns. How a client-side per-host setting (an SSH host's HTTP proxy) reaches an
+   *  agent the host plans, without letting the caller replace a host-owned variable with `env`. */
+  callerPlanEnv?: Record<string, string>
   launchPreferences?: AgentLaunchPreferences
   terminalKittyKeyboardProtocol?: boolean
   terminalImageViewerSupported?: boolean

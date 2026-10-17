@@ -12,7 +12,8 @@ import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../termin
 import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
-  sshPtyOwnerLeaseSecretSlot
+  sshPtyOwnerLeaseSecretSlot,
+  sshTargetHttpProxySecretSlot
 } from '../../protected-secret-persistence'
 import {
   isLegacyOpenCodeSessionCookie,
@@ -119,29 +120,11 @@ export class LoadedStateParsingOperations {
         }
         retainLegacyOpenCodeGoApiKey(parsed.settings, this.runtime.protectedSecrets)
         if (parsed.settings?.httpProxyUrl) {
-          const decryptedProxy = this.runtime.protectedSecrets.decryptWithStatus(
+          parsed.settings.httpProxyUrl = this.restoreSealedProxyUrl(
             PROTECTED_SECRET_SLOT.httpProxyUrl,
             parsed.settings.httpProxyUrl,
-            (value) => normalizeProxyUrl(value).ok
+            '[persistence] httpProxyUrl could not be decrypted — clearing the stored proxy URL. Re-enter it in Settings > Advanced > Network.'
           )
-          // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
-          // value must not masquerade as a configured proxy (silent DIRECT fallback) or
-          // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
-          if (
-            decryptedProxy.status === 'unavailable' ||
-            (decryptedProxy.status === 'failed' && !decryptedProxy.plaintext)
-          ) {
-            parsed.settings.httpProxyUrl = ''
-          } else if (normalizeProxyUrl(decryptedProxy.plaintext).ok) {
-            parsed.settings.httpProxyUrl = decryptedProxy.plaintext
-          } else {
-            console.warn(
-              '[persistence] httpProxyUrl could not be decrypted — clearing the stored proxy URL. Re-enter it in Settings > Advanced > Network.'
-            )
-            parsed.settings.httpProxyUrl = ''
-            this.runtime.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
-            this.runtime.loadNeedsSave = true
-          }
         }
         if (parsed.ui?.browserKagiSessionLink) {
           parsed.ui.browserKagiSessionLink = this.runtime.protectedSecrets.decrypt(
@@ -175,6 +158,28 @@ export class LoadedStateParsingOperations {
             return normalized
           })
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
+
+        // Why: per-host proxy URLs seal through the same safeStorage slots as the local
+        // httpProxyUrl, so they decrypt under the same STA-3442 contract.
+        parsed.sshTargets = (Array.isArray(parsed.sshTargets) ? parsed.sshTargets : []).map(
+          (target) => {
+            if (
+              typeof target?.id !== 'string' ||
+              typeof target?.httpProxyUrl !== 'string' ||
+              target.httpProxyUrl === ''
+            ) {
+              return target
+            }
+            return {
+              ...target,
+              httpProxyUrl: this.restoreSealedProxyUrl(
+                sshTargetHttpProxySecretSlot(target.id),
+                target.httpProxyUrl,
+                `[persistence] httpProxyUrl for SSH target ${target.id} could not be decrypted — clearing it. Re-enter it in the host's Advanced settings.`
+              )
+            }
+          }
+        )
 
         const terminalSettings = prepareLoadedTerminalSettings(parsed, () => {
           this.runtime.loadNeedsSave = true
@@ -294,5 +299,32 @@ export class LoadedStateParsingOperations {
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
     }))
     return migrated
+  }
+
+  /**
+   * Decrypts one sealed proxy URL under the STA-3442 contract shared by the local network proxy and
+   * each SSH target: an unavailable keychain or a failed decrypt that yields nothing keeps the value
+   * sealed (empty in memory, ciphertext retained for recovery), a plaintext URL passes as the
+   * upgrade path, and anything that is neither is released so it can never re-persist.
+   */
+  private restoreSealedProxyUrl(slot: string, sealed: string, clearedMessage: string): string {
+    const decrypted = this.runtime.protectedSecrets.decryptWithStatus(
+      slot,
+      sealed,
+      (value) => normalizeProxyUrl(value).ok
+    )
+    if (
+      decrypted.status === 'unavailable' ||
+      (decrypted.status === 'failed' && !decrypted.plaintext)
+    ) {
+      return ''
+    }
+    if (normalizeProxyUrl(decrypted.plaintext).ok) {
+      return decrypted.plaintext
+    }
+    console.warn(clearedMessage)
+    this.runtime.protectedSecrets.removeRetainedBlob(slot)
+    this.runtime.loadNeedsSave = true
+    return ''
   }
 }

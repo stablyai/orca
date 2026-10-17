@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-placement'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
@@ -123,6 +124,56 @@ export function makeSnapshot(): RuntimeMobileSessionTabsResult {
   }
 }
 
+/** The client-side pty id of the pane the split-source fixture below mounts. */
+export const SPLIT_SOURCE_PTY_ID = `remote:${ENVIRONMENT_ID}@@terminal-1`
+
+/**
+ * The store slice a remote split reads: one terminal tab whose leaf owns SPLIT_SOURCE_PTY_ID, plus an
+ * optional second focused tab. `sshTargetId` annotates the environment as a managed server on that
+ * target, which is what the per-host proxy resolution consults.
+ */
+export function makeSplitSourceState(args: {
+  hostTabId: string
+  leafId?: string
+  activeHostTabId?: string
+  sshTargetId?: string
+}): Record<string, unknown> {
+  const leafId = args.leafId ?? 'leaf-1'
+  const tabId = toWebTerminalSurfaceTabId(args.hostTabId)
+  const activeTabId = toWebTerminalSurfaceTabId(args.activeHostTabId ?? args.hostTabId)
+  const tabs = [
+    {
+      id: tabId,
+      worktreeId: WORKTREE_ID,
+      contentType: 'terminal',
+      ptyId: SPLIT_SOURCE_PTY_ID
+    },
+    ...(activeTabId === tabId
+      ? []
+      : [{ id: activeTabId, worktreeId: WORKTREE_ID, contentType: 'terminal' }])
+  ]
+  return {
+    ...(args.sshTargetId
+      ? {
+          runtimeEnvironments: [
+            { id: ENVIRONMENT_ID, orcadDeployment: { sshTargetId: args.sshTargetId } }
+          ]
+        }
+      : {}),
+    activeWorktreeId: WORKTREE_ID,
+    activeWorkspaceExecutionHostId: RUNTIME_EXECUTION_HOST_ID,
+    activeTabType: 'terminal',
+    activeTabTypeByWorktree: { [WORKTREE_ID]: 'terminal' },
+    activeTabIdByWorktree: { [WORKTREE_ID]: activeTabId },
+    tabsByWorktree: { [WORKTREE_ID]: tabs },
+    unifiedTabsByWorktree: { [WORKTREE_ID]: tabs },
+    groupsByWorktree: {},
+    terminalLayoutsByTabId: {
+      [tabId]: { activeLeafId: leafId, ptyIdsByLeafId: { [leafId]: SPLIT_SOURCE_PTY_ID } },
+      ...(activeTabId === tabId ? {} : { [activeTabId]: { activeLeafId: 'active-leaf' } })
+    }
+  }
+}
 export function stubBrowserTabCreateEnvironment(mocks: WebRuntimeSessionMocks): void {
   vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
   mocks.getState.mockReturnValue({

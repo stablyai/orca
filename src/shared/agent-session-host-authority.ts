@@ -113,6 +113,8 @@ export type RuntimeEnsureAgentSessionRequest =
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
+      /** The caller's own environment for the resumed agent; see `agentSession.create.env.v1`. */
+      env?: Record<string, string>
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
       spawnIntent?: SpawnIntent
@@ -135,6 +137,8 @@ export type RuntimeCreateAgentSessionRequest = {
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  /** The caller's own environment for the agent it spawns; see `agentSession.create.env.v1`. */
+  env?: Record<string, string>
   startupCwd?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }

@@ -9,6 +9,10 @@ export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
 // the chat it creates, so the message is the host's from the start.
 export const AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY =
   'agentSession.create.message.v1' as const
+// Why: same strict object; a host advertising this accepts the caller's own `env` for the agent it
+// spawns (`agentSession.create` and `agentSession.ensure`, explicit resume), which is the only way a
+// client-side per-host setting — an SSH host's HTTP proxy — reaches the agent process.
+export const AGENT_SESSION_CREATE_ENV_RUNTIME_CAPABILITY = 'agentSession.create.env.v1' as const
 
 // Why: `agentSession.send` is a strict object, so an older host refuses `options`. A host advertising
 // this applies a send's model and effort to the turn it starts and records them on the chat.
@@ -23,5 +27,6 @@ export const AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
-  AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY
+  AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_ENV_RUNTIME_CAPABILITY
 ] as const
