@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '@/store'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
 import {
   getAutomationHostTargetKey,
@@ -42,11 +43,32 @@ export function useAutomationsPageRefresh({
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
   const reloadExternalManagers = scopedExternal.reload
+  const attemptedNavigationRef =
+    useRef<AutomationsPageStoreState['pendingAutomationRunNavigation']>(null)
+
+  const [hostContactRevision, setHostContactRevision] = useState(0)
+  const pendingTarget = getAutomationTargetFromHostId(pendingAutomationRunNavigation?.hostId)
+  const pendingEnvironmentId =
+    pendingTarget.kind === 'environment' ? pendingTarget.environmentId : null
+  useEffect(() => {
+    if (pendingEnvironmentId === null) {
+      return
+    }
+    return subscribeRuntimeHostContactRegained(pendingEnvironmentId, () => {
+      if (!useAppStore.getState().runtimeStatusByEnvironmentId.get(pendingEnvironmentId)?.status) {
+        return
+      }
+      // Defer a recovery retry until any pending read settles.
+      attemptedNavigationRef.current = null
+      setHostContactRevision((current) => current + 1)
+    })
+  }, [pendingEnvironmentId])
 
   const refresh = useCallback(
     async (options?: { awaitExternalManagers?: boolean }): Promise<void> => {
       setIsLoading(true)
       const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
+      attemptedNavigationRef.current = pendingNavigation
       // Until a navigation names a host, the desktop is the only authority the
       // legacy unscoped arm can address without guessing.
       const target = pendingNavigation
@@ -113,7 +135,11 @@ export function useAutomationsPageRefresh({
     })
   }, [setRelativeNow])
   useEffect(() => {
-    if (!pendingAutomationRunNavigation || isLoading) {
+    if (!pendingAutomationRunNavigation) {
+      attemptedNavigationRef.current = null
+      return
+    }
+    if (isLoading || attemptedNavigationRef.current === pendingAutomationRunNavigation) {
       return
     }
     const pendingTargetKey = getAutomationHostTargetKey(
@@ -122,7 +148,13 @@ export function useAutomationsPageRefresh({
     if (automationHostTargetKey !== pendingTargetKey) {
       void refresh()
     }
-  }, [automationHostTargetKey, isLoading, pendingAutomationRunNavigation, refresh])
+  }, [
+    automationHostTargetKey,
+    hostContactRevision,
+    isLoading,
+    pendingAutomationRunNavigation,
+    refresh
+  ])
   useEffect(() => {
     for (const [workspaceId, worktree] of store.worktreeMap) {
       const displayName = worktree.displayName.trim()
