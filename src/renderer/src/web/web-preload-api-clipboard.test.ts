@@ -60,6 +60,15 @@ function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
 
 function installClipboardImageBase64(contentBase64: string): void {
   vi.stubGlobal(
+    'Image',
+    class {
+      src = ''
+      naturalWidth = 1
+      naturalHeight = 1
+      decode = async () => undefined
+    }
+  )
+  vi.stubGlobal(
     'FileReader',
     class {
       result: string | ArrayBuffer | null = null
@@ -81,7 +90,11 @@ function installClipboardImageBase64(contentBase64: string): void {
       read: vi.fn().mockResolvedValue([
         {
           types: ['image/png'],
-          getType: vi.fn().mockResolvedValue(new Blob(['ignored'], { type: 'image/png' }))
+          getType: vi
+            .fn()
+            .mockResolvedValue(
+              new Blob([Buffer.from('89504e470d0a1a0a', 'hex')], { type: 'image/png' })
+            )
         }
       ])
     }

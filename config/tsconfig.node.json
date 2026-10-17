@@ -22,6 +22,7 @@
     "../src/renderer/src/components/native-chat/structured-agent-session-pending-sends.ts",
     "../src/renderer/src/components/native-chat/native-chat-composer-primary-action.ts",
     "../src/renderer/src/components/terminal-pane/legacy-relay-bridge-panes.ts",
+    "../src/renderer/src/components/terminal-pane/terminal-image-attachment-lease.ts",
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/packages/process-host/src/__fixtures__/**/*",

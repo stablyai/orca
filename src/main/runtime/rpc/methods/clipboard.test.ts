@@ -8,12 +8,20 @@ import {
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
 } from '../../../../shared/clipboard-image'
 
-const { saveClipboardImageBufferAsTempFile } = vi.hoisted(() => ({
-  saveClipboardImageBufferAsTempFile: vi.fn()
+const {
+  saveClipboardImageBufferAsTempFile,
+  discardClipboardImageTempFile,
+  retainClipboardImageTempFile
+} = vi.hoisted(() => ({
+  saveClipboardImageBufferAsTempFile: vi.fn(),
+  discardClipboardImageTempFile: vi.fn(),
+  retainClipboardImageTempFile: vi.fn()
 }))
 
 vi.mock('../../../window/clipboard-image-temp-file', () => ({
-  saveClipboardImageBufferAsTempFile
+  saveClipboardImageBufferAsTempFile,
+  discardClipboardImageTempFile,
+  retainClipboardImageTempFile
 }))
 
 import {
@@ -484,4 +492,42 @@ describe('clipboard RPC methods', () => {
       )
     ).resolves.toMatchObject({ ok: true })
   })
+})
+
+it('exposes desktop lease support and propagates discardable ownership through chunked saves', async () => {
+  const dispatcher = makeDispatcher()
+  expect(await dispatcher.dispatch(makeRequest('clipboard.imageLeaseAvailable', {}))).toMatchObject(
+    { ok: true, result: { supported: true } }
+  )
+  const started = await dispatcher.dispatch(
+    makeRequest('clipboard.startImageUpload', {
+      expectedBase64Length: 4,
+      connectionId: null,
+      discardable: true
+    })
+  )
+  if (
+    !started.ok ||
+    typeof started.result !== 'object' ||
+    !started.result ||
+    !('uploadId' in started.result)
+  ) {
+    throw new Error('No upload')
+  }
+  const uploadId = started.result.uploadId
+  await dispatcher.dispatch(
+    makeRequest('clipboard.appendImageUploadChunk', { uploadId, offset: 0, contentBase64: 'cG5n' })
+  )
+  saveClipboardImageBufferAsTempFile.mockResolvedValueOnce('/tmp/lease.png')
+  await dispatcher.dispatch(makeRequest('clipboard.commitImageUpload', { uploadId }))
+  expect(saveClipboardImageBufferAsTempFile).toHaveBeenLastCalledWith(Buffer.from('png'), {
+    connectionId: null,
+    discardable: true
+  })
+  await dispatcher.dispatch(
+    makeRequest('clipboard.imageLease', { path: '/tmp/lease.png', retain: true })
+  )
+  expect(retainClipboardImageTempFile).toHaveBeenCalledWith('/tmp/lease.png', null, undefined)
+  await dispatcher.dispatch(makeRequest('clipboard.imageLease', { path: '/tmp/lease.png' }))
+  expect(discardClipboardImageTempFile).toHaveBeenCalledWith('/tmp/lease.png', null)
 })

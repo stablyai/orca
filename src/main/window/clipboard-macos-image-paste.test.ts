@@ -112,7 +112,7 @@ describe('macOS clipboard image data beside a file URL', () => {
 
       const savedPath = await invoke('clipboard:saveImageAsTempFile')
       expect(savedPath).toMatch(/orca-paste-.+\.png$/)
-      expect(mocks.writeFile).toHaveBeenCalledWith(savedPath, PNG)
+      expect(mocks.writeFile).toHaveBeenCalledWith(savedPath, PNG, { mode: 0o600 })
       expect(mocks.readBuffer).not.toHaveBeenCalled()
     }
   )
@@ -150,7 +150,7 @@ describe('macOS clipboard image data beside a file URL', () => {
     expect(invoke('clipboard:hasImage')).toBe(true)
     const savedPath = await invoke('clipboard:saveImageAsTempFile')
     expect(savedPath).toMatch(/orca-paste-.+\.png$/)
-    expect(mocks.writeFile).toHaveBeenCalledWith(savedPath, PNG)
+    expect(mocks.writeFile).toHaveBeenCalledWith(savedPath, PNG, { mode: 0o600 })
     expect(invoke('clipboard:readImageThumbnail')).toEqual({
       dataUrl: 'data:image/png;base64,PREVIEW',
       width: 32,
@@ -232,5 +232,50 @@ describe('macOS clipboard image data beside a file URL', () => {
       invoke('clipboard:saveImageAsTempFile', { connectionId: 'ssh-1' })
     ).rejects.toThrow('Clipboard image is too large')
     expect(mocks.writeFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('macOS terminal image preview recovery', () => {
+  it('captures JPEG bytes stored under the native PNG type for the attachment tray', async () => {
+    const recovered = setImage()
+    setImage({ width: 0, height: 0 }, true)
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0])
+    mocks.readBuffer.mockReturnValue(jpeg)
+    mocks.createFromBuffer.mockReturnValue(recovered)
+
+    const preview = await invoke('clipboard:saveImagePreview')
+    expect(preview).toEqual({
+      path: expect.stringMatching(/orca-paste-.+\.png$/),
+      dataUrl: `data:image/png;base64,${PNG.toString('base64')}`,
+      runtimeEnvironmentId: null
+    })
+    expect(mocks.createFromBuffer).toHaveBeenCalledWith(jpeg)
+    expect(mocks.writeFile).toHaveBeenCalledWith(expect.any(String), PNG, { mode: 0o600 })
+  })
+
+  it.each([
+    ['source bytes', () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)],
+    [
+      'declared dimensions',
+      () => Buffer.from('ffd8ffc00011081770177003011100021100031100ffd9', 'hex')
+    ]
+  ])('rejects oversized %s before decoding or creating a preview file', async (_name, bytes) => {
+    setImage({ width: 0, height: 0 }, true)
+    mocks.readBuffer.mockReturnValue(bytes())
+
+    await expect(invoke('clipboard:saveImagePreview')).rejects.toThrow(
+      'Clipboard image is too large'
+    )
+    expect(mocks.createFromBuffer).not.toHaveBeenCalled()
+    expect(mocks.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('rejects an untrusted renderer before recovering a preview', async () => {
+    setTrustedClipboardRendererWebContentsId(42)
+    await expect(invoke('clipboard:saveImagePreview')).rejects.toThrow(
+      'Unauthorized clipboard IPC sender'
+    )
+    expect(mocks.readImage).not.toHaveBeenCalled()
+    expect(mocks.readBuffer).not.toHaveBeenCalled()
   })
 })

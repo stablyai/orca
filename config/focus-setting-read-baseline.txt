@@ -240,7 +240,6 @@
 2 src/renderer/src/components/terminal-pane/terminal-pane-menu-paste.ts
 3 src/renderer/src/components/terminal-pane/terminal-pane-mount-preparation.ts
 1 src/renderer/src/components/terminal-pane/terminal-pane-paste-execution.ts
-1 src/renderer/src/components/terminal-pane/terminal-pane-paste-listeners.ts
 2 src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
 2 src/renderer/src/components/terminal-pane/use-terminal-pane-controller.ts
 1 src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts

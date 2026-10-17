@@ -20,6 +20,7 @@ type ExecuteTerminalPastePlanArgs = {
   writePty?: (data: string, signal?: AbortSignal) => boolean | Promise<boolean>
   isTargetCurrent?: () => boolean
   canContinue?: () => boolean
+  beforeDelivery?: () => Promise<void>
   yieldToEventLoop?: () => Promise<void>
   operationTimeoutMs?: number
   now?: () => number
@@ -41,6 +42,7 @@ async function executeTerminalPastePlanNow(
     writePty,
     isTargetCurrent,
     canContinue,
+    beforeDelivery,
     yieldToEventLoop = yieldToEventLoopTask,
     operationTimeoutMs = getTerminalPasteOperationTimeoutMs(plan),
     now = defaultNow
@@ -59,6 +61,21 @@ async function executeTerminalPastePlanNow(
   }
   if (isTargetCurrent && !isTargetCurrent()) {
     return finish('cancelled', 0, 'stale-target')
+  }
+  if (beforeDelivery) {
+    const preparation = await runTerminalPasteOperationWithTimeout(
+      beforeDelivery,
+      operationTimeoutMs
+    )
+    if (preparation.timedOut) {
+      return finish('cancelled', 0, 'operation-timeout')
+    }
+    if (isTargetCurrent && !isTargetCurrent()) {
+      return finish('cancelled', 0, 'stale-target')
+    }
+    if (canContinue && !canContinue()) {
+      return finish('cancelled', 0, 'target-disconnected')
+    }
   }
   if (plan.mode !== 'chunked') {
     const pasteResult = await runTerminalPasteOperationWithTimeout(() => {

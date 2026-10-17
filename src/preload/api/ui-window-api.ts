@@ -1,5 +1,5 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
-import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
+import type { ClipboardImagePreview, ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type {
   RichMarkdownContextMenuCommandPayload,
@@ -16,6 +16,17 @@ export type UiWindowApi = {
     /** A native-chat composer paste, kept where its draft can bring it back. */
     forNativeChatDraft?: boolean
   }) => Promise<string | null>
+  saveClipboardImagePreview: (args?: {
+    connectionId?: string | null
+    runtimeEnvironmentId?: string | null
+  }) => Promise<ClipboardImagePreview | null>
+  settleClipboardImagePreview: (args: {
+    path: string
+    connectionId?: string | null
+    runtimeEnvironmentId?: string | null
+    retain?: boolean
+    release?: boolean
+  }) => Promise<void>
   clipboardHasImage: () => Promise<boolean | null>
   /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>

@@ -226,3 +226,27 @@ describe('NativeChatImageAttachmentPreview', () => {
     expect(screen.getByText('Attach again')).toBeTruthy()
   })
 })
+
+it('uses the captured full-size image without reading an identically named local file', () => {
+  vi.stubGlobal('IntersectionObserver', undefined)
+  render(
+    <NativeChatImageAttachmentPreview
+      attachment={{ id: 'runtime', path: '/tmp/remote.png' }}
+      fullSizePreviewUrl="data:image/png;base64,captured"
+      onRemove={vi.fn()}
+    />
+  )
+  expect(mocks.useLocalImageSrc).toHaveBeenCalledWith(
+    undefined,
+    '/tmp/remote.png',
+    undefined,
+    undefined,
+    { kind: 'chat-image' }
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View image: remote.png' }))
+  expect(
+    screen
+      .getAllByRole('img')
+      .every((image) => image.getAttribute('src') === 'data:image/png;base64,captured')
+  ).toBe(true)
+})
