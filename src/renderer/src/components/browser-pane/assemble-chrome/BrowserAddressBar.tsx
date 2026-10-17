@@ -15,6 +15,7 @@ import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 
 type BrowserAddressBarProps = {
+  disabled?: boolean
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
@@ -33,6 +34,7 @@ type BrowserAddressBarProps = {
 }
 
 export default function BrowserAddressBar({
+  disabled = false,
   value,
   onChange,
   onSubmit,
@@ -424,6 +426,7 @@ export default function BrowserAddressBar({
             {leadingIcon ?? <Globe className="size-4 shrink-0 text-muted-foreground" />}
             <Input
               ref={inputRef}
+              disabled={disabled}
               value={value}
               onFocus={handleFocus}
               onMouseDown={addressBarClickSelect.onMouseDown}
