@@ -197,6 +197,25 @@ export function terminalSendWarnings(send: RuntimeTerminalSend): string[] {
   return warning ? [warning] : []
 }
 
+export type TerminalSendDeliveryVerdict = 'turn_started' | 'input_accepted' | 'unverifiable'
+
+/**
+ * What a JSON caller can trust. `accepted` only means the host took the bytes.
+ * `unsupported` is unobservable, not a failed turn.
+ */
+export function terminalSendDeliveryVerdict(
+  send: RuntimeTerminalSend
+): TerminalSendDeliveryVerdict | null {
+  const prompt = send.prompt
+  if (!send.accepted || !prompt) {
+    return null
+  }
+  if (prompt.observation === 'unsupported') {
+    return 'unverifiable'
+  }
+  return prompt.stages.includes('turn_started') ? 'turn_started' : 'input_accepted'
+}
+
 function promptObservationWarning(
   prompt: NonNullable<RuntimeTerminalSend['prompt']>
 ): string | null {
