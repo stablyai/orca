@@ -6,6 +6,18 @@ import {
 } from './gpu-crash-fallback-decision'
 
 describe('GpuCrashFallbackTracker', () => {
+  it('remembers earlier crashes after they leave the rolling window', () => {
+    const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
+    expect(tracker.hasRecordedExactlyOneCrash()).toBe(false)
+    tracker.recordGpuCrash(0)
+    expect(tracker.hasRecordedExactlyOneCrash()).toBe(true)
+    tracker.recordGpuCrash(40_000)
+    expect(tracker.windowSnapshot()).toEqual([40_000])
+    expect(tracker.hasRecordedExactlyOneCrash()).toBe(false)
+    tracker.disengage()
+    expect(tracker.hasRecordedExactlyOneCrash()).toBe(false)
+  })
+
   it('engages fallback once GPU crashes hit the threshold inside the window', () => {
     const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
     // F0BDNADU79Q / F0BDNRZ5MDG: GPU child dies within seconds of launch.
