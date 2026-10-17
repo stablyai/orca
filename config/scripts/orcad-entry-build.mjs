@@ -11,6 +11,7 @@ const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)('../dark-bui
 export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
 export const ORCAD_LAUNCHER_ENTRY_POINT = 'src/main/orcad/launcher.ts'
 export const ORCAD_CHILD_ENTRY_POINTS = {
+  imagePreview: 'src/main/runtime/runtime-image-preview-worker-entry.ts',
   watcher: 'src/main/ipc/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/profile-state-writer-worker-entry.ts',

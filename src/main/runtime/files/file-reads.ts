@@ -23,6 +23,7 @@ import {
   assertPreviewWithinTransportBudget,
   previewableBinaryByteLimit
 } from './file-preview-budget'
+import { buildRuntimeImagePreview, imagePreviewReadLimit } from '../runtime-image-preview'
 import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
@@ -74,16 +75,12 @@ export class RuntimeFileReads {
     relativePath: string,
     maxContentBytes?: number
   ): Promise<RuntimeFilePreviewResult> {
-    const binaryMaxBytes =
-      maxContentBytes === undefined
-        ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
-        : previewableBinaryByteLimit(maxContentBytes)
     const target = await resolveFileExplorerPath(this.host, worktreeSelector, relativePath)
     requireLocalRuntimeFileRoute(target)
     // Why: sized by extension instead of a stat round trip.
     const filePath = await resolveRuntimeAuthorizedPath(target.path, this.host.requireStore())
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-    const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
+    const maxBytes = mimeType ? imagePreviewReadLimit(mimeType, maxContentBytes) : MOBILE_FILE_READ_MAX_BYTES
     let buffer: Buffer
     try {
       buffer = (await readNodeFileWithinLimit(filePath, maxBytes)).buffer
@@ -94,15 +91,7 @@ export class RuntimeFileReads {
       throw error
     }
     if (mimeType) {
-      return assertPreviewWithinTransportBudget(
-        {
-          content: buffer.toString('base64'),
-          isBinary: true,
-          isImage: true,
-          mimeType
-        },
-        maxContentBytes
-      )
+      return buildRuntimeImagePreview(buffer, mimeType, maxContentBytes)
     }
 
     if (isBinaryBuffer(buffer)) {
