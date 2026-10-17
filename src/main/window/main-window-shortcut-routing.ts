@@ -5,7 +5,7 @@ import {
   toModifierDoubleTapEvent
 } from '../../shared/modifier-double-tap-detector'
 import {
-  normalizeTerminalShortcutPolicy,
+  resolveTerminalShortcutPolicy,
   type KeybindingMatchOptions
 } from '../../shared/keybindings'
 import {
@@ -139,9 +139,7 @@ export function installMainWindowShortcutRouting(args: {
         focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()
           ? 'terminal'
           : 'app',
-      terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
-        store?.getSettings().terminalShortcutPolicy
-      )
+      terminalShortcutPolicy: resolveTerminalShortcutPolicy(store?.getSettings())
     }
     const appShortcutContext: KeybindingMatchOptions = {
       context: 'app',
@@ -244,9 +242,7 @@ export function installMainWindowShortcutRouting(args: {
             focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()
               ? 'terminal'
               : 'app',
-          terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
-            store?.getSettings().terminalShortcutPolicy
-          )
+          terminalShortcutPolicy: resolveTerminalShortcutPolicy(store?.getSettings())
         }
       )
     ) {

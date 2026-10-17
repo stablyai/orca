@@ -17,9 +17,11 @@ export type KeybindingPlatform = 'darwin' | 'linux' | 'win32'
 
 export type TerminalShortcutPolicy = 'orca-first' | 'terminal-first'
 
+export type ResolvedTerminalShortcutPolicy = TerminalShortcutPolicy | 'terminal-first-with-search'
+
 export type KeybindingMatchOptions = {
   context?: KeybindingContext
-  terminalShortcutPolicy?: TerminalShortcutPolicy
+  terminalShortcutPolicy?: ResolvedTerminalShortcutPolicy
 }
 
 export type AgentTabActionId = `tab.newAgent.${TuiAgent}`

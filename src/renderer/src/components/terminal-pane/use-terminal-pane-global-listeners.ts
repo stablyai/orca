@@ -1,3 +1,4 @@
+import { resolveTerminalShortcutPolicy } from '../../../../shared/keybindings'
 import { useEffect } from 'react'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
 import { useTerminalKeyboardShortcuts } from './terminal-keyboard-hook'
@@ -86,7 +87,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     macOptionAsAltRef,
     paneKittyKeyboardModesRef,
     keybindings,
-    terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'
+    terminalShortcutPolicy: resolveTerminalShortcutPolicy(settings)
   })
   useTerminalPaneGlobalEffects({
     tabId,

@@ -5,7 +5,7 @@ import {
   keybindingMatchesAction,
   type KeybindingOverrides,
   type KeybindingPlatform,
-  type TerminalShortcutPolicy
+  type ResolvedTerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
@@ -112,7 +112,7 @@ export function matchFileSearchShortcut(
   e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
   platform: KeybindingPlatform,
   keybindings?: KeybindingOverrides,
-  terminalShortcutPolicy: TerminalShortcutPolicy = 'orca-first'
+  terminalShortcutPolicy: ResolvedTerminalShortcutPolicy = 'orca-first'
 ): boolean {
   if (e.repeat) {
     return false

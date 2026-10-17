@@ -2,7 +2,10 @@ import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
-import type { KeybindingOverrides, TerminalShortcutPolicy } from '../../../../shared/keybindings'
+import type {
+  KeybindingOverrides,
+  ResolvedTerminalShortcutPolicy
+} from '../../../../shared/keybindings'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import type { SearchState } from './terminal-keyboard-shortcut-matching'
@@ -35,5 +38,5 @@ export type KeyboardHandlersDeps = {
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
   paneKittyKeyboardModesRef?: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   keybindings?: KeybindingOverrides
-  terminalShortcutPolicy?: TerminalShortcutPolicy
+  terminalShortcutPolicy?: ResolvedTerminalShortcutPolicy
 }

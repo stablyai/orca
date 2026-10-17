@@ -1,3 +1,4 @@
+import { resolveTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
 import { useActivityTerminalPortals } from './activity/activity-terminal-portal'
 import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
@@ -28,8 +29,8 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const activeBrowserTabId = useAppStore((state) => state.activeBrowserTabId)
   const activeTabType = useAppStore((state) => state.activeTabType)
   const keybindings = useAppStore((state) => state.keybindings)
-  const terminalShortcutPolicy = useAppStore(
-    (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
+  const terminalShortcutPolicy = useAppStore((state) =>
+    resolveTerminalShortcutPolicy(state.settings)
   )
   const mobileEmulatorEnabled = useAppStore(
     (state) => state.settings?.mobileEmulatorEnabled !== false

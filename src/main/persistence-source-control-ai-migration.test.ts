@@ -495,6 +495,32 @@ describe('Store', () => {
     expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
   })
 
+  it.each([undefined, true, false])(
+    'restores missing terminal search preferences and preserves %s on load',
+    async (searchPreference) => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: {
+          terminalShortcutPolicy: 'terminal-first',
+          ...(searchPreference === undefined
+            ? {}
+            : { terminalSearchShortcutInTerminalFirst: searchPreference })
+        },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+
+      const store = await createStore()
+      expect(store.getSettings().terminalShortcutPolicy).toBe('terminal-first')
+      expect(store.getSettings().terminalSearchShortcutInTerminalFirst).toBe(
+        searchPreference !== false
+      )
+    }
+  )
+
   it('normalizes malformed terminal shortcut policy on load', async () => {
     writeDataFile({
       schemaVersion: 1,

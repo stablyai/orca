@@ -7,6 +7,7 @@ import {
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import {
+  resolveTerminalShortcutPolicy,
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingContext
@@ -68,7 +69,7 @@ export function useFloatingTerminalGlobalShortcutListeners({
       const matches = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, event, getShortcutPlatform(), state.keybindings, {
           context,
-          terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+          terminalShortcutPolicy: resolveTerminalShortcutPolicy(state.settings)
         })
       const consume = (): void => {
         event.preventDefault()

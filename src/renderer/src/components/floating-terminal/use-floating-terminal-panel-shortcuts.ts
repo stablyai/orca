@@ -1,3 +1,4 @@
+import { resolveTerminalShortcutPolicy } from '../../../../shared/keybindings'
 import { useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
 import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-error'
@@ -64,7 +65,7 @@ export function useFloatingTerminalPanelShortcuts({
     (input: FloatingPanelShortcutInput): FloatingPanelShortcutResolution | null => {
       const state = useAppStore.getState()
       const platform = getShortcutPlatform()
-      const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
+      const terminalShortcutPolicy = resolveTerminalShortcutPolicy(state.settings)
       const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(input.target)
       const context: KeybindingContext = input.doubleTapModifier
         ? 'app'
@@ -73,7 +74,7 @@ export function useFloatingTerminalPanelShortcuts({
           : 'app'
       const matchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
       const floatingChromeMatchOptions: KeybindingMatchOptions =
-        isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
+        isFloatingTerminalInput && terminalShortcutPolicy !== 'orca-first'
           ? { context: 'app', terminalShortcutPolicy }
           : matchOptions
       const ownedAction = matchFloatingWorkspacePanelOwnedAction(

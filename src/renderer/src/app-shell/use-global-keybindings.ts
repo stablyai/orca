@@ -21,6 +21,7 @@ import {
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import {
+  resolveTerminalShortcutPolicy,
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingMatchOptions
@@ -54,7 +55,7 @@ export function useGlobalKeybindings(args: {
   const { layout, floatingWorkspace } = args
   const actions = useAppShortcutActions()
   const keybindings = useAppStore((s) => s.keybindings)
-  const terminalShortcutPolicy = useAppStore((s) => s.settings?.terminalShortcutPolicy)
+  const terminalShortcutPolicy = useAppStore((s) => resolveTerminalShortcutPolicy(s.settings))
   const pluginCommands = usePluginCommands()
 
   const shortcutState: AppShortcutState = {

@@ -36,6 +36,29 @@ function keydown(init: KeyboardEventInit): KeyboardEvent {
 }
 
 describe('resolvePreviewShortcutAction', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'honors the search exception on %s for a remote terminal',
+    (clientPlatform) => {
+      const event = keydown({
+        key: 'f',
+        code: 'KeyF',
+        metaKey: clientPlatform === 'darwin',
+        ctrlKey: clientPlatform !== 'darwin'
+      })
+      const context = contextFor({
+        clientPlatform,
+        terminalShortcutPolicy: 'terminal-first-with-search',
+        terminalInput: { ...LOCAL_MAC, hostPlatform: 'linux' }
+      })
+      expect(resolvePreviewShortcutAction(event, context)).toEqual({ type: 'toggleSearch' })
+      expect(
+        resolvePreviewShortcutAction(event, {
+          ...context,
+          terminalShortcutPolicy: 'terminal-first'
+        })
+      ).toBeNull()
+    }
+  )
   afterEach(() => {
     _setLayoutMapForTests(null)
   })
