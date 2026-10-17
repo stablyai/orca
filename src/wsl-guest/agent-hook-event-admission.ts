@@ -25,6 +25,7 @@ type RelayHookAdmissionHost = {
   checkAgentPresence: (paneKey: string) => Promise<void>
 }
 
+/** Publishes only admitted hook rows, retaining the owning process across nested CLI events. */
 export function applyRelayHookEvent(
   host: RelayHookAdmissionHost,
   incoming: AgentHookEventPayload,
@@ -41,7 +42,11 @@ export function applyRelayHookEvent(
     previous &&
     !previous.providerSessionOnly &&
     sameAgentStatusTerminalOwner(previous, incoming) &&
-    hasOtherAgentProcessOwner(previous.agentPresence, incoming.payload.agentType ?? 'unknown')
+    hasOtherAgentProcessOwner(
+      previous.agentPresence,
+      incoming.payload.agentType ?? 'unknown',
+      incoming.agentPresence?.process
+    )
   ) {
     return undefined
   }

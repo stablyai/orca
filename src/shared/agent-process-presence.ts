@@ -77,16 +77,19 @@ export function isSameAgentProcess(a: AgentProcessIdentity, b: AgentProcessIdent
   return a.pid === b.pid && a.platform === b.platform && a.startTime === b.startTime
 }
 
+/** A held process also fences another process of the same agent type. */
 export function hasOtherAgentProcessOwner(
   presence: AgentProcessPresence | undefined,
-  incoming: string
+  incoming: string,
+  incomingProcess?: AgentProcessIdentity
 ): boolean {
   return Boolean(
     presence?.process &&
     presence.sessionOwner &&
     !presence.ended &&
     !presence.suspended &&
-    presence.agent !== incoming &&
+    (presence.agent !== incoming ||
+      (incomingProcess && !isSameAgentProcess(presence.process, incomingProcess))) &&
     presence.agent !== 'unknown'
   )
 }

@@ -6,6 +6,10 @@ import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, postHookEvent, RUNNING_SHELL } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+// The synthetic owner stays alive while its background-task lease expires.
+vi.mock('../../shared/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn(async () => 'live' as const)
+}))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))

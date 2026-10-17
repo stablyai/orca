@@ -29,7 +29,6 @@ import {
 } from './agent-hook-listener/opencode-session-registry'
 import { claudeRowHasUnlistedLiveWork } from './agent-hook-listener/providers/claude-pane-hold-evidence'
 import { readString } from './agent-hook-listener/tool-input-preview'
-/** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
   'prompt_input_exit',
   'logout',
@@ -37,6 +36,7 @@ const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
   'bypass_permissions_disabled'
 ])
 
+/** Rejects foreign hook producers before folding a pane's prompts, children and turn state. */
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
@@ -154,6 +154,8 @@ export function normalizeHookPayload(
     return null
   }
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
+  const agentProcess =
+    source === 'claude' ? readAgentProcessIdentity(record.agentProcess) : undefined
   const previousReceivedAt =
     previousStatus &&
     'receivedAt' in previousStatus &&
@@ -177,6 +179,7 @@ export function normalizeHookPayload(
         agentPresence: previousStatus.providerSessionOnly ? undefined : previousStatus.agentPresence
       },
       incoming: source,
+      incomingProcess: agentProcess,
       now: Date.now()
     }).inheritedFromActivePane
   ) {
@@ -223,8 +226,6 @@ export function normalizeHookPayload(
   }
 
   // Why: presence needs the agent's own process; without it the hook cannot speak for liveness.
-  const agentProcess =
-    source === 'claude' ? readAgentProcessIdentity(record.agentProcess) : undefined
   const agentPresence = agentProcess
     ? { agent: source, process: agentProcess, sessionOwner: true as const }
     : undefined
