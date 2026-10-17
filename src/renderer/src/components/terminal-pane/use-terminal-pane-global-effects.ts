@@ -10,7 +10,7 @@ import {
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport-types'
 import type { IDisposable } from '@xterm/xterm'
-import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
+import { collapseExpandedSibling, handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
@@ -43,6 +43,7 @@ type UseTerminalPaneGlobalEffectsArgs = {
   panePtyBindingsRef?: React.RefObject<Map<number, IDisposable>>
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
+  expandedPaneIdRef: React.RefObject<number | null>
   toggleExpandPane: (paneId: number) => void
 }
 
@@ -74,6 +75,7 @@ export function useTerminalPaneGlobalEffects({
   panePtyBindingsRef,
   isActiveRef,
   isVisibleRef,
+  expandedPaneIdRef,
   toggleExpandPane
 }: UseTerminalPaneGlobalEffectsArgs): void {
   // Start true so initially hidden panes suspend the WebGL context openTerminal creates instead of exhausting Chromium’s context budget.
@@ -228,12 +230,14 @@ export function useTerminalPaneGlobalEffects({
         manager: managerRef.current,
         acknowledgeAgents: (paneKeys) => useAppStore.getState().acknowledgeAgents(paneKeys),
         surfaceStaleAgentRow,
-        scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded
+        scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded,
+        revealPane: (paneId) =>
+          collapseExpandedSibling(paneId, expandedPaneIdRef.current, toggleExpandPane)
       })
     }
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
-  }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
+  }, [tabId, managerRef, scheduleFollowOutputIfNeeded, expandedPaneIdRef, toggleExpandPane])
 
   useEffect(() => {
     const onPasteText = (event: Event): void => {
