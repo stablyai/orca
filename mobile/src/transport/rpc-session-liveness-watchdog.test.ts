@@ -23,12 +23,12 @@ describe('RpcSessionLivenessWatchdog', () => {
     return { identity, sendProbe, terminate, watchdog }
   }
 
-  it('probes only after authenticated-inbound idle', async () => {
+  it('probes only after control-response idle', async () => {
     const { identity, sendProbe, watchdog } = fixture()
     await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS - 1)
     expect(sendProbe).not.toHaveBeenCalled()
 
-    watchdog.noteAuthenticatedInbound(identity)
+    watchdog.noteControlResponse(identity)
     await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS - 1)
     expect(sendProbe).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -70,23 +70,24 @@ describe('RpcSessionLivenessWatchdog', () => {
       reason: 'probe-timeout',
       missedProbes: 2,
       missedProbeLimit: 2,
-      lastInboundAgeMs: 8_000
+      lastInboundAgeMs: 8_000,
+      lastControlResponseAgeMs: 8_000
     })
     expect(onTimeout.mock.invocationCallOrder[0]).toBeLessThan(
       terminate.mock.invocationCallOrder[0]!
     )
   })
 
-  it('authenticated activity resets suspicion', async () => {
+  it('a control response resets suspicion', async () => {
     const { identity, terminate, watchdog } = fixture()
     watchdog.probeNow(identity)
     await vi.advanceTimersByTimeAsync(LIVENESS_PROBE_TIMEOUT_MS)
-    watchdog.noteAuthenticatedInbound(identity)
+    watchdog.noteControlResponse(identity)
     await vi.advanceTimersByTimeAsync(LIVENESS_IDLE_MS + LIVENESS_PROBE_TIMEOUT_MS * 2)
     expect(terminate).not.toHaveBeenCalled()
   })
 
-  it('does not churn timers during continuous authenticated traffic', async () => {
+  it('does not churn timers during continuous control responses', async () => {
     const setTimer = vi.fn(setTimeout)
     const sendProbe = vi.fn(() => true)
     const watchdog = new RpcSessionLivenessWatchdog({
@@ -101,13 +102,38 @@ describe('RpcSessionLivenessWatchdog', () => {
 
     await vi.advanceTimersByTimeAsync(10_000)
     for (let index = 0; index < 100; index++) {
-      watchdog.noteAuthenticatedInbound(identity)
+      watchdog.noteControlResponse(identity)
     }
     expect(setTimer).toHaveBeenCalledOnce()
 
     await vi.advanceTimersByTimeAsync(10_000)
     expect(sendProbe).not.toHaveBeenCalled()
     expect(setTimer).toHaveBeenCalledTimes(2)
+  })
+
+  // Regression (#10385): a terminal that keeps streaming must not make a dead
+  // control channel look alive. Before the fix, either assertion below failed.
+  it('does not let stream traffic defer the idle probe', async () => {
+    const { identity, sendProbe, watchdog } = fixture()
+
+    for (let elapsed = 0; elapsed < LIVENESS_IDLE_MS; elapsed += 1_000) {
+      watchdog.noteAuthenticatedInbound(identity)
+      await vi.advanceTimersByTimeAsync(1_000)
+    }
+
+    expect(sendProbe).toHaveBeenCalledOnce()
+  })
+
+  it('does not let stream traffic satisfy an in-flight probe', async () => {
+    const { identity, terminate, watchdog } = fixture()
+    watchdog.probeNow(identity)
+
+    for (let elapsed = 0; elapsed < LIVENESS_PROBE_TIMEOUT_MS * 3; elapsed += 500) {
+      watchdog.noteAuthenticatedInbound(identity)
+      await vi.advanceTimersByTimeAsync(500)
+    }
+
+    expect(terminate).toHaveBeenCalledOnce()
   })
 
   it('does not charge a scheduler-stalled probe window', () => {

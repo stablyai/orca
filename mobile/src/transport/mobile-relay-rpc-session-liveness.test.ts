@@ -133,7 +133,7 @@ describe('mobile relay RPC session liveness', () => {
         path: 'relay',
         message: 'Relay health check failed',
         detail: expect.stringMatching(
-          /^probe-timeout; 2\/2 probes missed; last authenticated activity \d+ms ago$/
+          /^probe-timeout; 2\/2 probes missed; last authenticated activity \d+ms ago; last control response \d+ms ago$/
         )
       })
     )
@@ -177,6 +177,59 @@ describe('mobile relay RPC session liveness', () => {
     session.notifyForeground('focus')
 
     expect(fakes.sendText).toHaveBeenCalledTimes(2)
+    session.close()
+  })
+
+  // Regression (#10385): relay keeps an idle session silent by design (#14333), so a
+  // stalled application RPC is the only stall signal the user's own work produces.
+  // It must confirm the control channel instead of being swallowed.
+  it('confirms a stalled application request with a control probe', async () => {
+    const session = await authenticateSession()
+
+    const settled = session
+      .sendRequest('worktree.ps', { limit: 1 })
+      .catch((error: Error) => error.message)
+    // sendRequest awaits waitForConnected, so the frame lands a microtask later.
+    await vi.advanceTimersByTimeAsync(0)
+    expect(sentRequests().map(({ method }) => method)).toEqual(['worktree.ps'])
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(await settled).toContain('relay RPC timed out')
+    expect(sentRequests().map(({ method }) => method)).toEqual(['worktree.ps', 'status.get'])
+    session.close()
+  })
+
+  // Terminal output over relay must not stand in for a control response either.
+  it('does not let relay stream traffic satisfy an in-flight probe', async () => {
+    const session = await authenticateSession()
+    session.notifyForeground('focus')
+    expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
+
+    for (let elapsed = 0; elapsed < 8_000; elapsed += 500) {
+      fakes.linkOptions!.onBinary(new Uint8Array([1, 2, 3]))
+      await vi.advanceTimersByTimeAsync(500)
+    }
+
+    expect(session.getState()).toBe('disconnected')
+  })
+
+  // The matching false-teardown guard: a still-answering desktop survives the same
+  // stream saturation.
+  it('keeps a stream-saturated relay whose control channel still answers', async () => {
+    const session = await authenticateSession()
+    session.notifyForeground('focus')
+
+    for (let elapsed = 0; elapsed < 16_000; elapsed += 500) {
+      fakes.linkOptions!.onBinary(new Uint8Array([1, 2, 3]))
+      const probe = sentRequests().findLast(({ method }) => method === 'status.get')
+      if (probe) {
+        fakes.linkOptions!.onText(JSON.stringify({ id: probe.id, ok: true, result: {} }))
+      }
+      await vi.advanceTimersByTimeAsync(500)
+    }
+
+    expect(session.getState()).toBe('connected')
     session.close()
   })
 
