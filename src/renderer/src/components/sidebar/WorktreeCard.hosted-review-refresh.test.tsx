@@ -162,4 +162,24 @@ describe('WorktreeCard hosted review refresh', () => {
 
     expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
   })
+
+  it('does not refetch the linked Linear issue when only workspace metadata changes', async () => {
+    worktreeCardProperties = ['linear-issue']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+    const render = (overrides: Partial<Worktree>) =>
+      act(() => {
+        root?.render(
+          <WorktreeCard
+            worktree={makeWorktree({ linkedLinearIssue: 'ENG-1', ...overrides })}
+            repo={makeRepo()}
+            isActive={false}
+          />
+        )
+      })
+
+    render({})
+    render({ comment: 'updated', lastActivityAt: 2 })
+
+    expect(fetchLinearIssue).toHaveBeenCalledTimes(1)
+  })
 })
