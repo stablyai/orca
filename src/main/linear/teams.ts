@@ -1,4 +1,4 @@
-import type { Team } from '@linear/sdk'
+import type { LinearRequest, Team } from '@linear/sdk'
 import type {
   LinearLabel,
   LinearMember,
@@ -7,7 +7,9 @@ import type {
   LinearWorkspaceError,
   LinearWorkspaceSelection
 } from '../../shared/linear/workspace-types'
+import { isLinearUuid } from '../../shared/linear/uuid'
 import { acquire, release } from './linear-request-concurrency'
+import { loadLinearSdk } from './linear-sdk'
 import { clearToken } from './linear-token-store'
 import { getClients, isAuthError } from './client'
 import {
@@ -114,7 +116,7 @@ export async function listTeamsForAgent(
 async function readTeamResource<T>(
   teamId: string,
   workspaceId: string | null | undefined,
-  fetchAll: (team: Team) => Promise<T[]>,
+  fetchAll: (team: Pick<Team, 'states' | 'labels' | 'members'>) => Promise<T[]>,
   fallbackWarning?: string
 ): Promise<T[]> {
   const entry = getClients(workspaceId)[0]
@@ -124,7 +126,23 @@ async function readTeamResource<T>(
 
   await acquire()
   try {
-    return await fetchAll(await entry.client.team(teamId))
+    // Team keys need the lookup's canonical ID for pagination.
+    if (!isLinearUuid(teamId)) {
+      return await fetchAll(await entry.client.team(teamId))
+    }
+    const sdk = loadLinearSdk()
+    const request: LinearRequest = <Response, Variables extends Record<string, unknown>>(
+      document: string,
+      variables?: Variables
+    ) =>
+      entry.client.client.request<Response, Variables>(document, variables).catch((error) => {
+        throw sdk.parseLinearError(error)
+      })
+    return await fetchAll({
+      states: (variables) => new sdk.Team_StatesQuery(request, teamId, variables).fetch(variables),
+      labels: (variables) => new sdk.Team_LabelsQuery(request, teamId, variables).fetch(variables),
+      members: (variables) => new sdk.Team_MembersQuery(request, teamId, variables).fetch(variables)
+    })
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)

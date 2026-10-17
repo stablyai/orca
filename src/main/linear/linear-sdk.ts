@@ -1,4 +1,10 @@
-import type { LinearClient } from '@linear/sdk'
+import type {
+  LinearClient,
+  Team_LabelsQuery,
+  Team_MembersQuery,
+  Team_StatesQuery,
+  parseLinearError
+} from '@linear/sdk'
 import { createRequire } from 'node:module'
 
 // The subset of @linear/sdk that client.ts constructs / type-checks. Declared
@@ -11,6 +17,10 @@ export type LinearSdkModule = {
     signal?: AbortSignal
   }) => LinearClient
   AuthenticationLinearError: new (...args: never[]) => Error
+  Team_LabelsQuery: typeof Team_LabelsQuery
+  Team_MembersQuery: typeof Team_MembersQuery
+  Team_StatesQuery: typeof Team_StatesQuery
+  parseLinearError: typeof parseLinearError
 }
 
 // Why: @linear/sdk is a ~2.6MB CJS bundle (~33ms to parse). The Linear client
