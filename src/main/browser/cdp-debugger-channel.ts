@@ -5,6 +5,7 @@ import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
 import { sendGuestCdpCommand } from './guest-cdp-command'
 import { isOrcaFrameSessionTraffic } from './guest-focused-frame-route'
+import type { CapturePaintHold } from './cdp-screenshot'
 
 /**
  * The IO boundary with webContents.debugger: lease-based attach, event fan-out to
@@ -15,13 +16,15 @@ export class CdpDebuggerChannel {
   private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
   private debuggerLease: ElectronDebuggerLease | null = null
   private attached = false
+  private readonly scriptPaintReleases = new Set<() => void>()
 
   constructor(
     private readonly webContents: WebContents,
     private readonly responder: CdpClientResponseWriter,
     private readonly sessions: CdpSyntheticSessionRegistry,
     private readonly getClient: () => WebSocket | null,
-    private readonly onDetached: () => void
+    private readonly onDetached: () => void,
+    private readonly holdPaint: CapturePaintHold
   ) {}
 
   async attachDebugger(): Promise<void> {
@@ -74,6 +77,7 @@ export class CdpDebuggerChannel {
   }
 
   detachDebugger(): void {
+    this.releaseScriptPaint()
     if (this.debuggerMessageHandler) {
       this.webContents.debugger.removeListener('message', this.debuggerMessageHandler as never)
       this.debuggerMessageHandler = null
@@ -86,6 +90,12 @@ export class CdpDebuggerChannel {
     this.debuggerLease = null
     lease?.release()
     this.attached = false
+  }
+
+  releaseScriptPaint(): void {
+    for (const release of this.scriptPaintReleases) {
+      release()
+    }
   }
 
   sendDebuggerCommand(
@@ -110,7 +120,17 @@ export class CdpDebuggerChannel {
       return
     }
     const sessionId = this.sessions.resolveDebuggerSessionId(msgSessionId)
+    let releasePaint = (): void => {}
     try {
+      if (method === 'Runtime.evaluate' || method === 'Runtime.callFunctionOn') {
+        const release = this.holdPaint()
+        releasePaint = () => {
+          if (this.scriptPaintReleases.delete(releasePaint)) {
+            release()
+          }
+        }
+        this.scriptPaintReleases.add(releasePaint)
+      }
       this.sendDebuggerCommand(method, params, sessionId)
         .then((result) => {
           this.responder.sendResult(clientId, result, client)
@@ -118,7 +138,9 @@ export class CdpDebuggerChannel {
         .catch((err: Error) => {
           this.responder.sendError(clientId, err.message, client)
         })
+        .finally(releasePaint)
     } catch (err) {
+      releasePaint()
       this.responder.sendError(clientId, err instanceof Error ? err.message : String(err), client)
     }
   }

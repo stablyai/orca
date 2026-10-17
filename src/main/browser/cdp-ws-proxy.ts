@@ -44,7 +44,8 @@ export class CdpWsProxy {
       this.responder,
       this.sessions,
       () => this.client,
-      () => this.stop()
+      () => this.stop(),
+      holdPaint
     )
     this.navigation = new CdpPageNavigationCommands(
       webContents,
@@ -160,6 +161,8 @@ export class CdpWsProxy {
   }
 
   private clearClientState(): void {
+    // Why: an awaited page script may never settle after its client disconnects.
+    this.debuggerChannel.releaseScriptPaint()
     // Why: session and focus state belongs to one websocket and must not cross client replacement.
     this.domFocusReplay.clear()
     this.pageCapture.clear()
