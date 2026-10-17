@@ -1,4 +1,5 @@
 import type { GitHubApiRepository } from './github-api-repository'
+import { shouldProbeGitRemote } from '../git/remote-name-listing'
 import {
   getOwnerRepoForRemote,
   type GitHubRemoteIdentityProbeOptions,
@@ -52,6 +53,20 @@ export async function getGitHubApiRepositoryForRemote(
   localGitOptions: LocalGitExecOptions = {},
   probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<GitHubApiRepository | null> {
+  // Why: this is the lowest-level entry point every non-origin remote lookup
+  // routes through (getRepoUpstream, tracked-upstream branch resolution,
+  // explicit-upstream issue/PR preference), so gating here — rather than in
+  // each caller — is what stops a remote git doesn't have (e.g. a removed
+  // `upstream`, or a branch whose tracked remote is stale) from spawning a
+  // `git remote get-url <name>` on every poll. `origin` is exempt: callers
+  // depend on it being attempted unconditionally so a genuinely missing
+  // origin still surfaces as a definitive answer, not a silent skip.
+  if (
+    remoteName !== 'origin' &&
+    !(await shouldProbeGitRemote(repoPath, remoteName, connectionId, localGitOptions))
+  ) {
+    return null
+  }
   // Why: generic PR resolution prefers upstream, but this API represents the
   // caller-selected remote exactly (#7331).
   const requireVerifiedSshProbe = probeOptions.requireVerifiedSshProbe === true
