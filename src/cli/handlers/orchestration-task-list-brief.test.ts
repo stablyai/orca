@@ -42,6 +42,40 @@ describe('orchestration task-list brief output', () => {
     expect(response.result.tasks[0].spec_truncated).toBe(true)
   })
 
+  it('rejects a worktree filter that an older runtime silently ignores', async () => {
+    callMock.mockReset().mockResolvedValue({ result: { tasks: [], count: 0 } })
+    await expect(
+      ORCHESTRATION_HANDLERS['orchestration task-list']({
+        flags: new Map([
+          ['worktree', 'repo::a'],
+          ['run', 'run_1']
+        ]),
+        client: { call: callMock },
+        json: true
+      } as never)
+    ).rejects.toThrow('does not support task worktree filtering')
+  })
+
+  it('accepts a host-confirmed worktree filter', async () => {
+    callMock.mockReset().mockResolvedValue({
+      result: {
+        tasks: [],
+        count: 0,
+        worktreeFilterApplied: 'repo::a'
+      }
+    })
+    await expect(
+      ORCHESTRATION_HANDLERS['orchestration task-list']({
+        flags: new Map([
+          ['worktree', 'repo::a'],
+          ['run', 'run_1']
+        ]),
+        client: { call: callMock },
+        json: true
+      } as never)
+    ).resolves.toBeUndefined()
+  })
+
   it('passes server-abbreviated rows through untouched', async () => {
     const serverTasks = [
       { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }

@@ -44,6 +44,12 @@ export function recordWorkerStage(
         updated_at: new Date().toISOString()
       }
     })
+    if (params.worktreeId) {
+      const dispatch = this.getDispatchContextById(params.dispatchId)
+      if (dispatch) {
+        this.updateTaskProvenance(dispatch.task_id, { worktreeId: params.worktreeId })
+      }
+    }
     this.db.exec('RELEASE worker_stage_transition')
   } catch (error) {
     this.db.exec('ROLLBACK TO worker_stage_transition')
