@@ -104,7 +104,7 @@ A listener that throws on a frame is recorded as a `stream-listener-crash` effec
 failing the suite, the same rule the crash boundary holds for a screen and the unhandled-rejection
 window holds for a detached effect. Only three listeners check the payload is an object before
 reading its `type` — the two `runtime.clientEvents` ones and the structured agent session's, which
-guards with `isSubscribeEvent` in `use-mobile-structured-agent-state.ts` — so without this every
+guards with `isSubscribeEvent` in `mobile-structured-transcript-subscription.ts` — so without this every
 other subscribing family died on the matrix's `result-absent` and `result-null` partitions — the
 two shapes a stream listener is most likely to be wrong about were the only ones the oracle could
 not record. The scenario's own faults

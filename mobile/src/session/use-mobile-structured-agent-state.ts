@@ -1,5 +1,3 @@
-import { openTranscriptAfterHold } from './mobile-structured-transcript-subscription'
-import { startMobileStructuredTranscriptRead } from './mobile-structured-transcript-read'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
@@ -10,6 +8,7 @@ import type {
 } from '../../../src/shared/agent-session-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
+import { startStructuredAgentSessionLiveRead } from '../../../src/shared/structured-agent-session-live-read'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
@@ -17,12 +16,15 @@ import {
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
+import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   agentSessionReadFailureRefusal,
   agentSessionReadFailureText,
+  agentSessionReadRefusalText,
   callAgentSession
 } from './mobile-structured-agent-session-rpc'
+import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-subscription'
 import {
   reduceMobileQueuePause,
   reduceMobileQueuedMessageFeed,
@@ -163,23 +165,45 @@ export function useMobileStructuredAgentState(args: {
       return
     }
     apply({ type: 'loading' })
-    const generation = streamGenerationRef.current
     const holderId = structuredAgentSessionHolderId('mobile-chat')
     const held = callAgentSession(client, 'agentSession.hold', {
       sessionId,
       holderId
     })
-    const endStream = startMobileStructuredTranscriptRead({
+    let ended = false
+    const read = startStructuredAgentSessionLiveRead({
+      applyRequests: apply,
+      applyEvent: (event, options) => {
+        apply({ type: 'event', event, ...options })
+        applyQueued(event)
+      },
+      applyError: (message, refusal) => {
+        // As on desktop: a loaded transcript stays as it is while the read reopens; a refusal is shown.
+        if (stateRef.current.epoch !== null && refusal === undefined) {
+          return
+        }
+        apply(
+          refusal
+            ? { type: 'error', message: agentSessionReadRefusalText(refusal), refusal }
+            : { type: 'error', message }
+        )
+      },
+      getCursor: () => stateRef.current.cursor,
+      onContactLost: () => {},
+      onHistoryReadInvalidated: () => {
+        streamGenerationRef.current += 1
+        setLoadingOlder(false)
+      },
+      readCurrentRequests: (request) =>
+        callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
-      open: (onFrame) => openTranscriptAfterHold(client, sessionId, held, onFrame),
-      read: (request) => callAgentSession(client, 'agentSession.currentRequests', request),
-      apply,
-      applyQueued,
-      error: applyReadFailure,
-      isCurrent: () => generation === streamGenerationRef.current
+      subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
+      // The app coming back (or a new network) cuts a grown reopen wait short.
+      subscribeRetryNow: subscribeConnectionRevival
     })
     return () => {
-      endStream()
+      ended = true
+      read.dispose()
       void held
         .then(() =>
           callAgentSession(
@@ -195,7 +219,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, applyQueued, applyReadFailure, client, connected, enabled, sessionId, sessionKey])
+  }, [apply, applyQueued, client, connected, enabled, sessionId, sessionKey])
 
   const loadEarlier = useCallback(() => {
     const current = stateRef.current
