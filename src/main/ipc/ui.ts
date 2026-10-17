@@ -51,6 +51,7 @@ export function getTrustedUIRendererWindow(): BrowserWindow | null {
   return renderer ? BrowserWindow.fromWebContents(renderer) : null
 }
 
+/** Registers shared UI state and native actions scoped to the requesting trusted renderer. */
 export function registerUIHandlers(
   store: Store,
   options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
@@ -113,19 +114,29 @@ export function registerUIHandlers(
     webContents?.paste()
   })
 
-  ipcMain.removeAllListeners('ui:performNativeSelectionAction')
-  ipcMain.on('ui:performNativeSelectionAction', (event, action: unknown) => {
-    if (
-      !isTrustedUIRenderer(event.sender) &&
-      options.isDashboardPopoutRenderer?.(event.sender) !== true
-    ) {
-      return
-    }
-    const target = BrowserWindow.fromWebContents(event.sender)?.webContents
-    if (action === 'copy') {
-      target?.copy()
-    } else if (action === 'select-all') {
-      target?.selectAll()
+  ipcMain.removeHandler('ui:performNativeSelectionAction')
+  ipcMain.handle('ui:performNativeSelectionAction', (event, action: unknown): boolean => {
+    try {
+      if (
+        (action !== 'copy' && action !== 'select-all') ||
+        event.sender.isDestroyed() ||
+        (!isTrustedUIRenderer(event.sender) &&
+          options.isDashboardPopoutRenderer?.(event.sender) !== true)
+      ) {
+        return false
+      }
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
+        return false
+      }
+      if (action === 'copy') {
+        window.webContents.copy()
+      } else {
+        window.webContents.selectAll()
+      }
+      return true
+    } catch {
+      return false
     }
   })
 }

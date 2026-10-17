@@ -126,8 +126,12 @@ export const uiClipboardAndWindowControlsApi = {
       mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
     })
   },
-  performNativeSelectionAction: (action: 'copy' | 'select-all'): void => {
-    ipcRenderer.send('ui:performNativeSelectionAction', action)
+  performNativeSelectionAction: async (action: 'copy' | 'select-all'): Promise<boolean> => {
+    try {
+      return (await ipcRenderer.invoke('ui:performNativeSelectionAction', action)) === true
+    } catch {
+      return false
+    }
   },
   writeClipboardFile: (
     args:

@@ -3,6 +3,7 @@ import { Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { copySelectedTextFromUserInput } from '@/lib/copy-selected-text-from-user-input'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
@@ -64,11 +65,11 @@ export function NativeChatSelectionQuote({
       }
       selectionChanged = false
       if (useAppStore.getState().settings?.terminalClipboardOnSelect) {
-        const text = readNativeChatTranscriptSelection(root)
-        if (text) {
-          // Swallowed like the terminal's copy on select: a failed copy leaves the selection to retry.
-          void window.api.ui.writeClipboardText(text).catch(() => {})
-        }
+        // A failed copy leaves the selection available for retry.
+        void copySelectedTextFromUserInput({
+          text: readNativeChatTranscriptSelection(root),
+          writeClipboardText: window.api.ui.writeClipboardText
+        }).catch(() => {})
       }
       window.clearTimeout(timer)
       timer = window.setTimeout(() => {

@@ -17,7 +17,7 @@ import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
-import { copyTerminalSelection } from './terminal-selection-copy'
+import { copyTerminalSelectionFromUserInput } from './terminal-selection-copy'
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from './terminal-native-copy-gutter'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
@@ -161,10 +161,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       if (!shouldWriteClipboard) {
         return
       }
-      void copyTerminalSelection({
-        terminal: pane.terminal,
-        writeClipboardText: window.api.ui.writeTerminalClipboardText
-      }).catch(() => {})
+      void copyTerminalSelectionFromUserInput(pane.terminal, 'selection').catch(() => {})
     })
   )
   if (settingsRef.current?.terminalMouseHideWhileTyping) {

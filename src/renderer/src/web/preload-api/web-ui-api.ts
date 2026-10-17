@@ -188,8 +188,12 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     performNativePaste: () => {
       document.execCommand?.('paste')
     },
-    performNativeSelectionAction: (action) => {
-      document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
+    performNativeSelectionAction: async (action) => {
+      try {
+        return document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll') === true
+      } catch {
+        return false
+      }
     },
     onExportPdfRequested: () => noopUnsubscribe,
     onAppMenuPaste: () => noopUnsubscribe,
