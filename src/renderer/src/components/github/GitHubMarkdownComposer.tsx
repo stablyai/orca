@@ -48,6 +48,7 @@ type GitHubMarkdownComposerProps = {
   previewGithubRepo?: GitHubOwnerRepo | null
 }
 
+/** Keeps a rich Markdown editor and preview synchronized with the parent-owned draft. */
 export function GitHubMarkdownComposer({
   value,
   onChange,
@@ -201,7 +202,8 @@ export function GitHubMarkdownComposer({
       return
     }
     editorRef.current = editor
-    editor.setEditable(!disabled)
+    // Editability updates must not restore the submitted draft through onChange.
+    editor.setEditable(!disabled, false)
   }, [disabled, editor])
 
   useEffect(() => {
