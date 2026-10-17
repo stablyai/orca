@@ -103,6 +103,13 @@ const CALLER_VERBS: Verb[] = [
     method: 'runCurrent',
     callerParam: 'from'
   },
+  {
+    command: 'run-handover',
+    flags: { id: 'run_1', 'to-task': 'task_1' },
+    callerFlag: 'from',
+    method: 'runHandover',
+    callerParam: 'from'
+  },
   { command: 'check', flags: {}, callerFlag: 'terminal', method: 'check', callerParam: 'terminal' },
   {
     command: 'send',
@@ -656,6 +663,7 @@ describe('every orchestration verb, enumerated', () => {
       'reply',
       'run-create',
       'run-current',
+      'run-handover',
       'run-use',
       'send',
       'task-create',

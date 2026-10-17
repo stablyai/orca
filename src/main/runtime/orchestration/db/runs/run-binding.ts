@@ -1,3 +1,5 @@
+import { authorizeRunBinding, acceptRunHandover } from './run-ownership'
+import { getRunAuthority, getRunHandover, recordRunCaller } from './run-authority-store'
 import type { RunRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
@@ -13,6 +15,11 @@ import {
 export function bindRun(
   this: OrchestrationDb,
   params: {
+    processIncarnation?: string | null
+    recordReceipt?: (run: RunRow) => void
+    onUnchangedWorker?: () => void
+    takeover?: boolean
+    probed?: { consumerGeneration: number; liveLabel: string | null }
     runId: string
     coordinatorHandle: string | null
     coordinatorPaneKey: string | null
@@ -31,7 +38,8 @@ export function bindRun(
   const coordinator = {
     terminalHandle: params.coordinatorHandle,
     paneKey: params.coordinatorPaneKey,
-    orcaSessionId: params.coordinatorOrcaSessionId ?? null
+    orcaSessionId: params.coordinatorOrcaSessionId ?? null,
+    processIncarnation: params.processIncarnation ?? null
   }
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -40,7 +48,15 @@ export function bindRun(
       this.db.exec('ROLLBACK')
       return undefined
     }
-    const sameBinding = runBoundToCoordinator(run, coordinator)
+    const decision = authorizeRunBinding(
+      this,
+      run,
+      coordinator,
+      Boolean(params.takeover || params.takeoverLegacy)
+    )
+    const sameBinding = decision.worker
+      ? decision.unchanged
+      : runBoundToCoordinator(run, coordinator)
     const adoption = this.getLegacyAdoption()
     const adoptedRun = adoption?.adopted_run_id === params.runId
     const legacyAuthority = params.legacyCoordinatorAuthority
@@ -112,6 +128,13 @@ export function bindRun(
     // Why: only LIVE legacy work needs the flag — settled work has no competing authority left, and
     // fencing it would strand the recovered graph behind an attestation the caller may not have.
     if (activeLegacyAssignment && !sameBinding && !provenLegacyBinding && !params.takeoverLegacy) {
+      if (decision.worker) {
+        throw new OrchestrationError(
+          'consumer_fenced',
+          'This Run still has active legacy work. Ask its coordinator for recovery; nothing changed.',
+          { effectsApplied: false }
+        )
+      }
       throw new OrchestrationError(
         'consumer_fenced',
         'This adopted Run still has live legacy work. Its attested coordinator may rebind it, or a current coordinator may explicitly use run-use --takeover-legacy.',
@@ -120,6 +143,46 @@ export function bindRun(
           recoveryCommand: `orca orchestration run-use --id ${params.runId} --takeover-legacy`
         }
       )
+    }
+    if (params.probed && params.probed.consumerGeneration !== run.consumer_generation) {
+      throw new OrchestrationError(
+        'run_binding_changed',
+        'The Run’s coordinator changed while it was checked. Retry the same command.',
+        { effectsApplied: false }
+      )
+    }
+    if (decision.worker && decision.unchanged) {
+      const confirmed = this.getRun(params.runId)
+      if (!confirmed) {
+        throw new Error('Confirmed Run is missing')
+      }
+      params.recordReceipt?.(confirmed)
+      params.onUnchangedWorker?.()
+      this.db.exec('COMMIT')
+      return confirmed
+    }
+    if (
+      !sameBinding &&
+      params.probed?.liveLabel &&
+      !decision.grantAccepted &&
+      !decision.priorAttempt &&
+      !params.takeover &&
+      !params.takeoverLegacy &&
+      !provenLegacyBinding
+    ) {
+      const advice = decision.worker
+        ? ' Ask its coordinator for a hand-over.'
+        : ' Use --takeover only if the user asks to replace it.'
+      throw new OrchestrationError(
+        'run_coordinator_live',
+        `This Run is coordinated by ${params.probed.liveLabel}, which is still open.${advice}`,
+        { effectsApplied: false }
+      )
+    }
+    const priorAuthority = getRunAuthority(this, params.runId)
+    const priorHandover = decision.grantAccepted ? undefined : getRunHandover(this, params.runId)
+    if (decision.grantAccepted) {
+      acceptRunHandover(this, params.runId)
     }
     this.unbindOtherRunsForCoordinator(coordinator, params.runId)
     // The mailbox address of the coordinator being replaced and of the one binding now.
@@ -178,6 +241,12 @@ export function bindRun(
         )
         .run(coordinator.orcaSessionId, params.runId)
     }
+    recordRunCaller(this, params.runId, coordinator, priorAuthority, priorHandover)
+    const bound = this.getRun(params.runId)
+    if (!bound) {
+      throw new Error('Bound Run is missing')
+    }
+    params.recordReceipt?.(bound)
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')
