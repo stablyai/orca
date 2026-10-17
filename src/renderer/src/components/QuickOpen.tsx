@@ -1,5 +1,5 @@
 import { useQuickOpenInteraction } from './use-quick-open-interaction'
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useActiveWorktree } from '@/store/selectors'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
@@ -15,6 +15,7 @@ import {
   parseQuickOpenQueryTarget,
   isQuickOpenAbsolutePath
 } from '../../../shared/quick-open-query-target'
+import { completeQuickOpenEditorHandoff } from './quick-open-editor-focus'
 import { openQuickOpenFile } from './quick-open-file-navigation'
 import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
 import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
@@ -80,6 +81,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   // the dialog (Esc / click-away) would otherwise leave the active panel
   // unfocused. This returns focus to the surface that was active on open.
   const { captureReturnFocus, skipReturnFocus } = useModalReturnFocus(visible)
+  const openedEditorRef = useRef<{ fileId: string; worktreeId: string } | null>(null)
 
   // Why: reset input only on open. Keeping this out of the file-load effect
   // prevents unrelated store updates (which can produce a new excludePaths
@@ -112,7 +114,7 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
       const interaction = begin()
       setOpenError(null)
       try {
-        await openQuickOpenFile(
+        const fileId = await openQuickOpenFile(
           selectedPath,
           activeWorktreeId,
           worktreePath,
@@ -121,6 +123,9 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
           interaction.assertCurrent
         )
         interaction.assertCurrent()
+        // Why: skip the previous surface, then focus this file's editor once the
+        // dialog trap is gone. Otherwise Cmd+F never reaches the editor.
+        openedEditorRef.current = { fileId, worktreeId: activeWorktreeId }
         skipReturnFocus()
         closeModal()
       } catch (error) {
@@ -153,9 +158,12 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     [closeModal, invalidate]
   )
 
-  const handleCloseAutoFocus = useCallback((e: Event) => {
-    // Why: prevent Radix from stealing focus to the trigger element.
-    e.preventDefault()
+  const handleCloseAutoFocus = useCallback((event: Event) => {
+    const openedEditor = openedEditorRef.current
+    openedEditorRef.current = null
+    // Why: prevent Radix from restoring the trigger. A file open then focuses
+    // that file's editor after the dialog trap unmounts (issue #29226).
+    completeQuickOpenEditorHandoff(event, openedEditor)
   }, [])
 
   const handleOpenAutoFocus = useCallback(() => {
