@@ -97,14 +97,39 @@ export function updateWorkerSetupEvidence(
   }
 }
 
+/** Records the launch a worker host resolved, so observations show the agent that actually ran. */
+export function recordWorkerStartLaunch(
+  this: OrchestrationDb,
+  params: { dispatchId: string; agent: string | null; launch: unknown }
+): void {
+  const current = this.getWorkerDispatch(params.dispatchId)
+  if (!current) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Dispatch ${params.dispatchId} was not found.`
+    )
+  }
+  const startOptions: Record<string, unknown> = JSON.parse(current.start_options)
+  this.db.prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?').run(
+    JSON.stringify({
+      ...startOptions,
+      ...(params.agent ? { agent: params.agent } : {}),
+      launch: params.launch
+    }),
+    params.dispatchId
+  )
+}
+
 export type WorkerDispatchStageMethods = {
   recordWorkerStage: typeof recordWorkerStage
   updateWorkerSetupEvidence: typeof updateWorkerSetupEvidence
+  recordWorkerStartLaunch: typeof recordWorkerStartLaunch
 }
 
 export function attachWorkerDispatchStage(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     recordWorkerStage,
-    updateWorkerSetupEvidence
+    updateWorkerSetupEvidence,
+    recordWorkerStartLaunch
   })
 }
