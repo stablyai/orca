@@ -17,6 +17,7 @@ function context(overrides: Partial<CmdJQuickActionContext> = {}): CmdJQuickActi
     openNewTerminalTab: vi.fn(),
     openCreateWorkspace: vi.fn(),
     deleteActiveWorkspace: vi.fn(),
+    toggleActiveWorkspacePin: vi.fn(),
     openAddQuickCommand: vi.fn(),
     ...overrides
   }

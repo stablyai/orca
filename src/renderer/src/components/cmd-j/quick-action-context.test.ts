@@ -421,6 +421,7 @@ describe('Cmd+J quick action context', () => {
       activeWorktree: null,
       runtimeMode: 'local-desktop' as const,
       openNewBrowserTab: async () => {},
+      openBrowserUrl: async () => {},
       openNewMarkdownFile: async () => {},
       openNewTerminalTab: async () => {},
       openCreateWorkspace: () => {},
