@@ -32,6 +32,8 @@ export type WorktreeMeta = {
   /** True when a user-authored label must survive branch changes. */
   displayNameIsPinned?: boolean
   comment: string
+  /** Host time in milliseconds of the last comment or workspaceStatus change; absent for legacy data. */
+  metadataUpdatedAt?: number
   linkedIssue: number | null
   linkedPR: number | null
   /** GitHub PR hidden from branch discovery after an explicit unlink. */

@@ -31,6 +31,12 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 describe('folderWorkspaceToWorktree', () => {
+  it('preserves the metadata timestamp without inventing one for old workspaces', () => {
+    expect(
+      folderWorkspaceToWorktree(makeFolderWorkspace({ metadataUpdatedAt: 123 })).metadataUpdatedAt
+    ).toBe(123)
+    expect(folderWorkspaceToWorktree(makeFolderWorkspace()).metadataUpdatedAt).toBeUndefined()
+  })
   it.each([
     [{}, 'local|folder:folder-workspace-1'],
     [{ connectionId: 'ssh host' }, 'ssh:ssh%20host|folder:folder-workspace-1'],

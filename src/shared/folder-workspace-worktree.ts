@@ -64,6 +64,9 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     ...(creatorProvenance ? { creatorProvenance } : {}),
     displayName: folderWorkspace.name,
     comment: folderWorkspace.comment,
+    ...(folderWorkspace.metadataUpdatedAt !== undefined
+      ? { metadataUpdatedAt: folderWorkspace.metadataUpdatedAt }
+      : {}),
     linkedIssue:
       selectedTask?.provider === 'github' && selectedTask.type === 'issue'
         ? selectedTask.number

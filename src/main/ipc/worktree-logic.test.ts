@@ -541,6 +541,7 @@ describe('mergeWorktree', () => {
       displayName: 'My Feature',
       displayNameIsPinned: true,
       comment: 'WIP',
+      metadataUpdatedAt: 1234,
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
@@ -572,6 +573,7 @@ describe('mergeWorktree', () => {
       }
     }
     const result = mergeWorktree('repo1', baseGit, meta)
+    expect(result.metadataUpdatedAt).toBe(1234)
     expect(result).toEqual({
       id: 'repo1::/workspaces/feature',
       repoId: 'repo1',
@@ -583,6 +585,7 @@ describe('mergeWorktree', () => {
       displayName: 'My Feature',
       displayNameMode: 'fixed',
       comment: 'WIP',
+      metadataUpdatedAt: 1234,
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,

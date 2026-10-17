@@ -24,6 +24,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
       getRepos: () => [],
       getWorktreeMeta: () => ({
         hostId: 'ssh:persisted-host',
+        metadataUpdatedAt: 123,
         linkedPR: 42,
         linkedItems: [{ provider: 'github', type: 'pr', number: 57 }]
       }),
@@ -39,6 +40,7 @@ describe('buildRuntimeWorktreePsSummaries', () => {
     }).get(worktree.id)
 
     expect(summary?.hostId).toBe('ssh:persisted-host')
+    expect(summary?.metadataUpdatedAt).toBe(123)
     expect(summary?.linkedItems).toEqual([
       { provider: 'github', type: 'pr', number: 57 },
       { provider: 'github', type: 'pr', number: 42 }
