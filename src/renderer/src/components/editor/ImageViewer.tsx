@@ -1,7 +1,8 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: image surface size is measured with ResizeObserver and DOM refs, which are external layout systems outside render derivation. */
-import { Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
+import { Copy, Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import ImageViewerContextMenu from './ImageViewerContextMenu'
 import ImageViewerPopup from './ImageViewerPopup'
 import PdfViewer from './PdfViewer'
 import {
@@ -19,6 +20,7 @@ import {
   type ImageViewerSurfaceSize,
   getZoomedImageLayoutSize
 } from './image-viewer-zoom'
+import { useImageViewerCopy } from './use-image-viewer-copy'
 import { translate } from '@/i18n/i18n'
 import { buildImageDataUri } from '../../../../shared/image-data-uri'
 
@@ -71,6 +73,7 @@ export default function ImageViewer({
     () => buildImageDataUri(mimeType, cleanedContent),
     [cleanedContent, mimeType]
   )
+  const { copyImage, copyScopeProps } = useImageViewerCopy(previewSrc)
   const imageError =
     (previewSrc === null && cleanedContent.length > 0) ||
     (previewSrc !== null && failedPreviewSrc === previewSrc)
@@ -263,59 +266,72 @@ export default function ImageViewer({
 
   return (
     <>
-      <div className={cn('flex min-h-0 flex-col', isIntrinsicLayout ? 'h-auto' : 'h-full')}>
-        <div
-          ref={setInlineSurfaceRef}
-          className={cn(
-            'cursor-pointer bg-muted/20',
-            isIntrinsicLayout
-              ? 'flex justify-center overflow-visible p-4'
-              : 'flex-1 overflow-auto scrollbar-editor'
-          )}
-          onClick={openPopup}
-          title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
-        >
+      <div
+        {...copyScopeProps}
+        // Why: focusable so a click inside lets Cmd/Ctrl+C copy the image.
+        tabIndex={-1}
+        className={cn(
+          'flex min-h-0 flex-col outline-none',
+          isIntrinsicLayout ? 'h-auto' : 'h-full'
+        )}
+      >
+        <ImageViewerContextMenu copyImage={copyImage}>
           <div
+            ref={setInlineSurfaceRef}
             className={cn(
-              'flex justify-center',
+              'cursor-pointer bg-muted/20',
               isIntrinsicLayout
-                ? 'max-w-full items-start'
-                : 'h-max min-h-full w-max min-w-full items-center p-4'
+                ? 'flex justify-center overflow-visible p-4'
+                : 'flex-1 overflow-auto scrollbar-editor'
+            )}
+            onClick={openPopup}
+            title={translate(
+              'auto.components.editor.ImageViewer.77bfc9b35a',
+              'Open image in popup'
             )}
           >
             <div
-              className="flex items-center justify-center"
-              style={
+              className={cn(
+                'flex justify-center',
                 isIntrinsicLayout
-                  ? { transform: `scale(${inlineZoom})`, transformOrigin: 'center center' }
-                  : inlineImageLayoutStyle
-              }
+                  ? 'max-w-full items-start'
+                  : 'h-max min-h-full w-max min-w-full items-center p-4'
+              )}
             >
-              <img
-                src={previewSrc}
-                alt={filename}
-                className={cn(
-                  'object-contain',
+              <div
+                className="flex items-center justify-center"
+                style={
                   isIntrinsicLayout
-                    ? 'block h-auto max-h-none max-w-full'
-                    : inlineImageLayoutSize
-                      ? 'block h-full w-full'
-                      : // Why: the w-max/h-max scroll box makes percentage maxes resolve to
-                        // none, so only viewport units bound the image before onLoad.
-                        'block max-h-[100vh] max-w-[100vw]'
-                )}
-                onLoad={(event) => {
-                  const img = event.currentTarget
-                  setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
-                  setFailedPreviewSrc(null)
-                }}
-                // Why: track the failed source identity, not a boolean, so a new
-                // image retries immediately without waiting for an Effect reset.
-                onError={() => setFailedPreviewSrc(previewSrc)}
-              />
+                    ? { transform: `scale(${inlineZoom})`, transformOrigin: 'center center' }
+                    : inlineImageLayoutStyle
+                }
+              >
+                <img
+                  src={previewSrc}
+                  alt={filename}
+                  className={cn(
+                    'object-contain',
+                    isIntrinsicLayout
+                      ? 'block h-auto max-h-none max-w-full'
+                      : inlineImageLayoutSize
+                        ? 'block h-full w-full'
+                        : // Why: the w-max/h-max scroll box makes percentage maxes resolve to
+                          // none, so only viewport units bound the image before onLoad.
+                          'block max-h-[100vh] max-w-[100vw]'
+                  )}
+                  onLoad={(event) => {
+                    const img = event.currentTarget
+                    setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight })
+                    setFailedPreviewSrc(null)
+                  }}
+                  // Why: track the failed source identity, not a boolean, so a new
+                  // image retries immediately without waiting for an Effect reset.
+                  onError={() => setFailedPreviewSrc(previewSrc)}
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </ImageViewerContextMenu>
         <div className="flex items-center gap-4 border-t px-4 py-2 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
             <button
@@ -350,6 +366,16 @@ export default function ImageViewer({
               <ZoomIn size={14} />
             </button>
             <span className="ml-1 tabular-nums">{inlineZoomPercent}%</span>
+            {copyImage && (
+              <button
+                type="button"
+                className="ml-2 rounded p-1 hover:bg-accent hover:text-foreground"
+                onClick={copyImage}
+                title={translate('components.native-chat.composer.copyImage', 'Copy image')}
+              >
+                <Copy size={14} />
+              </button>
+            )}
           </div>
           <span className="min-w-0 truncate" title={filename}>
             {filename}
@@ -363,6 +389,8 @@ export default function ImageViewer({
         </div>
       </div>
       <ImageViewerPopup
+        copyImage={copyImage}
+        copyScopeProps={copyScopeProps}
         filename={filename}
         imageLayoutSize={popupImageLayoutSize}
         imageLayoutStyle={popupImageLayoutStyle}
