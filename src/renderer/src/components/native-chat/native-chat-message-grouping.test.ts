@@ -33,12 +33,29 @@ describe('orderNativeChatMessages', () => {
     expect(ordered.map((m) => m.id)).toEqual(['a', 'z'])
   })
 
-  it('sorts the streaming preview after real content but before optimistic echoes', () => {
+  it('sorts a pending user prompt before an active streaming assistant preview triggered by it', () => {
     const ordered = orderNativeChatMessages([
       msg({ id: 'pending:abc', role: 'user', timestamp: 20, source: 'scrape' }),
       msg({ id: NATIVE_CHAT_STREAMING_ID, timestamp: null }),
       msg({ id: 'real-user', role: 'user', timestamp: 10 })
     ])
-    expect(ordered.map((m) => m.id)).toEqual(['real-user', 'streaming', 'pending:abc'])
+    expect(ordered.map((m) => m.id)).toEqual(['real-user', 'pending:abc', 'streaming'])
+  })
+
+  it('sorts a pending user prompt before a subsequent assistant response', () => {
+    const ordered = orderNativeChatMessages([
+      msg({ id: 'resp-1', role: 'assistant', timestamp: 200 }),
+      msg({ id: 'pending:abc', role: 'user', timestamp: 100, source: 'scrape' })
+    ])
+    expect(ordered.map((m) => m.id)).toEqual(['pending:abc', 'resp-1'])
+  })
+
+  it('sorts a queued prompt after an active streaming assistant preview', () => {
+    const ordered = orderNativeChatMessages([
+      msg({ id: 'pending:queued', role: 'user', timestamp: 30, source: 'scrape', queued: true }),
+      msg({ id: NATIVE_CHAT_STREAMING_ID, timestamp: null }),
+      msg({ id: 'pending:trigger', role: 'user', timestamp: 20, source: 'scrape' })
+    ])
+    expect(ordered.map((m) => m.id)).toEqual(['pending:trigger', 'streaming', 'pending:queued'])
   })
 })

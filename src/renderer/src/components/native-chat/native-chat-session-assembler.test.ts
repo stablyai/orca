@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { assembleNativeChatSession } from './native-chat-session-assembler'
+import { assembleNativeChatSession, compareMessages } from './native-chat-session-assembler'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 
 function msg(
   overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>
@@ -411,5 +412,57 @@ describe('assembleNativeChatSession', () => {
     })
     expect(session.status).toBe('error')
     expect(session.error).toBe('transcript unreadable')
+  })
+})
+
+describe('compareMessages', () => {
+  it('sorts a pending user prompt before a subsequent assistant response', () => {
+    const pending = msg({ id: 'pending:abc', role: 'user', timestamp: 100 })
+    const assistant = msg({ id: 'assistant-1', role: 'assistant', timestamp: 200 })
+    expect(compareMessages(pending, assistant)).toBeLessThan(0)
+    expect([assistant, pending].sort(compareMessages).map((m) => m.id)).toEqual([
+      'pending:abc',
+      'assistant-1'
+    ])
+  })
+
+  it('sorts a launch pending user prompt before a subsequent assistant response', () => {
+    const launchPending = msg({ id: 'launch-pending:tab-1', role: 'user', timestamp: 100 })
+    const assistant = msg({ id: 'assistant-1', role: 'assistant', timestamp: 200 })
+    expect(compareMessages(launchPending, assistant)).toBeLessThan(0)
+    expect([assistant, launchPending].sort(compareMessages).map((m) => m.id)).toEqual([
+      'launch-pending:tab-1',
+      'assistant-1'
+    ])
+  })
+
+  it('sorts a pending user prompt before an active streaming assistant preview triggered by it', () => {
+    const pending = msg({ id: 'pending:abc', role: 'user', timestamp: 100 })
+    const streaming = msg({ id: NATIVE_CHAT_STREAMING_ID, role: 'assistant', timestamp: null })
+    expect(compareMessages(pending, streaming)).toBeLessThan(0)
+    expect([streaming, pending].sort(compareMessages).map((m) => m.id)).toEqual([
+      'pending:abc',
+      NATIVE_CHAT_STREAMING_ID
+    ])
+  })
+
+  it('sorts a launching prompt before an active streaming assistant preview', () => {
+    const launching = msg({ id: 'launch-pending:tab-1', role: 'user', timestamp: 100 })
+    const streaming = msg({ id: NATIVE_CHAT_STREAMING_ID, role: 'assistant', timestamp: null })
+    expect(compareMessages(launching, streaming)).toBeLessThan(0)
+    expect([streaming, launching].sort(compareMessages).map((m) => m.id)).toEqual([
+      'launch-pending:tab-1',
+      NATIVE_CHAT_STREAMING_ID
+    ])
+  })
+
+  it('sorts a queued user prompt after an active streaming assistant preview', () => {
+    const queued = msg({ id: 'pending:queued', role: 'user', timestamp: 100, queued: true })
+    const streaming = msg({ id: NATIVE_CHAT_STREAMING_ID, role: 'assistant', timestamp: null })
+    expect(compareMessages(queued, streaming)).toBeGreaterThan(0)
+    expect([queued, streaming].sort(compareMessages).map((m) => m.id)).toEqual([
+      NATIVE_CHAT_STREAMING_ID,
+      'pending:queued'
+    ])
   })
 })
