@@ -4,27 +4,20 @@ import {
   buildExplicitEntriesByTabId,
   collectTabPaneInputs,
   resolveAttention
-} from '@/components/sidebar/smart-attention'
-import { collectLeafIds } from '@/components/terminal-pane/terminal-pane-layout-tree'
+} from '../../../shared/sidebar-list/smart-attention'
+import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { resolveRuntimePaneTitleLeafId } from '../../../shared/runtime-pane-title-leaf-id'
+import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
-import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
-import {
-  getSettingsFocusedExecutionHostId,
-  getWorktreeExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../shared/structured-agent-session-projection'
-import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { isSyntheticAgentPermissionTitle } from '../../../shared/synthetic-agent-title'
-import type { Worktree } from '../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { orderedWorkspaceTabs, type OrderedTab } from './next-attention-tab-order'
 
@@ -49,7 +42,6 @@ type QueueContext = {
   now: number
   entriesByTabId: ReadonlyMap<string, AgentStatusEntry[]>
   unreadPaneKeysByTabId: ReadonlyMap<string, string[]>
-  workspaceFlags: ReadonlyMap<string, WorkspaceFlag>
   mirroredTabIds: ReadonlySet<string>
 }
 
@@ -193,32 +185,6 @@ function chatTabTarget(
     : []
 }
 
-type WorkspaceFlag = { isUnread: boolean; lastActivityAt: number }
-
-/** Keyed by host-resolved identity, matching the sidebar order's executionHostId. */
-function indexWorkspaceFlags(state: AppState): Map<string, WorkspaceFlag> {
-  const repoMap = getRepoMapFromState(state)
-  const rows: { worktree: Worktree; repoId?: string }[] = [
-    ...getAllWorktreesFromState(state).map((worktree) => ({ worktree, repoId: worktree.repoId })),
-    ...state.folderWorkspaces.map((folder) => ({ worktree: folderWorkspaceToWorktree(folder) }))
-  ]
-  // Same default as the sidebar order, or a host-less row would key under a different identity.
-  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
-  const flags = new Map<string, WorkspaceFlag>()
-  for (const { worktree, repoId } of rows) {
-    const hostId = getWorktreeExecutionHostId(
-      worktree,
-      repoId === undefined ? undefined : repoMap.get(repoId),
-      defaultHostId
-    )
-    flags.set(composeWorktreeHostIdentity(hostId, worktree.id), {
-      isUnread: worktree.isUnread,
-      lastActivityAt: worktree.lastActivityAt
-    })
-  }
-  return flags
-}
-
 /** Every place needing the user, top-to-bottom: sidebar order, then tab strip, then panes. */
 export function buildAttentionQueue(
   state: AppState,
@@ -243,7 +209,6 @@ export function buildAttentionQueue(
       state.migrationUnsupportedByPtyId
     ),
     unreadPaneKeysByTabId: indexUnreadPaneKeys(state),
-    workspaceFlags: indexWorkspaceFlags(state),
     mirroredTabIds
   }
   const queue: AttentionTarget[] = []
@@ -275,12 +240,11 @@ function workspaceTargets(
     worktreeId: workspace.id,
     ...(workspace.executionHostId ? { executionHostId: workspace.executionHostId } : {})
   }
-  const flag = ctx.workspaceFlags.get(workspaceIdentity) ?? { isUnread: false, lastActivityAt: 0 }
   const targets: AttentionTarget[] = []
   for (const tab of ownsTabs ? orderedWorkspaceTabs(state, workspace.id) : []) {
     targets.push(
       ...(tab.kind === 'terminal'
-        ? terminalTabTargets(ctx, base, tab, flag.lastActivityAt)
+        ? terminalTabTargets(ctx, base, tab, workspace.lastActivityAt)
         : chatTabTarget(ctx, base, tab))
     )
   }
@@ -300,5 +264,5 @@ function workspaceTargets(
   if (unmirrored) {
     return [{ ...base, level: 'workspace', ownerPaneKey: unmirrored.paneKey }]
   }
-  return flag.isUnread ? [{ ...base, level: 'workspace' }] : []
+  return workspace.isUnread ? [{ ...base, level: 'workspace' }] : []
 }

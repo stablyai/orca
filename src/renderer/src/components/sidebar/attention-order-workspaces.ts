@@ -7,6 +7,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
+import { getAllWorktreesFromState } from '@/store/selectors'
 import { computeRenderedSidebarRows } from './rendered-sidebar-worktree-order'
 import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
 import {
@@ -17,12 +18,17 @@ import { computeLiveVisibleSidebarWorktrees } from './visible-worktrees'
 
 const NO_COLLAPSED_GROUPS = new Set<string>()
 
+const liveRowKey = (worktree: Worktree): string =>
+  `${worktree.repoId}\0${worktree.hostId ?? ''}\0${worktree.id}`
+
 export type AttentionOrderWorkspace = {
   id: string
   /** Host the row resolves to: keys identity, since the active workspace records the resolved host. */
   identityHostId: ExecutionHostId
   /** The row's own hostId, passed to activation as-is like Cmd+1–9 so legacy rows find their owner. */
   executionHostId?: ExecutionHostId
+  isUnread: boolean
+  lastActivityAt: number
 }
 
 /**
@@ -59,13 +65,24 @@ export function computeAttentionOrderWorkspaceTargets(
   )
   // Why single-location: it keeps each workspace's first row, so a pinned copy wins over its group copy.
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+  // Why live rows: the published list lags the store by a commit, so its unread flags can be stale.
+  const liveRows = new Map(
+    getAllWorktreesFromState(state).map((worktree) => [liveRowKey(worktree), worktree])
+  )
   return getRenderedWorkspaceRowsInSidebarOrder(rows, 'single-location').map((row) => {
     const identityHostId = getWorktreeExecutionHostId(row.worktree, row.repo, defaultHostId)
     // Why pin local: an unqualified id could otherwise resolve to a same-id remote row first.
     const executionHostId =
       row.worktree.hostId ??
       (identityHostId === LOCAL_EXECUTION_HOST_ID ? identityHostId : undefined)
-    return { id: row.worktree.id, identityHostId, ...(executionHostId ? { executionHostId } : {}) }
+    const live = liveRows.get(liveRowKey(row.worktree)) ?? row.worktree
+    return {
+      id: row.worktree.id,
+      identityHostId,
+      ...(executionHostId ? { executionHostId } : {}),
+      isUnread: live.isUnread,
+      lastActivityAt: live.lastActivityAt
+    }
   })
 }
 
