@@ -1110,6 +1110,8 @@ function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
     $key = $parts[$parts.Count - 1]
     $prefix = ""
     if ($parts.Count -gt 1) {
+        # Why: SendKeys types an uppercase letter as Shift+letter, so Ctrl+A would send Ctrl+Shift+A.
+        if ($key.Length -eq 1) { $key = $key.ToLowerInvariant() }
         foreach ($modifier in $parts[0..($parts.Count - 2)]) {
             $prefix += ConvertTo-OrcaSendKeysModifier $modifier
         }
