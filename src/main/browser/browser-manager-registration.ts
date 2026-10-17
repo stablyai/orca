@@ -64,7 +64,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)
     this.setupShortcutForwarding(browserTabId, guest)
-    this.setupMouseWheelZoomForwarding(browserTabId, guest)
+    this.setupGuestMouseForwarding(browserTabId, guest)
     this.flushPendingLoadFailure(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
@@ -106,10 +106,10 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       fwdCleanup()
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
     }
-    const mouseWheelZoomCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
-    if (mouseWheelZoomCleanup) {
-      mouseWheelZoomCleanup()
-      this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
+    const guestMouseCleanup = this.guestMouseCleanupByTabId.get(browserTabId)
+    if (guestMouseCleanup) {
+      guestMouseCleanup()
+      this.guestMouseCleanupByTabId.delete(browserTabId)
     }
     let hasActiveDownloads = false
     for (const [downloadId, download] of this.downloadsById.entries()) {
@@ -215,7 +215,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.pendingPermissionEventsByGuestId.clear()
     this.pendingPopupEventsByGuestId.clear()
     this.pendingDownloadIdsByGuestId.clear()
-    this.mouseWheelZoomCleanupByTabId.clear()
+    this.guestMouseCleanupByTabId.clear()
     this.annotationViewportBridgeOpsByTabId.clear()
   }
 }
