@@ -168,6 +168,8 @@ export function createWorkspaceTerminalHydrationActions(
           worktreesByRepo,
           // Why: restore the focus-recency map; pruning is deferred to App.tsx (post-hydration) because SSH worktrees may still be appearing in worktreesByRepo.
           lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
+          explicitlySleptChatsByWorkspace:
+            session.explicitlySleptChatsByWorkspace ?? s.explicitlySleptChatsByWorkspace,
           // Why union: a persist snapshot that omits the write-once marker is a writer that never
           // stamped it, not a report that default tabs were never applied (#18117).
           defaultTerminalTabsAppliedByWorktreeId: {

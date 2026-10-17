@@ -8,6 +8,7 @@ import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
+import type { ExplicitlySleptChatsByWorkspace } from './workspace-chat-sleep'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -132,6 +133,8 @@ export type WorkspaceSessionState = {
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
   /** Provider-session resume records captured when workspaces sleep. */
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
+  /** Client view intent from explicit Sleep, keyed by execution host and workspace. */
+  explicitlySleptChatsByWorkspace?: ExplicitlySleptChatsByWorkspace
   /** Host-issued process incarnation for each durable terminal surface. */
   terminalPtyIncarnationsByPaneKey?: Record<string, string>
   /** Monotonic host authority watermark for terminal membership in each repo. */

@@ -20,15 +20,27 @@ const EMPTY_WORKTREE_IDS: ReadonlySet<string> = new Set()
  * Worktree ids that currently have a live agent session, derived from the
  * live `agentStatusByPaneKey` map.
  *
- * Why only fresh in-progress rows: disconnected SSH and completed headless
- * agents can retain status entries without an open session.
+ * Why only fresh in-progress rows, plus chats whose host still runs their
+ * agent: disconnected SSH and completed headless agents can retain status
+ * entries without an open session.
  */
 export function getWorktreeIdsWithLiveAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
   tabsByWorktree: TabsByWorktree | null | undefined,
   now: number
 ): Set<string> {
-  return new Set(getLiveAgentStatusByWorktreeId(agentStatusByPaneKey, tabsByWorktree, now).keys())
+  const rows = Object.values(agentStatusByPaneKey ?? {})
+  const otherRows = Object.fromEntries(
+    rows.filter((entry) => !entry.structuredHostOwned).map((entry) => [entry.paneKey, entry])
+  )
+  const worktreeIds = new Set(getLiveAgentStatusByWorktreeId(otherRows, tabsByWorktree, now).keys())
+  // A chat's agent outlives its turn, so a done row can still have a running process.
+  for (const entry of rows) {
+    if (entry.structuredHostOwned && entry.worktreeId) {
+      worktreeIds.add(entry.worktreeId)
+    }
+  }
+  return worktreeIds
 }
 
 export function getLiveAgentStatusByWorktreeId(

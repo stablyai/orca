@@ -10,6 +10,7 @@ export const worktreeSliceInitialState: Pick<
   | 'activeWorktreeId'
   | 'activeWorkspaceKey'
   | 'activeWorkspaceExecutionHostId'
+  | 'explicitlySleptChatsByWorkspace'
   | 'pendingWorktreeCreations'
   | 'activePendingCreationId'
   | 'renamingWorktreeId'
@@ -32,6 +33,7 @@ export const worktreeSliceInitialState: Pick<
   activeWorktreeId: null,
   activeWorkspaceKey: null,
   activeWorkspaceExecutionHostId: null,
+  explicitlySleptChatsByWorkspace: {},
   pendingWorktreeCreations: {},
   activePendingCreationId: null,
   renamingWorktreeId: null,

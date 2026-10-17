@@ -123,6 +123,14 @@ export function mergeWorkspaceSessions(
           }
         }
       : {}),
+    ...(base.explicitlySleptChatsByWorkspace || incoming.explicitlySleptChatsByWorkspace
+      ? {
+          explicitlySleptChatsByWorkspace: {
+            ...base.explicitlySleptChatsByWorkspace,
+            ...incoming.explicitlySleptChatsByWorkspace
+          }
+        }
+      : {}),
     activeWorktreeIdsOnShutdown: [
       ...(base.activeWorktreeIdsOnShutdown ?? []),
       ...(incoming.activeWorktreeIdsOnShutdown ?? [])

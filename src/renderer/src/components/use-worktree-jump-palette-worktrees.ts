@@ -4,7 +4,7 @@ import { filterWorkspaceRows } from '../../../shared/workspace-view/workspace-ro
 import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/desktop-workspace-row-facts'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
-import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
+import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
@@ -40,6 +40,7 @@ export function useWorktreeJumpPaletteWorktrees({
   ptyIdsByTabId,
   browserTabsByWorktree,
   unifiedTabsByWorktree,
+  explicitlySleptChatsByWorkspace,
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
   runtimeEnvironments,
@@ -63,13 +64,9 @@ export function useWorktreeJumpPaletteWorktrees({
   const hasQuery = paletteSearchQuery.length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
   const worktreeIdsWithLiveAgent = useMemo(
-    () =>
-      new Set(
-        // The palette recomputes this snapshot when status inputs change; the
-        // clock intentionally reflects the render that performs that snapshot.
-        // oxlint-disable-next-line react/purity
-        getLiveAgentStatusByWorktreeId(agentStatusByPaneKey, tabsByWorktree, Date.now()).keys()
-      ),
+    // The clock reflects the render producing this snapshot.
+    // oxlint-disable-next-line react/purity
+    () => getWorktreeIdsWithLiveAgent(agentStatusByPaneKey, tabsByWorktree, Date.now()),
     [agentStatusByPaneKey, tabsByWorktree]
   )
   const pairedDeviceIdsByEnvironment = useMemo(
@@ -81,7 +78,8 @@ export function useWorktreeJumpPaletteWorktrees({
   )
   const worktreeIdsWithStructuredChat = getStructuredChatWorktreeIds(
     showSleepingWorkspaces,
-    unifiedTabsByWorktree
+    unifiedTabsByWorktree,
+    explicitlySleptChatsByWorkspace
   )
   const emptyQueryVisibleWorktrees = useMemo(() => {
     // Why no project or host scope: the palette ignores the sidebar's scope; filterPredicate scopes it.

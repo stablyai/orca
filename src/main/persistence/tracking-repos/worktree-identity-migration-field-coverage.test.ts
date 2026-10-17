@@ -206,6 +206,21 @@ const referencingFields = Object.keys(WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND)
   .sort()
 
 describe('migrateWorktreeIdentity worktree-reference coverage', () => {
+  it('rekeys view-only Sleep intent without treating it as checkout ownership', () => {
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      explicitlySleptChatsByWorkspace: {
+        [`local|${OLD}`]: [{ tabId: 'chat', sessionId: 'session' }]
+      }
+    }
+    expect([...collectWorkspaceSessionWorktreeOwners(session, CANDIDATES)]).toEqual([])
+
+    expect(migrateWorktreeIdentity(persistedState(session), OLD, NEW)).toBe(true)
+    expect(session.explicitlySleptChatsByWorkspace).toEqual({
+      [`local|${NEW}`]: [{ tabId: 'chat', sessionId: 'session' }]
+    })
+  })
+
   it('has a fixture for every field the ownership census says can name a worktree', () => {
     const missing = referencingFields.filter((field) => !REFERENCE_FIXTURES[field])
     expect(missing).toEqual([])

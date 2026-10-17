@@ -117,6 +117,10 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   // the record's worktreeId on worktree and project removal. Moving a project between profiles runs
   // removeSourceRepo, which has no owner scan, so these records leak there.
   sleepingAgentSessionsByPaneKey: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
+  explicitlySleptChatsByWorkspace: {
+    onRepoRemoval: 'prunedByOwnerKey',
+    onTransfer: 'copiedByOwnerKey'
+  },
   terminalPtyIncarnationsByPaneKey: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'

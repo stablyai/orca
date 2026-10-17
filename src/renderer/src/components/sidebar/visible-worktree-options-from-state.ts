@@ -31,7 +31,10 @@ export function buildVisibleWorktreeOptionsFromState(
       state.tabsByWorktree,
       Date.now()
     ),
-    worktreeIdsWithStructuredChat: getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree),
+    worktreeIdsWithStructuredChat: getWorktreeIdsWithStructuredChat(
+      state.unifiedTabsByWorktree,
+      state.explicitlySleptChatsByWorkspace
+    ),
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,

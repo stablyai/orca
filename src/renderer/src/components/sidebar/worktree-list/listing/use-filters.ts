@@ -114,7 +114,10 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
         state.ptyIdsByTabId,
         browserTabsByWorktree,
         liveAgentWorktrees,
-        getWorktreeIdsWithStructuredChat(state.unifiedTabsByWorktree)
+        getWorktreeIdsWithStructuredChat(
+          state.unifiedTabsByWorktree,
+          state.explicitlySleptChatsByWorkspace
+        )
       )
     ) {
       state.setShowSleepingWorkspaces(true)

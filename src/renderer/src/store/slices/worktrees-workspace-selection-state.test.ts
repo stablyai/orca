@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
+import type { Tab } from '../../../../shared/tab-types'
 import {
   registerPersistentWebview,
   unregisterPersistentWebview
@@ -56,6 +57,46 @@ describe('folder workspace lookups', () => {
 })
 
 describe('setActiveWorktree focus handling', () => {
+  it('wakes only the selected host chat in a shared workspace id', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/same'
+    const tab = (id: string, host: 'ssh:one' | 'ssh:two'): Tab => ({
+      id,
+      entityId: id,
+      groupId: 'group',
+      worktreeId,
+      executionHostId: host,
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    store.setState({
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'ssh:one' }),
+          makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'ssh:two' })
+        ]
+      },
+      unifiedTabsByWorktree: { [worktreeId]: [tab('one', 'ssh:one'), tab('two', 'ssh:two')] }
+    })
+    store
+      .getState()
+      .markWorkspaceChatsSlept(worktreeId, 'ssh:one', [{ tabId: 'one', sessionId: 'one' }])
+    store
+      .getState()
+      .markWorkspaceChatsSlept(worktreeId, 'ssh:two', [{ tabId: 'two', sessionId: 'two' }])
+
+    store.getState().setActiveWorktree(worktreeId, 'ssh:two')
+
+    expect(store.getState().explicitlySleptChatsByWorkspace).toEqual({
+      [`ssh:one|${worktreeId}`]: [{ tabId: 'one', sessionId: 'one' }]
+    })
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()

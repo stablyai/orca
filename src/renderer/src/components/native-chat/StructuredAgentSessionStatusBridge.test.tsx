@@ -209,6 +209,19 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()[0]).not.toHaveProperty('structuredHostOwned')
   })
 
+  it('clears a marked chat when the first confirmed live summary is still working', async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, executionHostId: 'local' }] },
+      explicitlySleptChatsByWorkspace: {
+        'local|wt-1': [{ tabId: structuredTab.id, sessionId: structuredTab.entityId }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+    expect(mocks.store?.getState().explicitlySleptChatsByWorkspace['local|wt-1']).toBeUndefined()
+  })
+
   it('maps each host status onto the sidebar agent state', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
@@ -653,13 +666,16 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(mocks.setAgentStatus).toHaveBeenCalledTimes(calls)
   })
 
-  it('keeps the host-fed chat row through Sleep and stops offering Sleep once the host lets go', async () => {
+  it('keeps the host-fed chat row through Sleep and offers Sleep until the chat is recorded slept', async () => {
     const state = (): AppState => useAppStore.getState()
     const sleepable = (): boolean =>
       hasSleepableWorkspaceActivity(
         { id: 'wt-1', hostId: 'local' },
         { ...state(), chatOwnerState: {} }
       )
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, executionHostId: 'local' }] }
+    })
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
     act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 2 }) }))
@@ -681,7 +697,16 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([expect.objectContaining({ state: 'done' })])
     expect(statuses()[0].structuredHostOwned).toBeUndefined()
     expect(state().acknowledgedAgentsByPaneKey).toEqual({ [paneKey]: 3 })
+    // The host let go; only the explicit Sleep's record stops offering Sleep, and new work clears it.
+    expect(sleepable()).toBe(true)
+    const chat = { tabId: structuredTab.id, sessionId: structuredTab.entityId }
+    act(() => state().markWorkspaceChatsSlept('wt-1', 'local', [chat]))
     expect(sleepable()).toBe(false)
+    act(() => feed().emit({ type: 'status', session: summary({ updatedAt: 3 }) }))
+    expect(state().explicitlySleptChatsByWorkspace['local|wt-1']).toBeUndefined()
+    // Work reported before the Sleep flow records the chat still wakes it.
+    act(() => state().markWorkspaceChatsSlept('wt-1', 'local', [chat]))
+    expect(state().explicitlySleptChatsByWorkspace['local|wt-1']).toBeUndefined()
   })
 
   it('drops the status and the feed when the last structured tab closes', async () => {

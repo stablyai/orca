@@ -235,9 +235,13 @@ describe('migrating saved state from released SSH clients', () => {
       const { state, local, host } = split()
       host.lastVisitedAtByWorktreeId = { [WORKTREE]: 5 }
       local.tabsByWorktree = { [WORKTREE]: [terminal('local')] }
+      local.explicitlySleptChatsByWorkspace = {
+        [`${HOST}|${WORKTREE}`]: [{ tabId: 'chat', sessionId: 'session' }]
+      }
       expect(census(state).totalCount).toBe(0)
       const session = exportState(state).payload.dormantState?.workspaceSession
       expect(session?.tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(['local'])
+      expect(session).not.toHaveProperty('explicitlySleptChatsByWorkspace')
     })
 
     it('exports local tabs and drafts beside a host-only closed-pane resume record', () => {

@@ -106,6 +106,8 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     sortRelevantChange ||
     attributionChanged ||
     existing?.workingMode !== entry.workingMode ||
+    // A chat's agent starting or stopping on a done row wakes or sleeps its workspace.
+    existing?.structuredHostOwned !== entry.structuredHostOwned ||
     verdictChanged ||
     doneRetentionFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]

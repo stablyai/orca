@@ -135,6 +135,10 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   browserPagesByWorkspace: moveDisposition(29),
   markdownFrontmatterVisible: moveDisposition(28),
   sleepingAgentSessionsByPaneKey: moveDisposition(33),
+  explicitlySleptChatsByWorkspace: notApplicableDisposition(
+    32,
+    'Explicit Sleep intent belongs to the old execution host.'
+  ),
   terminalPtyIncarnationsByPaneKey: {
     disposition: 'drop-pty-binding',
     item: 36

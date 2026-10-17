@@ -69,6 +69,9 @@ export function useWorktreeJumpPaletteStoreState({
   const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)
   const browserPagesByWorkspace = useAppStore((state) => state.browserPagesByWorkspace)
   const unifiedTabsByWorktree = useAppStore((state) => state.unifiedTabsByWorktree)
+  const explicitlySleptChatsByWorkspace = useAppStore(
+    (state) => state.explicitlySleptChatsByWorkspace
+  )
   const paletteIndexStatus = useMemo(
     () => selectPaletteIndexStatusSnapshot(useAppStore.getState(), paletteStatusInputsActive),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- these deps are the snapshot refresh policy.
@@ -161,6 +164,7 @@ export function useWorktreeJumpPaletteStoreState({
     browserTabsByWorktree,
     browserPagesByWorkspace,
     unifiedTabsByWorktree,
+    explicitlySleptChatsByWorkspace,
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
     unreadTerminalTabs,

@@ -6,6 +6,7 @@ import {
   removeRepoFromWorkspaceSession
 } from './profile-project-session-state'
 import { extractSessionForTransfer } from './profile-project-session-transfer'
+import { isChatExplicitlySlept, sleptChatWorkspaceKey } from '../../shared/workspace-chat-sleep'
 
 const REMOVED_WORKTREE_ID = 'repo-a::/removed'
 const RETAINED_WORKTREE_ID = 'repo-b::/retained'
@@ -13,6 +14,61 @@ const REMOVED_REPO_ID = 'repo-a'
 const RETAINED_REPO_ID = 'repo-b'
 
 describe('profile project session state', () => {
+  it('keeps exact chat Sleep choices when a moved project needs a new repo id', () => {
+    const movedWorktreeId = 'repo-c::/removed'
+    const retainedKey = sleptChatWorkspaceKey(RETAINED_WORKTREE_ID, 'local')
+    const localKey = sleptChatWorkspaceKey(movedWorktreeId, 'local')
+    const remoteKey = sleptChatWorkspaceKey(movedWorktreeId, 'ssh:profile-test')
+    const tabs = (['local', 'ssh:profile-test'] as const).map((executionHostId, sortOrder) => ({
+      id: `chat-${sortOrder}`,
+      entityId: `session-${sortOrder}`,
+      groupId: 'group',
+      worktreeId: REMOVED_WORKTREE_ID,
+      executionHostId,
+      contentType: 'agent-session' as const,
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder,
+      createdAt: 1
+    }))
+    const source: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      unifiedTabs: { [REMOVED_WORKTREE_ID]: tabs },
+      explicitlySleptChatsByWorkspace: Object.fromEntries(
+        tabs.map((tab) => [
+          sleptChatWorkspaceKey(REMOVED_WORKTREE_ID, tab.executionHostId),
+          [{ tabId: tab.id, sessionId: tab.entityId }]
+        ])
+      )
+    }
+    const retained = [{ tabId: 'retained-chat', sessionId: 'retained-session' }]
+    const target = {
+      ...getDefaultWorkspaceSession(),
+      explicitlySleptChatsByWorkspace: {
+        [retainedKey]: retained,
+        [localKey]: [{ tabId: 'old-chat', sessionId: 'old-session' }]
+      }
+    }
+    const result = mergeWorkspaceSessions(
+      target,
+      extractSessionForTransfer(source, REMOVED_REPO_ID, 'repo-c')
+    )
+
+    expect(result.explicitlySleptChatsByWorkspace).toEqual({
+      [retainedKey]: retained,
+      [localKey]: [{ tabId: 'chat-0', sessionId: 'session-0' }],
+      [remoteKey]: [{ tabId: 'chat-1', sessionId: 'session-1' }]
+    })
+    const movedTabs = result.unifiedTabs?.[movedWorktreeId] ?? []
+    expect(movedTabs).toHaveLength(2)
+    expect(
+      movedTabs.every((tab) =>
+        isChatExplicitlySlept(result.explicitlySleptChatsByWorkspace ?? {}, tab)
+      )
+    ).toBe(true)
+  })
+
   it('keeps topology revisions monotonic while merging session authority records', () => {
     const base = {
       ...getDefaultWorkspaceSession(),

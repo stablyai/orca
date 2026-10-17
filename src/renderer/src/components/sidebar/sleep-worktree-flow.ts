@@ -8,6 +8,7 @@ import {
   withWorktreeSleepTeardown
 } from '@/lib/worktree-sleep-intent'
 import { preserveSidebarWorktreePosition } from './sleep-worktree-sidebar-position'
+import { describeChatStopFailure, describeSleepFailure } from './sleep-worktree-failure-copy'
 import { translate } from '@/i18n/i18n'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
@@ -25,6 +26,7 @@ import {
   findIndexedProjectGroupOwner
 } from '@/lib/worktree-runtime-owner-index'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import type { AppState } from '@/store/types'
 
 export type WorkspaceSleepTarget =
@@ -62,38 +64,6 @@ export async function runSleepWorktree(
   executionHostId?: ExecutionHostId
 ): Promise<WorkspaceSleepResult[]> {
   return runSleepWorktrees([executionHostId ? { id: worktreeId, executionHostId } : worktreeId])
-}
-
-function describeSleepFailure(error: unknown): string {
-  const detail = error instanceof Error ? error.message : String(error)
-  if (detail.includes('legacy')) {
-    return translate(
-      'auto.components.sidebar.sleep.worktree.flow.legacy.unverified',
-      'The older host runtime could not confirm terminal shutdown. The workspace was kept open; update the host and try again.'
-    )
-  }
-  if (
-    detail.includes('terminal_') ||
-    detail.includes('runtime') ||
-    detail.includes('connection') ||
-    detail.includes('Daemon')
-  ) {
-    return translate(
-      'auto.components.sidebar.sleep.worktree.flow.host.unverified',
-      'The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again.'
-    )
-  }
-  return translate(
-    'auto.components.sidebar.sleep.worktree.flow.retry',
-    'The workspace was kept open. Try again; if the problem continues, check the host connection.'
-  )
-}
-
-function describeChatStopFailure(): string {
-  return translate(
-    'auto.components.sidebar.sleep.worktree.flow.chat.partial',
-    'The host could not confirm the chat stopped. Other panels may have closed; check the connection and try again.'
-  )
 }
 
 function resolveSleepTarget(
@@ -146,7 +116,9 @@ function resolveSleepTarget(
 export async function runSleepWorktrees(
   targets: readonly WorkspaceSleepTarget[]
 ): Promise<WorkspaceSleepResult[]> {
-  const { errors, results } = await sleepWorktreesReportingFailures(targets)
+  const { errors, results } = await sleepWorktreesReportingFailures(targets, {
+    recordExplicitChatSleep: true
+  })
   if (errors.length > 0) {
     // Why: callers are fire-and-forget; surface actionable teardown failures after restoring retryable UI state.
     toast.error(
@@ -174,7 +146,9 @@ export type WorktreeSleepOutcome = {
 
 /** The sleep without the toast, for callers that report failures themselves. */
 export async function sleepWorktreesReportingFailures(
-  targets: readonly WorkspaceSleepTarget[]
+  targets: readonly WorkspaceSleepTarget[],
+  // Why: only the user's Sleep hides its chats; a project move pauses through this core too.
+  options: { recordExplicitChatSleep?: boolean } = {}
 ): Promise<WorktreeSleepOutcome> {
   if (targets.length === 0) {
     return { failedWorktreeIds: [], errors: [], results: [] }
@@ -197,6 +171,11 @@ export async function sleepWorktreesReportingFailures(
     seen.add(key)
     return [selected]
   })
+  const capturedChats = resolved.map(({ workspaceId, executionHostId }) =>
+    (state.unifiedTabsByWorktree[workspaceId] ?? [])
+      .filter((tab) => isStructuredTab(tab) && tab.executionHostId === executionHostId)
+      .map((tab) => ({ tabId: tab.id, sessionId: tab.entityId, executionHostId }))
+  )
   const marked = resolved.map((target) => ({
     ...target,
     token: markWorktreeSleepIntent(target.workspaceId, target.executionHostId)
@@ -235,6 +214,17 @@ export async function sleepWorktreesReportingFailures(
       const { workspaceId, executionHostId, token } = target
       const current = (): boolean =>
         isCurrentWorktreeSleepIntent(workspaceId, executionHostId, token)
+      const clearFailedChats = (failures?: readonly { sessionId?: string }[]): void => {
+        if (!options.recordExplicitChatSleep || !current()) {
+          return
+        }
+        const failed = failures?.map((failure) => failure.sessionId)
+        const chats =
+          !failed || failed.includes(undefined)
+            ? undefined
+            : capturedChats[index].filter((chat) => failed.includes(chat.sessionId))
+        useAppStore.getState().clearWorkspaceChatsSlept(workspaceId, executionHostId, chats)
+      }
       let stoppedSessionIds: string[] = []
       let nativeCompleted = true
       let panelsCompleted = true
@@ -243,6 +233,7 @@ export async function sleepWorktreesReportingFailures(
       if (native.ok) {
         stoppedSessionIds = native.value.stoppedSessionIds
         if (native.value.failures?.length) {
+          clearFailedChats(native.value.failures)
           console.error('[sleep-worktree] native chat stop incomplete', {
             workspaceId,
             failures: native.value.failures
@@ -251,6 +242,7 @@ export async function sleepWorktreesReportingFailures(
           errors.push(describeChatStopFailure())
         }
       } else {
+        clearFailedChats()
         console.error('[sleep-worktree] native chat stop failed', {
           workspaceId,
           error: native.error
@@ -304,12 +296,21 @@ export async function sleepWorktreesReportingFailures(
       return { workspaceId, executionHostId, stoppedSessionIds, completed }
     })
   )
-  const results = attempts.map((result, index) => ({
-    ...result,
-    completed:
+  const results = attempts.map((result, index) => {
+    const completed =
       result.completed &&
       isCurrentWorktreeSleepIntent(result.workspaceId, result.executionHostId, marked[index].token)
-  }))
+    if (completed && options.recordExplicitChatSleep) {
+      const stopped = new Set(result.stoppedSessionIds)
+      const chats = capturedChats[index].filter((chat) => stopped.has(chat.sessionId))
+      if (chats.length > 0) {
+        useAppStore
+          .getState()
+          .markWorkspaceChatsSlept(result.workspaceId, result.executionHostId, chats)
+      }
+    }
+    return { ...result, completed }
+  })
   for (const result of results.filter((candidate) => !candidate.completed)) {
     failedWorktreeIds.add(result.workspaceId)
   }

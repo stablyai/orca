@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import { structuredChildWorkLegacySubagents } from '../../../../shared/structured-agent-session-child-work-legacy'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { isChatExplicitlySlept } from '../../../../shared/workspace-chat-sleep'
 import { structuredAgentSessionAgentStatus } from '../../../../shared/structured-agent-session-agent-status'
 import {
   structuredAgentSessionDatedMainAgent,
@@ -328,6 +329,20 @@ function StructuredAgentSessionOwnedStatusProjection({
   target: RuntimeClientTarget
 }): null {
   const { summary, observation } = useStructuredAgentSessionStatusSummary(tab.entityId, target)
+  const { id: tabId, entityId: sessionId, executionHostId, worktreeId } = tab
+  // Why: a send after Sleep's host stop can report working before the flow records the chat slept.
+  const slept = useAppStore((state) =>
+    isChatExplicitlySlept(state.explicitlySleptChatsByWorkspace, tab)
+  )
+  useEffect(() => {
+    if (!slept || observation !== 'live' || summary?.status !== 'working') {
+      return
+    }
+    const store = useAppStore.getState()
+    if (executionHostId) {
+      store.clearWorkspaceChatsSlept(worktreeId, executionHostId, [{ tabId, sessionId }])
+    }
+  }, [slept, summary, observation, tabId, sessionId, executionHostId, worktreeId])
   const launchFailed =
     useStructuredAgentSessionLaunchLifecycle(tab.worktreeId, tab.entityId) === 'failed'
   const failedAt = useStructuredAgentSessionLaunchFailedAt(tab.entityId)

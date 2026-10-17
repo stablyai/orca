@@ -9,6 +9,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import { renameSleptChatWorkspaceInSession } from '../../../shared/workspace-chat-sleep'
 
 type WorktreeNamingRow = { worktreeId: string }
 
@@ -189,6 +190,8 @@ export function migrateWorktreeIdentity(
       moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) || sessionChanged
     sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
     sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
+    sessionChanged =
+      renameSleptChatWorkspaceInSession(session, oldWorktreeId, newWorktreeId) || sessionChanged
     if (session.lastVisitedAtByWorktreeId) {
       const nextRecency = { ...session.lastVisitedAtByWorktreeId }
       let recencyChanged = false

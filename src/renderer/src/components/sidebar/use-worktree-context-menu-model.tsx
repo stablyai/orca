@@ -19,6 +19,7 @@ import {
   EMPTY_BROWSER_TABS_BY_WORKTREE,
   EMPTY_CYCLIC_LINEAGE_IDS,
   EMPTY_DELETE_STATE_BY_WORKTREE_ID,
+  EMPTY_EXPLICITLY_SLEPT_CHATS,
   EMPTY_PTY_IDS_BY_TAB_ID,
   EMPTY_TABS_BY_WORKTREE,
   EMPTY_UNIFIED_TABS_BY_WORKTREE,
@@ -129,6 +130,9 @@ export function useWorktreeContextMenuModel({
   const agentStatusByPaneKey = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
   )
+  const explicitlySleptChatsByWorkspace = useAppStore((s) =>
+    selectMenuScopedMap(menuOpen, s.explicitlySleptChatsByWorkspace, EMPTY_EXPLICITLY_SLEPT_CHATS)
+  )
   const deleteStateByWorktreeId = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.deleteStateByWorktreeId, EMPTY_DELETE_STATE_BY_WORKTREE_ID)
   )
@@ -139,40 +143,36 @@ export function useWorktreeContextMenuModel({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
-  const sleepableWorktrees = useMemo(
-    () =>
-      activeContextWorktrees.filter((item) =>
-        hasSleepableWorkspaceActivity(item, {
-          tabsByWorktree,
-          ptyIdsByTabId,
-          browserTabsByWorktree,
-          unifiedTabsByWorktree,
-          agentStatusByPaneKey,
-          chatOwnerState: useAppStore.getState()
-        })
-      ),
+  const sleepActivity = useMemo(
+    () => ({
+      tabsByWorktree,
+      ptyIdsByTabId,
+      browserTabsByWorktree,
+      unifiedTabsByWorktree,
+      agentStatusByPaneKey,
+      explicitlySleptChatsByWorkspace,
+      chatOwnerState: useAppStore.getState()
+    }),
     [
-      activeContextWorktrees,
       agentStatusByPaneKey,
       browserTabsByWorktree,
+      explicitlySleptChatsByWorkspace,
       ptyIdsByTabId,
       tabsByWorktree,
       unifiedTabsByWorktree
     ]
+  )
+  const sleepableWorktrees = useMemo(
+    () =>
+      activeContextWorktrees.filter((item) => hasSleepableWorkspaceActivity(item, sleepActivity)),
+    [activeContextWorktrees, sleepActivity]
   )
   const lineageMenuActions = useWorkspaceLineageMenuActions({
     enabled: !isMultiContext,
     parent: worktree,
     worktrees: allWorktrees,
     lineageById: worktreeLineageById,
-    activity: {
-      tabsByWorktree,
-      ptyIdsByTabId,
-      browserTabsByWorktree,
-      unifiedTabsByWorktree,
-      agentStatusByPaneKey,
-      chatOwnerState: useAppStore.getState()
-    }
+    activity: sleepActivity
   })
   const lineageDescendantCount = lineageMenuActions.descendants.length
   const subtreeSleepableWorktrees = lineageMenuActions.sleepableTargets

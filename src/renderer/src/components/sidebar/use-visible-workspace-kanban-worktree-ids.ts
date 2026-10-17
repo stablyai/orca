@@ -53,7 +53,11 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
   const worktreeIdsWithStructuredChat = useAppStore((s) =>
-    getStructuredChatWorktreeIds(showSleepingWorkspaces, s.unifiedTabsByWorktree)
+    getStructuredChatWorktreeIds(
+      showSleepingWorkspaces,
+      s.unifiedTabsByWorktree,
+      s.explicitlySleptChatsByWorkspace
+    )
   )
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a

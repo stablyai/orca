@@ -7,6 +7,7 @@ import { remapBrowserPageDocLocation } from '../../../../../../shared/browser-pa
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
+import { withRenamedSleptChatWorkspace } from '../../../../../../shared/workspace-chat-sleep'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
@@ -223,9 +224,18 @@ export function buildWorktreeRenameState(
       )
     : s.sleepingAgentSessionsByPaneKey
 
+  const explicitlySleptChatsByWorkspace = withRenamedSleptChatWorkspace(
+    s.explicitlySleptChatsByWorkspace,
+    oldWorktreeId,
+    newWorktreeId
+  )
+
   return {
     ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
     ...(renamed as Partial<AppState>),
+    ...(explicitlySleptChatsByWorkspace !== s.explicitlySleptChatsByWorkspace
+      ? { explicitlySleptChatsByWorkspace }
+      : {}),
     ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),
     ...(recentlyClosedBrowserPagesByWorkspace !== s.recentlyClosedBrowserPagesByWorkspace
       ? { recentlyClosedBrowserPagesByWorkspace }

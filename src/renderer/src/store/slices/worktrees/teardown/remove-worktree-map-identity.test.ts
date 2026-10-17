@@ -25,6 +25,7 @@ function buildState(): AppState {
     layoutByWorktree: { [SURVIVING_ID]: 'grid' },
     groupsByWorktree: {},
     unifiedTabsByWorktree: {},
+    explicitlySleptChatsByWorkspace: {},
     // Tab-keyed maps with no entry for the removed worktree's tabs.
     terminalLayoutsByTabId: { 'other-tab': 'single' },
     ptyIdsByTabId: {},
@@ -65,6 +66,7 @@ describe('removeWorktree map identity', () => {
       'layoutByWorktree',
       'groupsByWorktree',
       'unifiedTabsByWorktree',
+      'explicitlySleptChatsByWorkspace',
       'terminalLayoutsByTabId',
       'ptyIdsByTabId',
       'expandedPaneByTabId',
@@ -79,7 +81,11 @@ describe('removeWorktree map identity', () => {
     const before = buildState()
     Object.assign(before, {
       gitStatusByWorktree: { [REMOVED_ID]: 'dirty', [SURVIVING_ID]: 'clean' },
-      terminalLayoutsByTabId: { 'removed-tab': 'single', 'other-tab': 'single' }
+      terminalLayoutsByTabId: { 'removed-tab': 'single', 'other-tab': 'single' },
+      explicitlySleptChatsByWorkspace: {
+        [`local|${REMOVED_ID}`]: [{ tabId: 'removed-tab', sessionId: 's' }],
+        [`local|${SURVIVING_ID}`]: [{ tabId: 'other-tab', sessionId: 's' }]
+      }
     })
 
     const after = removeWorktree(before)
@@ -88,6 +94,9 @@ describe('removeWorktree map identity', () => {
     expect(after.gitStatusByWorktree).toEqual({ [SURVIVING_ID]: 'clean' })
     expect(after.terminalLayoutsByTabId).toEqual({ 'other-tab': 'single' })
     expect(after.tabsByWorktree).toEqual({ [SURVIVING_ID]: [] })
+    expect(after.explicitlySleptChatsByWorkspace).toEqual({
+      [`local|${SURVIVING_ID}`]: [{ tabId: 'other-tab', sessionId: 's' }]
+    })
   })
 
   it('drops sleeping records written for the removed worktree after its terminals stopped (#24784)', () => {

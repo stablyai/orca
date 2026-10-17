@@ -149,6 +149,9 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
   fill(loaded, 'tab.agentSessionAgent', 'claude', terminal)
   fill(loaded, 'view.lastFocusedAt', { [GIT_KEY]: { 'tab-agent': 1, 'browser-1': 2 } })
   fill(loaded, 'view.markdownFrontmatterVisible', { '/doc.md': true })
+  fill(loaded, 'view.explicitlySleptChatsByWorkspace', {
+    [`local|${GIT_KEY}`]: [{ tabId: 'tab-agent', sessionId: 's' }]
+  })
   fill(loaded, 'carried.activeConnectionIdsAtShutdown', ['target-1', 'target-2'])
   fill(loaded, 'carried.browserUrlHistory', [{ url: 'a' }, { url: 'b' }])
   fill(loaded, 'carried.workspaceDocHistory', [{ path: 'a' }, { path: 'b' }])

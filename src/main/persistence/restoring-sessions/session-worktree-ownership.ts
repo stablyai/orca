@@ -50,6 +50,8 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   lastVisitedAtByWorktreeId: 'owner-keyed',
   defaultTerminalTabsAppliedByWorktreeId: 'owner-keyed',
   sleepingAgentSessionsByPaneKey: 'row-record',
+  // A remembered Sleep is a view choice, not evidence that a checkout still exists.
+  explicitlySleptChatsByWorkspace: 'none',
   terminalPtyIncarnationsByPaneKey: 'none',
   terminalTopologyRevisionByRepoId: 'none',
   terminalSurfaceTombstonesByPaneKey: 'row-record',

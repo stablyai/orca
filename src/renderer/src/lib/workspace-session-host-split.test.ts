@@ -114,6 +114,9 @@ describe('splitWorkspaceSessionByHost', () => {
           visitCount: 1
         }
       ],
+      explicitlySleptChatsByWorkspace: {
+        'runtime:env-a|a-wt': [{ tabId: 'chat-a', sessionId: 'session-a' }]
+      },
       tabsByWorktree: {
         'local-wt': [makeTab('t-local', 'local-wt')],
         'a-wt': [makeTab('t-a', 'a-wt')],

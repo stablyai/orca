@@ -35,6 +35,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     worktreesByRepo: true,
     lastKnownRelayPtyIdByTabId: true,
     lastVisitedAtByWorktreeId: true,
+    explicitlySleptChatsByWorkspace: true,
     defaultTerminalTabsAppliedByWorktreeId: true,
     sleepingAgentSessionsByPaneKey: true,
     clientHostedBrowserCloseIntentsByEnvironment: true,

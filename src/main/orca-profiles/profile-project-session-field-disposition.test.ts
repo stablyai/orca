@@ -261,6 +261,7 @@ describe('workspace session field disposition census', () => {
       'activeGroupIdByWorktree',
       'lastVisitedAtByWorktreeId',
       'defaultTerminalTabsAppliedByWorktreeId',
+      'explicitlySleptChatsByWorkspace',
       'terminalTopologyRevisionByRepoId'
     ])
   })
@@ -275,6 +276,7 @@ describe('workspace session field disposition census', () => {
       'activeGroupIdByWorktree',
       'lastVisitedAtByWorktreeId',
       'defaultTerminalTabsAppliedByWorktreeId',
+      'explicitlySleptChatsByWorkspace',
       'terminalTopologyRevisionByRepoId'
     ])
   })

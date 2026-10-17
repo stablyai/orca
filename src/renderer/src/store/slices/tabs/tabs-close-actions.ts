@@ -16,6 +16,7 @@ import {
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { ownsGlobalSelection } from '../../global-selection-owner'
+import { sleptChatWorkspaceKey } from '../../../../../shared/workspace-chat-sleep'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForTab
@@ -99,6 +100,25 @@ export function createTabsCloseActions(
           const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter(
             (item) => item.id !== tabId
           )
+          const sleptKey =
+            tab.contentType === 'agent-session' && tab.executionHostId
+              ? sleptChatWorkspaceKey(worktreeId, tab.executionHostId)
+              : null
+          const slept = sleptKey ? current.explicitlySleptChatsByWorkspace[sleptKey] : undefined
+          const retainedSlept = slept?.filter(
+            (entry) => entry.tabId !== tabId || entry.sessionId !== tab.entityId
+          )
+          const nextSlept =
+            retainedSlept && retainedSlept.length !== slept?.length
+              ? { ...current.explicitlySleptChatsByWorkspace }
+              : current.explicitlySleptChatsByWorkspace
+          if (nextSlept !== current.explicitlySleptChatsByWorkspace && sleptKey) {
+            if (retainedSlept?.length) {
+              nextSlept[sleptKey] = retainedSlept
+            } else {
+              delete nextSlept[sleptKey]
+            }
+          }
           // Why: close-to-right/others bypass terminals.closeTab, so clear the entityId-keyed unread flag here or a stale dot leaks.
           const nextUnreadTerminalTabs = terminalEntityId
             ? omitRecordKeys(current.unreadTerminalTabs, [terminalEntityId])
@@ -146,6 +166,9 @@ export function createTabsCloseActions(
             !current.openFiles.some((file) => file.worktreeId === worktreeId)
           return {
             unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: nextTabs },
+            ...(nextSlept !== current.explicitlySleptChatsByWorkspace
+              ? { explicitlySleptChatsByWorkspace: nextSlept }
+              : {}),
             groupsByWorktree: {
               ...current.groupsByWorktree,
               [worktreeId]: nextGroups

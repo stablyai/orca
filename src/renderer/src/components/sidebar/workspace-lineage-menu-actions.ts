@@ -7,6 +7,10 @@ import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-sta
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { isStructuredTab } from '../../../../shared/structured-agent-session-tab'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import {
+  isChatExplicitlySlept,
+  type ExplicitlySleptChatsByWorkspace
+} from '../../../../shared/workspace-chat-sleep'
 import type { WorkspaceSleepTarget } from './sleep-worktree-flow'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -27,6 +31,7 @@ type WorkspaceActivityMaps = {
   browserTabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
   agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>
+  explicitlySleptChatsByWorkspace: ExplicitlySleptChatsByWorkspace
   chatOwnerState: WorktreeRuntimeOwnerState
 }
 
@@ -44,6 +49,7 @@ export function hasSleepableWorkspaceActivity(
     browserTabsByWorktree,
     unifiedTabsByWorktree,
     agentStatusByPaneKey,
+    explicitlySleptChatsByWorkspace,
     chatOwnerState
   }: WorkspaceActivityMaps
 ): boolean {
@@ -96,14 +102,17 @@ export function hasSleepableWorkspaceActivity(
   return (
     tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id)) ||
     (browserTabsByWorktree[worktreeId] ?? []).length > 0 ||
-    // A chat counts only while its host holds its process; a stopped one has nothing to sleep.
+    // A chat counts while its host holds its process, or until an explicit Sleep records it
+    // stopped, so an idle-ended chat can still be slept (and hidden) on purpose.
     (unifiedTabsByWorktree[worktreeId] ?? []).some(
       (tab) =>
         isStructuredTab(tab) &&
         !!hostId &&
         (!tab.executionHostId || tab.executionHostId === hostId) &&
-        agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
-          ?.structuredHostOwned === true
+        (agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
+          ?.structuredHostOwned === true ||
+          (tab.executionHostId === hostId &&
+            !isChatExplicitlySlept(explicitlySleptChatsByWorkspace, tab)))
     )
   )
 }
@@ -141,6 +150,7 @@ export function useWorkspaceLineageMenuActions(
     browserTabsByWorktree,
     unifiedTabsByWorktree,
     agentStatusByPaneKey,
+    explicitlySleptChatsByWorkspace,
     chatOwnerState
   } = activity
   return useMemo(
@@ -156,6 +166,7 @@ export function useWorkspaceLineageMenuActions(
               browserTabsByWorktree,
               unifiedTabsByWorktree,
               agentStatusByPaneKey,
+              explicitlySleptChatsByWorkspace,
               chatOwnerState
             }
           })
@@ -164,6 +175,7 @@ export function useWorkspaceLineageMenuActions(
       agentStatusByPaneKey,
       browserTabsByWorktree,
       enabled,
+      explicitlySleptChatsByWorkspace,
       lineageById,
       parent,
       ptyIdsByTabId,

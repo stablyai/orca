@@ -18,6 +18,8 @@ import {
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { resolveActivatedWorktreeSurface } from './active-worktree-surface'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { withoutSelectedSleptChats } from './workspace-chat-sleep'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import {
   pendingActivationTerminalPrepCancels,
   shouldDeferActivationTerminalPrep
@@ -116,6 +118,12 @@ export function createSetActiveWorktree(
         allDead && worktreeId != null
           ? markWorktreeTabsForActivationSpawn(s, worktreeId, { isWakeable, bumpGeneration: true })
           : {}
+      // Why: any activation wakes the workspace's chats, as it does its terminals.
+      const nextSleptChats = withoutSelectedSleptChats(
+        s.explicitlySleptChatsByWorkspace,
+        worktreeId,
+        executionHostId ?? getResolvedExecutionHostIdForWorktree(s, worktreeId) ?? undefined
+      )
 
       const nextActiveTabTypeByWorktree =
         s.activeTabTypeByWorktree[worktreeId] === activeTabType
@@ -134,6 +142,7 @@ export function createSetActiveWorktree(
         nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
         nextEverActivated !== s.everActivatedWorktreeIds ||
         nextActiveRepoId !== s.activeRepoId ||
+        nextSleptChats !== s.explicitlySleptChatsByWorkspace ||
         allDead ||
         reconciliationChanged ||
         stateTransition !== undefined
@@ -159,7 +168,10 @@ export function createSetActiveWorktree(
         rightSidebarExplorerView: restoredRightSidebarExplorerView,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
-        ...tabsByWorktreeUpdate
+        ...tabsByWorktreeUpdate,
+        ...(nextSleptChats !== s.explicitlySleptChatsByWorkspace
+          ? { explicitlySleptChatsByWorkspace: nextSleptChats }
+          : {})
       }
     })
 

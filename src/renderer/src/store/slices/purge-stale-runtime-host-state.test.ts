@@ -195,6 +195,22 @@ describe('purgeStaleRuntimeHostState', () => {
     expect(s.projectHostSetups).toBe(setupsRef)
   })
 
+  it('drops removed-host Sleep intent even before its workspace catalog loads', () => {
+    const store = createTestStore()
+    store.setState({
+      explicitlySleptChatsByWorkspace: {
+        'runtime:env-a|repo1::/wt': [{ tabId: 'a', sessionId: 'a' }],
+        'local|repo1::/wt': [{ tabId: 'local', sessionId: 'local' }]
+      }
+    })
+
+    store.getState().purgeStaleRuntimeHostState(['env-a'])
+
+    expect(store.getState().explicitlySleptChatsByWorkspace).toEqual({
+      'local|repo1::/wt': [{ tabId: 'local', sessionId: 'local' }]
+    })
+  })
+
   it('same-repoId-on-two-hosts: keeps an ambiguous unhosted row and the repo key', () => {
     const store = createTestStore()
     // repoId 'shared' exists under both local and runtime:env-a in worktreesByRepo.

@@ -37,6 +37,18 @@ const PROFILES = WORKSPACE_LAYOUT_PROFILES.map(
 )
 
 describe('workspace layout Loader and Serializer', () => {
+  it('round trips explicit chat Sleep as desktop view state', () => {
+    const stored = localDesktopSession()
+    stored.explicitlySleptChatsByWorkspace = {
+      'local|repo-1::/Users/dev/orca': [{ tabId: 'agent-session-1', sessionId: 'agent-session-1' }]
+    }
+    const { loaded, saved } = roundTrip(LOCAL_EXECUTION_HOST_ID, stored)
+    expect(loaded.desktopView.explicitlySleptChatsByWorkspace).toEqual(
+      stored.explicitlySleptChatsByWorkspace
+    )
+    expect(JSON.stringify(loaded.layout)).not.toContain('explicitlySleptChatsByWorkspace')
+    expect(saved.explicitlySleptChatsByWorkspace).toEqual(stored.explicitlySleptChatsByWorkspace)
+  })
   it.each(PROFILES)(
     '%s: save(load(stored)) writes exactly what was stored',
     (_name, hostId, build) => {

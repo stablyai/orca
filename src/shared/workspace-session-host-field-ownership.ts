@@ -51,6 +51,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   browserPagesByWorkspace: 'browserWorkspaceKeyed',
   markdownFrontmatterVisible: 'fileKeyed',
   sleepingAgentSessionsByPaneKey: 'sleepingAgentKeyed',
+  explicitlySleptChatsByWorkspace: 'global',
   terminalPtyIncarnationsByPaneKey: 'paneKeyed',
   // Why: this host-issued fence must never collide while unified renderer state merges equal repo ids across hosts.
   terminalTopologyRevisionByRepoId: 'hostPrivate',
@@ -102,7 +103,8 @@ export const GLOBAL_WORKSPACE_SESSION_FIELDS = (
  */
 export const HOST_PARTITION_REDUNDANT_GLOBAL_FIELDS = [
   'browserUrlHistory',
-  'workspaceDocHistory'
+  'workspaceDocHistory',
+  'explicitlySleptChatsByWorkspace'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 /** Serialize-side sweep over every non-local partition. The load path re-seeds these fields at

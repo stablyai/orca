@@ -164,6 +164,8 @@ function collectWorkspaceSession(
             }
           : null
     })
+    // Sleep intent belongs to the client that recorded it.
+    delete fragment.explicitlySleptChatsByWorkspace
     if (!sourceHostPartition) {
       // Client focus is not host state, so the destination never carries it.
       fragment.activeWorktreeId = null

@@ -43,6 +43,7 @@ export const SESSION_FIELD_OWNERS = {
   lastVisitedAtByWorktreeId: 'view',
   defaultTerminalTabsAppliedByWorktreeId: 'layout',
   sleepingAgentSessionsByPaneKey: 'layout',
+  explicitlySleptChatsByWorkspace: 'view',
   terminalPtyIncarnationsByPaneKey: 'layout',
   terminalTopologyRevisionByRepoId: 'layout',
   // Applied and cleared by the Loader; never written again.

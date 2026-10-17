@@ -51,6 +51,7 @@ const PERSISTED_WORKSPACE_SESSION_FIELDS = {
   lastVisitedAtByWorktreeId: true,
   defaultTerminalTabsAppliedByWorktreeId: true,
   sleepingAgentSessionsByPaneKey: true,
+  explicitlySleptChatsByWorkspace: true,
   terminalPtyIncarnationsByPaneKey: true,
   terminalTopologyRevisionByRepoId: true,
   terminalSurfaceTombstonesByPaneKey: true,
@@ -101,6 +102,20 @@ describe('workspaceSessionStateSchema field coverage', () => {
     expect(parsed.ok && parsed.value.closedTerminalTabTombstonesByTabId).toEqual({
       'tab-1': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1', reason: 'cleanup' },
       'tab-2': { closedAt: 1_700_000_000_000, worktreeId: 'repo:wt-1' }
+    })
+  })
+
+  it('loads explicit chat sleep intent without a tab layout field', () => {
+    const parsed = parseWorkspaceSession({
+      ...MINIMAL_SESSION,
+      explicitlySleptChatsByWorkspace: {
+        'local|repo:wt-1': [{ tabId: 'chat-tab', sessionId: 'session-1' }]
+      }
+    })
+
+    expect(parsed.ok).toBe(true)
+    expect(parsed.ok && parsed.value.explicitlySleptChatsByWorkspace).toEqual({
+      'local|repo:wt-1': [{ tabId: 'chat-tab', sessionId: 'session-1' }]
     })
   })
 

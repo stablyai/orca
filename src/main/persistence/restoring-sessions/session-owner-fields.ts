@@ -7,16 +7,24 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
 
+// Keyed by `${executionHostId}|${worktreeId}` as well as the bare owner key.
+const HOST_QUALIFIED_SESSION_FIELDS = [
+  'lastVisitedAtByWorktreeId',
+  'explicitlySleptChatsByWorkspace'
+] as const
+
 /**
  * The census fields this path deletes by indexing the owner key.
  *
- * Two classified fields are handled separately below: the topology revision is keyed by repo
- * rather than by owner, so removing one owner advances it instead of dropping it; and the recency
- * map also holds host-qualified keys, so it is scanned rather than indexed.
+ * Some classified fields are handled separately below: the topology revision is keyed by repo
+ * rather than by owner, so removing one owner advances it instead of dropping it; and the
+ * host-qualified maps are scanned rather than indexed.
  */
 export const OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER =
   SESSION_FIELDS_PRUNED_BY_OWNER_KEY.filter(
-    (field) => field !== 'terminalTopologyRevisionByRepoId' && field !== 'lastVisitedAtByWorktreeId'
+    (field) =>
+      field !== 'terminalTopologyRevisionByRepoId' &&
+      !HOST_QUALIFIED_SESSION_FIELDS.some((hostQualified) => hostQualified === field)
   )
 
 export function createMinimalPersistedTerminalTab(args: {
@@ -89,12 +97,12 @@ export function deleteOwnerKeyedSessionFields(
       delete record[ownerKey]
     }
   }
-  // Scanned, not indexed: this map also holds `${executionHostId}|${worktreeId}` keys.
-  if (next.lastVisitedAtByWorktreeId) {
-    for (const key of Object.keys(next.lastVisitedAtByWorktreeId)) {
+  for (const field of HOST_QUALIFIED_SESSION_FIELDS) {
+    const record: Record<string, unknown> | undefined = next[field]
+    for (const key of Object.keys(record ?? {})) {
       const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
-      if (key === ownerKey || rawId === ownerKey) {
-        delete next.lastVisitedAtByWorktreeId[key]
+      if (record && (key === ownerKey || rawId === ownerKey)) {
+        delete record[key]
       }
     }
   }

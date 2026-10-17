@@ -71,6 +71,7 @@ describe('workspace lineage menu actions', () => {
         },
         unifiedTabsByWorktree: {},
         agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {},
         chatOwnerState: {}
       }
     })
@@ -99,6 +100,7 @@ describe('workspace lineage menu actions', () => {
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
         agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {},
         chatOwnerState: {}
       }
     })
@@ -121,6 +123,7 @@ describe('hasSleepableWorkspaceActivity', () => {
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
         agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {},
         chatOwnerState: {}
       })
     ).toBe(false)
@@ -134,6 +137,7 @@ describe('hasSleepableWorkspaceActivity', () => {
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: {},
         agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {},
         chatOwnerState: {}
       })
     ).toBe(true)
@@ -144,6 +148,7 @@ describe('hasSleepableWorkspaceActivity', () => {
         browserTabsByWorktree: { 'wt-1': [{ id: 'browser-1' }] },
         unifiedTabsByWorktree: {},
         agentStatusByPaneKey: {},
+        explicitlySleptChatsByWorkspace: {},
         chatOwnerState: {}
       })
     ).toBe(true)
@@ -170,6 +175,7 @@ describe('hasSleepableWorkspaceActivity', () => {
         browserTabsByWorktree: {},
         unifiedTabsByWorktree: { 'wt-1': [chat] },
         agentStatusByPaneKey: hostHeld(chat),
+        explicitlySleptChatsByWorkspace: {},
         chatOwnerState: {
           worktreesByRepo: {
             'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }]
@@ -186,10 +192,49 @@ describe('hasSleepableWorkspaceActivity', () => {
           browserTabsByWorktree: {},
           unifiedTabsByWorktree: { 'wt-1': [{ ...chat, executionHostId: 'runtime:remote' }] },
           agentStatusByPaneKey: hostHeld(chat),
+          explicitlySleptChatsByWorkspace: {},
           chatOwnerState: {}
         }
       )
     ).toBe(false)
+  })
+
+  it('offers Sleep for an ended chat until an explicit Sleep records it', () => {
+    const chat: Tab = {
+      id: 'chat-1',
+      entityId: 'session-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      executionHostId: 'local',
+      label: 'Claude',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    }
+    const activity = (
+      slept: { tabId: string; sessionId: string }[]
+    ): Parameters<typeof hasSleepableWorkspaceActivity>[1] => ({
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      browserTabsByWorktree: {},
+      unifiedTabsByWorktree: { 'wt-1': [chat] },
+      agentStatusByPaneKey: {},
+      explicitlySleptChatsByWorkspace: { 'local|wt-1': slept },
+      chatOwnerState: {
+        worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', hostId: 'local' }] }
+      }
+    })
+    expect(hasSleepableWorkspaceActivity('wt-1', activity([]))).toBe(true)
+    expect(
+      hasSleepableWorkspaceActivity('wt-1', activity([{ tabId: 'chat-1', sessionId: 'session-1' }]))
+    ).toBe(false)
+    // A replaced session is a new chat the earlier Sleep never covered.
+    expect(
+      hasSleepableWorkspaceActivity('wt-1', activity([{ tabId: 'chat-1', sessionId: 'old' }]))
+    ).toBe(true)
   })
 
   it('offers Sleep for the selected host of a duplicate chat-only folder', () => {
@@ -216,6 +261,7 @@ describe('hasSleepableWorkspaceActivity', () => {
           browserTabsByWorktree: {},
           unifiedTabsByWorktree: { 'folder:folder-1': [chat] },
           agentStatusByPaneKey: hostHeld(chat),
+          explicitlySleptChatsByWorkspace: {},
           chatOwnerState: {
             folderWorkspaces: [
               {
