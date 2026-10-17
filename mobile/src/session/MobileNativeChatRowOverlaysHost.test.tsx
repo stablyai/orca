@@ -9,8 +9,20 @@ import {
 } from './mobile-native-chat-row-overlays'
 import type { MobileNativeChatConversation } from './use-mobile-native-chat-conversation-state'
 
+vi.mock('react-native-gesture-handler', () => ({
+  GestureHandlerRootView: 'View',
+  GestureDetector: ({ children }: { children: unknown }) => children,
+  Gesture: { Native: () => ({}) }
+}))
+vi.mock('./MobileNativeChatZoomableImagePage', () => ({
+  MobileNativeChatZoomableImagePage: 'AndroidImagePage'
+}))
 vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
   Image: 'Image',
+  Text: 'Text',
+  FlatList: 'FlatList',
+  useWindowDimensions: () => ({ width: 390, height: 844 }),
   Modal: 'Modal',
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -97,4 +109,31 @@ describe.each([
       ])
     ).toEqual([true, true, false])
   })
+})
+
+it('opens the selected gallery image and retains every neighboring image', () => {
+  const images = Array.from({ length: 5 }, (_, index) => ({
+    type: 'image-ref' as const,
+    url: `file:///${index}.jpg`,
+    alt: `Photo ${index + 1}`
+  }))
+  act(() => {
+    renderer = create(chat({ surfaceId: 'gallery', sessionId: 's1' }))
+  })
+  act(() =>
+    overlays!.openImage({
+      uri: 'file:///2.jpg',
+      label: 'Photo 3',
+      gallery: { images, initialIndex: 2 }
+    })
+  )
+  const list = renderer!.root.find((node) => String(node.type) === 'FlatList')
+  expect(list.props.data).toBe(images)
+  expect(list.props.initialScrollIndex).toBe(2)
+  act(() => list.props.onScroll({ nativeEvent: { contentOffset: { x: 390 * 4 } } }))
+  expect(
+    renderer!.root
+      .findAll((node) => String(node.type) === 'Text')
+      .some((node) => node.props.children.join('') === '5 / 5')
+  ).toBe(true)
 })

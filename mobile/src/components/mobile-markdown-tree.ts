@@ -1,4 +1,5 @@
 import MarkdownIt from 'markdown-it'
+import { collectMobileMarkdownLiteralRanges } from './mobile-markdown-literal-ranges'
 import footnote from 'markdown-it-footnote'
 import type {
   AlignType,
@@ -306,4 +307,10 @@ export function mobileMarkdownCodeLines(source: string): Set<number> {
     }
   }
   return lines
+}
+
+/** Literal code ranges in original source, including multiline inline spans. */
+export function mobileMarkdownLiteralRanges(source: string): { start: number; end: number }[] {
+  const env = {}
+  return collectMobileMarkdownLiteralRanges(source, markdown.parse(source, env), markdown, env)
 }

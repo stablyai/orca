@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
+  mobileNativeChatVisualSource,
   cachedMobileNativeChatVisual,
   readMobileNativeChatVisual,
   resetMobileNativeChatVisualCacheForTest,
@@ -197,4 +198,19 @@ describe('readMobileNativeChatVisual', () => {
     expect(cachedMobileNativeChatVisual(source, 'v0.html')).toBeNull()
     expect(cachedMobileNativeChatVisual(source, 'v16.html')).not.toBeNull()
   })
+})
+
+it('carries the same owning client with its negotiated attachment support', () => {
+  const { client, sessionId } = sourceWith(vi.fn())
+  expect(mobileNativeChatVisualSource(client, sessionId, false)).toEqual({
+    client,
+    sessionId,
+    attachmentsSupported: false
+  })
+  expect(mobileNativeChatVisualSource(client, sessionId, true)).toEqual({
+    client,
+    sessionId,
+    attachmentsSupported: true
+  })
+  expect(mobileNativeChatVisualSource(null, sessionId, true)).toBeNull()
 })

@@ -262,6 +262,7 @@ describe("useMobileStructuredAgentSession and the host's Stopping", () => {
       enabled: true,
       connected,
       hostSupport: {
+        attachments: false,
         promptCancel: false,
         questionAnswers: false,
         queuedMessages: false,

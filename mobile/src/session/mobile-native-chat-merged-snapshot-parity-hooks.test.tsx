@@ -62,6 +62,9 @@ vi.mock('lucide-react-native', () => ({
   ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
 }))
+vi.mock('./MobileNativeChatZoomableImagePage', () => ({
+  MobileNativeChatZoomableImagePage: 'AndroidImagePage'
+}))
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
@@ -87,6 +90,7 @@ const OVERLAY_IMAGES = {
 } as unknown as Parameters<typeof MobileNativeChatOverlay>[0]['images']
 
 const HOST_SUPPORT = {
+  attachments: false,
   promptCancel: true,
   questionAnswers: true,
   queuedMessages: true,

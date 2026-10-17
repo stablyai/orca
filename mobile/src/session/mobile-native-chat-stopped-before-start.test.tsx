@@ -1,3 +1,6 @@
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
 // The phone draws a send a Stop took back before the agent started it where it was sent, with the
 // one row after it, and gives neither a turn of its own.
 

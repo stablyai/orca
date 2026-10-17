@@ -1,3 +1,6 @@
+vi.mock('../layout/side-safe-area', () => ({
+  useWindowSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -363,7 +366,9 @@ describe('iOS whole-message copy', () => {
 
   it('has no copy footer for image-only or tool-only messages', () => {
     render({ ...message, blocks: [{ type: 'image-ref', path: '/attachment.png' }] })
-    expect(nodes('Pressable')).toHaveLength(0)
+    expect(
+      nodes('Pressable').filter((node) => node.props.accessibilityLabel?.startsWith('Copy '))
+    ).toHaveLength(0)
     act(() =>
       renderer!.update(
         createElement(MobileNativeChatMessage, {
@@ -371,6 +376,8 @@ describe('iOS whole-message copy', () => {
         })
       )
     )
-    expect(nodes('Pressable')).toHaveLength(0)
+    expect(
+      nodes('Pressable').filter((node) => node.props.accessibilityLabel?.startsWith('Copy '))
+    ).toHaveLength(0)
   })
 })

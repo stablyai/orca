@@ -1,3 +1,8 @@
+import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
+import { getStructuredAgentSessionHost } from './agent-session-wire/structured-agent-session-registry'
+import { getAgentSessionAttachmentStore } from './agent-session-attachments/agent-session-attachment-store-registry'
+import { parseAgentSessionAttachmentStorePath } from './agent-session-attachments/agent-session-attachment-references'
+import { formatNativeChatFileReference } from '../../shared/agent-image-paste'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import type {
@@ -32,7 +37,41 @@ export async function nativeChatTranscriptIncludesPath(args: {
   pathText: string
   absolutePath: string
   readTranscript?: TranscriptRead
+  attachmentRoot?: string
+  readJournal?: (sessionId: string) => Promise<Pick<AgentJournalSnapshot, 'items'>>
 }): Promise<boolean> {
+  const structuredTab = args.tabs.find(
+    (tab) => tab.id === args.context.tabId && tab.type === 'agent-session'
+  )
+  if (structuredTab?.type === 'agent-session') {
+    if (structuredTab.sessionId !== args.context.sessionId) {
+      return false
+    }
+    const root = args.attachmentRoot ?? getAgentSessionAttachmentStore()?.rootDir
+    if (!root || !parseAgentSessionAttachmentStorePath(root, args.absolutePath)) {
+      return false
+    }
+    const read = args.readJournal ?? getStructuredAgentSessionHost()?.journalSnapshot
+    if (!read) {
+      return false
+    }
+    try {
+      const snapshot = await read(structuredTab.sessionId)
+      const reference = formatNativeChatFileReference(args.absolutePath)
+      return snapshot.items.some(
+        ({ body }) =>
+          body.kind === 'message' &&
+          body.role === 'user' &&
+          body.from === undefined &&
+          body.blocks.some(
+            (block) =>
+              block.type === 'text' && transcriptTextIncludesPath(block.text, reference, reference)
+          )
+      )
+    } catch {
+      return false
+    }
+  }
   const tab = args.tabs.find(
     (candidate): candidate is RuntimeMobileSessionTerminalClientTab =>
       candidate.type === 'terminal' && candidate.id === args.context.tabId

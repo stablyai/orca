@@ -119,6 +119,7 @@ function Harness({
     connected: true,
     agent: 'codex',
     hostSupport: {
+      attachments: false,
       promptCancel: promptCancelSupported,
       questionAnswers: questionAnswersSupported,
       queuedMessages: false,

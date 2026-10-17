@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
@@ -16,6 +17,7 @@ import { structuredAgentSessionHostSupport } from './mobile-structured-agent-ses
 describe('structuredAgentSessionHostSupport', () => {
   it('reads each structured-session feature from the host capability list', () => {
     const none = {
+      attachments: false,
       promptCancel: false,
       questionAnswers: false,
       queuedMessages: false,
@@ -28,6 +30,9 @@ describe('structuredAgentSessionHostSupport', () => {
       permissionModes: false
     }
     expect(structuredAgentSessionHostSupport([])).toEqual(none)
+    expect(
+      structuredAgentSessionHostSupport([AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY])
+    ).toEqual({ ...none, attachments: true })
     expect(
       structuredAgentSessionHostSupport([AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY])
     ).toEqual({ ...none, questionAnswers: true })
