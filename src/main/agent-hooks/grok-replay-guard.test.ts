@@ -14,7 +14,7 @@ import { getManagedScript as getClaudeManagedScript } from '../claude/hook-servi
 import { getManagedScript as getCursorManagedScript } from '../cursor/hook-script'
 
 const POSIX_GROK_GUARD = 'if [ -n "$GROK_HOOK_EVENT" ]; then'
-const WINDOWS_GROK_GUARD = 'if not "%GROK_HOOK_EVENT%"=="" goto :orca_agent_hook_drain_stdin'
+const WINDOWS_GROK_GUARD = 'if not "%GROK_HOOK_EVENT%"=="" exit /b 0'
 const CLAUDE_SCRIPT_OPTIONS = {
   skipWhenDevinImportsClaude: true,
   skipWhenGrokImportsClaude: true

@@ -10,7 +10,6 @@ import {
   buildWindowsGrokReplayGuardLines
 } from '../agent-hooks/grok-replay-guard'
 import {
-  WINDOWS_HOOK_STDIN_DRAIN_LABEL,
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines,
@@ -47,8 +46,11 @@ export function getManagedScript(
       ...(options.skipWhenGrokImportsClaude ? buildWindowsGrokReplayGuardLines() : []),
       ...(options.skipWhenDevinImportsClaude
         ? [
-            // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
-            `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
+            // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so
+            // status posts stay attributed to Devin. Exit without reading (#11549): a
+            // read-to-EOF drain (more.com) parks forever when the caller abandons stdin, and
+            // the payload is discarded on this skip path anyway.
+            'if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0'
           ]
         : []),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
