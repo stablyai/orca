@@ -66,12 +66,12 @@ function registerGuest(browserPageId: string, webContentsId: number): Electron.S
   return guest.session as Electron.Session
 }
 
-function resolve(session: Electron.Session, webContentsId?: number): string {
+function resolve(session: Electron.Session, webContentsId?: number): string | undefined {
   return browserManager.resolveBrowserGuestRequestUserAgent({
     session,
     url: 'https://example.com/asset.js',
     webContentsId
-  }).userAgent
+  })?.userAgent
 }
 
 /**

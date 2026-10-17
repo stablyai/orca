@@ -37,6 +37,8 @@ export type ViewportGuestHandle = {
   debuggerAttach: ReturnType<typeof vi.fn>
   /** Flips what isCrashed() reports, as a renderer death and its reload do. */
   setRendererCrashed: (crashed: boolean) => void
+  /** A CDP command sent on the guest's debugger by someone other than the manager (an agent). */
+  sendForeignCdpCommand: (method: string, params?: Record<string, unknown>) => unknown
   setGuestUserAgent: (ua: string) => void
   commitNavigationTo: (nextUrl: string) => void
   webContentsUserAgent: () => string
@@ -44,6 +46,8 @@ export type ViewportGuestHandle = {
   presentedUserAgent: () => string
   /** The CDP UA override Chromium holds, or null when none stands. */
   standingUserAgentOverride: () => Record<string, unknown> | null
+  /** Chromium's detach: drops the session's CDP overrides, then tells the detach listeners. */
+  simulateDebuggerDetach: () => void
 }
 
 // Why: the guest wires the file's own hoisted mocks, which cannot be imported here.
@@ -56,6 +60,7 @@ export function createViewportGuestFactory(
     const debuggerSendCommand = vi.fn(rejectInvalidTouchPoints)
     const debuggerIsAttached = vi.fn(() => true)
     const debuggerAttach = vi.fn()
+    const debuggerOn = vi.fn()
     let currentUa = mocks.processUserAgent ?? GUEST_ELECTRON_UA
     let rendererCrashed = false
     // Why: getURL() reports the last COMMITTED url — it does not move at did-start-navigation.
@@ -102,7 +107,7 @@ export function createViewportGuestFactory(
         isAttached: debuggerIsAttached,
         attach: debuggerAttach,
         sendCommand,
-        on: vi.fn(),
+        on: debuggerOn,
         off: vi.fn()
       }
     }
@@ -114,6 +119,7 @@ export function createViewportGuestFactory(
       setRendererCrashed: (crashed: boolean) => {
         rendererCrashed = crashed
       },
+      sendForeignCdpCommand: sendCommand,
       setGuestUserAgent: (ua: string) => {
         currentUa = ua
       },
@@ -123,7 +129,15 @@ export function createViewportGuestFactory(
       webContentsUserAgent: () => currentUa,
       presentedUserAgent: () =>
         typeof cdpOverride?.userAgent === 'string' ? cdpOverride.userAgent : currentUa,
-      standingUserAgentOverride: () => cdpOverride
+      standingUserAgentOverride: () => cdpOverride,
+      simulateDebuggerDetach: () => {
+        cdpOverride = null
+        for (const [event, listener] of debuggerOn.mock.calls) {
+          if (event === 'detach' && typeof listener === 'function') {
+            listener()
+          }
+        }
+      }
     }
   }
 }
