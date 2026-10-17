@@ -4,6 +4,7 @@
 import { translate } from '@/i18n/i18n'
 import type { DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
+import { commitSyncTitle as resolveCommitSyncTitle } from './source-control-dropdown-copy'
 
 export type CommitDropdownItems = {
   commit: DropdownItem
@@ -72,31 +73,15 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
       commitDisabledReason !== null
   }
 
-  const commitSyncTitle = ((): string => {
-    if (upstreamLoading) {
-      return 'Checking branch status…'
-    }
-    if (publishBlockedByPRLoading) {
-      return 'Checking PR status…'
-    }
-    if (publishBlockedByMergedPR) {
-      return 'PR is already merged'
-    }
-    if (publishBlockedByDetachedHead) {
-      return 'Check out a branch before syncing commits'
-    }
-    if (!hasUpstream) {
-      // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
-      return 'Publish the branch first to sync commits'
-    }
-    if (shouldForcePushWithLease) {
-      return (
-        commitDisabledReason ??
-        'Use Commit & Force Push — remote only has older copies of local commits'
-      )
-    }
-    return commitDisabledReason ?? 'Commit, then pull and push'
-  })()
+  const commitSyncTitle = resolveCommitSyncTitle({
+    upstreamLoading,
+    publishBlockedByPRLoading,
+    publishBlockedByMergedPR,
+    publishBlockedByDetachedHead,
+    hasUpstream,
+    shouldForcePushWithLease,
+    commitDisabledReason
+  })
   const commitSync: DropdownItem = {
     kind: 'commit_sync',
     label: translate(
