@@ -2706,7 +2706,7 @@ export function createRemoteRuntimePtyTransport(
             return
           }
           outputProcessor.clearAccumulatedState()
-          if (verdict === 'unverifiable' || (tabId && isWebTerminalSurfaceTabId(tabId))) {
+          if (verdict === 'unverifiable') {
             setAttachmentReady(false)
             multiplexedStream = null
             multiplexedStreamHandle = null
