@@ -139,6 +139,11 @@ export class LocalhostWorktreeLabelProxy {
     // upstream request instead of surfacing as an uncaught exception/leak.
     request.on('error', () => proxyRequest.destroy())
     response.on('error', () => proxyRequest.destroy())
+    response.once('close', () => {
+      if (!response.writableFinished) {
+        proxyRequest.destroy()
+      }
+    })
 
     // Why: the proxy only relabels the hostname; responses are streamed
     // through untouched so app headers (CSP, cookies) and bodies are
