@@ -92,6 +92,9 @@ describe('AddRepoHostSelector', () => {
     expect(html).toContain('aria-disabled="true"')
     expect(html).not.toContain('cursor-not-allowed')
     expect(html).not.toContain('opacity-55')
+    // One status dot on the trigger and one on the Builder row.
+    expect(html.match(/bg-muted-foreground\/40/g)).toHaveLength(2)
+    expect(html).toContain('data-variant="outline"')
   })
 
   it('shows exact update guidance for incompatible runtime hosts', () => {

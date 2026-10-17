@@ -203,3 +203,19 @@ export function getSidebarHostVisibilityLabel(
 export function getSidebarHostHealthLabel(health: SidebarHostScopeOption['health']): string {
   return health === 'mixed' ? 'Mixed' : getExecutionHostHealthLabel(health)
 }
+
+export function getSidebarHostHealthDotClass(health: ExecutionHostHealth): string {
+  switch (health) {
+    case 'local':
+    case 'available':
+      return 'bg-status-success'
+    case 'connecting':
+      return 'bg-status-warning'
+    case 'disconnected':
+      // Why grey: the status bar and SSH settings show disconnected as idle, not as an error.
+      return 'bg-muted-foreground/40'
+    case 'blocked':
+    case 'error':
+      return 'bg-destructive'
+  }
+}
