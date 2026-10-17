@@ -518,4 +518,46 @@ describe('refreshFileExplorerExpandedDirs', () => {
     expect(readDirectory).toHaveBeenCalledTimes(1)
     expect(cache['/repo/b']).toEqual(newerBCache)
   })
+
+  it('keeps an opened folder link folder-shaped when a refresh re-reads its parent (#29069)', async () => {
+    let cache: Record<string, DirCache> = {
+      '/repo/src': {
+        children: [
+          {
+            name: 'linked',
+            path: '/repo/src/linked',
+            relativePath: 'src/linked',
+            isDirectory: true,
+            isSymlink: true,
+            depth: 1,
+            operationOwner: { kind: 'local' }
+          }
+        ],
+        operationOwner: { kind: 'local' }
+      },
+      '/repo/src/linked': { children: [], operationOwner: { kind: 'local' } }
+    }
+    const setDirCache = vi.fn((update: CacheUpdate) => {
+      cache = typeof update === 'function' ? update(cache) : update
+    })
+    const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
+
+    await refreshFileExplorerExpandedDirs({
+      dirs: [{ dirPath: '/repo/src', depth: 0 }],
+      worktreePath: '/repo',
+      dirLoadTracker: createFileExplorerDirLoadTracker(),
+      setDirCache,
+      updateLoadingDirPaths,
+      readDirectory: async () => ({
+        // Without followSymlinks the host reports the link as a file.
+        entries: [{ name: 'linked', isDirectory: false, isSymlink: true }],
+        operationOwner: { kind: 'local' as const }
+      }),
+      maxConcurrentReads: 4
+    })
+
+    expect(cache['/repo/src'].children).toMatchObject([
+      { name: 'linked', isDirectory: true, isSymlink: true }
+    ])
+  })
 })
