@@ -30,7 +30,7 @@ describe('createMainWindow', () => {
   })
 
   it.each(['darwin', 'win32', 'linux'] as const)(
-    'zooms with unshifted minus and preserves terminal shifted-minus on %s',
+    'zooms with the zoom keys a non-US layout sends and preserves terminal shifted-minus on %s',
     (platform) => {
       Object.defineProperty(process, 'platform', { value: platform })
       const windowHandlers: Record<string, (...args: any[]) => void> = {}
@@ -92,6 +92,22 @@ describe('createMainWindow', () => {
       expect(webContents.send).toHaveBeenNthCalledWith(4, 'terminal:zoom', 'out')
       expect(webContents.send).toHaveBeenNthCalledWith(5, 'terminal:zoom', 'out')
 
+      // Why: layouts that put '+' on its own key, or '=' behind Shift, must zoom in too.
+      for (const input of [
+        { type: 'keyDown', ...primary, alt: false, key: '+', code: 'BracketRight' },
+        { type: 'keyDown', ...primary, alt: false, shift: true, key: '+' },
+        { type: 'keyDown', ...primary, alt: false, shift: true, key: '=', code: 'Digit0' }
+      ]) {
+        const zoomInPreventDefault = vi.fn()
+        beforeInputEvent({ preventDefault: zoomInPreventDefault }, input)
+        expect(zoomInPreventDefault).toHaveBeenCalledTimes(1)
+      }
+
+      expect(webContents.send).toHaveBeenCalledTimes(8)
+      expect(webContents.send).toHaveBeenNthCalledWith(6, 'terminal:zoom', 'in')
+      expect(webContents.send).toHaveBeenNthCalledWith(7, 'terminal:zoom', 'in')
+      expect(webContents.send).toHaveBeenNthCalledWith(8, 'terminal:zoom', 'in')
+
       const setTerminalFocus = vi
         .mocked(ipcMain.on)
         .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
@@ -106,7 +122,7 @@ describe('createMainWindow', () => {
           { type: 'keyDown', ...primary, alt: false, shift: true, key, code: 'Minus' }
         )
         expect(undoPreventDefault).not.toHaveBeenCalled()
-        expect(webContents.send).toHaveBeenCalledTimes(5)
+        expect(webContents.send).toHaveBeenCalledTimes(8)
       }
     }
   )

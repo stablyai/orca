@@ -22,6 +22,31 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('matches zoom in on layouts where the plus key needs no Shift', () => {
+    expect(getEffectiveKeybindingsForAction('zoom.in', 'win32')).toContain('Mod+Plus')
+    const plusWithoutShift = {
+      key: '+',
+      code: 'BracketRight',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: false
+    }
+    expect(keybindingMatchesAction('zoom.in', plusWithoutShift, 'win32')).toBe(true)
+    // Why: the same key shifted types '*' (Latin American, German), which must not zoom.
+    expect(
+      keybindingMatchesAction('zoom.in', { ...plusWithoutShift, key: '*', shift: true }, 'win32')
+    ).toBe(false)
+    // Why: layouts that put '=' behind Shift report it as an unshifted '=' key.
+    expect(
+      keybindingMatchesAction(
+        'zoom.in',
+        { key: '=', code: 'Digit0', control: true, meta: false, alt: false, shift: true },
+        'win32'
+      )
+    ).toBe(true)
+  })
+
   it('matches file explorer undo and redo by produced logical key', () => {
     expect(getEffectiveKeybindingsForAction('fileExplorer.undo', 'darwin')).toEqual(['Mod+Z'])
     expect(getEffectiveKeybindingsForAction('fileExplorer.redo', 'darwin')).toEqual(['Mod+Shift+Z'])
