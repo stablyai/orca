@@ -12,8 +12,10 @@ import { stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
 import {
   AgentCommandOverrideInput,
   AgentDefaultArgsInput,
-  AgentDefaultEnvInput
+  AgentDefaultEnvInput,
+  AgentPostPasteSubmitInputControl
 } from './AgentLaunchDefaultsEditor'
+import type { AgentPostPasteSubmitInput } from '../../../../shared/tui-agent-post-paste-submit'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -73,6 +75,8 @@ export type AgentCatalogRowProps = {
   onSaveOverride: (value: string) => void | Promise<void>
   onSaveArgs: (value: string) => void | Promise<void>
   onSaveEnv: (value: Record<string, string>) => void
+  postPasteSubmitInput?: AgentPostPasteSubmitInput
+  onSavePostPasteSubmitInput?: (value: AgentPostPasteSubmitInput) => void
   sessionSourceHome?: AgentSessionSourceHomeControl
   environmentNames?: readonly string[]
   environmentEditor?: React.ReactNode
@@ -96,6 +100,8 @@ export function AgentCatalogRow({
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
+  postPasteSubmitInput,
+  onSavePostPasteSubmitInput,
   sessionSourceHome,
   environmentNames,
   environmentEditor
@@ -231,6 +237,14 @@ export function AgentCatalogRow({
                 />
               </div>
             ))}
+          {postPasteSubmitInput && onSavePostPasteSubmitInput && (
+            <div className="mt-2">
+              <AgentPostPasteSubmitInputControl
+                value={postPasteSubmitInput}
+                onSave={onSavePostPasteSubmitInput}
+              />
+            </div>
+          )}
           {sessionSourceHome && (
             <div className="mt-2">
               <AgentSessionSourceHomeInput

@@ -1,9 +1,15 @@
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-prompt-injection'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
+import {
+  resolveTerminalCtrlEnterInput,
+  TERMINAL_ENTER_INPUT
+} from '../../../shared/terminal-ctrl-enter-input'
+import { resolveAgentPostPasteSubmitInput } from '../../../shared/tui-agent-post-paste-submit'
 import { useAppStore } from '@/store'
 import {
   inspectRuntimeTerminalProcess,
@@ -14,6 +20,7 @@ import {
   BRACKETED_PASTE_START
 } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
+import { getPtyKittyKeyboardFlags } from '@/components/terminal-pane/terminal-pty-kitty-keyboard-flags'
 import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
@@ -182,11 +189,13 @@ export async function submitPromptToAgentPty(args: {
   tabId: string
   ptyId: string
   content: string
+  agent?: TuiAgent
 }): Promise<boolean> {
   return await sendBracketedPasteToAgent({
     ptyId: args.ptyId,
     content: args.content,
     submit: true,
+    agent: args.agent,
     inputKind: 'driving'
   })
 }
@@ -194,6 +203,7 @@ export async function submitPromptToAgentPty(args: {
 export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
+  agent?: TuiAgent
 }): Promise<boolean> {
   return await sendBracketedPasteToAgent({ ...args, submit: true, inputKind: 'driving' })
 }
@@ -208,6 +218,11 @@ async function sendBracketedPasteToAgent(args: {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
+  const submitInput = resolvePostPasteSubmitSequence(
+    agent,
+    useAppStore.getState().settings?.agentPostPasteSubmitInputs,
+    ptyId
+  )
   try {
     // Why: paste + Enter (+ retry Enter) must be one transaction, or a concurrent
     // paste on this PTY can slip between them and submit a half-written prompt.
@@ -221,14 +236,14 @@ async function sendBracketedPasteToAgent(args: {
       // Enter arrive in the same PTY write. Split the submit into the next turn so
       // the TUI processes bracketed-paste termination before handling Enter.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      const submitted = await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+      const submitted = await sendRuntimePtyInputVerified(ptyId, submitInput, inputKind)
 
       if (submitRetryDelayMs !== undefined) {
         // Why: agents that render their composer before Enter is live silently eat
         // the first Enter; the retry is best-effort and never downgrades `submitted`.
         await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
         try {
-          await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+          await sendRuntimePtyInputVerified(ptyId, submitInput, inputKind)
         } catch {
           // Why: a rejected retry leaves the first Enter's verdict untouched.
         }
@@ -239,6 +254,17 @@ async function sendBracketedPasteToAgent(args: {
   } catch {
     return false
   }
+}
+
+function resolvePostPasteSubmitSequence(
+  agent: TuiAgent | undefined,
+  configuredInputs: GlobalSettings['agentPostPasteSubmitInputs'] | undefined,
+  ptyId: string
+): string {
+  const configuredInput = resolveAgentPostPasteSubmitInput(agent, configuredInputs)
+  return configuredInput === 'ctrl-enter'
+    ? resolveTerminalCtrlEnterInput(getPtyKittyKeyboardFlags(ptyId))
+    : TERMINAL_ENTER_INPUT
 }
 
 function waitForAgentDraftInputReadyOnTab(args: {

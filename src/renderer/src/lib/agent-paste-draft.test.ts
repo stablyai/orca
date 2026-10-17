@@ -13,6 +13,7 @@ import {
   submitPromptToAgentPty
 } from './agent-paste-draft'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { TERMINAL_CTRL_ENTER_CSI_U_INPUT } from '../../../shared/terminal-ctrl-enter-input'
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -30,6 +31,7 @@ const testState = vi.hoisted(() => ({
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
+  getPtyKittyKeyboardFlags: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
 }))
@@ -64,6 +66,10 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
+}))
+
+vi.mock('@/components/terminal-pane/terminal-pty-kitty-keyboard-flags', () => ({
+  getPtyKittyKeyboardFlags: testState.getPtyKittyKeyboardFlags
 }))
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
@@ -102,6 +108,8 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
+    testState.getPtyKittyKeyboardFlags.mockReset()
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(0)
     testState.inspectRuntimeTerminalProcess.mockReset()
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'bash',
@@ -613,6 +621,44 @@ describe('pasteDraftWhenAgentReady', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, 'pty-1', '\r')
+  })
+
+  it('uses Ctrl+Enter only when Codex is configured for it and kitty keyboard reporting is active', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(1)
+
+    const promise = sendBracketedPasteToRunningAgent({
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.getPtyKittyKeyboardFlags).toHaveBeenCalledWith('pty-1')
+    expect(
+      testState.sendRuntimePtyInputVerified.mock.calls.filter(
+        (call) => call[1] === TERMINAL_CTRL_ENTER_CSI_U_INPUT
+      )
+    ).toHaveLength(2)
+  })
+
+  it('falls back to Enter when Ctrl+Enter is configured without kitty keyboard reporting', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+
+    const promise = sendBracketedPasteToRunningAgent({
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(
+      testState.sendRuntimePtyInputVerified.mock.calls.filter((call) => call[1] === '\r')
+    ).toHaveLength(2)
   })
 
   it('holds the PTY transaction across the paste and its submit Enter', async () => {

@@ -12,6 +12,10 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  resolveAgentPostPasteSubmitInput,
+  type AgentPostPasteSubmitInput
+} from '../../../../shared/tui-agent-post-paste-submit'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
@@ -93,6 +97,21 @@ export function AgentLaunchSettingsCatalog({
         })
       }
     },
+    ...(local
+      ? {
+          postPasteSubmitInput: resolveAgentPostPasteSubmitInput(
+            agent.id,
+            local.settings.agentPostPasteSubmitInputs
+          ),
+          onSavePostPasteSubmitInput: (value: AgentPostPasteSubmitInput) =>
+            local.updateSettings({
+              agentPostPasteSubmitInputs: {
+                ...local.settings.agentPostPasteSubmitInputs,
+                [agent.id]: value
+              }
+            })
+        }
+      : {}),
     ...(!local
       ? {
           environmentNames: settings.environmentNames[agent.id] ?? [],

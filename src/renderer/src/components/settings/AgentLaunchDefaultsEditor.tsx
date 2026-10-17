@@ -4,7 +4,9 @@ import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { SettingsSegmentedControl } from './SettingsFormControls'
 import { useAgentLaunchFieldWrite } from './use-agent-launch-field-write'
+import type { AgentPostPasteSubmitInput } from '../../../../shared/tui-agent-post-paste-submit'
 
 export function AgentCommandOverrideInput({
   defaultCmd,
