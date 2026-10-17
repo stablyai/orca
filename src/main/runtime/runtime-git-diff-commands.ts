@@ -1,3 +1,4 @@
+import type { GitBlameContentsSource, GitBlameResult } from '../../shared/git-blame'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -56,6 +57,22 @@ export class RuntimeGitDiffCommands {
   ): Promise<GitCommitCompareResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     return requireRuntimeGitProvider(target).getCommitCompare(target.worktree.path, commitId)
+  }
+
+  async getRuntimeGitBlame(
+    worktreeSelector: string,
+    filePath: string,
+    revision?: string,
+    contentsSource?: GitBlameContentsSource
+  ): Promise<GitBlameResult> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const relativePath = normalizeRuntimeGitRelativePath(filePath)
+    return requireRuntimeGitProvider(target).getBlame(
+      target.worktree.path,
+      relativePath,
+      revision,
+      contentsSource
+    )
   }
 
   async getRuntimeGitBranchDiff(

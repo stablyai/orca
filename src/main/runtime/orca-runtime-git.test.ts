@@ -225,6 +225,16 @@ describe('RuntimeGitCommands', () => {
     )
   })
 
+  it('rejects blame paths that escape the worktree before git runs', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const commands = makeCommands(worktreePath)
+
+    await expect(commands.getRuntimeGitBlame('id:wt-1', '../outside.txt')).rejects.toThrow(
+      'invalid_relative_path'
+    )
+  })
+
   it('prepares the selected local agent environment before generating commit messages', async () => {
     const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
     tempDirs.push(worktreePath)

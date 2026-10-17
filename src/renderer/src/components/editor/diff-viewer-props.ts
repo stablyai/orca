@@ -1,4 +1,5 @@
 import type { LargeDiffRenderLimit } from './large-diff-render-limit'
+import type { GitBlameContentsSource } from '../../../../shared/git-blame'
 
 export type DiffViewerProps = {
   modelKey: string
@@ -28,4 +29,10 @@ export type DiffViewerProps = {
   // Why: main-process limited diffs intentionally blank text bodies before IPC;
   // the fallback must not treat that placeholder as a saveable draft.
   largeDiffSaveContentAvailable?: boolean
+  originalBlamePath?: string
+  originalBlameRevision?: string
+  originalContentsSource?: GitBlameContentsSource
+  modifiedBlameRevision?: string
+  modifiedContentsSource?: GitBlameContentsSource
+  modifiedBufferDirty?: boolean
 }

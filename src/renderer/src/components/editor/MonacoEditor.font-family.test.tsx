@@ -25,6 +25,7 @@ vi.mock('@/store', () => ({
     selector({
       settings: storeState.current,
       editorFontZoomLevel: 0,
+      openFiles: [],
       setPendingEditorReveal: vi.fn(),
       setEditorCursorLine: vi.fn(),
       addDiffComment: vi.fn(),

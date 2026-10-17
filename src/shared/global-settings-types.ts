@@ -81,13 +81,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
-  editorAutoSave: boolean
-  editorAutoSaveDelayMs: number
-  editorMinimapEnabled: boolean
-  /** Opt-in code-editor font; empty (the default) keeps following `terminalFontFamily`. */
-  editorFontFamily?: string
-  /** Defaults on for profiles saved before file-editor wrapping became configurable. */
-  editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
