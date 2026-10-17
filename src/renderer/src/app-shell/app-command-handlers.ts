@@ -16,6 +16,11 @@ import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
+import {
+  jumpToFirstReachableUnreadAgent,
+  resolveUnreadAgentJumpTargets,
+  type UnreadAgentJumpDirection
+} from '../components/activity/activity-unread-agent-jump'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -154,6 +159,20 @@ export function createAppCommandHandlers(
         })
       : false
 
+  const jumpToUnreadAgent = (
+    actionId: KeybindingActionId,
+    direction: UnreadAgentJumpDirection
+  ): boolean => {
+    if (creationLayoutActive) {
+      return false
+    }
+    // Why resolve before claiming: with no unread agent the chord must reach the terminal.
+    const targets = resolveUnreadAgentJumpTargets(direction)
+    return targets.length > 0
+      ? claim(actionId, () => jumpToFirstReachableUnreadAgent(targets))
+      : false
+  }
+
   return new Map<KeybindingActionId, () => boolean>([
     [
       'worktree.history.back',
@@ -172,6 +191,11 @@ export function createAppCommandHandlers(
         }
         return claim('worktree.history.forward', () => useAppStore.getState().goForwardWorktree())
       }
+    ],
+    ['agent.jumpToNextUnread', () => jumpToUnreadAgent('agent.jumpToNextUnread', 'next')],
+    [
+      'agent.jumpToPreviousUnread',
+      () => jumpToUnreadAgent('agent.jumpToPreviousUnread', 'previous')
     ],
     ['sidebar.left.toggle', () => claim('sidebar.left.toggle', () => actions.toggleSidebar())],
     [

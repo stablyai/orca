@@ -67,6 +67,25 @@ describe('acknowledgeAgents with a clock-skewed execution host', () => {
     expect(ackAt < futureStartedAt).toBe(false)
   })
 
+  it('clears a main agent that finished ahead of the local clock under a background shell', () => {
+    const store = createUIStore()
+    const mainDoneAt = NOW + SKEW_MS
+    store.setState({
+      agentStatusByPaneKey: {
+        [PANE_KEY]: makeAgentEntry({
+          state: 'working',
+          workingMode: 'monitoring',
+          stateStartedAt: NOW - 60_000,
+          mainAgent: { state: 'done', stateStartedAt: mainDoneAt }
+        })
+      }
+    })
+
+    store.getState().acknowledgeAgents([PANE_KEY])
+
+    expect(store.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBe(mainDoneAt)
+  })
+
   it('stops rewriting the ack map once a future-stamped turn is acknowledged', () => {
     const store = createUIStore()
     const futureStartedAt = NOW + SKEW_MS
