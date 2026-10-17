@@ -129,14 +129,14 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.stages).toEqual(['terminal_creating'])
   })
 
-  it('fails a refused structured worker in the worktree it created, leaving a shell', async () => {
+  it('fails a refused structured worker without inferring an automatic recovery shell', async () => {
     const f = fakes()
     sessionCreate.refusal = { code: 'structured_agent_session_unsupported' }
 
     await expect(place(f, { mode: STRUCTURED })).rejects.toMatchObject({
       code: 'agent_unconfigured'
     })
-    expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', { surfaceOwner: false })
+    expect(f.runtime.createTerminal).not.toHaveBeenCalled()
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])
   })
 

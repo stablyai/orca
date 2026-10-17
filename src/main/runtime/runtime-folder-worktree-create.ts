@@ -1,3 +1,5 @@
+import { attemptWorktreeTerminalStartup } from './runtime-worktree-terminal-startup-attempt'
+import { navigationTargetsHost } from '../../shared/runtime-navigation'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
 import { randomUUID } from 'node:crypto'
@@ -46,6 +48,8 @@ type RuntimeFolderWorktreeCreateDeps = {
     startup?: WorktreeStartupLaunch,
     providesInitialSurface?: boolean
   ) => void
+  /** A running creation operation builds this workspace's first surface itself. */
+  launchOwnsFirstSurface?: (worktreeId: string) => boolean
 }
 
 export async function createRuntimeFolderWorktree(args: {
@@ -56,7 +60,6 @@ export async function createRuntimeFolderWorktree(args: {
   /** What a host-built startup was quoted for, or the repair error it fails with. */
   startupLaunchRuntime?: AgentLaunchRuntime | Error
   createdWithAgent?: TuiAgent
-  promisedAgentChat?: boolean
   onWorkspaceCreated?: (worktreeId: string) => void
   draftPaste?: WorktreeStartupDraftPaste
   deps: RuntimeFolderWorktreeCreateDeps
@@ -138,24 +141,41 @@ export async function createRuntimeFolderWorktree(args: {
   let warning: string | undefined
   let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
-  if (args.startup && deps.ptySpawnAvailable) {
-    try {
-      if (args.startupLaunchRuntime instanceof Error) {
-        throw args.startupLaunchRuntime
-      }
-      const terminal = await deps.createTerminal(`id:${worktree.id}`, {
+  const launchOwnsSurface = deps.launchOwnsFirstSurface?.(worktree.id) === true
+  const surfacing =
+    shouldActivate && navigationTargetsHost(request.navigation ?? 'host')
+      ? {}
+      : { surfaceOwner: false as const }
+  let startupFailure: Awaited<ReturnType<typeof attemptWorktreeTerminalStartup>>['failure']
+  if (args.startup) {
+    const attempted = await attemptWorktreeTerminalStartup({
+      selector: `id:${worktree.id}`,
+      options: {
         command: args.startup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
-        ...(args.startupLaunchRuntime ? { launchRuntime: args.startupLaunchRuntime } : {}),
+        ...(args.startupLaunchRuntime && !(args.startupLaunchRuntime instanceof Error)
+          ? { launchRuntime: args.startupLaunchRuntime }
+          : {}),
         ...(args.startup.viewMode ? { viewMode: args.startup.viewMode } : {}),
         startupCommandDelivery: args.startup.startupCommandDelivery,
         telemetry: args.startup.telemetry,
-        ...(shouldActivate ? {} : { surfaceOwner: false })
-      })
+        ...surfacing
+      },
+      ...(args.startupLaunchRuntime instanceof Error
+        ? { runtimeError: args.startupLaunchRuntime }
+        : {}),
+      canSpawn: deps.ptySpawnAvailable,
+      owned: launchOwnsSurface,
+      recoveryOptions: surfacing,
+      create: deps.createTerminal
+    })
+    startupFailure = attempted.failure
+    const terminal = attempted.agentTerminal
+    if (terminal) {
       if (args.draftPaste) {
         deps.pasteDraft(terminal.handle, args.draftPaste)
       }
@@ -163,28 +183,27 @@ export async function createRuntimeFolderWorktree(args: {
         deps.sendFollowup(terminal.handle, args.startupFollowup)
       }
       didSpawnStartup = true
-      startupTerminal = {
-        spawned: true,
-        handle: terminal.handle,
-        ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
-        ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
-        ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
-        surface: 'background'
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
+      startupTerminal = { spawned: true, ...terminal, surface: 'background' }
+    } else if (startupFailure) {
+      warning = `Failed to create the startup terminal for ${worktree.path}: ${startupFailure.message}`
       console.warn(`[worktree-create] ${warning}`)
     }
   }
   if (shouldActivate) {
-    deps.activate(
-      repo.id,
-      worktree.id,
-      undefined,
-      args.startup && !didSpawnStartup ? args.startup : undefined,
-      ...(args.promisedAgentChat && !args.startup ? ([true] as const) : [])
-    )
+    try {
+      deps.activate(
+        repo.id,
+        worktree.id,
+        undefined,
+        args.startup && !didSpawnStartup && !launchOwnsSurface ? args.startup : undefined,
+        launchOwnsSurface || undefined
+      )
+    } catch (error) {
+      if (!startupFailure) {
+        throw error
+      }
+      startupFailure.provisioningCauses.push(error)
+    }
   }
   if (
     (!shouldActivate || deps.provisionInBackground?.() === true) &&
@@ -192,7 +211,7 @@ export async function createRuntimeFolderWorktree(args: {
     shouldSeedWorktreePrimaryTerminal({
       hasPrimarySurface: didSpawnStartup,
       // Background attribution-only creates have historically omitted the shell.
-      callerProvidesSurface: args.promisedAgentChat === true || args.createdWithAgent !== undefined
+      callerProvidesSurface: launchOwnsSurface || args.createdWithAgent !== undefined
     })
   ) {
     try {
@@ -205,6 +224,9 @@ export async function createRuntimeFolderWorktree(args: {
         : initialWarning
       console.warn(`[worktree-create] ${warning}`)
     }
+  }
+  if (launchOwnsSurface && startupFailure) {
+    throw startupFailure
   }
   return {
     worktree: {

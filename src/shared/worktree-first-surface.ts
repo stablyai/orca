@@ -12,3 +12,15 @@ export function shouldSeedWorktreePrimaryTerminal(args: {
       args.issueCommandNeedsTerminal === true)
   )
 }
+
+/** Background agent creates leave their first surface to the caller; activated ones still get a shell. */
+export function backgroundAgentCreateLeavesSurface(args: {
+  createdWithAgent?: unknown
+  request: { activate?: boolean; runHooks?: boolean }
+}): boolean {
+  return (
+    args.createdWithAgent !== undefined &&
+    args.request.activate !== true &&
+    args.request.runHooks !== true
+  )
+}

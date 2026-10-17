@@ -11,6 +11,7 @@
  * (before its own request left), so a mark on the error itself would clear both.
  */
 export type TerminalSpawnDispatch = {
+  onPaneAcquisition: (outcome: 'unverifiable' | 'absent') => void
   onPtySpawnDispatched: () => void
   /** Rethrows the create's failure, remembering it when the spawn request had not yet left. */
   rethrow: (error: unknown) => never
@@ -18,20 +19,24 @@ export type TerminalSpawnDispatch = {
   failedBeforeDispatch: (error: unknown) => boolean
 }
 
-export function trackTerminalSpawnDispatch(): TerminalSpawnDispatch {
+export function trackTerminalSpawnDispatch(acquisitionUnverified = false): TerminalSpawnDispatch {
   let dispatched = false
+  let absenceEligible = !acquisitionUnverified
   let notStarted: { error: unknown } | undefined
   return {
+    onPaneAcquisition: (outcome) => {
+      absenceEligible = !dispatched && outcome === 'absent'
+    },
     onPtySpawnDispatched: () => {
       dispatched = true
     },
     rethrow: (error) => {
-      if (!dispatched) {
+      if (!dispatched && absenceEligible) {
         notStarted = { error }
       }
       throw error
     },
     failedBeforeDispatch: (error) =>
-      !dispatched && notStarted !== undefined && notStarted.error === error
+      !dispatched && absenceEligible && notStarted !== undefined && notStarted.error === error
   }
 }

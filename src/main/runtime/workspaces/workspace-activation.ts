@@ -327,6 +327,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       defaultTabs?: CreateWorktreeResult['defaultTabs']
       primaryTerminalHandle?: string | null
       hasStartupTerminal: boolean
+      primaryUnavailable?: boolean
+      callerProvidesSurface?: boolean
+      startupNeedsTerminal?: boolean
       setupOnly?: boolean
       setupCommandPlatform: 'windows' | 'posix'
       observeSetupCompletion?: boolean
@@ -340,7 +343,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       surfaceOwner?: false
     },
     createdWorktree?: Worktree
-  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+  ): ReturnType<typeof provisionWorktreeTerminals> {
     return provisionWorktreeTerminals(
       this.getWorktreeTerminalProvisioningHost(createdWorktree),
       args

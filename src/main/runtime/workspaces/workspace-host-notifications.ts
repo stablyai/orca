@@ -1,3 +1,4 @@
+import type { Worktree } from '../../../shared/worktree/types'
 import type { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../session-tabs/mobile-session-hydration'
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'
@@ -43,6 +44,21 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
 
   abstract invalidateResolvedWorktreeCache(): void
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
+
+  protected notifyCreatedWorktreeLifecycle(
+    worktree: Pick<Worktree, 'id' | 'path' | 'branch'>
+  ): void {
+    try {
+      this.emitWorktreeLifecycle({
+        kind: 'created',
+        worktreeId: worktree.id,
+        path: worktree.path,
+        branch: worktree.branch
+      })
+    } catch (error) {
+      console.warn('[worktree-create] Failed to announce the created workspace:', error)
+    }
+  }
 
   private static readonly MAX_SSH_RELAY_RECOVERY_GENERATIONS = 512
   private sshRelayRecoveryGenerationSequence = 0

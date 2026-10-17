@@ -15,6 +15,8 @@ type AgentLaunchRuntimeOwner = Pick<
 
 const liveLaunches = new WeakMap<AgentLaunchRuntimeOwner, Map<string, InitialSurfaceLaunch>>()
 
+/** The creation operation owns the new workspace's first surface (chat, agent terminal or folder
+ *  agent) from registration until it publishes that surface or fails. */
 export function beginCreatedWorkspaceLaunch(
   runtime: AgentLaunchRuntimeOwner,
   agent: TuiAgent

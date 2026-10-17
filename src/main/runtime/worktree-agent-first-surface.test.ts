@@ -24,13 +24,13 @@ const {
   listWorktrees
 } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
-const { makeRuntimeStoreWithWorkspaceSession, store } =
+const { makeRuntimeStoreWithWorkspaceSession, store, createStaleRuntimeWorktreeStore } =
   await import('./orca-runtime-test-fixtures.spec')
 
 const DEFAULTS = {
   runCommands: true,
   tabs: [
-    { title: 'Dev', command: 'pnpm dev' },
+    { title: 'Dev', color: 'blue', command: 'pnpm dev' },
     { title: 'Tests', command: 'pnpm test' }
   ]
 }
@@ -39,6 +39,7 @@ function chatCreateRuntime(args: {
   setupScriptLaunchMode: 'new-tab' | 'split-horizontal'
   withDefaults: boolean
   wait: boolean
+  folder?: boolean
   nativeChat?: true
 }) {
   const path = '/tmp/workspaces/chat-create'
@@ -48,6 +49,7 @@ function chatCreateRuntime(args: {
   }
   const repo = {
     ...baseRepo,
+    ...(args.folder ? { kind: 'folder' as const } : {}),
     hookSettings: {
       mode: 'auto' as const,
       setupRunPolicy: 'run-by-default' as const,
@@ -60,6 +62,7 @@ function chatCreateRuntime(args: {
   const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
   const runtime = new OrcaRuntimeService({
     ...runtimeStore,
+    ...(args.folder ? createStaleRuntimeWorktreeStore('').runtimeStore : {}),
     getRepo: (id) => (id === repo.id ? repo : undefined),
     getRepos: () => [repo],
     getSettings: () => ({
@@ -74,6 +77,7 @@ function chatCreateRuntime(args: {
   })
   runtime.setPtyController({
     spawn,
+    adoptStablePane: async () => null,
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null
@@ -107,7 +111,6 @@ describe('host-created workspaces awaiting their agent chat', () => {
         repoSelector: 'id:repo-1',
         name: 'chat-create',
         createdWithAgent: 'claude',
-        promisedAgentChat: true,
         onWorkspaceCreated: launch.onWorkspaceCreated,
         setupDecision: 'run',
         awaitTerminalProvisioning: true,
@@ -186,4 +189,122 @@ describe('host-created workspaces awaiting their agent chat', () => {
     const tabs = (await runtime.listMobileSessionTabs(`id:${result.worktreeId}`)).tabs
     expect(tabs.map((tab) => tab.title)).toEqual(['Setup'])
   })
+
+  // The launch builds the next agent itself, so handing the failed start to the window made two.
+  it('settles unknown startup without delegating another agent to the launch or window', async () => {
+    const { runtime, spawn } = chatCreateRuntime({
+      setupScriptLaunchMode: 'new-tab',
+      withDefaults: false,
+      wait: false
+    })
+    const activateWorktree = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this create reaches only these notifier hooks.
+    runtime.setNotifier({ activateWorktree, worktreesChanged: vi.fn() } as never)
+    spawn.mockRejectedValueOnce(new Error('pty unavailable'))
+    const { AGENT_LAUNCH_METHODS } = await import('./rpc/methods/agent-launch')
+    const method = AGENT_LAUNCH_METHODS.find((entry) => entry.name === 'agent.launch')
+    if (!method) {
+      throw new Error('missing agent.launch')
+    }
+    const params = method.params.parse({
+      agent: 'claude',
+      target: {
+        kind: 'create-worktree',
+        create: { repo: 'id:repo-1', name: 'chat-create', setupDecision: 'run', activate: true }
+      }
+    })
+    await expect(
+      method.handler(params, {
+        runtime,
+        clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
+      })
+    ).rejects.toThrow('pty unavailable')
+    expect(activateWorktree).toHaveBeenCalledOnce()
+    expect(activateWorktree.mock.calls[0]?.slice(3)).toEqual([undefined, undefined, true])
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn.mock.calls.every(([args]) => Boolean(args.command))).toBe(true)
+  })
 })
+
+it('retries the same positively absent pane and provisions around the actual agent', async () => {
+  const { runtime, spawn } = chatCreateRuntime({
+    setupScriptLaunchMode: 'split-horizontal',
+    withDefaults: true,
+    wait: false
+  })
+  const launch = beginCreatedWorkspaceLaunch(runtime, 'claude')
+  Object.defineProperty(runtime, 'buildTerminalWorkspaceEnv', {
+    value: vi.fn().mockRejectedValueOnce(new Error('env failed')).mockResolvedValue({})
+  })
+  const creates = vi.spyOn(runtime, 'createTerminal')
+  try {
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'chat-create',
+      startupAgent: 'claude',
+      onWorkspaceCreated: launch.onWorkspaceCreated,
+      setupDecision: 'run',
+      awaitTerminalProvisioning: true,
+      activate: true
+    })
+    expect(result.startupTerminal?.handle).toBeDefined()
+    expect(creates.mock.calls[0]?.[1]?.tabId).toBe(creates.mock.calls[1]?.[1]?.tabId)
+    expect(creates.mock.calls[0]?.[1]?.tabId).toBeDefined()
+    expect(spawn).toHaveBeenCalledTimes(3)
+    expect(spawn.mock.calls.some(([args]) => args.command === 'pnpm dev')).toBe(false)
+    const snapshot = await runtime.listMobileSessionTabs(`id:${result.worktree.id}`)
+    expect(snapshot.tabs[0]).toMatchObject({ title: 'Dev', color: 'blue' })
+  } finally {
+    launch.release()
+  }
+})
+
+it.each([
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true]
+])(
+  'settles local/folder (%s) absence with one recovery only (fails=%s)',
+  async (folder, recoveryFails) => {
+    const { runtime, spawn } = chatCreateRuntime({
+      folder,
+      setupScriptLaunchMode: 'new-tab',
+      withDefaults: false,
+      wait: false
+    })
+    const launch = beginCreatedWorkspaceLaunch(runtime, 'claude')
+    const lifecycle = vi.fn()
+    runtime.onWorktreeLifecycle(lifecycle)
+    let attempts = 0
+    Object.defineProperty(runtime, 'buildTerminalWorkspaceEnv', {
+      value: async () => {
+        if (++attempts <= 2 || recoveryFails) {
+          throw new Error('pre-spawn failed')
+        }
+        return {}
+      }
+    })
+    const creates = vi.spyOn(runtime, 'createTerminal')
+    try {
+      await expect(
+        runtime.createManagedWorktree({
+          repoSelector: 'id:repo-1',
+          name: 'chat-create',
+          startup: { command: 'claude' },
+          createdWithAgent: 'claude',
+          onWorkspaceCreated: launch.onWorkspaceCreated,
+          setupDecision: 'skip',
+          activate: true
+        })
+      ).rejects.toThrow('pre-spawn failed')
+      expect(creates).toHaveBeenCalledTimes(3)
+      expect(creates.mock.calls[0]?.[1]?.tabId).toBe(creates.mock.calls[1]?.[1]?.tabId)
+      expect(creates.mock.calls[2]?.[1]?.command).toBeUndefined()
+      expect(spawn).toHaveBeenCalledTimes(recoveryFails ? 0 : 1)
+      expect(lifecycle).toHaveBeenCalledOnce()
+    } finally {
+      launch.release()
+    }
+  }
+)

@@ -203,7 +203,13 @@ function coldRecord(runtime: Host): Host {
 
 /** A spawn that fails before the daemon was asked for a process: nothing can be running. */
 function failBeforeDispatch(runtime: Host, message: string): void {
-  runtime.createTerminal.mockRejectedValueOnce(new Error(message))
+  runtime.createTerminal.mockImplementationOnce(async (_selector, createOptions) => {
+    const acquired = createOptions?.onPaneAcquisition
+    if (typeof acquired === 'function') {
+      acquired('absent')
+    }
+    throw new Error(message)
+  })
 }
 
 /** A spawn the daemon was asked for, whose answer was lost: the process may exist. */

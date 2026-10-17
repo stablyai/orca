@@ -12,6 +12,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
  *  orchestration worker's session carries a redrive subscription and a mailbox a plain launch
  *  must not take, while the decision and ordering above it are identical. */
 export type AgentLaunchSurfaceFactory = {
+  failureProvesSurfaceAbsent?: (error: unknown, kind: 'structured' | 'terminal') => boolean
   createStructuredSession(args: {
     worktreeId: string
     /** An agent this host registered as structured; the launch mode already checked it. */
@@ -103,11 +104,11 @@ export class AgentLaunchStructuredSessionRefusedError extends Error {
 /** Creating the workspace, when the intent asks for one. Injected so orchestration keeps recording
  *  its own worktree stages and residual-resource effects around the same call. */
 export type AgentLaunchWorkspaceFactory = {
+  failureProvesNoSurface?: (error: unknown, worktreeId: string) => boolean
   createWorktree(args: {
     create: Readonly<Record<string, unknown>>
     /** Main-internal registration at the metadata boundary, before the workspace is announced. */
     onWorkspaceCreated?: (worktreeId: string) => void
-    promisedAgentChat?: boolean
     /** Set only when the settled mode is a terminal agent: agent-first creation sequences the
      *  agent's startup command behind the setup runner, which is how a PTY launch gets its
      *  wait-for-setup gate for free. A structured launch has no startup command to sequence and

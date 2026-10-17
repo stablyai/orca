@@ -38,7 +38,10 @@ export function agentLaunchWorkspaceFactory(
   context: RpcContext,
   agent: TuiAgent
 ): AgentLaunchWorkspaceFactory {
+  let preTerminalFailure: { worktreeId: string; error: unknown } | undefined
   return {
+    failureProvesNoSurface: (error, worktreeId) =>
+      preTerminalFailure?.worktreeId === worktreeId && preTerminalFailure.error === error,
     createFolderWorkspace: agentLaunchFolderWorkspaceCreator(context, agent),
     createRecoveryShell: async (worktreeId) => {
       await context.runtime.createTerminal(`id:${worktreeId}`, { surfaceOwner: false })
@@ -46,7 +49,6 @@ export function agentLaunchWorkspaceFactory(
     createWorktree: async ({
       create,
       startupAgent,
-      promisedAgentChat,
       onWorkspaceCreated,
       startupPrompt,
       agentArgs,
@@ -56,6 +58,7 @@ export function agentLaunchWorkspaceFactory(
       options,
       accountEnv
     }) => {
+      preTerminalFailure = undefined
       const startupLaunchPreferences = toAgentLaunchPreferences(options)
       let promptRodeLaunchCommand = false
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
@@ -106,8 +109,10 @@ export function agentLaunchWorkspaceFactory(
           // The launch owns the agent whichever surface it settles on, so the workspace records
           // it even when no startup terminal was created for it.
           createdWithAgent: agent,
-          ...(promisedAgentChat ? { promisedAgentChat } : {}),
           ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
+          onPreTerminalFailure: (worktreeId, error) => {
+            preTerminalFailure = { worktreeId, error }
+          },
           // Structured sessions have no startup command to sequence behind setup. Provision the
           // setup terminal synchronously and attach a completion token so the launch can wait
           // before creating the chat surface.

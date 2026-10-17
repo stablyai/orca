@@ -6,6 +6,7 @@ import type { ConnectionState } from '../transport/types'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
+import { agentLaunchUnconfirmedMessage } from '../session/mobile-existing-agent-launch'
 
 type Attempt = { method: string; params: Record<string, unknown> }
 
@@ -238,7 +239,10 @@ describe('agent.launch operation id', () => {
   ])('preserves the operation identity when the host refuses with %s', async (code) => {
     const attempts: Attempt[] = []
     const client = scriptedLaunchClient([{ errorCode: code }, { launched: 'wt-unnamed' }], attempts)
-    await expect(launchRetry({ client, attempts })).resolves.toEqual({ error: code })
+    await expect(launchRetry({ client, attempts })).resolves.toEqual({
+      error:
+        code === 'agent_session_operation_expired' ? agentLaunchUnconfirmedMessage('claude') : code
+    })
     expect(attempts).toHaveLength(1)
     expect(launchOperationIds(attempts)).toEqual(['op-1'])
   })
@@ -251,7 +255,8 @@ describe('agent.launch operation id', () => {
       attempts
     )
     await expect(launchRetry({ client, attempts })).resolves.toEqual({
-      error: 'agent_session_operation_unknown'
+      error:
+        'Orca could not confirm whether Claude started. Open the workspace and check its chats and terminals.'
     })
     expect(attempts).toHaveLength(1)
     expect(launchOperationIds(attempts)).toEqual(['op-1'])

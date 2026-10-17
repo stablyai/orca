@@ -47,6 +47,7 @@ export type StructuredAgentSessionAttachOptions = {
   hostLaunchDirectory?: string
   recordPhase?: AgentSessionCreatePhaseRecorder
   onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
+  onNewSessionAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
   /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
   startedFor?: string
   /** A close, an admitted Stop or quit aborted this attach: its refusal is that abort's. */
@@ -152,6 +153,8 @@ async function runAttachUnderAbort(
   // Read before the reserve clears it: how the previous generation ended decides how whatever it
   // left running is settled.
   const priorRecord = context.deps.store.getRecord(sessionId)
+  const onNewSessionAcquisitionFailed =
+    !priorRecord && fenceBefore === null ? options.onNewSessionAcquisitionFailed : undefined
   const priorDeathEvidence = priorRecord?.lease.deathEvidence ?? null
   const launchDirectory =
     !priorRecord && isFloatingWorkspaceId(params.location.workspaceId)
@@ -207,7 +210,10 @@ async function runAttachUnderAbort(
       },
       launchPermissionMode: async (record) =>
         (await structuredAgentSessionLaunchPermission(context.deps, record)) ?? undefined,
-      ...(options.onAcquisitionFailed ? { onAcquisitionFailed: options.onAcquisitionFailed } : {}),
+      onAcquisitionFailed: (error) => {
+        options.onAcquisitionFailed?.(error)
+        onNewSessionAcquisitionFailed?.(error)
+      },
       openConversation: async (record) => {
         const conversation = await context.openConversation(record.sessionId, { acquisition: true })
         if (!conversation) {
@@ -292,6 +298,11 @@ async function runAttachUnderAbort(
       context.publishStatus?.(sessionId)
     }
     return stampFailedCreateOwnerVerdict(context.deps.store, callerKey, params.envelope, attached)
+  } catch (error) {
+    if (!attempt.committed) {
+      onNewSessionAcquisitionFailed?.(error)
+    }
+    throw error
   } finally {
     if (!attempt.committed) {
       attemptSink.close()

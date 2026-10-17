@@ -21,6 +21,13 @@ const latestReseedIntentByGate = new WeakMap<
   GatedEmptyWorkspaceReseedIntent
 >()
 
+export function gateWorkspaceWithoutReseed(workspaceKey: string) {
+  const gate = gateWorktreeAgentActivation(workspaceKey)
+  latestReseedIntentByGate.delete(gate)
+  releaseEmptyWorkspaceDefaultSurface(workspaceKey)
+  return gate
+}
+
 export function gateAndReseedEmptyWorkspace(
   workspaceKey: string,
   intent: GatedEmptyWorkspaceReseedIntent

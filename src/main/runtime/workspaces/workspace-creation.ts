@@ -23,6 +23,7 @@ import { trackRuntimeWorkspaceCreate } from '../../workspace-create-telemetry'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../opencode/opencode-model-startup-plan'
 import { resolveWorktreeCreateAgentStartup } from '../runtime-worktree-agent-startup'
 import type { RuntimeWorkspaceCreateEvents } from '../../workspace-create-telemetry'
+import { readCreatedWorkspaceLaunch } from '../../agent-launch/agent-launch-created-workspace'
 import { createdWorkspaceActivationCallbacks } from './workspace-create-activation'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
@@ -112,6 +113,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         draftStartup?.agent ??
         (requestedAgentEnabled ? requestedAgent : undefined))
     const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
+    const launchOwnsFirstSurface = (worktreeId: string): boolean =>
+      readCreatedWorkspaceLaunch(this, worktreeId) !== undefined
     const activationCallbacks = createdWorkspaceActivationCallbacks(
       this.notifyActivateWorktree.bind(this),
       args.navigation
@@ -127,7 +130,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         startupFollowup: effectiveStartupFollowup,
         startupLaunchRuntime,
         createdWithAgent: effectiveCreatedWithAgent,
-        promisedAgentChat: args.promisedAgentChat,
         onWorkspaceCreated: args.onWorkspaceCreated,
         draftPaste: effectiveDraftPaste,
         deps: {
@@ -140,6 +142,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
           notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
           emitCreated: (event) => this.emitWorktreeLifecycle(event),
+          launchOwnsFirstSurface,
           activate: activationCallbacks.folder
         }
       })
@@ -237,7 +240,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       startupFollowup: effectiveStartupFollowup,
       startupLaunchRuntime,
       createdWithAgent: effectiveCreatedWithAgent,
-      promisedAgentChat: args.promisedAgentChat,
       draftPaste: effectiveDraftPaste,
       warning,
       ports: {
@@ -247,16 +249,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
         provision: (options) => this.provisionManagedWorktreeTerminals(options, worktree),
+        launchOwnsFirstSurface,
         activate: activationCallbacks.local
       }
-    })
+    }).finally(() => this.notifyCreatedWorktreeLifecycle(worktree))
     warning = terminalWarning
-    this.emitWorktreeLifecycle({
-      kind: 'created',
-      worktreeId: worktree.id,
-      path: worktree.path,
-      branch: worktree.branch
-    })
     return {
       worktree: {
         ...worktree,

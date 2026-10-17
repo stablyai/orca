@@ -132,7 +132,8 @@ describe('agent.launch with the real floating workspace resolver', () => {
             viewMode: 'terminal',
             // A paired device's launch never moves the desktop window.
             surfaceOwner: false,
-            onPtySpawnDispatched: expect.any(Function)
+            onPtySpawnDispatched: expect.any(Function),
+            onPaneAcquisition: expect.any(Function)
           }
         )
         expect(result).toMatchObject({

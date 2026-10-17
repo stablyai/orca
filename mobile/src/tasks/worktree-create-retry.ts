@@ -1,4 +1,6 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { classifyAgentLaunchReplayRefusal } from '../../../src/shared/agent-launch-replay-refusal'
+import { agentLaunchUnconfirmedMessage } from '../session/mobile-existing-agent-launch'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -129,7 +131,12 @@ export async function createWorktreeWithNameRetry(
     lastError = response.error.message
     // The replay-required host already exhausted its candidates; only legacy hosts need this loop.
     if (launch?.replay || !isRetryableWorktreeCreateConflict(lastError ?? '')) {
-      break
+      return {
+        error:
+          launch && classifyAgentLaunchReplayRefusal(response.error, sent.replayed) === 'unknown'
+            ? agentLaunchUnconfirmedMessage(launch.agent)
+            : lastError
+      }
     }
   }
   return { error: lastError ?? 'Failed to create workspace' }

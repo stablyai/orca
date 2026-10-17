@@ -89,15 +89,15 @@ describe('startRuntimeLocalWorktreeTerminals reserved startup pane', () => {
 
 describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
   it.each([{}, { activate: true }, { runHooks: true }])(
-    'preserves an explicit promised chat during setup (%j)',
+    'preserves a creation-owned chat during setup (%j)',
     async (activation) => {
       const { ports } = createPorts()
+      ports.launchOwnsFirstSurface = () => true
       await startRuntimeLocalWorktreeTerminals({
         request: { repoSelector: repo.id, name: 'chat', ...activation },
         repo,
         worktree,
         setup: { runnerScriptPath: '/repo/setup.sh', envVars: {} },
-        promisedAgentChat: true,
         ports
       })
       expect(ports.provision).toHaveBeenCalledWith(
@@ -197,23 +197,5 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
     expect(ports.provision).not.toHaveBeenCalled()
     expect(ports.activate).toHaveBeenCalledWith(repo.id, worktree.id, startup, setup, defaultTabs)
     expect(createTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not treat agent attribution alone as a promised chat on activation', async () => {
-    const { ports } = createPorts()
-    await startRuntimeLocalWorktreeTerminals({
-      request: { repoSelector: repo.id, name: 'attributed', activate: true },
-      repo,
-      worktree,
-      createdWithAgent: 'codex',
-      ports
-    })
-    expect(ports.activate).toHaveBeenCalledWith(
-      repo.id,
-      worktree.id,
-      undefined,
-      undefined,
-      undefined
-    )
   })
 })

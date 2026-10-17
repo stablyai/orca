@@ -23,6 +23,7 @@ import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-launch-runtime-capability'
 import {
+  agentLaunchUnconfirmedMessage,
   launchAgentInExistingWorkspace,
   reserveMobileAgentLaunch
 } from '../session/mobile-existing-agent-launch'
@@ -132,7 +133,7 @@ describe('mobile launch retries through the host ledger', () => {
     createStructuredSession.mockResolvedValue({ ok: false, refusal: { code, message: code } })
     const launch = mobileLaunch()
 
-    await expect(launch.result).resolves.toEqual({ error: 'agent_session_operation_unknown' })
+    await expect(launch.result).resolves.toEqual({ error: agentLaunchUnconfirmedMessage('claude') })
     expect(launch.runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(launch.attempts).toHaveLength(1)
     expect(store.listOperationRows()[0]?.outcome.status).toBe('unknown')
@@ -144,7 +145,7 @@ describe('mobile launch retries through the host ledger', () => {
         AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 1
     })
 
-    await expect(launch.result).resolves.toEqual({ error: 'agent_session_operation_expired' })
+    await expect(launch.result).resolves.toEqual({ error: agentLaunchUnconfirmedMessage('claude') })
     expect(launch.runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
     expect(createStructuredSession).toHaveBeenCalledTimes(1)
     expect(launch.attempts).toHaveLength(2)

@@ -29,6 +29,7 @@ function harness(options: {
   terminalPromptDelivered?: boolean
   /** Whether the surface reports that its typed line took the offered prompt. */
   lineCarriesPrompt?: boolean
+  preTerminalFailureProven?: boolean
   worktreeCreateError?: Error
   onStructuredCreate?: () => void
   onStructuredPromptDelivery?: () => void
@@ -43,7 +44,6 @@ function harness(options: {
     async (args: {
       create: Record<string, unknown>
       startupAgent: string | undefined
-      promisedAgentChat?: boolean
       startupPrompt?: string
       onWorkspaceCreated?: (worktreeId: string) => void
     }) => {
@@ -124,9 +124,15 @@ function harness(options: {
           deliverStructuredPrompt,
           deliverTerminalPrompt
         },
-        workspaces: options.worktreeOnlyFactory
-          ? { createWorktree, createRecoveryShell }
-          : { createWorktree, createFolderWorkspace, createRecoveryShell },
+        workspaces: {
+          createWorktree,
+          createRecoveryShell,
+          failureProvesNoSurface: (error, id) =>
+            options.preTerminalFailureProven === true &&
+            error === options.worktreeCreateError &&
+            id === 'wt-new',
+          ...(!options.worktreeOnlyFactory ? { createFolderWorkspace } : {})
+        },
         ...(options.onSurfacePublished ? { onSurfacePublished: options.onSurfacePublished } : {})
       })
   }
@@ -152,14 +158,17 @@ describe('a structured launch that creates its own worktree', () => {
     expect(readCreatedWorkspaceLaunch(h.runtime, 'wt-new')).toBeUndefined()
   })
 
-  it('recovers once and releases intent when creation fails after metadata registration', async () => {
-    const failure = new Error('materialization failed')
-    const h = harness({ worktreeCreateError: failure })
-    await expect(h.run(CREATE_INTENT)).rejects.toBe(failure)
-    expect(h.createRecoveryShell).toHaveBeenCalledExactlyOnceWith('wt-new')
-    expect(h.createStructuredSession).not.toHaveBeenCalled()
-    expect(readCreatedWorkspaceLaunch(h.runtime, 'wt-new')).toBeUndefined()
-  })
+  it.each([false, true])(
+    'recovers only proven pre-terminal metadata failure (%s)',
+    async (preTerminalFailureProven) => {
+      const failure = new Error('materialization failed')
+      const h = harness({ worktreeCreateError: failure, preTerminalFailureProven })
+      await expect(h.run(CREATE_INTENT)).rejects.toBe(failure)
+      expect(h.createRecoveryShell).toHaveBeenCalledTimes(preTerminalFailureProven ? 1 : 0)
+      expect(h.createStructuredSession).not.toHaveBeenCalled()
+      expect(readCreatedWorkspaceLaunch(h.runtime, 'wt-new')).toBeUndefined()
+    }
+  )
 
   it('creates the worktree with no startup agent, then asks the host, then opens a session', async () => {
     const h = harness({})
@@ -178,9 +187,6 @@ describe('a structured launch that creates its own worktree', () => {
     })
     expect(result.worktreeId).toBe('wt-new')
     expect(result.receipt.mode).toBe('structured')
-    expect(h.createWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ promisedAgentChat: true })
-    )
   })
 
   it('asks the host only after the workspace exists, never before', async () => {
@@ -260,17 +266,20 @@ describe('a structured launch that creates its own worktree', () => {
     })
   })
 
+  // The chat may exist after an unknown outcome, so a shell there would sit beside it.
+  it('leaves no shell after an unknown chat creation', async () => {
+    const h = harness({
+      structuredCreateError: new AgentLaunchStructuredSessionRefusedError(
+        'agent_session_operation_unknown',
+        'unknown'
+      )
+    })
+    await expect(h.run(CREATE_INTENT)).rejects.toThrow()
+    expect(h.createRecoveryShell).not.toHaveBeenCalled()
+    expect(h.createTerminalAgent).not.toHaveBeenCalled()
+  })
+
   it.each([
-    [
-      'unknown chat creation',
-      {
-        structuredCreateError: new AgentLaunchStructuredSessionRefusedError(
-          'agent_session_operation_unknown',
-          'unknown'
-        )
-      },
-      0
-    ],
     [
       'host downgrade terminal failure',
       {
@@ -290,10 +299,10 @@ describe('a structured launch that creates its own worktree', () => {
       },
       1
     ]
-  ] as const)('leaves a shell after %s', async (_label, options, agentStarts) => {
+  ] as const)('leaves no shell after unproven %s', async (_label, options, agentStarts) => {
     const h = harness(options)
     await expect(h.run(CREATE_INTENT)).rejects.toThrow()
-    expect(h.createRecoveryShell).toHaveBeenCalledWith('wt-new')
+    expect(h.createRecoveryShell).not.toHaveBeenCalled()
     expect(h.createTerminalAgent).toHaveBeenCalledTimes(agentStarts)
   })
 
@@ -359,7 +368,6 @@ describe('a launch the user did not ask to be structured', () => {
     expect(h.calls).toEqual(['createWorktree(startupAgent=claude)'])
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_agent_first' })
     expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'user_default' })
-    expect(h.createWorktree.mock.calls[0]?.[0]).not.toHaveProperty('promisedAgentChat')
   })
 })
 

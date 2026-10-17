@@ -18,6 +18,8 @@ export type WorktreeActivationSurfaceSelection = {
 }
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
+  /** The host creation already settled primary startup; navigation cannot repeat it. */
+  creationOwnsFirstSurface?: boolean
   startup?: WorktreeStartupPayload
   initialCwd?: string
   setup?: WorktreeSetupLaunch

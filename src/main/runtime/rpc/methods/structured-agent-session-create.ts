@@ -159,6 +159,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   caller: StructuredAgentSessionCaller
   prepared: PreparedStructuredAgentSessionCreate
   activate: boolean
+  onAcquisitionFailed?: (error: unknown) => void
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const tab = prepared.tab
@@ -188,11 +189,10 @@ export async function commitStructuredAgentSessionCreate(args: {
         : {})
     })
   }
-  const result = prepared.hostLaunchDirectory
-    ? await prepared.host.attach(args.caller, prepared.attachParams, {
-        hostLaunchDirectory: prepared.hostLaunchDirectory
-      })
-    : await prepared.host.attach(args.caller, prepared.attachParams)
+  const result = await prepared.host.attach(args.caller, prepared.attachParams, {
+    ...(prepared.hostLaunchDirectory ? { hostLaunchDirectory: prepared.hostLaunchDirectory } : {}),
+    ...(args.onAcquisitionFailed ? { onNewSessionAcquisitionFailed: args.onAcquisitionFailed } : {})
+  })
   if (!result.ok || !prepared.tab) {
     return result
   }
@@ -240,6 +240,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   worktree: string
   agent: StructuredAgentId
   activate: boolean
+  onAcquisitionFailed?: (error: unknown) => void
   options?: Readonly<Record<string, string>>
   tabId?: string
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
@@ -254,7 +255,8 @@ export async function createStructuredAgentSessionForWorktree(args: {
     runtime: args.runtime,
     caller: args.caller,
     prepared,
-    activate: args.activate
+    activate: args.activate,
+    ...(args.onAcquisitionFailed ? { onAcquisitionFailed: args.onAcquisitionFailed } : {})
   })
 }
 

@@ -572,7 +572,8 @@ describe('the terminal factory', () => {
       viewMode: 'terminal',
       // A paired device's launch never moves the desktop window.
       surfaceOwner: false,
-      onPtySpawnDispatched: expect.any(Function)
+      onPtySpawnDispatched: expect.any(Function),
+      onPaneAcquisition: expect.any(Function)
     })
     expect(createStructuredSession).not.toHaveBeenCalled()
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
@@ -599,7 +600,8 @@ describe('the terminal factory', () => {
       // No native chat renderer for this agent, so its tab opens as the terminal.
       viewMode: 'terminal',
       surfaceOwner: false,
-      onPtySpawnDispatched: expect.any(Function)
+      onPtySpawnDispatched: expect.any(Function),
+      onPaneAcquisition: expect.any(Function)
     })
     expect(result.worktreeId).toBe('wt-7')
   })

@@ -255,7 +255,7 @@ export function createWorktreeEventRuntime(
       ...(setup ? { setup } : {}),
       ...(startup ? { startup } : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
-      ...(providesInitialSurface ? { providesInitialSurface } : {}),
+      ...(providesInitialSurface ? { providesInitialSurface, creationOwnsFirstSurface: true } : {}),
       ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
       // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
       notifyHostRuntime: false,

@@ -1,6 +1,7 @@
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
+import { WorktreeTerminalStartupSettledError } from '../runtime/runtime-worktree-terminal-startup-attempt'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/opencode-model-startup-plan'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { AgentLaunchIntent, AgentLaunchResult } from '../../shared/agent-launch-intent'
@@ -25,8 +26,7 @@ import {
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeReceipt,
   DEFAULT_LAUNCH_VOCABULARY,
-  downgradeAgentLaunchModeForStructuredRefusal,
-  warnStructuredLaunchDowngrade
+  downgradeAgentLaunchModeForStructuredRefusal
 } from './agent-launch-mode'
 import {
   assertLegacyHostTarget,
@@ -37,10 +37,10 @@ import {
   AgentLaunchStructuredSessionRefusedError,
   type AgentLaunchStructuredSurface
 } from './agent-launch-surface-factories'
-import type {
-  AgentLaunchExecution,
-  AgentLaunchPublishedSurface,
-  AgentLaunchSurfaceExecution
+import {
+  publishAgentLaunchSurface as published,
+  type AgentLaunchExecution,
+  type AgentLaunchSurfaceExecution
 } from './agent-launch-execution'
 import {
   beginCreatedWorkspaceLaunch,
@@ -102,11 +102,13 @@ export async function executeAgentLaunch(
   }
 
   const launch =
-    intent.target.kind === 'create-worktree' && preflight.mode === 'structured'
-      ? beginCreatedWorkspaceLaunch(runtime, intent.agent)
-      : undefined
+    intent.target.kind === 'existing'
+      ? undefined
+      : beginCreatedWorkspaceLaunch(runtime, intent.agent)
   let placed: Awaited<ReturnType<typeof resolveWorkspace>> | undefined
   let surfacePublished = false
+  // A chat the host could not confirm or rule out may still exist; no shell beside it.
+  let attemptedKind: 'structured' | 'terminal' | undefined
   let recoverableWorktreeId: string | undefined
   try {
     placed = await resolveWorkspace(execution, preflight, launch?.onWorkspaceCreated)
@@ -155,6 +157,7 @@ export async function executeAgentLaunch(
     recoverableWorktreeId = placed.worktreeId
     let created: CreatedSurface
     try {
+      attemptedKind = settled.mode === 'structured' ? 'structured' : 'terminal'
       created = await createSurface(execution, placed, settled)
     } catch (error) {
       if (
@@ -165,6 +168,7 @@ export async function executeAgentLaunch(
         throw error
       }
       settled = downgradeAgentLaunchModeForStructuredRefusal(settled, vocabulary)
+      attemptedKind = 'terminal'
       created = await createTerminalSurface(execution, placed)
     }
     // Both CAN be set, so neither may be dropped. The create warns precisely when it produced no
@@ -193,22 +197,19 @@ export async function executeAgentLaunch(
     }
   } catch (error) {
     const createdWorktreeId = recoverableWorktreeId ?? launch?.createdWorktreeId()
-    if (!surfacePublished && intent.target.kind !== 'existing' && createdWorktreeId) {
+    const absent =
+      !(error instanceof WorktreeTerminalStartupSettledError) &&
+      (attemptedKind !== undefined
+        ? execution.surfaces.failureProvesSurfaceAbsent?.(error, attemptedKind) === true
+        : createdWorktreeId !== undefined &&
+          execution.workspaces?.failureProvesNoSurface?.(error, createdWorktreeId) === true)
+    if (!surfacePublished && absent && launch && createdWorktreeId) {
       await recoverCreatedWorkspace(execution.workspaces, createdWorktreeId)
     }
     throw error
   } finally {
     launch?.release()
   }
-}
-
-function published(
-  execution: AgentLaunchExecution,
-  surface: AgentLaunchPublishedSurface
-): AgentLaunchPublishedSurface {
-  warnStructuredLaunchDowngrade(execution.intent.agent, surface.receipt)
-  execution.onSurfacePublished?.(surface)
-  return surface
 }
 
 async function resolveWorkspace(
@@ -240,6 +241,7 @@ async function resolveWorkspace(
       throw new Error('agent_launch_workspace_factory_required')
     }
     const created = await workspaces.createFolderWorkspace({ create: intent.target.create })
+    onWorkspaceCreated?.(created.worktreeId)
     return { ...created, startupTerminalHandle: undefined }
   }
   const created = await workspaces.createWorktree({
@@ -248,7 +250,6 @@ async function resolveWorkspace(
     // owns the prompt for the same reason, so it re-supplies its own rather than honouring theirs.
     create: withoutReservedAgentCreateFields(intent.target.create),
     ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),
-    ...(preflight.mode === 'structured' ? { promisedAgentChat: true } : {}),
     startupAgent: preflight.mode === 'structured' ? undefined : intent.agent,
     ...createLaunchPromptInputs(execution, preflight.mode),
     ...(preflight.mode === 'structured' ? {} : terminalLaunchInputs(intent))

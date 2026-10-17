@@ -16,6 +16,7 @@ import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../src/shared/agent-launch-t
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../src/shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentLaunchReplayRun } from '../tasks/mobile-workspace-create-operations'
 import { agentLaunchExistingParams, readAgentLaunchSupport } from '../tasks/agent-launch-request'
@@ -42,6 +43,10 @@ export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE = "Could not read this host'
 
 export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
   "Couldn't confirm the agent started. Check the workspace before trying again."
+
+export function agentLaunchUnconfirmedMessage(agent: TuiAgent): string {
+  return `Orca could not confirm whether ${TUI_AGENT_DISPLAY_NAMES[agent]} started. Open the workspace and check its chats and terminals.`
+}
 
 // The host started nothing, and the next tap reserves new ids.
 export const AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE = "Couldn't start the agent. Try again."

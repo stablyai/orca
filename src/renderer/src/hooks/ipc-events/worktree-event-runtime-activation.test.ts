@@ -14,9 +14,14 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-it.each([false, true])(
-  'keeps async activation tied to its publishing connection (current=%s)',
-  async (stillCurrent) => {
+it.each([
+  { stillCurrent: false, providesInitialSurface: false },
+  { stillCurrent: true, providesInitialSurface: true },
+  { stillCurrent: true, providesInitialSurface: undefined },
+  { stillCurrent: true, providesInitialSurface: false }
+])(
+  'keeps async activation tied to its publishing connection (current=$stillCurrent, surface=$providesInitialSurface)',
+  async ({ stillCurrent, providesInitialSurface }) => {
     const fetched = Promise.withResolvers<void>()
     const fetchWorktrees = vi.spyOn(initialState, 'fetchWorktrees').mockImplementation(async () => {
       await fetched.promise
@@ -31,7 +36,13 @@ it.each([false, true])(
     let current = true
     try {
       const activation = runtime.activateNotifiedWorktree(
-        { type: 'activateWorktree', repoId: 'same-repo', worktreeId: 'same-wt', navigation: 'all' },
+        {
+          type: 'activateWorktree',
+          repoId: 'same-repo',
+          worktreeId: 'same-wt',
+          navigation: 'all',
+          providesInitialSurface
+        },
         {
           allowRuntimeEnvironment: true,
           executionHostId: 'runtime:host-a',
@@ -47,7 +58,10 @@ it.each([false, true])(
       if (stillCurrent) {
         expect(activateAndRevealWorktree).toHaveBeenCalledWith('same-wt', {
           executionHostId: 'runtime:host-a',
-          notifyHostRuntime: false
+          notifyHostRuntime: false,
+          ...(providesInitialSurface
+            ? { providesInitialSurface: true, creationOwnsFirstSurface: true }
+            : {})
         })
       } else {
         expect(activateAndRevealWorktree).not.toHaveBeenCalled()

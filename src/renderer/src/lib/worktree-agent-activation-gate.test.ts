@@ -474,7 +474,8 @@ describe('worktree agent activation gate', () => {
     const plainPtyId = `${WORKTREE_ID}@@plain-shell`
     const { deps, resume } = testDeps({
       sessions: [{ ...listed(plainPtyId), title: 'zsh', agentOwnership: 'absent' }],
-      sleeping: [dead]
+      sleeping: [dead],
+      surfaceOwners: new Map([[plainPtyId, UNOWNED]])
     })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('resumed')
@@ -486,7 +487,11 @@ describe('worktree agent activation gate', () => {
     const live = sleepingRecord('tab-live', LIVE_LEAF_ID, 'live-session')
     const dead = sleepingRecord('tab-dead', DEAD_LEAF_ID, 'dead-session')
     const livePtyId = `${WORKTREE_ID}@@live-agent`
-    const { deps, resume } = testDeps({ sessions: [listed(livePtyId)], sleeping: [live, dead] })
+    const { deps, resume } = testDeps({
+      sessions: [listed(livePtyId)],
+      sleeping: [live, dead],
+      surfaceOwners: new Map([[livePtyId, UNOWNED]])
+    })
     const store = deps.getState()
     store.terminalLayoutsByTabId['tab-live']!.ptyIdsByLeafId[LIVE_LEAF_ID] = livePtyId
 
@@ -666,9 +671,8 @@ describe('worktree agent activation gate', () => {
     })
   })
 
-  // Failing closed must not also fail silent: an unreadable census leaves the workspace with
-  // no surface, so the gate has to hand the caller its seed instead of claiming 'adopted'.
-  it('declines to mint but still asks for a seed when the host cannot answer', async () => {
+  // Unreadable ownership cannot authorize another primary beside a live PTY.
+  it('blocks seeding when the host cannot answer', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
@@ -676,12 +680,12 @@ describe('worktree agent activation gate', () => {
       resumeCount: 0
     })
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
     expect(createTab).not.toHaveBeenCalled()
   })
 
-  it('declines to mint but still asks for a seed when two host surfaces claim one live PTY', async () => {
+  it('blocks seeding when two host surfaces claim one live PTY', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({
       sessions: [listed(livePtyId)],
@@ -689,7 +693,7 @@ describe('worktree agent activation gate', () => {
       resumeCount: 0
     })
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
     expect(createTab).not.toHaveBeenCalled()
   })
@@ -706,8 +710,8 @@ describe('worktree agent activation gate', () => {
     })
     seedExistingSurface(deps.getState(), { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
 
-    // The seam re-checks its own guard, so an existing tab is not re-seeded by 'empty'.
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('empty')
+    // A live pane outside the persisted layout still blocks another primary.
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
 
     expect(createTab).not.toHaveBeenCalled()
     expect(warn).toHaveBeenCalledWith(
@@ -717,7 +721,7 @@ describe('worktree agent activation gate', () => {
     warn.mockRestore()
   })
 
-  it('reports adopted only for the PTYs that actually landed on a surface', async () => {
+  it('blocks seeding when any live PTY could not land on a surface', async () => {
     const adoptedPtyId = `${WORKTREE_ID}@@orphan-agent`
     const unverifiablePtyId = `${WORKTREE_ID}@@ambiguous-agent`
     const { deps } = testDeps({
@@ -729,7 +733,7 @@ describe('worktree agent activation gate', () => {
       resumeCount: 0
     })
 
-    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
   })
 
   it.each([
@@ -881,4 +885,13 @@ describe('worktree agent activation gate', () => {
       recordInteraction: false
     })
   })
+})
+
+it('blocks an exiting-only PTY instead of authorizing another primary', async () => {
+  const { deps, createTab } = testDeps({
+    sessions: [{ ...listed(`${WORKTREE_ID}@@closing`), exiting: true }],
+    resumeCount: 0
+  })
+  await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('blocked')
+  expect(createTab).not.toHaveBeenCalled()
 })

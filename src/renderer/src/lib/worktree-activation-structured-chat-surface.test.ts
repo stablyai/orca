@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import * as activationGate from './worktree-agent-activation-gate'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import {
@@ -153,4 +154,26 @@ describe('seeding beside a caller-provided chat surface', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
     expect(useAppStore.getState().pendingStartupByTabId).toEqual({})
   })
+})
+
+it('runs independent Setup immediately and never seeds when it closes before discovery', async () => {
+  const worktree = makeWorktree()
+  seedEmptyActivatableWorktree(worktree)
+  let resolveGate!: (outcome: activationGate.WorktreeAgentActivationOutcome) => void
+  vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(
+    new Promise((resolve) => {
+      resolveGate = resolve
+    })
+  )
+  activateAndRevealWorktree(worktree.id, {
+    providesInitialSurface: true,
+    creationOwnsFirstSurface: true,
+    notifyHostRuntime: false,
+    setup
+  })
+  expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+  useAppStore.setState({ tabsByWorktree: { [worktree.id]: [] } })
+  resolveGate('empty')
+  await Promise.resolve()
+  expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
 })

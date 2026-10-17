@@ -4,7 +4,7 @@ import { createDesktopTerminal } from '../../orca-runtime-create-terminal-deskto
 import { buildRuntimeAgentTeamsLaunchPlan } from './agent-teams-launch-plan'
 import { createIdempotentCallback } from '../../orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
-import { agentLaunchTokenFor } from '../../../agent-launch/agent-launch-token'
+import { agentLaunchEnvironment } from '../../../agent-launch/agent-launch-token'
 import { migratedPaneRestoreHint } from '../../migrated-pane-restore-cwd'
 
 export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
@@ -70,6 +70,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
+        launchOpts.onPaneAcquisition?.('unverifiable')
         const adoptedBeforeLaunch = await this.ptyController.adoptStablePane?.({
           ...initialSize,
           cwd,
@@ -79,11 +80,10 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           tabId,
           leafId
         })
-        const launchToken = agentLaunchTokenFor(launchOpts, dependencies.randomUUID)
-        const baseEnv = {
-          ...launchOpts.env,
-          ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+        if (!adoptedBeforeLaunch && this.ptyController.adoptStablePane) {
+          launchOpts.onPaneAcquisition?.('absent')
         }
+        const { launchToken, baseEnv } = agentLaunchEnvironment(launchOpts, dependencies.randomUUID)
         let agentTeamsPlan: Awaited<ReturnType<typeof buildRuntimeAgentTeamsLaunchPlan>>['plan']
         let sequencedStartupCommand: string | undefined
         let effectiveLaunchConfig = launchOpts.launchConfig

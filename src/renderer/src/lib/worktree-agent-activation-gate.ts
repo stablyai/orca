@@ -205,9 +205,7 @@ export async function runWorktreeAgentActivationGate(
     .map((session) => session.id)
   let liveSurfaceAdopted = false
   if (adoptablePtyIds.length > 0) {
-    // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
-    // would suppress the caller's seed and leave the workspace with no surface at all —
-    // fail-closed must still leave the user a usable pane (STA-5701).
+    // Uncertain ownership blocks automatic reseeding; explicit tab creation stays available.
     const adoption = await adoptLiveWorkspacePtySurfaces(
       deps.getState,
       worktreeId,
@@ -221,6 +219,9 @@ export async function runWorktreeAgentActivationGate(
         worktreeId,
         declinedPtyIds: adoption.declinedPtyIds
       })
+    }
+    if (adoption.declinedPtyIds.length > 0) {
+      return 'blocked'
     }
     if (liveSurfaceAdopted && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
       return 'adopted'
@@ -259,7 +260,9 @@ export async function runWorktreeAgentActivationGate(
       ? 'adopted'
       : structured
         ? 'structured'
-        : 'empty'
+        : liveWorkspacePtyIds.size > 0
+          ? 'blocked'
+          : 'empty'
 }
 
 export function gateWorktreeAgentActivation(

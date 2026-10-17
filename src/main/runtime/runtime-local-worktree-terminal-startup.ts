@@ -1,5 +1,16 @@
+import {
+  attemptWorktreeTerminalStartup,
+  settleWorktreeStartupProvisioning,
+  setupPlatform,
+  ownerSurfacing,
+  type WorktreeStartupProvisioner
+} from './runtime-worktree-terminal-startup-attempt'
 import { paneIdentity } from './runtime-terminal-pane-identity'
-import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
+import { navigationTargetsHost } from '../../shared/runtime-navigation'
+import {
+  backgroundAgentCreateLeavesSurface,
+  shouldSeedWorktreePrimaryTerminal
+} from '../../shared/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -7,7 +18,6 @@ import type { Worktree } from '../../shared/worktree/types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../shared/setup-runner-command'
 import type { RuntimeTerminalCreate } from '../../shared/runtime-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -15,23 +25,20 @@ import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
-import type {
-  WorktreeProvisionTerminalOptions,
-  WorktreeTerminalProvisioningArgs
-} from './runtime-worktree-terminal-provisioning'
+import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
 type Ports = {
   canSpawn: boolean
   provisionInBackground?: () => boolean
+  /** A running creation operation builds this workspace's first surface itself. */
+  launchOwnsFirstSurface?: (worktreeId: string) => boolean
   createTerminal: (
     selector: string,
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
   sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
-  provision: (
-    options: WorktreeTerminalProvisioningArgs
-  ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
+  provision: WorktreeStartupProvisioner
   activate: (
     repoId: string,
     worktreeId: string,
@@ -66,13 +73,13 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   /** What a host-built startup was quoted for, or the repair error it fails with. */
   startupLaunchRuntime?: AgentLaunchRuntime | Error
   createdWithAgent?: TuiAgent
-  promisedAgentChat?: boolean
   draftPaste?: WorktreeStartupDraftPaste
   warning?: string
   ports: Ports
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, setup, defaultTabs, startup, ports } = args
   const shouldActivate = request.activate === true || request.runHooks === true
+  const launchOwnsSurface = ports.launchOwnsFirstSurface?.(worktree.id) === true
   let warning = args.warning
   let didSpawnStartup = false
   let didSpawnSetup = false
@@ -83,6 +90,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPtyId: string | null = null
   let sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
+  let primaryTerminalHandle: string | null = null
+  let startupFailure: Awaited<ReturnType<typeof attemptWorktreeTerminalStartup>>['failure']
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
     const sequenced = createSequencedSetupAgentCommands({
@@ -99,12 +108,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     wrappedSetupCommand = sequenced.setupCommand
   }
 
-  if (sequencedStartup && ports.canSpawn) {
-    try {
-      if (args.startupLaunchRuntime instanceof Error) {
-        throw args.startupLaunchRuntime
-      }
-      const terminal = await ports.createTerminal(`id:${worktree.id}`, {
+  if (sequencedStartup) {
+    const attempted = await attemptWorktreeTerminalStartup({
+      selector: `id:${worktree.id}`,
+      options: {
         command: sequencedStartup.command,
         ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
         ...paneIdentity(request.startupPaneKey),
@@ -112,12 +119,28 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         env: sequencedStartup.env,
         ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
         ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
-        ...(args.startupLaunchRuntime ? { launchRuntime: args.startupLaunchRuntime } : {}),
+        ...(args.startupLaunchRuntime && !(args.startupLaunchRuntime instanceof Error)
+          ? { launchRuntime: args.startupLaunchRuntime }
+          : {}),
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
-        ...ownerSurfacing(shouldActivate)
-      })
+        ...ownerSurfacing(shouldActivate && navigationTargetsHost(request.navigation ?? 'host'))
+      },
+      ...(args.startupLaunchRuntime instanceof Error
+        ? { runtimeError: args.startupLaunchRuntime }
+        : {}),
+      canSpawn: ports.canSpawn,
+      owned: launchOwnsSurface,
+      recoveryOptions: ownerSurfacing(
+        shouldActivate && navigationTargetsHost(request.navigation ?? 'host')
+      ),
+      create: ports.createTerminal
+    })
+    primaryTerminalHandle = attempted.primaryTerminal?.handle ?? null
+    startupFailure = attempted.failure
+    const terminal = attempted.agentTerminal
+    if (terminal) {
       if (args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
       }
@@ -129,16 +152,35 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       startupTerminalTabId = terminal.tabId ?? null
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
-    } catch (error) {
-      warning = appendFailure(warning, worktree.path, 'startup', error)
+    } else if (startupFailure) {
+      warning = appendFailure(warning, worktree.path, 'startup', startupFailure)
+      wrappedSetupCommand = undefined
     }
+  }
+  const provision: Ports['provision'] = (options) =>
+    settleWorktreeStartupProvisioning(
+      () => ports.provision(options),
+      launchOwnsSurface,
+      startupFailure
+    )
+  const provisionPlan = provisionArgs(
+    args,
+    primaryTerminalHandle,
+    didSpawnStartup,
+    wrappedSetupCommand,
+    launchOwnsSurface
+  )
+  if (launchOwnsSurface && startupFailure && !primaryTerminalHandle) {
+    provisionPlan.primaryUnavailable = true
   }
 
   if (shouldActivate) {
     const provisionInBackground = ports.provisionInBackground?.() === true
     // Why: a failed agent start hands the whole create to the window, which seeds the agent's tab
     // first and lays setup and default tabs around it; main provisioning first would leave it no tab.
-    const agentStartFailed = Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup)
+    const agentStartFailed = Boolean(
+      sequencedStartup && ports.canSpawn && !didSpawnStartup && !launchOwnsSurface
+    )
     if (agentStartFailed && !provisionInBackground) {
       ports.activate(repo.id, worktree.id, startup, setup, defaultTabs)
     } else {
@@ -149,34 +191,42 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
           provisionInBackground ||
           Boolean(setup || defaultTabs))
       if (runtimeWillProvision) {
-        const provisioned = await ports.provision({
-          ...provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand),
+        const provisioned = await provision({
+          ...provisionPlan,
           ...(provisionInBackground ? { surfaceOwner: false as const } : {})
         })
         didSpawnSetup = provisioned.setupSpawned
         setupTerminalHandle = provisioned.setupTerminalHandle
-        if (setup && !didSpawnSetup) {
+        if (setup && !didSpawnSetup && (!startupFailure || provisioned.setupRetrySafe)) {
           failedSetup = {
             ...setup,
             ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
           }
         }
       }
-      ports.activate(
-        repo.id,
-        worktree.id,
-        startup && !didSpawnStartup ? startup : undefined,
-        failedSetup,
-        undefined,
-        ...(args.promisedAgentChat && !startup ? ([true] as const) : [])
-      )
+      // Creation-owned activation navigates without delegating another primary attempt.
+      try {
+        ports.activate(
+          repo.id,
+          worktree.id,
+          startup && !didSpawnStartup && !launchOwnsSurface ? startup : undefined,
+          failedSetup,
+          undefined,
+          launchOwnsSurface || undefined
+        )
+      } catch (error) {
+        if (!startupFailure) {
+          throw error
+        }
+        startupFailure.provisioningCauses.push(error)
+      }
     }
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
-    const provisioning = ports.provision({
-      ...provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand),
+    const provisioning = provision({
+      ...provisionPlan,
       surfaceOwner: false
     })
-    if (request.awaitTerminalProvisioning) {
+    if (request.awaitTerminalProvisioning || (launchOwnsSurface && startupFailure)) {
       const provisioned = await provisioning
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
@@ -190,7 +240,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     ports.canSpawn &&
     shouldSeedWorktreePrimaryTerminal({
       hasPrimarySurface: didSpawnStartup,
-      callerProvidesSurface: callerProvidesInitialSurface(args)
+      callerProvidesSurface: launchOwnsSurface || backgroundAgentCreateLeavesSurface(args)
     })
   ) {
     try {
@@ -198,6 +248,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     } catch (error) {
       warning = appendFailure(warning, worktree.path, 'initial', error)
     }
+  }
+  if (launchOwnsSurface && startupFailure) {
+    throw startupFailure
   }
   const returnedSetup = didSpawnSetup
     ? undefined
@@ -224,7 +277,8 @@ function provisionArgs(
   args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
   primaryTerminalHandle: string | null,
   hasStartupTerminal: boolean,
-  wrappedSetupCommand?: string
+  wrappedSetupCommand?: string,
+  launchOwnsSurface = false
 ): WorktreeTerminalProvisioningArgs {
   return {
     worktreeSelector: `id:${args.worktree.id}`,
@@ -235,37 +289,12 @@ function provisionArgs(
     primaryTerminalHandle,
     hasStartupTerminal,
     ...(args.request.setupOnly !== undefined ? { setupOnly: args.request.setupOnly } : {}),
-    callerProvidesSurface: callerProvidesInitialSurface(args),
-    startupNeedsTerminal: args.startup !== undefined,
+    callerProvidesSurface: launchOwnsSurface || backgroundAgentCreateLeavesSurface(args),
+    startupNeedsTerminal: args.startup !== undefined && !launchOwnsSurface,
     setupCommandPlatform: setupPlatform(args.setup, 'posix'),
     observeSetupCompletion: args.request.observeSetupCompletion,
     ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
   }
-}
-
-function callerProvidesInitialSurface(
-  args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0]
-): boolean {
-  // Background agent creates already leave their initial surface to the caller.
-  return (
-    args.promisedAgentChat === true ||
-    (args.createdWithAgent !== undefined &&
-      args.request.activate !== true &&
-      args.request.runHooks !== true)
-  )
-}
-
-function setupPlatform(
-  setup: CreateWorktreeResult['setup'],
-  fallback: 'windows' | 'posix'
-): 'windows' | 'posix' {
-  return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallback)
-}
-
-function ownerSurfacing(
-  shouldSurface: boolean
-): Pick<WorktreeProvisionTerminalOptions, 'surfaceOwner'> {
-  return shouldSurface ? {} : { surfaceOwner: false }
 }
 
 function appendFailure(

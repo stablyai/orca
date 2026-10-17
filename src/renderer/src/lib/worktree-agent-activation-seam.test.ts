@@ -267,10 +267,7 @@ describe('worktree agent activation seam', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
   })
 
-  // A paired-runtime owner is always omitted from its own scoped census, and an SSH relay that
-  // never answered omits everything. Declining to mint is right; leaving the workspace with no
-  // surface at all is not — the user asked for a pane and must get one.
-  it('still seeds a usable pane when the census cannot prove who owns a live PTY', async () => {
+  it('blocks automatic reseeding on uncertain ownership while allowing an explicit new pane', async () => {
     const worktree = makeWorktree()
     const livePtyId = `${worktree.id}@@live-codex`
     useAppStore.setState(baseState())
@@ -280,8 +277,15 @@ describe('worktree agent activation seam', () => {
     await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
-    expect(tabs).toHaveLength(1)
-    expect(tabs[0]?.ptyId).toBeNull()
+    expect(tabs).toHaveLength(0)
+    expect(useAppStore.getState().activeWorktreeId).toBe(worktree.id)
+    const explicit = useAppStore.getState().createTab(worktree.id)
+    const selected = useAppStore.getState()
+    expect(selected.activeTabId).toBe(explicit.id)
+    expect(selected.tabsByWorktree[worktree.id]).toEqual([explicit])
+    expect(selected.groupsByWorktree[worktree.id]?.[0]?.activeTabId).toBe(explicit.id)
+    expect(explicit.ptyId).toBeNull()
+    expect(selected.ptyIdsByTabId[explicit.id]).not.toContain(livePtyId)
   })
 
   it('does not spawn before a structured chat tab hydrates', async () => {

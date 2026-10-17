@@ -61,7 +61,23 @@ type RuntimeLocalWorktreeCreateArgs<T> = {
 }
 
 export function createRuntimeLocalManagedWorktree<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
-  return worktreeCreateGit.run(() => performRuntimeLocalWorktreeCreate(args))
+  let persistedWorktreeId: string | undefined
+  return worktreeCreateGit
+    .run(() =>
+      performRuntimeLocalWorktreeCreate({
+        ...args,
+        onWorktreeMetadataPersisted: (worktree) => {
+          persistedWorktreeId = worktree.id
+          return args.onWorktreeMetadataPersisted(worktree)
+        }
+      })
+    )
+    .catch((error: unknown) => {
+      if (persistedWorktreeId) {
+        args.request.onPreTerminalFailure?.(persistedWorktreeId, error)
+      }
+      throw error
+    })
 }
 
 async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCreateArgs<T>) {
