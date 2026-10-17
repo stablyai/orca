@@ -34,6 +34,14 @@ const MUSE_READY_TAIL = [
   '  muse-spark-1.3 · max · ~/Downloads/interview-coach · YOLO'
 ]
 
+// Linux builds of Muse never paint the "Voice input" ruler above the composer.
+const MUSE_READY_TAIL_LINUX = [
+  '  Muse Code 1.4.3',
+  '─────────────────────────────────────────────────────────────────────────',
+  '❯ ───────────────────────────────────────────────────────────────────────',
+  '  muse-spark-1.3 · high · ~/projects/demo · YOLO'
+]
+
 function createWait(options: {
   pty?: RuntimePtyWorktreeRecord
   leaf?: RuntimeLeafRecord
@@ -360,5 +368,18 @@ describe('tui-idle over the live OSC title pipeline', () => {
     ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
     await assertion
+  }, 20_000)
+
+  it('settles a quiet Linux Muse ready screen without the voice-input ruler', async () => {
+    const { runtime, handle } = await makeRuntime('muse')
+    runtime.onPtyData(
+      E2E_PTY_ID,
+      `${oscTitle('tmp')}${MUSE_READY_TAIL_LINUX.join('\n')}\n`,
+      Date.now()
+    )
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 15_000 })
+    ).resolves.toMatchObject({ condition: 'tui-idle', satisfied: true })
   }, 20_000)
 })
