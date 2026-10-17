@@ -2,7 +2,10 @@ import { spawn, spawnSync } from 'node:child_process'
 import { RuntimeClientError } from './runtime-client-error'
 import { readMacosBundleId, resetMacosTccPermission } from '../macos-tcc-reset'
 import { resolveMacOSComputerUseAppPath } from './macos-native-provider-paths'
-import { getComputerUsePermissionStatus } from './macos-computer-use-permission-status'
+import {
+  getComputerUsePermissionStatus,
+  getFreshComputerUsePermissionStatus
+} from './macos-computer-use-permission-status'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionResetResult,
@@ -113,14 +116,14 @@ async function resetComputerUsePermissionsAsync(): Promise<ComputerUsePermission
   await resetTccPermission('ScreenCapture', bundleId)
 
   return {
-    ...(await getComputerUsePermissionStatus()),
+    // Why fresh: the running provider was granted under the rows just reset.
+    ...(await getFreshComputerUsePermissionStatus()),
     bundleId
   }
 }
 
 function closeExistingPermissionHelpers(): void {
-  // Why: status probes use --permission-status-file and must not be killed
-  // while setup helpers are being replaced.
+  // Why: only setup windows; the --agent provider must survive a setup relaunch.
   const setupHelperPatterns = [
     'orca-computer-use-macos[[:space:]]+--permission([[:space:]]|$)',
     'orca-computer-use-macos[[:space:]]+--permissions([[:space:]]|$)'

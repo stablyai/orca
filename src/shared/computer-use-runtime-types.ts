@@ -166,6 +166,10 @@ export type ComputerProviderCapabilities = {
       dock: boolean
       menubar: boolean
     }
+    // Optional: only the macOS provider reports its own permission status.
+    permissions?: {
+      status: boolean
+    }
   }
 }
 

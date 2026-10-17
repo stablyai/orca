@@ -1,233 +1,171 @@
-import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
-import type * as TimersPromises from 'node:timers/promises'
+import { spawn, spawnSync } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { escapeRegex } from '../../shared/string-utils'
+import { RuntimeClientError } from './runtime-client-error'
 
-const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
-const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
-const runProcessMock = vi.hoisted(() => vi.fn())
-const permissionStatusDelayMock = vi.hoisted(() =>
-  vi.fn(
-    (milliseconds: number) =>
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, milliseconds)
-      })
-  )
-)
-const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
-const permissionStatusPath = join(permissionStatusTempDir, 'status.json')
+const { callPermissionStatusMock, isMacOS14OrNewerMock, resolveAppMock, resolveExecutableMock } =
+  vi.hoisted(() => ({
+    callPermissionStatusMock: vi.fn(),
+    isMacOS14OrNewerMock: vi.fn(),
+    resolveAppMock: vi.fn(),
+    resolveExecutableMock: vi.fn()
+  }))
 
-vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
-
-// The status poll's promise delay must use the fake clock this suite controls.
-vi.mock('node:timers/promises', async (importOriginal) => ({
-  ...(await importOriginal<typeof TimersPromises>()),
-  setTimeout: permissionStatusDelayMock
+vi.mock('node:child_process', () => ({ spawn: vi.fn(), spawnSync: vi.fn() }))
+vi.mock('./sidecar-client', () => ({
+  callComputerSidecarPermissionStatus: callPermissionStatusMock
 }))
-
-vi.mock('child_process', () => ({
-  execFileSync: vi.fn(),
-  spawn: vi.fn(() => {
-    const child = {
-      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      on: vi.fn((event: string, callback: (status: number) => void) => {
-        if (event === 'close') {
-          queueMicrotask(() => callback(0))
-        }
-        return child
-      }),
-      off: vi.fn(() => child),
-      unref: vi.fn()
-    }
-    return child
-  }),
-  spawnSync: vi.fn()
-}))
-
-vi.mock('fs/promises', () => ({
-  mkdtemp: vi.fn(),
-  readFile: vi.fn(),
-  rm: vi.fn(),
-  stat: vi.fn()
-}))
-
+vi.mock('./macos-native-provider-transport', () => ({ isMacOS14OrNewer: isMacOS14OrNewerMock }))
 vi.mock('./macos-native-provider-paths', () => ({
-  resolveMacOSComputerUseAppPath: resolveHelperAppPathMock,
-  resolveMacOSComputerUseExecutablePath: resolveHelperExecutablePathMock
+  resolveMacOSComputerUseAppPath: resolveAppMock,
+  resolveMacOSComputerUseExecutablePath: resolveExecutableMock
 }))
+
+const helperAppPath = '/Applications/Orca.app/Contents/Resources/Orca Computer Use.app'
+
+async function loadModule() {
+  vi.resetModules()
+  return await import('./macos-computer-use-permission-status')
+}
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => {}
+  let reject: (error: Error) => void = () => {}
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
 
 describe('getComputerUsePermissionStatus', () => {
   const originalPlatform = process.platform
 
   beforeEach(() => {
-    vi.mocked(spawn).mockClear()
-    vi.mocked(spawnSync).mockClear()
-    vi.mocked(execFileSync).mockReset()
-    vi.mocked(mkdtemp).mockReset()
-    vi.mocked(readFile).mockReset()
-    vi.mocked(rm).mockReset()
-    vi.mocked(stat).mockReset()
-    runProcessMock.mockReset()
-    permissionStatusDelayMock.mockClear()
-    runProcessMock.mockResolvedValue({
-      code: 1,
-      signal: null,
-      stdout: '',
-      stderr: '',
-      timedOut: false
-    })
-    resolveHelperAppPathMock.mockReset()
-    resolveHelperExecutablePathMock.mockReset()
-    resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
-    resolveHelperExecutablePathMock.mockReturnValue(
-      '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos'
-    )
-    vi.mocked(mkdtemp).mockResolvedValue(permissionStatusTempDir)
-    vi.mocked(stat).mockResolvedValue({} as Awaited<ReturnType<typeof stat>>)
-    mockPermissionStatus('{"accessibility":"granted","screenshots":"granted"}')
     setPlatform('darwin')
+    resolveAppMock.mockReturnValue(helperAppPath)
+    resolveExecutableMock.mockReturnValue(`${helperAppPath}/Contents/MacOS/orca-computer-use-macos`)
+    isMacOS14OrNewerMock.mockReturnValue(true)
+    callPermissionStatusMock.mockResolvedValue({
+      accessibility: 'granted',
+      screenshots: 'not-granted'
+    })
   })
 
   afterEach(() => {
-    vi.useRealTimers()
     setPlatform(originalPlatform)
+    vi.clearAllMocks()
   })
 
-  it('wraps permission status helper launch failures', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    const child = {
-      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      on: vi.fn((event: string, callback: (error: Error) => void) => {
-        if (event === 'error') {
-          queueMicrotask(() => callback(new Error('spawn ENOENT /private/path')))
-        }
-        return child
-      }),
-      off: vi.fn(() => child),
-      unref: vi.fn()
-    }
-    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
-
-    await expect(getComputerUsePermissionStatus()).rejects.toMatchObject({
-      name: 'RuntimeClientError',
-      code: 'accessibility_error',
-      message: 'Could not check permissions: failed to launch helper'
-    })
-    expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
-      recursive: true,
-      force: true
-    })
-    expectOnlyOwnStatusHelperStopped()
-  })
-
-  it('removes permission status helper listeners after close', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    const child = {
-      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      on: vi.fn((event: string, callback: (status: number) => void) => {
-        if (event === 'close') {
-          queueMicrotask(() => callback(0))
-        }
-        return child
-      }),
-      off: vi.fn(() => child),
-      unref: vi.fn()
-    }
-    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
-
-    await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
-      helperUnavailableReason: null
-    })
-
-    expect(child.stdout.off).toHaveBeenCalledWith('data', expect.any(Function))
-    expect(child.stderr.off).toHaveBeenCalledWith('data', expect.any(Function))
-    expect(child.off).toHaveBeenCalledWith('error', expect.any(Function))
-    expect(child.off).toHaveBeenCalledWith('close', expect.any(Function))
-  })
-
-  it('times out when the permission status helper launch never closes', async () => {
-    vi.useFakeTimers()
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    const child = {
-      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
-      on: vi.fn(() => child),
-      off: vi.fn(() => child),
-      kill: vi.fn(),
-      unref: vi.fn()
-    }
-    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
-
-    let settled = false
-    const statusPromise = getComputerUsePermissionStatus().then(
-      (status) => {
-        settled = true
-        return status
-      },
-      (error: unknown) => {
-        settled = true
-        throw error
-      }
-    )
-    const rejection = expect(statusPromise).rejects.toMatchObject({
-      name: 'RuntimeClientError',
-      code: 'accessibility_error',
-      message: 'Timed out launching permission helper'
-    })
-
-    await vi.advanceTimersByTimeAsync(5000)
-
-    expect(settled).toBe(true)
-    await rejection
-    expect(child.kill).toHaveBeenCalled()
-    expectOnlyOwnStatusHelperStopped()
-    expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
-      recursive: true,
-      force: true
-    })
-  })
-
-  it('reads permission status through the helper app identity', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    mockPermissionStatus('{"accessibility":"granted","screenshots":"not-granted"}')
+  it('reads status from the provider and never launches an app', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
 
     await expect(getComputerUsePermissionStatus()).resolves.toEqual({
       platform: 'darwin',
-      helperAppPath: '/Applications/Orca Computer Use.app',
+      helperAppPath,
       helperUnavailableReason: null,
       permissions: [
         { id: 'accessibility', status: 'granted' },
         { id: 'screenshots', status: 'not-granted' }
       ]
     })
-    expect(spawn).toHaveBeenCalledWith(
-      '/usr/bin/open',
-      [
-        '-n',
-        '/Applications/Orca Computer Use.app',
-        '--args',
-        '--permission-status-file',
-        permissionStatusPath
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    )
+    expect(callPermissionStatusMock).toHaveBeenCalledWith(false)
+    // Why: LaunchServices probe launches wedged app launches system-wide (#29146).
+    expect(spawn).not.toHaveBeenCalled()
     expect(spawnSync).not.toHaveBeenCalled()
-    expectOnlyOwnStatusHelperStopped()
-    expect(readFile).toHaveBeenCalledWith(permissionStatusPath, 'utf8')
-    expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
-      recursive: true,
-      force: true
+  })
+
+  it('shares one provider request across concurrent callers', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    const reply = deferred<unknown>()
+    callPermissionStatusMock.mockReturnValueOnce(reply.promise)
+
+    const reads = Array.from({ length: 4 }, () => getComputerUsePermissionStatus())
+    reply.resolve({ accessibility: 'granted', screenshots: 'granted' })
+    const results = await Promise.all(reads)
+
+    expect(callPermissionStatusMock).toHaveBeenCalledTimes(1)
+    expect(new Set(results).size).toBe(1)
+
+    await getComputerUsePermissionStatus()
+    expect(callPermissionStatusMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not share a read that started before a fresh one', async () => {
+    const { getComputerUsePermissionStatus, getFreshComputerUsePermissionStatus } =
+      await loadModule()
+    const stale = deferred<unknown>()
+    callPermissionStatusMock.mockReturnValueOnce(stale.promise)
+
+    const before = getComputerUsePermissionStatus()
+    const fresh = getFreshComputerUsePermissionStatus()
+    const after = getComputerUsePermissionStatus()
+    stale.resolve({ accessibility: 'granted', screenshots: 'granted' })
+
+    await expect(fresh).resolves.toMatchObject({
+      permissions: [
+        { id: 'accessibility', status: 'granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    })
+    await expect(after).resolves.toBe(await fresh)
+    await expect(before).resolves.not.toBe(await fresh)
+    expect(callPermissionStatusMock.mock.calls).toEqual([[false], [true]])
+  })
+
+  it('does not report a grant when the provider read fails', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    callPermissionStatusMock.mockRejectedValueOnce(
+      new RuntimeClientError('action_timeout', 'computer sidecar permissionStatus timed out')
+    )
+
+    await expect(getComputerUsePermissionStatus()).rejects.toThrow('timed out')
+    // The failed read must not stay cached for the next caller.
+    await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
+      helperUnavailableReason: null
     })
   })
 
-  it('returns unavailable permission status when the helper app is missing on macOS', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    resolveHelperAppPathMock.mockReturnValue(null)
+  it('rejects a malformed provider reply instead of guessing', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    callPermissionStatusMock.mockResolvedValueOnce({ accessibility: 'granted' })
+
+    await expect(getComputerUsePermissionStatus()).rejects.toThrow('malformed permission status')
+  })
+
+  it('reports a provider without the status capability as unavailable', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    callPermissionStatusMock.mockRejectedValueOnce(
+      new RuntimeClientError(
+        'unsupported_capability',
+        'native macOS provider does not support permissions.status'
+      )
+    )
+
+    await expect(getComputerUsePermissionStatus()).resolves.toEqual({
+      platform: 'darwin',
+      helperAppPath,
+      helperUnavailableReason:
+        'Orca Computer Use cannot report permissions: native macOS provider does not support permissions.status',
+      permissions: [
+        { id: 'accessibility', status: 'not-granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    })
+  })
+
+  it('reports unsupported macOS versions without starting the provider', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    isMacOS14OrNewerMock.mockReturnValue(false)
+
+    await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
+      helperUnavailableReason: 'Orca Computer Use requires macOS 14 or newer'
+    })
+    expect(callPermissionStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('reports a missing helper app without starting the provider', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    resolveAppMock.mockReturnValue(null)
 
     await expect(getComputerUsePermissionStatus()).resolves.toEqual({
       platform: 'darwin',
@@ -238,132 +176,36 @@ describe('getComputerUsePermissionStatus', () => {
         { id: 'screenshots', status: 'not-granted' }
       ]
     })
-    expect(execFileSync).not.toHaveBeenCalled()
-    expect(runProcessMock).not.toHaveBeenCalled()
+    expect(callPermissionStatusMock).not.toHaveBeenCalled()
   })
 
-  it('cleans up when the status file is invalid', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    mockPermissionStatus('{')
-
-    await expect(getComputerUsePermissionStatus()).rejects.toBeInstanceOf(SyntaxError)
-
-    expectOnlyOwnStatusHelperStopped()
-  })
-
-  it('cleans up when no status file arrives before the timeout', async () => {
-    vi.useFakeTimers()
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    vi.mocked(stat).mockRejectedValue(new Error('ENOENT'))
-    let settled = false
-    const statusPromise = getComputerUsePermissionStatus().then(
-      (status) => {
-        settled = true
-        return status
-      },
-      (error: unknown) => {
-        settled = true
-        throw error
-      }
-    )
-    const rejection = expect(statusPromise).rejects.toMatchObject({
-      code: 'accessibility_error',
-      message: 'Timed out checking permissions'
-    })
-
-    await vi.advanceTimersByTimeAsync(0)
-    expect(stat).toHaveBeenCalledTimes(1)
-    expect(permissionStatusDelayMock).toHaveBeenCalledTimes(1)
-    expect(settled).toBe(false)
-
-    await vi.advanceTimersByTimeAsync(4_999)
-    expect(settled).toBe(false)
-    expect(stat).toHaveBeenCalledTimes(50)
-    expect(permissionStatusDelayMock).toHaveBeenCalledTimes(50)
-    expect(permissionStatusDelayMock.mock.calls).toEqual(Array.from({ length: 50 }, () => [100]))
-    expect(runProcessMock).not.toHaveBeenCalled()
-    expect(rm).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-    await rejection
-
-    expect(settled).toBe(true)
-    expect(stat).toHaveBeenCalledTimes(50)
-    expect(permissionStatusDelayMock).toHaveBeenCalledTimes(50)
-    expectOnlyOwnStatusHelperStopped()
-    expect(rm).toHaveBeenCalledWith(permissionStatusTempDir, {
-      recursive: true,
-      force: true
-    })
-  })
-
-  it('returns the status while helper cleanup is still pending', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    let finishCleanup = (): void => {}
-    runProcessMock.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishCleanup = resolve
-      })
-    )
+  it('reports a missing helper executable without starting the provider', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    resolveExecutableMock.mockReturnValue(null)
 
     await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
-      helperUnavailableReason: null
+      helperAppPath,
+      helperUnavailableReason: `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`
     })
-    expectOnlyOwnStatusHelperStopped()
-    finishCleanup()
+    expect(callPermissionStatusMock).not.toHaveBeenCalled()
   })
 
-  it('preserves the status when helper cleanup cannot start', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    runProcessMock.mockRejectedValue(new Error('spawn ENOENT'))
+  it('returns unsupported permissions off macOS', async () => {
+    const { getComputerUsePermissionStatus } = await loadModule()
+    setPlatform('linux')
 
-    await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
-      helperUnavailableReason: null
+    await expect(getComputerUsePermissionStatus()).resolves.toEqual({
+      platform: 'linux',
+      helperAppPath: null,
+      helperUnavailableReason: null,
+      permissions: [
+        { id: 'accessibility', status: 'unsupported' },
+        { id: 'screenshots', status: 'unsupported' }
+      ]
     })
-    expectOnlyOwnStatusHelperStopped()
-  })
-
-  it('targets each concurrent check separately', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    const peerDirectory = `${permissionStatusTempDir}-peer`
-    vi.mocked(mkdtemp)
-      .mockResolvedValueOnce(permissionStatusTempDir)
-      .mockResolvedValueOnce(peerDirectory)
-
-    await Promise.all([getComputerUsePermissionStatus(), getComputerUsePermissionStatus()])
-
-    expect(runProcessMock).toHaveBeenCalledTimes(2)
-    for (const directory of [permissionStatusTempDir, peerDirectory]) {
-      expect(runProcessMock).toHaveBeenCalledWith({
-        program: '/usr/bin/pkill',
-        args: [
-          '-f',
-          `(^|[[:space:]/])orca-computer-use-macos[[:space:]]+--permission-status-file[[:space:]]+${escapeRegex(join(directory, 'status.json'))}$`
-        ],
-        timeoutMs: 2000,
-        stdio: 'ignore'
-      })
-    }
+    expect(callPermissionStatusMock).not.toHaveBeenCalled()
   })
 })
-
-function expectOnlyOwnStatusHelperStopped(): void {
-  expect(runProcessMock).toHaveBeenCalledTimes(1)
-  expect(runProcessMock).toHaveBeenCalledWith({
-    program: '/usr/bin/pkill',
-    args: [
-      '-f',
-      `(^|[[:space:]/])orca-computer-use-macos[[:space:]]+--permission-status-file[[:space:]]+${escapeRegex(permissionStatusPath)}$`
-    ],
-    timeoutMs: 2000,
-    stdio: 'ignore'
-  })
-}
-
-function mockPermissionStatus(json: string): void {
-  vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
-  vi.mocked(readFile).mockResolvedValue(json)
-}
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })

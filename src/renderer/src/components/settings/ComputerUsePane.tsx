@@ -11,6 +11,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
 import { translate } from '@/i18n/i18n'
+import { recordComputerUsePermissionStatus } from '../setup-guide/computer-use-permission-setup-store'
 export { getComputerUsePaneSearchEntries } from './computer-use-search'
 
 type PermissionDefinition = {
@@ -151,6 +152,7 @@ export function ComputerUsePane(): React.JSX.Element {
       if (operationId !== permissionOperationSequence.current) {
         return
       }
+      recordComputerUsePermissionStatus(result)
       if (!mountedRef.current) {
         return
       }
@@ -246,6 +248,8 @@ export function ComputerUsePane(): React.JSX.Element {
     setResetting(true)
     try {
       const result = await window.api.computerUsePermissions.reset()
+      // Why: the setup checklist stops re-checking once granted, so it must hear about a reset.
+      recordComputerUsePermissionStatus(result)
       if (operationId !== permissionOperationSequence.current) {
         return
       }

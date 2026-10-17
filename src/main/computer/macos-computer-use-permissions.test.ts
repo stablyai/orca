@@ -1,5 +1,4 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -9,7 +8,7 @@ import {
 
 const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
 const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
-const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
+const callPermissionStatusMock = vi.hoisted(() => vi.fn())
 const helperAppPath = '/Applications/Orca Computer Use.app'
 const helperInfoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
 
@@ -67,12 +66,11 @@ vi.mock('child_process', () => ({
   spawnSync: vi.fn()
 }))
 
-vi.mock('fs/promises', () => ({
-  mkdtemp: vi.fn(),
-  readFile: vi.fn(),
-  rm: vi.fn(),
-  stat: vi.fn()
+vi.mock('./sidecar-client', () => ({
+  callComputerSidecarPermissionStatus: callPermissionStatusMock
 }))
+
+vi.mock('./macos-native-provider-transport', () => ({ isMacOS14OrNewer: () => true }))
 
 vi.mock('./macos-native-provider-paths', () => ({
   resolveMacOSComputerUseAppPath: resolveHelperAppPathMock,
@@ -86,17 +84,12 @@ describe('openComputerUsePermissions', () => {
     vi.mocked(spawn).mockClear()
     vi.mocked(spawnSync).mockClear()
     vi.mocked(execFileSync).mockReset()
-    vi.mocked(mkdtemp).mockReset()
-    vi.mocked(readFile).mockReset()
-    vi.mocked(rm).mockReset()
-    vi.mocked(stat).mockReset()
+    callPermissionStatusMock.mockReset()
     resolveHelperAppPathMock.mockReset()
     resolveHelperExecutablePathMock.mockReset()
     resolveHelperExecutablePathMock.mockReturnValue(
       '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos'
     )
-    vi.mocked(mkdtemp).mockResolvedValue(permissionStatusTempDir)
-    vi.mocked(stat).mockResolvedValue({} as Awaited<ReturnType<typeof stat>>)
     mockPermissionStatus('{"accessibility":"granted","screenshots":"granted"}')
     setPlatform('darwin')
   })
@@ -159,6 +152,11 @@ describe('openComputerUsePermissions', () => {
       ['-n', '/Applications/Orca Computer Use.app', '--args', '--permissions'],
       { detached: true, stdio: 'ignore' }
     )
+    // The preliminary status read goes to the provider, so the setup window is the only launch.
+    expect(
+      vi.mocked(spawn).mock.calls.filter(([program]) => program === '/usr/bin/open')
+    ).toHaveLength(1)
+    expect(callPermissionStatusMock).toHaveBeenCalledWith(false)
   })
 
   it('launches a targeted permission helper flow', async () => {
@@ -244,9 +242,9 @@ describe('openComputerUsePermissions', () => {
 
   it('resets stale macOS TCC grants for the helper bundle id', async () => {
     resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
-    vi.mocked(readFile)
-      .mockResolvedValueOnce('{"accessibility":"granted","screenshots":"granted"}')
-      .mockResolvedValueOnce('{"accessibility":"not-granted","screenshots":"not-granted"}')
+    callPermissionStatusMock
+      .mockResolvedValueOnce({ accessibility: 'granted', screenshots: 'granted' })
+      .mockResolvedValueOnce({ accessibility: 'not-granted', screenshots: 'not-granted' })
     vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
 
     await expect(resetComputerUsePermissions()).resolves.toEqual({
@@ -277,6 +275,9 @@ describe('openComputerUsePermissions', () => {
       ['reset', 'ScreenCapture', 'com.example.orca.computer-use'],
       throughChokepoint
     )
+    // Why: the provider read before the reset holds the old grant; the answer must come from a new one.
+    expect(callPermissionStatusMock.mock.calls).toEqual([[false], [true]])
+    expect(spawn).not.toHaveBeenCalledWith('/usr/bin/open', expect.anything(), expect.anything())
     // Why: a sync reset would hold main's event loop for both children.
     expect(spawnSync).not.toHaveBeenCalledWith(
       '/usr/bin/tccutil',
@@ -288,7 +289,7 @@ describe('openComputerUsePermissions', () => {
 
 function mockPermissionStatus(json: string): void {
   vi.mocked(spawnSync).mockReturnValue({ status: 0 } as ReturnType<typeof spawnSync>)
-  vi.mocked(readFile).mockResolvedValue(json)
+  callPermissionStatusMock.mockResolvedValue(JSON.parse(json))
 }
 
 function setPlatform(platform: NodeJS.Platform): void {

@@ -28,7 +28,6 @@ src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-wsl-hook-install-plan.ts
 src/main/computer/desktop-script-provider-bridge.ts
-src/main/computer/macos-computer-use-permission-status.ts
 src/main/computer/macos-computer-use-permissions.ts
 src/main/computer/macos-native-provider-transport.ts
 src/main/computer/sidecar-client.ts

@@ -1,5 +1,6 @@
 import { computerProviderUnavailableMessage } from './computer-provider-unavailable-message'
 import { currentComputerProvider, shutdownComputerProviders } from './computer-provider-lifecycle'
+import { MacOSNativeProviderClient } from './macos-native-provider-client'
 import { RuntimeClientError } from './runtime-client-error'
 
 type SidecarRequest = {
@@ -54,6 +55,15 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
   switch (method) {
     case 'capabilities': {
       return await provider.capabilities()
+    }
+    case 'permissionStatus': {
+      if (!(provider instanceof MacOSNativeProviderClient)) {
+        throw new RuntimeClientError(
+          'unsupported_capability',
+          'this computer-use provider does not report permission status'
+        )
+      }
+      return await provider.permissionStatus({ fresh: params.fresh === true })
     }
     case 'listApps': {
       return await provider.listApps()

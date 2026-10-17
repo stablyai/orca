@@ -9,6 +9,14 @@ public struct PermissionStatusSnapshot: Equatable, Sendable {
         self.accessibilityGranted = accessibilityGranted
         self.screenshotsGranted = screenshotsGranted
     }
+
+    /// Body of the agent socket's `permissionStatus` reply; Orca parses these exact keys and values.
+    public var wireStatus: [String: String] {
+        [
+            "accessibility": accessibilityGranted ? "granted" : "not-granted",
+            "screenshots": screenshotsGranted ? "granted" : "not-granted",
+        ]
+    }
 }
 
 public enum PermissionStatusSnapshotProbe {

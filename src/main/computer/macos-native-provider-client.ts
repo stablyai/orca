@@ -13,12 +13,14 @@ import {
   REQUIRED_MACOS_PROVIDER_PROTOCOL_VERSION,
   type NativeActionMethod,
   type NativeMethod,
+  type NativeRequestMethod,
   type NativeResponse,
   type PendingNativeRequest,
   writeNativeProviderLine
 } from './macos-native-provider-contract'
 import { resolveMacOSComputerUseExecutablePath } from './macos-native-provider-paths'
 import { MacOSProviderProcessOwner } from './macos-native-provider-process-reaping'
+import * as permissionStatusWire from './macos-native-provider-permission-status'
 import {
   attachMacOSNativeProviderSocketListeners,
   NativeProviderLineBuffer,
@@ -43,6 +45,9 @@ export class MacOSNativeProviderClient {
   private providerCapabilities: ComputerProviderCapabilities | null = null
   private socketListenerCleanup: (() => void) | null = null
   private socketStartGeneration = 0
+  // Per provider process: true until it serves anything but handshake/status reads.
+  private statusOnlyProvider = false
+  private screenshotsMissingAtLastRead = false
   async listApps(): Promise<ComputerListAppsResult> {
     return (await this.call('listApps', {})) as ComputerListAppsResult
   }
@@ -62,8 +67,21 @@ export class MacOSNativeProviderClient {
       method,
       params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
     )
-    await this.ensureActionSupported(method)
+    await this.ensureCapability('actions', macOSActionCapabilityKey(method))
     return normalizeComputerActionResult((await this.call(method, params)) as ComputerActionResult)
+  }
+  async permissionStatus(options: {
+    fresh: boolean
+  }): Promise<permissionStatusWire.MacOSProviderPermissionStatus> {
+    // Why: a Screen Recording grant may only show in a process started after it. Never recycle a
+    // provider that served agent work: its snapshot cache backs the agent's element indexes.
+    if (options.fresh || (this.statusOnlyProvider && this.screenshotsMissingAtLastRead)) {
+      this.shutdown()
+    }
+    await this.ensureCapability('permissions', 'status')
+    const status = permissionStatusWire.parse(await this.call('permissionStatus', {}))
+    this.screenshotsMissingAtLastRead = status.screenshots === 'not-granted'
+    return status
   }
   shutdown(): void {
     const socket = this.socket
@@ -88,10 +106,8 @@ export class MacOSNativeProviderClient {
     }
     this.releaseHelperGeneration()
   }
-  private async call(method: NativeMethod, params: unknown): Promise<unknown> {
-    if (method !== 'handshake') {
-      await this.ensureCompatible()
-    }
+  private async call(method: NativeRequestMethod, params: unknown): Promise<unknown> {
+    await this.ensureCompatible()
     return await this.send(method, params)
   }
   private async send(method: NativeMethod, params: unknown): Promise<unknown> {
@@ -101,6 +117,7 @@ export class MacOSNativeProviderClient {
       throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
     }
     const transport = await this.ensureSocketStarted(helperExecutablePath)
+    this.statusOnlyProvider &&= method === 'permissionStatus' || method === 'handshake'
     const token = this.socketToken
     const line = `${JSON.stringify({ id, method, params, token })}\n`
     const result = new Promise<unknown>((resolve, reject) => {
@@ -166,9 +183,6 @@ export class MacOSNativeProviderClient {
       `native macOS provider does not support ${String(group)}.${capability}`
     )
   }
-  private async ensureActionSupported(method: NativeActionMethod): Promise<void> {
-    await this.ensureCapability('actions', macOSActionCapabilityKey(method))
-  }
   private async ensureSocketStarted(helperExecutablePath: string): Promise<net.Socket> {
     if (this.socket && !this.socket.destroyed) {
       return this.socket
@@ -209,6 +223,7 @@ export class MacOSNativeProviderClient {
       error: (error) => this.handleTransportError(socket, error)
     })
     this.socket = socket
+    this.statusOnlyProvider = true
     return socket
   }
   private handleSocketData(socket: net.Socket, chunk: string): void {

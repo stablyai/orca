@@ -12,9 +12,11 @@ import { normalizeComputerActionResult } from './computer-action-verification-no
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
+import { StatusOnlySidecarIdleRelease } from './computer-sidecar-status-only-idle'
 
 type ComputerSidecarMethod =
   | 'capabilities'
+  | 'permissionStatus'
   | 'listApps'
   | 'listWindows'
   | 'getAppState'
@@ -59,6 +61,11 @@ export async function callComputerSidecarCapabilities(): Promise<ComputerProvide
   return (await getComputerSidecar().call('capabilities', {})) as ComputerProviderCapabilities
 }
 
+// Resolves to the provider's raw `{ accessibility, screenshots }` reply.
+export async function callComputerSidecarPermissionStatus(fresh: boolean): Promise<unknown> {
+  return await getComputerSidecar().call('permissionStatus', { fresh })
+}
+
 export async function callComputerSidecarListWindows(
   params: unknown
 ): Promise<ComputerListWindowsResult> {
@@ -74,7 +81,7 @@ export async function callComputerSidecarSnapshot(
 export async function callComputerSidecarAction(
   method: Exclude<
     ComputerSidecarMethod,
-    'capabilities' | 'listApps' | 'listWindows' | 'getAppState'
+    'capabilities' | 'permissionStatus' | 'listApps' | 'listWindows' | 'getAppState'
   >,
   params: unknown
 ): Promise<ComputerActionResult> {
@@ -127,10 +134,17 @@ class ComputerSidecarProcess {
   private pending = new Map<number, PendingRequest>()
   private queueTail: Promise<void> | null = null
   private queueGeneration = 0
+  // Why the guards: a request queued or in flight must never lose its sidecar to the idle release.
+  private readonly idleRelease = new StatusOnlySidecarIdleRelease(() => {
+    if (this.child && this.pending.size === 0 && this.queueTail === null) {
+      this.shutdown()
+    }
+  })
 
   constructor(private readonly entryPath: string) {}
 
   call(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
+    this.idleRelease.cancel()
     const generation = this.queueGeneration
     const run = () => {
       if (generation !== this.queueGeneration) {
@@ -150,6 +164,7 @@ class ComputerSidecarProcess {
     void tail.finally(() => {
       if (this.queueTail === tail) {
         this.queueTail = null
+        this.idleRelease.idle()
       }
     })
     return result
@@ -157,6 +172,7 @@ class ComputerSidecarProcess {
 
   private send(method: ComputerSidecarMethod, params: unknown): Promise<unknown> {
     const child = this.ensureStarted()
+    this.idleRelease.served(method)
     if (!child.send) {
       const error = new RuntimeClientError(
         'accessibility_error',
@@ -242,6 +258,7 @@ class ComputerSidecarProcess {
       child.on('error', ignoreStaleChildError)
     }
     this.child = child
+    this.idleRelease.started()
     return child
   }
 

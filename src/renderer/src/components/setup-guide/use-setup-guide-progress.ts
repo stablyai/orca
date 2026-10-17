@@ -1,5 +1,4 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: setup-guide readiness is driven by bounded IPC probes and browser focus events; the state cannot be derived synchronously from render inputs. */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -25,7 +24,6 @@ import {
 import { deriveIntegrationConnectionStatus } from '../feature-wall/use-integration-connection-status'
 import { useSetupGuideBrowserMilestoneProgress } from './setup-guide-browser-milestone-progress'
 import {
-  getComputerUsePermissionSetupState,
   getCurrentSetupScriptProbeState,
   getSetupGuideProgressReady,
   getSetupScriptProbeSignature
@@ -35,6 +33,11 @@ import {
   setSetupScriptProbeCache,
   subscribeSetupScriptProbeCache
 } from './setup-script-probe-cache'
+import {
+  readComputerUsePermissionSetup,
+  subscribeComputerUsePermissionSetup,
+  watchComputerUsePermissionSetup
+} from './computer-use-permission-setup-store'
 
 const SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS = 15_000
 
@@ -71,10 +74,11 @@ export function useSetupGuideProgress(
     readSetupScriptProbeCache,
     readSetupScriptProbeCache
   )
-  const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
-  const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
-    useState(false)
-  const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
+  const computerUsePermissionSetup = useSyncExternalStore(
+    subscribeComputerUsePermissionSetup,
+    readComputerUsePermissionSetup,
+    readComputerUsePermissionSetup
+  )
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
     useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
@@ -192,51 +196,13 @@ export function useSetupGuideProgress(
     }
   }, [orderedGitRepos, settings, setupScriptProbeSignature, shouldRefreshCoreState])
 
-  const readComputerUsePermissions = useCallback(async (isStale: () => boolean): Promise<void> => {
-    const status = await window.api.computerUsePermissions.getStatus().catch(() => null)
-    if (isStale()) {
-      return
-    }
-    const permissionState = getComputerUsePermissionSetupState(status)
-    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- Why: async permission checks update setup progress after external OS state changes.
-    setComputerUsePermissionStatusChecked(true)
-    setComputerUsePermissionsReady(permissionState.ready)
-    setComputerUseUnavailable(permissionState.unavailable)
-  }, [])
-
+  const computerUseStepActive = shouldRefreshCoreState && computerUseSkillInstalled
   useEffect(() => {
-    if (!shouldRefreshCoreState || !computerUseSkillInstalled) {
-      // Why: unavailable setup-guide steps must clear stale permission state before
-      // readiness is derived for the visible checklist.
-      setComputerUsePermissionStatusChecked(false)
-      setComputerUsePermissionsReady(false)
-      setComputerUseUnavailable(false)
+    if (!computerUseStepActive) {
       return
     }
-    let stale = false
-    const refreshComputerUsePermissions = (): void => {
-      void readComputerUsePermissions(() => stale)
-    }
-    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- Why: refresh the setup checklist when the permission step becomes active.
-    refreshComputerUsePermissions()
-    const handleFocus = (): void => {
-      void refreshComputerUsePermissions()
-    }
-    const handleVisibilityChange = (): void => {
-      if (document.visibilityState === 'visible') {
-        void refreshComputerUsePermissions()
-      }
-    }
-    // Why: users grant Computer Use permissions outside the setup guide. Refresh
-    // on return so the checklist updates without requiring a remount.
-    window.addEventListener('focus', handleFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => {
-      stale = true
-      window.removeEventListener('focus', handleFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [computerUseSkillInstalled, readComputerUsePermissions, shouldRefreshCoreState])
+    return watchComputerUsePermissionSetup()
+  }, [computerUseStepActive])
 
   const taskSourceStatus = deriveIntegrationConnectionStatus({
     preflightStatus,
@@ -260,11 +226,11 @@ export function useSetupGuideProgress(
     setupScriptProbeSignature
   )
   const currentComputerUsePermissionStatusChecked =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionStatusChecked : false
+    computerUseStepActive && computerUsePermissionSetup.checked
   const currentComputerUsePermissionsReady =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionsReady : false
+    computerUseStepActive && computerUsePermissionSetup.ready
   const currentComputerUseUnavailable =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUseUnavailable : false
+    computerUseStepActive && computerUsePermissionSetup.unavailable
   const ready = getSetupGuideProgressReady({
     refreshEnabled: shouldRefreshCoreState,
     settingsLoaded: settings !== null,

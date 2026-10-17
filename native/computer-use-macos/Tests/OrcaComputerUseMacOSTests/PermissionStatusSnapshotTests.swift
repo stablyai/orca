@@ -15,6 +15,13 @@ final class PermissionStatusSnapshotTests: XCTestCase {
         )
     }
 
+    func testWireStatusUsesTheValuesOrcaParses() {
+        XCTAssertEqual(
+            PermissionStatusSnapshot(accessibilityGranted: true, screenshotsGranted: false).wireStatus,
+            ["accessibility": "granted", "screenshots": "not-granted"]
+        )
+    }
+
     func testRunsPermissionProbesConcurrently() {
         let accessibilityStarted = DispatchSemaphore(value: 0)
         let screenshotsStarted = DispatchSemaphore(value: 0)

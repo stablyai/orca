@@ -15,11 +15,15 @@ export type NativeMethod =
   | 'hotkey'
   | 'pasteText'
   | 'setValue'
+  | 'permissionStatus'
   | 'terminate'
+
+// Methods that run after the handshake has established compatibility.
+export type NativeRequestMethod = Exclude<NativeMethod, 'handshake'>
 
 export type NativeActionMethod = Exclude<
   NativeMethod,
-  'handshake' | 'listApps' | 'listWindows' | 'getAppState' | 'terminate'
+  'handshake' | 'listApps' | 'listWindows' | 'getAppState' | 'permissionStatus' | 'terminate'
 >
 
 export type NativeResponse =

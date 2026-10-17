@@ -213,6 +213,9 @@ final class Provider {
         switch method {
         case "handshake":
             return providerHandshake()
+        case "permissionStatus":
+            // Why: Orca reads status from this long-lived agent instead of launching a probe app per check.
+            return permissionStatusSnapshotSettled().wireStatus
         case "listApps":
             return ["apps": listApps().map(renderListedApp)]
         case "listWindows":
@@ -516,6 +519,9 @@ final class Provider {
                     "dialogs": false,
                     "dock": false,
                     "menubar": false,
+                ],
+                "permissions": [
+                    "status": true,
                 ],
             ],
         ]
@@ -4167,26 +4173,6 @@ private func runPermissionCheck(initialPermission: PermissionKind? = nil) {
     app.run()
 }
 
-private func printPermissionStatus() {
-    let snapshot = permissionStatusSnapshotSettled()
-    let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
-    let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    print(#"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#)
-}
-
-private func writePermissionStatus(to path: String) {
-    let snapshot = permissionStatusSnapshotSettled()
-    let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
-    let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    let text = #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#
-    do {
-        try text.write(toFile: path, atomically: true, encoding: .utf8)
-    } catch {
-        fputs("failed to write permission status: \(error)\n", stderr)
-        exit(1)
-    }
-}
-
 private func runStdio() {
     fputs("Orca Computer Use provider must be launched by Orca in app-agent mode.\n", stderr)
     exit(13)
@@ -4306,14 +4292,6 @@ if arguments.first == "--agent" {
     runPermissionCheck()
 } else if arguments.first == "--permission" {
     runPermissionCheck(initialPermission: PermissionKind.parse(arguments.dropFirst().first))
-} else if arguments.first == "--permission-status" {
-    printPermissionStatus()
-} else if arguments.first == "--permission-status-file" {
-    guard arguments.count >= 2 else {
-        fputs("usage: orca-computer-use-macos --permission-status-file <path>\n", stderr)
-        exit(2)
-    }
-    writePermissionStatus(to: arguments[1])
 } else {
     runStdio()
 }
