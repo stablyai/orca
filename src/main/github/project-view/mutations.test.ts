@@ -111,7 +111,7 @@ describe('updateIssueBySlug', () => {
     expect(runRestMock).not.toHaveBeenCalled()
   })
 
-  it('guards and accounts state mutations in the selected host quota scope', async () => {
+  it('guards and accounts state mutations against the GraphQL quota of the selected host', async () => {
     const args = {
       owner: 'acme',
       repo: 'widgets',
@@ -122,8 +122,10 @@ describe('updateIssueBySlug', () => {
 
     await expect(updateIssueBySlug(args)).resolves.toEqual({ ok: true })
 
-    expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(args, 'core')
-    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(args, 'core')
+    // Why: `gh issue close/reopen` look up and mutate the issue over GraphQL.
+    expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(args, 'graphql')
+    expect(noteRepositoryRateLimitSpendMock).toHaveBeenCalledWith(args, 'graphql')
+    expect(repositoryRateLimitGuardMock).not.toHaveBeenCalledWith(args, 'core')
   })
 
   it('does not spawn a state mutation while that host quota is blocked', async () => {

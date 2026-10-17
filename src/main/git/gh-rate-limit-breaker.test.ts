@@ -33,10 +33,34 @@ describe('classifyGhRateLimitBucket', () => {
     expect(classifyGhRateLimitBucket(['search', 'prs', '--author', 'x'])).toBe('search')
   })
 
-  it('classifies graphql and defaults everything else to core', () => {
+  it('classifies the GraphQL endpoint and the GraphQL-backed subcommands Orca runs as graphql', () => {
     expect(classifyGhRateLimitBucket(['api', 'graphql', '-f', 'query=…'])).toBe('graphql')
+    for (const args of [
+      ['pr', 'list', '--limit', '36'],
+      ['pr', 'view', '12', '--repo', 'github.com/a/b', '--json', 'number'],
+      ['pr', 'checks', '12', '--json', 'name,state,link'],
+      ['pr', 'create', '--repo', 'a/b', '--base', 'main', '--title', 't'],
+      ['pr', 'merge', '12', '--squash'],
+      ['pr', 'edit', '12', '--title', 't'],
+      ['pr', 'ready', '12', '--repo', 'a/b'],
+      ['pr', 'close', '12', '--repo', 'a/b'],
+      ['pr', 'reopen', '12', '--repo', 'a/b'],
+      ['issue', 'view', '5', '--json', 'body'],
+      ['issue', 'list', '--json', 'number'],
+      ['issue', 'close', '5', '--repo', 'a/b', '--reason', 'completed'],
+      ['issue', 'reopen', '5', '--repo', 'a/b'],
+      ['issue', 'edit', '5', '--repo', 'a/b', '--add-label', 'bug'],
+      ['repo', 'view', 'a/b', '--json', 'isFork,parent']
+    ]) {
+      expect(classifyGhRateLimitBucket(args)).toBe('graphql')
+    }
+  })
+
+  it('keeps REST endpoints and REST or unlisted subcommands on core', () => {
     expect(classifyGhRateLimitBucket(['api', 'repos/a/b/pulls?per_page=36'])).toBe('core')
-    expect(classifyGhRateLimitBucket(['pr', 'list', '--limit', '36'])).toBe('core')
+    expect(classifyGhRateLimitBucket(['run', 'list', '--json', 'status'])).toBe('core')
+    expect(classifyGhRateLimitBucket(['auth', 'status', '--hostname', 'github.com'])).toBe('core')
+    expect(classifyGhRateLimitBucket(['pr'])).toBe('core')
   })
 })
 
@@ -68,6 +92,9 @@ describe('isGhPrimaryRateLimitStderr', () => {
       isGhPrimaryRateLimitStderr(
         'gh: API rate limit exceeded for user ID 1775218. If you reach out to GitHub Support… (HTTP 403)'
       )
+    ).toBe(true)
+    expect(
+      isGhPrimaryRateLimitStderr('GraphQL: API rate limit already exceeded for user ID 1775218.')
     ).toBe(true)
     expect(isGhPrimaryRateLimitStderr('You have exceeded a secondary rate limit.')).toBe(false)
     expect(isGhPrimaryRateLimitStderr('gh: Not Found (HTTP 404)')).toBe(false)

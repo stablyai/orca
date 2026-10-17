@@ -99,13 +99,25 @@ function findGhApiEndpoint(args: readonly string[]): string | null {
   return null
 }
 
+// Why: gh serves these subcommands Orca runs over GraphQL (cli/cli pr/shared finder.go, pr list,
+// issue/shared lookup.go, api.FetchRepository). A mixed one, like `pr edit` reviewers over REST on
+// GHES, may trip the wrong bucket; the reset probe re-reads every bucket and corrects it.
+const GH_GRAPHQL_SUBCOMMANDS = new Map<string, ReadonlySet<string>>([
+  ['issue', new Set(['close', 'edit', 'list', 'reopen', 'view'])],
+  [
+    'pr',
+    new Set(['checks', 'close', 'create', 'edit', 'list', 'merge', 'ready', 'reopen', 'view'])
+  ],
+  ['repo', new Set(['view'])]
+])
+
 export function classifyGhRateLimitBucket(args: readonly string[]): GhRateLimitBucket {
   const command = args[0]
   if (command === 'search') {
     return 'search'
   }
   if (command !== 'api') {
-    return 'core'
+    return GH_GRAPHQL_SUBCOMMANDS.get(command)?.has(args[1]) ? 'graphql' : 'core'
   }
   const endpoint = findGhApiEndpoint(args)
   if (!endpoint) {
@@ -137,12 +149,13 @@ export function isGhLocalOnlyCommand(args: readonly string[]): boolean {
 }
 
 /**
- * Primary rate-limit detection. Secondary limits ("secondary rate limit")
+ * Primary rate-limit detection. REST says "API rate limit exceeded"; GraphQL says
+ * "API rate limit already exceeded". Secondary limits ("secondary rate limit")
  * carry Retry-After and are handled by the runner's transient retry logic.
  */
 export function isGhPrimaryRateLimitStderr(stderr: string): boolean {
   const s = stderr.toLowerCase()
-  return s.includes('api rate limit exceeded') && !s.includes('secondary rate limit')
+  return /api rate limit (?:already )?exceeded/.test(s) && !s.includes('secondary rate limit')
 }
 
 export function recordGhPrimaryRateLimit(
