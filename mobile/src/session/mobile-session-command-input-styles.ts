@@ -117,17 +117,19 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   accessoryKeyTextDisabled: {
     color: colors.textMuted
   },
+  // Why stretch, not a height: the key only shows while the keyboard is up, so a height of its own
+  // that beats the accessory row resizes the bar, the terminal frame above it, and the PTY.
   keyboardDismissKey: {
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'stretch',
     marginLeft: spacing.sm,
     marginVertical: spacing.xs,
     backgroundColor: colors.bgRaised,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: 0,
     borderRadius: radii.button,
-    minWidth: 36,
-    height: 28
+    minWidth: 36
   },
   keyboardDismissGlyph: {
     alignItems: 'center',
