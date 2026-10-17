@@ -3,6 +3,7 @@ import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-
 import { getProjectHostSetupProjectionFromState } from '@/store/selectors'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { resolveAiVaultHostScopeDefaults } from './ai-vault-host-scope'
+import { DEFAULT_AI_VAULT_SCOPE } from './ai-vault-scope-state'
 import { deriveAiVaultScopeSessionPaths } from './ai-vault-scope-paths'
 import { buildAiVaultProjectContext } from './ai-vault-session-projects'
 import { selectAiVaultPanelWorkspace } from './ai-vault-panel-workspace'
@@ -28,6 +29,7 @@ export function resolveAiVaultPanelSessionListRequest(
   })
   return {
     scopePaths: deriveAiVaultScopeSessionPaths(worktree, allWorktrees, {
+      scope: DEFAULT_AI_VAULT_SCOPE,
       activeProjectKey,
       projectHostSetupProjection
     }),

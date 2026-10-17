@@ -113,6 +113,13 @@ export function getSessionParseCacheEntry(path: string): SessionParseCacheEntry 
   return restored
 }
 
+/** A row's stored fields without placing it in memory: a scope walk checks thousands. */
+export function peekSessionParseCacheEntry(
+  path: string
+): PersistedSessionParseCacheEntry | undefined {
+  return cache.get(path) ?? coldTier?.read(path)
+}
+
 export function storeSessionParseCacheEntry(path: string, entry: SessionParseCacheEntry): void {
   const previous = cache.get(path)
   const changed =

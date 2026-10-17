@@ -1,5 +1,6 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { sessionFileExecutionNamespace } from '../../shared/ai-vault-scope-cwd-match'
+export { sessionFileExecutionNamespace } from '../../shared/ai-vault-scope-cwd-match'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { sessionSortTime } from './session-scanner-accumulator'
@@ -18,14 +19,6 @@ const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl$/
 // separators must be handled independently of the local platform.
 function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
-}
-
-// Why: local Windows discovery scans both the host and every WSL distro under
-// one `local` host id, even though hardlinks and resume identity cannot cross
-// those execution boundaries.
-export function sessionFileExecutionNamespace(filePath: string): string {
-  const wslPath = parseWslUncPath(filePath)
-  return wslPath ? `wsl:${wslPath.distro.toLowerCase()}` : 'native'
 }
 
 /** Returns a pre-parse alias key only when metadata proves a shared hardlink. */

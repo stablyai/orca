@@ -114,10 +114,10 @@ function makeState(
   return useAppStore.getState()
 }
 
-// What the Session History panel sends for this workspace: every path of its project, at the
-// panel's default depth, on the workspace's own host.
+// What the Session History panel sends for its default Workspace scope, at the panel's default
+// depth, on the workspace's own host.
 const PANEL_REQUEST = {
-  scopePaths: ['/repo/wt', '/repo/sibling', '/repos/repo-1'],
+  scopePaths: ['/repo/wt'],
   executionHostScope: 'local',
   sessionLimit: 250
 } as const

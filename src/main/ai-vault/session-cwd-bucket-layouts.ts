@@ -66,11 +66,3 @@ export const CODEBUDDY_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
   // This is only a prefilter: each transcript's cwd decides membership, including lossy collisions.
   isDirInScope: (name, prefixes) => [...prefixes].some((prefix) => name.startsWith(prefix))
 }
-
-// Agents whose on-disk layout names a directory per cwd, so a scope's older
-// sessions can be found without reading every transcript's header.
-export const CWD_BUCKET_LAYOUTS = [
-  CLAUDE_CWD_BUCKET_LAYOUT,
-  PI_CWD_BUCKET_LAYOUT,
-  CODEBUDDY_CWD_BUCKET_LAYOUT
-]
