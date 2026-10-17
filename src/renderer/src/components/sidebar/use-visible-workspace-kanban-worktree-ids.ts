@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/workspace-creator-visibility'
 import { getStructuredChatWorktreeIds } from './visible-worktree-activity-inputs'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { getConcealedRepoIdsFromState } from '@/store/concealed-repo-selector'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -47,6 +48,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const settings = useAppStore((s) => s.settings)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
   const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
   const ptyIdsByTabId = useAppStore((s) => (!showSleepingWorkspaces ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
@@ -103,10 +105,12 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         worktreeLineageById: {},
         // Why: the board has no nested lineage presentation. Ancestor injection
         // would make filtered-out parents appear as ordinary cards.
-        injectLineageAncestors: false
+        injectLineageAncestors: false,
+        concealedRepoIds
       }).map(getWorktreeHostIdentity)
     )
   }, [
+    concealedRepoIds,
     allWorktrees,
     browserTabsByWorktree,
     filterRepoIds,

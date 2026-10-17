@@ -1,6 +1,7 @@
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { EMPTY_CONCEALED_REPO_IDS } from '../incognito-projects'
 import {
   filterWorkspaceRows,
   type WorkspaceRowFactReader,
@@ -25,6 +26,8 @@ export type VisibleSidebarWorktreeInputs = {
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
+  /** Locked incognito repos; nothing (forced rows, lineage ancestors) may bring them back. */
+  concealedRepoIds?: ReadonlySet<string>
 }
 
 /** The sidebar's visible worktrees, in display order, before grouping. */
@@ -38,19 +41,26 @@ export function selectVisibleSidebarWorktrees({
   filterRepoIds,
   injectLineageAncestors,
   preserveLineageParentOrder,
-  forcedVisibleWorktreeIds
+  forcedVisibleWorktreeIds,
+  concealedRepoIds = EMPTY_CONCEALED_REPO_IDS
 }: VisibleSidebarWorktreeInputs): Worktree[] {
+  const isShown = (w: Worktree): boolean => !concealedRepoIds.has(w.repoId)
+
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.
   const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
 
-  let all = filterWorkspaceRows(rows, filters, facts)
+  let all = filterWorkspaceRows(
+    concealedRepoIds.size > 0 ? rows.filter(isShown) : rows,
+    filters,
+    facts
+  )
 
   if (forcedVisibleWorktreeIds && forcedVisibleWorktreeIds.length > 0) {
     const includedIds = new Set(all.map((worktree) => worktree.id))
     for (const worktreeId of forcedVisibleWorktreeIds) {
       const worktree = ancestorById.get(worktreeId)
-      if (worktree && !includedIds.has(worktreeId)) {
+      if (worktree && !includedIds.has(worktreeId) && isShown(worktree)) {
         includedIds.add(worktreeId)
         all.push(worktree)
       }
@@ -69,9 +79,11 @@ export function selectVisibleSidebarWorktrees({
     return ai - bi
   })
 
-  return injectLineageAncestors === false || preserveLineageParentOrder
-    ? all
-    : addVisibleLineageAncestors(all, ancestorById, worktreeLineageById, selectedRepoIds)
+  const result =
+    injectLineageAncestors === false || preserveLineageParentOrder
+      ? all
+      : addVisibleLineageAncestors(all, ancestorById, worktreeLineageById, selectedRepoIds)
+  return concealedRepoIds.size === 0 ? result : result.filter(isShown)
 }
 
 function addVisibleLineageAncestors(

@@ -86,7 +86,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   atRest?: boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
-  const structuredAgentCliSourceEvidence = args.structuredAgentCliSourceEvidence ??
+  const structuredAgentCliSourceEvidence =
+    args.structuredAgentCliSourceEvidence ??
     (args.resumeFrom?.cliSource
       ? captureStructuredAgentCliSource(() => args.runtime.getAgentProviderSessionRows())
       : undefined)

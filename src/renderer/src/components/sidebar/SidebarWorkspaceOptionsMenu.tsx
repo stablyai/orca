@@ -9,6 +9,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { OptionsFilterCountBadge } from './options-filter-count-badge'
+import { SidebarIncognitoToggle } from './SidebarIncognitoToggle'
 import {
   useWorkspaceOptionsFilterBadge,
   WorkspaceOptionsMenuItems
@@ -84,6 +85,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
         <WorkspaceOptionsMenuItems preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+        <SidebarIncognitoToggle onBeforeToggle={() => handleOpenChange(false)} />
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -10,7 +10,11 @@
 // never be spliced into a sequence space that a structured session is also
 // writing; a later structured resume rolls the epoch again and rebuilds.
 
-import { adoptedTranscriptSourceObserver, validateAdoptedOpenCodeSource, type AdoptedTranscriptSource } from './adopted-transcript-source'
+import {
+  adoptedTranscriptSourceObserver,
+  validateAdoptedOpenCodeSource,
+  type AdoptedTranscriptSource
+} from './adopted-transcript-source'
 import { createReadStream } from 'node:fs'
 import type { AgentType } from '../../../shared/agent-status-types'
 import type {
@@ -215,10 +219,14 @@ async function decodeReplacementItems(input: {
   source?: AdoptedTranscriptSource
   limits: JournalPayloadLimits
 }): Promise<{ items: JournalReplacementItem[]; consumedBytes: number }> {
-  const source = input.source ? adoptedTranscriptSourceObserver({
-    agent: input.agent, filePath: input.filePath, source: input.source,
-    maxSourceBytes: MAX_LEGACY_IMPORT_RECORD_BYTES
-  }) : null
+  const source = input.source
+    ? adoptedTranscriptSourceObserver({
+        agent: input.agent,
+        filePath: input.filePath,
+        source: input.source,
+        maxSourceBytes: MAX_LEGACY_IMPORT_RECORD_BYTES
+      })
+    : null
   const tracker = createLegacyIdentityTracker({
     transcriptAgent: input.transcriptAgent,
     agent: input.agent,

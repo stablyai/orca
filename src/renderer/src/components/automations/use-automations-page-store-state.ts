@@ -1,10 +1,15 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
+import {
+  getConcealedRepoIdsFromState,
+  getShownReposFromState,
+  omitConcealedRepoKeys
+} from '@/store/concealed-repo-selector'
 import {
   automationFolderWorktreeForRow,
   automationRepoForRow,
@@ -16,9 +21,15 @@ const AGENTS = getAgentCatalog().map((agent) => agent.id)
 
 /** Store-backed values shared by the page's state and action hooks. */
 export function useAutomationsPageStoreState() {
-  const repos = useAppStore((s) => s.repos)
+  // Why: the project and workspace pickers name what they list, so locked incognito repos stay out.
+  const repos = useAppStore(getShownReposFromState)
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const rawWorktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const worktreesByRepo = useMemo(
+    () => omitConcealedRepoKeys(rawWorktreesByRepo, concealedRepoIds),
+    [concealedRepoIds, rawWorktreesByRepo]
+  )
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
@@ -68,6 +79,7 @@ export function useAutomationsPageStoreState() {
 
   return {
     repos,
+    concealedRepoIds,
     projectHostSetups,
     worktreesByRepo,
     unifiedTabsByWorktree,

@@ -2,6 +2,8 @@ import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
 import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
 import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { isIncognitoRepo } from '../../../../shared/incognito-projects'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type {
   ProviderBufferAcquisition,
   RuntimeHeadlessTerminal,
@@ -34,7 +36,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 
-  protected readonly mobileNotifications = new RuntimeMobileNotificationController()
+  protected readonly mobileNotifications = new RuntimeMobileNotificationController({
+    isWorktreeHiddenFromPhones: (worktreeId) =>
+      isIncognitoRepo(this.store?.getRepo(getRepoIdFromWorktreeId(worktreeId)))
+  })
 
   protected ptysById = new Map<string, RuntimePtyWorktreeRecord>()
 

@@ -5,6 +5,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import { useWithoutConcealedRepos } from './use-without-concealed-repos'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
 import {
@@ -110,7 +111,9 @@ function WorkspaceCleanupDialogContent({
     [deletionPhaseByIdentity]
   )
 
-  const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
+  // Why: the scan covers every repo; a locked incognito one must not be listed, counted or bulk-selected.
+  const candidates = useWithoutConcealedRepos(scan?.candidates)
+  const scanErrors = useWithoutConcealedRepos(scan?.errors)
   // The browse view promises Git facts for every row. The broad scan defers
   // some reads for performance, so fill those gaps while the modal is open.
   const gitEvidenceNeeded = open
@@ -150,10 +153,10 @@ function WorkspaceCleanupDialogContent({
   const scanNoticeMessage = useMemo(
     () =>
       formatWorkspaceCleanupScanNotice(
-        scan?.errors ?? [],
+        scanErrors,
         new Map(repos.map((repo) => [repo.id, repo.displayName || repo.path]))
       ),
-    [repos, scan?.errors]
+    [repos, scanErrors]
   )
   const initialLoading = loading && candidates.length === 0
   const runSpaceScan = useCallback(() => {

@@ -13,6 +13,10 @@
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import type { NotificationDispatchRequest } from '../../../shared/notification-settings-types'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { useAppStore } from '@/store'
+import { getConcealedRepoIdsFromState } from '@/store/concealed-repo-selector'
+import { isIncognitoRepo } from '../../../shared/incognito-projects'
 
 export type AgentAttentionNotificationSound = {
   customSoundId: string
@@ -23,8 +27,14 @@ export function deliverAgentAttentionNotification(
   request: NotificationDispatchRequest,
   sound: AgentAttentionNotificationSound
 ): void {
+  // Why: a banner, sound or phone push would name a locked incognito project; unread stays hidden with its row.
+  const incognito = request.worktreeId ? readWorktreeIncognito(request.worktreeId) : 'shown'
+  if (incognito === 'concealed') {
+    return
+  }
   void window.api.notifications
-    .dispatch(request)
+    // Why: unlocked here still means hidden on phones, which have no unlock of their own.
+    .dispatch(incognito === 'revealed' ? { ...request, repoIncognito: true } : request)
     .then((result) => {
       if (result.delivered) {
         void playDesktopNotificationSound(sound.customSoundId, sound.customSoundVolume)
@@ -39,6 +49,17 @@ export function deliverAgentAttentionNotification(
     .catch((err) => {
       console.warn('Failed to dispatch notification:', err)
     })
+}
+
+function readWorktreeIncognito(worktreeId: string): 'shown' | 'revealed' | 'concealed' {
+  const state = useAppStore.getState()
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  if (getConcealedRepoIdsFromState(state).has(repoId)) {
+    return 'concealed'
+  }
+  return state.repos.some((repo) => repo.id === repoId && isIncognitoRepo(repo))
+    ? 'revealed'
+    : 'shown'
 }
 
 /** The sound preferences one delivery reads, defaulted the way the dispatch path always has. */

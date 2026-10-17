@@ -316,8 +316,7 @@ export class StructuredAgentSessionStatusFeed {
   captureChildWorkStops = (
     sessionId: string,
     handleIds: readonly string[]
-  ): CapturedChildWorkStops =>
-    this.ownership.captureChildWorkStops(sessionId, handleIds)
+  ): CapturedChildWorkStops => this.ownership.captureChildWorkStops(sessionId, handleIds)
 
   /** Reads the store, so a failing read costs only the strip's note, as `readChildWork`'s does. */
   childWorkIncomplete = (sessionId: string): boolean => {

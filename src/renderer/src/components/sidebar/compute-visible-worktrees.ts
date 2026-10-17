@@ -37,6 +37,8 @@ export type VisibleWorktreeOptions = {
   forcedVisibleWorktreeIds?: readonly string[]
   /** Exempt from the sleeping sweep only; unlike forcedVisibleWorktreeIds, every other filter still applies. */
   sleepingSweepExemptWorktreeIds?: ReadonlySet<string>
+  /** Locked incognito repos; nothing (forced rows, lineage ancestors) may bring them back. */
+  concealedRepoIds?: ReadonlySet<string>
 }
 
 export function computeVisibleWorktrees(
@@ -54,7 +56,8 @@ export function computeVisibleWorktrees(
     filterRepoIds: opts.filterRepoIds,
     injectLineageAncestors: opts.injectLineageAncestors,
     preserveLineageParentOrder: opts.preserveLineageParentOrder,
-    forcedVisibleWorktreeIds: opts.forcedVisibleWorktreeIds
+    forcedVisibleWorktreeIds: opts.forcedVisibleWorktreeIds,
+    concealedRepoIds: opts.concealedRepoIds
   })
 }
 

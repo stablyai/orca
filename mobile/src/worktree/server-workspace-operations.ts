@@ -9,6 +9,7 @@ import {
 } from '../../../src/shared/mobile-relay-hosts-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { withoutIncognitoWorktreeRows } from './incognito-project-rows'
 
 const HEALTH = [
   'local',
@@ -64,7 +65,9 @@ export const relayHostWorktreesRead = bindDeferredRpcOperation(
     barrier: 'after-caller-barrier',
     read: rpcResultVariant(
       'relay-host-worktrees',
-      z.looseObject({ worktrees: z.array(z.unknown()).nullable() })
+      z.looseObject({
+        worktrees: z.array(z.unknown()).transform(withoutIncognitoWorktreeRows).nullable()
+      })
     )
   })
 )

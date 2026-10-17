@@ -20264,6 +20264,36 @@
       "activeLabel": "Jira favourites: {{name}}"
     }
   },
+  "incognitoProjects": {
+    "indicatorTooltip": "Incognito project — hidden when incognito projects are locked",
+    "hideFromScreenCaptureLabel": "Hide Orca from screen sharing while incognito projects are shown",
+    "hideFromScreenCaptureLinux": "Linux has no way for an app to block screen capture, so this has no effect here. Lock incognito projects before sharing your screen.",
+    "hideFromScreenCaptureDescription": "Screen sharing, recording and screenshot tools see a blank Orca window until incognito projects are locked again. Incognito only hides projects on screen; it does not encrypt anything.",
+    "searchDescription": "Incognito projects: keep Orca out of screen shares and recordings while they are shown.",
+    "searchKeywordIncognito": "incognito",
+    "searchKeywordScreenShare": "screen share",
+    "searchKeywordHidden": "hidden projects",
+    "searchKeywordPrivate": "private",
+    "wrongPasscode": "That passcode is not correct.",
+    "rateLimited": "Too many attempts. Try again in {{seconds}} seconds.",
+    "passcodeTooShort": "Use at least {{count}} characters.",
+    "unlockUnavailable": "Could not unlock on this device.",
+    "passcodeMismatch": "The passcodes do not match.",
+    "setupTitle": "Set an incognito passcode",
+    "unlockTitle": "Show incognito projects",
+    "setupDescription": "Incognito projects stay hidden until this passcode is entered. Orca stores only a hash of it. Hiding is not encryption: files on disk are unchanged.",
+    "unlockDescription": "Enter your incognito passcode. Projects hide again when Orca restarts or the screen locks.",
+    "passcodeLabel": "Passcode",
+    "confirmPasscodeLabel": "Confirm passcode",
+    "cancel": "Cancel",
+    "setPasscode": "Set passcode",
+    "unlock": "Unlock",
+    "showIncognito": "Show incognito projects",
+    "removeFromIncognito": "Remove from incognito",
+    "makeIncognito": "Make incognito",
+    "madeIncognitoToast": "Project hidden in incognito",
+    "madeIncognitoToastDescription": "Show it again with \"Show incognito projects\" in the sidebar's Workspace options menu."
+  },
   "workspaceSpace": {
     "deleteOne": "Delete {{value0}}",
     "table": {

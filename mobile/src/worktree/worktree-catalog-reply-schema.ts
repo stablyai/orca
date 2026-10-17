@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import { withoutIncognitoWorktreeRows } from './incognito-project-rows'
 
 // Both reads a host's workspace catalog answers. Checked against `worktree.ps` and
 // `worktree.listRetiredNames` in src/main/runtime/rpc/methods/worktree-catalog-methods.ts and the
@@ -24,7 +25,10 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  * result be named at the boundary instead of reaching three different property reads.
  */
 export const worktreeCatalogSchema = z.looseObject({
-  worktrees: salvagedOptional('worktrees', z.array(z.unknown())),
+  worktrees: salvagedOptional(
+    'worktrees',
+    z.array(z.unknown()).transform(withoutIncognitoWorktreeRows)
+  ),
   snapshotId: salvagedOptional('snapshotId', z.string()),
   unchanged: salvagedOptional('unchanged', z.boolean())
 })

@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { AlertTriangle, HardDrive, Loader2, RefreshCw, X } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { getShownWorkspaceSpaceAnalysisFromState } from '../../store/concealed-repo-selector'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import {
@@ -15,7 +16,7 @@ export function WorkspaceSpaceCompactPanel({
 }: {
   onOpenFullPage: () => void
 }): React.JSX.Element {
-  const analysis = useAppStore((state) => state.workspaceSpaceAnalysis)
+  const analysis = useAppStore(getShownWorkspaceSpaceAnalysisFromState)
   const progress = useAppStore((state) => state.workspaceSpaceScanProgress)
   const scanError = useAppStore((state) => state.workspaceSpaceScanError)
   const isScanning = useAppStore((state) => state.workspaceSpaceScanning)

@@ -14,6 +14,8 @@ import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../..
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
 import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import { getConcealedRepoIdsFromState } from '@/store/concealed-repo-selector'
+import { withoutConcealedRepos } from '../../../../shared/incognito-projects'
 
 export type ComposerStateInput = {
   initialRepoId?: string
@@ -122,7 +124,12 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
 
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
 
-  const eligibleRepos = useMemo(() => getComposerEligibleRepos(repos), [repos])
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
+
+  const eligibleRepos = useMemo(
+    () => withoutConcealedRepos(getComposerEligibleRepos(repos), concealedRepoIds),
+    [repos, concealedRepoIds]
+  )
 
   const hostOptions = useMemo(
     () =>

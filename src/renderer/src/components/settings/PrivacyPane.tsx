@@ -8,6 +8,7 @@ import { Switch } from '../ui/switch'
 import { PRIVACY_URL, getConsentState, setOptIn as telemetrySetOptIn } from '../../lib/telemetry'
 import { useAppStore } from '../../store'
 import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
+import { IncognitoProjectsPrivacySection } from './IncognitoProjectsPrivacySection'
 import { translate } from '@/i18n/i18n'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
@@ -125,6 +126,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
       </div>
 
       {blocked ? <BlockedHelper blocked={blocked} id={PRIVACY_PANE_BLOCKED_HELPER_ID} /> : null}
+      <IncognitoProjectsPrivacySection />
       <PrivacyDiagnosticsSection />
     </div>
   )

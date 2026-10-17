@@ -122,8 +122,10 @@ describe('structured agent-session create intent', () => {
         envelope: { sessionId: 'new-chat', clientOperationId: 'operation-1' },
         worktree: 'id:another-workspace',
         agent: 'claude',
-        resumeFrom: { providerSessionId: 'provider-session-alpha-1',
-          cliSource: { workspaceId: 'another-workspace', paneKey: 'missing-pane' } }
+        resumeFrom: {
+          providerSessionId: 'provider-session-alpha-1',
+          cliSource: { workspaceId: 'another-workspace', paneKey: 'missing-pane' }
+        }
       })
     ).rejects.toMatchObject({
       refusal: {
@@ -496,17 +498,23 @@ describe('adopting a conversation recorded outside Orca', () => {
       expect(intent.adopt).toEqual({
         providerHandle: { transport: 'jsonl-rpc', agent: 'pi', nativeId: file },
         transcriptPath: file,
-        source: { providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a', workspaceCwd: '/repos/workspace-1' }
+        source: {
+          providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a',
+          workspaceCwd: '/repos/workspace-1'
+        }
       })
 
       workspaceDirectory = '/different-folder'
       const refused = await runtime.resolveStructuredAgentSessionCreateIntent({
-          envelope: { sessionId: 'session-2', clientOperationId: 'operation-2' },
-          worktree: 'id:workspace-1',
-          agent: 'pi',
-          resumeFrom: { providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a' }
-        })
-      expect(await prepareAdoptedTranscript(refused)).toMatchObject({ ok: false, refusal: { code: 'agent_session_identity_required' } })
+        envelope: { sessionId: 'session-2', clientOperationId: 'operation-2' },
+        worktree: 'id:workspace-1',
+        agent: 'pi',
+        resumeFrom: { providerSessionId: '0198c2a4-7d1e-7c3a-9a4b-1f2e3d4c5b6a' }
+      })
+      expect(await prepareAdoptedTranscript(refused)).toMatchObject({
+        ok: false,
+        refusal: { code: 'agent_session_identity_required' }
+      })
     } finally {
       vi.unstubAllEnvs()
       await rm(accountHome, { recursive: true, force: true })

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import type { RepoSshGateResolver } from '@/hooks/use-repo-ssh-gate-resolver'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
+import { RepoIncognitoIndicator } from '@/components/repo/repo-incognito-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -335,6 +336,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             <div className="flex min-w-0 items-center gap-1.5">
               <div className="min-w-0 truncate text-[13px] font-semibold leading-none">{label}</div>
               <RepoForkIndicator upstream={row.repo?.upstream} />
+              <RepoIncognitoIndicator incognito={row.repo?.incognito} />
               <FolderPathStatusIndicator status={projectGroupPathStatus} />
               {isRepoHeader ? <RepoScanUnavailableIndicator repo={row.repo!} /> : null}
             </div>

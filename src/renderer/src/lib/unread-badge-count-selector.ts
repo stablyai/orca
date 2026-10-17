@@ -1,6 +1,10 @@
 import { getVisibleWorkspaceHostIdSet } from '@/components/sidebar/visible-worktree-host-scope'
 import { getPairedDeviceIdsByEnvironment } from '../../../shared/workspace-creator-visibility'
 import { getRepoMapFromState } from '@/store/selectors'
+import {
+  getConcealedRepoIdsFromState,
+  omitConcealedRepoKeys
+} from '@/store/concealed-repo-selector'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -24,6 +28,7 @@ type UnreadBadgeCountState = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
+  | 'incognitoProjectsUnlocked'
 >
 
 /** The worktree fields the count reads (`id` embeds `repoId`), so equality over them is a sound cache key. */
@@ -71,6 +76,7 @@ function sameCountInputs(previous: UnreadBadgeCountState, next: UnreadBadgeCount
     previous.folderWorkspaces === next.folderWorkspaces &&
     previous.projectGroups === next.projectGroups &&
     previous.repos === next.repos &&
+    previous.incognitoProjectsUnlocked === next.incognitoProjectsUnlocked &&
     previous.workspaceHostScope === next.workspaceHostScope &&
     previous.visibleWorkspaceHostIds === next.visibleWorkspaceHostIds &&
     previous.settings?.activeRuntimeEnvironmentId === next.settings?.activeRuntimeEnvironmentId &&
@@ -100,7 +106,11 @@ export function createUnreadBadgeCountSelector(): (state: UnreadBadgeCountState)
   return (state) => {
     if (!previousState || !sameCountInputs(previousState, state)) {
       unreadCount = getUnreadBadgeCount({
-        worktreesByRepo: state.worktreesByRepo,
+        // Why: a badge count must not reveal activity in a locked incognito project.
+        worktreesByRepo: omitConcealedRepoKeys(
+          state.worktreesByRepo,
+          getConcealedRepoIdsFromState(state)
+        ),
         folderWorkspaces: state.folderWorkspaces,
         tabsByWorktree: state.tabsByWorktree,
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,

@@ -1,5 +1,8 @@
 import { stat } from 'node:fs/promises'
-import { agentSessionRefusalError, isAgentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../shared/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../native-chat/codex-adoption-preparation'
 import type { NativeCodexResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../shared/structured-agent-session-create'
@@ -112,9 +115,13 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     const stores = new Map<AgentSessionAccountHome, string | null>()
     const storeOf = (accountHome: AgentSessionAccountHome): string | null => {
       if (!stores.has(accountHome)) {
-        stores.set(accountHome, input.transcriptImport.conversationStore({
-          accountHome, launchEnv: input.launchEnv
-        }))
+        stores.set(
+          accountHome,
+          input.transcriptImport.conversationStore({
+            accountHome,
+            launchEnv: input.launchEnv
+          })
+        )
       }
       return stores.get(accountHome) ?? null
     }
@@ -145,8 +152,13 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
               return exact
             }
           } catch (error) {
-            if (!(error instanceof Error && 'code' in error &&
-                (error.code === 'ENOENT' || error.code === 'ENOTDIR'))) {
+            if (
+              !(
+                error instanceof Error &&
+                'code' in error &&
+                (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+              )
+            ) {
               throw error
             }
           }
@@ -165,7 +177,10 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
         if (!found) {
           return null
         }
-        const path = await input.transcriptImport.admitTranscriptPath({ store, transcriptPath: found })
+        const path = await input.transcriptImport.admitTranscriptPath({
+          store,
+          transcriptPath: found
+        })
         if (!path) {
           throw new Error('The conversation path is outside its account storage.')
         }
@@ -175,13 +190,21 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
       workspaceCwd: input.workspaceCwd
     })
     return input.agent === 'codex'
-      ? await prepareCodexAdoption(adoption, input.providerSessionId, input.prepareCodexResume, candidates)
+      ? await prepareCodexAdoption(
+          adoption,
+          input.providerSessionId,
+          input.prepareCodexResume,
+          candidates
+        )
       : adoption
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
       throw error
     }
-    throw agentSessionRefusalError('agent_session_identity_required',
-      { reason: 'transcriptUnreadable' }, error instanceof Error ? error.message : String(error))
+    throw agentSessionRefusalError(
+      'agent_session_identity_required',
+      { reason: 'transcriptUnreadable' },
+      error instanceof Error ? error.message : String(error)
+    )
   }
 }

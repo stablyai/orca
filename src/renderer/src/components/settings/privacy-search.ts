@@ -44,6 +44,22 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'incognitoProjects.hideFromScreenCaptureLabel',
+      'Hide Orca from screen sharing while incognito projects are shown'
+    ),
+    description: translate(
+      'incognitoProjects.searchDescription',
+      'Incognito projects: keep Orca out of screen shares and recordings while they are shown.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('incognitoProjects.searchKeywordIncognito', 'incognito'),
+      ...translateSearchKeyword('incognitoProjects.searchKeywordScreenShare', 'screen share'),
+      ...translateSearchKeyword('incognitoProjects.searchKeywordHidden', 'hidden projects'),
+      ...translateSearchKeyword('incognitoProjects.searchKeywordPrivate', 'private')
+    ]
+  },
+  {
     title: translate('auto.components.settings.privacy.search.6d258d2ed6', 'Diagnostics'),
     description: translate(
       'auto.components.settings.privacy.search.8b08f32366',

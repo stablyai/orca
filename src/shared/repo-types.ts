@@ -119,6 +119,8 @@ export type Repo = {
   projectGroupId?: string | null
   /** User-authored ordering inside the project group or ungrouped bucket. */
   projectGroupOrder?: number
+  /** Kept off every client screen until the user unlocks incognito projects there. */
+  incognito?: boolean
   /** Repo-specific source-control AI overrides. Missing fields inherit global settings. */
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */

@@ -34,6 +34,7 @@ import {
 import { resolveSettingsHostScope } from './settings-host-scope'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { defaultScopeHost } from '@/lib/default-creation-host'
+import { getShownReposFromState } from '@/store/concealed-repo-selector'
 
 export function useSettingsStoreModel() {
   const settings = useAppStore((s) => s.settings)
@@ -47,6 +48,7 @@ export function useSettingsStoreModel() {
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
+  const shownRepos = useAppStore(getShownReposFromState)
   const projects = useAppStore((s) => s.projects)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const updateProject = useAppStore((s) => s.updateProject)
@@ -68,11 +70,11 @@ export function useSettingsStoreModel() {
   // Why: same inputs as nav metadata so both lists agree — the source of truth for the pane list.
   const settingsProjectList = useMemo(
     () =>
-      buildSettingsProjectList(repos, {
+      buildSettingsProjectList(shownRepos, {
         projects: projectHostSetupProjection.projects,
         projectHostSetups: projectHostSetupProjection.setups
       }),
-    [repos, projectHostSetupProjection]
+    [shownRepos, projectHostSetupProjection]
   )
   const repoIdToRepresentative = useMemo(
     () => buildRepoIdToRepresentative(settingsProjectList),

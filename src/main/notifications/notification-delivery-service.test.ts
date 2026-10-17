@@ -206,6 +206,13 @@ describe('createNotificationDeliveryService', () => {
     expect(harness.dispatchMobileNotification).not.toHaveBeenCalled()
   })
 
+  it('never fans an incognito project out to phones, while the desktop banner still shows', () => {
+    const harness = makeHarness(makeSettings())
+    const service = createNotificationDeliveryService(harness.deps)
+    expect(service.dispatch(makeRequest({ repoIncognito: true }))).toEqual({ delivered: true })
+    expect(harness.dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
   it('skips mobile fan-out entirely when no runtime is paired', () => {
     const harness = makeHarness(makeSettings())
     harness.deps.dispatchMobileNotification = null

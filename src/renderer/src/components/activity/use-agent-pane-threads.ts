@@ -29,6 +29,7 @@ import type {
   AgentPaneThread,
   ThreadReadFilter
 } from './activity-thread-types'
+import { getConcealedRepoIdsFromState } from '@/store/concealed-repo-selector'
 
 export type AgentPaneThreadsStoreData = Pick<
   AppState,
@@ -180,7 +181,7 @@ export function useAgentPaneThreads(args: {
     [storeData, agentStatusEpoch]
   )
 
-  const allThreads = useMemo(
+  const builtThreads = useMemo(
     () =>
       buildAgentPaneThreads(
         {
@@ -192,6 +193,15 @@ export function useAgentPaneThreads(args: {
         threadReuseCacheRef.current
       ),
     [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled]
+  )
+  const concealedRepoIds = useAppStore(getConcealedRepoIdsFromState)
+  // Why: a locked incognito project's agents must not surface in the Agents view or its counts.
+  const allThreads = useMemo(
+    () =>
+      concealedRepoIds.size === 0
+        ? builtThreads
+        : builtThreads.filter((thread) => !thread.repo || !concealedRepoIds.has(thread.repo.id)),
+    [builtThreads, concealedRepoIds]
   )
 
   const selectedPaneKeyIsLive =

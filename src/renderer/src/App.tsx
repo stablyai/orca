@@ -33,6 +33,7 @@ import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feat
 import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
+import { useIncognitoProjectsLockSync } from './app-shell/use-incognito-projects-lock-sync'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 
 function App(): React.JSX.Element {
@@ -50,6 +51,7 @@ function App(): React.JSX.Element {
   usePersistedUIWriter()
   useDocumentAppearance()
   useWindowVisibilityEffects()
+  useIncognitoProjectsLockSync()
   useGlobalKeybindings({ layout, floatingWorkspace })
 
   // Why: the same vars are set inline on .app-layout below, but portaled surfaces

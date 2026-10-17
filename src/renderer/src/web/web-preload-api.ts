@@ -56,6 +56,8 @@ import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-ap
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { noopUnsubscribe } from './preload-api/web-storage'
+import { LOCKED_INCOGNITO_STATE } from '../../../shared/incognito-projects'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
@@ -124,6 +126,16 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         Promise.resolve({ state: 'synced', reason: null, systemConfigPath: '' } as const)
     },
     developerPermissions: createDeveloperPermissionsApi(),
+    // Why: a web client has no Touch ID or passcode of its own, so incognito projects stay locked.
+    incognitoProjects: {
+      getState: () => Promise.resolve(LOCKED_INCOGNITO_STATE),
+      unlockWithTouchId: () => Promise.resolve({ ok: false, reason: 'unavailable' } as const),
+      unlockWithPasscode: () => Promise.resolve({ ok: false, reason: 'unavailable' } as const),
+      setPasscode: () => Promise.resolve({ ok: false, reason: 'unavailable' } as const),
+      lock: () => Promise.resolve(),
+      setAllowScreenCapture: () => Promise.resolve(LOCKED_INCOGNITO_STATE),
+      onStateChanged: () => noopUnsubscribe
+    },
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
     shell: createShellApi(),

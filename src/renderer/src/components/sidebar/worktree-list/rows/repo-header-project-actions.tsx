@@ -3,6 +3,7 @@ import {
   CircleX,
   Ellipsis,
   Eye,
+  EyeOff,
   FolderInput,
   FolderTree,
   Plus,
@@ -24,6 +25,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
@@ -79,6 +81,7 @@ export function RepoHeaderProjectActionsMenu({
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
 }): React.JSX.Element {
+  const setProjectIncognito = useAppStore((s) => s.setProjectIncognito)
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -165,6 +168,12 @@ export function RepoHeaderProjectActionsMenu({
             {translate('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
+        <DropdownMenuItem onSelect={() => void setProjectIncognito(repo, repo.incognito !== true)}>
+          <EyeOff className="size-3.5" />
+          {repo.incognito === true
+            ? translate('incognitoProjects.removeFromIncognito', 'Remove from incognito')
+            : translate('incognitoProjects.makeIncognito', 'Make incognito')}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { useRepoMap, useAllWorktrees } from '@/store/selectors'
+import { getShownReposFromState } from '@/store/concealed-repo-selector'
 import { localPreflightContextKey, getLocalPreflightContext } from '@/lib/local-preflight-context'
 import {
   getProviderRuntimeContextKey,
@@ -18,7 +19,7 @@ export function useTaskPageStoreBindings() {
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const closeTaskPage = useAppStore((s) => s.closeTaskPage)
   const activeModal = useAppStore((s) => s.activeModal)
-  const repos = useAppStore((s) => s.repos)
+  const repos = useAppStore(getShownReposFromState)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)

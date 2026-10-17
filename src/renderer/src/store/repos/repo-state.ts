@@ -52,6 +52,7 @@ export type RepoUpdate = Partial<
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
     | 'projectGroupOrder'
+    | 'incognito'
   >
 > & {
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null

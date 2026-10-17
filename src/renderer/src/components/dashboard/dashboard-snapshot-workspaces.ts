@@ -18,6 +18,7 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-w
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { isIncognitoRepo } from '../../../../shared/incognito-projects'
 
 export type ActiveDashboardWorkspace = {
   projectId: string
@@ -39,7 +40,12 @@ export type DashboardWorkspaceState = Pick<AppState, 'repos' | 'worktreesByRepo'
   Partial<
     Pick<
       AppState,
-      'folderWorkspaces' | 'projectGroups' | 'runtimeEnvironments' | 'settings' | 'sshTargetLabels'
+      | 'folderWorkspaces'
+      | 'projectGroups'
+      | 'runtimeEnvironments'
+      | 'settings'
+      | 'sshTargetLabels'
+      | 'incognitoProjectsUnlocked'
     >
   >
 
@@ -91,6 +97,10 @@ export function collectActiveDashboardWorkspaces(
   }
 
   for (const repo of state.repos ?? []) {
+    // Why: absent unlock state (pop-out, partial snapshots) means locked.
+    if (isIncognitoRepo(repo) && state.incognitoProjectsUnlocked !== true) {
+      continue
+    }
     for (const worktree of state.worktreesByRepo?.[repo.id] ?? []) {
       if (worktree.isArchived) {
         continue
