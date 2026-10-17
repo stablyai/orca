@@ -1,3 +1,4 @@
+import { inlineMediaKind, toggleInlineMedia } from './terminal-inline-media'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import { extractTerminalFileLinkCandidates, extractTerminalFileLinks } from '@/lib/terminal-links'
@@ -26,7 +27,10 @@ import {
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint
 } from './terminal-link-open-hints'
-import { isTerminalLinkDirectActivation } from './terminal-link-activation'
+import {
+  isTerminalLinkActionActivation,
+  isTerminalLinkDirectActivation
+} from './terminal-link-activation'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import { handleTerminalFileLink } from './terminal-file-link-actions'
@@ -143,6 +147,21 @@ export function createFilePathLinkProvider(
                   range,
                   text: parsed.displayText,
                   activate: (event) => {
+                    // Why the system-default check: it is Orca's test that the file is on this computer,
+                    // so an SSH or paired-server path keeps the usual link action.
+                    const mediaKind = shouldOpenTerminalFileWithSystemDefault(fileContext)
+                      ? inlineMediaKind(mappedPath)
+                      : null
+                    // Why a plain click: Cmd+click still opens the file in an Orca tab; a plain
+                    // click on a local video, sound or image plays it right under the link.
+                    if (
+                      mediaKind &&
+                      isTerminalLinkActionActivation(event) &&
+                      toggleInlineMedia(pane.terminal, range.start.y - 1, mappedPath, mediaKind)
+                    ) {
+                      event?.preventDefault?.()
+                      return
+                    }
                     if (
                       handleTerminalFileLink(
                         mappedPath,
