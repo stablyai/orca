@@ -7,6 +7,7 @@ export class DurablePushWorker {
   private timer?: NodeJS.Timeout
   private running: Promise<void> | null = null
   private stopped = false
+  private wakePending = false
   constructor(
     private readonly store: DurablePushStore,
     private readonly dispatcher: PushDispatcher,
@@ -24,24 +25,35 @@ export class DurablePushWorker {
     this.timer.unref()
   }
 
+  wake(): void {
+    if (!this.timer || this.stopped) return
+    this.wakePending = true
+    if (!this.running) {
+      void this.runDue().catch(() => {
+        console.warn(JSON.stringify({ event: 'orca_push_worker_failed' }))
+      })
+    }
+  }
+
   async runDue(): Promise<void> {
     if (this.running) {
       await this.running
       return
     }
     if (this.stopped) return
+    this.wakePending = false
     const drains = Array.from({ length: WORKER_DRAINS }, () => this.drain())
-    const pending = Promise.allSettled(drains).then(
-      (results) => {
-        const failure = results.find((result) => result.status === 'rejected')
-        if (failure?.status === 'rejected') throw failure.reason
-      }
-    )
+    const pending = Promise.allSettled(drains).then((results) => {
+      const failure = results.find((result) => result.status === 'rejected')
+      if (failure?.status === 'rejected') throw failure.reason
+    })
     this.running = pending
     try {
       await pending
     } finally {
       this.running = null
+      // A committed enqueue can arrive after every drain has found an empty queue.
+      if (this.wakePending && !this.stopped) this.wake()
     }
   }
 
@@ -84,6 +96,7 @@ export class DurablePushWorker {
 
   async stop(): Promise<void> {
     this.stopped = true
+    this.wakePending = false
     if (this.timer) clearInterval(this.timer)
     this.timer = undefined
     await this.running
