@@ -20,6 +20,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'grok',
   'devin',
   'omp',
+  'gjc',
   'prime-agent',
   'copilot',
   'cursor',
@@ -267,7 +268,8 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     // OMP keeps id-based resume while optionally locating its native-chat transcript.
-    case 'omp': {
+    case 'omp':
+    case 'gjc': {
       const id = readSessionId(payload, ['session_id'])
       return id ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file']) : null
     }

@@ -23,6 +23,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   'mimo-code': 'MiMo Code',
   pi: 'Pi',
   omp: 'OMP',
+  gjc: 'GJC',
   'prime-agent': 'Prime Agent',
   qoder: 'Qoder CLI',
   'qoder-cn': 'Qoder CLI China',

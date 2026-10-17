@@ -1,3 +1,4 @@
+import { isOmpFamilyAgent } from '../../../shared/omp-family-agent'
 import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -157,7 +158,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           : 'suppress'
         if (normalized.event && statusDisposition !== 'suppress') {
           const restartedAuthority =
-            statusDisposition === 'restart' && source === 'omp'
+            statusDisposition === 'restart' && isOmpFamilyAgent(source)
               ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
               : undefined
           const event =

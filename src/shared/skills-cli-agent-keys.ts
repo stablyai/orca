@@ -24,6 +24,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   'mimo-code': null,
   pi: 'pi',
   omp: null,
+  gjc: null,
   'prime-agent': null,
   qoder: 'qoder',
   'qoder-cn': 'qoder-cn',

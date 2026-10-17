@@ -25,6 +25,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   'mimo-code': 'mimo-code',
   pi: 'pi',
   omp: 'omp',
+  gjc: 'gjc',
   'prime-agent': 'prime-agent',
   qoder: 'qoder',
   'qoder-cn': 'qoder-cn',

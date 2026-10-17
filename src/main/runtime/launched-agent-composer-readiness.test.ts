@@ -41,6 +41,7 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   cursor: 'tui-idle',
   pi: 'tui-idle',
   omp: 'tui-idle',
+  gjc: 'tui-idle',
   droid: 'tui-idle',
   hermes: 'tui-idle',
   devin: 'tui-idle',

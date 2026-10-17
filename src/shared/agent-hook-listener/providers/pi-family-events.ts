@@ -1,3 +1,4 @@
+import { isOmpFamilyAgent } from '../../omp-family-agent'
 import {
   normalizeAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -14,13 +15,13 @@ import { readString } from '../tool-input-preview'
  *  for events that carry no status. */
 export function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'gjc' | 'prime-agent',
   eventName: unknown,
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType !== 'omp' && eventName === 'session_start') {
+  if (!isOmpFamilyAgent(agentType) && eventName === 'session_start') {
     // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     // Why: a custom modal can switch sessions before its promise resolves.
@@ -59,14 +60,16 @@ export function normalizePiCompatibleEvent(
   const toolName = readString(hookPayload, 'tool_name')
   const isPiCompatibleAsk =
     ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
-      (agentType === 'omp' && toolName === 'ask')) &&
+      (isOmpFamilyAgent(agentType) && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
   // Why: unlike Codex's PermissionRequest, omp emits this only after its own policy engine already
   // resolved to "prompt", so a human is always the decider. The forwarded approval_mode is the
   // ambient mode, not the verdict -- it reads 'yolo' whenever tools.approval.<tool> prompts -- so
   // no value of it can downgrade this to working without hiding a real prompt.
-  const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
-  const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
+  const isOmpApprovalRequest =
+    isOmpFamilyAgent(agentType) && eventName === 'tool_approval_requested'
+  const isOmpApprovalResolution =
+    isOmpFamilyAgent(agentType) && eventName === 'tool_approval_resolved'
   const isPiUiPrompt =
     agentType === 'pi' && (eventName === 'ui_prompt_start' || hookPayload.ui_prompt_active === true)
   const isPiUiPromptEnd = agentType === 'pi' && eventName === 'ui_prompt_end'
@@ -142,15 +145,17 @@ const OMP_APPROVAL_RELEASE_EVENTS: ReadonlySet<unknown> = new Set([
  */
 function holdsOmpApproval(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'gjc' | 'prime-agent',
   eventName: unknown,
   paneKey: string
 ): boolean {
-  if (agentType !== 'omp' || OMP_APPROVAL_RELEASE_EVENTS.has(eventName)) {
+  if (!isOmpFamilyAgent(agentType) || OMP_APPROVAL_RELEASE_EVENTS.has(eventName)) {
     return false
   }
   const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
   return (
-    previous?.agentType === 'omp' && previous.state === 'blocked' && previous.toolName !== 'ask'
+    isOmpFamilyAgent(previous?.agentType) &&
+    previous.state === 'blocked' &&
+    previous.toolName !== 'ask'
   )
 }

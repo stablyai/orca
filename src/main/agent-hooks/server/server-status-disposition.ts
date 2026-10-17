@@ -1,3 +1,4 @@
+import { isOmpFamilyAgent } from '../../../shared/omp-family-agent'
 import { createHash } from 'node:crypto'
 
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
@@ -71,7 +72,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     const retirementFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
     if (
       paneRetired &&
-      event?.source === 'omp' &&
+      isOmpFamilyAgent(event?.source) &&
       retirementFence?.aliases.some(
         ({ physicalPaneKey, entry }) =>
           this.retiredPaneFencesByKey.get(physicalPaneKey) !== retirementFence ||

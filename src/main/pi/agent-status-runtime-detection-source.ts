@@ -26,8 +26,24 @@ export function getPiOmpRuntimeDetectionSourceLines(configuredHookPath: string):
     '  ]',
     '  cachedOmpRuntime = executableNames.some((name) =>',
     "    ['omp', 'omp.js', 'omp.sh', 'omp.cmd', 'omp.exe', 'omp.bat'].includes(name)",
-    '  )',
+    '  ) || isGjcRuntime()',
     '  return cachedOmpRuntime',
+    '}',
+    '',
+    '// Why: GJC is an OMP fork that auto-loads this extension from ~/.gjc/agent/extensions;',
+    '// it keeps OMP semantics but reports on its own route so Orca can label it.',
+    'let cachedGjcRuntime: boolean | null = null',
+    '',
+    'function isGjcRuntime(): boolean {',
+    '  if (cachedGjcRuntime !== null) return cachedGjcRuntime',
+    '  const names = [',
+    '    processName(process.title),',
+    '    processName(process.env._),',
+    '    processName(process.argv[1]),',
+    '    processName(process.argv[0])',
+    '  ]',
+    "  cachedGjcRuntime = names.some((name) => ['gjc', 'gjc.exe', 'gjc.cmd'].includes(name))",
+    '  return cachedGjcRuntime',
     '}'
   ]
 }
@@ -52,7 +68,7 @@ export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): 
     '',
     'function resolveHookPath(ompRuntime: boolean): string {',
     '  // Why: runtime detection keeps a bare-shell OMP launch from reporting as Pi.',
-    "  if (ompRuntime) return '/hook/omp'",
+    "  if (ompRuntime) return isGjcRuntime() ? '/hook/gjc' : '/hook/omp'",
     '  return CONFIGURED_HOOK_PATH',
     '}'
   ]

@@ -49,6 +49,15 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
     case 'devin':
       return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
+    // Why: GJC is an OMP fork and accepts the same `--resume <file|id>` contract.
+    case 'gjc':
+      return providerSession.key === 'session_id'
+        ? [
+            'gjc',
+            '--resume',
+            ompResumeFilePath?.trim() || providerSession.transcriptPath?.trim() || id
+          ]
+        : null
     case 'omp':
       return providerSession.key === 'session_id'
         ? [
