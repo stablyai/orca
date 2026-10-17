@@ -13,11 +13,18 @@ export function areStructurallyEqual(a: unknown, b: unknown): boolean {
     return false
   }
   const leftEntries = Object.entries(a)
-  const rightEntries = new Map(Object.entries(b))
-  return (
-    leftEntries.length === rightEntries.size &&
-    leftEntries.every(
-      ([key, value]) => rightEntries.has(key) && areStructurallyEqual(value, rightEntries.get(key))
-    )
-  )
+  const rightEntries = Object.entries(b)
+  if (leftEntries.length !== rightEntries.length) {
+    return false
+  }
+  let rightEntriesByKey: Map<string, unknown> | null = null
+  return leftEntries.every(([key, value], index) => {
+    const rightEntry = rightEntries[index]
+    if (key === rightEntry[0]) {
+      return areStructurallyEqual(value, rightEntry[1])
+    }
+    // Preserve order-independent comparison without indexing catalogs whose keys already align.
+    rightEntriesByKey ??= new Map(rightEntries)
+    return rightEntriesByKey.has(key) && areStructurallyEqual(value, rightEntriesByKey.get(key))
+  })
 }
