@@ -4,12 +4,8 @@ import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
 import { clearIpynbOutputs, updateIpynbCellRuns, withIpynbCellIds } from './ipynb-cell-mutations'
 import { toStoredOutputs } from './ipynb-kernel-outputs'
-import {
-  forgetFinishedRuns,
-  markRunCommitted,
-  runCells,
-  trustNotebook
-} from './ipynb-kernel-session'
+import { forgetFinishedRuns, markRunCommitted } from './ipynb-kernel-runs'
+import { runCells, trustNotebook } from './ipynb-kernel-session'
 import {
   getCellRun,
   getSession,
