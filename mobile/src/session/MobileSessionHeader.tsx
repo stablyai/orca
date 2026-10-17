@@ -139,6 +139,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
           {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
           <ScrollView
             ref={tabStripRef}
+            accessibilityRole="tablist"
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.tabScroll}
@@ -160,6 +161,10 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             {visibleTabs.map((t) => (
               <Pressable
                 key={t.id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: t.id === activeSessionTabId }}
+                aria-selected={t.id === activeSessionTabId}
+                accessibilityLabel={getMobileSessionTabTitle(t)}
                 style={[styles.tab, t.id === activeSessionTabId && styles.tabActive]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout

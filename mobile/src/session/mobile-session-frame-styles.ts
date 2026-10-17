@@ -86,6 +86,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   },
   tabScroll: {
     flex: 1,
+    minWidth: 0,
     maxHeight: 36
   },
   tabContent: {
@@ -93,12 +94,13 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     paddingRight: spacing.sm
   },
   tab: {
-    width: 128,
+    flexShrink: 0,
+    minWidth: 44,
     maxWidth: 128,
     minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.sm - 2,
     paddingVertical: spacing.sm,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent'
@@ -116,6 +118,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   },
   tabText: {
     flexShrink: 1,
+    minWidth: 0,
     color: colors.textSecondary,
     fontSize: 13
   },
@@ -123,6 +126,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     color: colors.textPrimary
   },
   newTerminalButton: {
+    flexShrink: 0,
     width: 40,
     height: 36,
     alignItems: 'center',
@@ -139,6 +143,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   // Divider between the + new-terminal button and the Quick Commands launcher,
   // matching the tab strip's borderSubtle separators.
   tabActionDivider: {
+    flexShrink: 0,
     width: StyleSheet.hairlineWidth,
     height: 18,
     backgroundColor: colors.borderSubtle
