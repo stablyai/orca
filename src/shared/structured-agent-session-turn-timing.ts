@@ -90,9 +90,10 @@ type StructuredAgentJournalTurns = {
 
 function readStructuredAgentJournalTurns(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly AgentJournalSubmission[] = [],
+  latestTurn?: AgentSessionLatestTurn | null
 ): StructuredAgentJournalTurns {
-  const anchors = structuredAgentTurnAnchors(items, submissions)
+  const anchors = structuredAgentTurnAnchors(items, submissions, latestTurn)
   const byAnchor = new Map<string, StructuredAgentTurnTiming | null>()
   const byTurnId = new Map<string, StructuredAgentTurnTiming | null>()
   let precedingTurnEndedAt: number | undefined
@@ -108,6 +109,15 @@ function readStructuredAgentJournalTurns(
     if (timing || turn.state === 'unverifiable') {
       byAnchor.set(anchor, timing)
     }
+  }
+  const latestAnchor = latestTurn ? anchors.get(latestTurn.itemId) : undefined
+  if (latestTurn && latestAnchor !== undefined && !byTurnId.has(latestTurn.turn.turnId)) {
+    const timing = readTiming(
+      { body: { kind: 'turn', ...latestTurn.turn }, observedAt: latestTurn.observedAt },
+      undefined
+    )
+    byTurnId.set(latestTurn.turn.turnId, timing)
+    byAnchor.set(latestAnchor, timing)
   }
   return { byAnchor, byTurnId }
 }
@@ -222,26 +232,15 @@ export function selectStructuredAgentTurnBars(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
   turnId: string | null,
-  /** The host's newest turn record, which times a running turn whose row is not loaded. */
+  /** Times the newest explicitly scoped turn even when its lifecycle row is not loaded. */
   latestTurn?: AgentSessionLatestTurn | null
 ): {
   settledTurns: NativeChatSettledTurns
   runningTiming: StructuredAgentTurnTiming | null
 } {
-  const turns = readStructuredAgentJournalTurns(items, submissions)
-  const unloaded =
-    turnId !== null && !turns.byTurnId.has(turnId) && latestTurn?.turn.turnId === turnId
-      ? latestTurn
-      : null
+  const turns = readStructuredAgentJournalTurns(items, submissions, latestTurn)
   return {
     settledTurns: settledTurnsOf(turns, submissions),
-    runningTiming: unloaded
-      ? readTiming(
-          { body: { kind: 'turn', ...unloaded.turn }, observedAt: unloaded.observedAt },
-          undefined
-        )
-      : turnId === null
-        ? null
-        : (turns.byTurnId.get(turnId) ?? null)
+    runningTiming: turnId === null ? null : (turns.byTurnId.get(turnId) ?? null)
   }
 }

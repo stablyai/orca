@@ -91,6 +91,14 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   const pageOffsetRef = useRef(0)
   const pageReaderMovedUpRef = useRef(false)
   const scopeKeyRef = useRef(scopeKey)
+  const contentPinFrame = useRef<number | null>(null)
+  const contentHeight = useRef(0)
+  const cancelContentPin = useCallback(() => {
+    if (contentPinFrame.current !== null) {
+      cancelAnimationFrame(contentPinFrame.current)
+      contentPinFrame.current = null
+    }
+  }, [])
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
@@ -127,12 +135,22 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, height: number) => {
-      if (!followingRef.current || !hasItems) {
+      if (scopeKeyRef.current !== scopeKey || !followingRef.current || !hasItems) {
         return
       }
       listRef.current?.scrollToOffset({ animated: false, offset: height })
+      contentHeight.current = height
+      if (contentPinFrame.current === null) {
+        contentPinFrame.current = requestAnimationFrame(() => {
+          contentPinFrame.current = null
+          // Android's visible-row anchor can otherwise undo the pin during its layout commit.
+          if (scopeKeyRef.current === scopeKey && followingRef.current) {
+            listRef.current?.scrollToOffset({ animated: false, offset: contentHeight.current })
+          }
+        })
+      }
     },
-    [hasItems]
+    [hasItems, scopeKey]
   )
 
   const clearUserScrollSettle = useCallback(() => {
@@ -165,12 +183,13 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   )
 
   const jumpToTail = useCallback(() => {
+    cancelContentPin()
     clearUserScrollSettle()
     userScrollActiveRef.current = false
     setAtTail(true)
     setFollowing(true)
     pinToTail()
-  }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing])
+  }, [clearUserScrollSettle, pinToTail, setAtTail, setFollowing, cancelContentPin])
 
   const beginUserScroll = useCallback(() => {
     clearUserScrollSettle()
@@ -236,7 +255,13 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     }
   }, [scopeKey, jumpToTail])
 
-  useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
+  useEffect(
+    () => () => {
+      clearUserScrollSettle()
+      cancelContentPin()
+    },
+    [clearUserScrollSettle, cancelContentPin]
+  )
 
   return {
     listRef,

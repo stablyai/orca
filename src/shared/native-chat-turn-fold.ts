@@ -55,6 +55,8 @@ export function nativeChatTurnAnswerRows(
   const answers = new Map<string, number>()
   for (const [index, row] of rows.entries()) {
     const isCandidate =
+      !row.explainsTurn &&
+      !row.outlivesTurn &&
       row.rendersProse &&
       (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
     if (row.turnKey !== undefined && isCandidate) {

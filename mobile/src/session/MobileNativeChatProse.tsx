@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { Image, Pressable, Text } from 'react-native'
+import { Image, Pressable, View, Text } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
@@ -47,6 +47,18 @@ export function Prose({
   onLongPress?: () => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
+    if (block.presentation === 'compaction') {
+      return (
+        <View style={styles.compaction} accessible accessibilityLabel={block.text}>
+          <View style={styles.compactionLine} />
+          <Text style={[styles.compactionLabel, { fontSize: TEXT_SIZE * 0.9 * fontScale }]}>
+            {block.text}
+          </Text>
+          <View style={styles.compactionLine} />
+        </View>
+      )
+    }
+
     // A host line standing in for a message too large to send, on the person's own row.
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
       return (

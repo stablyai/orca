@@ -58,6 +58,17 @@ describe('nativeChatTurnAnswerRows', () => {
     expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(2)
   })
 
+  it.each(['explainsTurn', 'outlivesTurn'] as const)(
+    'keeps the final reply visible when a later assistant row %s',
+    (flag) => {
+      const rows = [row({ role: 'user' }), row(), row(), row({ [flag]: true })]
+      expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(2)
+      expect([
+        ...nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE }).foldedRows
+      ]).toEqual([1])
+    }
+  )
+
   it('reports no answer for a turn that only ran tools', () => {
     const rows = [row({ role: 'user' }), row({ rendersProse: false })]
     expect(nativeChatTurnAnswerRows(rows).has('turn-1')).toBe(false)

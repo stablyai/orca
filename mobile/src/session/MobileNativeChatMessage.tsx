@@ -42,6 +42,8 @@ import { Prose } from './MobileNativeChatProse'
 function MobileNativeChatMessageImpl({
   message,
   mayStillGrow = false,
+  finalReply = false,
+  processHidden = false,
   toolsExpanded = false,
   fontScale = 1,
   onOpenFile,
@@ -65,6 +67,8 @@ function MobileNativeChatMessageImpl({
 }: {
   message: NativeChatMessage
   /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
+  finalReply?: boolean
+  processHidden?: boolean
   mayStillGrow?: boolean
   toolsExpanded?: boolean
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
@@ -162,6 +166,9 @@ function MobileNativeChatMessageImpl({
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />
   ) : null
+  if (processHidden) {
+    return <>{statusRow}</>
+  }
   if (receipt) {
     return (
       <>
@@ -204,7 +211,8 @@ function MobileNativeChatMessageImpl({
     )
   }
   const isChatTurn = message.role === 'user' || message.role === 'assistant'
-  const copyText = isChatTurn ? nativeChatMessagePlainText(message) : ''
+  const copyText =
+    finalReply && message.role === 'assistant' ? nativeChatMessagePlainText(message) : ''
   const proseRow = (block: NativeChatBlock, index: number, text: string, revealing = false) =>
     isSubagentGroupBlock(block) && isRenderableSubagentGroup(block) ? (
       <MobileNativeChatSubagentGroup

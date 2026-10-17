@@ -21,7 +21,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     renderer = null
   })
 
-  it('does not scan bridge-lane transcripts', () => {
+  it('keeps bridge-lane rows in order without turn bars or folding', () => {
     const messages: NativeChatMessage[] = [
       {
         id: 'u1',
@@ -31,19 +31,16 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         source: 'transcript'
       }
     ]
-    const findLastIndex = vi.spyOn(messages, 'findLastIndex')
-    const slice = vi.spyOn(messages, 'slice')
-    const filter = vi.spyOn(messages, 'filter')
-    const map = vi.spyOn(messages, 'map')
 
     act(() => {
       renderer = create(createElement(Harness, { messages, enabled: false }))
     })
 
-    expect(findLastIndex).not.toHaveBeenCalled()
-    expect(slice).not.toHaveBeenCalled()
-    expect(filter).not.toHaveBeenCalled()
-    expect(map).not.toHaveBeenCalled()
+    const { disclosure } = renderer!.root.findByType(Result).props
+    expect(disclosure.listMessages).toBe(messages)
+    expect(disclosure.active).toBeNull()
+    expect(disclosure.resolveRow(0, messages[0]).turnStatus).toBeNull()
+    expect(disclosure.resolveRow(0, messages[0]).processHidden).toBe(false)
   })
 
   it('keeps a settled turn handler stable for NUL-delimited scope keys', () => {

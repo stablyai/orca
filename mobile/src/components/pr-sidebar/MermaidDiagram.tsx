@@ -2,6 +2,7 @@ import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
+import { useMobileTranscriptLayoutPending } from '../mobile-transcript-layout'
 import { loadPageMermaid } from './mermaid-page-engine'
 
 export type MermaidDiagramProps = {
@@ -36,6 +37,8 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
   const suffix = useId().replace(/[^\w-]/g, '')
   const id = `orca-mermaid-${suffix}`
   const failed = failedSource === source
+  const [renderedSource, setRenderedSource] = useState<string | null>(null)
+  useMobileTranscriptLayoutPending(!failed && renderedSource !== source)
 
   useEffect(() => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
@@ -55,6 +58,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
         // Already sanitized: `securityLevel: 'strict'` is what makes this string safe to parse,
         // and mermaid is the only thing that can sanitize its own serialization.
         host.innerHTML = svg
+        setRenderedSource(source)
       } catch {
         if (!disposed) {
           setFailedSource(source)

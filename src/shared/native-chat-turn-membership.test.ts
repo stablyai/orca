@@ -276,8 +276,8 @@ describe('a turn whose record is above the loaded rows', () => {
     expect(live.partialTurnKey).toBe('t1')
   })
 
-  it('leaves its tail ungrouped once it ends, whichever turn is newest', () => {
-    expect(membership(tail(), hostTurn('completed')).turnKeys).toEqual([undefined, undefined])
+  it('keeps explicit tail attribution after completion but never borrows a different turn', () => {
+    expect(membership(tail(), hostTurn('completed')).turnKeys).toEqual(['t1', 't1'])
     const next = membership([...tail(), user('u2')], hostTurn('running', 't2'))
     expect(next.turnKeys.slice(0, 2)).toEqual([undefined, undefined])
   })

@@ -68,9 +68,9 @@ describe('iOS whole-message copy', () => {
     }
     return node
   }
-  function render(value = message) {
+  function render(value = message, finalReply = true) {
     act(() => {
-      renderer = create(createElement(MobileNativeChatMessage, { message: value }))
+      renderer = create(createElement(MobileNativeChatMessage, { message: value, finalReply }))
     })
   }
   beforeEach(() => {
@@ -82,7 +82,7 @@ describe('iOS whole-message copy', () => {
     vi.useRealTimers()
   })
 
-  it.each(['user', 'assistant'] as const)(
+  it.each(['assistant'] as const)(
     'copies current %s source outside the text after streaming',
     async (role) => {
       render({ ...message, role })
@@ -96,7 +96,11 @@ describe('iOS whole-message copy', () => {
           { type: 'text', text: last }
         ]
       }
-      act(() => renderer!.update(createElement(MobileNativeChatMessage, { message: current })))
+      act(() =>
+        renderer!.update(
+          createElement(MobileNativeChatMessage, { message: current, finalReply: true })
+        )
+      )
       const copy = copyButton()
       expect(copy.props.accessibilityRole).toBe('button')
       expect(copy.props.style({ pressed: false })[0]).toMatchObject({ width: 24, height: 24 })
@@ -129,27 +133,34 @@ describe('iOS whole-message copy', () => {
     }
   )
 
-  it.each(['user', 'assistant'] as const)(
-    'shows the %s message copy button without a tap',
+  it.each(['assistant'] as const)('shows the %s message copy button without a tap', (role) => {
+    render({ ...message, role })
+    expect(copyButton()).toBeDefined()
+  })
+
+  it.each(['user', 'assistant', 'reasoning'] as const)(
+    'keeps copy icons off %s process rows',
     (role) => {
-      render({ ...message, role })
-      expect(copyButton()).toBeDefined()
+      render({ ...message, role }, false)
+      expect(
+        nodes('Pressable').filter((node) => node.props.accessibilityLabel === 'Copy message')
+      ).toHaveLength(0)
     }
   )
 
   it.each([
     'Please repair this chart:\n::orca-visual{file="usage.html"}\nKeep this text.',
     '::orca-visual{file="usage.html"}'
-  ])('copies the entire visible own source %j', async (text) => {
+  ])('preserves the entire visible own source without an inline copy control %j', (text) => {
     render({ ...message, role: 'user', blocks: [{ type: 'text', text }] })
     // Drawn as written: your own message never renders a visual.
     expect(nodes('MobileMarkdown')).toHaveLength(1)
     expect(nodes('MobileMarkdown')[0]?.props.content).toBe(text)
     expect(nodes('MobileMarkdown')[0]?.props.renderVisual).toBeUndefined()
-    expect(copyButton().props.accessibilityRole).toBe('button')
-    await act(async () => copyButton().props.onPress())
-    expect(writeText.mock.calls).toEqual([[text]])
-    expect(nodes('Check')).toHaveLength(1)
+    expect(
+      nodes('Pressable').filter((node) => node.props.accessibilityLabel === 'Copy message')
+    ).toHaveLength(0)
+    expect(writeText).not.toHaveBeenCalled()
   })
 
   it('omits assistant visual directives while retaining literal fenced code', async () => {
@@ -181,13 +192,16 @@ describe('iOS whole-message copy', () => {
     act(() =>
       renderer!.update(
         createElement(MobileNativeChatMessage, {
-          message: { ...message, blocks: [{ type: 'text', text: 'New source' }] }
+          message: { ...message, blocks: [{ type: 'text', text: 'New source' }] },
+          finalReply: true
         })
       )
     )
     expect(nodes('Check')).toHaveLength(0)
     expect(vi.getTimerCount()).toBe(0)
-    act(() => renderer!.update(createElement(MobileNativeChatMessage, { message })))
+    act(() =>
+      renderer!.update(createElement(MobileNativeChatMessage, { message, finalReply: true }))
+    )
     expect(nodes('Check')).toHaveLength(0)
     await act(async () => copyButton().props.onPress())
     act(() => renderer!.unmount())
@@ -228,7 +242,8 @@ describe('iOS whole-message copy', () => {
       act(() =>
         renderer!.update(
           createElement(MobileNativeChatMessage, {
-            message: { ...message, blocks: [{ type: 'text', text: 'Newest source' }] }
+            message: { ...message, blocks: [{ type: 'text', text: 'Newest source' }] },
+            finalReply: true
           })
         )
       )
@@ -266,11 +281,14 @@ describe('iOS whole-message copy', () => {
     act(() =>
       renderer!.update(
         createElement(MobileNativeChatMessage, {
-          message: { ...message, blocks: [{ type: 'text', text: 'Changed source' }] }
+          message: { ...message, blocks: [{ type: 'text', text: 'Changed source' }] },
+          finalReply: true
         })
       )
     )
-    act(() => renderer!.update(createElement(MobileNativeChatMessage, { message })))
+    act(() =>
+      renderer!.update(createElement(MobileNativeChatMessage, { message, finalReply: true }))
+    )
     await act(async () => pending.finish('success'))
     expect(nodes('Check')).toHaveLength(0)
     expect(alert).not.toHaveBeenCalled()
@@ -319,7 +337,8 @@ describe('iOS whole-message copy', () => {
         act(() =>
           renderer!.update(
             createElement(MobileNativeChatMessage, {
-              message: { ...message, blocks: [{ type: 'text', text }] }
+              message: { ...message, blocks: [{ type: 'text', text }] },
+              finalReply: true
             })
           )
         )

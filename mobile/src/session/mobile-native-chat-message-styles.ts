@@ -12,6 +12,19 @@ export function scaledType(size: number, fontScale: number, leading = 6) {
 export const MONO_SIZE = 12
 
 export const styles = StyleSheet.create({
+  compaction: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  compactionLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle
+  },
+  compactionLabel: { color: colors.textMuted, textAlign: 'center', flexShrink: 1 },
   row: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm

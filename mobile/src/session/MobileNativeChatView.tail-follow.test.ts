@@ -44,7 +44,7 @@ vi.mock('./MobileNativeChatComposer', async () => {
 describe('MobileNativeChatView: tail-follow', () => {
   installChatViewHooks()
 
-  it('lets content growth own streaming tail-follow without a delayed animated command', async () => {
+  it('corrects the measured tail after native layout without an animated command', async () => {
     vi.useFakeTimers()
     try {
       const folded = [assistantTurn('a1', 'Starting')]
@@ -62,7 +62,12 @@ describe('MobileNativeChatView: tail-follow', () => {
       await act(async () => {
         vi.advanceTimersByTime(60)
       })
-      expect(scrollToOffset).toHaveBeenCalledOnce()
+      expect(scrollToOffset).toHaveBeenCalledTimes(2)
+      expect(
+        scrollToOffset.mock.calls.every(
+          ([options]) => options.animated === false && options.offset === 900
+        )
+      ).toBe(true)
     } finally {
       vi.useRealTimers()
     }

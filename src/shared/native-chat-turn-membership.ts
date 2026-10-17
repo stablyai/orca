@@ -31,7 +31,12 @@ import { inSendOrder } from './native-chat-send-order'
 import { runningStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
 import { nativeChatOpeningTurnKey } from './native-chat-messages-waiting-behind-live-turn'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
-import { nativeChatTurnRowAttribution } from './native-chat-turn-row-attribution'
+import {
+  nativeChatTurnRowAttribution,
+  hasNativeChatRowsInTurn
+} from './native-chat-turn-row-attribution'
+
+export { isNativeChatRowInLiveWorkingTurn } from './native-chat-turn-row-attribution'
 
 /** Whether the host writing this journal states each row's turn. Only a host that runs `/compact`
  *  as a turn of the send path does, so this is also how a client tells that host from an older one. */
@@ -42,9 +47,9 @@ export function hostStatesTurnScopes(items: readonly AgentJournalRenderItem[]): 
 export type NativeChatTurnJournal = {
   items: readonly AgentJournalRenderItem[]
   submissions: readonly AgentJournalSubmission[]
-  /** The host's newest turn record: it names the live turn, and anchors it while it runs when the
-   *  record is not loaded, so the turn's loaded rows still draw under its bar. Absent from older
-   *  hosts. */
+  /** The host's newest lifecycle record anchors its explicitly scoped tail even when the older
+   *  record is not loaded, so running and completed partial turns retain their bar. Absent from
+   *  older hosts. */
   latestTurn?: AgentSessionLatestTurn | null
   /** The host's answer to whether the session's own agent is working; absent from older hosts. */
   working?: boolean
@@ -63,7 +68,7 @@ export type NativeChatTurnJournal = {
 export function structuredAgentTurnAnchors(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
-  /** Anchored too while it runs with its record above the loaded rows; nothing loaded precedes it. */
+  /** Also anchors an explicitly scoped tail whose lifecycle row is outside the loaded window. */
   latestTurn?: AgentSessionLatestTurn | null
 ): ReadonlyMap<string, string> {
   const userItemIds = new Set(
@@ -166,8 +171,12 @@ export function structuredAgentTurnAnchors(
     anchors.set(item.itemId, anchor)
     inFlightSinceLastTurn = null
   }
-  // Only while running: an ended turn's tail would otherwise regroup when the next turn opens.
-  if (latestTurn?.turn.state === 'running' && !anchors.has(latestTurn.itemId)) {
+  // Explicit scopes still identify a completed tail when its older lifecycle row is not loaded.
+  if (
+    latestTurn &&
+    !anchors.has(latestTurn.itemId) &&
+    (latestTurn.turn.state === 'running' || hasNativeChatRowsInTurn(items, latestTurn.itemId))
+  ) {
     anchors.set(
       latestTurn.itemId,
       anchorOf(latestTurn.itemId, latestTurn.turn, userItemIds, aliases, steeredInto, null, null)
@@ -351,16 +360,6 @@ function namedRecordKeys(
 
 function anchoringUserItems(recordKeys: ReadonlyMap<string, string | null>): ReadonlySet<string> {
   return new Set([...recordKeys.values()].filter((key) => key !== null))
-}
-
-/** Whether a row belongs to the turn running now. Liveness is the owning turn's, not the newest
- *  prompt's: a running turn's rows stay live while a newer message waits behind it. */
-export function isNativeChatRowInLiveWorkingTurn(
-  turnKey: string | undefined,
-  liveTurnKey: string | undefined,
-  working: boolean
-): boolean {
-  return working && (liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined)
 }
 
 function newestUserTurnKey(

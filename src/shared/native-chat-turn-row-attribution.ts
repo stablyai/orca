@@ -40,3 +40,23 @@ export function nativeChatTurnRowAttribution<T>(
   }
   return attributed ?? attribution
 }
+
+/** Whether loaded rows explicitly name a lifecycle record outside the history window. */
+export function hasNativeChatRowsInTurn(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): boolean {
+  return items.some(
+    ({ turnScope }) => turnScope?.kind === 'turn' && turnScope.turnItemId === turnItemId
+  )
+}
+
+/** Whether a row belongs to the turn running now. Liveness is the owning turn's, not the newest
+ *  prompt's: a running turn's rows stay live while a newer message waits behind it. */
+export function isNativeChatRowInLiveWorkingTurn(
+  turnKey: string | undefined,
+  liveTurnKey: string | undefined,
+  working: boolean
+): boolean {
+  return working && (liveTurnKey ? turnKey === liveTurnKey : turnKey === undefined)
+}
