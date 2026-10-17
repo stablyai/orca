@@ -29,6 +29,8 @@ export const WORKTREE_SET_COMMAND_SPEC: CommandSpec = {
     'Each link flag updates its own field and leaves unrelated links unchanged. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
   ],
   examples: [
+    'orca worktree set --worktree active --pr 123 --json',
+    'orca worktree set --worktree active --pr null --json',
     'orca worktree set --worktree active --linear-issue STA-335 --json',
     'orca worktree set --worktree active --linear-issue null --json',
     'orca worktree set --worktree active --workspace-status in-review --unread --json'
