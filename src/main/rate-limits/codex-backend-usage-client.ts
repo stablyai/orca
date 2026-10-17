@@ -24,6 +24,7 @@ type BackendRateLimitWindow = {
 
 type BackendUsageResponse = {
   plan_type?: string
+  credits?: { unlimited?: boolean } | null
   rate_limit?: {
     primary_window?: BackendRateLimitWindow | null
     secondary_window?: BackendRateLimitWindow | null
@@ -79,6 +80,10 @@ export async function fetchCodexRateLimitsViaBackend(
     primary: backendWindowToSnapshot(payload.rate_limit?.primary_window),
     secondary: backendWindowToSnapshot(payload.rate_limit?.secondary_window)
   })
+  const isUnlimited = payload.credits?.unlimited === true
+  if (!classified.session && !classified.weekly && !isUnlimited) {
+    return null
+  }
   return {
     provider: 'codex',
     session: mapCodexRateLimitWindow(
@@ -90,6 +95,7 @@ export async function fetchCodexRateLimitsViaBackend(
       snapshotWindowMinutes(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
     ),
     planType: payload.plan_type,
+    ...(isUnlimited ? { isUnlimited: true } : {}),
     ...(payload.rate_limit_reset_credits !== undefined
       ? {
           rateLimitResetCredits:
@@ -116,17 +122,19 @@ export async function supplementCodexSessionWindow(
       return limits
     }
     const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits
+    const backendMetadata = {
+      planType: backend.planType ?? limits.planType,
+      ...(backend.isUnlimited ? { isUnlimited: true } : {}),
+      ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {})
+    }
     if (!backend.session) {
-      return rateLimitResetCredits === limits.rateLimitResetCredits
-        ? limits
-        : { ...limits, rateLimitResetCredits }
+      return { ...limits, ...backendMetadata }
     }
     return {
       ...limits,
       session: backend.session,
       weekly: backend.weekly ?? limits.weekly,
-      planType: backend.planType ?? limits.planType,
-      ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
+      ...backendMetadata,
       updatedAt: backend.updatedAt
     }
   } catch {

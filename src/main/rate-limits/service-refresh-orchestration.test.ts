@@ -242,6 +242,31 @@ describe('RateLimitService', () => {
     expect(state.claude?.error).toBe('still failing')
   })
 
+  it('keeps recent unlimited usage through a transient refresh failure', async () => {
+    const service = new RateLimitService()
+    const internal = serviceInternals(service)
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 0))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce({
+        ...okProvider('codex', 0, Date.now()),
+        session: null,
+        weekly: null,
+        planType: 'business',
+        isUnlimited: true
+      })
+      .mockResolvedValueOnce(errorProvider('codex', 'temporary failure'))
+
+    await internal.fetchAll()
+    await internal.fetchAll()
+
+    expect(service.getState().codex).toMatchObject({
+      planType: 'business',
+      isUnlimited: true,
+      status: 'error',
+      error: 'temporary failure'
+    })
+  })
+
   it('labels a kept stale snapshot with only the latest failure kind', async () => {
     const service = new RateLimitService()
     const internal = serviceInternals(service)
