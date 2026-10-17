@@ -2,7 +2,7 @@
 // beside it so the card file stays about layout and apply wiring.
 
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
-import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronRight, type LucideIcon } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import {
   sessionOptionValueMarker,
@@ -16,14 +16,17 @@ export function SessionOptionCaption({ children }: { children: string }): React.
   return <Text style={styles.caption}>{children}</Text>
 }
 
+/** A label pill truncates to fit the row; an icon-only pill keeps its size. */
 export function Pill({
   label,
+  icon: Icon,
   accessibleName,
   disabled,
   onPress,
   labelColor
 }: {
-  label: string
+  label?: string
+  icon?: LucideIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void
@@ -34,22 +37,35 @@ export function Pill({
       accessibilityLabel={accessibleName}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      style={({ pressed }) => [styles.pill, pressed && !disabled && styles.pressed]}
+      style={({ pressed }) => [
+        styles.pill,
+        label === undefined && styles.pillFixed,
+        pressed && !disabled && styles.pressed
+      ]}
       onPress={onPress}
       disabled={disabled}
       hitSlop={6}
     >
-      <Text
-        style={[
-          styles.pillText,
-          labelColor ? { color: labelColor } : null,
-          disabled && styles.pillTextDisabled
-        ]}
-        numberOfLines={1}
-        ellipsizeMode="tail"
-      >
-        {label}
-      </Text>
+      {Icon ? (
+        <Icon
+          size={14}
+          color={disabled ? colors.textMuted : (labelColor ?? colors.textSecondary)}
+          strokeWidth={2.2}
+        />
+      ) : null}
+      {label !== undefined ? (
+        <Text
+          style={[
+            styles.pillText,
+            labelColor ? { color: labelColor } : null,
+            disabled && styles.pillTextDisabled
+          ]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {label}
+        </Text>
+      ) : null}
       <ChevronDown size={12} color={disabled ? colors.textMuted : colors.textSecondary} />
     </Pressable>
   )
@@ -281,6 +297,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     maxWidth: 180,
+    // RN items default to flexShrink 0, so without this the label never truncates
+    // and the pill slides under Mic and Send.
+    flexShrink: 1,
+    minWidth: 0,
     minHeight: 28,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
@@ -288,6 +308,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
+  },
+  pillFixed: {
+    flexShrink: 0
   },
   pillText: {
     color: colors.textSecondary,

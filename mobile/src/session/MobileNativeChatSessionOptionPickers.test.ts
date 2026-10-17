@@ -21,6 +21,10 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
   ChevronRight: 'ChevronRight',
+  FilePenLine: 'FilePenLine',
+  Hand: 'Hand',
+  ShieldAlert: 'ShieldAlert',
+  ShieldCheck: 'ShieldCheck',
   X: 'X'
 }))
 vi.mock('../components/BottomDrawer', async () => {
@@ -310,6 +314,14 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       accessibilityLabel: 'Permissions, Ask for approval',
       disabled: false
     })
+    // Icon only: a spelled-out mode pushed the model pill under Mic and Send.
+    const permissionPill = renderer!.root.find(
+      (node) =>
+        node.type === 'Pressable' &&
+        node.props.accessibilityLabel === 'Permissions, Ask for approval'
+    )
+    expect(permissionPill.findAllByType('Hand')).toHaveLength(1)
+    expect(permissionPill.findAllByType('Text')).toEqual([])
     // A write that waits behind a starting agent never holds the sheet open.
     setOption.mockImplementation(() => new Promise(() => {}))
     await act(async () => pill('Permissions').props.onPress())
