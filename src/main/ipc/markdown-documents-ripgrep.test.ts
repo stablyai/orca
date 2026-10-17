@@ -90,18 +90,43 @@ describe('Markdown document ripgrep lifecycle', () => {
     }
   )
 
-  it('rejects an unreadable subtree even after receiving valid documents', async () => {
+  it('returns readable documents when an unrelated subtree is unreadable', async () => {
     const result = listMarkdownDocuments(root)
-    child.stdout.write('./README.md\0')
-    child.stderr.write('Permission denied')
+    child.stdout.write('./docs/guide.md\0./README.md\0')
+    child.stderr.write('rg: ./data/clickhouse/store: Permission denied (os error 13)')
+    child.emit('close', 2, null)
+    expect((await result).map((document) => document.relativePath)).toEqual([
+      'docs/guide.md',
+      'README.md'
+    ])
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('still rejects an unreadable listing that returns no documents', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stderr.write('rg: .: Permission denied (os error 13)')
     child.emit('close', 2, null)
     await expect(result).rejects.toThrow('Permission denied')
   })
 
-  it('rejects a truncated final path instead of returning partial documents', async () => {
+  it('still rejects unexpected exit codes after receiving valid documents', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write('./README.md\0')
+    child.emit('close', 3, null)
+    await expect(result).rejects.toThrow('Markdown document listing failed (3)')
+  })
+
+  it('still rejects a signalled process after receiving valid documents', async () => {
+    const result = listMarkdownDocuments(root)
+    child.stdout.write('./README.md\0')
+    child.emit('close', 2, 'SIGTERM')
+    await expect(result).rejects.toThrow('Markdown document listing failed (SIGTERM)')
+  })
+
+  it.each([0, 2])('rejects a truncated final path on exit %s', async (code) => {
     const result = listMarkdownDocuments(root)
     child.stdout.write('./README.md\0./unfinished.md')
-    child.emit('close', 0, null)
+    child.emit('close', code, null)
     await expect(result).rejects.toThrow('Incomplete path')
   })
 
