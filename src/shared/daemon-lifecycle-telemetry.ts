@@ -1,7 +1,7 @@
 // Enums + bucketing for the `daemon_lifecycle` telemetry event (STA-2376).
 // The daemon's own retirement cause (pam-rejections/probe-timeouts) lives in the
 // subprocess and never crosses into the app, so every reason here is one the app
-// itself decides: a startup replace, or an observed death→respawn.
+// itself decides: a startup replace, an observed death→respawn, or a drain check.
 
 // Startup launcher replaced a still-connectable daemon (each maps 1:1 to a `daemon-replacement-preflight.ts` decision).
 export const DAEMON_REPLACE_REASONS = [
@@ -14,8 +14,10 @@ export const DAEMON_REPLACE_REASONS = [
 ] as const
 export type DaemonReplaceReason = (typeof DAEMON_REPLACE_REASONS)[number]
 
-// Adapter observed the daemon die and forked a replacement.
-export const DAEMON_RETIRE_REASONS = ['died_respawn'] as const
+// Adapter observed the daemon die and forked a replacement; or the app retired a
+// drained legacy generation whose own last-disconnect retirement cannot fire while
+// the app's legacy adapter stays connected (#9138).
+export const DAEMON_RETIRE_REASONS = ['died_respawn', 'drained_legacy'] as const
 export type DaemonRetireReason = (typeof DAEMON_RETIRE_REASONS)[number]
 
 export const DAEMON_LIFECYCLE_TRANSITIONS = ['replaced', 'retired'] as const

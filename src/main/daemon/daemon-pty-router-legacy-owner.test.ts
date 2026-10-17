@@ -11,6 +11,13 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy', ['claude-session'])
     vi.mocked(legacy.listProcesses).mockRejectedValueOnce(new Error('slow inventory'))
+    // Why: the drain sweep asks generations the inventory could not route; a daemon still
+    // hosting the session refuses, which is what keeps it around for this reattach.
+    vi.mocked(legacy.requestIdleRetirement).mockResolvedValue({
+      state: 'busy',
+      liveSessions: 1,
+      admissionReopened: true
+    })
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
@@ -42,6 +49,12 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     const legacy = createAdapter('legacy', ['claude-session'])
     vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('wedged'))
     vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+    // Why: same refusal as above — an unanswerable daemon is never proven drained.
+    vi.mocked(legacy.requestIdleRetirement).mockResolvedValue({
+      state: 'busy',
+      liveSessions: 1,
+      admissionReopened: true
+    })
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 

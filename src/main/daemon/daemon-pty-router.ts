@@ -1,6 +1,5 @@
 import { reconcileDaemonRouterSessions } from './daemon-router-session-reconciliation'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -19,6 +18,7 @@ import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
 import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
+import { createLegacyDrainFanout, detachLegacyAdapter } from './daemon-legacy-drain-retirement'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal-osc-color-reply'
 
@@ -27,28 +27,28 @@ export class DaemonPtyRouter implements IPtyProvider {
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
-  private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
   private readonly legacyExitProof = new LegacyDaemonExitProof()
+  private readonly legacyDrain: ReturnType<typeof createLegacyDrainFanout>
   readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
     this.legacy = opts.legacy
     this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
-    this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
-      this.allAdapters(),
-      // Why owner-only: another generation's exit for a reused id must not unroute a live legacy session.
-      (id, adapter) => {
-        this.ownerResolver.forgetRoute(id, adapter)
-      },
-      (adapter) => this.ownerResolver.invalidateProvider(adapter)
-    )
+    this.legacyDrain = createLegacyDrainFanout({
+      adapters: this.allAdapters(),
+      legacy: this.legacy,
+      sessionAdapters: this.sessionAdapters,
+      ownerResolver: this.ownerResolver
+    })
     this.legacyExitProof.record(this.legacy)
   }
 
   async discoverLegacySessions(): Promise<void> {
     await this.ownerResolver.discoverRoutes()
     this.legacyExitProof.record(this.legacy)
+    // Why: generations that drained while no app was running have no exit event to react to.
+    this.legacyDrain.drain.sweepDrainedLegacyAdapters(this.legacy)
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
@@ -260,18 +260,8 @@ export class DaemonPtyRouter implements IPtyProvider {
           ) {
             throw error
           }
-          const index = this.legacy.indexOf(adapter)
-          if (index !== -1) {
-            this.legacy.splice(index, 1)
-            // Why: the resolver and fanout were built from a copy of allAdapters().
-            // Splicing this.legacy alone leaves them querying the dead socket.
-            this.ownerResolver.dropProvider(adapter)
-            this.subscriptions.dropAdapter(adapter)
-          }
+          detachLegacyAdapter(this.legacy, this.ownerResolver, this.legacyDrain.fanout, adapter)
           // Why: the socket is already gone; a failed disconnect must not fail the list.
-          void Promise.resolve()
-            .then(() => adapter.disconnectOnly())
-            .catch(() => undefined)
           return []
         }
       })
@@ -288,23 +278,23 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
-    return this.subscriptions.onData(callback)
+    return this.legacyDrain.fanout.onData(callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
-    return this.subscriptions.onBackgroundStreamEvent(callback)
+    return this.legacyDrain.fanout.onBackgroundStreamEvent(callback)
   }
 
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
-    return this.subscriptions.onWriteUnavailable(callback)
+    return this.legacyDrain.fanout.onWriteUnavailable(callback)
   }
 
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
-    return this.subscriptions.onReplay(callback)
+    return this.legacyDrain.fanout.onReplay(callback)
   }
 
   onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
-    return this.subscriptions.onExit(callback)
+    return this.legacyDrain.fanout.onExit(callback)
   }
 
   ackColdRestore(sessionId: string): void {
@@ -322,7 +312,8 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   dispose(): void {
-    this.subscriptions.dispose()
+    this.legacyDrain.drain.dispose()
+    this.legacyDrain.fanout.dispose()
     for (const adapter of this.allAdapters()) {
       adapter.dispose()
     }
@@ -330,11 +321,12 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   // Why: restart reuses the legacy adapters in a new router, so detach only our subscriptions (dispose() would tear them down; skipping this leaked a router per restart).
   disposeRouterOnly(): void {
-    this.subscriptions.dispose()
+    this.legacyDrain.drain.dispose()
+    this.legacyDrain.fanout.dispose()
   }
 
   async disconnectOnly(): Promise<void> {
-    this.subscriptions.dispose()
+    this.legacyDrain.fanout.dispose()
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 
