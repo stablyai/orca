@@ -139,7 +139,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Tab navigation defaults (new installs):** next/previous tab **across all types** is `Cmd+Shift+]` / `Cmd+Shift+[` (Ctrl on Linux/Windows). Same-type next/previous is `Cmd+Option+]` / `Cmd+Option+[`. Previous recent tab is `Ctrl+Tab`. Existing installs keep customized overrides under `~/.orca/keybindings.json`.
 - **Add Review Note** defaults to `Cmd+Shift+A` (macOS) / `Ctrl+Shift+A` (Windows / Linux); remappable.
 - **Send Review Notes to Agent** ships unbound; assign it here to open the send-notes menu for the active worktree's diff notes without using the mouse.
-- **Delete workspace** defaults to `Cmd+Shift+Backspace` on macOS and `Ctrl+Shift+Backspace` on Windows / Linux. Hover the sidebar workspace you mean to delete; Orca still asks for confirmation.
+- **Delete workspace** defaults to `Cmd+Shift+Backspace` on macOS and `Ctrl+Shift+Backspace` on Windows / Linux. It acts on the selected workspace. The first press shows a prompt on that workspace's sidebar row; press the shortcut again within a few seconds to delete it. Press Escape, switch workspace, or wait to cancel. Workspaces with child workspaces still open the delete dialog.
 
 ## Repository
 

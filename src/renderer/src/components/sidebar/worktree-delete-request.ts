@@ -18,6 +18,8 @@ export type WorktreeDeleteOptions = {
   /** Why (STA-4343): the id-keyed map holds one row per `repoId::path`, so a row
    *  that knows its host must say so or the delete lands on the other one. */
   expectedHostId?: ExecutionHostId
+  /** Caller already confirmed (press-again shortcut); lineage children still get the dialog. */
+  confirmed?: boolean
 }
 
 export type WorktreeDeleteWithToastOptions = {

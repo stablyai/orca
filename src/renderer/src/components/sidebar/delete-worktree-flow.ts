@@ -99,7 +99,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     state.worktreeLineageById
   )
   const hasLineageChildren = deleteLineage.descendants.length > 0
-  const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
+  const skipConfirm = options.confirmed || (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm && !hasLineageChildren) {
     void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
     return
