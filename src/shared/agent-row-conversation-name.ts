@@ -9,6 +9,7 @@
 import type { AgentType } from './agent-status-types'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
+import { isGeneratedTabTitleOwnedByPane } from './agent-tab-title'
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isJcodeIdentityTerminalTitle } from './jcode-terminal-title'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
@@ -17,7 +18,13 @@ import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
+  | 'customTitle'
+  | 'quickCommandLabel'
+  | 'aiVaultTitle'
+  | 'generatedTitle'
+  | 'generatedTitlePaneKey'
+  | 'title'
+  | 'defaultTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -126,7 +133,8 @@ export function getAgentRowConversationName(
   // single-pane tab) keeps the tab title. Tab-owned names above are unaffected:
   // the user gave those to the whole tab and they do not flip on focus.
   paneLiveTitle?: string | null,
-  providerSessionId?: string
+  providerSessionId?: string,
+  paneKey?: string
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -152,7 +160,10 @@ export function getAgentRowConversationName(
   ) {
     return providerTitle
   }
-  const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
+  const generatedTitle =
+    generatedTitlesEnabled && isGeneratedTabTitleOwnedByPane(tab, paneKey)
+      ? tab.generatedTitle?.trim()
+      : ''
   if (generatedTitle) {
     return generatedTitle
   }

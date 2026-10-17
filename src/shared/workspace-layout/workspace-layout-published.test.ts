@@ -38,6 +38,7 @@ describe('publishWorkspaceLayout: the explicit published projection', () => {
       panes: [{ leafId: leaf(3), ptyId: `${GIT_KEY}@@aaaa0003` }],
       chatLeafId: leaf(3),
       defaultTitle: 'Terminal 2',
+      generatedTitlePaneKey: `term-agent:${leaf(3)}`,
       launchAgent: 'claude'
     })
     // A tab's launch inputs are published, so a window mounting it starts the same shell.

@@ -63,6 +63,7 @@ export function saveTerminalRow(
     ...pickStoredFields(tab.terminal, ['defaultTitle']),
     worktreeId: scope.worktreeId,
     ...(tab.generatedTitle !== undefined ? { generatedTitle: tab.generatedTitle } : {}),
+    ...pickStoredFields(tab, ['generatedTitlePaneKey']),
     ...pickStoredFields(tab, SHARED_OPTIONAL_FIELDS),
     customTitle: tab.customTitle,
     color: tab.color,

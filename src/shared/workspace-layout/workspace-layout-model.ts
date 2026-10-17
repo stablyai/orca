@@ -44,6 +44,7 @@ export type LayoutTerminalCreation = Pick<
 
 export type LayoutTerminalTab = LayoutTabFields & {
   kind: 'terminal'
+  generatedTitlePaneKey?: string | null
   terminal: LayoutTerminalCreation
   panes: LayoutTerminalPanes
 }

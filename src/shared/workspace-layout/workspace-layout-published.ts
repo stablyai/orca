@@ -37,6 +37,8 @@ export type PublishedTerminal = {
   chatLeafId?: string
   /** "Terminal N", the title shown when no other title is set. */
   defaultTitle?: string
+  /** Pane whose agent prompt produced the tab's `generatedTitle`; absent on older titles. */
+  generatedTitlePaneKey?: string | null
 } & Pick<
   LayoutTerminalCreation,
   'shellOverride' | 'forceHostRuntime' | 'startupCwd' | 'launchAgent'
@@ -119,6 +121,7 @@ function publishTab(
       root: tab.panes.root,
       panes,
       ...pickStoredFields(tab.panes, ['chatLeafId']),
+      ...pickStoredFields(tab, ['generatedTitlePaneKey']),
       ...pickStoredFields(tab.terminal, [
         'defaultTitle',
         'shellOverride',

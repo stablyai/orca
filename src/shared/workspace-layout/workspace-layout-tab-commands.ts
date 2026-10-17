@@ -164,13 +164,12 @@ export function renameTab(model: WorkspaceLayoutModel, command: CommandOf<'renam
   if (command.kind === 'aiVault') {
     return updateTab(model, command.workspace, { ...tab, aiVaultTitle: command.title })
   }
-  return updateTab(
-    model,
-    command.workspace,
-    command.kind === 'custom'
-      ? { ...tab, customTitle: command.title }
-      : { ...tab, generatedTitle: command.title }
-  )
+  if (command.kind === 'custom') {
+    return updateTab(model, command.workspace, { ...tab, customTitle: command.title })
+  }
+  // Why: a title set by command names no pane, so the pane that produced the old one must not keep it.
+  const untagged = tab.kind === 'terminal' ? omitStoredFields(tab, ['generatedTitlePaneKey']) : tab
+  return updateTab(model, command.workspace, { ...untagged, generatedTitle: command.title })
 }
 
 export function setTabProps(

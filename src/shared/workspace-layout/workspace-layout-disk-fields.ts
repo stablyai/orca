@@ -122,6 +122,7 @@ const ROW = {
   title: own('terminalRow', 'title'),
   defaultTitle: own('tab.terminal', 'defaultTitle'),
   generatedTitle: tab('generatedTitle'),
+  generatedTitlePaneKey: tab('generatedTitlePaneKey'),
   customTitle: tab('customTitle'),
   sortOrder: TAB_ORDER,
   generation: own('terminalRow', 'generation'),

@@ -1,3 +1,5 @@
+import type { TerminalTab } from './terminal-tab-types'
+
 export const GENERATED_TAB_TITLE_MAX_LENGTH = 40
 export const GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT = 512
 
@@ -108,4 +110,18 @@ export function deriveGeneratedTabTitle(prompt: string): string | null {
   }
 
   return truncateAtWordBoundary(capitalizeFirstLetter(candidate), GENERATED_TAB_TITLE_MAX_LENGTH)
+}
+
+/**
+ * Whether a pane's row may show its tab's generated title. The title comes from one pane's
+ * prompt, so it names only that pane; untagged older titles, or callers without a pane, keep
+ * today's tab-wide behavior.
+ */
+export function isGeneratedTabTitleOwnedByPane(
+  tab: Pick<TerminalTab, 'generatedTitlePaneKey'>,
+  paneKey: string | undefined
+): boolean {
+  return (
+    !tab.generatedTitlePaneKey || paneKey === undefined || tab.generatedTitlePaneKey === paneKey
+  )
 }
