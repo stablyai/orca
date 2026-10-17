@@ -65,25 +65,4 @@ describe('structured pointer schema migration', () => {
       db.close()
     }
   })
-
-  it('creates the structured pointer operation store', () => {
-    const db = new OrchestrationDb(':memory:')
-    try {
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
-      db.putStructuredPointerOperation({
-        mailbox_handle: 'dispatch:d1',
-        session_id: 's1',
-        operation_id: '1757030400000-0123456789abcdef0123456789abcdef',
-        batch_fingerprint: 'fp',
-        minted_at_ms: 1_757_030_400_000
-      })
-      expect(db.getStructuredPointerOperation('dispatch:d1')?.operation_id).toBe(
-        '1757030400000-0123456789abcdef0123456789abcdef'
-      )
-      db.deleteStructuredPointerOperation('dispatch:d1')
-      expect(db.getStructuredPointerOperation('dispatch:d1')).toBeUndefined()
-    } finally {
-      db.close()
-    }
-  })
 })

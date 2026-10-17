@@ -21,13 +21,14 @@ export type AgentMessageSender = Readonly<{
 /** One orchestration message a notice points at: its record, and its sender's `senders` address. */
 export type OrchestrationMailMessage = Readonly<{ messageId: string; runId: string; from: string }>
 
-/** "You have N orchestration messages": the pointer a terminal agent is typed, for a mailbox's
- *  unread mail, which the agent reads with `check`. */
+/** Mail identity, shared by legacy notices and chats carrying each message whole. */
 export type OrchestrationMailNotice = Readonly<{
   message: 'mail-notice'
   mailbox: string
   dispatchId: string | null
   messages: readonly OrchestrationMailMessage[]
+  /** Absent on legacy pointers, which do not acknowledge receipt of the mail itself. */
+  carriesMailContent?: boolean
 }>
 
 /** A Dispatch's task, sent as the assignee's turn: the records it joins back to while they exist. */
@@ -71,7 +72,8 @@ const mailNoticeSchema = z.object({
   message: z.literal('mail-notice'),
   mailbox: z.string(),
   dispatchId: z.string().nullable(),
-  messages: z.array(z.object({ messageId: z.string(), runId: z.string(), from: z.string() }))
+  messages: z.array(z.object({ messageId: z.string(), runId: z.string(), from: z.string() })),
+  carriesMailContent: z.boolean().optional()
 })
 
 const taskSchema = z.object({

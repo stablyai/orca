@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatMessageBanner, formatMessagePointer, formatMessagesForInjection } from './formatter'
+import {
+  formatMessageBanner,
+  formatMessageForChat,
+  formatMessagePointer,
+  formatMessagesForInjection
+} from './formatter'
 import type { MessageRow } from './types'
 
 function makeMessage(overrides: Partial<MessageRow> = {}): MessageRow {
@@ -185,5 +190,26 @@ describe('formatMessagePointer', () => {
     expect(formatMessagePointer(1, 'run:run_dev', 'orca-dev')).toContain(
       '`orca-dev orchestration check --run run_dev`'
     )
+  })
+})
+
+describe('formatMessageForChat', () => {
+  // A chat's history is sent to every client, so one huge report must not carry its whole payload.
+  it('caps a long body and payload and says where the whole message is', () => {
+    const text = formatMessageForChat(
+      makeMessage({ body: 'b'.repeat(3_000), payload: 'p'.repeat(3_000) }),
+      'orca'
+    )
+    expect(text.match(/[bp]/g)?.length).toBeLessThan(4_100)
+    expect(text).toContain('`orca orchestration inbox --id msg_test1 --full`')
+    expect(text).toContain('orca orchestration inbox --terminal term_coord --full --limit 100')
+    expect(text).toContain('increase --limit to look farther back')
+    const hugeSubject = formatMessageForChat(
+      makeMessage({ subject: 's'.repeat(10_000) }),
+      'orca-dev'
+    )
+    expect(hugeSubject).not.toContain('s'.repeat(4_001))
+    expect(hugeSubject).toContain('orca-dev orchestration inbox --id msg_test1 --full')
+    expect(hugeSubject).toContain('**Reply:**')
   })
 })

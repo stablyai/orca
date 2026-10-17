@@ -101,15 +101,15 @@ function workerMessage(
   })
 }
 
-/** The name the mail lane records for `term_worker` when it announces these messages. */
-function announcedName(batch: MessageRow[]): string | null {
+/** The name the mail lane records for `term_worker` when it sends this message. */
+function announcedName(message: MessageRow): string | null {
   const sources = names()
   return (
     structuredMailSource({
       db,
       mailboxHandle: 'run:r',
       dispatchId: null,
-      batch,
+      message,
       senderName: (party, reported) => sources.nameOf(party, reported)
     }).senders[0]?.name ?? null
   )
@@ -193,7 +193,7 @@ describe("a sender's name, from what Orca shows for it", () => {
     // Settled synchronously at send, before the mail lane names who it is from.
     expect(reconcileLifecycleMessage(db, report).action).toBe('completed')
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
-    expect(announcedName([report])).toBe('build it')
+    expect(announcedName(report)).toBe('build it')
   })
 
   it('never names a worker by a task it never ran, nor by work it finished long ago', () => {
@@ -201,17 +201,17 @@ describe("a sender's name, from what Orca shows for it", () => {
     const report = workerMessage(runId, 'worker_done', { taskId, dispatchId })
     expect(reconcileLifecycleMessage(db, report).action).toBe('completed')
     // Its next message, unrelated to that finished task: no task names it.
-    expect(announcedName([workerMessage(runId, 'status')])).toBe('Codex')
+    expect(announcedName(workerMessage(runId, 'status'))).toBe('Codex')
     // A second task dispatched to the same terminal fails before the worker runs it.
     const taskB = db.createTask({ runId, spec: 'task B' })
     const failed = createRootDispatch(db, taskB.id, 'term_worker')
     db.failDispatch(failed.id, 'delivery failed')
-    expect(announcedName([workerMessage(runId, 'status')])).toBe('Codex')
+    expect(announcedName(workerMessage(runId, 'status'))).toBe('Codex')
   })
 
   it('never names a worker by a dispatch its report names that is not its own', () => {
     const other = finishedWorker('someone else', 'term_other')
-    expect(announcedName([workerMessage(other.runId, 'worker_done', other)])).toBe('Codex')
+    expect(announcedName(workerMessage(other.runId, 'worker_done', other))).toBe('Codex')
   })
 
   it("names a chat by the label its tab shows, the person's rename first", () => {

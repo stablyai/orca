@@ -14,6 +14,13 @@ export const MESSAGE_TYPES = [
 
 export type MessageType = (typeof MESSAGE_TYPES)[number]
 
+export type UndeliveredUnreadMessageOptions = {
+  excludeTypes?: readonly string[]
+  limit?: number
+  afterSequence?: number
+  throughSequence?: number
+}
+
 export type MessagePriority = 'normal' | 'high' | 'urgent'
 
 export type MessageDeliveryContract = 'legacy_direct' | 'current_delivery' | 'audit_only'

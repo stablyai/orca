@@ -12,14 +12,18 @@ import type {
   StructuredMailboxPointerHost,
   StructuredPointerSessionFacts
 } from './structured-mailbox-pointer-delivery'
-import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSnapshot
+} from '../../../shared/agent-session-journal-types'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
 import { sendAgentTurn, type StructuredSessionTurnOutcome } from './send-agent-turn'
 
-/** Names the dispatch a nudge belongs to on the operation row it writes. */
+/** Names the dispatch a send belongs to on the operation row it writes. */
 export function structuredPointerCallerKey(dispatchId: string): string {
   return `trusted-local:orchestration:${dispatchId}`
 }
@@ -55,7 +59,7 @@ export async function readStructuredSessionGateFacts(
   return structuredSessionGateFacts(snapshot.items, work?.scope)
 }
 
-/** What each recorded send settled as. */
+/** What each recorded send settled as, and the orchestration message it carried. */
 async function readPointerSessionFacts(
   sessionId: string
 ): Promise<StructuredPointerSessionFacts | null> {
@@ -65,11 +69,30 @@ async function readPointerSessionFacts(
   }
   const host = getStructuredAgentSessionHost()
   const boundary = host?.deps.store.getRecord(sessionId)?.providerContextBoundary
-  return {
-    submissions: boundary
-      ? snapshot.submissions.filter((submission) => submission.fence > boundary.afterFence)
-      : snapshot.submissions
+  const mailByItemId = new Map<string, string>()
+  for (const item of snapshot.items) {
+    const messageId = item.body.kind === 'message' ? mailContentMessageId(item.body) : undefined
+    if (messageId) {
+      mailByItemId.set(item.itemId, messageId)
+    }
   }
+  return {
+    submissions: snapshot.submissions
+      .filter((submission) => !boundary || submission.fence > boundary.afterFence)
+      .map(({ clientMessageId, dispatchState, submittedAt }) => ({
+        clientMessageId,
+        dispatchState,
+        submittedAt,
+        mailMessageId: mailByItemId.get(agentJournalSubmissionKey(clientMessageId))
+      }))
+  }
+}
+
+function mailContentMessageId(body: AgentJournalMessageItem): string | undefined {
+  const source = body.from?.orchestration
+  return source?.message === 'mail-notice' && source.carriesMailContent
+    ? source.messages[0]?.messageId
+    : undefined
 }
 
 async function readSessionJournal(sessionId: string): Promise<AgentJournalSnapshot | null> {
@@ -124,6 +147,8 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           callerKey: input.dispatchId
             ? structuredPointerCallerKey(input.dispatchId)
             : structuredSessionPointerCallerKey(input.sessionId),
+          onAnswered: (refusal) =>
+            input.onAnswered?.(refusal?.code !== AGENT_SESSION_NOT_ATTACHED.code),
           turn: {
             body: input.body,
             // A person's plain send: every agent takes it the way it takes their own mid-turn message.

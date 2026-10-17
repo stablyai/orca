@@ -22,7 +22,6 @@ import {
   type OrchestrationCliCommand
 } from './cli-command'
 import { OrchestrationDb } from './db'
-import { formatMessagePointer } from './formatter'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 import {
   buildDispatchPreamble,
@@ -117,7 +116,7 @@ async function renderPreamble(worker: 'chat' | 'terminal'): Promise<string> {
 }
 
 /** The turn text the structured lane sends a chat for one message on `mailbox`. */
-async function renderChatPointer(mailbox: string): Promise<string> {
+async function renderChatMail(mailbox: string): Promise<string> {
   const texts: string[] = []
   const message = db.insertMessage({ from: 'term_peer', to: mailbox, subject: 'hi' })
   const delivery = new OrchestrationStructuredMailboxPointerDelivery({
@@ -142,8 +141,7 @@ async function renderChatPointer(mailbox: string): Promise<string> {
   })
   delivery.deliverForHandle(mailbox)
   await vi.waitFor(() => expect(texts).toHaveLength(1))
-  // Read, as the agent's `check` reads it, so this mailbox's next mail is pointed too.
-  db.markAsRead([message.id])
+  expect(db.getMessageById(message.id)?.read).toBeTruthy()
   return texts[0]!
 }
 
@@ -172,26 +170,21 @@ describe('a chat agent and a terminal agent see the same text but for how each i
   it.each([
     ['a packaged app', true],
     ['a dev build', false]
-  ])(
-    'renders the pointer the PTY lane types into a local terminal, in %s',
-    async (_label, packaged) => {
-      installApp(packaged)
-      // What the PTY lane types for a local, non-WSL terminal (`getTerminalOrchestrationCliCommand`).
-      const terminalCli: OrchestrationCliCommand = resolveTerminalOrchestrationCliCommand({
-        connectionId: null,
-        isWsl: false,
-        worktreeId: 'repo::/tmp/wt',
-        runtimeCliCommand: runtimeOrchestrationCliCommand()
-      })
-      expect(terminalCli).toBe(packaged ? 'orca' : 'orca-dev')
+  ])('names the CLI the PTY lane types into a local terminal, in %s', async (_label, packaged) => {
+    installApp(packaged)
+    // What the PTY lane types for a local, non-WSL terminal (`getTerminalOrchestrationCliCommand`).
+    const terminalCli: OrchestrationCliCommand = resolveTerminalOrchestrationCliCommand({
+      connectionId: null,
+      isWsl: false,
+      worktreeId: 'repo::/tmp/wt',
+      runtimeCliCommand: runtimeOrchestrationCliCommand()
+    })
+    expect(terminalCli).toBe(packaged ? 'orca' : 'orca-dev')
 
-      for (const mailbox of ['run:run_parity', CHAT_ADDRESS]) {
-        expect(await renderChatPointer(mailbox)).toBe(
-          formatMessagePointer(1, mailbox, terminalCli).trim()
-        )
-      }
+    for (const mailbox of ['run:run_parity', CHAT_ADDRESS]) {
+      expect(await renderChatMail(mailbox)).toContain(`\`${terminalCli} orchestration reply --id`)
     }
-  )
+  })
 })
 
 describe('agent-read text about an Orca session ID', () => {

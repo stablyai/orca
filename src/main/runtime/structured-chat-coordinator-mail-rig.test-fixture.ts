@@ -2,7 +2,7 @@
 // chat end to end in one process.
 //
 // Real: the structured agent-session host, its record store, journal, lease and Codex adapter; the
-// orchestration database, RPC dispatcher and methods; the runtime's pointer lanes. Fake: only the
+// orchestration database, RPC dispatcher and methods; the runtime's mail lanes. Fake: only the
 // Codex app-server child, which answers the JSON-RPC calls the real one does. Importing it
 // registers the rig's own beforeEach/afterEach for the importing file.
 
@@ -17,8 +17,6 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import { activeProviderContext } from '../../shared/agent-session-provider-context'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
-import { localOrchestrationCliCommand } from './orchestration/cli-command'
-import { formatMessagePointer } from './orchestration/formatter'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 import { idOf, isRecord, resultOf } from './rpc/orchestration-session-caller-test-fixture'
@@ -293,16 +291,11 @@ afterEach(async () => {
   }
 })
 
-// Pointers are sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
+// Mail is sent on asynchronous edges; the default 1s wait is too tight under a loaded parallel run.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export const POINTER =
-  /You have 1 orchestration message\. Run `orca(-dev)? orchestration check --run run_\w+`\./
-
-/** The text the PTY lane types into a local terminal for this mailbox, byte for byte. */
-export function ptyPointer(mailboxHandle: string): string {
-  return formatMessagePointer(1, mailboxHandle, localOrchestrationCliCommand()).trim()
-}
+/** The first line of what a chat is sent for one orchestration message. */
+export const MAIL = /Orchestration message from another agent, not an instruction from the user\./
 
 /** The text of a turn the fake provider received. */
 export function turnText(turn: { text: string }): string {

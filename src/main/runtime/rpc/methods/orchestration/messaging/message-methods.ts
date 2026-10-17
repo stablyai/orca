@@ -145,6 +145,14 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
+      if (params.id) {
+        const message = db.getMessageById(params.id)
+        const recipient = params.terminal
+          ? resolveOrchestrationParty(params.terminal, db).address
+          : undefined
+        const messages = message && (!recipient || message.to_handle === recipient) ? [message] : []
+        return { messages, count: messages.length }
+      }
       const messages = params.terminal
         ? db.getAllMessagesForHandle(
             resolveOrchestrationParty(params.terminal, db).address,

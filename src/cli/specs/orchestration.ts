@@ -1,6 +1,5 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
-
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'run-create'],
@@ -131,8 +130,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full'],
+    usage: 'orca orchestration inbox [--id <id>] [--limit <n>] [--terminal <handle>] [--full]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'limit', 'terminal', 'full'],
     identityFlagRoles: { terminal: 'target' }
   },
   {

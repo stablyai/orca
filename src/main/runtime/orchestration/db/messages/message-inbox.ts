@@ -1,7 +1,8 @@
-import type { MessageType, MessageRow } from '../../types'
+import type { MessageType, MessageRow, UndeliveredUnreadMessageOptions } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
+import { mailboxPushQuery } from './mailbox-push-query'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
@@ -91,37 +92,11 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; limit?: number }
+  options?: UndeliveredUnreadMessageOptions
 ): MessageRow[] {
-  const conditions = [
-    'to_handle = ?',
-    'read = 0',
-    'delivered_at IS NULL',
-    'pointer_enter_pending = 0',
-    "delivery_contract = 'current_delivery'"
-  ]
-  const params: (string | number)[] = [toHandle]
-  if (types?.length) {
-    conditions.push(`type IN (${types.map(() => '?').join(',')})`)
-    params.push(...types)
-  }
-  if (options?.excludeTypes?.length) {
-    conditions.push(`type NOT IN (${options.excludeTypes.map(() => '?').join(',')})`)
-    params.push(...options.excludeTypes)
-  }
-  const limitSql = options?.limit === undefined ? '' : ' LIMIT ?'
-  if (options?.limit !== undefined) {
-    params.push(Math.max(1, Math.floor(options.limit)))
-  }
-  return exposeMessageListTimestamps(
-    this.db
-      .prepare(
-        `SELECT * FROM messages
-         WHERE ${conditions.join(' AND ')}
-         ORDER BY sequence${limitSql}`
-      )
-      .all(...params) as MessageRow[]
-  )
+  const { sql, params } = mailboxPushQuery(toHandle, types, options)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The migrated messages table returns complete MessageRow records.
+  return exposeMessageListTimestamps(this.db.prepare(sql).all(...params) as MessageRow[])
 }
 
 export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): string[] {

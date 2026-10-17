@@ -122,6 +122,8 @@ export const SQLITE_DATABASE_RUNTIME_INCLUDE = [
   'src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts',
   'src/main/runtime/orchestration/run-coordinator-orca-session-address.test.ts',
   'src/main/runtime/orchestration/settled-question-threads-migration.test.ts',
+  'src/main/runtime/orchestration/structured-mail-source.test.ts',
+  'src/main/runtime/orchestration/structured-mailbox-pointer-backlog.test.ts',
   'src/main/runtime/orchestration/worker-dispatch-repair-safety.test.ts',
   'src/main/runtime/orchestration/worker-dispatch-settlement.test.ts',
   'src/main/runtime/orchestration/worker-start-unobserved-prompt-settlement.test.ts',

@@ -827,6 +827,26 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.inbox', () => {
+    it('reads an exact consumed report beyond recent history without consuming other mail', async () => {
+      setup()
+      const report = db.insertMessage({
+        from: 'a',
+        to: 'b',
+        subject: 'old',
+        body: 'full'.repeat(2_000)
+      })
+      db.markAsRead([report.id])
+      for (let i = 0; i < 21; i++) {
+        db.insertMessage({ from: 'a', to: 'c', subject: 'new' })
+      }
+      const result = await call('orchestration.inbox', { id: report.id, terminal: 'b' })
+      expect(result).toMatchObject({ count: 1, messages: [{ id: report.id, body: report.body }] })
+      expect(await call('orchestration.inbox', { id: report.id, terminal: 'c' })).toEqual({
+        count: 0,
+        messages: []
+      })
+      expect(db.getUnreadMessages('c')).toHaveLength(21)
+    })
     it('returns all messages', async () => {
       setup()
       db.insertMessage({ from: 'a', to: 'b', subject: 'one' })

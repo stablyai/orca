@@ -4,8 +4,9 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 
-const hostRef: { current: unknown } = { current: null }
+const hostRef: { current: Record<string, unknown> | null } = { current: null }
 
 vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
@@ -83,16 +84,44 @@ describe('structured mailbox pointer host', () => {
     })
   })
 
-  it("reads what the session's sends settled as", async () => {
-    const submissions = [{ clientMessageId: 'op1', dispatchState: 'unknown' }]
+  it("reads what the session's sends settled as, and the mail each carried", async () => {
+    const submissions = [
+      { clientMessageId: 'op1', dispatchState: 'unknown', submittedAt: 1 },
+      { clientMessageId: 'op2', dispatchState: 'accepted', submittedAt: 2 }
+    ]
+    const from: AgentMessageSource = {
+      kind: 'agent',
+      senders: [],
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'run:r1',
+        dispatchId: null,
+        messages: [{ messageId: 'm1', runId: 'r1', from: 'term_a' }],
+        carriesMailContent: true
+      }
+    }
+    const item = { itemId: agentJournalSubmissionKey('op1'), body: { kind: 'message', from } }
     hostRef.current = {
       deps: { store: { getRecord: () => null } },
-      journalSnapshot: () => ({ items: [], submissions }),
+      journalSnapshot: () => ({ items: [item], submissions }),
       currentWork: () => null
     }
     expect(await createStructuredMailboxPointerHost().readSessionFacts('s1')).toEqual({
-      submissions
+      submissions: [{ ...submissions[0], mailMessageId: 'm1' }, submissions[1]]
     })
+    // An upgraded host must not acknowledge mail just because an old pointer was accepted.
+    item.body.from = {
+      ...from,
+      orchestration: {
+        message: 'mail-notice',
+        mailbox: 'run:r1',
+        dispatchId: null,
+        messages: [{ messageId: 'm1', runId: 'r1', from: 'term_a' }]
+      }
+    }
+    expect(
+      (await createStructuredMailboxPointerHost().readSessionFacts('s1'))?.submissions
+    ).toEqual(submissions)
   })
 
   it('scopes settlements to the record fence when the journal marker disagrees', async () => {
@@ -123,9 +152,9 @@ describe('structured mailbox pointer host', () => {
       currentWork: () => null
     }
     const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({
-      submissions: [current]
-    })
+    expect((await host.readSessionFacts('s1'))?.submissions).toEqual([
+      expect.objectContaining({ clientMessageId: current.clientMessageId })
+    ])
     expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
   })
 
@@ -144,9 +173,9 @@ describe('structured mailbox pointer host', () => {
       currentWork: () => null
     }
     const host = createStructuredMailboxPointerHost()
-    expect(await host.readSessionFacts('s1')).toEqual({
-      submissions: [current]
-    })
+    expect((await host.readSessionFacts('s1'))?.submissions).toEqual([
+      expect.objectContaining({ clientMessageId: current.clientMessageId })
+    ])
     expect(host.currentContextClearOperationId('s1')).toBe('clear-1')
   })
 
@@ -274,7 +303,9 @@ describe('structured mailbox pointer host', () => {
       ['agent_session_ownership_unknown', { kind: 'unattached' }],
       ['agent_session_conflict', { kind: 'sent', state: 'rejected' }]
     ] as const) {
-      hostRef.current = { send: async () => ({ ok: false, refusal: { code, message: 'no' } }) }
+      hostRef.current = {
+        send: async () => ({ ok: false, refusal: { code, message: 'no' } })
+      }
       await expect(
         createStructuredMailboxPointerHost().send({
           sessionId: 's1',

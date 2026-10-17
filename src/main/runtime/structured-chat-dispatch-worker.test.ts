@@ -237,7 +237,7 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(dispatchCount()).toEqual({ n: 0 })
   })
 
-  it("points the chat at its coordinator's mail to the Dispatch, which its own check reads", async () => {
+  it("sends the chat its coordinator's mail to the Dispatch whole, which its own check then skips", async () => {
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
     const { taskId } = await coordinatorRunAndTask()
@@ -255,14 +255,19 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     )
 
     await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
+    // A Dispatch mailbox's reply needs no `--from`: the CLI resolves the live sender.
     expect(turnText(worker.turns[0]!)).toMatch(
-      /^You have 1 orchestration message\. Run `orca(-dev)? orchestration check`\.$/
+      /\*\*Subject:\*\* also check the tests[\s\S]*`orca(-dev)? orchestration reply --id msg_\w+ --body "\.\.\."`$/
     )
     expect(await queuedCardTexts(PEER_CHAT)).toEqual([])
     await settleTurn(PEER_CHAT, 0)
-    expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
-      messages: [expect.objectContaining({ subject: 'also check the tests' })]
-    })
+    await vi.waitFor(
+      async () =>
+        expect(await call('orchestration.check', {}, { sessionId: PEER_CHAT })).toMatchObject({
+          messages: []
+        }),
+      WAIT
+    )
   })
 
   it("counts a chat worker's own Dispatch as depth 2, under the nesting cap", async () => {

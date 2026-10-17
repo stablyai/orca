@@ -52,6 +52,8 @@ export type StructuredSessionTurnSend = {
   /** Scopes the host's operation ledger, so one sender's sends cannot exhaust another's budget. */
   callerKey: string
   turn: StructuredSessionTurn
+  /** The host answered, before any wait for the send to settle. */
+  onAnswered?: (refusal?: AgentSessionWireRefusal) => void
   /** The caller's own readiness budget for the agent to take the message, its start included;
    *  the orchestration readiness timeout by default. */
   budgetMs?: number
@@ -140,6 +142,7 @@ async function sendStructuredSessionTurn(
     { callerKey: send.callerKey },
     turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
   )
+  send.onAnswered?.(result.ok ? undefined : result.refusal)
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }
   }

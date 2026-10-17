@@ -206,9 +206,8 @@ CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_identity
 CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_release
   ON worker_terminal_resources(release_state);
 
--- One live agent-session operation id per structured worker mailbox. Persisted because the id is
--- the send's idempotency key: re-minting it after a restart would re-deliver an already-queued
--- pointer as a second turn.
+-- No longer written: chats now get each message whole, and the journal records each send's id.
+-- Kept so existing databases keep their schema.
 CREATE TABLE IF NOT EXISTS structured_pointer_operations (
   mailbox_handle    TEXT PRIMARY KEY,
   session_id        TEXT NOT NULL,

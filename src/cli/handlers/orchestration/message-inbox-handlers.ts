@@ -31,15 +31,26 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration inbox': async ({ flags, client, json }) => {
     const full = flags.has('full')
+    const id = getOptionalStringFlag(flags, 'id')
+    const terminal = getOptionalStringFlag(flags, 'terminal')
     const result = await client.call<{
       messages: MessageSummary[]
       count: number
     }>('orchestration.inbox', {
+      id,
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getOptionalStringFlag(flags, 'terminal')
+      terminal
     })
+    // Older hosts ignore id; never print their unrelated history as an exact lookup.
+    if (id) {
+      result.result.messages = result.result.messages.filter((message) => message.id === id)
+      result.result.count = result.result.messages.length
+    }
     printResult(result, json, (value) => {
       if (value.count === 0) {
+        if (id) {
+          return `Message ${id} was not returned; an older host may only search recent history. Rerun the same inbox command without --id, keeping its terminal and execution profile, with --full --limit 100 and look for ${id}; increase --limit to look farther back.`
+        }
         return 'No messages.'
       }
       // Why: default output omits body/payload for at-a-glance sweeps; --full prints them for auditing.

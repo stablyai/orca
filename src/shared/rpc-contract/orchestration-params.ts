@@ -70,6 +70,7 @@ export const ReplyParams = z.object({
 })
 
 export const InboxParams = z.object({
+  id: OptionalString,
   limit: OptionalFiniteNumber,
   // Why: filters the inbox to a handle so inbox and check --all give agreeing results (design doc §3.3).
   terminal: OptionalString
