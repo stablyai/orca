@@ -4214,6 +4214,13 @@
                 }
               }
             }
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "클릭하여 GitHub Copilot에 로그인",
+            "deviceCode": "Copilot 로그인 코드 {{code}}을(를) 복사했습니다. 브라우저에 붙여넣으세요.",
+            "signInFailed": "Copilot 로그인에 실패했습니다"
           }
         }
       },

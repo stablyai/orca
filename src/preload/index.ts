@@ -46,6 +46,7 @@ import { terminalPreviewApi } from './api/terminal-preview-bridge'
 import { macosTccPromptsApi } from './api/macos-tcc-prompts-bridge'
 import { developerPermissionsApi } from './api/developer-permissions-bridge'
 import { computerUsePermissionsApi } from './api/computer-use-permissions-bridge'
+import { copilotCompletionApi } from './api/copilot-completion-bridge'
 import { shellApi } from './api/shell-bridge'
 import { skillsApi } from './api/skills-bridge'
 import { petApi } from './api/pet-bridge'
@@ -160,6 +161,7 @@ const api = {
   docPreview: docPreviewApi,
   notebook: notebookApi,
   fs: fsApi,
+  copilotCompletion: copilotCompletionApi,
   git: gitApi,
   ui: uiApi,
   stats: statsApi,

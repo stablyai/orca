@@ -5,7 +5,11 @@ import {
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveWorktreeExecutionHost } from '../../../shared/worktree-execution-host-resolution'
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import {
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -53,17 +57,7 @@ export function createConnectionIdForFileSelector(
   }
 }
 
-export function getConnectionIdFromState(
-  state: ConnectionOwnerState,
-  worktreeId: string | null
-): string | null | undefined {
-  if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
-    return null
-  }
-  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
-  if (parsedWorkspaceKey?.type === 'folder') {
-    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
-  }
+function resolveWorktreeHostFromState(state: ConnectionOwnerState, worktreeId: string) {
   // Why: owner resolution runs from retained Zustand selectors, so unrelated
   // store writes must not flatten every worktree or scan every repository.
   const worktreeResolution = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
@@ -71,7 +65,7 @@ export function getConnectionIdFromState(
     // Why (#17799): rows that disagree about the owner cannot name a connection.
     // `undefined` is this module's documented "cannot determine the host" answer;
     // collapsing it to `null` would authorize a local read of a remote path.
-    return undefined
+    return null
   }
   const worktree = worktreeResolution.kind === 'resolved' ? worktreeResolution.owner : undefined
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
@@ -84,7 +78,22 @@ export function getConnectionIdFromState(
     },
     { repoId, hostId: worktree?.hostId ?? null }
   )
-  return resolution.kind === 'resolved' ? resolution.connectionId : undefined
+  return { worktree, resolution }
+}
+
+export function getConnectionIdFromState(
+  state: ConnectionOwnerState,
+  worktreeId: string | null
+): string | null | undefined {
+  if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return null
+  }
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId)
+  }
+  const host = resolveWorktreeHostFromState(state, worktreeId)
+  return host?.resolution.kind === 'resolved' ? host.resolution.connectionId : undefined
 }
 
 /**
@@ -135,4 +144,34 @@ export function getConnectionIdForFileFromState(
       .map(({ repo }) => repo.connectionId ?? null)
   )
   return connectionIds.size === 1 ? ([...connectionIds][0] ?? null) : undefined
+}
+
+/**
+ * True only when the file provably lives on this machine. `getConnectionIdForFileFromState` answers
+ * `null` for a `runtime:` host too (no nested SSH target), so a null connection is not enough to
+ * hand the path to a locally spawned process; unresolved, SSH and runtime hosts are all false.
+ */
+export function isFileOnLocalHostFromState(
+  state: ConnectionOwnerState,
+  worktreeId: string | null,
+  filePath: string
+): boolean {
+  if (!worktreeId || getConnectionIdForFileFromState(state, worktreeId, filePath) !== null) {
+    return false
+  }
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    const pinnedHost = state.folderWorkspaces.find(
+      (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
+    )?.executionHostId
+    const host = parseExecutionHostId(pinnedHost)
+    return !host || host.kind === 'local'
+  }
+  const host = resolveWorktreeHostFromState(state, worktreeId)
+  return (
+    host !== null &&
+    !host.worktree?.runtimeOwnerEnvironmentId?.trim() &&
+    host.resolution.kind === 'resolved' &&
+    host.resolution.hostId === LOCAL_EXECUTION_HOST_ID
+  )
 }

@@ -4322,6 +4322,13 @@
                 }
               }
             }
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "Cliquez pour vous connecter à GitHub Copilot",
+            "deviceCode": "Code de connexion Copilot {{code}} copié : collez-le dans le navigateur.",
+            "signInFailed": "Échec de la connexion à Copilot"
           }
         }
       },
