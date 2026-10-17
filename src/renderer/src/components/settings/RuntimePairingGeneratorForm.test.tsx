@@ -13,7 +13,8 @@ function renderForm(
     address: string
     runtimePairingUrl: string
     webClientUrl: string
-  }
+  },
+  localWebSocketPort: number | null = 6768
 ): string {
   return renderToStaticMarkup(
     <TooltipProvider>
@@ -28,6 +29,7 @@ function renderForm(
         runtimePairingUrl={generated?.runtimePairingUrl ?? null}
         copiedTarget={null}
         generatedAddress={generated?.address ?? null}
+        localWebSocketPort={localWebSocketPort}
         onIntentChange={vi.fn()}
         onSelectedAddressChange={vi.fn()}
         onRefreshNetworkInterfaces={vi.fn()}
@@ -53,6 +55,33 @@ describe('RuntimePairingGeneratorForm', () => {
     const populatedMarkup = renderForm('custom', 'openclaw.example.ts.net')
     expect(populatedMarkup).toContain('value="openclaw.example.ts.net"')
     expect(populatedMarkup).not.toContain('disabled=""')
+  })
+
+  it('shows the cloudflared command against the bound loopback port', () => {
+    const markup = renderForm('cloudflare', '')
+    expect(markup).toContain('cloudflared tunnel --url http://127.0.0.1:6768')
+    expect(markup).toContain('id="runtime-pairing-cloudflare-address"')
+    // No tunnel URL yet, so there is nothing to generate against.
+    expect(markup).toContain('disabled=""')
+  })
+
+  // Why: a copyable command carrying a literal placeholder port is a broken command.
+  it('withholds the command instead of printing a placeholder port', () => {
+    const markup = renderForm('cloudflare', '', undefined, null)
+    expect(markup).not.toContain('cloudflared tunnel')
+    expect(markup).toContain('The runtime port is not available yet.')
+  })
+
+  // Why: a bare host would inherit the local port and advertise :6768 through an edge on 443, so the
+  // form must refuse anything the tunnel parser cannot normalize to a public wss:// URL.
+  it('accepts a public tunnel URL and rejects a loopback one', () => {
+    const accepted = renderForm('cloudflare', 'https://tidy-otter-plum.trycloudflare.com')
+    expect(accepted).not.toContain('disabled=""')
+    expect(accepted).toContain('Quick tunnel URLs change every time')
+
+    const rejected = renderForm('cloudflare', 'https://127.0.0.1:6768')
+    expect(rejected).toContain('disabled=""')
+    expect(rejected).toContain('aria-invalid="true"')
   })
 
   it('hides generated links after the selected address changes', () => {
