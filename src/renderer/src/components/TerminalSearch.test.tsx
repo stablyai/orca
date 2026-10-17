@@ -171,3 +171,39 @@ describe('TerminalSearch cleanup', () => {
     expect(addon.findNext).toHaveBeenLastCalledWith('')
   })
 })
+
+describe('TerminalSearch whole-word matching', () => {
+  it('forwards whole-word matching to the addon and keyboard search state', async () => {
+    const { addon } = createSearchAddon()
+    const searchStateRef = { current: { query: '', caseSensitive: false, regex: false } }
+    const view = render(
+      <TerminalSearch
+        isOpen
+        onClose={vi.fn()}
+        searchAddon={addon}
+        searchStateRef={searchStateRef}
+      />
+    )
+    fireEvent.change(view.getByPlaceholderText('Search...'), { target: { value: 'foo' } })
+    await waitFor(() => expect(addon.findNext).toHaveBeenCalled())
+    vi.mocked(addon.findNext).mockClear()
+
+    const toggle = view.getByTitle('Match Whole Word')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+
+    await waitFor(() =>
+      expect(addon.findNext).toHaveBeenCalledWith(
+        'foo',
+        expect.objectContaining({ wholeWord: true, caseSensitive: false, regex: false })
+      )
+    )
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    expect(searchStateRef.current).toEqual({
+      query: 'foo',
+      caseSensitive: false,
+      regex: false,
+      wholeWord: true
+    })
+  })
+})

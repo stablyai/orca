@@ -2617,6 +2617,7 @@
         "0f3066256e": "Previous match",
         "42e466b9f1": "Regex",
         "90c61387d9": "Case sensitive",
+        "wholeWord": "Match Whole Word",
         "e07012f26e": "Search...",
         "10e039b591": "No results"
       },
