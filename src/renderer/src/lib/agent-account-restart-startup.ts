@@ -2,12 +2,10 @@ import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import {
   resolveSshHostReportedPlatform,
+  sshOwnerEnvironmentIdForPlatform,
   resolveAgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
-import {
-  getExecutionHostIdForWorktree,
-  getExplicitRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
@@ -82,7 +80,7 @@ export function resolveAgentAccountRestartResumeStartup(
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      getExplicitRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+      sshOwnerEnvironmentIdForPlatform(state, args.worktreeId)
     )
   })
   const startupPlan = buildAgentResumeStartupPlan({

@@ -5,13 +5,11 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import {
   resolveSshHostReportedPlatform,
+  sshOwnerEnvironmentIdForPlatform,
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
 } from '@/lib/agent-resume-launch-target'
-import {
-  getExecutionHostIdForWorktree,
-  getExplicitRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveResumeLaunchRecipe } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
@@ -44,7 +42,7 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
     remotePlatform: resolveSshHostReportedPlatform(
       state,
       executionHostId,
-      getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      sshOwnerEnvironmentIdForPlatform(state, worktreeId)
     )
   })
 }

@@ -6,23 +6,19 @@ import { getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeMobileSessionTabsResult, RuntimeStatus } from '../../../shared/runtime-types'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
 import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
-  getExplicitRuntimeEnvironmentIdForWorktree: vi.fn()
+  ownerEnvironmentIdForWorkspace: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRuntimeOwnerModule>()
-  return {
-    ...actual,
-    getExplicitRuntimeEnvironmentIdForWorktree: mocks.getExplicitRuntimeEnvironmentIdForWorktree
-  }
-})
+vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
+  mirroredRuntimeEnvironmentIdForWorkspace: (state: unknown, workspaceId: string | null) =>
+    workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
+}))
 
 vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
@@ -177,7 +173,7 @@ describe('session-tabs streams across worktree switches on one host', () => {
     runtimeCall.mockClear()
     runtimeSubscribe.mockClear()
     mocks.createTerminal.mockReset().mockResolvedValue({ status: 'created' })
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV)
+    mocks.ownerEnvironmentIdForWorkspace.mockReset().mockReturnValue(ENV)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -364,7 +360,7 @@ describe('session-tabs streams across worktree switches on one host', () => {
   it('does not seed a terminal on the old host after the same worktree moves to another host', async () => {
     await connect()
     const streamA = latestStream(WORKTREE_A)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReturnValue('env-b')
+    mocks.ownerEnvironmentIdForWorkspace.mockReturnValue('env-b')
     await act(async () => {
       useAppStore.setState({ runtimeEnvironments: [...useAppStore.getState().runtimeEnvironments] })
       await settle()
@@ -385,7 +381,7 @@ describe('session-tabs streams across worktree switches on one host', () => {
   it('drops a warm stream when its host is re-paired while another host is selected', async () => {
     await connect()
     const streamA = latestStream(WORKTREE_A)
-    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockImplementation((_state, worktreeId) =>
+    mocks.ownerEnvironmentIdForWorkspace.mockImplementation((_state, worktreeId) =>
       worktreeId === WORKTREE_B ? 'env-b' : ENV
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mirror scan and revision ledger read only id, createdAt and pairingRevision.

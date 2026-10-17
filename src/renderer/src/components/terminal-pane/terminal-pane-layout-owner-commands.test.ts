@@ -27,8 +27,11 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExplicitRuntimeEnvironmentIdForWorktree: () => mocks.ownerEnvironmentId
+vi.mock('@/lib/resolve-owner', () => ({
+  runtimeEnvironmentIdForWorkspaceOwner: () => ({
+    kind: 'resolved',
+    environmentId: mocks.ownerEnvironmentId
+  })
 }))
 
 describe('equalizeTerminalPanes', () => {

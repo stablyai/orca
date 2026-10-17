@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshStatus
@@ -75,6 +75,14 @@ function derivePhase(
   return 'unavailable'
 }
 
+function sshOwnerEnvironmentId(state: AppState, worktreeId: string | null): string | null {
+  const owner = worktreeId
+    ? runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+    : null
+  // Why: the phase only reads SSH state; an undecidable owner reads the direct connection.
+  return owner?.kind === 'resolved' ? owner.environmentId : null
+}
+
 /** The shared signal for a caller that already resolved the worktree's connection id. */
 export function resolveWorktreeHostConnection(
   state: AppState,
@@ -87,7 +95,7 @@ export function resolveWorktreeHostConnection(
   }
   const environmentId =
     environmentIdOverride === undefined
-      ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+      ? sshOwnerEnvironmentId(state, worktreeId)
       : environmentIdOverride
   const publishedStatus = selectRuntimeAwareSshStatus(state, environmentId, targetId)
   const generation = selectRuntimeAwareSshConnectionGeneration(state, environmentId, targetId)

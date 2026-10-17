@@ -8,7 +8,7 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { afterLayoutFrame, layoutFramesFlowing } from '@/runtime/layout-frame-position'
 import { expectTabRowFields } from '@/runtime/layout-owner-pane-intents'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { layoutFrameTerminalTab } from '@/runtime/layout-frame-terminal-panes'
@@ -25,6 +25,15 @@ import type { AppState } from '../types'
  * recorded. A field main's copy lacks keeps the window's: a runtime create records a shell only
  * when its launch named one, so a WSL worktree's resolved shell lives only here.
  */
+// Why: as `sendLayoutApply`, a twin stays on main's path: it edits this window's layout, not a host.
+function isPairedServerLayout(
+  state: Parameters<typeof runtimeEnvironmentIdForWorkspaceOwner>[0],
+  workspaceId: string
+): boolean {
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId })
+  return owner.kind === 'resolved' && owner.environmentId !== null
+}
+
 export function withMainTerminalFacts(tab: TerminalTab): TerminalTab {
   const main = layoutFrameTerminalTab(tab.worktreeId, tab.id)
   if (!main) {
@@ -97,7 +106,7 @@ export function recordCreatedTerminalTabInLayoutOwner(
   // Why: a paired server mirrors this workspace's tabs; main does not own its layout. A tab main
   // already holds is its own.
   if (
-    getExplicitRuntimeEnvironmentIdForWorktree(state, command.workspace) ||
+    isPairedServerLayout(state, command.workspace) ||
     layoutFrameTerminalTab(command.workspace, command.tabId)
   ) {
     return
@@ -130,7 +139,7 @@ export function createInitialTerminalThroughLayoutOwner(
   worktreeId: string,
   create: (ids?: { tabId: string; leafId: string }) => void
 ): boolean {
-  if (getExplicitRuntimeEnvironmentIdForWorktree(getState(), worktreeId)) {
+  if (isPairedServerLayout(getState(), worktreeId)) {
     return false
   }
   const tabId = createBrowserUuid()

@@ -48,7 +48,14 @@ function toOwnerMatch(
   if (authority === 'contradictory') {
     return { kind: 'ambiguous' }
   }
-  return authority ? { kind: 'resolved', owner: authority } : { kind: 'missing' }
+  if (authority) {
+    return { kind: 'resolved', owner: authority }
+  }
+  // Why: a route that names a host (e.g. the unresolved-owner sentinel) is contested, not absent;
+  // `missing` would let callers read it as this app.
+  return resolution.route.executionHostId || resolution.route.runtimeEnvironmentId?.trim()
+    ? { kind: 'ambiguous' }
+    : { kind: 'missing' }
 }
 
 /**
@@ -133,8 +140,30 @@ export function resolveOwner(
   state: WorktreeOperationRouteState,
   ref: WorkspaceOwnerRef
 ): ExecutionHostOwnerMatch<HostAuthority> {
-  // Why: focus is the only settings field the route resolvers read; blanking it makes this focus-free.
-  return resolveRoute({ ...state, settings: null }, ref)
+  return resolveRoute(focusFreeRouteState(state), ref)
+}
+
+/**
+ * Only the fields the route resolvers read, so per-row selectors do not copy the whole store.
+ * Focus is the only settings field they read; blanking it makes this focus-free.
+ */
+function focusFreeRouteState(state: WorktreeOperationRouteState): {
+  [K in keyof Required<WorktreeOperationRouteState>]: WorktreeOperationRouteState[K]
+} {
+  return {
+    settings: null,
+    runtimeEnvironments: state.runtimeEnvironments,
+    folderWorkspaces: state.folderWorkspaces,
+    projectGroups: state.projectGroups,
+    restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+    activeWorktreeId: state.activeWorktreeId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+    repos: state.repos,
+    worktreesByRepo: state.worktreesByRepo,
+    detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+    removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds
+  }
 }
 
 /** Transport to the workspace's owner, or `null` when the rows name none or disagree. */

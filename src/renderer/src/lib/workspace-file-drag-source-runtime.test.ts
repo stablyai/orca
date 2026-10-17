@@ -11,8 +11,13 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ settings: { activeRuntimeEnvironmentId: 'foreign-env' } }) }
 }))
 vi.mock('./worktree-runtime-owner', () => ({
-  getKnownExecutionHostIdForWorktree: () => mocks.host,
-  getExplicitRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
+  getKnownExecutionHostIdForWorktree: () => mocks.host
+}))
+vi.mock('./resolve-owner', () => ({
+  runtimeEnvironmentIdForWorkspaceOwner: () => ({
+    kind: 'resolved',
+    environmentId: mocks.environmentId
+  })
 }))
 
 describe('workspace drag source server namespace', () => {

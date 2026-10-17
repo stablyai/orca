@@ -7,10 +7,8 @@ import { findRuntimeWorkspaceFileOwner } from '../../../shared/runtime-workspace
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
-import {
-  getExecutionHostIdForWorktree,
-  getExplicitRuntimeEnvironmentIdForWorktree
-} from './worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
 
 export type RuntimeWorkspaceFileRoute = {
@@ -26,9 +24,9 @@ function workspaceMatchesExecutionHost(
 ): boolean {
   const parsedHost = parseExecutionHostId(executionHostId)
   if (parsedHost?.kind === 'runtime') {
-    return (
-      getExplicitRuntimeEnvironmentIdForWorktree(state, workspaceId) === parsedHost.environmentId
-    )
+    const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId })
+    // Why: a twin matches neither host, so a server's path never opens as the other twin's file.
+    return owner.kind === 'resolved' && owner.environmentId === parsedHost.environmentId
   }
   const explicit = resolveExplicitWorktreeOperationRouteResult(state, workspaceId)
   if (explicit.kind === 'resolved') {

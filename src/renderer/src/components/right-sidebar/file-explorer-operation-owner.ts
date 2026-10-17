@@ -9,10 +9,8 @@ import {
 } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { translate } from '@/i18n/i18n'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
 import {
@@ -76,8 +74,15 @@ export function getFileExplorerOperationOwnerFromState(
     }
   }
 
+  const explicitOwner = worktreeId
+    ? runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
+    : null
+  // Why: file writes and deletes must not pick one of two hosts that publish this workspace.
+  if (explicitOwner?.kind === 'ambiguous') {
+    return { kind: 'unresolved' }
+  }
   const connectionId = getConnectionIdFromState(state, worktreeId ?? null)
-  const explicitRuntimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const explicitRuntimeEnvironmentId = explicitOwner?.environmentId ?? null
   // Why: global runtime focus is not ownership evidence while SSH/local
   // metadata is unresolved; destructive actions must wait for explicit provenance.
   if (connectionId === undefined && explicitRuntimeEnvironmentId === null) {

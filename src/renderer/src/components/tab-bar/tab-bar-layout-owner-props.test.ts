@@ -10,8 +10,11 @@ const mocks = vi.hoisted(
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExplicitRuntimeEnvironmentIdForWorktree: () => mocks.ownerEnvironmentId
+vi.mock('@/lib/resolve-owner', () => ({
+  runtimeEnvironmentIdForWorkspaceOwner: () => ({
+    kind: 'resolved',
+    environmentId: mocks.ownerEnvironmentId
+  })
 }))
 
 const pinnedItem = { unifiedTabId: 'tab-editor', isPinned: true }

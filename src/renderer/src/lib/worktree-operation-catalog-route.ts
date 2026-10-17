@@ -12,6 +12,7 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
+  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 // Type-only, so routing's shared vocabulary stays in one place without a runtime cycle.
@@ -108,7 +109,12 @@ function isUnstampedRowOfSharedLocalProject(
   state: WorktreeOperationRouteState,
   owner: WorktreeOperationOwnerRecord
 ): boolean {
-  if (owner.hostId || owner.runtimeOwnerEnvironmentId?.trim()) {
+  // Why the index first: one row cannot be both, and this runs inside retained selectors.
+  if (
+    owner.hostId ||
+    owner.runtimeOwnerEnvironmentId?.trim() ||
+    resolveIndexedRepoOwner(state.repos, owner.repoId).kind !== 'ambiguous'
+  ) {
     return false
   }
   let hasLocalRepoRow = false

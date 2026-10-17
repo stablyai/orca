@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { useAppStore } from '../../store'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '../../lib/worktree-runtime-owner'
+import { mirroredRuntimeEnvironmentIdForWorkspace } from './mirrored-workspace-owner'
 import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../web-session-terminal-orphan-recovery'
 import {
@@ -94,7 +94,7 @@ export function installActiveSessionTabsSubscription({
     const state = useAppStore.getState()
     return (
       state.activeWorktreeId === activeWorktreeId &&
-      getExplicitRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)?.trim() === environmentId
+      mirroredRuntimeEnvironmentIdForWorkspace(state, activeWorktreeId) === environmentId
     )
   }
   const seeder = createInitialTerminalSeeder(environmentId, activeWorktreeId)
