@@ -278,6 +278,12 @@ export function DictationController() {
   // route through a ref so the two callbacks do not depend on each other.
   stopDictationRef.current = () => void stopDictation()
 
+  useEffect(() => {
+    if (!settings?.voice?.enabled) {
+      void stopDictation()
+    }
+  }, [settings?.voice?.enabled, stopDictation])
+
   // Toggle mode: use IPC from main process (before-input-event intercepts
   // the keyDown so Cmd+E doesn't reach xterm or trigger system shortcuts).
   useEffect(() => {
@@ -287,16 +293,9 @@ export function DictationController() {
     }
 
     const handleKeyDown = (): void => {
-      if (
-        !settings?.voice?.enabled ||
-        !settings.voice.sttModel ||
-        dictationStateRef.current === 'stopping'
-      ) {
-        return
-      }
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
         void stopDictation()
-      } else {
+      } else if (settings?.voice?.enabled && settings.voice.sttModel) {
         void startDictation()
       }
     }
@@ -314,12 +313,12 @@ export function DictationController() {
   useEffect(() => {
     const canDictate = (): boolean => Boolean(settings?.voice?.enabled && settings.voice.sttModel)
     const handleControl = (event: Event): void => {
-      if (!canDictate() || dictationStateRef.current === 'stopping') {
+      if (dictationStateRef.current === 'stopping') {
         return
       }
       const action = (event as CustomEvent<DictationControlAction>).detail
       if (action === 'start') {
-        if (dictationStateRef.current === 'idle') {
+        if (canDictate() && dictationStateRef.current === 'idle') {
           void startDictation()
         }
         return
@@ -332,7 +331,7 @@ export function DictationController() {
       }
       if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
         void stopDictation()
-      } else {
+      } else if (canDictate()) {
         void startDictation()
       }
     }
