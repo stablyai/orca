@@ -17,7 +17,8 @@ export function localizeProjectHeader(
     anchorRepo: row.repo,
     hostId,
     count: row.hostWorktreeCounts?.get(hostId) ?? 0,
-    worktreeIds: row.hostWorktreeIds?.get(hostId) ?? []
+    worktreeIds: row.hostWorktreeIds?.get(hostId) ?? [],
+    countedWorkspaceIds: row.hostCountedWorkspaceIds?.get(hostId) ?? []
   }
 }
 

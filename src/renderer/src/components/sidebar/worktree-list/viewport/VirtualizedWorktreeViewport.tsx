@@ -32,6 +32,11 @@ import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { useAttentionWorkspaceIds } from '../../use-attention-workspace-ids'
+import {
+  collapsedGroupCountBadgeNeedsAttention,
+  resolveCollapsedGroupCountBadgeMode
+} from '../../../../../../shared/collapsed-group-count-badge'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
@@ -105,6 +110,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       handleRemoveProject,
       handleCreateForRepo
     ]
+  )
+  const countBadgeMode = resolveCollapsedGroupCountBadgeMode(settings)
+  const attentionWorkspaceIds = useAttentionWorkspaceIds(
+    collapsedGroupCountBadgeNeedsAttention(countBadgeMode)
   )
 
   const reveal = useSidebarRevealHighlight()
@@ -361,6 +370,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     headerDrag,
     projectHeaderHostContexts,
     getCachedFolderWorkspacePathStatus,
+    countBadgeMode,
+    attentionWorkspaceIds,
     getLineageToggleHandler,
     toggleGroupWithScrollAnchor,
     onRowClickCapture: handleWorktreeRowClickCapture,

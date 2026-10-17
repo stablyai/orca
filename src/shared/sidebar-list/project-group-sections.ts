@@ -17,6 +17,8 @@ import {
   withRepoSectionDisplayLabels
 } from '../project-section-order'
 import { buildFolderWorkspaceRow } from './row-builders'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
+import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -101,6 +103,24 @@ export function appendProjectGroupSections(
     )
   }
 
+  // Why separate from getProjectGroupSubtreeCount: that count is child projects and folder
+  // workspaces, while the header's count badge is about workspaces.
+  const getProjectGroupSubtreeWorkspaceIds = (groupId: string): string[] => {
+    const ids: string[] = []
+    for (const [, group] of groupByProjectGroupId.get(groupId) ?? []) {
+      for (const worktree of group.items) {
+        ids.push(getWorktreeHostIdentity(worktree))
+      }
+    }
+    for (const pair of folderWorkspacesByProjectGroupId.get(groupId) ?? []) {
+      ids.push(getFolderWorkspaceHostIdentity(pair.folderWorkspace))
+    }
+    for (const child of childGroupsByParentId.get(groupId) ?? []) {
+      ids.push(...getProjectGroupSubtreeWorkspaceIds(child.id))
+    }
+    return ids
+  }
+
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
@@ -112,7 +132,8 @@ export function appendProjectGroupSections(
       count: getProjectGroupSubtreeCount(projectGroup.id),
       icon: { kind: 'project' },
       projectGroup,
-      projectGroupDepth: depth
+      projectGroupDepth: depth,
+      countedWorkspaceIds: getProjectGroupSubtreeWorkspaceIds(projectGroup.id)
     })
     if (!collapsedGroups.has(key)) {
       for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {

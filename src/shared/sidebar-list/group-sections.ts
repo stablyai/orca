@@ -6,7 +6,9 @@ import { getWorkspaceStatusFromGroupKey } from '../workspace-statuses'
 import type { PRGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import {
+  getHostCountedWorktreeKeys,
   getHostWorktreeIds,
+  getLaneHostCountedWorkspaceIds,
   getLaneHostWorktreeCounts,
   getLaneHostWorktreeIds,
   getMixedHostContextLabels,
@@ -30,6 +32,8 @@ import type {
   Row,
   WorktreeGroupBy
 } from './row-types'
+import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
+import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 
 /** Everything section emission reads that stays fixed for one planSidebarRows call. */
 export type SectionAppendContext = {
@@ -53,7 +57,10 @@ export type SectionAppendContext = {
 function getProjectHeaderHostScope(
   ctx: SectionAppendContext,
   group: WorktreeGroupEntry
-): Pick<GroupHeaderRow, 'hostRepos' | 'hostWorktreeCounts' | 'hostWorktreeIds'> {
+): Pick<
+  GroupHeaderRow,
+  'hostRepos' | 'hostWorktreeCounts' | 'hostWorktreeIds' | 'hostCountedWorkspaceIds'
+> {
   const hostRepos = getProjectHeaderHostRepos({
     group,
     repoMap: ctx.repoMap,
@@ -75,7 +82,8 @@ function getProjectHeaderHostScope(
     hostWorktreeCounts: hostWorktreeIds
       ? new Map([...hostWorktreeIds].map(([hostId, ids]) => [hostId, ids.length]))
       : undefined,
-    hostWorktreeIds
+    hostWorktreeIds,
+    hostCountedWorkspaceIds: getHostCountedWorktreeKeys(group.items, ctx.repoOf, ctx.defaultHostId)
   }
 }
 
@@ -104,6 +112,12 @@ export function appendOrderedGroups(
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
+    // Why host identity: the badge intersects these with the attention set, which keys a folder
+    // workspace as folderWorkspaceToWorktree does, so twins on two hosts stay apart.
+    const laneWorkspaceIds = [
+      ...group.items.map(getWorktreeHostIdentity),
+      ...folderPairs.map((pair) => getFolderWorkspaceHostIdentity(pair.folderWorkspace))
+    ]
     const header =
       groupBy === 'repo'
         ? {
@@ -114,6 +128,7 @@ export function appendOrderedGroups(
             icon: { kind: 'project' as const },
             repo,
             projectGroupDepth,
+            countedWorkspaceIds: group.items.map(getWorktreeHostIdentity),
             ...getProjectHeaderHostScope(ctx, group)
           }
         : groupBy === 'workspace-status'
@@ -141,7 +156,14 @@ export function appendOrderedGroups(
                   repoOf,
                   defaultHostId
                 ),
-                worktreeIds: group.items.map((worktree) => worktree.id)
+                worktreeIds: group.items.map((worktree) => worktree.id),
+                countedWorkspaceIds: laneWorkspaceIds,
+                hostCountedWorkspaceIds: getLaneHostCountedWorkspaceIds(
+                  group.items,
+                  folderPairs,
+                  repoOf,
+                  defaultHostId
+                )
               }
             })()
           : (() => {
@@ -163,7 +185,14 @@ export function appendOrderedGroups(
                   repoOf,
                   defaultHostId
                 ),
-                worktreeIds: group.items.map((worktree) => worktree.id)
+                worktreeIds: group.items.map((worktree) => worktree.id),
+                countedWorkspaceIds: laneWorkspaceIds,
+                hostCountedWorkspaceIds: getLaneHostCountedWorkspaceIds(
+                  group.items,
+                  folderPairs,
+                  repoOf,
+                  defaultHostId
+                )
               }
             })()
 
