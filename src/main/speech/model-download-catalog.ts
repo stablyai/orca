@@ -200,6 +200,27 @@ const MODEL_DOWNLOAD_FILES = {
       ]
     ]
   ),
+  'whisper-medium-int8': huggingFaceFiles(
+    'csukuangfj/sherpa-onnx-whisper-medium',
+    '8c31d28503847560985df21f90e14f0c736e075e',
+    [
+      [
+        'medium-encoder.int8.onnx',
+        374_196_283,
+        '1c54582b4d829de0089f6cb63bbbdb3bf7555398bacaf855fbecf1a84dfd193e'
+      ],
+      [
+        'medium-decoder.int8.onnx',
+        571_059_257,
+        '595d00a338a365a7bfa0ca7f296cabc639583bef770ab6130df90f49a6412747'
+      ],
+      [
+        'medium-tokens.txt',
+        816_730,
+        'b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126'
+      ]
+    ]
+  ),
   'sense-voice-zh-en-ja-ko-yue': huggingFaceFiles(
     'csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
     '2365baeacb507f821a0c8120fcee3d484dba7a07',
