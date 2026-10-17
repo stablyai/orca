@@ -7,6 +7,7 @@ import fr from './locales/fr.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
 import zh from './locales/zh.json'
+import zhHant from './locales/zh-Hant.json'
 
 const AGENT_SETTINGS_KEYS = [
   'environmentName',
@@ -28,7 +29,8 @@ it.each([
   ['fr', fr],
   ['ja', ja],
   ['ko', ko],
-  ['zh', zh]
+  ['zh', zh],
+  ['zh-Hant', zhHant]
 ] as const)(
   'keeps %s agent settings usable as nested language-pack translations',
   async (locale, catalog) => {

@@ -8,13 +8,15 @@ import fr from './locales/fr.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
 import zh from './locales/zh.json'
+import zhHant from './locales/zh-Hant.json'
 
 const catalogs = {
   es: { catalog: es, compactBalanceMessage: 'saldo 12.50' },
   fr: { catalog: fr, compactBalanceMessage: 'solde 12.50' },
   ja: { catalog: ja, compactBalanceMessage: '残高 12.50' },
   ko: { catalog: ko, compactBalanceMessage: '잔액 12.50' },
-  zh: { catalog: zh, compactBalanceMessage: '余额 12.50' }
+  zh: { catalog: zh, compactBalanceMessage: '余额 12.50' },
+  'zh-Hant': { catalog: zhHant, compactBalanceMessage: '餘額 12.50' }
 }
 const balanceMessages = [
   ['StatusBar.4025a6f62f', 'Unlimited'],

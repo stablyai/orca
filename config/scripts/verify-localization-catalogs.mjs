@@ -5,13 +5,17 @@ import {
   main as verifyCatalog
 } from './verify-localization-catalog.mjs'
 import { main as verifyRuntimeCatalog } from './generate-runtime-required-english-catalog.mjs'
+import { main as verifyZhHantCatalog } from './generate-zh-hant-catalog.mjs'
 
 export async function main(root = process.cwd()) {
   // Share only this invocation's scan, never cached evidence from another checkout.
   const references = await collectLocalizationReferences(root)
   const results = await Promise.allSettled([
     verifyCatalog(root, {}, references),
-    verifyRuntimeCatalog(root, [], references)
+    verifyRuntimeCatalog(root, [], references),
+    // Why: zh-Hant.json is generated from zh.json, so a Simplified edit that
+    // skips `sync:zh-hant-catalog` would ship a stale Traditional catalog.
+    verifyZhHantCatalog(root, ['--check'])
   ])
   let exitCode = 0
   for (const result of results) {
