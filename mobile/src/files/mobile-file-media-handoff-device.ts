@@ -1,0 +1,59 @@
+import { sha256 } from '@noble/hashes/sha256'
+import { File, Paths } from 'expo-file-system'
+import type { MobileFileMediaAttempt, MobileFileMediaSink } from './mobile-file-media-handoff'
+
+const mediaHandoffOwners = new Map<string, MobileFileMediaAttempt>()
+
+// The device half of the media handoff: the one module here that names expo-file-system,
+// so the download loop over it stays testable without it (native-media's device split).
+
+/** Why: a relative path is only unique inside its workspace, so the name keys on the workspace too. */
+function shortPathHash(source: string): string {
+  const digest = sha256(new TextEncoder().encode(source))
+  return Array.from(digest.slice(0, 4), (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/** A cache name nothing else in this app writes, stable per downloaded source path. */
+export function mediaHandoffCacheName(worktreeId: string, relativePath: string): string {
+  const base = relativePath.split(/[\\/]/).pop() || 'download'
+  const sanitized = base.replace(/[^A-Za-z0-9._-]/g, '_')
+  return `orca-media-handoff-${shortPathHash(`${worktreeId}\n${relativePath}`)}-${sanitized}`
+}
+
+/** The sink + the uri the share sheet is handed once the download settles. */
+export function mediaHandoffSinkFor(
+  worktreeId: string,
+  relativePath: string
+): MobileFileMediaSink & { uri: string } {
+  const cacheName = mediaHandoffCacheName(worktreeId, relativePath)
+  const file = new File(Paths.cache, cacheName)
+  const ownerKey = file.uri
+  return {
+    uri: file.uri,
+    open(attempt) {
+      if (file.exists) {
+        file.delete()
+      }
+      mediaHandoffOwners.set(ownerKey, attempt)
+    },
+    appendBase64(base64: string, attempt) {
+      if (mediaHandoffOwners.get(ownerKey) === attempt && !attempt.cancelled) {
+        file.write(base64, { encoding: 'base64', append: true })
+      }
+    },
+    release(attempt) {
+      if (mediaHandoffOwners.get(ownerKey) === attempt) {
+        mediaHandoffOwners.delete(ownerKey)
+      }
+    },
+    discard(attempt) {
+      if (mediaHandoffOwners.get(ownerKey) !== attempt) {
+        return
+      }
+      mediaHandoffOwners.delete(ownerKey)
+      if (file.exists) {
+        file.delete()
+      }
+    }
+  }
+}

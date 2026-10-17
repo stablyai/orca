@@ -1,6 +1,8 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
+  fileMediaChunkSchema,
+  fileMediaStatSchema,
   filePreviewImageSchema,
   filePreviewTextSchema,
   terminalArtifactWriteSchema,
@@ -89,6 +91,27 @@ export const terminalArtifactPathResolve = bindDeferredRpcOperation(
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('terminal-path-resolution', terminalPathResolutionSchema)
+  })
+)
+
+/** files.readChunk for the media handoff download. Same skip policy: a refused read renders as copy. */
+export const fileMediaChunkRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.media-chunk-or-skip',
+    method: 'files.readChunk',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('file-media-chunk', fileMediaChunkSchema)
+  })
+)
+
+export const fileMediaStatRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.media-stat-or-skip',
+    method: 'files.stat',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('file-media-stat', fileMediaStatSchema)
   })
 )
 
