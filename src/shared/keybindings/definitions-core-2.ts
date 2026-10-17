@@ -162,6 +162,24 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+T'])
   },
   {
+    id: 'tab.moveToSplitRight',
+    title: 'Move active tab to split right',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: [
+      'shortcut',
+      'tab',
+      'split',
+      'pane',
+      'column',
+      'editor',
+      'move',
+      'right',
+      'side by side'
+    ],
+    defaultBindings: platformBindings(['Mod+Backslash'])
+  },
+  {
     id: 'tab.nextSameType',
     title: 'Next tab (same type)',
     group: 'Tab Navigation',

@@ -20,6 +20,7 @@ import {
 } from '../components/right-sidebar/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
+import { dispatchActiveTabSplitShortcut } from '../components/tab-bar/active-tab-pane-column-split'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -101,7 +102,8 @@ export function useGlobalKeybindings(args: {
         openFloatingWorkspaceMaximized,
         pluginCommands,
         setFloatingTerminalOpen,
-        terminalShortcutPolicy
+        terminalShortcutPolicy,
+        workspaceChromeActive
       } = state
 
       // Child handlers (e.g. terminal search) share this window capture phase and fire first; bail if they already preventDefault'd so both don't act.
@@ -184,6 +186,20 @@ export function useGlobalKeybindings(args: {
       ) {
         input.preventDefault()
         openFloatingWorkspaceMaximized()
+        return
+      }
+
+      // Keyboard path for "Move Tab to Split". Ahead of the editable-target guard because it is a
+      // layout command, not text input: Monaco's EditContext div passes the guard today, but its
+      // legacy textarea path would not. A single-tab group has nothing to split, so the chord falls through.
+      if (
+        workspaceChromeActive &&
+        !isFloatingWorkspacePanelFocused() &&
+        dispatchActiveTabSplitShortcut(activeWorktreeId, matchShortcut, (actionId) => {
+          input.preventDefault()
+          notifyTerminalCapture(actionId)
+        })
+      ) {
         return
       }
 
