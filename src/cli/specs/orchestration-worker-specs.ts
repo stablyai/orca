@@ -1,3 +1,4 @@
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
 
 export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
@@ -35,7 +36,8 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Current and existing worktrees never rerun setup; a fresh agent terminal is created unless --terminal is explicit.',
       'When reusing --terminal, pass --worktree for that terminal; current means the coordinator worktree.',
-      '--agent takes an Orca agent id enabled on the worker server, such as claude, codex, cursor, antigravity, muse, zcode, opencode, or opencode2.',
+      `Registered --agent ids: ${Object.keys(TUI_AGENT_CONFIG).join(', ')}.`,
+      '--agent must be enabled on the worker server; configured single-executable command aliases are also accepted. Registered ids do not verify CLI installation, credentials, or provider availability on that execution host.',
       '--model supports Claude, Codex, Cursor, Antigravity, and Muse opaque provider model ids; --effort requires --model. OMP accepts --model only; --effort is unsupported. Neither can combine with --terminal. OpenCode model selection requires an existing worktree, a verified execution-host CLI, and an available model; effort is unsupported. Other agents, including zcode, launch with the model from their own config.',
       'New worktrees use agent-first creation and default --setup to run. Repository start-immediately runs setup beside the agent; wait-for-setup gates agent readiness and task input.',
       'Creation flags (--name, --repo, --base-branch, --display-name, --comment, --setup) are rejected for current/existing worktrees. Use exact --repo on the selected server; project/host convenience routing remains on worktree create.',
