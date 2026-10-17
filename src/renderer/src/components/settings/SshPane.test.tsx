@@ -110,7 +110,11 @@ describe('SSH import count notices', () => {
           button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
         })
         if (count === 0) {
-          expect(mocks.toast).toHaveBeenLastCalledWith('~/.ssh/config already in sync')
+          expect(mocks.toast).toHaveBeenLastCalledWith(
+            language === 'ko'
+              ? '~/.ssh/config가 이미 동기화되어 있습니다.'
+              : '~/.ssh/config already in sync.'
+          )
           expect(mocks.success).not.toHaveBeenCalled()
         } else {
           expect(mocks.success).toHaveBeenLastCalledWith(

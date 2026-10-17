@@ -1807,6 +1807,16 @@
         "createWorktree": "ワークツリーを作成する",
         "createWorkspace": "ワークスペースを作成"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "閉じる PR #{{number}}?",
+        "mergeLabel": "Create merge commit",
+        "mergeTitle": "Create merge commit PR #{{number}}?",
+        "rebaseLabel": "Rebase and merge",
+        "rebaseTitle": "Rebase and merge PR #{{number}}?",
+        "reopenTitle": "再度開く PR #{{number}}?",
+        "squashLabel": "Squash and merge",
+        "squashTitle": "Squash and merge PR #{{number}}?"
+      },
       "PullRequestPage": {
         "2560588245": "レビュアーのリクエストに失敗しました",
         "3450247584": "コメント",

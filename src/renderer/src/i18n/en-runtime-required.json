@@ -33,6 +33,7 @@
         "9263e75f49": "Codex is using the previous account"
       },
       "GitHubItemDialog": {
+        "03d7216d62": "{{value0}} PR #{{value1}}?",
         "04539beb48": "issue",
         "307c98e8e3": "Show {{value0}} more lines above",
         "3853476a97": "GitHub item",
@@ -128,6 +129,7 @@
         "e1f3641bfd": "from",
         "e295a78c11": "Show {{value0}} more lines above",
         "e6996f4024": "· updated",
+        "eec3706a6a": "{{value0}} PR #{{value1}}?",
         "ff84e1f54c": "{{value0}} {{value1}} as viewed"
       },
       "StarNagCard": {
@@ -162,6 +164,7 @@
         "68df347677": "you@example.com",
         "6edf402e11": "overview",
         "7799ad9ab6": "draft",
+        "844dc193c7": "{{value0}} PR #{{value1}}?",
         "887efe9140": "Connect",
         "937b29fa35": "items",
         "93d5f21fc1": "pr",

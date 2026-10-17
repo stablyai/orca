@@ -1807,6 +1807,16 @@
         "createWorktree": "작업 트리 만들기",
         "createWorkspace": "워크스페이스 만들기"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "PR #{{number}}을 닫으시겠습니까?",
+        "mergeLabel": "병합 커밋 생성",
+        "mergeTitle": "병합 커밋을 생성하여 PR #{{number}}을 병합하시겠습니까?",
+        "rebaseLabel": "리베이스 및 병합",
+        "rebaseTitle": "PR #{{number}}을 리베이스하여 병합하시겠습니까?",
+        "reopenTitle": "PR #{{number}}을 다시 여시겠습니까?",
+        "squashLabel": "스쿼시 및 병합",
+        "squashTitle": "PR #{{number}}을 스쿼시하여 병합하시겠습니까?"
+      },
       "PullRequestPage": {
         "2560588245": "리뷰어를 요청하지 못했습니다.",
         "3450247584": "댓글",

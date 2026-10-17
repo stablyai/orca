@@ -1806,6 +1806,16 @@
         "createWorktree": "Crear worktree",
         "createWorkspace": "Crear espacio de trabajo"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "Cerrar PR #{{number}}?",
+        "mergeLabel": "Create merge commit",
+        "mergeTitle": "Create merge commit PR #{{number}}?",
+        "rebaseLabel": "Rebase and merge",
+        "rebaseTitle": "Rebase and merge PR #{{number}}?",
+        "reopenTitle": "Reabrir PR #{{number}}?",
+        "squashLabel": "Squash and merge",
+        "squashTitle": "Squash and merge PR #{{number}}?"
+      },
       "PullRequestPage": {
         "2560588245": "No se pudo solicitar el revisor",
         "3450247584": "Comentario",

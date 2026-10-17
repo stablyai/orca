@@ -270,7 +270,12 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
         if (result.targets.length === 0) {
-          toast('~/.ssh/config already in sync')
+          toast(
+            translate(
+              'auto.components.sidebar.AddRemoteHostDialog.sshImportAlreadySynced',
+              '~/.ssh/config already in sync.'
+            )
+          )
         } else {
           toast.success(
             translate(

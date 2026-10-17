@@ -1991,6 +1991,16 @@
         "createWorktree": "Create worktree",
         "createWorkspace": "Create workspace"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "Close PR #{{number}}?",
+        "mergeLabel": "Create merge commit",
+        "mergeTitle": "Merge PR #{{number}} with a merge commit?",
+        "rebaseLabel": "Rebase and merge",
+        "rebaseTitle": "Rebase and merge PR #{{number}}?",
+        "reopenTitle": "Reopen PR #{{number}}?",
+        "squashLabel": "Squash and merge",
+        "squashTitle": "Squash and merge PR #{{number}}?"
+      },
       "PullRequestPage": {
         "2560588245": "Failed to request reviewer",
         "3450247584": "Comment",

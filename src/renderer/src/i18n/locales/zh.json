@@ -1807,6 +1807,16 @@
         "createWorktree": "创建工作树",
         "createWorkspace": "创建工作区"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "关闭 PR #{{number}}？",
+        "mergeLabel": "Create merge commit",
+        "mergeTitle": "Create merge commit PR #{{number}}？",
+        "rebaseLabel": "Rebase and merge",
+        "rebaseTitle": "Rebase and merge PR #{{number}}？",
+        "reopenTitle": "重新打开 PR #{{number}}？",
+        "squashLabel": "Squash and merge",
+        "squashTitle": "Squash and merge PR #{{number}}？"
+      },
       "PullRequestPage": {
         "2560588245": "请求评审人失败",
         "3450247584": "评论",

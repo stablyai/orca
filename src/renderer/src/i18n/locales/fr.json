@@ -1915,6 +1915,16 @@
         "createWorktree": "Créer un worktree",
         "createWorkspace": "Créer un espace de travail"
       },
+      "PullRequestConfirmation": {
+        "closeTitle": "Fermer la PR #{{number}} ?",
+        "mergeLabel": "Create merge commit",
+        "mergeTitle": "Create merge commit la PR #{{number}} ?",
+        "rebaseLabel": "Rebase and merge",
+        "rebaseTitle": "Rebase and merge la PR #{{number}} ?",
+        "reopenTitle": "Rouvrir la PR #{{number}} ?",
+        "squashLabel": "Squash and merge",
+        "squashTitle": "Squash and merge la PR #{{number}} ?"
+      },
       "PullRequestPage": {
         "2560588245": "Échec de la demande de reviewer",
         "3450247584": "Commentaire",
