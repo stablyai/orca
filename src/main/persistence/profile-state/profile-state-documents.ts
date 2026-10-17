@@ -165,6 +165,19 @@ export function readAcceptedProfileStateParsedSnapshot(
   return readAcceptedSnapshot(db, rawJson, () => readProfileStateParsedSnapshot(db))
 }
 
+/**
+ * Salvage variant of {@link readAcceptedProfileStateParsedSnapshot}: when the
+ * accepted snapshot fails whole-snapshot validation on one corrupt row, re-read
+ * row-by-row and keep only the documents that still verify. The acceptance
+ * marker is still required, so a salvage read cannot adopt unaccepted state.
+ */
+export function readAcceptedProfileStateParsedSnapshotSalvage(
+  db: Database.Database,
+  rawJson: string
+): ProfileStateParsedSnapshot | undefined {
+  return readAcceptedSnapshot(db, rawJson, () => readProfileStateParsedSnapshotSalvage(db))
+}
+
 function readAcceptedSnapshot<T extends { revision: number }>(
   db: Database.Database,
   rawJson: string,
@@ -184,11 +197,52 @@ function readAcceptedSnapshot<T extends { revision: number }>(
 
 /** Transfer independently validated values without constructing another whole-profile string. */
 export function readProfileStateParsedSnapshot(db: Database.Database): ProfileStateParsedSnapshot {
+  return readProfileStateParsedSnapshotInternal(db, false)
+}
+
+/**
+ * Salvage variant of {@link readProfileStateParsedSnapshot}: skip rows that fail
+ * validation instead of aborting the whole read, so a torn write that leaves one
+ * row's hash stale still yields the profile's surviving domains.
+ */
+export function readProfileStateParsedSnapshotSalvage(
+  db: Database.Database
+): ProfileStateParsedSnapshot {
+  return readProfileStateParsedSnapshotInternal(db, true)
+}
+
+/**
+ * Salvage variant of {@link readProfileStateSnapshot}: skip rows that fail
+ * validation instead of aborting the whole read, so a later serialized read
+ * stays usable after a salvage startup left rejected rows on disk.
+ */
+export function readProfileStateSnapshotSalvage(db: Database.Database): ProfileStateSnapshot {
   return withProfileStateReadSnapshot(db, () => {
     const revision = readProfileStateRevision(db)
     const documents = readProfileStateDocuments(db, {
       profileRevision: revision,
-      representation: 'parsed'
+      salvage: true
+    })
+    return {
+      revision,
+      documents,
+      json: `{${documents
+        .map((document) => `${JSON.stringify(document.domain)}:${document.payload}`)
+        .join(',')}}`
+    }
+  })
+}
+
+function readProfileStateParsedSnapshotInternal(
+  db: Database.Database,
+  salvage: boolean
+): ProfileStateParsedSnapshot {
+  return withProfileStateReadSnapshot(db, () => {
+    const revision = readProfileStateRevision(db)
+    const documents = readProfileStateDocuments(db, {
+      profileRevision: revision,
+      representation: 'parsed',
+      salvage
     })
     return {
       revision,

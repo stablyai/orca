@@ -8,9 +8,12 @@ import type {
 import {
   importProfileStateJson,
   readAcceptedProfileStateParsedSnapshot,
+  readAcceptedProfileStateParsedSnapshotSalvage,
   readProfileStateParsedSnapshot,
+  readProfileStateParsedSnapshotSalvage,
   readProfileStateRevision,
-  readProfileStateSnapshot
+  readProfileStateSnapshot,
+  readProfileStateSnapshotSalvage
 } from './profile-state-documents'
 import {
   openWritableProfileStateDatabase,
@@ -96,7 +99,17 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     this.assertActive()
     const opened = openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
-      const snapshot = readAcceptedProfileStateParsedSnapshot(opened.db, rawJson)
+      let snapshot: ReturnType<typeof readAcceptedProfileStateParsedSnapshot>
+      try {
+        snapshot = readAcceptedProfileStateParsedSnapshot(opened.db, rawJson)
+      } catch {
+        // A corrupt row would otherwise quarantine the whole snapshot. Salvage
+        // the intact documents so the profile opens with its surviving state.
+        // Rejected rows stay excluded (no in-place hash repair): the user
+        // recovers them from a trusted snapshot or backup, not by re-blessing
+        // an unverifiable payload.
+        snapshot = readAcceptedProfileStateParsedSnapshotSalvage(opened.db, rawJson)
+      }
       if (snapshot === undefined) {
         return undefined
       }
@@ -114,7 +127,16 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const opened =
       this.writableDatabase ?? openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
-      const snapshot = readProfileStateParsedSnapshot(opened.db)
+      let snapshot: ReturnType<typeof readProfileStateParsedSnapshot>
+      try {
+        snapshot = readProfileStateParsedSnapshot(opened.db)
+      } catch {
+        // A corrupt row would otherwise quarantine the whole snapshot. Salvage
+        // the intact documents so the profile opens with its surviving state.
+        // Rejected rows stay excluded; recovery of a lost domain comes from a
+        // trusted snapshot or backup, not by re-blessing an unverifiable payload.
+        snapshot = readProfileStateParsedSnapshotSalvage(opened.db)
+      }
       return this.createInitialState(
         snapshot.revision,
         snapshot.revision === 0 ? undefined : snapshot.state
@@ -137,7 +159,15 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const opened =
       this.writableDatabase ?? openProfileStateDatabaseReadOnly(this.databasePath, this.profileId)
     try {
-      const snapshot = readProfileStateSnapshot(opened.db)
+      let snapshot: ReturnType<typeof readProfileStateSnapshot>
+      try {
+        snapshot = readProfileStateSnapshot(opened.db)
+      } catch {
+        // A salvage startup leaves rejected rows on disk behind the write
+        // fence; fall back to the row-by-row read so a later serialized read
+        // stays usable instead of re-tripping the whole-snapshot validator.
+        snapshot = readProfileStateSnapshotSalvage(opened.db)
+      }
       this.observedRevision = snapshot.revision
       return snapshot.revision === 0 ? undefined : snapshot.json
     } finally {

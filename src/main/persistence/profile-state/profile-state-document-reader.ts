@@ -15,6 +15,12 @@ import {
 export type ReadProfileStateDocumentsOptions = {
   /** The profile revision already read by a surrounding snapshot. */
   profileRevision?: number
+  /**
+   * Skip rows that fail hash/metadata/JSON validation instead of throwing.
+   * The remaining intact rows are returned. Used to recover the rest of the
+   * profile when a torn write has left one row's content_hash stale.
+   */
+  salvage?: boolean
 }
 
 /** Read the authoritative rows after checking their hash, shape, and JSON payload. */
@@ -37,12 +43,23 @@ export function readProfileStateDocuments(
   | readonly (ProfileStateDocument | ProfileStateParsedDocument | ProfileStateValidatedDocument)[]
   | void {
   const profileRevision = options.profileRevision ?? readProfileStateRevision(db)
-  const normalized =
-    options.representation === 'validated'
-      ? readProfileStateAutomationRunsDocument(db, profileRevision, 'validated')
-      : options.representation === 'parsed'
-        ? readProfileStateAutomationRunsDocument(db, profileRevision, 'parsed')
-        : readProfileStateAutomationRunsDocument(db, profileRevision)
+  let normalized: ReturnType<typeof readProfileStateAutomationRunsDocument>
+  try {
+    normalized =
+      options.representation === 'validated'
+        ? readProfileStateAutomationRunsDocument(db, profileRevision, 'validated')
+        : options.representation === 'parsed'
+          ? readProfileStateAutomationRunsDocument(db, profileRevision, 'parsed')
+          : readProfileStateAutomationRunsDocument(db, profileRevision)
+  } catch (error) {
+    // Salvage mode drops a corrupt normalized automationRuns projection and
+    // keeps the rest of the profile; otherwise the caller decides.
+    if (options.salvage) {
+      normalized = null
+    } else {
+      throw error
+    }
+  }
   const rows = db
     .prepare(
       `SELECT domain, payload, domain_version, revision, updated_at, content_hash
@@ -55,19 +72,30 @@ export function readProfileStateDocuments(
     | ProfileStateValidatedDocument
   )[] = []
   for (const row of rows) {
-    const document = validateProfileStateDocumentRow(row, {
-      retainParsedValue: options.representation === 'parsed'
-    })
-    assertProfileStateDocumentRevision(document.revision, profileRevision, document.domain)
-    if (
-      normalized !== undefined &&
-      document.domain === 'automationRuns' &&
-      document.payload !== 'null'
-    ) {
-      throw new ProfileStateDocumentCorruptionError(
-        'Normalized automationRuns placeholder is invalid',
-        document.domain
-      )
+    let document: ReturnType<typeof validateProfileStateDocumentRow>
+    try {
+      document = validateProfileStateDocumentRow(row, {
+        retainParsedValue: options.representation === 'parsed'
+      })
+      assertProfileStateDocumentRevision(document.revision, profileRevision, document.domain)
+      if (
+        normalized !== undefined &&
+        document.domain === 'automationRuns' &&
+        document.payload !== 'null'
+      ) {
+        throw new ProfileStateDocumentCorruptionError(
+          'Normalized automationRuns placeholder is invalid',
+          document.domain
+        )
+      }
+    } catch (error) {
+      // Salvage mode keeps the surviving rows; a corrupt row is dropped so the
+      // rest of the profile still loads instead of quarantining the whole file.
+      if (options.salvage) {
+        continue
+      }
+      // Fail-closed otherwise: preserve the original diagnostic unchanged.
+      throw error
     }
     if (options.representation === 'validated') {
       continue

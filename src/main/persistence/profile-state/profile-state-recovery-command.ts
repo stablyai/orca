@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   ProfileStateRecoveryCommandError,
   type ProfileStateRecoverySelector,
@@ -21,13 +22,21 @@ import {
   openProfileStateDatabaseReadOnly,
   openWritableProfileStateDatabase
 } from './profile-state-database'
+import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
 import {
   writeProfileStateAuthorityJsonExport,
   writeProfileStateRecoveryJsonExport
 } from './legacy-json/profile-state-authority-exports'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
 import { readProfileStateDomain } from './profile-state-domain-reader'
-import { isRecord } from './profile-state-document-validation'
+import {
+  type ProfileStateDocument,
+  isRecord
+} from './profile-state-document-validation'
+import { salvageValidDocuments } from './profile-state-salvage'
+import { raiseProfileStateRevisionFloor } from './profile-state-revision'
+export type { ProfileStateRecoverySelector } from '../../../shared/profile-state-recovery-command'
+import { PROFILE_STATE_DATABASE_FILE_NAME } from '../../../shared/profile-state-storage-paths'
 import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
 import {
   invalidateHttp1CompatibilityMarker,
@@ -159,15 +168,89 @@ function restoreDatabaseBackup(
     profileId: result.profileId,
     beforeRestore: () => invalidateActiveProfileMarker(userDataPath, result.profileId)
   })
+  let revision = recovered.revision
+  if (hasSalvageSource(recovered.quarantine.directory)) {
+    revision = mergeSalvageIntoRestoredDatabase(result, recovered.quarantine.directory, revision)
+  }
   syncHttp1CompatibilityMarkerFromDatabase(userDataPath, result)
   return {
     ...result,
     storage: 'sqlite',
     restoredPath: result.databaseFile,
     backupId: backup.id,
-    revision: recovered.revision,
+    revision,
     quarantineDirectory: recovered.quarantine.directory,
     removedDatabaseFiles: recovered.removedDatabaseFiles
+  }
+}
+
+function hasSalvageSource(quarantineDirectory: string): boolean {
+  return existsSync(join(quarantineDirectory, PROFILE_STATE_DATABASE_FILE_NAME))
+}
+
+/**
+ * Merge documents that survived a quarantined database into the restored
+ * baseline so the last committed revisions are not discarded with the damaged
+ * family. Documents whose stored hash or metadata no longer verify are skipped
+ * rather than replayed; a quarantined database that cannot be read at all (a
+ * torn primary) leaves the restored baseline untouched.
+ */
+function mergeSalvageIntoRestoredDatabase(
+  result: ProfileStateExportsResult,
+  quarantineDirectory: string,
+  restoredRevision: number
+): number {
+  const salvageSource = join(quarantineDirectory, PROFILE_STATE_DATABASE_FILE_NAME)
+  let intact: readonly ProfileStateDocument[]
+  let sourceRevision: number
+  try {
+    const salvaged = salvageValidDocuments({
+      databasePath: salvageSource,
+      profileId: result.profileId
+    })
+    intact = salvaged.intactDocuments
+    sourceRevision = salvaged.sourceRevision
+  } catch {
+    return restoredRevision
+  }
+  if (intact.length === 0 || sourceRevision === 0 || sourceRevision <= restoredRevision) {
+    return restoredRevision
+  }
+  const opened = openWritableProfileStateDatabase(result.databaseFile, result.profileId)
+  try {
+    const floorRevision = sourceRevision
+    withProfileStateWriteTransaction(opened.db, () => {
+      for (const document of intact) {
+        // Only replay documents that are newer than the restored baseline.
+        if (document.revision <= restoredRevision) {
+          continue
+        }
+        opened.db
+          .prepare(
+            `INSERT INTO profile_state_documents
+             (domain, payload, domain_version, revision, updated_at, content_hash)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(domain) DO UPDATE SET
+               payload = excluded.payload,
+               domain_version = excluded.domain_version,
+               revision = excluded.revision,
+               updated_at = excluded.updated_at,
+               content_hash = excluded.content_hash`
+          )
+          .run(
+            document.domain,
+            document.payload,
+            document.domainVersion,
+            document.revision,
+            document.updatedAt,
+            document.contentHash
+          )
+      }
+      raiseProfileStateRevisionFloor(opened.db, floorRevision)
+    })
+    return floorRevision
+  } finally {
+    opened.db.close()
   }
 }
 
