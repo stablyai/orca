@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { StatusPorcelainParser } from '../../shared/git-status-porcelain-parser'
 
 describe('StatusPorcelainParser', () => {
@@ -38,6 +38,85 @@ describe('StatusPorcelainParser', () => {
     expect(parser.entries).toEqual([
       { path: 'new.ts', status: 'renamed', area: 'staged', oldPath: 'old.ts' }
     ])
+  })
+
+  it.each([
+    ['src/a file  with spaces.ts ', 'old/a file  with spaces.ts '],
+    [' src/leading.ts', ' old/leading.ts'],
+    ['"src/tab\\tquote\\\".ts"', '"old/line\\nname.ts"'],
+    ['"src/\\303\\251.ts"', '"old/\\342\\230\\203.ts"'],
+    ['src/é.ts', 'old/e\u0301.ts']
+  ])('preserves path fields across every stream split: %s', (rawPath, rawOldPath) => {
+    const line = `2 RM S.MU 100644 100644 100644 aaaa bbbb R100 ${rawPath}\t${rawOldPath}\r\n`
+    const complete = new StatusPorcelainParser()
+    complete.update(line, 0)
+    complete.finish()
+    for (let split = 0; split <= line.length; split += 1) {
+      const parser = new StatusPorcelainParser()
+      parser.update(line.slice(0, split), 0)
+      parser.update(line.slice(split), 0)
+      parser.finish()
+      expect(parser.entries).toEqual(complete.entries)
+      expect(parser.statusRecords).toEqual(complete.statusRecords)
+      expect(parser.statusLength).toBe(2)
+    }
+  })
+
+  it('keeps ordinary path spaces and quoted control characters intact', () => {
+    const parser = new StatusPorcelainParser()
+    parser.update(
+      '1 MM N... 100644 100644 100644 aaaa bbbb  src/a  file.ts \n' +
+        '1 .M N... 100644 100644 100644 aaaa bbbb "src/a\\tline\\nfile.ts"\n',
+      0
+    )
+    parser.finish()
+    expect(parser.entries).toEqual([
+      { path: ' src/a  file.ts ', status: 'modified', area: 'staged' },
+      { path: ' src/a  file.ts ', status: 'modified', area: 'unstaged' },
+      { path: 'src/a\tline\nfile.ts', status: 'modified', area: 'unstaged' }
+    ])
+  })
+
+  it.each([
+    ['1 M. N... 100644', 'modified', undefined],
+    ['2 R. N... 100644', 'renamed', ''],
+    ['2 R. N... 100644 100644 100644 aaaa bbbb R100\told path', 'renamed', 'old path'],
+    ['2 R. N... 100644 100644 100644 aaaa bbbb R100 new path', 'renamed', '']
+  ] as const)('keeps truncated record behavior for %s', (line, status, oldPath) => {
+    const parser = new StatusPorcelainParser()
+    parser.update(`${line}\n`, 0)
+    parser.finish()
+    expect(parser.entries).toEqual([
+      {
+        path: line.endsWith('new path') ? 'new path' : '',
+        status,
+        area: 'staged',
+        ...(oldPath === undefined ? {} : { oldPath })
+      }
+    ])
+  })
+
+  it.each(['1 M.', '2 R.'])('bounds temporary fields for space-heavy %s paths', (prefix) => {
+    const filePath = `dir/${'space '.repeat(500)}file.ts`
+    const rename = prefix.startsWith('2 ')
+    const line = `${prefix} N... 100644 100644 100644 aaaa bbbb ${rename ? 'R100 ' : ''}${filePath}${rename ? `\told/${filePath}` : ''}\n`
+    const split = vi.spyOn(String.prototype, 'split')
+    const parser = new StatusPorcelainParser()
+    let largestFieldCount = 0
+    try {
+      parser.update(line, 0)
+      parser.finish()
+      for (const result of split.mock.results) {
+        if (result.type === 'return' && Array.isArray(result.value)) {
+          largestFieldCount = Math.max(largestFieldCount, result.value.length)
+        }
+      }
+    } finally {
+      split.mockRestore()
+    }
+    expect(parser.entries[0]?.path).toBe(filePath)
+    expect(parser.entries[0]?.oldPath).toBe(rename ? `old/${filePath}` : undefined)
+    expect(largestFieldCount).toBeLessThanOrEqual(9)
   })
 
   it('marks staged S... submodule rows as commit-changed gitlinks', () => {

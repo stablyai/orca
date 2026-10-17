@@ -138,7 +138,13 @@ export class StatusPorcelainParser {
   private parseChangedEntry(line: string): void {
     // Changed entries: "1 XY sub mH mI mW hH path" or
     // "2 XY sub mH mI mW hH X<score> path\torigPath"
-    const parts = line.split(' ')
+    // Split only metadata so filename spaces cannot allocate extra fields.
+    const fieldCount = line.startsWith('2 ') ? 9 : 8
+    const parts = line.split(' ', fieldCount)
+    let pathStart = fieldCount
+    for (const part of parts) {
+      pathStart += part.length
+    }
     const xy = parts[1]
     const indexStatus = xy[0]
     const worktreeStatus = xy[1]
@@ -147,9 +153,9 @@ export class StatusPorcelainParser {
       // Why: porcelain v2 type-2 records put the new path after 9 fixed
       // space-delimited fields and the old path after the tab. Preserving spaces
       // keeps row actions and numstat counts keyed correctly.
-      const tabParts = line.split('\t')
-      const path = decodeGitCQuotedPath(tabParts[0].split(' ').slice(9).join(' '))
-      const oldPath = decodeGitCQuotedPath(tabParts.slice(1).join('\t'))
+      const tab = line.indexOf('\t')
+      const path = decodeGitCQuotedPath(line.slice(pathStart, tab === -1 ? undefined : tab))
+      const oldPath = decodeGitCQuotedPath(tab === -1 ? '' : line.slice(tab + 1))
       if (indexStatus !== '.') {
         this.push({
           path,
@@ -171,7 +177,7 @@ export class StatusPorcelainParser {
       return
     }
 
-    const path = decodeGitCQuotedPath(parts.slice(8).join(' '))
+    const path = decodeGitCQuotedPath(line.slice(pathStart))
     if (indexStatus !== '.') {
       this.push({
         path,
