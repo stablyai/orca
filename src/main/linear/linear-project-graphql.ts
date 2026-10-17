@@ -108,6 +108,11 @@ export const ORCA_ISSUE_FIELDS = `
     name
     key
   }
+  project {
+    id
+    name
+    color
+  }
   assignee {
     id
     displayName

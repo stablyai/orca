@@ -22,6 +22,9 @@ function linearIssueStatusSignature(issue: LinearIssue): string {
     issue.team.id,
     issue.team.name,
     issue.team.key,
+    issue.project?.id ?? null,
+    issue.project?.name ?? null,
+    issue.project?.color ?? null,
     sortedStrings(issue.labels),
     issue.assignee?.id ?? null,
     issue.assignee?.displayName ?? null,
@@ -88,6 +91,23 @@ export function findTaskPageLinearIssue(
     }
   }
   return null
+}
+
+export function preferFreshTaskPageLinearIssue(
+  currentIssue: LinearIssue,
+  cachedIssue: LinearIssue | null
+): LinearIssue {
+  if (!cachedIssue) {
+    return currentIssue
+  }
+  const currentUpdatedAt = Date.parse(currentIssue.updatedAt)
+  const cachedUpdatedAt = Date.parse(cachedIssue.updatedAt)
+  // Why: context reads can be newer than general caches. Guard both timestamps so
+  // an unparseable cached updatedAt (NaN comparisons are always false) cannot win.
+  return Number.isFinite(currentUpdatedAt) &&
+    (!Number.isFinite(cachedUpdatedAt) || currentUpdatedAt > cachedUpdatedAt)
+    ? currentIssue
+    : cachedIssue
 }
 
 export const findTaskPageLinearDrawerIssue = findTaskPageLinearIssue

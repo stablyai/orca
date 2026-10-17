@@ -23,6 +23,9 @@ export function TaskPageLinearIssueBoard({
     linearIssuesHasMore,
     linearAttributeFilter,
     linearViewMode,
+    linearGroupBy,
+    effectiveLinearDisplayProperties,
+    linearIssueGridStyle,
     activeLinearIssues,
     activeLinearIssueLoading,
     activeLinearIssueError,
@@ -38,6 +41,36 @@ export function TaskPageLinearIssueBoard({
         scrollbarGutter: 'stable'
       }}
     >
+      {linearViewMode === 'list' && linearGroupBy === 'none' ? (
+        <div
+          className="sticky top-0 z-10 grid h-8 items-center gap-3 border-b border-border/50 bg-muted px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
+          style={linearIssueGridStyle}
+        >
+          <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
+          <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
+          {effectiveLinearDisplayProperties.has('project') ? (
+            <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+          ) : null}
+          {effectiveLinearDisplayProperties.has('labels') ? (
+            <span>{translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}</span>
+          ) : null}
+          {effectiveLinearDisplayProperties.has('team') ? (
+            <span>{translate('auto.components.TaskPage.a98cbe7664', 'Team')}</span>
+          ) : null}
+          {effectiveLinearDisplayProperties.has('state') ? (
+            <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+          ) : null}
+          {effectiveLinearDisplayProperties.has('assignee') ? (
+            <span className="text-center">
+              {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
+            </span>
+          ) : null}
+          {effectiveLinearDisplayProperties.has('updated') ? (
+            <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+          ) : null}
+          <span>{translate('auto.components.TaskPage.linearWorktreesColumn', 'Workspaces')}</span>
+        </div>
+      ) : null}
       {activeLinearIssueError ? (
         <div className="border-b border-border px-4 py-4 text-sm text-destructive">
           {activeLinearIssueError}
