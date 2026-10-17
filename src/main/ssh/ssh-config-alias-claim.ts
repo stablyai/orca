@@ -64,13 +64,15 @@ function matchesHostPattern(pattern: string, normalizedAlias: string): boolean {
 // command, so re-expanding Includes every time is not an option.
 const CLAIM_CACHE_TTL_MS = 5_000
 
-let cachedClaims: { key: string; readAt: number; claims: SshConfigAliasClaims } | null = null
+// Cache uncertainty too; otherwise a permanently unreadable Include is re-read for every command.
+let cachedClaims: { key: string; readAt: number; claims: SshConfigAliasClaims | null } | null = null
 
 /**
  * Parse of `~/.ssh/config` (Includes expanded), or null when it cannot be read.
  *
- * Null and empty are different answers here: an absent or unreadable file is the uncertainty case,
- * while a readable file with no matching block is the proof {@link sshConfigMayClaimAlias} needs.
+ * Null and empty are different answers here: an absent or unreadable file -- or one whose Includes
+ * could not all be read -- is the uncertainty case, while a fully readable config with no matching
+ * block is the proof {@link sshConfigMayClaimAlias} needs.
  */
 export function loadUserSshConfigAliasClaims(): SshConfigAliasClaims | null {
   const configPath = join(homedir(), '.ssh', 'config')
@@ -85,7 +87,9 @@ export function loadUserSshConfigAliasClaims(): SshConfigAliasClaims | null {
     if (cachedClaims?.key === key && now - cachedClaims.readAt < CLAIM_CACHE_TTL_MS) {
       return cachedClaims.claims
     }
-    const claims = parseSshConfigAliasClaims(expandSshConfigIncludes(configPath))
+    const expansion = expandSshConfigIncludes(configPath)
+    // Incomplete expansion cannot prove that no hidden block claims the alias.
+    const claims = expansion.fullyExpanded ? parseSshConfigAliasClaims(expansion.content) : null
     cachedClaims = { key, readAt: now, claims }
     return claims
   } catch {
