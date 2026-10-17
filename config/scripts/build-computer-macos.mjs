@@ -28,12 +28,29 @@ chmodSync(binaryPath, 0o755)
 createHelperApp()
 
 function buildUniversalBinary() {
+  const slicesDir = path.join(packagePath, '.build', 'universal-slices')
+  rmSync(slicesDir, { recursive: true, force: true })
+  mkdirSync(slicesDir, { recursive: true })
   const builtBinaries = universalTriples.map((triple) => {
-    run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
-    return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
+    const buildArgs = ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple]
+    run('swift', buildArgs)
+    // Why copy each slice out: Swift 6.4's default build system (swiftbuild) writes every triple
+    // to one shared products dir, so the next triple's build overwrites this one.
+    const slicePath = path.join(slicesDir, `orca-computer-use-macos-${triple}`)
+    copyFileSync(path.join(swiftBinPath(buildArgs), 'orca-computer-use-macos'), slicePath)
+    return slicePath
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
   run('lipo', ['-create', ...builtBinaries, '-output', binaryPath])
+}
+
+function swiftBinPath(buildArgs) {
+  const result = spawnSync('swift', [...buildArgs, '--show-bin-path'], { encoding: 'utf8' })
+  if (result.status !== 0 || !result.stdout.trim()) {
+    process.stderr.write(result.stderr ?? '')
+    process.exit(result.status || 1)
+  }
+  return result.stdout.trim()
 }
 
 function createHelperApp() {
