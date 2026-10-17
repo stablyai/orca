@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS deliveries (
   mailbox_handle        TEXT NOT NULL DEFAULT '',
   consumer_generation   INTEGER NOT NULL,
   message_ids           TEXT NOT NULL,
+  sweep_end_sequence    INTEGER,
   status                TEXT NOT NULL DEFAULT 'outstanding'
     CHECK(status IN ('outstanding', 'acknowledged', 'fenced')),
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
