@@ -303,6 +303,26 @@ describe('WSL host deployment store', () => {
     expect(environment?.orcadDeployment).toBeUndefined()
   })
 
+  it('ignores a record written for another server re-paired under the same id and port', () => {
+    const wslId = addWslManaged(
+      wslRecord({ pairingPublicKeyB64: Buffer.alloc(32, 2).toString('base64') })
+    )
+    const [environment] = listEnvironments(userDataPath)
+    expect(environment?.id).toBe(wslId)
+    expect(environment?.orcadDeployment).toBeUndefined()
+  })
+
+  it('overlays a record bound to the pairing key (keyless records keep port-only binding)', () => {
+    addWslManaged(wslRecord({ pairingPublicKeyB64: pairing.publicKeyB64 }))
+    expect(listEnvironments(userDataPath)[0]?.orcadDeployment).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu-24.04',
+      distroId: '0e3a7f2c-1b4d-4c5e-9f60-7a8b9c0d1e2f',
+      localPort: 42000,
+      remotePort: 6769
+    })
+  })
+
   it('ignores a WSL record on a server that already has an SSH deployment', () => {
     addSshManaged()
     writeWslHostDeployment(
