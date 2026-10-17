@@ -95,10 +95,8 @@ export function init(
   // Why: a width-reflow re-stream rewraps the same content at new cols.
   // Distance-from-bottom (rows) is the only stable anchor across reflow,
   // since line counts and cell positions change. null = stay pinned to bottom.
-  const prevB =
-    preserveScroll && scope.term && scope.term.buffer && scope.term.buffer.active
-      ? scope.term.buffer.active
-      : null
+  // Why: a pending replay is still at bottom; only the committed terminal holds the reader's place.
+  const prevB = preserveScroll ? scope.committedTerm?.buffer.active : null
   const scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1
   scope.terminalGeneration++
   const gen = scope.terminalGeneration
