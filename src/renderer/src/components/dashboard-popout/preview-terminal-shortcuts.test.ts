@@ -113,6 +113,10 @@ describe('resolvePreviewShortcutAction', () => {
         contextFor({ clientPlatform: 'linux', terminalInput: null })
       )
     ).toEqual({ type: 'sendInput', data: '\x1bb' })
+    // Why: ConPTY would turn \eb into Alt+B, which Codex and PSReadLine don't read as Alt+←.
+    expect(
+      resolvePreviewShortcutAction(keydown({ key: 'ArrowLeft', altKey: true }), conpty)
+    ).toBeNull()
   })
 
   it('routes Shift+Enter by the PTY host, not the client OS', () => {

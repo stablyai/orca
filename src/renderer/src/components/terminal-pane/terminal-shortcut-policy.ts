@@ -92,7 +92,7 @@ export function resolveTerminalShortcutAction(
   optionKeyLocations: OptionKeyLocationState = 0,
   isWindows: boolean = false,
   keybindings?: KeybindingOverrides,
-  // Why: lazy so local ConPTY lookup runs only for Ctrl+Arrow and Ctrl+Enter.
+  // Why: lazy so local ConPTY lookup runs only for Ctrl/Alt+Arrow and Ctrl+Enter.
   isLocalWindowsConptyPane?: () => boolean,
   // Why: exact flags distinguish ordinary kitty negotiation from report-all mode.
   getKittyKeyboardFlagsActivePane?: () => number,
@@ -289,6 +289,10 @@ export function resolveTerminalShortcutAction(
   ) {
     // Why: a kitty-protocol TUI binds alt+arrow via xterm's native CSI 1;3D/C; \eb/\ef would reach it as alt+b/f.
     if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
+      return null
+    }
+    // Why: ConPTY turns \eb/\ef into Alt+B/F, which Codex and PSReadLine don't read as alt+←/→; Git Bash binds the native form (#29177).
+    if (isLocalWindowsConptyPane?.()) {
       return null
     }
     // Why: readline doesn't bind xterm's \e[1;3D/C for alt+←/→, so translate to \eb/\ef for word-nav (iTerm2 "Esc+" behavior).
