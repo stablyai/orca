@@ -1,7 +1,8 @@
 // Runs the headless-server suites under the pinned Node (design D4/D4a), not the host's.
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { globSync, readFileSync } from 'node:fs'
+import { globSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import {
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME,
@@ -18,7 +19,6 @@ import { currentTarget } from './server-build-target.mjs'
 import { UNIT_INCLUDE } from './ci-unit-files.mjs'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from './process-failure-message.mjs'
-import { resolveBuildSourceCommit } from './build-source-commit.mjs'
 import {
   CROSS_RUNTIME_TEST_PATHS,
   nodeServerTestPaths,
@@ -82,32 +82,36 @@ if (artifact) {
   )
   process.stdout.write(`${JSON.stringify({ target, ...response })}\n`)
 
-  const source = `https://github.com/stablyai/orca/tree/${resolveBuildSourceCommit()}`
-  const cli = runProcessSync({
-    program: runtimePath,
-    args: [
-      join(packageDir, ORCAD_CLI_ENTRY_FILENAME),
-      'skills',
-      'install',
-      '--skill',
-      'orca-cli',
-      '--agent',
-      'universal',
-      '--dry-run'
-    ],
-    cwd: root,
-    env,
-    timeoutMs: 90_000
-  })
+  // Why a scratch home: the plan must start from no installed copy, whatever the runner holds.
+  const skillHome = mkdtempSync(join(tmpdir(), 'orcad-cli-skills-'))
+  let cli
+  try {
+    cli = runProcessSync({
+      program: runtimePath,
+      args: [
+        join(packageDir, ORCAD_CLI_ENTRY_FILENAME),
+        'skills',
+        'install',
+        '--skill',
+        'orca-cli',
+        '--agent',
+        'universal',
+        '--dry-run'
+      ],
+      cwd: root,
+      env: { ...env, HOME: skillHome, USERPROFILE: skillHome },
+      timeoutMs: 90_000
+    })
+  } finally {
+    rmSync(skillHome, { recursive: true, force: true })
+  }
   if (
     cli.code !== 0 ||
     cli.timedOut ||
     cli.outputTruncated ||
-    !cli.stdout.split('\n')[0].split(' ').includes(source)
+    !cli.stdout.startsWith('orca-cli: would install ')
   ) {
-    throw new Error(
-      `Bundled CLI skills source did not match ${source}: ${describeProcessFailure(cli)}`
-    )
+    throw new Error(`Bundled CLI could not plan its own skills: ${describeProcessFailure(cli)}`)
   }
 }
 run(runtimePath, [

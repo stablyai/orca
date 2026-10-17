@@ -2,8 +2,6 @@ import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Copy, Loader2, RefreshCw } from 'lucide-react'
 import {
   canonicalizeSkillUpdateNames,
-  isSkillScanIssueNeedingAttention,
-  isSkillScanIssueTruncatingScan,
   type SkillFreshnessInventory
 } from '../../../../shared/skill-freshness'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
@@ -23,7 +21,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { groupSkillFreshness } from './skill-freshness-grouping'
 import { useSkillUpdateSelection } from './use-skill-update-selection'
-import { SkillFreshnessScanIssues } from './skill-freshness-scan-issues'
 import { SkillUpdateRow } from './SkillUpdateRow'
 import {
   SummaryHeadline,
@@ -60,7 +57,7 @@ function RunLog({ output }: { output: string }): React.JSX.Element | null {
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1 min-w-0">
-        {/* Displayed verbatim, never parsed — `skills add` has no --json. */}
+        {/* Displayed verbatim: one line per skill from the installer. */}
         <pre className="scrollbar-sleek max-h-40 overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-md border border-border bg-muted px-3 py-2.5 font-mono text-[11px] leading-relaxed text-muted-foreground">
           {output.trim()}
         </pre>
@@ -93,7 +90,6 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   // Display only. The button stays disabled until a live scan lands, so a re-scan in
   // flight can never authorize work — but it keeps its place and its label instead of
   // vanishing and reflowing the footer every time one runs.
-  const displayEligibleCount = inventory?.eligibleUpdateNames.length ?? 0
   const isRunning = run.state === 'running'
   // The kill sweep can take seconds; without this the Stop button sits enabled
   // and inert, which reads as broken.
@@ -104,29 +100,20 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const runNamesKey = run.state === 'idle' ? '' : run.names.join('\n')
   const runNames = useMemo(() => (runNamesKey ? runNamesKey.split('\n') : []), [runNamesKey])
   const groups = useMemo(
-    () =>
-      inventory
-        ? groupSkillFreshness(inventory.installations, inventory.eligibleUpdateNames, runNames)
-        : [],
+    () => (inventory ? groupSkillFreshness(inventory, runNames) : []),
     [inventory, runNames]
   )
   const selection = useSkillUpdateSelection(groups)
-  const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
+  const displayEligibleCount = selection.updatableCount
   const blockedCount = groups.filter((group) => group.status === 'cannot-update').length
-  // Retained: the list keeps the last known folders on screen through a re-scan, the
-  // same way the rows above stay put rather than blanking.
-  const scanIssues = inventory?.scanIssues ?? []
   // Why: the headline reads the LIVE snapshot, not the retained one — the two
   // disagree for the whole loading window, and pairing a retained "eligible" with
   // a live count of 0 renders "0 updates available" over rows badged "Update
   // available". Live means it says "Checking…" over the rows it kept on screen.
   const summaryKind = summarizeInventory(
     state.inventory,
-    selection.ownedCount,
-    hasBlockedGroup,
-    (state.inventory?.scanIssues ?? []).some(
-      (issue) => isSkillScanIssueNeedingAttention(issue) || isSkillScanIssueTruncatingScan(issue)
-    )
+    state.inventory ? selection.updatableCount : 0,
+    blockedCount > 0
   )
 
   // Why: one row list for every state. The rows are identical objects across the
@@ -265,9 +252,8 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     return (
       <SummaryHeadline
         kind={summaryKind}
-        eligibleCount={selection.ownedCount}
+        eligibleCount={selection.updatableCount}
         blockedCount={blockedCount}
-        unselectedForeignCount={selection.unselectedForeignCount}
       />
     )
   })()
@@ -292,7 +278,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         )}
 
         {isRunning ? (
-          // Indeterminate on purpose: the CLI reports no parseable progress.
+          // Indeterminate on purpose: the installer reports no per-skill progress.
           <div
             role="progressbar"
             aria-label={
@@ -328,14 +314,6 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
                 />
               ))}
             </TooltipProvider>
-          </div>
-        ) : null}
-
-        {/* Why: folders, not skills — a plugin path Orca could not read says nothing
-            about which skill lives there, so it cannot be a row above. */}
-        {scanIssues.length > 0 ? (
-          <div className="min-w-0 border-t border-border/60 pt-3">
-            <SkillFreshnessScanIssues issues={scanIssues} />
           </div>
         ) : null}
 
@@ -385,8 +363,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
 
         <DialogFooter className="sm:justify-between">
           {isRunning ? (
-            // The terminal used to be the escape hatch for a stalled update;
-            // without it a wedged npx would leave restarting Orca as the only way out.
+            // Why: without Stop a stalled install would leave restarting Orca as the only way out.
             <Button
               type="button"
               variant="ghost"

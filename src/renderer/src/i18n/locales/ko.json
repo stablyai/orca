@@ -4706,30 +4706,8 @@
         "SkillFreshnessRow": {
           "statusUpdateAvailable": "업데이트 있음",
           "statusCantUpdate": "업데이트할 수 없음",
-          "cantUpdateReason": "이 스킬은 Orca가 안전하게 업데이트할 수 없는 위치에 설치되어 있어, 업데이트 명령이 변경하지 않습니다.",
-          "chipCurrent": "최신",
           "chipInaccessible": "액세스 불가",
-          "chipDuplicate": "중복",
-          "chipExternalLink": "외부 링크",
-          "chipBrokenLink": "깨진 링크",
-          "chipReadOnly": "읽기 전용",
-          "chipInRepo": "저장소 내",
-          "chipPluginCache": "플러그인 캐시",
-          "tipCurrent": "여기 있는 스킬은 이미 최신이므로 업데이트해도 변경되지 않습니다.",
-          "tipInaccessible": "Orca가 여기 있는 스킬을 읽지 못해(권한 또는 파일 오류) 확인하거나 업데이트할 수 없습니다.",
-          "tipDuplicate": "이 스킬은 기본 위치와 별개로 여기에도 설치되어 있어 업데이트 명령이 접근할 수 없습니다. 업데이트를 허용하려면 제거하세요.",
-          "tipExternalLink": "Orca의 스킬 폴더 바깥을 가리키는 바로 가기입니다. 업데이트가 이를 따라가지 않습니다.",
-          "tipBrokenLink": "더 이상 존재하지 않는 대상을 가리키는 바로 가기입니다. 삭제해도 됩니다.",
-          "tipReadOnly": "여기 있는 스킬은 읽기 전용 위치에 있어 권한을 변경해야 업데이트할 수 있습니다.",
-          "tipInRepo": "여기 있는 스킬은 전역 스킬이 아니라 프로젝트 안에 있습니다. Orca는 전역 스킬만 업데이트합니다.",
-          "tipPluginCache": "여기 있는 스킬은 플러그인이 관리합니다. 대신 플러그인을 업데이트하세요.",
-          "skippedReasonReadOnly": "This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.",
-          "skippedReasonInaccessible": "Orca couldn’t read this copy, so it left the skill out of the update.",
-          "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
-          "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
-          "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
-          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
-          "skippedReasonDuplicate": "별도의 사본이라 업데이트가 적용되지 않습니다. 명령은 기본 사본만 새로 고칩니다. 이 사본을 제거한 뒤 스킬을 다시 설치하면 이 위치도 기본 사본을 따릅니다."
+          "chipReadOnly": "읽기 전용"
         },
         "SkillFreshnessUpdateDialog": {
           "title": "스킬 업데이트",
@@ -4761,18 +4739,7 @@
           "done": "Done",
           "stop": "Stop",
           "stopping": "Stopping…",
-          "stoppingHeadline": "Stopping the update…",
-          "scanIncomplete": "Orca가 플러그인으로 관리되는 스킬 확인을 완료하지 못했습니다.",
-          "scanDepthLimit": "이 폴더를 확인하기 전에 플러그인 검사 깊이 제한에 도달했습니다.",
-          "scanEntryLimit": "이 캐시의 나머지 항목을 확인하기 전에 플러그인 검사 항목 수 제한에 도달했습니다.",
-          "scanCandidateLimit": "안전하게 검사할 수 있는 수보다 많은 동명 스킬 폴더가 발견되었습니다.",
-          "scanManifestLimit": "안전한 제한을 초과한 플러그인 매니페스트를 건너뛰었습니다.",
-          "scanOutsideRoot": "플러그인 캐시 외부를 가리키는 플러그인 경로를 건너뛰었습니다.",
-          "scanIoErrorWithCode": "이 플러그인 경로를 읽지 못했습니다({{value0}}).",
-          "scanIoError": "이 플러그인 경로를 읽지 못했습니다.",
-          "scanIssueLimit": "건너뛴 플러그인 폴더가 너무 많아 개별적으로 표시할 수 없습니다.",
-          "unselectedForeignOne": "Orca에서 설치하지 않은 스킬 1개는 선택되지 않았습니다.",
-          "unselectedForeignMany": "Orca에서 설치하지 않은 스킬 {{value0}}개는 선택되지 않았습니다."
+          "stoppingHeadline": "Stopping the update…"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "업데이트 가능",
@@ -4790,8 +4757,6 @@
           "oneLocation": "위치 1개",
           "manyLocations": "위치 {{value0}}개",
           "notFromOrca": "Orca에서 설치하지 않음",
-          "notFromOrcaSourceTip": "{{value0}}에서 설치되었습니다. 선택하면 Orca 버전으로 교체됩니다.",
-          "notFromOrcaNoRecordTip": "이 사본에는 Orca 설치 기록이 없습니다. 선택하면 Orca 버전으로 교체됩니다.",
           "includeSkill": "{{value0}} 포함"
         },
         "host": {
@@ -5168,6 +5133,28 @@
           "placementSummaryParts": "{{roots}}에서 {{parts}}을(를) 제거합니다.",
           "placementJoin": "그리고",
           "retainedSource": "스킬 자체는 {{path}}에 유지됩니다."
+        },
+        "skill": {
+          "plan": {
+            "location": {
+              "copy": {
+                "install": "설치 예정",
+                "update": "업데이트 예정",
+                "link": "연결 예정",
+                "replace": "교체 예정",
+                "localChangesLabel": "로컬 변경 사항",
+                "linkNotManagedLabel": "관리되지 않는 링크",
+                "nameInUseLabel": "이름 사용 중",
+                "localChanges": "이 사본에는 Orca가 만들지 않은 변경 사항이 있어 업데이트에서 그대로 둡니다. 사본을 삭제한 후 스킬을 다시 설치하면 Orca 버전을 받을 수 있습니다.",
+                "notInstalledByOrca": "Orca가 설치한 사본이 아니어서 업데이트에서 그대로 둡니다. 사본을 삭제한 후 스킬을 다시 설치하면 Orca 버전을 사용할 수 있습니다.",
+                "linkNotManaged": "Orca가 만든 링크가 아니어서 업데이트에서 그대로 둡니다.",
+                "nameInUse": "다른 파일이나 폴더가 이미 이 스킬 이름을 사용하고 있어 업데이트에서 그대로 둡니다.",
+                "readOnly": "이 위치는 읽기 전용이라 업데이트로 변경할 수 없습니다. Orca가 업데이트할 수 있도록 권한을 변경하세요.",
+                "unreadable": "Orca가 이 사본을 읽지 못해 업데이트에서 그대로 둡니다.",
+                "keep": "변경 없음"
+              }
+            }
+          }
         }
       },
       "sidebar": {

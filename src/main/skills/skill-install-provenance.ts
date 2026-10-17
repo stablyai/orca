@@ -6,13 +6,16 @@ import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 import type { SkillInstalledFileMode } from './skill-install-filesystem'
 import { nativeSkillInstallFilesystem } from './skill-install-filesystem'
 
+// Why `_`: cloud package ids are UUIDs, so this prefix can never name a shared package.
+export const BUNDLED_ORCA_SKILL_PACKAGE_ID_PREFIX = 'orca_bundled_'
+
 export type SkillInstallReceiptV1 = {
   schemaVersion: 1
   packageId: string
   versionId: string
   packageDigest: string
   bundleDigest?: string
-  archiveSha256: string
+  archiveSha256?: string
   scope: 'global' | 'workspace'
   destinationIdentity: string
   canonicalPath: string
@@ -66,7 +69,7 @@ function isReceipt(value: unknown): value is SkillInstallReceiptV1 {
     typeof receipt.versionId === 'string' &&
     typeof receipt.packageDigest === 'string' &&
     (receipt.bundleDigest === undefined || typeof receipt.bundleDigest === 'string') &&
-    typeof receipt.archiveSha256 === 'string' &&
+    (receipt.archiveSha256 === undefined || typeof receipt.archiveSha256 === 'string') &&
     (receipt.scope === 'global' || receipt.scope === 'workspace') &&
     typeof receipt.destinationIdentity === 'string' &&
     typeof receipt.canonicalPath === 'string' &&
@@ -100,7 +103,8 @@ export async function listManagedSkillInstalls(
       const parsed = await readFile(join(receiptsDirectory, entry.name), 'utf8')
         .then((value): unknown => JSON.parse(value))
         .catch(() => null)
-      if (!isReceipt(parsed)) {
+      // Why: Orca's own skills are not shared packages; listing them would offer cloud actions.
+      if (!isReceipt(parsed) || parsed.packageId.startsWith(BUNDLED_ORCA_SKILL_PACKAGE_ID_PREFIX)) {
         return null
       }
       const observed = options?.observeReceipt

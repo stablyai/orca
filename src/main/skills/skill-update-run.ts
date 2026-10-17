@@ -1,82 +1,35 @@
-import { spawn, type ChildProcess } from 'node:child_process'
 import {
   canonicalizeSkillUpdateNames,
   type SkillUpdateRun,
   type SkillUpdateStartResult
 } from '../../shared/skill-freshness'
-import {
-  buildAgentFeatureSkillInstallArgs,
-  SKILLS_CLI_ENV_OVERRIDES
-} from '../../shared/agent-feature-install-commands'
-import { detectSkillsCliUpdateAgentKeys } from '../../shared/skills-cli-agent-detection'
-import { resolveCliCommand } from '../codex-cli/command'
-import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
-import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { getSpawnArgsForWindows, WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL } from '../win32-utils'
-
-// Why: `skills add` prints ANSI colour and \r + erase-line progress. We show
-// this log verbatim to the user but never parse it — `add` has no --json, so
-// stdout is not a contract.
-const ANSI_RE = /\x1b\[[0-9;?]*[A-Za-z]/g // eslint-disable-line no-control-regex
-
-// Keep the tail: failures land at the end, and an unbounded buffer would pin
-// however much the CLI decides to print.
-const MAX_OUTPUT_CHARS = 32_000
-
-// Long enough to swallow a burst of progress frames, short enough that the log
-// still reads as live when the user has it expanded.
-const OUTPUT_FLUSH_MS = 100
-
-// Strictly above the sweep's own transitive worst case (~1s on POSIX; 3s identity
-// query + 5s taskkill on Windows). A backstop that ties its own bound would fire
-// while a slow-but-healthy sweep is still working.
-export const CANCEL_RELEASE_TIMEOUT_MS = 12_000
+import type { SkillInstallResult } from '../../shared/skill-install-contract'
+import { describeBundledSkillInstallResult } from './bundled-orca-skill-install-report'
 
 export type SkillUpdateRunnerDeps = {
-  /** The commit the running build was made from; the install is pinned to it. */
-  sourceCommit: string
-  /** Same targets `orca skills update` picks on this host. */
-  detectAgentKeys?: () => string[]
-  spawnProcess?: typeof spawn
-  resolveCommand?: (commandName: string) => string
+  /** Installs this build's copy of each name on the host the inventory scans. */
+  installSkills: (names: string[], signal: AbortSignal) => Promise<SkillInstallResult[]>
   /** Returns the subset of `names` that did not land, re-read from disk. */
   rescanOutdatedNames?: (names: string[]) => Promise<string[]>
-  killTree?: (pid: number, killRoot: () => void) => Promise<void>
-  /** Injected so the Windows cmd.exe rail is reachable off Windows. */
-  buildSpawnArgs?: typeof getSpawnArgsForWindows
   now?: () => number
   onState?: (run: SkillUpdateRun) => void
 }
 
-function stripAnsi(value: string): string {
-  return value.replace(ANSI_RE, '').replace(/\r(?!\n)/g, '\n')
+const UPDATE_FAILED_MESSAGE = 'Some skills could not be updated.'
+
+function failedNames(results: readonly SkillInstallResult[]): string[] {
+  return results
+    .filter((result) => !['installed', 'updated', 'unchanged'].includes(result.status))
+    .map((result) => result.name)
 }
 
-function clampOutput(value: string): string {
-  return value.length <= MAX_OUTPUT_CHARS ? value : value.slice(value.length - MAX_OUTPUT_CHARS)
-}
-
-/**
- * Runs the pinned `npx --yes skills@<pinned> add <orca>/tree/<commit> --skill <name>... --global
- * --agent ... -y` headlessly. `add` always re-copies, so the result is this build's bytes
- * however the old copy was installed or edited.
- *
- * Both `--yes` flags are load-bearing and distinct: `npx --yes` skips the
- * install-this-package prompt, and `skills … -y` takes the CLI's own
- * non-interactive branch. `skills` gates its prompts on
- * `options.yes || !process.stdin.isTTY`, and stdin is ignored below, so the run
- * cannot block on input that no one can answer.
- */
+/** Brings Orca's own skills to this build's bytes with Orca's skill installer. */
 export class SkillUpdateRunner {
   private run: SkillUpdateRun = { state: 'idle' }
-  private child: ChildProcess | null = null
-  // Why: a failed spawn emits `error` *and* `close`, and a cancelled child still
-  // emits `close` after `kill()`. The token retires a child's handlers so a dead
-  // run can never settle or write output into the run that replaced it; the latch
-  // keeps the first verdict of a live run while its re-scan is still in flight.
+  private controller: AbortController | null = null
+  // Why: a cancelled run's install still settles later; the token keeps its verdict out of
+  // the run that replaced it.
   private runToken = 0
-  private settling = false
-  private killing = false
   private readonly deps: Required<Pick<SkillUpdateRunnerDeps, 'now'>> & SkillUpdateRunnerDeps
 
   constructor(deps: SkillUpdateRunnerDeps) {
@@ -100,221 +53,78 @@ export class SkillUpdateRunner {
     if (!canonicalNames) {
       return { started: false, reason: 'invalid-names' }
     }
-
-    const resolveCommand = this.deps.resolveCommand ?? ((name: string) => resolveCliCommand(name))
-    const spawnProcess = this.deps.spawnProcess ?? spawn
-    const npxCommand = resolveCommand('npx')
-    const npxArgs = [
-      '--yes',
-      ...buildAgentFeatureSkillInstallArgs(canonicalNames, {
-        sourceCommit: this.deps.sourceCommit,
-        yes: true,
-        agents: (this.deps.detectAgentKeys ?? detectSkillsCliUpdateAgentKeys)()
-      })
-    ]
-
-    let spawnCmd: string
-    let spawnArgs: string[]
-    try {
-      const buildSpawnArgs = this.deps.buildSpawnArgs ?? getSpawnArgsForWindows
-      ;({ spawnCmd, spawnArgs } = buildSpawnArgs(npxCommand, npxArgs))
-    } catch {
-      // Why: the names are already canonical here, so this is the cmd.exe rail
-      // rejecting the resolved npx *path*. Publishing the failure keeps the dialog
-      // honest; a bare `started: false` would leave the button dead and silent.
-      this.runToken += 1
-      this.settling = false
-      this.publish({
-        state: 'error',
-        names: canonicalNames,
-        finishedAt: this.deps.now(),
-        output: '',
-        failedNames: canonicalNames,
-        message:
-          `Could not run ${npxCommand} safely from this location: its path contains one of ` +
-          `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL}, which cmd.exe would reinterpret.`
-      })
-      return { started: false, reason: 'unsafe-command-path' }
-    }
-
-    const startedAt = this.deps.now()
     const token = ++this.runToken
-    this.settling = false
-    this.publish({ state: 'running', names: canonicalNames, startedAt, output: '' })
-
-    const child = spawnProcess(spawnCmd, spawnArgs, {
-      // Why: stdin ignored keeps `process.stdin.isTTY` falsy in the child, which
-      // is the second half of the CLI's non-interactive gate.
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-      // Why: npx is an `#!/usr/bin/env node` script — without its own node ahead of
-      // PATH it loads under whatever version leads, and a native dep dies on ABI.
-      env: withCliRuntimeOnPath(npxCommand, { ...process.env, ...SKILLS_CLI_ENV_OVERRIDES })
+    const controller = new AbortController()
+    this.controller = controller
+    this.publish({
+      state: 'running',
+      names: canonicalNames,
+      startedAt: this.deps.now(),
+      output: ''
     })
-    this.child = child
-
-    // Why: `stripAnsi` turns each \r progress frame into its own line, so an npm
-    // install emits many chunks a second — and every publish structured-clones
-    // the whole buffer to every window. Coalesce into one push per tick.
-    let flushTimer: ReturnType<typeof setTimeout> | null = null
-    let pendingOutput = ''
-    const flush = (): void => {
-      flushTimer = null
-      if (token !== this.runToken || this.run.state !== 'running' || !pendingOutput) {
-        return
-      }
-      const appended = pendingOutput
-      pendingOutput = ''
-      this.publish({ ...this.run, output: clampOutput(this.run.output + appended) })
-    }
-    const append = (chunk: Buffer): void => {
-      if (token !== this.runToken || this.run.state !== 'running') {
-        return
-      }
-      pendingOutput = clampOutput(pendingOutput + stripAnsi(chunk.toString('utf8')))
-      if (!flushTimer) {
-        flushTimer = setTimeout(flush, OUTPUT_FLUSH_MS)
-        flushTimer.unref?.()
-      }
-    }
-    child.stdout?.on('data', append)
-    child.stderr?.on('data', append)
-    // The tail matters most on failure, so never let a pending chunk die with the
-    // process — drain it before the exit handlers settle the run.
-    const drain = (): void => {
-      if (flushTimer) {
-        clearTimeout(flushTimer)
-      }
-      flush()
-    }
-
-    child.on('error', (error) => {
-      drain()
-      this.settle(token, canonicalNames, error.message)
-    })
-    child.on('close', (code) => {
-      drain()
-      this.settle(token, canonicalNames, code === 0 ? null : `skills add exited with code ${code}`)
-    })
-
+    void this.deps.installSkills(canonicalNames, controller.signal).then(
+      (results) => this.settle(token, canonicalNames, results, null),
+      (error: unknown) =>
+        this.settle(
+          token,
+          canonicalNames,
+          [],
+          error instanceof Error ? error.message : String(error)
+        )
+    )
     return { started: true }
   }
 
-  private settle(token: number, names: string[], spawnError: string | null): void {
-    if (token !== this.runToken || this.settling || this.run.state !== 'running') {
+  private async settle(
+    token: number,
+    names: string[],
+    results: readonly SkillInstallResult[],
+    installError: string | null
+  ): Promise<void> {
+    if (token !== this.runToken) {
       return
     }
-    this.settling = true
-    this.child = null
-    const output = this.run.output
+    this.controller = null
+    const output = [
+      ...results.map(describeBundledSkillInstallResult),
+      ...(installError ? [installError] : [])
+    ].join('\n')
     const finishedAt = this.deps.now()
-    const rescan = this.deps.rescanOutdatedNames
-
-    // Why: when the re-scan produces a verdict it *is* the answer — it re-hashes
-    // what landed on disk, which is what the user actually cares about. The exit
-    // code only decides the outcome when no verdict is available, because
-    // `skills add` reports nothing else we can trust.
-    const finish = (failedNames: string[] | null): void => {
-      // The re-scan is slow enough that a cancel — or a whole replacement run —
-      // can land while it is still in flight; its verdict is about a run that no
-      // longer exists.
-      if (token !== this.runToken) {
-        return
-      }
-      const failed = failedNames ?? (spawnError ? names : [])
-      if (failed.length === 0) {
-        this.publish({ state: 'success', names, finishedAt, output })
-        return
-      }
-      this.publish({
-        state: 'error',
-        names,
-        finishedAt,
-        output,
-        failedNames: failed,
-        message: spawnError ?? 'Some skills could not be updated.'
-      })
-    }
-
-    if (!rescan) {
-      finish(null)
+    // Why the re-scan wins when it answers: it re-hashes what is on disk, which is what the
+    // dialog reports on; the install results only stand in when it cannot.
+    const rescanned = await this.deps.rescanOutdatedNames?.(names).catch(() => null)
+    if (token !== this.runToken) {
       return
     }
-    void rescan(names).then(
-      (failedNames) => finish(failedNames),
-      () => finish(null)
-    )
+    // Why after the re-scan: a stopped run may still have written some skills, and the
+    // re-scan is what refreshes the copies the dialog shows.
+    if (this.run.state === 'running' && this.run.stopping) {
+      this.publish({ state: 'idle' })
+      return
+    }
+    const failed = rescanned ?? (installError ? names : failedNames(results))
+    if (failed.length === 0) {
+      this.publish({ state: 'success', names, finishedAt, output })
+      return
+    }
+    this.publish({
+      state: 'error',
+      names,
+      finishedAt,
+      output,
+      failedNames: failed,
+      message: UPDATE_FAILED_MESSAGE
+    })
   }
 
   cancel(): void {
-    if (this.killing) {
+    if (this.run.state !== 'running' || this.run.stopping) {
       return
     }
-    // Retire the child's handlers now so its exit settles nothing.
-    this.runToken += 1
-    this.settling = false
-    const child = this.child
-    this.child = null
-    if (!child) {
-      if (this.run.state === 'running') {
-        this.publish({ state: 'idle' })
-      }
-      return
-    }
-
-    // Why: `npx` is a wrapper — on POSIX the `skills` process it execs is a
-    // child, and on Windows the shim runs under cmd.exe. Killing only the direct
-    // child leaves the process that is actually writing to the global skill
-    // homes alive.
-    this.killing = true
-    let hasReleased = false
-    let releaseTimer: ReturnType<typeof setTimeout> | null = null
-    const release = (): void => {
-      if (hasReleased) {
-        return
-      }
-      hasReleased = true
-      if (releaseTimer) {
-        clearTimeout(releaseTimer)
-      }
-      this.killing = false
-      // Why: stay `running` until the tree is actually dead. The sweep waits for
-      // a descendant snapshot before it signals anything, so releasing on the
-      // synchronous path would let an immediate re-Update spawn a second npx
-      // writing the same bundles — the corruption the post-run verdict exists to
-      // catch. `start()` already refuses while running, so holding the state is
-      // the whole guard.
-      if (this.run.state === 'running') {
-        this.publish({ state: 'idle' })
-      }
-    }
-    // Every layer of the sweep is individually bounded, but this is the recovery
-    // path: if one ever fails to settle, the run would be stuck `running` with
-    // Stop already spent. Cap it rather than depend on that transitively.
-    releaseTimer = setTimeout(release, CANCEL_RELEASE_TIMEOUT_MS)
-    releaseTimer.unref?.()
-    if (this.run.state === 'running') {
-      this.publish({ ...this.run, stopping: true })
-    }
-
-    const kill = this.deps.killTree ?? killWithDescendantSweep
-    const pid = child.pid
-    if (typeof pid !== 'number') {
-      // Same contract as the sweep path below: a throwing kill must not escape
-      // and leave `killing` latched with the run stuck `running`.
-      try {
-        child.kill()
-      } catch {
-        /* already gone, or not ours to signal */
-      }
-      release()
-      return
-    }
-    // Why `release` on both paths and no retry: the sweep runs `killRoot()` in its
-    // own `finally`, so the only way it rejects is that kill throwing (EPERM) —
-    // calling it again would throw straight back out of the rejection handler,
-    // leaving an unhandled rejection and no release at all.
-    void kill(pid, () => child.kill()).then(release, release)
+    // Why stay `running` until the install settles: a second run would write the same
+    // skill folders while the first transaction is still rolling back.
+    this.publish({ ...this.run, stopping: true })
+    this.controller?.abort()
   }
 
   /** Clears a settled run so the status-bar segment can retire itself. */

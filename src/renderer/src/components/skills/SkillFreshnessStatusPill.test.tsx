@@ -4,6 +4,14 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
+import {
+  agentLocation,
+  currentPlan,
+  freshnessInventory,
+  sharedLocation,
+  skillPlan,
+  updatablePlan
+} from '@/lib/bundled-skill-plan-fixtures'
 import { SkillFreshnessStatusPill } from './SkillFreshnessStatusPill'
 import { consumeSkillFreshnessUpdateDialogRequest } from './skill-freshness-update-dialog'
 
@@ -28,34 +36,6 @@ function detailsButton(container: HTMLDivElement): HTMLButtonElement | null {
 
 function pillText(container: HTMLDivElement): string {
   return (container.textContent ?? '').replace(detailsButton(container)?.textContent ?? '', '')
-}
-
-function inventory(
-  entries: { name: string; status: 'current' | 'outdated' | 'inaccessible' }[],
-  eligibleUpdateNames: string[]
-): SkillFreshnessInventory {
-  return {
-    schemaVersion: 1,
-    installations: entries.map((entry, index) => ({
-      id: `${entry.name}-${index}`,
-      name: entry.name,
-      rootId: 'home-agents',
-      providers: ['agent-skills'],
-      sourceKind: 'home',
-      sourceLabel: 'Agent skills home',
-      unresolvedPath: `/home/.agents/skills/${entry.name}`,
-      resolvedPath: `/home/.agents/skills/${entry.name}`,
-      physicalIdentity: `physical-${entry.name}-${index}`,
-      topology: 'canonical-copy',
-      status: entry.status,
-      currentPackageDigest: 'current',
-      lockSource: 'stablyai/orca',
-      errorCategory: null
-    })),
-    eligibleUpdateNames,
-    scanIssues: [],
-    scannedAt: 1
-  }
 }
 
 let root: Root | null = null
@@ -90,7 +70,7 @@ describe('SkillFreshnessStatusPill', () => {
   })
 
   it('shows Update available for an eligible outdated skill', async () => {
-    mocks.inventory = inventory([{ name: 'orca-cli', status: 'outdated' }], ['orca-cli'])
+    mocks.inventory = freshnessInventory(updatablePlan('orca-cli'))
 
     const rendered = await renderPill('orca-cli')
     expect(pillText(rendered)).toBe('Update available')
@@ -98,7 +78,7 @@ describe('SkillFreshnessStatusPill', () => {
   })
 
   it('shows Up to date when every placement is current', async () => {
-    mocks.inventory = inventory([{ name: 'orca-cli', status: 'current' }], [])
+    mocks.inventory = freshnessInventory(currentPlan('orca-cli'))
 
     const rendered = await renderPill('orca-cli')
     expect(pillText(rendered)).toBe('Up to date')
@@ -106,17 +86,15 @@ describe('SkillFreshnessStatusPill', () => {
     expect(detailsButton(rendered)).toBeNull()
   })
 
-  it('flags a blocked outdated placement instead of reading as all-clear', async () => {
-    mocks.inventory = inventory(
-      [
-        { name: 'orca-cli', status: 'outdated' },
-        { name: 'orca-cli', status: 'inaccessible' }
-      ],
-      []
+  it('flags a copy the install leaves instead of reading as all-clear', async () => {
+    mocks.inventory = freshnessInventory(
+      skillPlan('orca-cli', [
+        sharedLocation('orca-cli', 'keep'),
+        agentLocation('orca-cli', 'leave', 'unreadable')
+      ])
     )
 
     const rendered = await renderPill('orca-cli')
-    // Why: a green pill over a copy the update cannot reach hides real drift.
     expect(pillText(rendered)).toBe('Review skill')
     expect(detailsButton(rendered)?.textContent).toBe('Details')
   })
@@ -144,7 +122,7 @@ describe('SkillFreshnessStatusPill', () => {
   })
 
   it('opens the freshness review dialog from Details', async () => {
-    mocks.inventory = inventory([{ name: 'orca-cli', status: 'outdated' }], ['orca-cli'])
+    mocks.inventory = freshnessInventory(updatablePlan('orca-cli'))
     const rendered = await renderPill('orca-cli')
 
     await act(async () => {

@@ -21,7 +21,9 @@ import {
   describeFile,
   normalizeText,
   packageDigest,
-  sortManifestFiles
+  findDroppedReleasedDigests,
+  sortManifestFiles,
+  withDigests
 } from './generate-skill-bundle-manifest.mjs'
 
 const temporaryDirectories = []
@@ -36,6 +38,12 @@ async function createPackage() {
 // Why: the generator resolves its repo root from its own location, so a copy of
 // the script inside a throwaway tree exercises the real CLI without touching
 // resources/skills.
+function localGitEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith('GITHUB_'))
+  )
+}
+
 async function createGeneratorSandbox() {
   // Node resolves the entry point through symlinks, so the script's own
   // repo-root check only matches when the sandbox path is already resolved.
@@ -44,11 +52,21 @@ async function createGeneratorSandbox() {
   const script = path.join(root, 'config', 'scripts', 'generate-skill-bundle-manifest.mjs')
   await mkdir(path.dirname(script), { recursive: true })
   await mkdir(skillRoot, { recursive: true })
-  await copyFile(path.join(import.meta.dirname, 'generate-skill-bundle-manifest.mjs'), script)
+  for (const name of ['generate-skill-bundle-manifest.mjs', 'git-pull-request-diff-base.mjs']) {
+    await copyFile(path.join(import.meta.dirname, name), path.join(path.dirname(script), name))
+  }
   await writeFile(path.join(skillRoot, 'SKILL.md'), 'demo skill\n')
   return {
-    generate: (...args) => execFileSync(process.execPath, [script, ...args], { stdio: 'pipe' }),
+    // Why strip GITHUB_*: on a CI pull_request the base-ledger check would look for a base this sandbox lacks.
+    generate: (...args) =>
+      execFileSync(process.execPath, [script, ...args], { stdio: 'pipe', env: localGitEnv() }),
+    generateOnPullRequest: (...args) =>
+      execFileSync(process.execPath, [script, ...args], {
+        stdio: 'pipe',
+        env: { ...localGitEnv(), GITHUB_EVENT_NAME: 'pull_request' }
+      }),
     read: (name) => readFile(path.join(root, 'resources', 'skills', name), 'utf8'),
+    readRepoFile: (name) => readFile(path.join(root, ...name.split('/')), 'utf8'),
     editSkill: (body) => writeFile(path.join(skillRoot, 'SKILL.md'), body)
   }
 }
@@ -120,6 +138,44 @@ describe('skill bundle manifest generator', () => {
 
     await sandbox.editSkill('changed\n')
     expect(() => sandbox.generate()).toThrow()
+  })
+
+  it('fails verification on a pull request whose base it cannot read', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.generate('--write')
+    expect(() => sandbox.generateOnPullRequest()).toThrow(/Cannot read the pull request base/)
+  })
+
+  it('merges ledger digests without duplicates and reports any the base had but HEAD lost', () => {
+    const merged = withDigests({ skills: { demo: ['a'] } }, [['demo', ['b', 'a', 'b']]])
+    expect(merged.skills.demo).toEqual(['a', 'b'])
+    expect(findDroppedReleasedDigests({ skills: { demo: ['a', 'b'] } }, merged)).toEqual([])
+    expect(
+      findDroppedReleasedDigests({ skills: { demo: ['a', 'c'], gone: ['d'] } }, merged)
+    ).toEqual(['demo:c', 'gone:d'])
+  })
+
+  it('keeps every shipped digest in the ledger and embeds the current bytes', async () => {
+    const sandbox = await createGeneratorSandbox()
+    sandbox.generate('--write')
+    const [first] = JSON.parse(await sandbox.read('released-digests.json')).skills.demo
+
+    await sandbox.editSkill('changed\r\n')
+    sandbox.generate('--write')
+    const manifest = JSON.parse(await sandbox.read('current-manifest.json'))
+    expect(JSON.parse(await sandbox.read('released-digests.json'))).toEqual({
+      schemaVersion: 1,
+      skills: { demo: [first, manifest.skills[0].packageDigest] }
+    })
+    const embedded = await sandbox.readRepoFile('src/main/skills/bundled-orca-skill-packages.ts')
+    expect(embedded).toContain(
+      JSON.stringify({
+        name: 'demo',
+        files: [{ path: 'SKILL.md', text: 'changed\n' }],
+        releasedDigests: [first, manifest.skills[0].packageDigest]
+      })
+    )
+    expect(() => sandbox.generate()).not.toThrow()
   })
 
   it.runIf(process.platform !== 'win32')(

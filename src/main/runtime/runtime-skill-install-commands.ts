@@ -1,9 +1,16 @@
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import { executeSkillInstallRequest } from '../skills/skill-install-request-service'
 import { executeSkillBundleInstallRequest } from '../skills/skill-bundle-install-request-service'
 import { SkillUploadSessionService } from '../skills/skill-upload-session-service'
 import { SKILL_UPLOAD_STAGING_ROOT_NAME } from '../skills/skill-upload-staging-ownership'
+import {
+  installBundledOrcaSkills,
+  type BundledOrcaSkillInstallInput
+} from '../skills/bundled-orca-skill-install'
+import { planBundledOrcaSkills } from '../skills/bundled-orca-skill-plan'
+import type { BundledSkillPlan } from '../../shared/skill-freshness'
 import type {
   SkillBundleInstallProgress,
   SkillBundleInstallRequest,
@@ -162,6 +169,31 @@ export class RuntimeSkillInstallCommands {
         this.operations.delete(request.operationId)
       }
       this.progress.delete(request.operationId)
+    }
+  }
+  // Why this host's global homes only: they are what the freshness inventory scans.
+  async installBundledOrcaSkills(
+    names: readonly string[],
+    signal?: AbortSignal
+  ): Promise<SkillInstallResult[]> {
+    await this.host.skillTransactionRecovery
+    return installBundledOrcaSkills(names, { ...(await this.bundledGlobalInstallInput()), signal })
+  }
+  // Why: the app's skill freshness is this plan, so it shows what the install will do.
+  async planBundledOrcaSkills(names: readonly string[]): Promise<BundledSkillPlan[]> {
+    return planBundledOrcaSkills(names, await this.bundledGlobalInstallInput())
+  }
+  private async bundledGlobalInstallInput(): Promise<BundledOrcaSkillInstallInput> {
+    const homeDirectory = homedir()
+    const runtimeId = this.host.getRuntimeId()
+    return {
+      scope: 'global',
+      homeDirectory,
+      orcaStateDirectory: this.userDataPath(),
+      detectedProviders: await detectInstalledAgentsWithShellPathHydration(),
+      providerRootOverrides: await this.roots({ scope: 'global', homeDirectory }),
+      hostIdentity: runtimeId,
+      destinationIdentity: `global:${runtimeId}`
     }
   }
   getSharedSkillInstallProgress(operationId: string) {

@@ -151,13 +151,7 @@ export function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
       callRuntimeResult<SkillDiscoveryResult>('skills.discover', target, 15_000),
     // Why: browser clients have no local skill homes; remote-host freshness stays off until its update rail covers it.
     freshnessInventory: (): Promise<SkillFreshnessInventory> =>
-      Promise.resolve({
-        schemaVersion: 1,
-        installations: [],
-        eligibleUpdateNames: [],
-        scanIssues: [],
-        scannedAt: Date.now()
-      }),
+      Promise.resolve({ schemaVersion: 2, skills: [], scannedAt: Date.now() }),
     // Why: with no local skill homes there is nothing to update, so the run rail
     // reports a permanently idle state rather than spawning anything.
     startUpdateRun: () => Promise.resolve({ started: false as const, reason: 'invalid-names' }),

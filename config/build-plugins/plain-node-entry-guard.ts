@@ -23,6 +23,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'gitlab/project-ref-parser',
   'orca-profiles/profile-index-store',
   'claude-accounts/keychain',
+  'skills/bundled-orca-skill-cli-entry',
   ...[
     'access',
     'active-location',

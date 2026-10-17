@@ -34,6 +34,7 @@ export function createSkillPlacementTransaction(input: {
   providerRootOverrides?: SkillProviderRootOverrides
   filesystem?: SkillInstallFilesystem
   wslDistro?: string
+  adoptableDigests?: readonly string[]
   signal?: AbortSignal
 }): {
   prepare(previous: SkillInstallReceiptV1 | null, receipt: SkillInstallReceiptV1): Promise<void>
@@ -123,7 +124,8 @@ export function createSkillPlacementTransaction(input: {
           backupPath: join(destination.rootPath, `.${name}.orca-placement-backup-${id}`)
         })),
         ...(providerRootOverrides ? { providerRootOverrides } : {}),
-        ...(input.wslDistro ? { wslDistro: input.wslDistro } : {})
+        ...(input.wslDistro ? { wslDistro: input.wslDistro } : {}),
+        ...(input.adoptableDigests?.length ? { adoptableDigests: [...input.adoptableDigests] } : {})
       }
       await writeSkillStateFile(
         skillPlacementJournalPath(input.stateDirectory, receipt.canonicalPath),

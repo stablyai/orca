@@ -5,6 +5,7 @@ import {
   installLocalSkillPackage,
   type LocalExtractedSkillPackage,
   type LocalSkillInstallInput,
+  type LocalSkillInstallTarget,
   previewLocalSkillPackage
 } from './skill-install-transaction'
 import {
@@ -31,8 +32,16 @@ export type SkillInstallServiceInput = Omit<
   filesystem?: SkillInstallFilesystem
   wslDistro?: string
   discover?: () => Promise<SkillDiscoveryResult>
+  /** Receives discovery's diagnostic line; defaults to console.info. */
+  discoveryLog?: (line: string) => void
   signal?: AbortSignal
 }
+
+/** Install input for a package already staged on disk, which has no archive to verify. */
+export type SkillInstallTargetInput = Omit<
+  SkillInstallServiceInput,
+  'archivePath' | 'expectedArchiveSha256'
+>
 
 export type SkillRemoveServiceInput = {
   operationId: string
@@ -61,26 +70,33 @@ function canonicalRoot(input: {
 
 export function skillInstallLocalInput(input: SkillInstallServiceInput): LocalSkillInstallInput {
   return {
-    operationId: input.operationId,
+    ...skillInstallLocalTarget(input),
     archivePath: input.archivePath,
+    expectedArchiveSha256: input.expectedArchiveSha256
+  }
+}
+
+export function skillInstallLocalTarget(input: SkillInstallTargetInput): LocalSkillInstallTarget {
+  return {
+    operationId: input.operationId,
     destinationRoot: canonicalRoot(input),
     stateDirectory: join(input.orcaStateDirectory, 'skill-installs'),
     scope: input.scope,
     destinationIdentity: input.destinationIdentity,
     hostIdentity: input.hostIdentity,
-    expectedArchiveSha256: input.expectedArchiveSha256,
     expectedPackageDigest: input.expectedPackageDigest,
     expectedPackageId: input.expectedPackageId,
     expectedVersionId: input.expectedVersionId,
     sourceBundleDigest: input.sourceBundleDigest,
     conflictResolution: input.conflictResolution,
+    adoptableDigests: input.adoptableDigests,
     filesystem: input.filesystem,
     wslDistro: input.wslDistro,
     signal: input.signal
   }
 }
 
-function placementTransaction(input: SkillInstallServiceInput, request: LocalSkillInstallInput) {
+function placementTransaction(input: SkillInstallTargetInput, request: LocalSkillInstallTarget) {
   return createSkillPlacementTransaction({
     stateDirectory: request.stateDirectory,
     scope: input.scope,
@@ -90,6 +106,7 @@ function placementTransaction(input: SkillInstallServiceInput, request: LocalSki
     providerRootOverrides: input.providerRootOverrides,
     filesystem: input.filesystem,
     wslDistro: input.wslDistro,
+    adoptableDigests: input.adoptableDigests,
     signal: input.signal
   })
 }
@@ -106,10 +123,10 @@ export async function installSharedSkill(
 }
 
 export async function installSharedExtractedSkill(
-  input: SkillInstallServiceInput,
+  input: SkillInstallTargetInput,
   extracted: LocalExtractedSkillPackage
 ): Promise<SkillInstallResult> {
-  const request = skillInstallLocalInput(input)
+  const request = skillInstallLocalTarget(input)
   const result = await installLocalExtractedSkillPackage(request, extracted, {
     placementTransaction: placementTransaction(input, request)
   })
@@ -117,7 +134,7 @@ export async function installSharedExtractedSkill(
 }
 
 async function completeSharedSkillInstall(
-  input: SkillInstallServiceInput,
+  input: SkillInstallTargetInput,
   result: SkillInstallResult
 ): Promise<SkillInstallResult> {
   if (
@@ -138,7 +155,8 @@ async function completeSharedSkillInstall(
     workspaceDirectory: input.workspaceDirectory,
     wslDistro: input.wslDistro,
     providerRootOverrides: input.providerRootOverrides,
-    discover: input.discover
+    discover: input.discover,
+    log: input.discoveryLog
   })
 }
 

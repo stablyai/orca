@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
-import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
+import { bundledSkillVerdict, type SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 
 // Why: window focus fires on every alt-tab, and each scan re-reads and re-hashes
@@ -115,7 +115,10 @@ function onWindowFocus(): void {
     void refreshSkillFreshness(true)
     return
   }
-  if (!snapshot.inventory?.eligibleUpdateNames.length || scheduledFocusRescan !== null) {
+  const offersUpdate = snapshot.inventory?.skills.some(
+    (plan) => bundledSkillVerdict(plan) === 'update'
+  )
+  if (!offersUpdate || scheduledFocusRescan !== null) {
     return
   }
   // Why: a focus event can follow an external edit. Retract stale update

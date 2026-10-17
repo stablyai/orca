@@ -11,9 +11,13 @@ import type {
   SkillUpdateRun,
   SkillUpdateStartResult
 } from '../../shared/skill-freshness'
-import { inventorySkillFreshness } from '../skills/skill-freshness-inventory'
 import { SkillUpdateRunner } from '../skills/skill-update-run'
-import { skillUpdateFailedNames } from '../skills/skill-update-outcome'
+import {
+  bundledSkillsStillToUpdate,
+  scanBundledSkillFreshness,
+  updateBundledSkills,
+  type BundledSkillPlanner
+} from '../skills/bundled-skill-freshness'
 import {
   clearSkillDiscoveryCaches,
   discoverSkillsOnTarget,
@@ -31,20 +35,31 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
       refresh: parsedTarget?.refresh === true
     })
   }
+  // Why this machine's global homes only: WSL and SSH freshness stay out until their
+  // installer rail has an equivalent proof.
+  const requireRuntime = (): OrcaRuntimeService => {
+    if (!runtime) {
+      throw new Error('Skill installs are unavailable in this process.')
+    }
+    return runtime
+  }
+  const plan: BundledSkillPlanner = (names) => requireRuntime().planBundledOrcaSkills(names)
   const scanInventory = (): Promise<SkillFreshnessInventory> =>
-    // Why: the update command targets this machine's global homes. WSL and SSH
-    // inventories stay out until their installer rail has an equivalent proof.
-    inventorySkillFreshness({ repos: store.getRepos() })
+    runtime
+      ? scanBundledSkillFreshness(plan)
+      : Promise.resolve({ schemaVersion: 2, skills: [], scannedAt: Date.now() })
 
   const runner = new SkillUpdateRunner({
-    sourceCommit: ORCA_BUILD_COMMIT,
-    // Why: per-skill outcomes come from re-hashing what is actually on disk, not
-    // from scraping stdout.
+    installSkills: (names, signal) =>
+      updateBundledSkills(names, {
+        plan,
+        install: (updatable) => requireRuntime().installBundledOrcaSkills(updatable, signal)
+      }),
     rescanOutdatedNames: async (names) => {
       // Why: the run just rewrote skill packages on this host. Clients that never
       // send `refresh` (older builds) would otherwise read a pre-run scan.
       clearSkillDiscoveryCaches()
-      return skillUpdateFailedNames(names, (await scanInventory()).installations)
+      return bundledSkillsStillToUpdate(names, plan)
     },
     onState: (run: SkillUpdateRun) => {
       for (const window of BrowserWindow.getAllWindows()) {

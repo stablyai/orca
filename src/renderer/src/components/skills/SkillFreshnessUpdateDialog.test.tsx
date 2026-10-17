@@ -3,11 +3,16 @@
 import { act, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  SkillFreshnessInstallation,
-  SkillFreshnessInventory,
-  SkillUpdateRun
-} from '../../../../shared/skill-freshness'
+import type { SkillFreshnessInventory, SkillUpdateRun } from '../../../../shared/skill-freshness'
+import {
+  agentLocation,
+  blockedPlan,
+  currentPlan,
+  freshnessInventory,
+  sharedLocation,
+  skillPlan,
+  updatablePlan
+} from '@/lib/bundled-skill-plan-fixtures'
 import { SkillFreshnessUpdateDialog } from './SkillFreshnessUpdateDialog'
 import {
   consumeSkillFreshnessUpdateDialogRequest,
@@ -92,37 +97,8 @@ const skillsApi = {
 }
 let pushRun: ((run: SkillUpdateRun) => void) | null = null
 
-function placement(
-  name: string,
-  overrides: Partial<SkillFreshnessInstallation> = {}
-): SkillFreshnessInstallation {
-  return {
-    id: `${name}-${overrides.rootId ?? 'home-agents'}`,
-    name,
-    rootId: 'home-agents',
-    providers: ['agent-skills'],
-    sourceKind: 'home',
-    sourceLabel: 'Agent skills home',
-    unresolvedPath: `/home/.agents/skills/${name}`,
-    resolvedPath: `/home/.agents/skills/${name}`,
-    physicalIdentity: `physical-${name}`,
-    topology: 'canonical-copy',
-    status: 'outdated',
-    currentPackageDigest: 'current',
-    lockSource: 'stablyai/orca',
-    errorCategory: null,
-    ...overrides
-  }
-}
-
 function eligibleInventory(): SkillFreshnessInventory {
-  return {
-    schemaVersion: 1,
-    installations: [placement('orca-cli')],
-    eligibleUpdateNames: ['orca-cli'],
-    scanIssues: [],
-    scannedAt: 1
-  }
+  return freshnessInventory(updatablePlan('orca-cli'))
 }
 
 let root: Root | null = null
@@ -249,7 +225,7 @@ describe('SkillFreshnessUpdateDialog', () => {
       state: 'success',
       names: ['orca-cli'],
       finishedAt: 2,
-      output: '✓ Updated 1 skill(s)'
+      output: 'orca-cli: updated (/home/.agents/skills/orca-cli)'
     })
 
     expect(container?.textContent).toContain('Updated 1 skill')
@@ -261,14 +237,8 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(mocks.notifyChanged).toHaveBeenCalled()
   })
 
-  it('attributes failures to the names the re-scan says are still outdated', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [placement('orca-cli'), placement('orchestration')],
-      eligibleUpdateNames: ['orca-cli', 'orchestration'],
-      scanIssues: [],
-      scannedAt: 1
-    }
+  it('attributes failures to the names the re-plan still has an update for', async () => {
+    mocks.inventory = freshnessInventory(updatablePlan('orca-cli'), updatablePlan('orchestration'))
     await renderDialog()
     await openViaRequest()
     await emitRun({
@@ -276,8 +246,8 @@ describe('SkillFreshnessUpdateDialog', () => {
       names: ['orca-cli', 'orchestration'],
       failedNames: ['orchestration'],
       finishedAt: 3,
-      output: '✗ Failed to update orchestration',
-      message: 'skills add exited with code 1'
+      output: 'orchestration: failed (skill-install-failed)',
+      message: 'Some skills could not be updated.'
     })
 
     expect(container?.textContent).toContain('Updated 1 of 2 skills')
@@ -287,7 +257,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(
       container?.querySelector('[data-skill-row="orchestration"]')?.getAttribute('data-state-label')
     ).toBe('failed')
-    expect(container?.textContent).toContain('skills add exited with code 1')
+    expect(container?.textContent).toContain('Some skills could not be updated.')
     expect(findButton('Retry')).toBeDefined()
   })
 
@@ -304,13 +274,7 @@ describe('SkillFreshnessUpdateDialog', () => {
 
     // The re-scan makes the skill current, which would otherwise drop it from
     // the group list and blank the row out mid-transition.
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [placement('orca-cli', { status: 'current' })],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 5
-    }
+    mocks.inventory = { ...freshnessInventory(currentPlan('orca-cli')), scannedAt: 5 }
     await emitRun({ state: 'success', names: ['orca-cli'], finishedAt: 2, output: 'done' })
     await rerender()
     const after = container?.querySelector('[data-skill-row="orca-cli"]')
@@ -319,20 +283,7 @@ describe('SkillFreshnessUpdateDialog', () => {
   })
 
   it('collapses each skill’s locations behind its own disclosure', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement('orca-cli'),
-        placement('orca-cli', {
-          rootId: 'plugin',
-          topology: 'plugin-cache',
-          status: 'inaccessible'
-        })
-      ],
-      eligibleUpdateNames: ['orca-cli'],
-      scanIssues: [],
-      scannedAt: 1
-    }
+    mocks.inventory = freshnessInventory(updatablePlan('orca-cli'))
     await renderDialog()
     await openViaRequest()
 
@@ -376,11 +327,11 @@ describe('SkillFreshnessUpdateDialog', () => {
       state: 'success',
       names: ['orca-cli'],
       finishedAt: 2,
-      output: 'Checking skills from source: stablyai/orca\n  ✓ Updated orca-cli'
+      output: 'orca-cli: updated (/home/.agents/skills/orca-cli)'
     })
 
     expect(container?.querySelector('pre')?.textContent).toContain(
-      'Checking skills from source: stablyai/orca'
+      'orca-cli: updated (/home/.agents/skills/orca-cli)'
     )
   })
 
@@ -413,13 +364,7 @@ describe('SkillFreshnessUpdateDialog', () => {
   })
 
   it('shows the up-to-date state once every installation is current', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [placement('orca-cli', { status: 'current' })],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 2
-    }
+    mocks.inventory = freshnessInventory(currentPlan('orca-cli'))
     await renderDialog()
     await openViaRequest()
 
@@ -428,160 +373,60 @@ describe('SkillFreshnessUpdateDialog', () => {
   })
 
   it('shows why a skill was skipped without needing the disclosure', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      // Why: a read-only copy rather than a project one — a project-owned copy raises no
-      // row at all now, so it cannot carry this assertion about how a row renders.
-      installations: [placement('computer-use', { topology: 'read-only' })],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 3
-    }
+    mocks.inventory = freshnessInventory(blockedPlan('computer-use', 'read-only'))
     await renderDialog()
     await openViaRequest()
 
     const row = container?.querySelector('[data-skill-row="computer-use"]')
-    expect(container?.textContent).toContain('computer-use')
     expect(container?.textContent).toContain('Skipped')
     // The reason is the one thing a skipped row exists to say, so it lives
-    // outside the disclosure — visible with the row still collapsed, and not
-    // dependent on a mount-time `defaultOpen` a later re-scan could never re-fire.
+    // outside the disclosure — visible with the row still collapsed.
     expect(row?.getAttribute('data-collapsible-open')).toBe('false')
-    expect(container?.textContent).toContain('This copy is in a read-only location')
-    // Assert the placement, not just the presence: moving it back inside the
-    // disclosure would hide it in production but still satisfy `textContent`.
+    expect(container?.textContent).toContain('This location is read-only')
     expect(row?.querySelector('[data-collapsible-content]')?.textContent).not.toContain(
-      'This copy is in a read-only location'
+      'This location is read-only'
     )
+    expect(container?.textContent).toContain('Some installed Orca skills were left out')
   })
 
-  it('raises no row for a skill whose only finding is a project-owned copy', async () => {
-    // The reported bug: a pristine global install plus a drifted copy inside a work
-    // directory. Orca only ever updates global skills, so a "Skipped" row here asserts
-    // it considered an update it could never perform.
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement('computer-use', { status: 'current' }),
-        placement('computer-use', {
-          rootId: 'repo-work',
-          sourceKind: 'repo',
-          topology: 'repo-scope',
-          status: 'outdated',
-          unresolvedPath: '/home/projects/work/.agents/skills/computer-use',
-          resolvedPath: '/home/projects/work/.agents/skills/computer-use',
-          physicalIdentity: 'physical-repo-computer-use'
-        })
-      ],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 4
-    }
+  it('offers a skills CLI copy in an agent folder that the install takes over', async () => {
+    mocks.inventory = freshnessInventory(
+      skillPlan('orca-cli', [
+        sharedLocation('orca-cli', 'install'),
+        agentLocation('orca-cli', 'replace')
+      ])
+    )
     await renderDialog()
     await openViaRequest()
 
-    expect(container?.textContent).toContain('All installed Orca skills are up to date.')
-    expect(container?.querySelector('[data-skill-row="computer-use"]')).toBeNull()
+    expect(container?.textContent).toContain('1 update available')
+    expect(container?.textContent).not.toContain('Skipped')
+    expect(container?.textContent).toContain('Will replace')
+    await clickButton('Update 1 skill')
+    expect(skillsApi.startUpdateRun).toHaveBeenLastCalledWith(['orca-cli'])
   })
 
-  it('still lists a project copy when another placement earns the group', async () => {
-    // The converse: ownership suppresses the group, never the visibility of a location
-    // that exists. An outdated global copy earns the row, and the project copy has to
-    // stay listed there so the user can see every place the skill lives.
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement('computer-use', { topology: 'read-only' }),
-        placement('computer-use', {
-          rootId: 'repo-work',
-          sourceKind: 'repo',
-          topology: 'repo-scope',
-          status: 'outdated',
-          unresolvedPath: '/home/projects/work/.agents/skills/computer-use',
-          resolvedPath: '/home/projects/work/.agents/skills/computer-use',
-          physicalIdentity: 'physical-repo-computer-use'
-        })
-      ],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 5
-    }
+  it('preselects every update and lists skipped skills unticked below the headline', async () => {
+    mocks.inventory = freshnessInventory(
+      updatablePlan('orca-cli'),
+      updatablePlan('orchestration'),
+      blockedPlan('computer-use', 'not-installed-by-orca')
+    )
     await renderDialog()
     await openViaRequest()
 
-    const row = container?.querySelector('[data-skill-row="computer-use"]')
-    expect(row).not.toBeNull()
-    expect(row?.textContent).toContain('/home/projects/work/.agents/skills/computer-use')
-  })
-
-  it('preselects Orca-owned updates and leaves same-named skills from elsewhere unticked', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement('computer-use', { lockSource: 'acme/agent-skills' }),
-        placement('linear-tickets', { lockSource: null }),
-        placement('orca-cli'),
-        placement('orchestration', { lockSource: 'https://github.com/stablyai/orca.git' })
-      ],
-      eligibleUpdateNames: ['computer-use', 'linear-tickets', 'orca-cli', 'orchestration'],
-      scanIssues: [],
-      scannedAt: 7
-    }
-    await renderDialog()
-    await openViaRequest()
-
-    // Orca's own rows sort first, and only they are checked.
-    const rows = Array.from(container?.querySelectorAll('[data-skill-row]') ?? [])
-    expect(rows.map((row) => row.getAttribute('data-skill-row'))).toEqual([
-      'orca-cli',
-      'orchestration',
-      'computer-use',
-      'linear-tickets'
-    ])
     const checked = (name: string): string | null | undefined =>
       container
         ?.querySelector(`[role="checkbox"][aria-label="Include ${name}"]`)
         ?.getAttribute('aria-checked')
     expect(checked('orca-cli')).toBe('true')
     expect(checked('orchestration')).toBe('true')
-    expect(checked('computer-use')).toBe('false')
-    expect(checked('linear-tickets')).toBe('false')
-    expect(container?.querySelector('[data-skill-row="computer-use"]')?.textContent).toContain(
-      'Not from Orca'
-    )
-    expect(container?.querySelector('[data-skill-row="orca-cli"]')?.textContent).toContain(
-      'Update available'
-    )
+    expect(container?.querySelector('[aria-label="Include computer-use"]')).toBeNull()
     expect(container?.textContent).toContain('2 updates available')
-    expect(container?.textContent).toContain('2 skills not installed by Orca are unselected.')
+    expect(container?.textContent).toContain("1 skill can't be updated automatically.")
 
     await clickButton('Update 2 skills')
     expect(skillsApi.startUpdateRun).toHaveBeenLastCalledWith(['orca-cli', 'orchestration'])
-  })
-
-  it('counts the selection in the button once the user ticks a foreign copy', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement('computer-use', { lockSource: 'acme/agent-skills' }),
-        placement('orca-cli')
-      ],
-      eligibleUpdateNames: ['computer-use', 'orca-cli'],
-      scanIssues: [],
-      scannedAt: 8
-    }
-    await renderDialog()
-    await openViaRequest()
-    const foreign = container?.querySelector('[aria-label="Include computer-use"]')
-    await act(async () => {
-      foreign?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(foreign?.getAttribute('aria-checked')).toBe('true')
-    expect(container?.textContent).not.toContain('not installed by Orca')
-    await clickButton('Update 2 skills')
-    // Display order, Orca's first; the runner canonicalizes.
-    expect(skillsApi.startUpdateRun).toHaveBeenLastCalledWith(['orca-cli', 'computer-use'])
   })
 
   it('disables the update once nothing is selected', async () => {
@@ -594,62 +439,6 @@ describe('SkillFreshnessUpdateDialog', () => {
     })
 
     expect(findButton('Update 0 skills')).toBeUndefined()
-    expect(findButton('Update skills')?.disabled).toBe(true)
-  })
-
-  it('drops a choice when a re-check finds a different install source', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement('computer-use', { lockSource: 'acme/agent-skills' }),
-        placement('orca-cli')
-      ],
-      eligibleUpdateNames: ['computer-use', 'orca-cli'],
-      scanIssues: [],
-      scannedAt: 10
-    }
-    await renderDialog()
-    await openViaRequest()
-    await act(async () => {
-      container
-        ?.querySelector('[aria-label="Include computer-use"]')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    // The re-check now attributes orca-cli to someone else: its preselection was Orca's,
-    // not the user's, so it must not be replaced without a fresh tick.
-    mocks.inventory = {
-      ...mocks.inventory,
-      installations: [
-        placement('computer-use', { lockSource: 'acme/agent-skills' }),
-        placement('orca-cli', { lockSource: 'acme/agent-skills' })
-      ],
-      scannedAt: 11
-    }
-    await rerender()
-
-    expect(
-      container?.querySelector('[aria-label="Include orca-cli"]')?.getAttribute('aria-checked')
-    ).toBe('false')
-    await clickButton('Update 1 skill')
-    expect(skillsApi.startUpdateRun).toHaveBeenLastCalledWith(['computer-use'])
-  })
-
-  it('reads Orca’s skills as current when only a foreign copy is outdated', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [
-        placement('computer-use', { lockSource: null }),
-        placement('orca-cli', { status: 'current' })
-      ],
-      eligibleUpdateNames: ['computer-use'],
-      scanIssues: [],
-      scannedAt: 9
-    }
-    await renderDialog()
-    await openViaRequest()
-
-    expect(container?.textContent).toContain('All installed Orca skills are up to date.')
-    expect(container?.textContent).toContain('1 skill not installed by Orca is unselected.')
     expect(findButton('Update skills')?.disabled).toBe(true)
   })
 
@@ -676,7 +465,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     ).toBe('available')
   })
 
-  it('says it is stopping while the process tree is still being killed', async () => {
+  it('says it is stopping while the install is still settling', async () => {
     await renderDialog()
     await openViaRequest()
     await emitRun({ state: 'running', names: ['orca-cli'], startedAt: 1, output: '' })
@@ -746,9 +535,9 @@ describe('SkillFreshnessUpdateDialog', () => {
       failedNames: ['orca-cli'],
       finishedAt: 3,
       output: '',
-      message: 'skills add exited with code 1'
+      message: 'Some skills could not be updated.'
     })
-    // The settling re-scan has emptied `eligibleUpdateNames` by the time Retry
+    // The settling re-plan has dropped the update by the time Retry
     // is on screen; retrying that list would spawn nothing at all.
     mocks.inventory = null
     mocks.loading = true
@@ -778,10 +567,10 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(container?.querySelector('[data-skill-row="orca-cli"]')).not.toBeNull()
 
     mocks.inventory = null
-    mocks.error = 'Missing canonical agent skills root'
+    mocks.error = 'Skill installs are unavailable in this process.'
     await rerender()
 
-    expect(container?.textContent).toContain('Missing canonical agent skills root')
+    expect(container?.textContent).toContain('Skill installs are unavailable in this process.')
     expect(container?.querySelector('[data-skill-row="orca-cli"]')).toBeNull()
     expect(findButton('Update 1 skill')).toBeUndefined()
   })
@@ -798,100 +587,5 @@ describe('SkillFreshnessUpdateDialog', () => {
     )
     expect(error?.className).toContain('min-w-0')
     expect(error?.className).toContain('[overflow-wrap:anywhere]')
-  })
-
-  it('shows incomplete plugin coverage without presenting a fabricated skill copy', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [placement('orca-cli', { status: 'current' })],
-      eligibleUpdateNames: [],
-      scanIssues: [
-        {
-          rootId: 'codex-plugin-cache',
-          sourceLabel: 'Codex plugin cache',
-          path: '/home/.codex/plugins/cache/vendor/locked',
-          reason: 'io-error',
-          errorCode: 'EACCES'
-        }
-      ],
-      scannedAt: 2
-    }
-    await renderDialog()
-    await openViaRequest()
-
-    expect(container?.textContent).toContain(
-      'Orca could not finish checking plugin-managed skills.'
-    )
-    expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/locked')
-    expect(container?.textContent).toContain('EACCES')
-    expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
-    // Why: the fabricated per-skill path is exactly what this change removed — the
-    // unreadable folder must never be rendered as a copy of a named skill.
-    expect(container?.textContent).not.toContain(
-      '/home/.codex/plugins/cache/vendor/locked/orca-cli'
-    )
-  })
-
-  // Why: the walk stopped early here, so claiming every copy is up to date would assert
-  // a completeness the scan did not reach — green dishonesty in place of amber.
-  it.each(['entry-limit', 'candidate-limit'] as const)(
-    'does not report all-clear when %s ended the scan early',
-    async (reason) => {
-      mocks.inventory = {
-        schemaVersion: 1,
-        installations: [placement('orca-cli', { status: 'current' })],
-        eligibleUpdateNames: [],
-        scanIssues: [
-          {
-            rootId: 'codex-plugin-cache',
-            sourceLabel: 'Codex plugin cache',
-            path: '/home/.codex/plugins/cache',
-            reason: reason,
-            errorCode: null
-          }
-        ],
-        scannedAt: 2
-      }
-      await renderDialog()
-      await openViaRequest()
-
-      expect(container?.textContent).not.toContain('All installed Orca skills are up to date.')
-      expect(container?.textContent).toContain(
-        'Orca could not finish checking plugin-managed skills.'
-      )
-      // Why: the headline alone would pass with the folder list gone, leaving the user
-      // told the scan stopped but never told where. Assert the diagnostic renders too.
-      expect(container?.textContent).toContain('/home/.codex/plugins/cache')
-    }
-  )
-
-  // Why: Orca's own traversal bounds are not the user's to act on. Headlining them
-  // would put a permanent warning on any ordinary large plugin cache while every
-  // skill badge stayed green — the same unclearable amber, moved into the dialog.
-  it('lists a traversal bound without headlining it', async () => {
-    mocks.inventory = {
-      schemaVersion: 1,
-      installations: [placement('orca-cli', { status: 'current' })],
-      eligibleUpdateNames: [],
-      scanIssues: [
-        {
-          rootId: 'codex-plugin-cache',
-          sourceLabel: 'Codex plugin cache',
-          path: '/home/.codex/plugins/cache/vendor/deep',
-          reason: 'depth-limit',
-          errorCode: null
-        }
-      ],
-      scannedAt: 2
-    }
-    await renderDialog()
-    await openViaRequest()
-
-    expect(container?.textContent).toContain('All installed Orca skills are up to date.')
-    expect(container?.textContent).not.toContain(
-      'Orca could not finish checking plugin-managed skills.'
-    )
-    expect(container?.textContent).toContain('/home/.codex/plugins/cache/vendor/deep')
-    expect(container?.textContent).toContain('scan depth limit')
   })
 })

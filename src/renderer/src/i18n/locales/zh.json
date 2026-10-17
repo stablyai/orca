@@ -4706,30 +4706,8 @@
         "SkillFreshnessRow": {
           "statusUpdateAvailable": "有更新",
           "statusCantUpdate": "无法更新",
-          "cantUpdateReason": "此技能安装在 Orca 无法安全更新的位置，因此 更新命令不会更改它。",
-          "chipCurrent": "最新",
           "chipInaccessible": "无法访问",
-          "chipDuplicate": "重复",
-          "chipExternalLink": "外部链接",
-          "chipBrokenLink": "失效链接",
-          "chipReadOnly": "只读",
-          "chipInRepo": "在仓库中",
-          "chipPluginCache": "插件缓存",
-          "tipCurrent": "这里的技能已是最新，更新不会更改它。",
-          "tipInaccessible": "Orca 无法读取这里的技能（权限或文件错误），因此无法检查或更新它。",
-          "tipDuplicate": "此技能除主副本外还安装在这里，因此 更新命令无法访问它。请移除它以允许更新。",
-          "tipExternalLink": "这是一个指向 Orca 技能文件夹之外的快捷方式；更新不会跟随它。",
-          "tipBrokenLink": "这是一个指向已不存在内容的快捷方式，可以安全删除。",
-          "tipReadOnly": "这里的技能位于只读位置，需更改其权限后才能更新。",
-          "tipInRepo": "这里的技能位于某个项目内，而非全局技能；Orca 只更新全局技能。",
-          "tipPluginCache": "这里的技能由插件管理；请改为更新插件。",
-          "skippedReasonReadOnly": "此副本位于只读位置，因此 Orca 未将其纳入更新。请更改其权限，让 Orca 更新它。",
-          "skippedReasonInaccessible": "Orca 无法读取此副本，因此未将该技能纳入更新。",
-          "skippedReasonInRepo": "这是项目技能而非全局技能 — Orca 只更新您的全局技能，因此将其排除在更新之外。",
-          "skippedReasonPluginCache": "此技能由插件管理，因此 Orca 未将其纳入更新 — 请改为更新插件。",
-          "skippedReasonExternalLink": "此副本是指向 Orca 技能文件夹之外的快捷方式，因此 Orca 未将其纳入更新。",
-          "skippedReasonBrokenLink": "此副本是指向已不存在内容的快捷方式，因此 Orca 将其排除 — 您可以放心删除。",
-          "skippedReasonDuplicate": "这是独立的副本，因此更新不会触及它 — 该命令只刷新主副本。请删除此副本并重新安装技能，使此位置跟随主副本。"
+          "chipReadOnly": "只读"
         },
         "SkillFreshnessUpdateDialog": {
           "title": "更新技能",
@@ -4761,18 +4739,7 @@
           "done": "Done",
           "stop": "Stop",
           "stopping": "Stopping…",
-          "stoppingHeadline": "正在停止更新…",
-          "scanIncomplete": "Orca 无法完成对插件管理技能的检查。",
-          "scanDepthLimit": "在检查此文件夹之前，Orca 已达到插件扫描深度上限。",
-          "scanEntryLimit": "在检查此缓存的其余内容之前，Orca 已达到插件扫描条目数上限。",
-          "scanCandidateLimit": "Orca 发现的同名技能文件夹数量超过了可安全检查的上限。",
-          "scanManifestLimit": "此插件清单超出安全限制，Orca 已将其跳过。",
-          "scanOutsideRoot": "此插件路径指向插件缓存之外，Orca 已将其跳过。",
-          "scanIoErrorWithCode": "Orca 无法读取此插件路径（{{value0}}）。",
-          "scanIoError": "Orca 无法读取此插件路径。",
-          "scanIssueLimit": "被跳过的插件文件夹过多，Orca 无法逐一列出。",
-          "unselectedForeignOne": "有 1 个非 Orca 安装的技能未选中。",
-          "unselectedForeignMany": "有 {{value0}} 个非 Orca 安装的技能未选中。"
+          "stoppingHeadline": "正在停止更新…"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "有可用更新",
@@ -4790,8 +4757,6 @@
           "oneLocation": "1 个位置",
           "manyLocations": "{{value0}} 个位置",
           "notFromOrca": "非 Orca 安装",
-          "notFromOrcaSourceTip": "安装自 {{value0}}。选中后会替换为 Orca 的版本。",
-          "notFromOrcaNoRecordTip": "此副本没有 Orca 安装记录。选中后会替换为 Orca 的版本。",
           "includeSkill": "包含 {{value0}}"
         },
         "host": {
@@ -5168,6 +5133,28 @@
           "supportingFilesDescription": "包括主要说明之外的可读参考文件。",
           "runnableFilesDescription": "包括智能体可以使用您的访问权限运行的脚本。",
           "binaryFilesDescription": "包括不透明资产和可执行二进制文件。"
+        },
+        "skill": {
+          "plan": {
+            "location": {
+              "copy": {
+                "install": "将安装",
+                "update": "将更新",
+                "link": "将链接",
+                "replace": "将替换",
+                "localChangesLabel": "本地更改",
+                "linkNotManagedLabel": "未受管理的链接",
+                "nameInUseLabel": "名称已被占用",
+                "localChanges": "此副本包含非 Orca 所做的更改，因此更新会保持原样。请删除它，然后重新安装该技能以获取 Orca 的版本。",
+                "notInstalledByOrca": "此副本不是 Orca 安装的，因此更新会保持原样。请删除它，然后重新安装该技能以使用 Orca 的版本。",
+                "linkNotManaged": "此链接不是 Orca 创建的，因此更新会保持原样。",
+                "nameInUse": "已有其他文件或文件夹使用此技能名称，因此更新会保持原样。",
+                "readOnly": "此位置为只读，更新无法修改它。请更改其权限以允许 Orca 更新。",
+                "unreadable": "Orca 无法读取此副本，因此更新会保持原样。",
+                "keep": "无更改"
+              }
+            }
+          }
         }
       },
       "sidebar": {

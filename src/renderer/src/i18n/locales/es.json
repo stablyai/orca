@@ -4701,30 +4701,8 @@
         "SkillFreshnessRow": {
           "statusUpdateAvailable": "Actualización disponible",
           "statusCantUpdate": "No se puede actualizar",
-          "cantUpdateReason": "Esta skill está instalada en un lugar que Orca no puede actualizar de forma segura, así que el comando de actualización la deja sin cambios.",
-          "chipCurrent": "Actual",
           "chipInaccessible": "Inaccesible",
-          "chipDuplicate": "Duplicada",
-          "chipExternalLink": "Enlace externo",
-          "chipBrokenLink": "Enlace roto",
-          "chipReadOnly": "Solo lectura",
-          "chipInRepo": "En un repo",
-          "chipPluginCache": "Caché de plugin",
-          "tipCurrent": "La skill aquí ya está actualizada; la actualización no la cambiará.",
-          "tipInaccessible": "Orca no pudo leer la skill aquí (un error de permisos o de archivo), así que no puede comprobarla ni actualizarla.",
-          "tipDuplicate": "La skill también está instalada aquí, aparte de la principal, así que el comando de actualización no puede alcanzarla. Elimínala para permitir las actualizaciones.",
-          "tipExternalLink": "Es un acceso directo que apunta fuera de las carpetas de skills de Orca; la actualización no lo seguirá.",
-          "tipBrokenLink": "Es un acceso directo a algo que ya no existe; puedes eliminarlo sin problema.",
-          "tipReadOnly": "La skill aquí está en una ubicación de solo lectura, así que no se puede actualizar hasta que cambies sus permisos.",
-          "tipInRepo": "La skill aquí vive dentro de un proyecto, no en tus skills globales; Orca solo actualiza las globales.",
-          "tipPluginCache": "La skill aquí la gestiona un plugin; actualiza el plugin en su lugar.",
-          "skippedReasonReadOnly": "This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.",
-          "skippedReasonInaccessible": "Orca couldn’t read this copy, so it left the skill out of the update.",
-          "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
-          "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
-          "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
-          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
-          "skippedReasonDuplicate": "Es una copia aparte, así que la actualización no la alcanza: el comando solo actualiza la copia principal. Elimina esta copia y vuelve a instalar la skill para que esta ubicación siga a la principal."
+          "chipReadOnly": "Solo lectura"
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Actualizar skills",
@@ -4756,18 +4734,7 @@
           "done": "Done",
           "stop": "Stop",
           "stopping": "Stopping…",
-          "stoppingHeadline": "Stopping the update…",
-          "scanIncomplete": "Orca no pudo terminar de comprobar los skills gestionados por plugins.",
-          "scanDepthLimit": "Orca alcanzó el límite de profundidad del análisis antes de comprobar esta carpeta.",
-          "scanEntryLimit": "Orca alcanzó el límite de entradas del análisis antes de comprobar el resto de esta caché.",
-          "scanCandidateLimit": "Orca encontró más carpetas de skills con el mismo nombre de las que puede inspeccionar de forma segura.",
-          "scanManifestLimit": "Orca omitió este manifiesto del plugin porque superaba un límite seguro.",
-          "scanOutsideRoot": "Orca omitió esta ruta del plugin porque apunta fuera de la caché de plugins.",
-          "scanIoErrorWithCode": "Orca no pudo leer esta ruta del plugin ({{value0}}).",
-          "scanIoError": "Orca no pudo leer esta ruta del plugin.",
-          "scanIssueLimit": "Orca encontró demasiadas carpetas de plugins omitidas para mostrarlas por separado.",
-          "unselectedForeignOne": "1 skill no instalada por Orca no está seleccionada.",
-          "unselectedForeignMany": "{{value0}} skills no instaladas por Orca no están seleccionadas."
+          "stoppingHeadline": "Stopping the update…"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "Actualización disponible",
@@ -4785,8 +4752,6 @@
           "oneLocation": "1 ubicación",
           "manyLocations": "{{value0}} ubicaciones",
           "notFromOrca": "No es de Orca",
-          "notFromOrcaSourceTip": "Instalada desde {{value0}}. Si la seleccionas, se reemplaza por la versión de Orca.",
-          "notFromOrcaNoRecordTip": "No hay registro de instalación de Orca para esta copia. Si la seleccionas, se reemplaza por la versión de Orca.",
           "includeSkill": "Incluir {{value0}}"
         },
         "host": {
@@ -5163,6 +5128,28 @@
           "placementSummaryParts": "Elimina {{parts}} a través de {{roots}}.",
           "placementJoin": "y",
           "retainedSource": "La habilidad en sí permanece en {{path}}."
+        },
+        "skill": {
+          "plan": {
+            "location": {
+              "copy": {
+                "install": "Se instalará",
+                "update": "Se actualizará",
+                "link": "Se enlazará",
+                "replace": "Se reemplazará",
+                "localChangesLabel": "Cambios locales",
+                "linkNotManagedLabel": "Enlace no gestionado",
+                "nameInUseLabel": "Nombre en uso",
+                "localChanges": "Esta copia tiene cambios que Orca no hizo, así que la actualización la deja como está. Elimínala y vuelve a instalar la skill para obtener la versión de Orca.",
+                "notInstalledByOrca": "Orca no instaló esta copia, así que la actualización la deja como está. Elimínala y vuelve a instalar la skill para usar la versión de Orca.",
+                "linkNotManaged": "Este enlace no lo creó Orca, así que la actualización lo deja como está.",
+                "nameInUse": "Otro archivo o carpeta ya usa el nombre de esta skill, así que la actualización lo deja como está.",
+                "readOnly": "Esta ubicación es de solo lectura, así que la actualización no puede cambiarla. Cambia sus permisos para que Orca pueda actualizarla.",
+                "unreadable": "Orca no pudo leer esta copia, así que la actualización la deja como está.",
+                "keep": "Sin cambios"
+              }
+            }
+          }
         }
       },
       "sidebar": {

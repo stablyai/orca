@@ -190,6 +190,7 @@ export async function recoverSkillPlacementTransaction(
       fileModes: journal.fileModes,
       filesystem,
       transaction: { stagingPath: action.stagingPath, backupPath: action.backupPath },
+      adoptableDigests: journal.adoptableDigests,
       ...(journal.wslDistro ? { targetPlatform: 'linux' as const } : {})
     })
     if (placement) {

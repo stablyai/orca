@@ -5,10 +5,7 @@ import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import {
-  isOrcaSkillLockSource,
-  skillPlacementParticipatesInGlobalFreshness
-} from '../../../../shared/skill-freshness'
+import { bundledSkillVerdict, type BundledSkillPlan } from '../../../../shared/skill-freshness'
 import { requestSkillFreshnessUpdateDialog } from './skill-freshness-update-dialog'
 
 const MAX_DISMISSED_FRESHNESS_NUDGES = 512
@@ -20,12 +17,10 @@ type ActiveFreshnessNudge = {
   persistDismissal: boolean
 }
 
-function candidateKey(args: {
-  physicalIdentity: string
-  name: string
-  currentPackageDigest: string
-}): string {
-  return [args.physicalIdentity, args.name, args.currentPackageDigest].join('\0')
+// Why: a dismissal is scoped to this build's package, so the next Orca version nudges again.
+function candidateKey(plan: BundledSkillPlan): string {
+  const shared = plan.locations.find((location) => location.role === 'shared')
+  return [shared?.path ?? '', plan.name, plan.packageDigest].join('\0')
 }
 
 export function SkillFreshnessNudge(): null {
@@ -65,29 +60,9 @@ export function SkillFreshnessNudge(): null {
       }
       return
     }
-    const eligibleNames = new Set(inventory.eligibleUpdateNames)
-    const candidates = inventory.installations.flatMap((installation) =>
-      // Why: a project copy the global update never touches must not enter the dismissal
-      // fingerprint, or re-checking out that repo re-raises a nudge the user already
-      // dismissed — and spends the bounded dismissal budget on copies Orca cannot update.
-      skillPlacementParticipatesInGlobalFreshness(installation) &&
-      installation.status === 'outdated' &&
-      eligibleNames.has(installation.name) &&
-      // Why: a same-named skill from somewhere else is listed in the dialog, never nudged.
-      isOrcaSkillLockSource(installation.lockSource) &&
-      installation.physicalIdentity
-        ? [
-            {
-              key: candidateKey({
-                physicalIdentity: installation.physicalIdentity,
-                name: installation.name,
-                currentPackageDigest: installation.currentPackageDigest
-              }),
-              name: installation.name
-            }
-          ]
-        : []
-    )
+    const candidates = inventory.skills
+      .filter((plan) => bundledSkillVerdict(plan) === 'update')
+      .map((plan) => ({ key: candidateKey(plan), name: plan.name }))
     const dismissedKeys = new Set(dismissed)
     const unseen = candidates.filter((candidate) => !dismissedKeys.has(candidate.key))
     if (unseen.length === 0) {

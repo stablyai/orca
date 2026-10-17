@@ -38,6 +38,20 @@ export async function placementMatchesDigest(
   )
 }
 
+async function placementBackupWasAdoptable(
+  journal: SkillPlacementJournalV1,
+  action: SkillPlacementJournalActionV1,
+  filesystem: SkillInstallFilesystem
+): Promise<boolean> {
+  if (!journal.adoptableDigests?.length) {
+    return false
+  }
+  const observed = await filesystem
+    .observeSkill(action.backupPath, journal.fileModes)
+    .catch(() => null)
+  return Boolean(observed && journal.adoptableDigests.includes(observed.observedDigest))
+}
+
 export async function placementBackupMatchesPrevious(
   journal: SkillPlacementJournalV1,
   action: SkillPlacementJournalActionV1,
@@ -47,15 +61,17 @@ export async function placementBackupMatchesPrevious(
     (placement) => normalizedPath(placement.path) === normalizedPath(action.destinationPath)
   )
   if (!previous || !journal.previousReceipt) {
-    return false
+    return placementBackupWasAdoptable(journal, action, filesystem)
   }
   if (previous.topology !== 'provider-alias') {
-    return placementMatchesDigest(
-      action.backupPath,
-      journal.previousReceipt.packageDigest,
-      journal,
-      filesystem,
-      journal.previousReceipt.fileModes ?? []
+    return (
+      (await placementMatchesDigest(
+        action.backupPath,
+        journal.previousReceipt.packageDigest,
+        journal,
+        filesystem,
+        journal.previousReceipt.fileModes ?? []
+      )) || placementBackupWasAdoptable(journal, action, filesystem)
     )
   }
   if (filesystem.aliasTargets) {

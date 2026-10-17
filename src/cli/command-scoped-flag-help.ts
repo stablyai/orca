@@ -54,7 +54,12 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     focus: FILE_OPEN_FOCUS_HELP
   },
   'skills install': {
-    agent: '--agent <names>        Comma-separated install targets; default is detected agents'
+    agent: '--agent <names>        Comma-separated agents to add; default is detected agents',
+    force: '--force                Replace a copy that has local changes'
+  },
+  'skills update': {
+    agent: '--agent <names>        Comma-separated agents to add; default is detected agents',
+    force: '--force                Replace a copy that has local changes'
   },
   'worktree set': {
     unread: '--unread               Mark the workspace unread in the sidebar',

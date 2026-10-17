@@ -3,7 +3,7 @@ import type { SkillPackageManifestV1 } from '../../shared/skill-package-manifest
 import { skillInstallFailureFromError } from './skill-install-operation-error'
 import type { SkillCanonicalState } from './skill-install-planner'
 import type { SkillInstallReceiptV1 } from './skill-install-provenance'
-import type { LocalSkillInstallInput } from './skill-install-transaction'
+import type { LocalSkillInstallTarget } from './skill-install-transaction'
 
 export function skillInstallConflictResult(
   operationId: string,
@@ -34,7 +34,7 @@ export function skillInstallConflictResult(
 }
 
 export function skillInstallFailureResult(
-  input: LocalSkillInstallInput,
+  input: LocalSkillInstallTarget,
   manifest: SkillPackageManifestV1,
   canonicalPath: string,
   error: unknown
@@ -57,9 +57,16 @@ export function skillInstallFailureResult(
 
 export function skillInstallReplacementAllowed(
   state: SkillCanonicalState,
-  input: LocalSkillInstallInput
+  input: LocalSkillInstallTarget
 ): boolean {
   if (state.kind === 'missing' || state.kind === 'clean-update') {
+    return input.conflictResolution !== 'cancel'
+  }
+  if (
+    (state.kind === 'modified' || state.kind === 'unowned') &&
+    state.digest !== undefined &&
+    input.adoptableDigests?.includes(state.digest)
+  ) {
     return input.conflictResolution !== 'cancel'
   }
   return (
@@ -69,7 +76,7 @@ export function skillInstallReplacementAllowed(
 }
 
 export function skillInstallUnchangedResult(
-  input: LocalSkillInstallInput,
+  input: LocalSkillInstallTarget,
   manifest: SkillPackageManifestV1,
   canonicalPath: string,
   receipt: SkillInstallReceiptV1
@@ -87,9 +94,9 @@ export function skillInstallUnchangedResult(
 }
 
 export function createSkillInstallReceipt(input: {
-  request: LocalSkillInstallInput
+  request: LocalSkillInstallTarget
   manifest: SkillPackageManifestV1
-  archiveSha256: string
+  archiveSha256?: string
   canonicalPath: string
   previous: SkillInstallReceiptV1 | null
 }): SkillInstallReceiptV1 {
@@ -99,7 +106,7 @@ export function createSkillInstallReceipt(input: {
     versionId: input.manifest.versionId,
     packageDigest: input.manifest.packageDigest,
     ...(input.request.sourceBundleDigest ? { bundleDigest: input.request.sourceBundleDigest } : {}),
-    archiveSha256: input.archiveSha256,
+    ...(input.archiveSha256 ? { archiveSha256: input.archiveSha256 } : {}),
     scope: input.request.scope,
     destinationIdentity: input.request.destinationIdentity,
     canonicalPath: input.canonicalPath,

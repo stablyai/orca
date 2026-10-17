@@ -31,6 +31,8 @@ export type SkillPlacementJournalV1 = {
   providerRootOverrides?: SkillProviderRootOverrides
   actions: SkillPlacementJournalActionV1[]
   wslDistro?: string
+  /** Digests of unowned provider copies this install may replace, kept for crash recovery. */
+  adoptableDigests?: string[]
 }
 
 export function skillPlacementJournalPath(stateDirectory: string, canonicalPath: string): string {
@@ -129,7 +131,15 @@ function isJournal(value: unknown, canonicalPath: string): value is SkillPlaceme
     ) ||
     (journal.previousReceipt !== null &&
       journal.previousReceipt?.canonicalPath !== canonicalPath) ||
-    (journal.wslDistro !== undefined && typeof journal.wslDistro !== 'string')
+    (journal.wslDistro !== undefined && typeof journal.wslDistro !== 'string') ||
+    (journal.adoptableDigests !== undefined &&
+      !(
+        Array.isArray(journal.adoptableDigests) &&
+        journal.adoptableDigests.length <= 1024 &&
+        journal.adoptableDigests.every(
+          (digest) => typeof digest === 'string' && /^[a-f0-9]{64}$/u.test(digest)
+        )
+      ))
   ) {
     return false
   }

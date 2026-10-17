@@ -1,13 +1,11 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, Circle, Info, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Circle, XCircle } from 'lucide-react'
 import type { SkillFreshnessGroupModel } from './skill-freshness-grouping'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { chipLabel, chipTooltip } from './skill-location-chip-copy'
-import { skippedReason } from './skill-freshness-skipped-reason'
+import { leaveReasonSentence, planLocationLabel } from './skill-plan-location-copy'
 
 export type SkillRowState = 'available' | 'blocked' | 'pending' | 'done' | 'failed'
 
@@ -30,27 +28,8 @@ function StateIcon({ state }: { state: SkillRowState }): React.JSX.Element | nul
   }
 }
 
-function notFromOrcaTooltip(lockSource: string | null): string {
-  return lockSource
-    ? translate(
-        'auto.components.skills.SkillUpdateRow.notFromOrcaSourceTip',
-        'Installed from {{value0}}. Selecting it replaces it with Orca’s version.',
-        { value0: lockSource }
-      )
-    : translate(
-        'auto.components.skills.SkillUpdateRow.notFromOrcaNoRecordTip',
-        'No Orca install record for this copy. Selecting it replaces it with Orca’s version.'
-      )
-}
-
 /** Sits immediately right of the name, so the label reads as part of it. */
-function StateBadge({
-  state,
-  group
-}: {
-  state: SkillRowState
-  group: SkillFreshnessGroupModel
-}): React.JSX.Element | null {
+function StateBadge({ state }: { state: SkillRowState }): React.JSX.Element | null {
   if (state === 'blocked') {
     return (
       <Badge
@@ -59,25 +38,6 @@ function StateBadge({
       >
         {translate('auto.components.skills.SkillFreshnessRow.statusCantUpdate', 'Skipped')}
       </Badge>
-    )
-  }
-  if (state === 'available' && !group.orcaOwned) {
-    // Why: quiet on purpose; the copy is offered, not recommended.
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            tabIndex={0}
-            className="inline-flex shrink-0 cursor-help items-center gap-1 rounded-sm text-xs font-normal text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            {translate('auto.components.skills.SkillUpdateRow.notFromOrca', 'Not from Orca')}
-            <Info className="size-3" />
-          </span>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-xs text-pretty">
-          {notFromOrcaTooltip(group.lockSource)}
-        </TooltipContent>
-      </Tooltip>
     )
   }
   if (state === 'available') {
@@ -102,7 +62,7 @@ function StateBadge({
  * the result — the row keeps its place and its right edge — so pressing Update
  * doesn't replace the dialog's layout with a different one. Locations live
  * behind a per-skill disclosure instead of being dumped inline, because a skill
- * with several plugin-cache copies otherwise buries the actions.
+ * linked into several agents otherwise buries the actions.
  */
 export function SkillUpdateRow({
   group,
@@ -115,6 +75,13 @@ export function SkillUpdateRow({
   selection?: { checked: boolean; onCheckedChange: (checked: boolean) => void }
 }): React.JSX.Element {
   const locationCount = group.locations.length
+  const leaveReasons = [
+    ...new Set(
+      group.locations.flatMap((location) =>
+        location.action === 'leave' ? [location.reason ?? 'unreadable'] : []
+      )
+    )
+  ]
   return (
     <Collapsible
       data-skill-row={group.name}
@@ -149,7 +116,7 @@ export function SkillUpdateRow({
             <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
               {group.name}
             </span>
-            <StateBadge state={state} group={group} />
+            <StateBadge state={state} />
           </span>
           <span className="shrink-0 text-[11px] font-normal tabular-nums text-muted-foreground">
             {locationCount === 1
@@ -173,40 +140,29 @@ export function SkillUpdateRow({
         </p>
       ) : null}
 
-      {/* Why: outside the disclosure, alongside the failure line. The reason is
-          the whole point of a skipped row, so it must not depend on a click —
-          nor on a mount-time `defaultOpen` that a re-scan can't re-fire. */}
-      {state === 'blocked' ? (
-        <p className="px-1.5 pb-1.5 text-xs leading-5 text-muted-foreground">
-          {skippedReason(group.locations)}
+      {/* Why: outside the disclosure. Why a location stays as it is must not depend on a
+          click, on a skipped row or on an update that leaves one copy behind. */}
+      {leaveReasons.map((reason) => (
+        <p key={reason} className="px-1.5 pb-1.5 text-xs leading-5 text-muted-foreground">
+          {leaveReasonSentence(reason)}
         </p>
-      ) : null}
+      ))}
 
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
         <div className="flex flex-col gap-2 px-1.5 pb-2 pt-0.5">
           {group.locations.map((location) => (
-            <div key={location.id} className="flex min-w-0 items-center gap-2">
-              {/* Why: plugin-cache paths nest arbitrarily deep. Without an explicit
-                  shrink basis the unbreakable string sets the dialog's width and
-                  pushes the footer actions off-screen. */}
+            <div key={location.path} className="flex min-w-0 items-center gap-2">
+              {/* Why: without an explicit shrink basis a long unbreakable path sets the
+                  dialog's width and pushes the footer actions off-screen. */}
               <span
                 className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground"
                 title={location.path}
               >
                 {location.path}
               </span>
-              {location.chip ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="shrink-0 cursor-help border-dashed">
-                      {chipLabel(location.chip)}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-pretty">
-                    {chipTooltip(location.chip)}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
+              <Badge variant="outline" className="shrink-0">
+                {planLocationLabel(location)}
+              </Badge>
             </div>
           ))}
         </div>

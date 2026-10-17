@@ -373,7 +373,8 @@ describe('electron-builder config', () => {
         'out/package.json',
         'out/cli/**',
         'out/shared/**',
-        'out/main/claude-accounts/keychain.js'
+        'out/main/claude-accounts/keychain.js',
+        'out/main/skills/bundled-orca-skill-cli-entry.js'
       ])
     )
   })

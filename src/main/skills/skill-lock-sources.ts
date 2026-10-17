@@ -25,11 +25,22 @@ function globalSkillLockPath(args: SkillLockSourcesArgs): string {
  * Only provenance is read. The lock's hash depends on whether the skills CLI reached
  * GitHub's API when it installed, so it says nothing reliable about the bytes on disk.
  */
-export async function readSkillLockSources(
+export function readSkillLockSources(
   args: SkillLockSourcesArgs = {}
 ): Promise<ReadonlyMap<string, string>> {
+  return readLockSourcesAt(globalSkillLockPath(args))
+}
+
+/** The project lock (`skills-lock.json`) the skills CLI writes for a non-global install. */
+export function readProjectSkillLockSources(
+  workspaceDirectory: string
+): Promise<ReadonlyMap<string, string>> {
+  return readLockSourcesAt(join(workspaceDirectory, 'skills-lock.json'))
+}
+
+async function readLockSourcesAt(lockPath: string): Promise<ReadonlyMap<string, string>> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(globalSkillLockPath(args), 'utf8'))
+    const parsed: unknown = JSON.parse(await readFile(lockPath, 'utf8'))
     const skills =
       parsed && typeof parsed === 'object' && 'skills' in parsed ? parsed.skills : undefined
     if (!skills || typeof skills !== 'object' || Array.isArray(skills)) {

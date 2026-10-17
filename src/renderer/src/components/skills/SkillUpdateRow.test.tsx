@@ -3,16 +3,15 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agentLocation, sharedLocation } from '@/lib/bundled-skill-plan-fixtures'
 import type { SkillFreshnessGroupModel } from './skill-freshness-grouping'
 import { SkillUpdateRow } from './SkillUpdateRow'
 
-// Why: render tooltip content inline so the copy it carries can be asserted.
-vi.mock('@/components/ui/tooltip', () => ({
-  Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  TooltipTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  TooltipContent: ({ children }: { children?: ReactNode }) => (
-    <div data-tooltip-content>{children}</div>
-  )
+// Why: Radix unmounts closed disclosure content; render it so location chips can be asserted.
+vi.mock('@/components/ui/collapsible', () => ({
+  Collapsible: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  CollapsibleContent: ({ children }: { children?: ReactNode }) => <div>{children}</div>
 }))
 
 let root: Root | null = null
@@ -22,16 +21,7 @@ function group(overrides: Partial<SkillFreshnessGroupModel> = {}): SkillFreshnes
   return {
     name: 'computer-use',
     status: 'update-available',
-    orcaOwned: false,
-    lockSource: 'acme/agent-skills',
-    locations: [
-      {
-        id: 'location',
-        path: '/home/.agents/skills/computer-use',
-        chip: null,
-        participatesInGlobalFreshness: true
-      }
-    ],
+    locations: [sharedLocation('computer-use', 'update'), agentLocation('computer-use', 'keep')],
     ...overrides
   }
 }
@@ -45,10 +35,6 @@ async function render(element: React.JSX.Element): Promise<void> {
   })
 }
 
-function tooltipText(): string | undefined {
-  return container?.querySelector('[data-tooltip-content]')?.textContent ?? undefined
-}
-
 afterEach(async () => {
   if (root) {
     await act(async () => root?.unmount())
@@ -59,39 +45,31 @@ afterEach(async () => {
 })
 
 describe('SkillUpdateRow', () => {
-  it('labels a copy from another source quietly and names that source', async () => {
+  it('shows what the install does to each location', async () => {
     await render(<SkillUpdateRow group={group()} state="available" />)
 
-    expect(container?.textContent).toContain('Not from Orca')
-    expect(container?.textContent).not.toContain('Update available')
-    expect(tooltipText()).toBe(
-      'Installed from acme/agent-skills. Selecting it replaces it with Orca’s version.'
-    )
-    // Why: the source is only in the tooltip, so keyboard focus must be able to open it.
-    const label = Array.from(container?.querySelectorAll('[tabindex="0"]') ?? []).find((node) =>
-      node.textContent?.includes('Not from Orca')
-    )
-    expect(label).toBeDefined()
+    expect(container?.textContent).toContain('Update available')
+    expect(container?.textContent).toContain('Will update')
+    expect(container?.textContent).toContain('No change')
   })
 
-  it('says there is no install record when the lock has no entry', async () => {
-    await render(<SkillUpdateRow group={group({ lockSource: null })} state="available" />)
-
-    expect(tooltipText()).toBe(
-      'No Orca install record for this copy. Selecting it replaces it with Orca’s version.'
-    )
-  })
-
-  it('keeps the update badge for Orca’s own skill', async () => {
+  it('says why a location is left as it is, beside an update too', async () => {
     await render(
       <SkillUpdateRow
-        group={group({ name: 'orca-cli', orcaOwned: true, lockSource: 'stablyai/orca' })}
+        group={group({
+          locations: [
+            sharedLocation('computer-use', 'update'),
+            agentLocation('computer-use', 'leave', 'local-changes')
+          ]
+        })}
         state="available"
       />
     )
 
-    expect(container?.textContent).toContain('Update available')
-    expect(container?.textContent).not.toContain('Not from Orca')
+    expect(container?.textContent).toContain('Local changes')
+    expect(container?.textContent).toContain(
+      'This copy has changes Orca didn’t make, so the update leaves it as it is.'
+    )
   })
 
   it('renders a checkbox only while the user is choosing', async () => {

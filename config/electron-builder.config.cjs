@@ -359,6 +359,7 @@ module.exports = {
     'out/main/antigravity/**',
     'out/main/claude/**',
     'out/main/claude-accounts/keychain.js',
+    'out/main/skills/bundled-orca-skill-cli-entry.js',
     'out/main/codex/**',
     'out/main/copilot/**',
     'out/main/cursor/**',

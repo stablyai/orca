@@ -4,7 +4,6 @@ const {
   handleMock,
   discoverSkillsMock,
   discoverSkillObservationInWslMock,
-  inventorySkillFreshnessMock,
   getDefaultWslDistroMock,
   getWslHomeMock,
   parseWslPathMock
@@ -12,7 +11,6 @@ const {
   handleMock: vi.fn(),
   discoverSkillsMock: vi.fn(),
   discoverSkillObservationInWslMock: vi.fn(),
-  inventorySkillFreshnessMock: vi.fn(),
   getDefaultWslDistroMock: vi.fn(),
   getWslHomeMock: vi.fn(),
   parseWslPathMock: vi.fn()
@@ -40,9 +38,7 @@ vi.mock('../skills/skill-discovery-wsl', () => ({
   discoverSkillObservationInWsl: discoverSkillObservationInWslMock
 }))
 
-vi.mock('../skills/skill-freshness-inventory', () => ({
-  inventorySkillFreshness: inventorySkillFreshnessMock
-}))
+vi.mock('./skill-cloud-ipc-handlers', () => ({ registerSkillCloudIpcHandlers: vi.fn() }))
 
 vi.mock('../wsl', () => ({
   getDefaultWslDistro: getDefaultWslDistroMock,
@@ -80,13 +76,6 @@ describe('registerSkillsHandlers', () => {
     parseWslPathMock.mockReturnValue(null)
     discoverSkillsMock.mockResolvedValue({ skills: [], sources: [], scannedAt: 1 })
     discoverSkillObservationInWslMock.mockResolvedValue({ rows: [], sources: [], scannedAt: 1 })
-    inventorySkillFreshnessMock.mockResolvedValue({
-      schemaVersion: 1,
-      installations: [],
-      eligibleUpdateNames: [],
-      scanIssues: [],
-      scannedAt: 1
-    })
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\alice')
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -109,8 +98,9 @@ describe('registerSkillsHandlers', () => {
     return call[1] as (_event: unknown, target?: unknown) => Promise<unknown>
   }
 
-  function getFreshnessHandler() {
-    registerSkillsHandlers(store as never)
+  function getFreshnessHandler(runtime?: unknown) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: freshness registration reads only store.getRepos and runtime.planBundledOrcaSkills.
+    registerSkillsHandlers(store as never, runtime as never)
     const call = handleMock.mock.calls.find(
       (entry: unknown[]) => entry[0] === 'skills:freshnessInventory'
     )
@@ -246,12 +236,34 @@ describe('registerSkillsHandlers', () => {
     expect(discoverSkillsMock).not.toHaveBeenCalled()
   })
 
-  it('keeps freshness inventory local and read-only over known repositories', async () => {
-    const handler = getFreshnessHandler()
+  it('reads freshness from this host’s install plan and keeps only skills present here', async () => {
+    const present = {
+      name: 'orca-cli',
+      packageDigest: 'd',
+      locations: [
+        { path: '/h/.agents/skills/orca-cli', role: 'shared', action: 'keep', exists: true }
+      ]
+    }
+    const absent = {
+      name: 'orchestration',
+      packageDigest: 'd',
+      locations: [
+        {
+          path: '/h/.agents/skills/orchestration',
+          role: 'shared',
+          action: 'install',
+          exists: false
+        }
+      ]
+    }
+    const planBundledOrcaSkills = vi.fn(async () => [present, absent])
+    const handler = getFreshnessHandler({ planBundledOrcaSkills })
 
-    await handler(null)
-
-    expect(inventorySkillFreshnessMock).toHaveBeenCalledWith({ repos })
+    await expect(handler(null)).resolves.toMatchObject({ schemaVersion: 2, skills: [present] })
     expect(getWslHomeMock).not.toHaveBeenCalled()
+  })
+
+  it('reports no skills rather than failing where no runtime can plan', async () => {
+    await expect(getFreshnessHandler()(null)).resolves.toMatchObject({ skills: [] })
   })
 })

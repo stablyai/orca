@@ -1,5 +1,3 @@
-import type { SkillProvider, SkillSourceKind } from './skills'
-
 export type SkillBundleFileIdentity = {
   path: string
   size: number
@@ -8,57 +6,6 @@ export type SkillBundleFileIdentity = {
   exactSha256: string
   textNormalizedSha256: string | null
   identitySha256: string
-}
-
-export type SkillCurrentBundleEntry = {
-  name: string
-  sourcePath: string
-  packageDigest: string
-  files: SkillBundleFileIdentity[]
-}
-
-// Why: schema 3 dropped the release revision and git tree identity with the
-// snapshot registry; freshness compares against this build's bytes only.
-export type SkillBundleManifest = {
-  schemaVersion: 3
-  skills: SkillCurrentBundleEntry[]
-}
-
-export type SkillFreshnessStatus = 'current' | 'outdated' | 'inaccessible'
-
-export type SkillInstallationTopology =
-  | 'canonical-copy'
-  | 'provider-alias'
-  | 'independent-copy'
-  | 'external-link'
-  | 'broken-link'
-  | 'read-only'
-  | 'repo-scope'
-  | 'plugin-cache'
-
-// Why: eligibility and the explanation copy must agree on which placements the
-// pinned install rail rewrites; a drifted copy would blame a phantom sibling.
-export const SUPPORTED_GLOBAL_SKILL_TOPOLOGIES: ReadonlySet<SkillInstallationTopology> = new Set([
-  'canonical-copy',
-  'provider-alias'
-])
-
-export type SkillFreshnessInstallation = {
-  id: string
-  name: string
-  rootId: string
-  providers: SkillProvider[]
-  sourceKind: SkillSourceKind
-  sourceLabel: string
-  unresolvedPath: string
-  resolvedPath: string | null
-  physicalIdentity: string | null
-  topology: SkillInstallationTopology
-  status: SkillFreshnessStatus
-  currentPackageDigest: string
-  /** The skills.sh global lock's `source` for this name; null when it has no entry. */
-  lockSource: string | null
-  errorCategory: string | null
 }
 
 const ORCA_SKILL_LOCK_SOURCE = 'stablyai/orca'
@@ -77,93 +24,93 @@ export function isOrcaSkillLockSource(source: string | null): boolean {
   return normalized === ORCA_SKILL_LOCK_SOURCE
 }
 
-// Why: Orca's updater only ever passes --global, so a project's or a plugin's own copy is
-// not something Orca can act on. Without a list of past releases, a differing plugin copy
-// is indistinguishable from another vendor's same-named skill, so neither scope can be
-// reported as the user's drift.
-export function skillPlacementParticipatesInGlobalFreshness(
-  installation: SkillFreshnessInstallation
-): boolean {
-  return installation.topology !== 'repo-scope' && installation.topology !== 'plugin-cache'
+/** Why an install leaves a location as it is. Each maps to one plain sentence. */
+export type BundledSkillLeaveReason =
+  | 'local-changes'
+  | 'not-installed-by-orca'
+  | 'link-not-managed'
+  | 'name-in-use'
+  | 'read-only'
+  | 'unreadable'
+
+export type BundledSkillLocationAction =
+  | 'keep'
+  /** Writes the shared copy where none exists. */
+  | 'install'
+  /** Rewrites a shared copy Orca installed. */
+  | 'update'
+  /** Points an agent's skills folder at the shared copy. */
+  | 'link'
+  /** Rewrites an Orca-installed copy in an agent's skills folder. */
+  | 'replace'
+  | 'leave'
+
+export type BundledSkillLocationPlan = {
+  path: string
+  /** `shared` is the .agents/skills copy agent folders link to. */
+  role: 'shared' | 'agent'
+  action: BundledSkillLocationAction
+  /** Whether something is at this path now. */
+  exists: boolean
+  reason?: BundledSkillLeaveReason
+}
+
+/** What installing one of Orca's own skills does on a host, read without writing. */
+export type BundledSkillPlan = {
+  name: string
+  /** This build's package; a nudge dismissal is scoped to it. */
+  packageDigest: string
+  locations: BundledSkillLocationPlan[]
+}
+
+export type BundledSkillVerdict =
+  /** Nothing of this skill is here. */
+  | 'absent'
+  | 'current'
+  /** An Orca-installed copy is here and the install would rewrite something. */
+  | 'update'
+  /** A copy is here that the install leaves as it is, and nothing Orca's to update. */
+  | 'attention'
+
+const WRITES: ReadonlySet<BundledSkillLocationAction> = new Set([
+  'install',
+  'update',
+  'link',
+  'replace'
+])
+
+export function bundledSkillPlanWrites(plan: BundledSkillPlan): boolean {
+  return plan.locations.some((location) => WRITES.has(location.action))
+}
+
+export function bundledSkillLeftLocations(plan: BundledSkillPlan): BundledSkillLocationPlan[] {
+  return plan.locations.filter((location) => location.action === 'leave')
 }
 
 /**
- * Whether a copy is wrong in a way running the update would not resolve.
- *
- * Shared so the badge and the review dialog cannot disagree about what counts: the
- * badge points at the dialog for the explanation, so a copy that turns the badge
- * amber must also produce a row there. An out-of-date copy the command rewrites is
- * ordinary work, not a problem.
+ * The one reading of a plan every surface shares: the CLI's update, the app's badge,
+ * nudge and Update skills dialog. An update only rewrites skills Orca already has a copy
+ * of here; `install` is the verb that adds one.
  */
-export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstallation): boolean {
-  return (
-    skillPlacementParticipatesInGlobalFreshness(installation) &&
-    installation.status !== 'current' &&
-    !(
-      SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
-      installation.status === 'outdated'
-    )
+export function bundledSkillVerdict(plan: BundledSkillPlan): BundledSkillVerdict {
+  if (!plan.locations.some((location) => location.exists)) {
+    return 'absent'
+  }
+  const hasOrcaCopy = plan.locations.some(
+    (location) =>
+      location.exists &&
+      (location.action === 'keep' || location.action === 'update' || location.action === 'replace')
   )
+  if (hasOrcaCopy && bundledSkillPlanWrites(plan)) {
+    return 'update'
+  }
+  return bundledSkillLeftLocations(plan).length > 0 ? 'attention' : 'current'
 }
 
-export type SkillFreshnessScanIssueReason =
-  | 'depth-limit'
-  | 'entry-limit'
-  | 'candidate-limit'
-  | 'manifest-limit'
-  | 'outside-root'
-  | 'io-error'
-  | 'issue-limit'
-
-export type SkillFreshnessScanIssue = {
-  rootId: string
-  sourceLabel: string
-  path: string
-  reason: SkillFreshnessScanIssueReason
-  errorCode: string | null
-}
-
-// Why: a real read failure is a fact about the user's disk and stays actionable. Orca's
-// own traversal bounds are not — reporting them as attention turns an ordinary large
-// plugin cache into a permanent amber pill on every skill.
-//
-// 'outside-root' is deliberately NOT here. A plugin that links its skills out of the
-// cache (a content-addressed store, a dev-linked package) is a packaging choice by the
-// vendor, not a fault the user can clear: deleting the link only makes their package
-// manager recreate it. Flagging it turned an install that is clean on main into amber on
-// every installed skill. It is still listed in Details, like the other bounds.
-const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>(['io-error'])
-
-export function isSkillScanAttentionReason(reason: SkillFreshnessScanIssueReason): boolean {
-  return SKILL_SCAN_ATTENTION_REASONS.has(reason)
-}
-
-export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue): boolean {
-  return isSkillScanAttentionReason(issue.reason)
-}
-
-// Why: these are the bounds that end the walk rather than skip one folder. They are
-// still not the user's to act on, so they raise no pill — but a scan that stopped
-// early cannot be reported as proof every copy is up to date.
-const SKILL_SCAN_TRUNCATING_REASONS = new Set<SkillFreshnessScanIssueReason>([
-  'entry-limit',
-  'candidate-limit'
-])
-
-export function isTruncatingSkillScanReason(reason: SkillFreshnessScanIssueReason): boolean {
-  return SKILL_SCAN_TRUNCATING_REASONS.has(reason)
-}
-
-export function isSkillScanIssueTruncatingScan(issue: SkillFreshnessScanIssue): boolean {
-  return isTruncatingSkillScanReason(issue.reason)
-}
-
+/** This host's plan for every Orca skill that has any copy here. */
 export type SkillFreshnessInventory = {
-  schemaVersion: 1
-  installations: SkillFreshnessInstallation[]
-  /** Outdated names the pinned install can safely rewrite, whoever installed them. */
-  eligibleUpdateNames: string[]
-  scanIssues: SkillFreshnessScanIssue[]
+  schemaVersion: 2
+  skills: BundledSkillPlan[]
   scannedAt: number
 }
 
@@ -177,14 +124,12 @@ export function canonicalizeSkillUpdateNames(names: readonly string[]): string[]
   return canonicalNames.length > 0 ? canonicalNames : null
 }
 
-// Why: `skills add` has no --json, so the run reports one indeterminate phase.
-// Per-skill outcomes come from re-scanning the inventory after exit, never from
-// parsing stdout.
+// Why one indeterminate phase: per-skill outcomes come from re-planning after the run,
+// which is what the dialog reports on.
 export type SkillUpdateRun =
   | { state: 'idle' }
-  // `stopping` covers the window between Stop and the process tree actually
-  // dying — the run is still `running` (that is what blocks a second writer),
-  // but the Stop affordance has already been spent.
+  // `stopping` covers the window between Stop and the install actually settling — the run is
+  // still `running` (that is what blocks a second writer), but Stop has already been spent.
   | { state: 'running'; names: string[]; startedAt: number; output: string; stopping?: boolean }
   | { state: 'success'; names: string[]; finishedAt: number; output: string }
   | {
@@ -193,10 +138,10 @@ export type SkillUpdateRun =
       finishedAt: number
       output: string
       message: string
-      /** Names still outdated after the run — the re-scan is the source of truth. */
+      /** Names the re-plan after the run still has work for. */
       failedNames: string[]
     }
 
 export type SkillUpdateStartResult =
   | { started: true }
-  | { started: false; reason: 'already-running' | 'invalid-names' | 'unsafe-command-path' }
+  | { started: false; reason: 'already-running' | 'invalid-names' }

@@ -115,7 +115,7 @@ describe('skill install transaction', () => {
     const replaced = await installLocalSkillPackage(
       installInput(root, archive, { conflictResolution: 'replace-and-discard-local' })
     )
-    expect(replaced.status).toBe('installed')
+    expect(replaced.status).toBe('updated')
     expect(await readFile(join(destination, 'SKILL.md'), 'utf8')).toContain('# Cloud')
   })
 

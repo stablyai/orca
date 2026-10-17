@@ -4706,30 +4706,8 @@
         "SkillFreshnessRow": {
           "statusUpdateAvailable": "更新があります",
           "statusCantUpdate": "スキップ済み",
-          "cantUpdateReason": "このスキルは Orca が安全に更新できない場所にインストールされているため、更新コマンドは変更しません。",
-          "chipCurrent": "現在",
           "chipInaccessible": "アクセス不可",
-          "chipDuplicate": "重複",
-          "chipExternalLink": "外部リンク",
-          "chipBrokenLink": "リンク切れ",
-          "chipReadOnly": "読み取り専用",
-          "chipInRepo": "リポジトリ内",
-          "chipPluginCache": "プラグインキャッシュ",
-          "tipCurrent": "ここのスキルはすでに最新です。更新しても変更されません。",
-          "tipInaccessible": "Orca はここのスキルを読み取れなかったため（権限またはファイルのエラー）、確認も更新もできません。",
-          "tipDuplicate": "このスキルはメインとは別に、ここにもインストールされています。そのため 更新コマンドは到達できません。更新を許可するには削除してください。",
-          "tipExternalLink": "これは Orca のスキルフォルダーの外を指すショートカットです。更新では追跡されません。",
-          "tipBrokenLink": "これは存在しないものを指すショートカットです。削除しても問題ありません。",
-          "tipReadOnly": "ここのスキルは読み取り専用の場所にあるため、権限を変更するまで更新できません。",
-          "tipInRepo": "ここのスキルはグローバルスキルではなくプロジェクト内にあります。Orca はグローバルなものだけを更新します。",
-          "tipPluginCache": "ここのスキルはプラグインによって管理されています。代わりにプラグインを更新してください。",
-          "skippedReasonReadOnly": "このコピーは読み取り専用の場所にあるため、Orca は更新対象から除外しました。Orca が更新できるように、権限を変更してください。",
-          "skippedReasonInaccessible": "Orca はこのコピーを読み取れなかったため、このスキルを更新対象から除外しました。",
-          "skippedReasonInRepo": "これはグローバルスキルではなくプロジェクトスキルです。Orca はグローバルスキルのみを更新するため、更新対象から除外しました。",
-          "skippedReasonPluginCache": "このスキルはプラグインが管理しているため、Orca は更新対象から除外しました。代わりにプラグインを更新してください。",
-          "skippedReasonExternalLink": "このコピーは Orca のスキルフォルダー外を指すショートカットのため、Orca は更新対象から除外しました。",
-          "skippedReasonBrokenLink": "このコピーは存在しない対象へのショートカットのため、Orca は更新対象から除外しました。削除して問題ありません。",
-          "skippedReasonDuplicate": "これは別のコピーのため、更新は反映されません。コマンドはメインのコピーのみを更新します。このコピーを削除してからスキルを再インストールすると、この場所もメインに追従します。"
+          "chipReadOnly": "読み取り専用"
         },
         "SkillFreshnessUpdateDialog": {
           "title": "スキルを更新",
@@ -4761,18 +4739,7 @@
           "done": "完了",
           "stop": "停止",
           "stopping": "Stopping…",
-          "stoppingHeadline": "更新を停止しています…",
-          "scanIncomplete": "Orca はプラグインで管理されるスキルの確認を完了できませんでした。",
-          "scanDepthLimit": "このフォルダーを確認する前に、プラグインスキャンの深度上限に達しました。",
-          "scanEntryLimit": "キャッシュの残りを確認する前に、プラグインスキャンのエントリ数上限に達しました。",
-          "scanCandidateLimit": "安全に確認できる数を超える同名のスキルフォルダーが見つかりました。",
-          "scanManifestLimit": "安全な上限を超えたため、このプラグインマニフェストをスキップしました。",
-          "scanOutsideRoot": "プラグインキャッシュの外部を指しているため、このプラグインパスをスキップしました。",
-          "scanIoErrorWithCode": "このプラグインパスを読み取れませんでした（{{value0}}）。",
-          "scanIoError": "このプラグインパスを読み取れませんでした。",
-          "scanIssueLimit": "スキップされたプラグインフォルダーが多すぎるため、個別に表示できません。",
-          "unselectedForeignOne": "Orca 以外からインストールされた 1 件のスキルは選択されていません。",
-          "unselectedForeignMany": "Orca 以外からインストールされた {{value0}} 件のスキルは選択されていません。"
+          "stoppingHeadline": "更新を停止しています…"
         },
         "SkillFreshnessStatusPill": {
           "updateAvailable": "更新があります",
@@ -4790,8 +4757,6 @@
           "oneLocation": "1 件の場所",
           "manyLocations": "{{value0}} 件の場所",
           "notFromOrca": "Orca 以外から導入",
-          "notFromOrcaSourceTip": "{{value0}} からインストールされています。選択すると Orca のバージョンに置き換えられます。",
-          "notFromOrcaNoRecordTip": "このコピーには Orca によるインストール記録がありません。選択すると Orca のバージョンに置き換えられます。",
           "includeSkill": "{{value0}} を含める"
         },
         "host": {
@@ -5168,6 +5133,28 @@
           "placementSummaryParts": "{{roots}} 間の {{parts}} を削除します。",
           "placementJoin": " と ",
           "retainedSource": "スキル自体は{{path}}のままです。"
+        },
+        "skill": {
+          "plan": {
+            "location": {
+              "copy": {
+                "install": "インストール予定",
+                "update": "更新予定",
+                "link": "リンク予定",
+                "replace": "置き換え予定",
+                "localChangesLabel": "ローカルの変更",
+                "linkNotManagedLabel": "管理外のリンク",
+                "nameInUseLabel": "名前が使用中",
+                "localChanges": "このコピーには Orca 以外による変更があるため、更新では変更されません。削除してからスキルを再インストールすると、Orca のバージョンになります。",
+                "notInstalledByOrca": "このコピーは Orca がインストールしたものではないため、更新では変更されません。削除してからスキルを再インストールすると、Orca のバージョンを使えます。",
+                "linkNotManaged": "これは Orca が作成したリンクではないため、更新では変更されません。",
+                "nameInUse": "別のファイルまたはフォルダーがこのスキル名をすでに使用しているため、更新では変更されません。",
+                "readOnly": "この場所は読み取り専用のため、更新で変更できません。Orca が更新できるように権限を変更してください。",
+                "unreadable": "Orca がこのコピーを読み取れなかったため、更新では変更されません。",
+                "keep": "変更なし"
+              }
+            }
+          }
         }
       },
       "sidebar": {

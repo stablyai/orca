@@ -4865,30 +4865,8 @@
         "SkillFreshnessRow": {
           "statusUpdateAvailable": "Update available",
           "statusCantUpdate": "Skipped",
-          "cantUpdateReason": "Orca left this skill out of the update command.",
-          "skippedReasonReadOnly": "This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.",
-          "skippedReasonInaccessible": "Orca couldn’t read this copy, so it left the skill out of the update.",
-          "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
-          "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
-          "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
-          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
-          "chipCurrent": "Current",
           "chipInaccessible": "Inaccessible",
-          "chipDuplicate": "Duplicate",
-          "chipExternalLink": "External link",
-          "chipBrokenLink": "Broken link",
-          "chipReadOnly": "Read only",
-          "chipInRepo": "In a repo",
-          "chipPluginCache": "Plugin cache",
-          "tipCurrent": "This copy matches the current official version.",
-          "tipInaccessible": "Orca couldn’t read this copy (a permissions or file error).",
-          "tipDuplicate": "A separate copy of this skill, installed apart from the main one.",
-          "tipExternalLink": "A shortcut pointing outside Orca’s skill folders.",
-          "tipBrokenLink": "A shortcut to something that no longer exists.",
-          "tipReadOnly": "This copy is in a read-only location.",
-          "tipInRepo": "This copy lives inside a project, not your global skills.",
-          "tipPluginCache": "This copy is managed by a plugin.",
-          "skippedReasonDuplicate": "This is a separate copy, so the update won’t reach it — the command only refreshes the main copy. Remove this copy, then reinstall the skill so this location follows the main one."
+          "chipReadOnly": "Read only"
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Update skills",
@@ -4920,18 +4898,7 @@
           "close": "Close",
           "stop": "Stop",
           "stopping": "Stopping…",
-          "stoppingHeadline": "Stopping the update…",
-          "scanIncomplete": "Orca could not finish checking plugin-managed skills.",
-          "scanDepthLimit": "Orca reached its plugin scan depth limit before checking this folder.",
-          "scanEntryLimit": "Orca reached its plugin scan entry limit before checking the rest of this cache.",
-          "scanCandidateLimit": "Orca found more same-named skill folders than it can safely inspect.",
-          "scanManifestLimit": "Orca skipped this plugin manifest because it exceeded a safe limit.",
-          "scanOutsideRoot": "Orca skipped this plugin path because it points outside the plugin cache.",
-          "scanIoErrorWithCode": "Orca could not read this plugin path ({{value0}}).",
-          "scanIoError": "Orca could not read this plugin path.",
-          "scanIssueLimit": "Orca found too many skipped plugin folders to list individually.",
-          "unselectedForeignOne": "1 skill not installed by Orca is unselected.",
-          "unselectedForeignMany": "{{value0}} skills not installed by Orca are unselected."
+          "stoppingHeadline": "Stopping the update…"
         },
         "SkillUpdateResultRows": {
           "stillOutdated": "Still out of date after the update ran."
@@ -4940,8 +4907,6 @@
           "oneLocation": "1 location",
           "manyLocations": "{{value0}} locations",
           "notFromOrca": "Not from Orca",
-          "notFromOrcaSourceTip": "Installed from {{value0}}. Selecting it replaces it with Orca’s version.",
-          "notFromOrcaNoRecordTip": "No Orca install record for this copy. Selecting it replaces it with Orca’s version.",
           "includeSkill": "Include {{value0}}"
         },
         "SkillFreshnessStatusPill": {
@@ -5412,6 +5377,28 @@
           "placementSummaryParts": "Removes {{parts}} across {{roots}}.",
           "placementJoin": " and ",
           "retainedSource": "The skill itself stays at {{path}}."
+        },
+        "skill": {
+          "plan": {
+            "location": {
+              "copy": {
+                "install": "Will install",
+                "update": "Will update",
+                "link": "Will link",
+                "replace": "Will replace",
+                "localChangesLabel": "Local changes",
+                "linkNotManagedLabel": "Unmanaged link",
+                "nameInUseLabel": "Name in use",
+                "localChanges": "This copy has changes Orca didn’t make, so the update leaves it as it is. Remove it, then reinstall the skill to get Orca’s version.",
+                "notInstalledByOrca": "Orca didn’t install this copy, so the update leaves it as it is. Remove it, then reinstall the skill to use Orca’s version.",
+                "linkNotManaged": "This is a link Orca didn’t create, so the update leaves it as it is.",
+                "nameInUse": "Another file or folder already uses this skill’s name, so the update leaves it as it is.",
+                "readOnly": "This location is read-only, so the update can’t change it. Change its permissions to let Orca update it.",
+                "unreadable": "Orca couldn’t read this copy, so the update leaves it as it is.",
+                "keep": "No change"
+              }
+            }
+          }
         }
       },
       "sidebar": {

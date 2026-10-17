@@ -4,6 +4,7 @@ import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
+import { freshnessInventory, updatablePlan } from '@/lib/bundled-skill-plan-fixtures'
 import {
   _skillFreshnessCacheForTests,
   type SkillFreshnessState,
@@ -24,8 +25,12 @@ function deferred<T>(): {
   return { promise, resolve, reject }
 }
 
-function inventory(scannedAt: number, eligibleUpdateNames: string[] = []): SkillFreshnessInventory {
-  return { schemaVersion: 1, installations: [], eligibleUpdateNames, scanIssues: [], scannedAt }
+function inventory(scannedAt: number, updatableNames: string[] = []): SkillFreshnessInventory {
+  return { ...freshnessInventory(...updatableNames.map(updatablePlan)), scannedAt }
+}
+
+function updatableNames(state: { inventory: SkillFreshnessInventory | null } | null): string[] {
+  return (state?.inventory?.skills ?? []).map((plan) => plan.name)
 }
 
 let root: Root | null = null
@@ -119,7 +124,7 @@ describe('useSkillFreshness', () => {
 
     await act(async () => renderProbes(true))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
-    expect(state?.inventory?.eligibleUpdateNames).toEqual(['orca-cli'])
+    expect(updatableNames(state)).toEqual(['orca-cli'])
 
     await act(async () => renderProbes(true))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
@@ -139,7 +144,7 @@ describe('useSkillFreshness', () => {
 
     await act(async () => second.resolve(inventory(2)))
     expect(state?.inventory?.scannedAt).toBe(2)
-    expect(state?.inventory?.eligibleUpdateNames).toEqual([])
+    expect(updatableNames(state)).toEqual([])
   })
 
   it('skips focus rescans inside the cooldown but honors install-change events', async () => {
@@ -175,7 +180,7 @@ describe('useSkillFreshness', () => {
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<Probe />))
-    expect(state?.inventory?.eligibleUpdateNames).toEqual(['orca-cli'])
+    expect(updatableNames(state)).toEqual(['orca-cli'])
 
     await act(async () => window.dispatchEvent(new Event('focus')))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)

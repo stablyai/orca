@@ -4,6 +4,7 @@ import { act, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
+import { freshnessInventory, updatablePlan } from '@/lib/bundled-skill-plan-fixtures'
 import { _skillFreshnessCacheForTests } from '@/hooks/useSkillFreshness'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 
@@ -21,30 +22,8 @@ vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
   OnboardingInlineCommandTerminal: () => null
 }))
 
-function inventory(eligibleUpdateNames: string[]): SkillFreshnessInventory {
-  return {
-    schemaVersion: 1,
-    // Why: an update is only advertised for a copy the skills.sh lock attributes to Orca.
-    installations: eligibleUpdateNames.map((name) => ({
-      id: name,
-      name,
-      rootId: 'home-agents',
-      providers: ['agent-skills'],
-      sourceKind: 'home',
-      sourceLabel: 'Agent skills home',
-      unresolvedPath: `/home/.agents/skills/${name}`,
-      resolvedPath: `/home/.agents/skills/${name}`,
-      physicalIdentity: `physical-${name}`,
-      topology: 'canonical-copy',
-      status: 'outdated',
-      currentPackageDigest: 'current',
-      lockSource: 'stablyai/orca',
-      errorCategory: null
-    })),
-    eligibleUpdateNames,
-    scanIssues: [],
-    scannedAt: 1
-  }
+function inventory(updatableNames: string[]): SkillFreshnessInventory {
+  return freshnessInventory(...updatableNames.map(updatablePlan))
 }
 
 function panelProps(

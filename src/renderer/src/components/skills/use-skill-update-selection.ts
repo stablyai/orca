@@ -8,37 +8,36 @@ export type SkillUpdateSelection = {
   }
   reset: () => void
   selectedNames: string[]
-  ownedCount: number
-  unselectedForeignCount: number
-}
-
-// Why: a choice is consent for the copy the user saw; if a re-scan finds a different
-// install source, the choice lapses back to the ownership default.
-function choiceKey(group: SkillFreshnessGroupModel): string {
-  return `${group.name}\0${group.lockSource ?? ''}`
+  updatableCount: number
 }
 
 /**
- * Which updatable skills the next run rewrites. Orca's own skills are preselected;
- * a same-named copy from elsewhere is only replaced once the user ticks it.
+ * Which updatable skills the next run rewrites. Every row the plan calls an update is
+ * Orca's own copy, so all start selected; the user can untick one.
  */
 export function useSkillUpdateSelection(
   groups: readonly SkillFreshnessGroupModel[]
 ): SkillUpdateSelection {
-  const [choices, setChoices] = useState<ReadonlyMap<string, boolean>>(new Map())
-  const isSelected = (group: SkillFreshnessGroupModel): boolean =>
-    choices.get(choiceKey(group)) ?? group.orcaOwned
+  const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set())
   const updatable = groups.filter((group) => group.status === 'update-available')
   return {
     checkboxFor: (group) => ({
-      checked: isSelected(group),
+      checked: !unticked.has(group.name),
       onCheckedChange: (checked) =>
-        setChoices((previous) => new Map(previous).set(choiceKey(group), checked))
+        setUnticked((previous) => {
+          const next = new Set(previous)
+          if (checked) {
+            next.delete(group.name)
+          } else {
+            next.add(group.name)
+          }
+          return next
+        })
     }),
-    reset: () => setChoices(new Map()),
-    selectedNames: updatable.filter(isSelected).map((group) => group.name),
-    ownedCount: updatable.filter((group) => group.orcaOwned).length,
-    unselectedForeignCount: updatable.filter((group) => !group.orcaOwned && !isSelected(group))
-      .length
+    reset: () => setUnticked(new Set()),
+    selectedNames: updatable
+      .filter((group) => !unticked.has(group.name))
+      .map((group) => group.name),
+    updatableCount: updatable.length
   }
 }

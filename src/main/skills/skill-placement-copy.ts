@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { cp, mkdir, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import type { SkillPlacementResult } from '../../shared/skill-install-contract'
 import type { SkillInstalledFileMode, SkillInstallFilesystem } from './skill-install-filesystem'
 
 export async function createVerifiedSkillPlacementCopy(
@@ -99,5 +100,35 @@ export async function createSkillPlacementCopyAtMissingDestination(
         await filesystem.remove(destinationPath)
       }
     }
+  }
+}
+
+/** Replaces an owned agent-home copy with the canonical bytes, keeping the backup for recovery. */
+export async function replaceIndependentSkillPlacementCopy(input: {
+  canonicalPath: string
+  destinationPath: string
+  destination: { provider: string }
+  filesystem: SkillInstallFilesystem
+  fileModes?: readonly SkillInstalledFileMode[]
+  transaction?: { stagingPath: string; backupPath: string }
+}): Promise<SkillPlacementResult> {
+  await replaceOwnedSkillPlacementCopy(
+    input.canonicalPath,
+    input.destinationPath,
+    input.filesystem,
+    input.fileModes,
+    input.transaction
+      ? {
+          replacementPath: input.transaction.stagingPath,
+          backupPath: input.transaction.backupPath,
+          retainBackup: true
+        }
+      : undefined
+  )
+  return {
+    provider: input.destination.provider,
+    path: input.destinationPath,
+    topology: 'independent-copy',
+    status: 'installed'
   }
 }

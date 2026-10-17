@@ -101,6 +101,7 @@ async function discoverInstalledSkill(input: {
   workspaceDirectory?: string
   wslDistro?: string
   providerRootOverrides?: SkillProviderRootOverrides
+  log?: (line: string) => void
 }): Promise<SkillDiscoveryResult> {
   if (input.wslDistro) {
     const wslDistro = input.wslDistro
@@ -126,7 +127,8 @@ async function discoverInstalledSkill(input: {
     ...(input.scope === 'workspace' && input.workspaceDirectory
       ? { cwd: input.workspaceDirectory }
       : { includeCwd: false }),
-    ...(input.providerRootOverrides ? { providerRootOverrides: input.providerRootOverrides } : {})
+    ...(input.providerRootOverrides ? { providerRootOverrides: input.providerRootOverrides } : {}),
+    ...(input.log ? { log: input.log } : {})
   })
 }
 
@@ -138,6 +140,7 @@ export async function verifySkillInstallDiscovery(input: {
   wslDistro?: string
   providerRootOverrides?: SkillProviderRootOverrides
   discover?: () => Promise<SkillDiscoveryResult>
+  log?: (line: string) => void
 }): Promise<SkillInstallResult> {
   const discovery = await (input.discover?.() ?? discoverInstalledSkill(input)).catch(() => null)
   if (!discovery) {

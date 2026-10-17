@@ -4729,30 +4729,8 @@
         "SkillFreshnessRow": {
           "statusUpdateAvailable": "Mise à jour disponible",
           "statusCantUpdate": "Ignoré",
-          "cantUpdateReason": "Orca a exclu ce skill de la commande de mise à jour.",
-          "skippedReasonReadOnly": "Cette copie se trouve dans un emplacement en lecture seule, donc Orca l'a exclue de la mise à jour. Modifiez ses permissions pour permettre à Orca de la mettre à jour.",
-          "skippedReasonInaccessible": "Orca n'a pas pu lire cette copie, il a donc exclu le skill de la mise à jour.",
-          "skippedReasonInRepo": "C'est un skill de projet, pas un skill global — Orca ne met à jour que vos skills globaux, il a donc exclu celui-ci de la mise à jour.",
-          "skippedReasonPluginCache": "Un plugin gère ce skill, donc Orca l'a exclu de la mise à jour — mettez plutôt à jour le plugin.",
-          "skippedReasonExternalLink": "Cette copie est un raccourci pointant hors des dossiers de skills d'Orca, donc Orca l'a exclue de la mise à jour.",
-          "skippedReasonBrokenLink": "Cette copie est un raccourci vers quelque chose qui n'existe plus, donc Orca l'a exclue — vous pouvez la supprimer sans risque.",
-          "chipCurrent": "Actuel",
           "chipInaccessible": "Inaccessible",
-          "chipDuplicate": "Doublon",
-          "chipExternalLink": "Lien externe",
-          "chipBrokenLink": "Lien cassé",
-          "chipReadOnly": "Lecture seule",
-          "chipInRepo": "Dans un dépôt",
-          "chipPluginCache": "Cache de plugins",
-          "tipCurrent": "Cette copie correspond à la version officielle actuelle.",
-          "tipInaccessible": "Orca n'a pas pu lire cette copie (erreur de permissions ou de fichier).",
-          "tipDuplicate": "Une copie séparée de ce skill, installée à part de la principale.",
-          "tipExternalLink": "Un raccourci pointant hors des dossiers de skills d'Orca.",
-          "tipBrokenLink": "Un raccourci vers quelque chose qui n'existe plus.",
-          "tipReadOnly": "Cette copie se trouve dans un emplacement en lecture seule.",
-          "tipInRepo": "Cette copie vit dans un projet, pas dans vos skills globaux.",
-          "tipPluginCache": "Cette copie est gérée par un plugin.",
-          "skippedReasonDuplicate": "Il s'agit d'une copie séparée : la mise à jour ne l'atteindra pas — la commande ne rafraîchit que la copie principale. Supprimez cette copie puis réinstallez le skill pour que cet emplacement suive le principal."
+          "chipReadOnly": "Lecture seule"
         },
         "SkillFreshnessUpdateDialog": {
           "title": "Mettre à jour les skills",
@@ -4784,18 +4762,7 @@
           "close": "Fermer",
           "stop": "Arrêter",
           "stopping": "Arrêt…",
-          "stoppingHeadline": "Arrêt de la mise à jour…",
-          "scanIncomplete": "Orca n'a pas pu terminer la vérification des skills gérés par plugin.",
-          "scanDepthLimit": "Orca a atteint sa limite de profondeur d'analyse des plugins avant de vérifier ce dossier.",
-          "scanEntryLimit": "Orca a atteint sa limite d'entrées d'analyse des plugins avant de vérifier le reste de ce cache.",
-          "scanCandidateLimit": "Orca a trouvé plus de dossiers de skills homonymes qu'il ne peut en inspecter sans risque.",
-          "scanManifestLimit": "Orca a ignoré ce manifeste de plugin car il dépassait une limite de sécurité.",
-          "scanOutsideRoot": "Orca a ignoré ce chemin de plugin car il pointe hors du cache de plugins.",
-          "scanIoErrorWithCode": "Orca n'a pas pu lire ce chemin de plugin ({{value0}}).",
-          "scanIoError": "Orca n'a pas pu lire ce chemin de plugin.",
-          "scanIssueLimit": "Orca a trouvé trop de dossiers de plugins ignorés pour pouvoir les lister un par un.",
-          "unselectedForeignOne": "1 skill non installé par Orca n’est pas sélectionné.",
-          "unselectedForeignMany": "{{value0}} skills non installés par Orca ne sont pas sélectionnés."
+          "stoppingHeadline": "Arrêt de la mise à jour…"
         },
         "SkillUpdateResultRows": {
           "stillOutdated": "Toujours pas à jour après l'exécution de la mise à jour."
@@ -4804,8 +4771,6 @@
           "oneLocation": "1 emplacement",
           "manyLocations": "{{value0}} emplacements",
           "notFromOrca": "Hors Orca",
-          "notFromOrcaSourceTip": "Installé depuis {{value0}}. Le sélectionner le remplace par la version d’Orca.",
-          "notFromOrcaNoRecordTip": "Aucune trace d’installation par Orca pour cette copie. La sélectionner la remplace par la version d’Orca.",
           "includeSkill": "Inclure {{value0}}"
         },
         "SkillFreshnessStatusPill": {
@@ -5276,6 +5241,28 @@
           "placementSummaryParts": "Supprime {{parts}} répartis sur {{roots}}.",
           "placementJoin": " et ",
           "retainedSource": "Le skill lui-même reste à {{path}}."
+        },
+        "skill": {
+          "plan": {
+            "location": {
+              "copy": {
+                "install": "Sera installé",
+                "update": "Sera mis à jour",
+                "link": "Sera lié",
+                "replace": "Sera remplacé",
+                "localChangesLabel": "Modifications locales",
+                "linkNotManagedLabel": "Lien non géré",
+                "nameInUseLabel": "Nom déjà utilisé",
+                "localChanges": "Cette copie contient des modifications qu’Orca n’a pas faites, la mise à jour la laisse donc telle quelle. Supprimez-la, puis réinstallez le skill pour obtenir la version d’Orca.",
+                "notInstalledByOrca": "Orca n’a pas installé cette copie, la mise à jour la laisse donc telle quelle. Supprimez-la, puis réinstallez le skill pour utiliser la version d’Orca.",
+                "linkNotManaged": "Ce lien n’a pas été créé par Orca, la mise à jour le laisse donc tel quel.",
+                "nameInUse": "Un autre fichier ou dossier utilise déjà le nom de ce skill, la mise à jour le laisse donc tel quel.",
+                "readOnly": "Cet emplacement est en lecture seule, la mise à jour ne peut donc pas le modifier. Modifiez ses autorisations pour permettre à Orca de le mettre à jour.",
+                "unreadable": "Orca n’a pas pu lire cette copie, la mise à jour la laisse donc telle quelle.",
+                "keep": "Aucun changement"
+              }
+            }
+          }
         }
       },
       "sidebar": {
