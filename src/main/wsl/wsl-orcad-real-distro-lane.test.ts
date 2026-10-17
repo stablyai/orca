@@ -408,7 +408,7 @@ async function updatePhase(distro: string): Promise<Receipt> {
   }
   const terminal = await openTerminal(before)
 
-  // A live terminal: the incumbent keeps serving and the update waits, forceably.
+  // A live terminal: the incumbent keeps serving and the update waits, forcibly.
   templates.set(key, nextTemplate('n1'))
   let started = performance.now()
   const deferred = await supervisor.connect(distro)
