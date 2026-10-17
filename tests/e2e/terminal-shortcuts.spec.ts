@@ -15,6 +15,7 @@
  */
 
 import { test, expect } from './helpers/orca-app'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import {
@@ -196,11 +197,12 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
           : null
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    pane?.terminal.focus()
-    const textarea = pane?.container.querySelector(
-      '.xterm-helper-textarea'
-    ) as HTMLTextAreaElement | null
-    if (!textarea) {
+    if (!pane) {
+      throw new Error('No active terminal pane to receive keyboard input')
+    }
+    pane.terminal.focus()
+    const textarea = pane.container.querySelector('.xterm-helper-textarea')
+    if (!(textarea instanceof HTMLTextAreaElement)) {
       throw new Error('No xterm helper textarea to receive keyboard input')
     }
     textarea.focus()
@@ -591,9 +593,7 @@ test.describe('Terminal Shortcuts', () => {
     }
   })
 
-  test('@headful Codex-like background output stays visible without disabling WebGL in auto mode', async ({
-    orcaPage
-  }) => {
+  test('@headful background SGR output retains WebGL in auto mode', async ({ orcaPage }) => {
     const hasPane = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
@@ -633,44 +633,50 @@ test.describe('Terminal Shortcuts', () => {
 
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const marker = `CODEX_BG_${Date.now()}`
-    await execInTerminal(orcaPage, ptyId, `printf '\\033[48;2;52;52;52m  ${marker}  \\033[0m\\n'`)
-    await waitForTerminalOutput(orcaPage, marker)
-
-    await expect
-      .poll(
-        () =>
-          orcaPage.evaluate((expectedMarker) => {
-            const state = window.__store?.getState()
-            const worktreeId = state?.activeWorktreeId
-            const tabId =
-              state?.activeTabType === 'terminal'
-                ? state.activeTabId
-                : worktreeId
-                  ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-                  : null
-            const manager = tabId ? window.__paneManagers?.get(tabId) : null
-            const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-            const terminalText = pane?.terminal.buffer.active
-              .translateBufferLineToString(pane.terminal.buffer.active.cursorY, true)
-              .trim()
-            const visibleText = pane?.container.textContent ?? ''
+    const script = await runNodeScriptInTerminal(
+      orcaPage,
+      ptyId,
+      `process.stdout.write(${JSON.stringify(`\x1b[48;2;52;52;52m  ${marker}  \x1b[0m\r\n`)})`
+    )
+    try {
+      await waitForTerminalOutput(orcaPage, marker)
+      await expect
+        .poll(
+          async () => {
+            const renderer = await orcaPage.evaluate(() => {
+              const state = window.__store?.getState()
+              const worktreeId = state?.activeWorktreeId
+              const tabId =
+                state?.activeTabType === 'terminal'
+                  ? state.activeTabId
+                  : worktreeId
+                    ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+                    : null
+              const manager = tabId ? window.__paneManagers?.get(tabId) : null
+              const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+              return {
+                hasComplexScriptOutput: pane?.hasComplexScriptOutput === true,
+                hasWebgl: Boolean(pane?.webglAddon)
+              }
+            })
             return {
-              markerVisible:
-                visibleText.includes(expectedMarker) || terminalText === expectedMarker,
-              hasComplexScriptOutput: pane?.hasComplexScriptOutput === true,
-              hasWebgl: Boolean(pane?.webglAddon)
+              ...renderer,
+              hasOutput: (await getTerminalContent(orcaPage)).includes(marker)
             }
-          }, marker),
-        {
-          timeout: 5_000,
-          message: 'Background SGR output did not stay visible on the auto renderer'
-        }
-      )
-      .toEqual({
-        markerVisible: true,
-        hasComplexScriptOutput: false,
-        hasWebgl: true
-      })
+          },
+          {
+            timeout: 5_000,
+            message: 'Background SGR output disabled the auto renderer or lost terminal output'
+          }
+        )
+        .toEqual({
+          hasOutput: true,
+          hasComplexScriptOutput: false,
+          hasWebgl: true
+        })
+    } finally {
+      script.cleanup()
+    }
   })
 
   test('floating terminal owns tab switch shortcuts while focused', async ({ orcaPage }) => {
