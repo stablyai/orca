@@ -15,6 +15,10 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+vi.mock('../local-worktree-filesystem', () => ({
+  isLocalWorktreePathMissing: vi.fn().mockResolvedValue(false)
+}))
+
 import { removeWorktree } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 

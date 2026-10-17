@@ -22,8 +22,17 @@ import {
   translateWorktreePath
 } from './worktree-path-comparison'
 import { gitExecFileAsync } from './runner'
+import { isLocalWorktreePathMissing } from '../local-worktree-filesystem'
 
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
+
+export class MissingWorktreePathError extends Error {
+  readonly code = 'ENOENT'
+
+  constructor(repoPath: string) {
+    super(`Repository path missing: ${repoPath}`)
+  }
+}
 
 type RepoLocation = { topLevel: string; commonDir: string; gitDir: string }
 
@@ -209,6 +218,13 @@ export async function readWorktreeList(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
+  throwIfSignalAborted(options.signal)
+  // A host check may be unverifiable; only positive absence skips Git.
+  const missingPath = await isLocalWorktreePathMissing(repoPath, options).catch(() => false)
+  throwIfSignalAborted(options.signal)
+  if (missingPath) {
+    throw new MissingWorktreePathError(repoPath)
+  }
   const execOptions = {
     cwd: repoPath,
     ...options,

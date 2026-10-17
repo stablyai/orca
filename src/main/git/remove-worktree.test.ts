@@ -1,3 +1,4 @@
+import type * as LocalWorktreeFilesystem from '../local-worktree-filesystem'
 import { existsSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -20,6 +21,13 @@ const {
   readFileMock: vi.fn(),
   resolveGitDirMock: vi.fn()
 }))
+
+vi.mock('../local-worktree-filesystem', async () => {
+  const actual = await vi.importActual<typeof LocalWorktreeFilesystem>(
+    '../local-worktree-filesystem'
+  )
+  return { ...actual, isLocalWorktreePathMissing: vi.fn().mockResolvedValue(false) }
+})
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,

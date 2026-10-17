@@ -9,6 +9,7 @@ import { toWslExecutionSpace } from '../../shared/wsl-paths'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
   readCheckedOutBranchRef,
+  MissingWorktreePathError,
   readRepoCommonDirFromGit,
   readRepoLocation,
   readTranslatedWorktreeGraph,
@@ -70,6 +71,9 @@ export async function listWorktreesUnshared(
  * path is gone, or it is not a Git repo. Every other failure means the scan could not read Git.
  */
 async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
+  if (err instanceof MissingWorktreePathError) {
+    return true
+  }
   if (getErrorCode(err) === 'ENOENT') {
     try {
       await stat(repoPath)

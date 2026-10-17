@@ -1,8 +1,16 @@
+import type * as LocalWorktreeFilesystem from '../local-worktree-filesystem'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn()
 }))
+
+vi.mock('../local-worktree-filesystem', async () => {
+  const actual = await vi.importActual<typeof LocalWorktreeFilesystem>(
+    '../local-worktree-filesystem'
+  )
+  return { ...actual, isLocalWorktreePathMissing: vi.fn().mockResolvedValue(false) }
+})
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,

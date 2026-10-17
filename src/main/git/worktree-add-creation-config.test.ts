@@ -1,4 +1,5 @@
 // addWorktree: checkout creation, branch-base/push.autoSetupRemote config writes, ref qualification.
+import type * as LocalWorktreeFilesystem from '../local-worktree-filesystem'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock } = vi.hoisted(
@@ -8,6 +9,13 @@ const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock }
     translateWslOutputPathsMock: vi.fn((output: string) => output)
   })
 )
+
+vi.mock('../local-worktree-filesystem', async () => {
+  const actual = await vi.importActual<typeof LocalWorktreeFilesystem>(
+    '../local-worktree-filesystem'
+  )
+  return { ...actual, isLocalWorktreePathMissing: vi.fn().mockResolvedValue(false) }
+})
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,

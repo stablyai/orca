@@ -1,3 +1,4 @@
+import type * as LocalWorktreeFilesystem from '../local-worktree-filesystem'
 import { worktreeCreateGit } from './worktree-create-git-executor'
 // Worktree scan sharing: in-flight coalescing and mutation-generation retirement.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,6 +10,13 @@ const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock }
     translateWslOutputPathsMock: vi.fn((output: string) => output)
   })
 )
+
+vi.mock('../local-worktree-filesystem', async () => {
+  const actual = await vi.importActual<typeof LocalWorktreeFilesystem>(
+    '../local-worktree-filesystem'
+  )
+  return { ...actual, isLocalWorktreePathMissing: vi.fn().mockResolvedValue(false) }
+})
 
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
@@ -60,6 +68,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const first = listWorktrees('/repo')
     const second = listWorktrees('/repo')
+    await vi.waitFor(() => expect(resolveScan).toBeTypeOf('function'))
     resolveScan()
     const [a, b] = await Promise.all([first, second])
 
@@ -80,6 +89,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const first = listWorktreeGraph('/repo')
     const second = listWorktreeGraph('/repo')
+    await vi.waitFor(() => expect(resolveScan).toBeTypeOf('function'))
     resolveScan()
     const [a, b] = await Promise.all([first, second])
 
@@ -101,7 +111,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const graphScan = listWorktreeGraph('/repo')
     const annotatedScan = listWorktrees('/repo')
-    expect(resolvers).toHaveLength(1)
+    await vi.waitFor(() => expect(resolvers).toHaveLength(1))
 
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
@@ -123,7 +133,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const statusScan = listWorktreeGraph('/repo', { admissionTier: 'status' })
     const interactiveScan = worktreeCreateGit.run(() => listWorktreeGraph('/repo'))
-    expect(resolvers).toHaveLength(2)
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2))
 
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
@@ -144,7 +154,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const annotatedScan = listWorktrees('/repo')
     const graphScan = listWorktreeGraph('/repo')
-    expect(resolvers).toHaveLength(1)
+    await vi.waitFor(() => expect(resolvers).toHaveLength(1))
 
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
@@ -178,7 +188,7 @@ describe('listWorktrees in-flight sharing', () => {
     const defaultScan = listWorktreeGraph('/repo')
     const preparationScan = listWorktreeGraph('/repo', { includeCreatePreparations: true })
     const shorterScan = listWorktreeGraph('/repo', { timeout: 5_000 })
-    expect(resolvers).toHaveLength(3)
+    await vi.waitFor(() => expect(resolvers).toHaveLength(3))
 
     for (const resolve of resolvers) {
       resolve({ stdout: 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n' })
@@ -199,10 +209,10 @@ describe('listWorktrees in-flight sharing', () => {
     )
 
     const staleScan = listWorktreeGraph('/repo')
-    expect(resolvers).toHaveLength(1)
+    await vi.waitFor(() => expect(resolvers).toHaveLength(1))
     notifyPreparedWorktreeMutation('/repo')
     const freshScan = listWorktreeGraph('/repo')
-    expect(resolvers).toHaveLength(2)
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2))
 
     resolvers[1]?.({ stdout: 'worktree /repo\nHEAD fresh\nbranch refs/heads/main\n' })
     resolvers[0]?.({ stdout: 'worktree /repo\nHEAD stale\nbranch refs/heads/main\n' })
@@ -226,6 +236,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const first = listWorktreesSharedStrict('/repo')
     const second = listWorktreesSharedStrict('/repo')
+    await vi.waitFor(() => expect(resolveScan).toBeTypeOf('function'))
     resolveScan()
     const [a, b] = await Promise.all([first, second])
 
@@ -246,6 +257,7 @@ describe('listWorktrees in-flight sharing', () => {
     const first = listWorktreesSharedStrict('/repo')
     const second = listWorktreesSharedStrict('/repo')
     const settled = Promise.allSettled([first, second])
+    await vi.waitFor(() => expect(rejectScan).toBeTypeOf('function'))
     rejectScan(new Error('git timed out.'))
 
     // A joiner silently receiving [] would be #16520 re-entering through the dedup path.
@@ -279,6 +291,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const first = listWorktreesStrict('/repo')
     const second = listWorktreesStrict('/repo')
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2))
     for (const resolve of resolvers) {
       resolve()
     }
@@ -384,7 +397,7 @@ describe('listWorktrees in-flight sharing', () => {
     })
 
     const staleScan = listWorktrees('/repo')
-    expect(scanResolvers).toHaveLength(1)
+    await vi.waitFor(() => expect(scanResolvers).toHaveLength(1))
 
     await moveWorktree('/repo', '/repo-old', '/repo-new')
     // Two entries per annotated scan: its own, plus the graph listing it shares with probe-free callers.
@@ -393,6 +406,7 @@ describe('listWorktrees in-flight sharing', () => {
     const freshScan = listWorktrees('/repo')
     expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 4, generations: 1 })
 
+    await vi.waitFor(() => expect(scanResolvers).toHaveLength(2))
     scanResolvers[1]?.('worktree /repo-new\nHEAD fresh\nbranch refs/heads/main\n')
     expect((await freshScan)[0]?.path).toBe('/repo-new')
     expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 2, generations: 1 })
@@ -403,7 +417,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const firstReuse = listWorktrees('/repo')
     const secondReuse = listWorktrees('/repo')
-    expect(listCalls).toBe(3)
+    await vi.waitFor(() => expect(listCalls).toBe(3))
 
     scanResolvers[2]?.('worktree /repo-reused\nHEAD reused\nbranch refs/heads/main\n')
     const [firstResult, secondResult] = await Promise.all([firstReuse, secondReuse])
@@ -431,7 +445,7 @@ describe('listWorktrees in-flight sharing', () => {
     await moveWorktree('/repo', '/old-1', '/new-1')
     const newestScan = listWorktrees('/repo')
 
-    expect(listCalls).toBe(3)
+    await vi.waitFor(() => expect(listCalls).toBe(3))
     expect(_getWorktreeScanCacheSizesForTests()).toEqual({ inFlight: 6, generations: 1 })
 
     scanResolvers[0]?.()
@@ -461,7 +475,7 @@ describe('listWorktrees in-flight sharing', () => {
 
     const staleUbuntu = listWorktrees('/repo', { wslDistro: 'Ubuntu' })
     const staleDebian = listWorktrees('/repo', { wslDistro: 'Debian' })
-    expect(scanResolvers).toHaveLength(2)
+    await vi.waitFor(() => expect(scanResolvers).toHaveLength(2))
 
     await removeWorktree('/repo', '/worktree', false, {
       knownRemovedWorktree: { branch: '', head: '' },
@@ -469,7 +483,7 @@ describe('listWorktrees in-flight sharing', () => {
     })
     const freshUbuntu = listWorktrees('/repo', { wslDistro: 'Ubuntu' })
     const freshDebian = listWorktrees('/repo', { wslDistro: 'Debian' })
-    expect(scanResolvers).toHaveLength(4)
+    await vi.waitFor(() => expect(scanResolvers).toHaveLength(4))
 
     for (const resolve of scanResolvers) {
       resolve()

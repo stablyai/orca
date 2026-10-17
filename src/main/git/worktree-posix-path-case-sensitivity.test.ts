@@ -8,6 +8,7 @@
  * production `listWorktreesStrict` always runs the listing through it, so the paths that reach the
  * comparison are UNC, never Linux. The end-to-end case below therefore drives the real translator.
  */
+import type * as LocalWorktreeFilesystem from '../local-worktree-filesystem'
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslPathTranslation from './command-runner/wsl-path-translation'
@@ -23,6 +24,13 @@ const { gitExecFileAsyncMock, gitExecFileSyncMock, statMock, readFileMock, resol
 
 // Why the real translator: an identity mock removes the Linux -> UNC rewrite that production
 // always applies, which is the only reason the Linux spelling would ever reach the comparison.
+vi.mock('../local-worktree-filesystem', async () => {
+  const actual = await vi.importActual<typeof LocalWorktreeFilesystem>(
+    '../local-worktree-filesystem'
+  )
+  return { ...actual, isLocalWorktreePathMissing: vi.fn().mockResolvedValue(false) }
+})
+
 vi.mock('./runner', async () => {
   const translation = await vi.importActual<typeof WslPathTranslation>(
     './command-runner/wsl-path-translation'
