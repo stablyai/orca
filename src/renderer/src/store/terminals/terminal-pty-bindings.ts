@@ -128,18 +128,12 @@ export function createTerminalPtyBindingActions(
         const hasReplacementPendingRestart = replacementPtyId
           ? replacementPtyId in s.pendingPaneAccountRestarts
           : false
-        const hasReplacementRestartNotice = replacementPtyId
-          ? replacementPtyId in s.codexRestartNoticeByPtyId
-          : false
         const hasReplacementMigrationUnsupported = replacementPtyId
           ? replacementPtyId in s.migrationUnsupportedByPtyId
           : false
         const nextPendingPaneAccountRestarts = hasReplacementPendingRestart
           ? { ...s.pendingPaneAccountRestarts }
           : s.pendingPaneAccountRestarts
-        const nextCodexRestartNoticeByPtyId = hasReplacementRestartNotice
-          ? { ...s.codexRestartNoticeByPtyId }
-          : s.codexRestartNoticeByPtyId
         const nextMigrationUnsupportedByPtyId = hasReplacementMigrationUnsupported
           ? { ...s.migrationUnsupportedByPtyId }
           : s.migrationUnsupportedByPtyId
@@ -147,11 +141,6 @@ export function createTerminalPtyBindingActions(
           if (hasReplacementPendingRestart) {
             nextPendingPaneAccountRestarts[ptyId] = nextPendingPaneAccountRestarts[replacementPtyId]
             delete nextPendingPaneAccountRestarts[replacementPtyId]
-          }
-          if (hasReplacementRestartNotice) {
-            const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]
-            nextCodexRestartNoticeByPtyId[ptyId] ??= replacedNotice
-            delete nextCodexRestartNoticeByPtyId[replacementPtyId]
           }
           if (hasReplacementMigrationUnsupported) {
             const replacedMigrationUnsupported = nextMigrationUnsupportedByPtyId[replacementPtyId]
@@ -182,7 +171,6 @@ export function createTerminalPtyBindingActions(
             : {}),
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
           pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
-          codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
             ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }

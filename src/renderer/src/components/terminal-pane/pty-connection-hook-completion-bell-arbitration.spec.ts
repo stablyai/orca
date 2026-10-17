@@ -386,45 +386,5 @@ export function registerPtyConnectionHookCompletionBellArbitrationTests(): void 
       })
       expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
     })
-
-    // Why: on a stale-codex pane (pending account-switch restart), production blocks sendInput.
-    it('blocks onData on a stale codex pane', async () => {
-      const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex-stale')
-      transportFactoryQueue.push(transport)
-      // isCodexPaneStale reads codexRestartNoticeByPtyId; seed a restart notice to trigger the stale branch.
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: {
-          'wt-1': [{ id: 'tab-1', ptyId: 'pty-codex-stale' }]
-        },
-        ptyIdsByTabId: {
-          'tab-1': ['pty-codex-stale']
-        },
-        codexRestartNoticeByPtyId: {
-          'pty-codex-stale': { previousAccountLabel: 'A', nextAccountLabel: 'B' }
-        }
-      }
-
-      const pane = createPane(1)
-      let onDataHandler: ((data: string) => void) | null = null
-      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
-        onDataHandler = handler
-        return { dispose: vi.fn() }
-      }) as typeof pane.terminal.onData)
-
-      const manager = createManager(1)
-      const deps = createDeps()
-
-      connectPanePty(pane as never, manager as never, deps as never)
-
-      if (!onDataHandler) {
-        throw new Error('expected onData handler to be registered')
-      }
-      ;(onDataHandler as (data: string) => void)('a')
-
-      // Stale-codex input is also blocked from reaching the transport.
-      expect(transport.sendInput).not.toHaveBeenCalled()
-    })
   })
 }

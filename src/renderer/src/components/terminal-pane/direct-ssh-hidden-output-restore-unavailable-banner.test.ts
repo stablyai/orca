@@ -40,7 +40,6 @@ import {
 const scheduleRuntimeGraphSync = vi.fn()
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
 const toastInfo = vi.fn()
-const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
@@ -76,10 +75,6 @@ vi.mock('sonner', () => ({
   toast: {
     info: toastInfo
   }
-}))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep
 }))
 
 vi.mock('react', async (importOriginal) => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../codex-restart-notice-state'
 import { ptyDataHandlers } from './pty-dispatcher'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
 import {
@@ -12,19 +12,17 @@ import {
   isPreHandlerPtyStateDiscarded
 } from './pty-pre-handler-buffer'
 import { parkedWatchersByTabId } from './terminal-parked-watcher-registry'
-import { sweepUnclaimedCodexPaneRestarts } from './codex-detached-pane-restart'
+import { sweepUnclaimedPaneAccountRestarts } from './detached-pane-account-restart'
 import {
-  hasAddedPendingCodexPaneRestart,
-  installCodexDetachedPaneRestartExecutor,
-  resetCodexDetachedPaneRestartExecutorForTests
-} from './codex-detached-pane-restart-scheduler'
+  hasAddedPendingPaneAccountRestart,
+  installDetachedPaneAccountRestartExecutor,
+  resetDetachedPaneAccountRestartExecutorForTests
+} from './detached-pane-account-restart-scheduler'
 
-const ACCOUNT_A = 'a@example.com'
-const ACCOUNT_B = 'b@example.com'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OLD_PTY = 'wt1@@old'
 const NEW_PTY = 'wt1@@new'
-const UNLOCATED_PTY = 'wt1@@unlocated'
+const FAILING_PTY = 'wt1@@failing'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -67,11 +65,6 @@ function seedQueuedRestart(
         }
       : {}
   })
-  useAppStore
-    .getState()
-    .markCodexRestartNotices([
-      { ptyId: OLD_PTY, previousAccountLabel: ACCOUNT_A, nextAccountLabel: ACCOUNT_B }
-    ])
   useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'codex')
 }
 
@@ -79,7 +72,7 @@ describe('codex detached pane restart executor', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 
   beforeEach(() => {
-    resetCodexDetachedPaneRestartExecutorForTests()
+    resetDetachedPaneAccountRestartExecutorForTests()
     useAppStore.setState(useAppStore.getInitialState(), true)
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
@@ -96,7 +89,7 @@ describe('codex detached pane restart executor', () => {
   })
 
   afterEach(() => {
-    resetCodexDetachedPaneRestartExecutorForTests()
+    resetDetachedPaneAccountRestartExecutorForTests()
     ptyDataHandlers.delete(OLD_PTY)
     vi.useRealTimers()
     if (originalWindow) {
@@ -109,7 +102,7 @@ describe('codex detached pane restart executor', () => {
   it('kill-and-respawns an accepted restart no mounted transport claims', async () => {
     seedQueuedRestart()
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     expect(window.api.pty.spawn).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
@@ -146,9 +139,36 @@ describe('codex detached pane restart executor', () => {
     expect(state.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({ [LEAF_ID]: NEW_PTY })
     expect(state.pendingPaneAccountRestarts).toEqual({})
     expect(state.suppressedPtyExitIds[OLD_PTY]).toBeUndefined()
-    // The whole point: the restart completed, so nothing may block input anymore.
-    expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[OLD_PTY])).toBe(false)
-    expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[NEW_PTY])).toBe(false)
+  })
+
+  it('waits for a busy Codex turn to end, then restarts', async () => {
+    seedQueuedRestart()
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const codexStatus = (state: 'working' | 'done') => ({
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          state,
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'codex' as const
+        }
+      }
+    })
+    useAppStore.setState(codexStatus('working'))
+
+    await sweepUnclaimedPaneAccountRestarts()
+    expect(window.api.pty.spawn).not.toHaveBeenCalled()
+    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [OLD_PTY]: 'codex' })
+
+    useAppStore.setState(codexStatus('done'))
+    await sweepUnclaimedPaneAccountRestarts()
+    expect(window.api.pty.spawn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ command: 'codex', replacesPtyId: OLD_PTY })
+    )
   })
 
   it('adopts the replacement when the replaced PTY exit clears the tab binding mid-spawn', async () => {
@@ -160,13 +180,12 @@ describe('codex detached pane restart executor', () => {
       return { id: NEW_PTY }
     })
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     const state = useAppStore.getState()
     expect(window.api.pty.kill).not.toHaveBeenCalled()
     expect(state.ptyIdsByTabId['tab-1']).toEqual([NEW_PTY])
     expect(state.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({ [LEAF_ID]: NEW_PTY })
-    expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[NEW_PTY])).toBe(false)
   })
 
   it('keeps the replaced PTY exit away from a tab revealed mid-restart', async () => {
@@ -185,7 +204,7 @@ describe('codex detached pane restart executor', () => {
       return { id: NEW_PTY }
     })
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     // Neither: the reveal reconnects by pane identity, which main answers with the replacement.
     expect(revealView).toEqual({ exitReplayed: false, sessionAdmitted: false })
@@ -193,7 +212,7 @@ describe('codex detached pane restart executor', () => {
   })
 
   it('executes via the store subscription without a lifecycle timeout', async () => {
-    const uninstall = installCodexDetachedPaneRestartExecutor()
+    const uninstall = installDetachedPaneAccountRestartExecutor()
     try {
       seedQueuedRestart()
       expect(window.api.pty.spawn).not.toHaveBeenCalled()
@@ -220,39 +239,43 @@ describe('codex detached pane restart executor', () => {
       }
     )
 
-    expect(hasAddedPendingCodexPaneRestart(unchanged, unchanged)).toBe(false)
-    expect(hasAddedPendingCodexPaneRestart({ [OLD_PTY]: 'codex' }, {})).toBe(true)
+    expect(hasAddedPendingPaneAccountRestart(unchanged, unchanged)).toBe(false)
+    expect(hasAddedPendingPaneAccountRestart({ [OLD_PTY]: 'codex' }, {})).toBe(true)
   })
 
   it('contains one claim failure so later queued panes still restart', async () => {
-    useAppStore
-      .getState()
-      .markCodexRestartNotices([
-        { ptyId: UNLOCATED_PTY, previousAccountLabel: ACCOUNT_A, nextAccountLabel: ACCOUNT_B }
-      ])
-    useAppStore.getState().queuePaneAccountRestarts([UNLOCATED_PTY], 'codex')
     seedQueuedRestart()
+    const seeded = useAppStore.getState()
+    useAppStore.setState({
+      tabsByWorktree: {
+        wt1: [
+          ...seeded.tabsByWorktree.wt1!,
+          { ...seeded.tabsByWorktree.wt1![0]!, id: 'tab-2', ptyId: FAILING_PTY }
+        ]
+      },
+      ptyIdsByTabId: { ...seeded.ptyIdsByTabId, 'tab-2': [FAILING_PTY] }
+    })
     const consumePendingPaneAccountRestart = useAppStore.getState().consumePendingPaneAccountRestart
     useAppStore.setState({
       consumePendingPaneAccountRestart: (ptyId) => {
-        if (ptyId === UNLOCATED_PTY) {
+        if (ptyId === FAILING_PTY) {
           throw new Error('corrupt restored claim')
         }
         return consumePendingPaneAccountRestart(ptyId)
       }
     })
+    useAppStore.getState().queuePaneAccountRestarts([FAILING_PTY], 'codex')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const uninstall = installCodexDetachedPaneRestartExecutor()
+    const uninstall = installDetachedPaneAccountRestartExecutor()
 
     try {
       await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
 
       const state = useAppStore.getState()
-      expect(state.pendingPaneAccountRestarts).toEqual({})
-      expect(awaitsCodexRestartAnswer(state.codexRestartNoticeByPtyId[UNLOCATED_PTY])).toBe(true)
+      expect(state.pendingPaneAccountRestarts).toEqual({ [FAILING_PTY]: 'codex' })
       expect(state.ptyIdsByTabId['tab-1']).toEqual([NEW_PTY])
       expect(warn).toHaveBeenCalledWith(
-        '[codex-restart] detached pane restart failed:',
+        '[account-restart] detached pane restart failed:',
         expect.objectContaining({ message: 'corrupt restored claim' })
       )
     } finally {
@@ -265,7 +288,7 @@ describe('codex detached pane restart executor', () => {
     seedQueuedRestart()
     ptyDataHandlers.set(OLD_PTY, () => {})
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     expect(window.api.pty.spawn).not.toHaveBeenCalled()
     expect(window.api.pty.kill).not.toHaveBeenCalled()
@@ -275,26 +298,10 @@ describe('codex detached pane restart executor', () => {
   it('leaves foreign-machine PTYs queued for their mounted pane path', async () => {
     useAppStore.setState({ pendingPaneAccountRestarts: { 'remote:term-1': 'codex' } })
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     expect(window.api.pty.spawn).not.toHaveBeenCalled()
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'remote:term-1': 'codex' })
-  })
-
-  it('clears the notice when the queued pane no longer exists', async () => {
-    useAppStore
-      .getState()
-      .markCodexRestartNotices([
-        { ptyId: 'wt1@@gone', previousAccountLabel: ACCOUNT_A, nextAccountLabel: ACCOUNT_B }
-      ])
-    useAppStore.getState().queuePaneAccountRestarts(['wt1@@gone'], 'codex')
-
-    await sweepUnclaimedCodexPaneRestarts()
-
-    const state = useAppStore.getState()
-    expect(window.api.pty.spawn).not.toHaveBeenCalled()
-    expect(state.pendingPaneAccountRestarts).toEqual({})
-    expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId['wt1@@gone'])).toBe(false)
   })
 
   it('rebuilds a rootless single-pane layout so the mount replays this leaf', async () => {
@@ -302,7 +309,7 @@ describe('codex detached pane restart executor', () => {
     // doesn't name this one, silently orphaning the respawned PTY on reveal.
     seedQueuedRestart({ layoutRoot: 'none' })
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']).toEqual(
       expect.objectContaining({
@@ -336,7 +343,7 @@ describe('codex detached pane restart executor', () => {
       }
     })
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     const layout = useAppStore.getState().terminalLayoutsByTabId['tab-1']
     expect(layout?.root?.type).toBe('split')
@@ -363,7 +370,7 @@ describe('codex detached pane restart executor', () => {
       getTabWideAgentHintLeafId: () => null
     })
     try {
-      await sweepUnclaimedCodexPaneRestarts()
+      await sweepUnclaimedPaneAccountRestarts()
 
       expect(window.api.pty.spawn).not.toHaveBeenCalled()
       expect(window.api.pty.kill).not.toHaveBeenCalled()
@@ -378,7 +385,7 @@ describe('codex detached pane restart executor', () => {
     const pendingSpawn = deferred<{ id: string }>()
     vi.mocked(window.api.pty.spawn).mockReturnValue(pendingSpawn.promise)
 
-    const restart = sweepUnclaimedCodexPaneRestarts()
+    const restart = sweepUnclaimedPaneAccountRestarts()
     await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
     const unregister = registerRuntimeTerminalTab({
       tabId: 'tab-1',
@@ -409,10 +416,9 @@ describe('codex detached pane restart executor', () => {
     vi.mocked(window.api.pty.spawn).mockReturnValue(pendingSpawn.promise)
     vi.mocked(window.api.pty.kill).mockReturnValue(pendingKill.promise)
 
-    const restart = sweepUnclaimedCodexPaneRestarts()
+    const restart = sweepUnclaimedPaneAccountRestarts()
     await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
     const state = useAppStore.getState()
-    const notice = state.codexRestartNoticeByPtyId[OLD_PTY]
     useAppStore.setState({
       tabsByWorktree: {
         wt1: [{ ...state.tabsByWorktree.wt1![0]!, generation: 1, ptyId: 'wt1@@successor' }]
@@ -423,8 +429,7 @@ describe('codex detached pane restart executor', () => {
           ...state.terminalLayoutsByTabId['tab-1']!,
           ptyIdsByLeafId: { [LEAF_ID]: 'wt1@@successor' }
         }
-      },
-      codexRestartNoticeByPtyId: { 'wt1@@successor': notice! }
+      }
     })
 
     pendingSpawn.resolve({ id: NEW_PTY })
@@ -433,36 +438,33 @@ describe('codex detached pane restart executor', () => {
     const after = useAppStore.getState()
     expect(after.ptyIdsByTabId['tab-1']).toEqual(['wt1@@successor'])
     expect(after.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId?.[LEAF_ID]).toBe('wt1@@successor')
-    expect(awaitsCodexRestartAnswer(after.codexRestartNoticeByPtyId['wt1@@successor'])).toBe(true)
     await restart
     pendingKill.resolve()
   })
 
   it('leaves a sleep-retained pending id alone so wake can migrate it', async () => {
     // Why: hibernation unbinds a pane's PTY but keeps its pending restart, and
-    // wake moves that entry onto the respawned PTY. No notice means nothing is
-    // blocked, so consuming here would silently lose the accepted restart.
+    // wake moves that entry onto the respawned PTY, so consuming here would
+    // silently lose the accepted restart.
     useAppStore.setState({ pendingPaneAccountRestarts: { 'wt1@@sleeping': 'codex' } })
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     expect(window.api.pty.spawn).not.toHaveBeenCalled()
     expect(window.api.pty.kill).not.toHaveBeenCalled()
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'wt1@@sleeping': 'codex' })
   })
 
-  it('re-offers the prompt instead of leaving a silent block when the respawn fails', async () => {
+  it('leaves the pane running on its account when the respawn fails', async () => {
     seedQueuedRestart()
     vi.mocked(window.api.pty.spawn).mockRejectedValue(new Error('managed auth unavailable'))
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     const state = useAppStore.getState()
     expect(window.api.pty.kill).not.toHaveBeenCalled()
     expect(state.ptyIdsByTabId['tab-1']).toEqual([OLD_PTY])
     expect(state.pendingPaneAccountRestarts).toEqual({})
-    // The question is back on screen; input stays blocked but never silently.
-    expect(awaitsCodexRestartAnswer(state.codexRestartNoticeByPtyId[OLD_PTY])).toBe(true)
   })
 
   it('keeps parked watchers and buffered output for the old PTY when main cannot stop it', async () => {
@@ -479,7 +481,7 @@ describe('codex detached pane restart executor', () => {
     vi.mocked(window.api.pty.spawn).mockRejectedValue(new Error('daemon unreachable'))
 
     try {
-      await sweepUnclaimedCodexPaneRestarts()
+      await sweepUnclaimedPaneAccountRestarts()
 
       // No exit was sent, so the still-running Codex keeps every renderer observer it had.
       expect(disposeWatcher).not.toHaveBeenCalled()
@@ -488,9 +490,6 @@ describe('codex detached pane restart executor', () => {
       const replayed: string[] = []
       drainPreHandlerPtyData(OLD_PTY, (data) => replayed.push(data))
       expect(replayed).toEqual(['still running'])
-      expect(
-        awaitsCodexRestartAnswer(useAppStore.getState().codexRestartNoticeByPtyId[OLD_PTY])
-      ).toBe(true)
     } finally {
       parkedWatchersByTabId.delete('tab-1')
       clearPreHandlerPtyState(OLD_PTY)
@@ -500,7 +499,7 @@ describe('codex detached pane restart executor', () => {
   it('kills now and defers the Codex respawn to mount when the layout leaf is unknown', async () => {
     seedQueuedRestart({ leafId: null })
 
-    await sweepUnclaimedCodexPaneRestarts()
+    await sweepUnclaimedPaneAccountRestarts()
 
     const state = useAppStore.getState()
     expect(window.api.pty.spawn).not.toHaveBeenCalled()
@@ -513,7 +512,6 @@ describe('codex detached pane restart executor', () => {
         launchAgent: 'codex'
       })
     )
-    expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[OLD_PTY])).toBe(false)
   })
 
   it('publishes a rootless replacement startup before waiting for old PTY teardown', async () => {
@@ -521,7 +519,7 @@ describe('codex detached pane restart executor', () => {
     const pendingKill = deferred<void>()
     vi.mocked(window.api.pty.kill).mockReturnValue(pendingKill.promise)
 
-    const restart = sweepUnclaimedCodexPaneRestarts()
+    const restart = sweepUnclaimedPaneAccountRestarts()
     await vi.waitFor(() => expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith(OLD_PTY))
 
     expect(useAppStore.getState().ptyIdsByTabId['tab-1']).toEqual([])

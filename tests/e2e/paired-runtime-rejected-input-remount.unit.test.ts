@@ -68,7 +68,6 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
@@ -323,7 +322,6 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       transientClearedAgentStatusConnectionIds: {},
       cacheTimerByKey: {},
       settings: { terminalMainSideEffectAuthority: false },
-      codexRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
       deferredSshSessionIdsByTabId: {},
       removeDeferredSshReconnectTarget: vi.fn(),

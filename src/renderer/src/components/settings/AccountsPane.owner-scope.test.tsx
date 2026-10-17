@@ -63,6 +63,10 @@ vi.mock('@/store', () => ({
       fetchSettings: fake.write
     })
 }))
+// Why: this suite covers which owner's accounts a page shows; asking about running sessions is not in scope.
+vi.mock('@/lib/agent-account-switch-sessions', () => ({
+  handleRunningAgentSessionsAfterSwitch: async () => 'show-confirmation'
+}))
 vi.mock('@/runtime/runtime-provider-accounts-client', () => {
   const empty = () => ({
     accounts: [],

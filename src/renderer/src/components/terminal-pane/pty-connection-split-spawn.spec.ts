@@ -1,4 +1,4 @@
-import { bindPtyConnectionTestMocks, ptyConnectionTestMocks } from './pty-connection-mocks.spec'
+import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
@@ -23,8 +23,6 @@ import {
 } from './pty-connection-test-environment'
 
 export function registerPtyConnectionSplitSpawnTests(): void {
-  const { notifyCodexPaneBoundForStaleSweep } = ptyConnectionTestMocks
-
   let mockStoreState: StoreState
   let transportFactoryQueue: MockTransport[] = []
   let createdTransportOptions: Record<string, unknown>[] = []
@@ -401,9 +399,6 @@ export function registerPtyConnectionSplitSpawnTests(): void {
       expect(pane.container.dataset.ptyId).toBe('pty-daemon-reattach')
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'pty-daemon-reattach')
       expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-daemon-reattach')
-      // Why: the restored shell keeps the CODEX_HOME it was spawned with, and this
-      // bind is the first moment the daemon PTY can be inspected for it.
-      expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('pty-daemon-reattach')
     })
 
     it('replays a stable-pane adoption without submitting the resume command', async () => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-account-restart-startup'
+import { ACCOUNT_SWITCH_AGENTS } from '@/lib/agent-account-switch-agents'
 import {
   isAccountRestartReady,
   selectReadyAccountRestartPtyIds
@@ -19,7 +20,6 @@ import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 /** Owns the restart/close actions for panes whose PTY process has exited. */
 export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseController) {
   const {
-    clearCodexRestartNotice,
     clearExitedPanePtyLayoutBinding,
     clearRuntimePaneTitle,
     clearTabPtyId,
@@ -60,7 +60,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
 
   const buildAccountRestartStartup = useCallback(
     (agent: AccountRestartAgent, leafId: string) =>
-      buildPaneAccountRestartStartup(agent, {
+      buildPaneAccountRestartStartup(ACCOUNT_SWITCH_AGENTS[agent], {
         tabId,
         worktreeId,
         leafId,
@@ -83,7 +83,6 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       const existingPtyId = transport?.getPtyId()
       if (existingPtyId) {
         suppressPtyExit(existingPtyId)
-        clearCodexRestartNotice(existingPtyId)
         clearTabPtyId(tabId, existingPtyId)
       }
       panePtyBinding?.dispose()
@@ -135,7 +134,6 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
-      clearCodexRestartNotice,
       clearExitedPanePtyLayoutBinding,
       clearRuntimePaneTitle,
       clearTabPtyId,
@@ -255,8 +253,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       const agent = consumePendingPaneAccountRestart(ptyId)
       const startup = agent ? buildAccountRestartStartup(agent, pane.leafId) : null
       if (agent && startup) {
-        // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
-        handleRestartPane(pane.id, startup, { focus: agent === 'codex' })
+        // Why: one switch restarts many panes at once from a dialog; none was the one the user clicked.
+        handleRestartPane(pane.id, startup, { focus: false })
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.

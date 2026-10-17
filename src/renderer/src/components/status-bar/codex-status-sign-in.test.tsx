@@ -17,7 +17,7 @@ import type {
 } from '../../../../shared/managed-account-types'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
-const markLiveCodexSessionsForRestart = vi.fn(async () => {})
+const handleRunningAgentSessionsAfterSwitch = vi.fn(async () => 'show-confirmation')
 const toastSuccess = vi.fn()
 const toastError = vi.fn()
 const fetchInactiveCodexAccountUsage = vi.fn(async () => {})
@@ -76,9 +76,13 @@ vi.mock('sonner', () => ({
   toast: { success: toastSuccess, error: toastError }
 }))
 
-vi.mock('@/lib/codex-session-restart', () => ({
-  markLiveCodexSessionsForRestart,
-  resolveCodexRestartPromptAccountLabel: (
+vi.mock('@/lib/agent-account-switch-sessions', () => ({
+  handleRunningAgentSessionsAfterSwitch
+}))
+
+vi.mock('@/lib/codex-session-restart', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveCodexSwitchAccountLabel: (
     accounts: readonly { id: string; email: string }[],
     accountId: string | null | undefined
   ) => accounts.find((entry) => entry.id === accountId)?.email ?? 'System default'
@@ -234,10 +238,9 @@ describe('status bar Codex sign-in action', () => {
           }
         )
       )
-      expect(markLiveCodexSessionsForRestart).toHaveBeenCalledWith(
-        expect.objectContaining({
-          nextAccountId: 'account-2'
-        })
+      expect(handleRunningAgentSessionsAfterSwitch).toHaveBeenCalledWith(
+        expect.objectContaining({ agent: 'codex' }),
+        expect.objectContaining({ after: expect.objectContaining({ accountId: 'account-2' }) })
       )
     }
   )
@@ -254,11 +257,12 @@ describe('status bar Codex sign-in action', () => {
       accountId: 'account-2',
       activateIfSelectionWasEmpty: true
     })
-    expect(markLiveCodexSessionsForRestart).toHaveBeenCalledTimes(1)
-    expect(markLiveCodexSessionsForRestart).toHaveBeenCalledWith(
+    expect(handleRunningAgentSessionsAfterSwitch).toHaveBeenCalledTimes(1)
+    expect(handleRunningAgentSessionsAfterSwitch).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'codex' }),
       expect.objectContaining({
-        previousAccountId: null,
-        nextAccountId: 'account-2',
+        before: expect.objectContaining({ accountId: null }),
+        after: expect.objectContaining({ accountId: 'account-2' }),
         target: { runtime: 'host', wslDistro: null }
       })
     )
@@ -278,7 +282,7 @@ describe('status bar Codex sign-in action', () => {
       accountId: 'account-2',
       activateIfSelectionWasEmpty: true
     })
-    expect(markLiveCodexSessionsForRestart).not.toHaveBeenCalled()
+    expect(handleRunningAgentSessionsAfterSwitch).not.toHaveBeenCalled()
     expect(toastError).not.toHaveBeenCalled()
   })
 
@@ -291,7 +295,7 @@ describe('status bar Codex sign-in action', () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))
     expect(toastSuccess).not.toHaveBeenCalled()
-    expect(markLiveCodexSessionsForRestart).not.toHaveBeenCalled()
+    expect(handleRunningAgentSessionsAfterSwitch).not.toHaveBeenCalled()
     errorSpy.mockRestore()
   })
 })

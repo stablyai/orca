@@ -31,7 +31,6 @@ const {
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
-  notifyCodexPaneBoundForStaleSweep,
   warnTerminalLifecycleAnomaly
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
@@ -39,7 +38,6 @@ const {
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
-  notifyCodexPaneBoundForStaleSweep: vi.fn(),
   warnTerminalLifecycleAnomaly: vi.fn()
 }))
 
@@ -88,10 +86,6 @@ vi.mock('./cache-timer-seeding', () => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep
-}))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()

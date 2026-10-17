@@ -64,7 +64,6 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery: vi.fn()
 }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false) }))
 vi.mock('@/store', () => ({
@@ -380,7 +379,6 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
         promptCacheTimerEnabled: true,
         terminalMainSideEffectAuthority: false
       },
-      codexRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
       deferredSshSessionIdsByTabId: {},
       removeDeferredSshReconnectTarget: vi.fn(),

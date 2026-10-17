@@ -36,7 +36,8 @@ import {
   normalizeClaudeStatusRuntimeTarget,
   resolveClaudeStatusAccountState
 } from './status-bar-claude-accounts'
-import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
+import { handleRunningAgentSessionsAfterSwitch } from '@/lib/agent-account-switch-sessions'
+import { CLAUDE_ACCOUNT_SWITCH_AGENT } from '@/lib/claude-account-switch-agent'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -191,7 +192,7 @@ export function ClaudeSwitcherMenu({
       }
       const nextActiveAccountId = getClaudeStatusActiveId(next, target)
       if (previousActiveAccountId !== nextActiveAccountId) {
-        void handleRunningClaudeSessionsAfterSwitch({
+        void handleRunningAgentSessionsAfterSwitch(CLAUDE_ACCOUNT_SWITCH_AGENT, {
           owner: runtimeTarget,
           target,
           before: { state: accountState, accountId: previousActiveAccountId },

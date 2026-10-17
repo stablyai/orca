@@ -20,7 +20,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import { CODEX_ACCOUNT_RESTART_STARTUP } from './codex-session-restart'
+import type { AccountSwitchAgent } from './agent-account-switch-agent'
 
 export type AgentAccountRestartStartup = {
   command: string
@@ -124,13 +124,12 @@ export function resolveAgentAccountRestartResumeStartup(
 }
 
 /**
- * The startup an account-switch restart relaunches the pane with. Codex falls
- * back to a bare relaunch; Claude only ever resumes, so null means skip it.
+ * The startup an account-switch restart relaunches the pane with: its own session resumed, else
+ * the agent's fresh startup; null (skip it) for an agent that only resumes.
  */
 export function buildPaneAccountRestartStartup(
-  agent: AccountRestartAgent,
+  agent: Pick<AccountSwitchAgent, 'agent' | 'freshStartup'>,
   args: AccountRestartPane
 ): AgentAccountRestartStartup | null {
-  const resume = resolveAgentAccountRestartResumeStartup(agent, args)
-  return resume ?? (agent === 'codex' ? CODEX_ACCOUNT_RESTART_STARTUP : null)
+  return resolveAgentAccountRestartResumeStartup(agent.agent, args) ?? agent.freshStartup ?? null
 }

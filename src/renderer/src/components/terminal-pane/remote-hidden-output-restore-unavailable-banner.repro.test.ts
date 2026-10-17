@@ -75,7 +75,6 @@ type MockTransport = {
 const scheduleRuntimeGraphSync = vi.fn()
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
 const toastInfo = vi.fn()
-const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
 let mockStoreState: Record<string, unknown>
 let transportFactoryQueue: MockTransport[] = []
@@ -117,10 +116,6 @@ vi.mock('sonner', () => ({
   toast: {
     info: toastInfo
   }
-}))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -505,7 +500,6 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
         experimentalTerminalAttention: true,
         terminalMainSideEffectAuthority: false
       },
-      codexRestartNoticeByPtyId: {},
       deferredSshReconnectTargets: [],
       deferredSshSessionIdsByTabId: {},
       removeDeferredSshReconnectTarget: vi.fn(),

@@ -577,10 +577,7 @@ describe('registerCoreHandlers', () => {
     registeredRelaunchExit = registerAppHandlersMock.mock.calls[0]?.[1]?.onBeforeRelaunchExit
     await registeredRelaunchExit?.()
     expect(runtime.closeNotificationDismissals).toHaveBeenCalledOnce()
-    expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(
-      codexAccounts,
-      expect.any(Function)
-    )
+    expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime, {
       getPtyIdForPaneKey: expect.any(Function)
     })

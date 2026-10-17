@@ -25,7 +25,6 @@ import type {
 import type {
   AccountRestartAgent,
   AutomaticAgentResumeClaim,
-  CodexRestartNotice,
   HydrateWorkspaceSessionOptions
 } from './terminal-contracts'
 
@@ -164,18 +163,8 @@ export type TerminalActions = {
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
-  /** Codex also marks its restart notices answered. */
   queuePaneAccountRestarts: (ptyIds: string[], agent: AccountRestartAgent) => void
   consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
-  markCodexRestartNotices: (
-    notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
-      Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
-        ptyId: string
-      })[]
-  ) => string[]
-  clearCodexRestartNotice: (ptyId: string) => void
-  dismissCodexRestartNotices: (ptyIds: string[]) => void
-  reopenCodexRestartPrompt: (ptyId: string) => void
   replaceTerminalLayoutPanePtyId: (tabId: string, leafId: string, ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void

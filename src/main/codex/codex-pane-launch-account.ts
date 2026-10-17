@@ -19,12 +19,10 @@ type CodexPaneLaunchAccountSettings = Pick<
  *
  * Why: an automatic session resume deliberately pins CODEX_HOME to the home
  * that owns the session rather than to the current selection, so a cold-restored
- * pane can come back on an account the user already switched away from. Naming
- * that real account — instead of the selection Orca ignored — is what lets the
- * restart prompt tell the user which account the pane is stuck on.
+ * pane can come back on an account the user already switched away from. The
+ * record must name that real account, not the selection Orca ignored.
  *
- * Returns null when the launch cannot be attributed, which keeps the pane out of
- * the stale-pane report entirely.
+ * Returns null when the launch cannot be attributed.
  */
 export function resolveCodexPaneLaunchAccount(args: {
   pinnedByResume: boolean

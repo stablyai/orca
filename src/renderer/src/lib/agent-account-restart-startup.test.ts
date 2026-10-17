@@ -10,6 +10,8 @@ import {
   resolveAgentAccountRestartResumeStartup,
   type AgentAccountRestartStartup
 } from './agent-account-restart-startup'
+import { CLAUDE_ACCOUNT_SWITCH_AGENT } from './claude-account-switch-agent'
+import { CODEX_ACCOUNT_SWITCH_AGENT } from './codex-account-switch-agent'
 
 let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
 
@@ -46,7 +48,7 @@ function seedAgentStatus(entry: Partial<AgentStatusEntry> | null): void {
 }
 
 function build(): AgentAccountRestartStartup {
-  const startup = buildPaneAccountRestartStartup('codex', {
+  const startup = buildPaneAccountRestartStartup(CODEX_ACCOUNT_SWITCH_AGENT, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
     worktreeId: WORKTREE_ID
@@ -188,7 +190,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       providerSession: { key: 'session_id', id: SESSION_ID }
     })
 
-    const startup = buildPaneAccountRestartStartup('claude', pane)
+    const startup = buildPaneAccountRestartStartup(CLAUDE_ACCOUNT_SWITCH_AGENT, pane)
 
     expect(startup?.command).toMatch(/^claude\b/)
     expect(startup?.command).toContain('--resume')
@@ -212,7 +214,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       }
     })
 
-    const startup = buildPaneAccountRestartStartup('claude', pane)
+    const startup = buildPaneAccountRestartStartup(CLAUDE_ACCOUNT_SWITCH_AGENT, pane)
     expect(startup?.command).toContain(SESSION_ID)
     expect(startup?.command).not.toContain('--dangerously-skip-permissions')
     expect(startup?.env?.CLAUDE_DEFAULT_ONLY).toBeUndefined()
@@ -228,7 +230,9 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       settings: { ...getDefaultSettings('/home/dev'), agentDefaultArgs: { codex: '--search' } }
     })
 
-    expect(buildPaneAccountRestartStartup('codex', pane)?.command).toContain('--search')
+    expect(buildPaneAccountRestartStartup(CODEX_ACCOUNT_SWITCH_AGENT, pane)?.command).toContain(
+      '--search'
+    )
   })
 
   it('keeps a recorded Claude launch config on resume', () => {
@@ -242,13 +246,15 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       agentEnv: {}
     })
 
-    expect(buildPaneAccountRestartStartup('claude', pane)?.command).toContain('--model')
+    expect(buildPaneAccountRestartStartup(CLAUDE_ACCOUNT_SWITCH_AGENT, pane)?.command).toContain(
+      '--model'
+    )
   })
 
   it('reports no resume when the Claude pane has no session id', () => {
     seedAgentStatus({ agentType: 'claude', state: 'done' })
 
-    expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
+    expect(buildPaneAccountRestartStartup(CLAUDE_ACCOUNT_SWITCH_AGENT, pane)).toBeNull()
   })
 
   it('never resumes a Codex session as Claude', () => {

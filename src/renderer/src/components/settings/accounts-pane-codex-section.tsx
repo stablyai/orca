@@ -11,6 +11,7 @@ import { getAccountsCodexSearchEntries } from './accounts-search'
 import { getCodexSystemDefaultSubtitle } from './accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
+import { RunningSessionSwitchSetting } from './running-session-switch-setting'
 
 export function renderCodexAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const {
@@ -26,10 +27,12 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
     remoteAccountScopeNotice,
     runCodexAccountAction,
     accountOwner,
+    settings,
     systemCodexActive,
     systemCodexIdentity,
     systemCodexMissingSignIn,
     systemCodexNeedsSignIn,
+    updateSettings,
     visibleCodexAccounts,
     wslCapabilitiesLoading
   } = model
@@ -283,6 +286,12 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
           )}
         </div>
       </SearchableSetting>
+      {/* Why shown for a server's accounts too: a server switch asks about that server's sessions under this setting. */}
+      <RunningSessionSwitchSetting
+        agent="codex"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     </section>
   )
 }

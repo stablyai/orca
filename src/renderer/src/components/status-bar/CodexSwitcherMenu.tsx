@@ -18,7 +18,7 @@ import {
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
-import { AccountRuntimeToggle, CodexRestartStatusPrompt } from './StatusBarAccountControls'
+import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
   InlineUsageSignInAction,
@@ -225,7 +225,7 @@ export function CodexSwitcherMenu({
                     <DropdownMenuItem
                       key={`${selectedGroup.key}:${target.id ?? 'system'}`}
                       onSelect={(event) => {
-                        // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
+                        // Why: keep the menu open so the switch reads as done in place.
                         event.preventDefault()
                         if (suppressNextAccountSelectRef.current) {
                           suppressNextAccountSelectRef.current = false
@@ -281,7 +281,6 @@ export function CodexSwitcherMenu({
           </div>
         </div>
       ) : null}
-      {open ? <CodexRestartStatusPrompt /> : null}
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {

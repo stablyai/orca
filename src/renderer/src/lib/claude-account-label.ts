@@ -1,8 +1,8 @@
-import type { ClaudeRateLimitAccountsState } from '../../../shared/managed-account-types'
+import type { AgentAccountSnapshot } from './agent-account-switch-agent'
 
 /** Display label for a selected Claude account row; null is System default. */
 export function getClaudeAccountLabel(
-  state: Pick<ClaudeRateLimitAccountsState, 'accounts'>,
+  state: AgentAccountSnapshot['state'],
   accountId: string | null | undefined
 ): string {
   if (accountId == null) {

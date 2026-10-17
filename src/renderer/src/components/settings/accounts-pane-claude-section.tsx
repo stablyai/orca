@@ -7,7 +7,7 @@ import { ButtonGroup } from '../ui/button-group'
 import { Label } from '../ui/label'
 import { ClaudeIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
-import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
+import { RunningSessionSwitchSetting } from './running-session-switch-setting'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView
@@ -366,7 +366,11 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
         </div>
       </SearchableSetting>
       {isRemoteAccountScope ? null : (
-        <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+        <RunningSessionSwitchSetting
+          agent="claude"
+          settings={settings}
+          updateSettings={updateSettings}
+        />
       )}
     </section>
   )

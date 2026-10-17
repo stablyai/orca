@@ -29,9 +29,6 @@
       "d54e66004c": "terminal"
     },
     "components": {
-      "CodexRestartChip": {
-        "9263e75f49": "Codex is using the previous account"
-      },
       "GitHubItemDialog": {
         "04539beb48": "issue",
         "307c98e8e3": "Show {{value0}} more lines above",

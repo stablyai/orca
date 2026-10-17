@@ -1264,14 +1264,6 @@
       }
     },
     "components": {
-      "CodexRestartChip": {
-        "c72a5fb234": "Reiniciar",
-        "9263e75f49": "Codex está usando la cuenta anterior.",
-        "a4c8e1b2f7": "Codex sigue conectado como {{value0}}",
-        "d3e8a1f4b2": "Cuenta cambiada",
-        "9375620cc3": "Reinicia esta sesión para usar {{value0}}. Se mantiene en la cuenta anterior hasta que lo hagas.",
-        "6133594b12": "Mantener cuenta anterior"
-      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Descartar aviso",
         "94cc673726": "Entiendo",
@@ -3843,7 +3835,6 @@
             "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
-            "59c6e7b4e0": "Las sesiones visibles se reinician ahora. Las demás se reinician cuando su worktree se activa.",
             "c676918adc": "Predeterminado del sistema",
             "3325d996cb": "Actualizar rate limits",
             "fda8146810": "Abrir detalles de uso de Kimi",
@@ -3854,10 +3845,6 @@
             "68efc0345c": "gemini",
             "76b06d4da5": "claude",
             "a28a5dd9b1": "error",
-            "cd9d7b40ff": "Reiniciar {{value0}} sesiones",
-            "6cd6650b4c": "Reiniciar sesión",
-            "1446d0d8a0": "{{value0}} sesiones de Codex siguen en la cuenta anterior.",
-            "605901a495": "1 sesión de Codex sigue en la cuenta anterior",
             "5e5f9f5160": "1 reset de rate limit disponible",
             "5ecae9197c": "{{value0}} resets de rate limit disponibles",
             "25d8bbde69": "Aplicando reset…",

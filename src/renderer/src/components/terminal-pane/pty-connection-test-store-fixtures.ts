@@ -37,7 +37,6 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
       experimentalTerminalAttention: true,
       terminalMainSideEffectAuthority: false
     },
-    codexRestartNoticeByPtyId: {},
     deferredSshReconnectTargets: [],
     deferredSshSessionIdsByTabId: {},
     removeDeferredSshReconnectTarget: vi.fn(),
@@ -92,7 +91,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     }),
     markTerminalBell: vi.fn(),
     markAgentAttentionUnread: vi.fn()
-  } as StoreState
+  }
 }
 
 export function buildReattachPaneTitleState(current: StoreState, title: string): StoreState {

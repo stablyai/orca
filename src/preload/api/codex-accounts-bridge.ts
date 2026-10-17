@@ -22,18 +22,5 @@ export const codexAccountsApi = {
     accountId: string | null
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
-  }) => ipcRenderer.invoke('codexAccounts:select', args),
-  listStalePanes: (args: {
-    ptyIds: string[]
-  }): Promise<
-    {
-      ptyId: string
-      launchAccountId: string | null
-      activeAccountId: string | null
-    }[]
-  > => ipcRenderer.invoke('codexAccounts:listStalePanes', args),
-  listRecordedPaneLanes: (args: { ptyIds: string[] }): Promise<Record<string, string>> =>
-    ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),
-  forgetStalePanes: (args: { ptyIds: string[] }): Promise<void> =>
-    ipcRenderer.invoke('codexAccounts:forgetStalePanes', args)
+  }) => ipcRenderer.invoke('codexAccounts:select', args)
 } satisfies PreloadApi['codexAccounts']

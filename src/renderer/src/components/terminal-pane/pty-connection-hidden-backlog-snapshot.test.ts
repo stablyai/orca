@@ -33,7 +33,6 @@ const {
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
-  notifyCodexPaneBoundForStaleSweep,
   presentPaneViewportPreservingSynchronizedOutput
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
@@ -41,7 +40,6 @@ const {
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
-  notifyCodexPaneBoundForStaleSweep: vi.fn(),
   presentPaneViewportPreservingSynchronizedOutput: vi.fn()
 }))
 
@@ -93,10 +91,6 @@ vi.mock('sonner', () => ({
   toast: {
     info: toastInfo
   }
-}))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep
 }))
 
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).

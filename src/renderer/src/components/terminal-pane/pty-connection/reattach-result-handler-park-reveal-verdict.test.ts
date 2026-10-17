@@ -33,7 +33,6 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))
 // Why: the payload handlers need a mounted xterm; what matters here is the

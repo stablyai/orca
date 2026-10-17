@@ -7,7 +7,11 @@ import { selectReadyAccountRestartPtyIds } from './pane-account-restart-readines
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 
-function status(tabId: string, state: AgentStatusEntry['state']): AgentStatusEntry {
+function status(
+  tabId: string,
+  state: AgentStatusEntry['state'],
+  agentType: 'claude' | 'codex' = 'claude'
+): AgentStatusEntry {
   const paneKey = makePaneKey(tabId, LEAF)
   return {
     paneKey,
@@ -17,7 +21,7 @@ function status(tabId: string, state: AgentStatusEntry['state']): AgentStatusEnt
     updatedAt: 1,
     stateStartedAt: 1,
     stateHistory: [],
-    agentType: 'claude'
+    agentType
   }
 }
 
@@ -47,14 +51,19 @@ describe('selectReadyAccountRestartPtyIds', () => {
     })
   })
 
-  it("holds this tab's Claude restart until its turn ends", () => {
-    setStatuses(status('tab-1', 'working'))
-    useAppStore.getState().queuePaneAccountRestarts(['tab-1-pty'], 'claude')
-    expect(ready()).toEqual([])
+  it.each(['claude', 'codex'] as const)(
+    "holds this tab's %s restart through a reply, permission prompt or question",
+    (agent) => {
+      useAppStore.getState().queuePaneAccountRestarts(['tab-1-pty'], agent)
+      for (const busy of ['working', 'blocked', 'waiting'] as const) {
+        setStatuses(status('tab-1', busy, agent))
+        expect(ready()).toEqual([])
+      }
 
-    setStatuses(status('tab-1', 'done'))
-    expect(ready()).toEqual(['tab-1-pty'])
-  })
+      setStatuses(status('tab-1', 'done', agent))
+      expect(ready()).toEqual(['tab-1-pty'])
+    }
+  )
 
   it("gives an equal result when only another tab's status changes", () => {
     setStatuses(status('tab-1', 'working'), status('tab-2', 'working'))
@@ -64,10 +73,5 @@ describe('selectReadyAccountRestartPtyIds', () => {
     setStatuses(status('tab-1', 'working'), status('tab-2', 'done'))
 
     expect(shallow(before, ready())).toBe(true)
-  })
-
-  it('treats a Codex restart as ready at once', () => {
-    useAppStore.getState().queuePaneAccountRestarts(['codex-pty'], 'codex')
-    expect(ready()).toEqual(['codex-pty'])
   })
 })

@@ -24,15 +24,13 @@ const {
   scheduleTerminalWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
-  toastInfo,
-  notifyCodexPaneBoundForStaleSweep
+  toastInfo
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
   scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
-  toastInfo: vi.fn(),
-  notifyCodexPaneBoundForStaleSweep: vi.fn()
+  toastInfo: vi.fn()
 }))
 
 let mockStoreState: StoreState
@@ -78,10 +76,6 @@ vi.mock('sonner', () => ({
   toast: {
     info: toastInfo
   }
-}))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep
 }))
 
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
@@ -174,7 +168,6 @@ describe('connectPanePty', () => {
     // Why: a pane that outlived the app reaches its PTY only through this
     // restored-session reattach, so the stale-account sweep must be queued here
     // too — the fresh-spawn chokepoint never runs for it.
-    expect(notifyCodexPaneBoundForStaleSweep).toHaveBeenCalledWith('leaf-pty-2')
   })
 
   it('publishes async layout bindings by the pane leaf, not a remapped numeric id', async () => {

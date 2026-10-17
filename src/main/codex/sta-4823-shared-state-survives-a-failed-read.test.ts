@@ -4,7 +4,6 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
-import { listStaleCodexPanes } from './codex-stale-pane-accounts'
 import type { CodexTrustEntry } from './config-toml-trust'
 
 // STA-4823: six shared Codex state files were rebuilt, erased or reported as
@@ -483,12 +482,9 @@ describe('STA-4823 D31 — an unreadable pane registry must not erase every attr
     denials.denyReads(registryPath())
 
     expect(paneRegistry.getCodexPaneAccount(PANE)).toBeNull()
-    expect(() =>
-      listStaleCodexPanes({
-        ptyIds: [PANE],
-        settings: { activeCodexManagedAccountId: 'account-2' } as never
-      })
-    ).toThrow('registry could not be read')
+    expect(() => paneRegistry.hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toThrow(
+      'registry could not be read'
+    )
 
     denials.release(registryPath())
 

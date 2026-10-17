@@ -62,8 +62,7 @@ function emptyState() {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     lastKnownRelayPtyIdByTabId: {},
-    pendingCodexPaneRestartIds: {},
-    codexRestartNoticeByPtyId: {},
+    pendingPaneAccountRestarts: {},
     deferredSshSessionIdsByTabId: {},
     pendingReconnectPtyIdByTabId: {},
     deferredSshReconnectTargets: [],
@@ -201,11 +200,7 @@ for (let iteration = 0; iteration < 3000; iteration++) {
         state.pendingReconnectPtyIdByTabId[id] = toAppSshPtyId(owner, 'reconnect')
       }
       if (ptyId) {
-        state.pendingCodexPaneRestartIds[ptyId] = true
-        state.codexRestartNoticeByPtyId[ptyId] = {
-          previousAccountLabel: 'old',
-          nextAccountLabel: 'new'
-        }
+        state.pendingPaneAccountRestarts[ptyId] = 'codex'
       }
       return tab(id, key, ptyId)
     })

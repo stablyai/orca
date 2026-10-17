@@ -21,7 +21,6 @@ type PtyConnectionTestMocks = {
   scheduleRuntimeGraphSync: Mock
   shouldSeedCacheTimerOnInitialTitle: Mock<() => boolean>
   toastInfo: Mock
-  notifyCodexPaneBoundForStaleSweep: Mock
 }
 
 const fixture = vi.hoisted(() => {
@@ -32,8 +31,7 @@ const fixture = vi.hoisted(() => {
       scheduleTerminalWebglAtlasRecovery: vi.fn(),
       scheduleRuntimeGraphSync: vi.fn(),
       shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
-      toastInfo: vi.fn(),
-      notifyCodexPaneBoundForStaleSweep: vi.fn()
+      toastInfo: vi.fn()
     },
     bind(next: PtyConnectionTestBindings): void {
       bindings = next
@@ -105,10 +103,6 @@ vi.mock('sonner', () => ({
   toast: {
     info: fixture.mocks.toastInfo
   }
-}))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep: fixture.mocks.notifyCodexPaneBoundForStaleSweep
 }))
 
 // Notification hooks run outside React in these suites.

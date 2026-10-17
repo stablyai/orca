@@ -15,13 +15,11 @@ export type {
 } from './codex-pane-account-registry-types'
 
 /**
- * Remembers which Codex account each live PTY was launched under.
+ * Remembers which Codex account and home each live PTY was launched under.
  *
- * Why: `CODEX_HOME` is baked into a PTY's environment at spawn and can never be
- * changed afterwards, so a shell keeps launching Codex against the account that
- * was selected when the terminal opened. The daemon keeps those shells alive
- * across app restarts, so without an on-disk record Orca forgets a pane is on
- * the old account and the user is stuck there with no prompt to escape it.
+ * Why: `CODEX_HOME` is baked into a PTY's environment at spawn, and the daemon
+ * keeps those shells alive across app restarts, so startup needs this on-disk
+ * record to keep retired shared homes and their hooks working for them.
  */
 
 let cachedRegistry: CodexPaneAccountRegistryFile | null = null
@@ -174,7 +172,7 @@ function writeRegistry(registry: CodexPaneAccountRegistryFile): boolean {
     cachedRegistryIsAuthoritative = true
     return true
   } catch (error) {
-    // Why: this record only powers a restart hint; losing it must never break a
+    // Why: losing this record must never break a
     // terminal spawn or a PTY teardown — including when the cleanup itself fails.
     console.warn('[codex-pane-accounts] Failed to persist pane account registry:', error)
     try {
@@ -217,41 +215,6 @@ export function isCodexPaneHomeRouteProvenAwayFromSharedHome(
   route: CodexPaneHomeRoute | undefined
 ): boolean {
   return route === 'real-home' || route === 'account-home' || route === 'wsl-home'
-}
-
-/**
- * Reports the lane each given PTY launched from, omitting panes with no record.
- *
- * Why the renderer needs this: an account switch has to know which panes the
- * change could have stranded, and this key was written from the shell, cwd and
- * distro the spawn actually resolved. Re-deriving it from current settings
- * answers for a launch that never happened once the user edits those settings.
- */
-export function listRecordedCodexPaneLanes(ptyIds: readonly string[]): Record<string, string> {
-  const registry = readRegistryOrThrow()
-  const lanesByPtyId: Record<string, string> = {}
-  for (const ptyId of ptyIds) {
-    const record = registry.panes[ptyId]
-    if (record) {
-      lanesByPtyId[ptyId] = record.selectionKey
-    }
-  }
-  return lanesByPtyId
-}
-
-/** Reads restart-authoritative records without mapping an unavailable file to no attribution. */
-export function listRecordedCodexPaneAccounts(
-  ptyIds: readonly string[]
-): ReadonlyMap<string, CodexPaneAccountRecord> {
-  const registry = readRegistryOrThrow()
-  const records = new Map<string, CodexPaneAccountRecord>()
-  for (const ptyId of ptyIds) {
-    const record = registry.panes[ptyId]
-    if (record) {
-      records.set(ptyId, record)
-    }
-  }
-  return records
 }
 
 /** True when a retained host pane may still read the retired shared CODEX_HOME. */

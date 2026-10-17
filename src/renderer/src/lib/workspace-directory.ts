@@ -1,6 +1,8 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { AppState } from '@/store/types'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import { getWorktreeMapFromState } from '@/store/selectors'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 // Why detected rows are optional: skill discovery does not subscribe to them, so a detected-only
 // workspace has no directory there.
@@ -28,4 +30,16 @@ export function resolveWorkspaceDirectory(
     floatingWorkspacePath: state.floatingWorkspacePath
   }
   return findKnownWorktreeById(catalog, worktreeId, executionHostId ?? undefined)?.path || null
+}
+
+/** A catalog worktree's or folder workspace's directory; unlike resolveWorkspaceDirectory, never a detected or floating one. */
+export function getWorkspacePath(
+  state: Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces'>,
+  worktreeId: string
+): string | null {
+  const parsed = parseWorkspaceKey(worktreeId)
+  return parsed?.type === 'folder'
+    ? (state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
+        ?.folderPath ?? null)
+    : (getWorktreeMapFromState(state).get(worktreeId)?.path ?? null)
 }

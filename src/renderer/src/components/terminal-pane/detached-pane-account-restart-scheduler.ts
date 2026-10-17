@@ -1,9 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import {
-  resetDetachedCodexPaneRestartClaimsForTests,
-  sweepUnclaimedCodexPaneRestarts
-} from './codex-detached-pane-restart'
+import { sweepUnclaimedPaneAccountRestarts } from './detached-pane-account-restart'
 
 let executorInstalled = false
 let executorGeneration = 0
@@ -11,7 +8,7 @@ let sweepQueued = false
 let sweepRunning = false
 let sweepRequestedAfterRun = false
 
-export function hasAddedPendingCodexPaneRestart(
+export function hasAddedPendingPaneAccountRestart(
   current: Record<string, AccountRestartAgent>,
   previous: Record<string, AccountRestartAgent>
 ): boolean {
@@ -22,18 +19,18 @@ export function hasAddedPendingCodexPaneRestart(
 }
 
 /** Installed once at app startup; returns the uninstaller (tests). */
-export function installCodexDetachedPaneRestartExecutor(): () => void {
+export function installDetachedPaneAccountRestartExecutor(): () => void {
   executorInstalled = true
   const generation = ++executorGeneration
   const unsubscribe = useAppStore.subscribe((state, previousState) => {
     if (
-      hasAddedPendingCodexPaneRestart(
+      hasAddedPendingPaneAccountRestart(
         state.pendingPaneAccountRestarts,
         previousState.pendingPaneAccountRestarts
       ) ||
-      // Why: a deferred Claude restart runs once its turn ends, which only a status change reports.
+      // Why: a deferred restart runs once its turn ends, which only a status change reports.
       (state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey &&
-        Object.values(state.pendingPaneAccountRestarts).includes('claude'))
+        Object.keys(state.pendingPaneAccountRestarts).length > 0)
     ) {
       scheduleClaimSweep()
     }
@@ -50,13 +47,12 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
   }
 }
 
-export function resetCodexDetachedPaneRestartExecutorForTests(): void {
+export function resetDetachedPaneAccountRestartExecutorForTests(): void {
   executorInstalled = false
   executorGeneration += 1
   sweepQueued = false
   sweepRunning = false
   sweepRequestedAfterRun = false
-  resetDetachedCodexPaneRestartClaimsForTests()
 }
 
 function scheduleClaimSweep(): void {
@@ -83,9 +79,9 @@ function scheduleClaimSweep(): void {
       return
     }
     sweepRunning = true
-    void sweepUnclaimedCodexPaneRestarts()
+    void sweepUnclaimedPaneAccountRestarts()
       .catch((err) => {
-        console.warn('[codex-restart] detached restart sweep failed:', err)
+        console.warn('[account-restart] detached restart sweep failed:', err)
       })
       .finally(() => {
         sweepRunning = false

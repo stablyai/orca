@@ -67,14 +67,11 @@ export function createTerminalPtyReleaseActions(
           delete nextPtyIdsByTabId[tabId]
         }
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
-        const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
           delete nextPendingPaneAccountRestarts[ptyId]
-          delete nextCodexRestartNoticeByPtyId[ptyId]
         } else {
           for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
             delete nextPendingPaneAccountRestarts[currentPtyId]
-            delete nextCodexRestartNoticeByPtyId[currentPtyId]
           }
         }
         // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
@@ -98,8 +95,7 @@ export function createTerminalPtyReleaseActions(
             : {}),
           ptyIdsByTabId: nextPtyIdsByTabId,
           lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
-          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
-          codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
+          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts
         }
       })
       // Bump activity on PTY exit, but skip intentional shutdowns (suppressed exits) and click-driven pane unmounts (pendingActivationSpawn).

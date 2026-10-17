@@ -58,7 +58,7 @@ describe('isCodexRestartEligiblePane', () => {
   })
 
   it('rejects a Codex-launched pane the user exited back to a shell prompt', () => {
-    // A restart notice drops every keystroke, so a bare prompt must stay unmarked.
+    // A restart would kill whatever runs there, so a bare prompt must stay unmarked.
     for (const foregroundProcess of ['pwsh.exe', 'powershell.exe', 'bash', 'zsh']) {
       expect(
         isCodexRestartEligiblePane({

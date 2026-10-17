@@ -1449,14 +1449,6 @@
         "title": "Google logins aren't imported",
         "description": "Sign in to Google directly in Orca."
       },
-      "CodexRestartChip": {
-        "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
-        "c72a5fb234": "Restart",
-        "9263e75f49": "Codex is using the previous account",
-        "d3e8a1f4b2": "Account switched",
-        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "6133594b12": "Keep old account"
-      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Dismiss notice",
         "94cc673726": "Got it",
@@ -4068,7 +4060,6 @@
             "d450654fa2": "Claude Account",
             "11e2354daf": "Claude usage runtime",
             "3dd7ddfae1": "Open Claude details and account switcher",
-            "59c6e7b4e0": "Visible sessions restart now. Others restart when their worktree becomes active.",
             "c676918adc": "System default",
             "3325d996cb": "Refresh rate limits",
             "fda8146810": "Open Kimi usage details",
@@ -4079,10 +4070,6 @@
             "68efc0345c": "gemini",
             "76b06d4da5": "claude",
             "a28a5dd9b1": "error",
-            "cd9d7b40ff": "Restart {{value0}} Sessions",
-            "6cd6650b4c": "Restart Session",
-            "1446d0d8a0": "{{value0}} Codex sessions are still on the old account.",
-            "605901a495": "1 Codex session is still on the old account",
             "5e5f9f5160": "1 rate-limit reset available",
             "5ecae9197c": "{{value0}} rate-limit resets available",
             "25d8bbde69": "Using reset…",
@@ -19964,36 +19951,7 @@
       "moreSignInOptions": "More sign-in options",
       "copySignInLink": "Copy sign-in link instead",
       "signInLinkCopied": "Sign-in link copied. Open it in a private window to sign in with a different account.",
-      "signInLinkCopyFailed": "Could not copy the link.",
-      "switchSessions": {
-        "title": "Switched to {{account}}",
-        "bodyOne": "1 Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
-        "bodyOther": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
-        "dontAskAgain": "Don't ask again (restart automatically)",
-        "dontAskAgainHint": "You can turn this off in Settings → AI Provider Accounts.",
-        "keep": "Keep as is",
-        "restartOne": "Restart session",
-        "restartOther": "Restart {{count}} sessions",
-        "listLabel": "Claude sessions to restart",
-        "selectAll": "Select all",
-        "selectAllSessions": "Select all sessions",
-        "selectedCount": "{{selected}} of {{total}} selected",
-        "selectWorkspace": "Select all sessions in {{workspace}}",
-        "session": "Claude session",
-        "busy": "Working",
-        "idle": "Idle",
-        "settingTitle": "When you switch accounts while Claude is running",
-        "settingDescription": "Restarting continues each running conversation on the new account.",
-        "keyword": {
-          "restart": "restart",
-          "running": "running"
-        },
-        "settingAsk": "Ask",
-        "settingRestart": "Always restart",
-        "settingKeep": "Never restart",
-        "restartingOne": "Restarting 1 Claude session on {{account}}",
-        "restartingOther": "Restarting {{count}} Claude sessions on {{account}}"
-      }
+      "signInLinkCopyFailed": "Could not copy the link."
     },
     "managedData": {
       "description": "Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.",
@@ -20008,6 +19966,43 @@
       "removeTitle": "Remove managed account?",
       "removeDescription": "Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.",
       "cancel": "Cancel"
+    },
+    "switchSessions": {
+      "title": "Switched to {{account}}",
+      "claude": {
+        "bodyOne": "1 Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
+        "bodyOther": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
+        "settingTitle": "When you switch accounts while Claude is running",
+        "settingDescription": "Restarting continues each running conversation on the new account."
+      },
+      "codex": {
+        "bodyOne": "1 Codex session is still running on {{previous}}. Restarting relaunches it on {{next}}. A busy session waits for idle before restarting.",
+        "bodyOther": "{{count}} Codex sessions are still running on {{previous}}. Restarting relaunches them on {{next}}. Busy sessions wait for idle before restarting.",
+        "settingTitle": "When you switch accounts while Codex is running",
+        "settingDescription": "Restarting relaunches each running Codex session on the new account."
+      },
+      "dontAskAgain": "Don't ask again (restart automatically)",
+      "dontAskAgainHint": "You can turn this off in Settings → AI Provider Accounts.",
+      "keep": "Keep as is",
+      "restartOne": "Restart session",
+      "restartOther": "Restart {{count}} sessions",
+      "listLabel": "{{agent}} sessions to restart",
+      "selectAll": "Select all",
+      "selectAllSessions": "Select all sessions",
+      "selectedCount": "{{selected}} of {{total}} selected",
+      "selectWorkspace": "Select all sessions in {{workspace}}",
+      "session": "{{agent}} session",
+      "busy": "Working",
+      "idle": "Idle",
+      "keyword": {
+        "restart": "restart",
+        "running": "running"
+      },
+      "settingAsk": "Ask",
+      "settingRestart": "Always restart",
+      "settingKeep": "Never restart",
+      "restartingOne": "Restarting 1 {{agent}} session on {{account}}",
+      "restartingOther": "Restarting {{count}} {{agent}} sessions on {{account}}"
     }
   },
   "fileSearch": {

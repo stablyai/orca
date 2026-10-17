@@ -107,7 +107,7 @@ describe('pane trees main writes itself', () => {
       }
     } satisfies WorkspaceSessionState
 
-    // The replacement's spawn binds before it replies (codex-detached-pane-restart.ts).
+    // The replacement's spawn binds before it replies (detached-pane-account-restart.ts).
     applyPtyBinding(
       {
         worktreeId: 'wt-1',

@@ -4,7 +4,6 @@ import type { PtyBufferSnapshot, PtyConnectResult } from '../pty-transport-types
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 // Why: a restored pane's stale-account prompt can only be raised once a PTY is
 // actually attached — nothing is inspectable while the session hydrates.
-import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { useAppStore } from '@/store'
 import { resolveHiddenRestoreScrollbackRows } from '../terminal-hidden-restore-scrollback'
 import { shouldIgnoreStalePanePtyLayoutBinding } from './pane-pty-layout-binding'
@@ -222,7 +221,6 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     // Keep layout sync after the identity commit; replacement paths are atomic.
     session.syncPanePtyLayoutBinding(ptyId)
     useAppStore.getState().restoreAgentPaneAuthority?.(session.cacheKey)
-    notifyCodexPaneBoundForStaleSweep(ptyId)
     session.agentCompletionCoordinator.startProcessTracking()
     session.sampleVisiblePaneForegroundAgent()
 

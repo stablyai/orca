@@ -16,17 +16,13 @@ import {
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 
-const {
-  notifyCodexPaneBoundForStaleSweep,
-  scheduleRuntimeGraphSync,
-  shouldSeedCacheTimerOnInitialTitle,
-  toastInfo
-} = vi.hoisted(() => ({
-  notifyCodexPaneBoundForStaleSweep: vi.fn(),
-  scheduleRuntimeGraphSync: vi.fn(),
-  shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
-  toastInfo: vi.fn()
-}))
+const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle, toastInfo } = vi.hoisted(
+  () => ({
+    scheduleRuntimeGraphSync: vi.fn(),
+    shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
+    toastInfo: vi.fn()
+  })
+)
 
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
@@ -55,8 +51,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep }))
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()

@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { CLAUDE_ACCOUNT_SWITCH_AGENT } from '@/lib/claude-account-switch-agent'
 
 export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
   {
@@ -23,19 +24,13 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate(
-      'accounts.claude.switchSessions.settingTitle',
-      'When you switch accounts while Claude is running'
-    ),
-    description: translate(
-      'accounts.claude.switchSessions.settingDescription',
-      'Restarting continues each running conversation on the new account.'
-    ),
+    title: CLAUDE_ACCOUNT_SWITCH_AGENT.copy.settingTitle(),
+    description: CLAUDE_ACCOUNT_SWITCH_AGENT.copy.settingDescription(),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
-      ...translateSearchKeyword('accounts.claude.switchSessions.keyword.restart', 'restart'),
-      ...translateSearchKeyword('accounts.claude.switchSessions.keyword.running', 'running')
+      ...translateSearchKeyword('accounts.switchSessions.keyword.restart', 'restart'),
+      ...translateSearchKeyword('accounts.switchSessions.keyword.running', 'running')
     ]
   }
 ])

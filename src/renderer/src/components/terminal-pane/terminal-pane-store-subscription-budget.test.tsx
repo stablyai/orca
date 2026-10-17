@@ -29,7 +29,7 @@ import {
 const TERMINAL_PANE_LISTENER_BUDGET = 15
 /** What the same mount cost before the stable-action and unified-tab folds: one listener per
  *  bound action (each new stable action raises this by one, never the budget) plus the folded reads. */
-const PRE_FOLD_LISTENERS_PER_PANE = 44
+const PRE_FOLD_LISTENERS_PER_PANE = 43
 
 const originalState = useAppStore.getState()
 

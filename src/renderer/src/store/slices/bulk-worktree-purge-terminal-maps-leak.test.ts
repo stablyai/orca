@@ -13,7 +13,7 @@
  *   deferredSshSessionIdsByTabId, pendingInitialCwdByTabId,
  *   pendingIssueCommandSplitByTabId, pendingStartupByTabId
  * Pty-keyed (evicted via the doomed-pty set derived from live and durable bindings):
- *   codexRestartNoticeByPtyId, migrationUnsupportedByPtyId,
+ *   migrationUnsupportedByPtyId,
  *   suppressedPtyExitIds, pendingPaneAccountRestarts
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -98,10 +98,6 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
       [TAB2]: { command: 'b' }
     },
     pendingStartupByTabId: { [TAB1]: { command: 'start-a' }, [TAB2]: { command: 'start-b' } },
-    codexRestartNoticeByPtyId: {
-      [PTY1]: { previousAccountLabel: 'a1', nextAccountLabel: 'a2' },
-      [PTY2]: { previousAccountLabel: 'b1', nextAccountLabel: 'b2' }
-    },
     migrationUnsupportedByPtyId: {
       [PTY1]: {
         ptyId: PTY1,
@@ -150,7 +146,6 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingInitialCwdByTabId[TAB1]).toBeUndefined()
     expect(s.pendingIssueCommandSplitByTabId[TAB1]).toBeUndefined()
     expect(s.pendingStartupByTabId[TAB1]).toBeUndefined()
-    expect(s.codexRestartNoticeByPtyId[PTY1]).toBeUndefined()
     expect(s.migrationUnsupportedByPtyId[PTY1]).toBeUndefined()
     expect(s.suppressedPtyExitIds[PTY1]).toBeUndefined()
     expect(s.suppressedPtyExitIds[PTY1_SPLIT]).toBeUndefined()
@@ -166,7 +161,6 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     expect(s.pendingInitialCwdByTabId[TAB2]).toBe('/path/wt2')
     expect(s.pendingIssueCommandSplitByTabId[TAB2]).toEqual({ command: 'b' })
     expect(s.pendingStartupByTabId[TAB2]).toEqual({ command: 'start-b' })
-    expect(s.codexRestartNoticeByPtyId[PTY2]).toBeDefined()
     expect(s.migrationUnsupportedByPtyId[PTY2]).toBeDefined()
     expect(s.suppressedPtyExitIds[PTY2]).toBe(true)
     expect(s.pendingPaneAccountRestarts[PTY2]).toBe('codex')

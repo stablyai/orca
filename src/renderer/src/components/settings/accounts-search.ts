@@ -1,6 +1,7 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { CODEX_ACCOUNT_SWITCH_AGENT } from '@/lib/codex-account-switch-agent'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 
@@ -71,6 +72,16 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.35b461d817', 'sign in')
+    ]
+  },
+  {
+    title: CODEX_ACCOUNT_SWITCH_AGENT.copy.settingTitle(),
+    description: CODEX_ACCOUNT_SWITCH_AGENT.copy.settingDescription(),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword('accounts.switchSessions.keyword.restart', 'restart'),
+      ...translateSearchKeyword('accounts.switchSessions.keyword.running', 'running')
     ]
   }
 ])

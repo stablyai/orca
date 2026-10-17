@@ -1373,14 +1373,6 @@
         "title": "Connexions Google non importées",
         "description": "Connectez-vous à Google directement dans Orca."
       },
-      "CodexRestartChip": {
-        "a4c8e1b2f7": "Codex est toujours connecté en tant que {{value0}}",
-        "c72a5fb234": "Redémarrer",
-        "9263e75f49": "Codex utilise le compte précédent",
-        "d3e8a1f4b2": "Compte changé",
-        "9375620cc3": "Redémarrez cette session pour utiliser {{value0}}. Elle reste sur le compte précédent tant que vous ne l'avez pas fait.",
-        "6133594b12": "Conserver l'ancien compte"
-      },
       "FirstLaunchBanner": {
         "b9e1b966c7": "Masquer l'avis",
         "94cc673726": "Compris",
@@ -3948,7 +3940,6 @@
             "d450654fa2": "Compte Claude",
             "11e2354daf": "Runtime d'utilisation Claude",
             "3dd7ddfae1": "Ouvrir les détails Claude et le sélecteur de compte",
-            "59c6e7b4e0": "Les sessions visibles redémarrent maintenant. Les autres redémarrent quand leur worktree devient actif.",
             "c676918adc": "Valeur par défaut du système",
             "3325d996cb": "Actualiser les limites de débit",
             "fda8146810": "Ouvrir les détails d'utilisation Kimi",
@@ -3959,10 +3950,6 @@
             "68efc0345c": "gemini",
             "76b06d4da5": "claude",
             "a28a5dd9b1": "error",
-            "cd9d7b40ff": "Redémarrer {{value0}} sessions",
-            "6cd6650b4c": "Redémarrer la session",
-            "1446d0d8a0": "{{value0}} sessions Codex sont toujours sur l'ancien compte.",
-            "605901a495": "1 session Codex est encore sur l'ancien compte",
             "5e5f9f5160": "1 réinitialisation de limite de débit disponible",
             "5ecae9197c": "{{value0}} réinitialisations de limite de débit disponibles",
             "25d8bbde69": "Utilisation de la réinitialisation…",

@@ -34,7 +34,7 @@ export function isCodexForegroundProcess(processName: string | null): boolean {
  * `pwsh -> node -> codex.exe -> claude.exe` => "claude" and was filtered out
  * before the stale-account registry was ever consulted. `launchAgent` is
  * recorded metadata (Orca started Codex in this tab), not a repaintable label,
- * so it survives that. A restart notice makes the pane drop every keystroke, so
+ * so it survives that. A restart offered there would kill whatever the user runs, so
  * the fallback is deliberately paired with a foreground that can only be a
  * deeper *agent* (or the node/python wrapper that has not resolved to one yet):
  * both the Windows descendant scan and the POSIX `ps` walk only ever surface a

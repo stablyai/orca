@@ -14,18 +14,6 @@ export type AutomaticAgentResumeClaim = {
 /** Agents whose panes restart in place onto a newly selected account. */
 export type AccountRestartAgent = 'codex' | 'claude'
 
-export type CodexRestartNotice = {
-  previousAccountLabel: string
-  nextAccountLabel: string
-  /** Labels are display-only; account ids disambiguate equal labels and A→B→A collapse. */
-  previousAccountId?: string | null
-  nextAccountId?: string | null
-  /** Accepted restart remains tracked so a failed execution can reopen instead of input-blocking invisibly. */
-  restartRequested?: true
-  /** Dismissal outlives the prompt while explicitly preventing that notice from blocking pane input. */
-  dismissed?: true
-}
-
 export type HydrateWorkspaceSessionOptions = {
   runtimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
   /** Rows parked for hosts that lost a contested workspace id; omitted leaves the store's copy. */

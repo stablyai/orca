@@ -11,25 +11,25 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { ClaudeAccountSwitchSessionTree } from './ClaudeAccountSwitchSessionTree'
+import { AccountSwitchSessionTree } from './AccountSwitchSessionTree'
 import {
-  answerClaudeAccountSwitchPrompt,
-  getClaudeAccountSwitchPrompt,
-  subscribeClaudeAccountSwitchPrompt,
-  type ClaudeAccountSwitchPrompt
-} from '@/lib/claude-account-switch-sessions'
+  answerAgentAccountSwitchPrompt,
+  getAgentAccountSwitchPrompt,
+  subscribeAgentAccountSwitchPrompt,
+  type AgentAccountSwitchPrompt
+} from '@/lib/agent-account-switch-sessions'
 
-export default function ClaudeAccountSwitchDialog(): React.JSX.Element | null {
+export default function AccountSwitchSessionsDialog(): React.JSX.Element | null {
   const prompt = useSyncExternalStore(
-    subscribeClaudeAccountSwitchPrompt,
-    getClaudeAccountSwitchPrompt,
-    getClaudeAccountSwitchPrompt
+    subscribeAgentAccountSwitchPrompt,
+    getAgentAccountSwitchPrompt,
+    getAgentAccountSwitchPrompt
   )
-  // Why keyed: each switch asks afresh, with the box unticked and every session selected.
+  // Why keyed: each question asks afresh, with the box unticked and every session selected.
   return prompt ? <SwitchPromptDialog key={prompt.id} prompt={prompt} /> : null
 }
 
-function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): React.JSX.Element {
+function SwitchPromptDialog({ prompt }: { prompt: AgentAccountSwitchPrompt }): React.JSX.Element {
   const [dontAskAgain, setDontAskAgain] = useState(false)
   // Why unticks, not ticks: every listed session starts selected.
   const [unticked, setUnticked] = useState<ReadonlySet<string>>(() => new Set())
@@ -48,18 +48,13 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
       return next
     })
   }
-  const accounts = {
-    count,
-    previous: prompt.previousAccountLabel,
-    next: prompt.nextAccountLabel
-  }
   return (
     <Dialog
       open
       onOpenChange={(open) => {
         // Why: closing never undoes the switch; it answers "Keep as is".
         if (!open) {
-          answerClaudeAccountSwitchPrompt('keep', { dontAskAgain })
+          answerAgentAccountSwitchPrompt('keep', { dontAskAgain })
         }
       }}
     >
@@ -70,26 +65,21 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
       >
         <DialogHeader>
           <DialogTitle>
-            {translate('accounts.claude.switchSessions.title', 'Switched to {{account}}', {
+            {translate('accounts.switchSessions.title', 'Switched to {{account}}', {
               account: prompt.nextAccountLabel
             })}
           </DialogTitle>
           <DialogDescription>
-            {count === 1
-              ? translate(
-                  'accounts.claude.switchSessions.bodyOne',
-                  '1 Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.',
-                  accounts
-                )
-              : translate(
-                  'accounts.claude.switchSessions.bodyOther',
-                  '{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.',
-                  accounts
-                )}
+            {prompt.agent.copy.body({
+              count,
+              previous: prompt.previousAccountLabel,
+              next: prompt.nextAccountLabel
+            })}
           </DialogDescription>
         </DialogHeader>
         {count > 1 && (
-          <ClaudeAccountSwitchSessionTree
+          <AccountSwitchSessionTree
+            agent={prompt.agent.agent}
             sessions={prompt.sessions}
             selected={new Set(chosen)}
             onToggle={toggle}
@@ -104,13 +94,13 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
           <span className="min-w-0 space-y-0.5">
             <span className="block text-sm">
               {translate(
-                'accounts.claude.switchSessions.dontAskAgain',
+                'accounts.switchSessions.dontAskAgain',
                 "Don't ask again (restart automatically)"
               )}
             </span>
             <span className="block text-xs text-muted-foreground">
               {translate(
-                'accounts.claude.switchSessions.dontAskAgainHint',
+                'accounts.switchSessions.dontAskAgainHint',
                 'You can turn this off in Settings → AI Provider Accounts.'
               )}
             </span>
@@ -121,9 +111,9 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => answerClaudeAccountSwitchPrompt('keep', { dontAskAgain })}
+            onClick={() => answerAgentAccountSwitchPrompt('keep', { dontAskAgain })}
           >
-            {translate('accounts.claude.switchSessions.keep', 'Keep as is')}
+            {translate('accounts.switchSessions.keep', 'Keep as is')}
           </Button>
           <Button
             type="button"
@@ -131,17 +121,15 @@ function SwitchPromptDialog({ prompt }: { prompt: ClaudeAccountSwitchPrompt }): 
             autoFocus
             disabled={chosen.length === 0}
             onClick={() =>
-              answerClaudeAccountSwitchPrompt('restart', { ptyIds: chosen, dontAskAgain })
+              answerAgentAccountSwitchPrompt('restart', { ptyIds: chosen, dontAskAgain })
             }
           >
             <RefreshCw className="size-3.5" aria-hidden="true" />
             {chosen.length <= 1
-              ? translate('accounts.claude.switchSessions.restartOne', 'Restart session')
-              : translate(
-                  'accounts.claude.switchSessions.restartOther',
-                  'Restart {{count}} sessions',
-                  { count: chosen.length }
-                )}
+              ? translate('accounts.switchSessions.restartOne', 'Restart session')
+              : translate('accounts.switchSessions.restartOther', 'Restart {{count}} sessions', {
+                  count: chosen.length
+                })}
           </Button>
         </DialogFooter>
       </DialogContent>

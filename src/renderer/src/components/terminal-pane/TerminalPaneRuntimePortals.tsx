@@ -1,6 +1,4 @@
 import { createPortal } from 'react-dom'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import CodexRestartChip from '../CodexRestartChip'
 import { CodexSharedServerBanner } from './CodexSharedServerBanner'
 import { ClaudeOldTerminalBanner } from './ClaudeOldTerminalBanner'
 import { NewerDaemonHoldBanner } from './NewerDaemonHoldBanner'
@@ -15,21 +13,12 @@ import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibilit
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 
-export function TerminalPaneCodexRestartPortals({
+export function TerminalPaneBannerPortals({
   controller
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element {
-  const {
-    activePane,
-    isActive,
-    isVisible,
-    managedPanes,
-    managerRef,
-    paneTransportsRef,
-    savedLayout,
-    tabId
-  } = controller
+  const { managedPanes, paneTransportsRef, savedLayout, tabId } = controller
   return (
     <>
       {managedPanes.map((pane) => {
@@ -42,16 +31,6 @@ export function TerminalPaneCodexRestartPortals({
         }
         return createPortal(
           <>
-            <CodexRestartChip
-              key={`codex-restart-${pane.id}-${ptyId}`}
-              isVisible={isVisible}
-              ptyId={ptyId}
-              onReturnFocus={() => {
-                managerRef.current?.setActivePane(pane.id, { focus: false })
-                focusTerminalTabSurface(tabId, pane.leafId)
-              }}
-              shouldFocus={isActive && isVisible && activePane?.id === pane.id}
-            />
             <CodexSharedServerBanner
               key={`codex-shared-server-${pane.id}-${ptyId}`}
               ptyId={ptyId}
@@ -71,7 +50,7 @@ export function TerminalPaneCodexRestartPortals({
             />
           </>,
           pane.container,
-          `codex-restart-${pane.id}`
+          `pane-banners-${pane.id}`
         )
       })}
     </>
