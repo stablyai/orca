@@ -1023,6 +1023,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'jira.disconnect': SiteSelection,
   'jira.generateIssueSummary': GenerateIssueSummary,
   'jira.getIssue': IssueKey,
+  'jira.getIssueEditFields': IssueKey,
   'jira.getIssueStream': IssueKey,
   'jira.getProjectStatusOrder': ProjectStatusOrder,
   'jira.issueComments': IssueKey,

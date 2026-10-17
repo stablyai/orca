@@ -20,6 +20,7 @@ import {
   getIssue,
   getIssueSummary,
   getIssueComments,
+  getIssueEditFields,
   getProjectStatusOrder,
   listIssues,
   listTransitions,
@@ -247,6 +248,20 @@ export function registerJiraHandlers(): void {
         return []
       }
       return listTransitions(
+        args.key.trim(),
+        normalizeJiraSiteId(args.siteId),
+        args.strict === true
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'jira:getIssueEditFields',
+    async (_event, args: { key: string; siteId?: string; strict?: boolean }) => {
+      if (typeof args?.key !== 'string' || !args.key.trim()) {
+        return []
+      }
+      return getIssueEditFields(
         args.key.trim(),
         normalizeJiraSiteId(args.siteId),
         args.strict === true

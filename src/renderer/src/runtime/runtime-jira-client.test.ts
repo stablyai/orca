@@ -14,7 +14,9 @@ import {
   jiraSearchIssuesForTarget,
   jiraStatusForTarget,
   jiraSearchUsers,
-  jiraListIssues
+  jiraListIssues,
+  jiraGetIssueEditFieldsForTarget,
+  jiraUpdateIssueForTarget
 } from './runtime-jira-client'
 import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira-attachment-image'
 import { clearJiraImageCache } from './runtime-jira-image-cache'
@@ -24,6 +26,7 @@ import {
   JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
   JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY,
   JIRA_CURRENT_SPRINT_RUNTIME_CAPABILITY,
+  JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY,
   JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE
 } from '../../../shared/protocol-version'
 
@@ -547,5 +550,51 @@ describe('required transition fields on mixed remote versions', () => {
     await expect(jiraUpdateIssue(settings, 'APP-1', { transitionId: '11' })).resolves.toEqual({
       ok: true
     })
+  })
+})
+
+describe('edit-screen fields on mixed remote versions', () => {
+  const target = { kind: 'environment' as const, environmentId: 'env-1' }
+
+  function mockHost(withEditFields: boolean): void {
+    runtimeCall.mockImplementation(async (args: { method: string }) => {
+      if (args.method === 'status.get') {
+        const response = createCompatibleRuntimeStatusResponse()
+        if (!response.ok) {
+          throw new Error('Expected status fixture')
+        }
+        response.result.capabilities = response.result.capabilities?.filter(
+          (capability) => withEditFields || capability !== JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY
+        )
+        return response
+      }
+      if (args.method === 'jira.getIssueEditFields') {
+        return { id: 'rpc-1', ok: true, result: [] }
+      }
+      return { id: 'rpc-1', ok: true, result: { ok: true } }
+    })
+  }
+
+  it('hides edit fields and refuses field writes on hosts that would strip them', async () => {
+    mockHost(false)
+    await expect(jiraGetIssueEditFieldsForTarget(target, 'APP-1', 'site-1')).resolves.toBeNull()
+    await expect(
+      jiraUpdateIssueForTarget(target, 'APP-1', { fields: { duedate: '2026-10-20' } }, 'site-1')
+    ).rejects.toThrow('Update the remote Orca server')
+    const methods = runtimeCall.mock.calls.map(([args]) => args.method)
+    expect(methods).not.toContain('jira.getIssueEditFields')
+    expect(methods).not.toContain('jira.updateIssue')
+  })
+
+  it('reads edit fields strictly from hosts that advertise them', async () => {
+    mockHost(true)
+    await expect(jiraGetIssueEditFieldsForTarget(target, 'APP-1', 'site-1')).resolves.toEqual([])
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'jira.getIssueEditFields',
+        params: { key: 'APP-1', siteId: 'site-1', strict: true },
+        selector: 'env-1'
+      })
+    )
   })
 })

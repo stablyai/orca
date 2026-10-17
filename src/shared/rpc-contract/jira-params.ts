@@ -85,7 +85,10 @@ export const IssueUpdate = z.object({
       priorityId: z.union([z.string(), z.null()]).optional(),
       transitionId: OptionalString,
       transitionFields: z.record(z.string(), z.unknown()).optional(),
-      transitionComment: z.string().optional()
+      transitionComment: z.string().optional(),
+      fields: z.record(z.string(), z.unknown()).optional(),
+      userFieldKeys: z.array(z.string()).optional(),
+      richTextFieldKeys: z.array(z.string()).optional()
     })
     .refine((updates) => !(updates.labels && updates.labelOperations), {
       message: 'Pass labels or labelOperations, not both'

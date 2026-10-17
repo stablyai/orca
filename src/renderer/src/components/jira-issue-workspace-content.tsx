@@ -31,7 +31,10 @@ export function JiraIssueWorkspaceContent({
   commentsLoading,
   retryComments,
   onUse,
-  actionItems
+  actionItems,
+  editFieldsSection,
+  descriptionAction,
+  descriptionEditor
 }: {
   displayed: JiraIssue
   imageTarget: RuntimeClientTarget
@@ -48,6 +51,10 @@ export function JiraIssueWorkspaceContent({
   retryComments: () => void
   onUse: (issue: JiraIssue) => void
   actionItems: JiraIssueWorkspaceAction[]
+  editFieldsSection?: React.ReactNode
+  descriptionAction?: React.ReactNode
+  // Replaces the rendered description while the user edits it.
+  descriptionEditor?: React.ReactNode
 }): React.JSX.Element {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_228px]">
@@ -111,6 +118,8 @@ export function JiraIssueWorkspaceContent({
           </div>
         </section>
 
+        {editFieldsSection}
+
         <section className="border-b border-border/40 px-4 py-4">
           <div className="mb-2 flex items-center gap-2">
             <JiraIcon className="size-3 text-muted-foreground" />
@@ -120,8 +129,11 @@ export function JiraIssueWorkspaceContent({
               {displayed.assignee?.displayName ??
                 translate('auto.components.JiraIssueWorkspace.0b6b5646ed', 'Unassigned')}
             </span>
+            {descriptionAction ? <div className="ml-auto">{descriptionAction}</div> : null}
           </div>
-          {displayed.description?.trim() ? (
+          {descriptionEditor ? (
+            descriptionEditor
+          ) : displayed.description?.trim() ? (
             <JiraIssueMarkdown
               target={imageTarget}
               content={displayed.description}

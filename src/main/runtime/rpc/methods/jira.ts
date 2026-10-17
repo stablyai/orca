@@ -276,6 +276,13 @@ export const JIRA_METHODS = [
       runtime.jiraListTransitions(params.key.trim(), params.siteId, params.strict)
   }),
   defineMethod({
+    name: 'jira.getIssueEditFields',
+    permission: 'workspace',
+    params: IssueKey,
+    handler: async (params, { runtime }) =>
+      runtime.jiraGetIssueEditFields(params.key.trim(), params.siteId, params.strict)
+  }),
+  defineMethod({
     name: 'jira.getProjectStatusOrder',
     permission: 'workspace',
     params: ProjectStatusOrder,
