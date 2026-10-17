@@ -72,26 +72,13 @@ export function buildTitleDerivedAgentRows(args: {
         : []
 
     if (paneTitleEntries.length > 0) {
-      // Why: hoisted per tab — the leaf lists are layout-derived, not pane-derived.
-      const leafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
-      const liveSlotIds = paneTitleEntries
-        .map(([paneId]) => Number(paneId))
-        .filter((paneId) => paneId >= FIRST_PANE_ID)
-      // Why: pane ids only encode creation order while they are the dense sequence a
-      // fresh mount or replay allocates; an in-session pane close leaves them sparse.
-      const liveSlotsAreDense =
-        liveSlotIds.length === leafIds.length &&
-        liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+      const resolveLeafId = createTitleFallbackLeafResolver(
+        layout,
+        ptyIdsByTabId[tab.id] ?? [],
+        paneTitleEntries
+      )
       for (const [paneId, title] of paneTitleEntries) {
-        const leafId = resolveLeafIdForTitleFallback({
-          layout,
-          leafIds,
-          ptyIds: ptyIdsByTabId[tab.id] ?? [],
-          liveSlotIds,
-          liveSlotsAreDense,
-          paneId: Number(paneId),
-          title
-        })
+        const leafId = resolveLeafId(Number(paneId), title)
         if (!leafId) {
           continue
         }
@@ -277,7 +264,7 @@ export function resolveAgentTypeFromTerminalTitle(
     : null
 }
 
-function titleStatusToRowState(
+export function titleStatusToRowState(
   status: 'working' | 'permission' | 'idle'
 ): AgentStatusState | 'idle' {
   if (status === 'permission') {
@@ -287,6 +274,38 @@ function titleStatusToRowState(
     return 'working'
   }
   return 'idle'
+}
+
+/**
+ * Maps one tab's runtime pane-title slots to layout leaves; shared with the sidebar attention badge.
+ * `allowPositional` false answers null instead of guessing a leaf by slot position.
+ */
+export function createTitleFallbackLeafResolver(
+  layout: TerminalLayoutSnapshot | undefined,
+  ptyIds: string[],
+  paneTitleEntries: [string, string][],
+  allowPositional = true
+): (paneId: number, title: string) => string | null {
+  const leafIds = collectRuntimePaneLeafIds(layout?.root ?? null)
+  const liveSlotIds = paneTitleEntries
+    .map(([paneId]) => Number(paneId))
+    .filter((paneId) => paneId >= FIRST_PANE_ID)
+  // Why: pane ids only encode creation order while they are the dense sequence a
+  // fresh mount or replay allocates; an in-session pane close leaves them sparse.
+  const liveSlotsAreDense =
+    liveSlotIds.length === leafIds.length &&
+    liveSlotIds.every((paneId, index) => paneId === FIRST_PANE_ID + index)
+  return (paneId, title) =>
+    resolveLeafIdForTitleFallback({
+      layout,
+      leafIds,
+      ptyIds,
+      liveSlotIds,
+      liveSlotsAreDense,
+      allowPositional,
+      paneId,
+      title
+    })
 }
 
 /**
@@ -304,6 +323,7 @@ function resolveLeafIdForTitleFallback(args: {
   ptyIds: string[]
   liveSlotIds: number[]
   liveSlotsAreDense: boolean
+  allowPositional: boolean
   paneId: number
   title: string
 }): string | null {
@@ -344,6 +364,9 @@ function resolveLeafIdForTitleFallback(args: {
     return matchingTitleLeafIds[0]
   }
 
+  if (!args.allowPositional) {
+    return null
+  }
   // Why: in-session pane closes leave the survivors' ids sparse, which creation order
   // cannot resolve. Index within the LIVE slots only — never across both id spaces.
   const paneIndex = args.liveSlotIds.indexOf(args.paneId)

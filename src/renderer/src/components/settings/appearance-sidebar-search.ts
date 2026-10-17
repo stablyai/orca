@@ -123,6 +123,48 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getCollapsedGroupCountBadgeEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.collapsedGroupCountBadge.title',
+    'Collapsed Group Count'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.collapsedGroupCountBadge.description',
+    'Collapsed sidebar groups can show no count, only workspaces waiting on you, or the total with the waiting count.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.collapsedGroupCountBadge.collapsed',
+      'collapsed'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.collapsedGroupCountBadge.count',
+      'count'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.collapsedGroupCountBadge.badge',
+      'badge'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.collapsedGroupCountBadge.attention',
+      'attention'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.collapsedGroupCountBadge.needsYou',
+      'needs you'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.collapsedGroupCountBadge.project',
+      'project'
+    ),
+    ...translateSearchKeyword(
+      'auto.components.settings.appearance.search.collapsedGroupCountBadge.workspace',
+      'workspace'
+    )
+  ]
+}))
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -189,5 +231,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  getCollapsedGroupCountBadgeEntry()
 ])

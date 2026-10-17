@@ -4,6 +4,7 @@ import { appendProjectGroupSections } from '../../../../../../shared/sidebar-lis
 import type { SectionAppendContext } from '../../../../../../shared/sidebar-list/group-sections'
 import type { OrderedGroupEntry } from '../../../../../../shared/sidebar-list/worktree-group-entry'
 import { repo, worktree } from '../../worktree-list-groups-test-fixtures'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 function entry(
   key: string,
@@ -115,7 +116,8 @@ describe('recent project rank scan budget', () => {
         count: 32,
         icon: { kind: 'project' },
         repo: group.repo,
-        projectGroupDepth: 1
+        projectGroupDepth: 1,
+        countedWorkspaceIds: group.items.map(getWorktreeHostIdentity)
       }))
     )
     expect(readCount()).toBe(128 * 33)
