@@ -797,10 +797,18 @@ final class Provider {
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
         }
-        guard performAction(record.element, action) else {
+        switch performActionOutcome(record.element, action) {
+        case .performed:
+            return actionMetadata(path: "accessibility", actionName: action)
+        case let .unconfirmed(axError):
+            var verification = unverifiedAction(reason: "accessibility_action_unasserted")
+            verification["axError"] = Int(axError)
+            return actionMetadata(path: "accessibility", actionName: action, verification: verification)
+        case let .notPerformed(axError):
+            throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed with AXError \(axError)")
+        case nil:
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
         }
-        return actionMetadata(path: "accessibility", actionName: action)
     }
 
     private func setValue(params: [String: JSONValue]) throws -> [String: Any] {
@@ -1626,8 +1634,15 @@ private func actions(_ element: AXUIElement) -> [String] {
 }
 
 private func performAction(_ element: AXUIElement, _ action: String) -> Bool {
-    actions(element).contains(where: { $0.caseInsensitiveCompare(action) == .orderedSame }) &&
-        AXUIElementPerformAction(element, action as CFString) == .success
+    performActionOutcome(element, action) == .performed
+}
+
+/// nil when the element no longer lists the action, so nothing was sent.
+private func performActionOutcome(_ element: AXUIElement, _ action: String) -> AccessibilityActionOutcome? {
+    guard actions(element).contains(where: { $0.caseInsensitiveCompare(action) == .orderedSame }) else {
+        return nil
+    }
+    return AccessibilityActionOutcome.classify(AXUIElementPerformAction(element, action as CFString))
 }
 
 private func isSettable(_ element: AXUIElement, _ attribute: String) -> Bool {
