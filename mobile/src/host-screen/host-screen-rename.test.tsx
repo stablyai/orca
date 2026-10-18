@@ -114,8 +114,8 @@ describe('the workspace long-press sheet', () => {
 
   it('leads with Worktree Settings, which opens the settings page for that row', async () => {
     const { root, setters } = await mountSheet({ displayName: 'Feature A' })
-    const [first] = root.find((node) => String(node.type) === 'ActionSheetContent').props
-      .actions as SheetAction[]
+    const [first]: SheetAction[] = root.find((node) => String(node.type) === 'ActionSheetContent')
+      .props.actions
     expect(first?.label).toBe('Worktree Settings')
     act(() => first?.onPress())
     expect(setters.setWorktreeSettingsTarget).toHaveBeenCalledWith(
