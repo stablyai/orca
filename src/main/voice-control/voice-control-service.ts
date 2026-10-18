@@ -79,7 +79,12 @@ type LiveSession = {
   gate: RealtimeResponseGate
   backend: VoiceControlSessionBackend
   hangupTimer: ReturnType<typeof setTimeout> | null
+  /** Suspend-after-silence timer; realtime audio bills per minute connected. */
+  idleTimer: ReturnType<typeof setTimeout> | null
 }
+
+/** Sideband classifications that prove the session is being used right now. */
+const IDLE_RESET_KINDS = new Set(['user-transcript', 'agent-transcript', 'tool-call'])
 
 export class VoiceControlService {
   private state: VoiceControlState = 'idle'
@@ -200,6 +205,7 @@ export class VoiceControlService {
       { ts: Date.now(), kind: 'user', text },
       { durableText: '(typed message)' }
     )
+    this.noteActivity(sessionId)
     live.gate.sendEvent({
       type: 'conversation.item.create',
       item: { type: 'message', role: 'user', content: [{ type: 'input_text', text }] }
@@ -222,7 +228,9 @@ export class VoiceControlService {
       detail: `control session ended (${reason})`
     })
     this.sessionId = null
-    this.transition('idle')
+    // Autonomous ends name themselves so the pill can say why the session is gone;
+    // a user-initiated stop needs no explanation.
+    this.transition('idle', reason === 'idle-suspend' || reason === 'max-session-minutes' ? reason : undefined)
   }
 
   private async openSideband(sessionId: string, callId: string, generation: number): Promise<void> {
@@ -239,15 +247,19 @@ export class VoiceControlService {
       this.deps.gateObserver ?? voiceControlGateObserver
     )
     const sideband = createSideband(this.deps.readApiKey(), callId, {
-      onEvent: (event) =>
-        routeVoiceControlSidebandEvent({
+      onEvent: (event) => {
+        const kind = routeVoiceControlSidebandEvent({
           sessionId,
           gate,
           backend: this.live?.backend ?? null,
           emitToolActivity: this.deps.emitToolActivity,
           recordTranscript: this.deps.recordTranscript,
           event
-        }),
+        })
+        if (IDLE_RESET_KINDS.has(kind)) {
+          this.noteActivity(sessionId)
+        }
+      },
       onMalformedFrame: () => {
         this.deps.emitToolActivity({
           sessionId,
@@ -280,15 +292,45 @@ export class VoiceControlService {
       gate,
       send: (event) => sideband.send(event)
     })
-    this.live = { sessionId, callId, sideband, gate, backend, hangupTimer }
+    this.live = { sessionId, callId, sideband, gate, backend, hangupTimer, idleTimer: null }
     this.pending = null
     backend.start()
+    this.armIdleTimer(sessionId)
   }
 
-  private transition(state: VoiceControlState): void {
+  /** The idle-suspend budget restarts on real use — speech, a spoken answer, a tool call. */
+  private noteActivity(sessionId: string): void {
+    if (this.live?.sessionId !== sessionId) {
+      return
+    }
+    this.armIdleTimer(sessionId)
+  }
+
+  private armIdleTimer(sessionId: string): void {
+    const live = this.live
+    if (!live || live.sessionId !== sessionId) {
+      return
+    }
+    if (live.idleTimer) {
+      clearTimeout(live.idleTimer)
+      live.idleTimer = null
+    }
+    const idleMinutes = this.deps.getSettings().idleSuspendMinutes
+    if (!(idleMinutes > 0)) {
+      return
+    }
+    live.idleTimer = setTimeout(() => {
+      if (this.live?.sessionId === sessionId) {
+        void this.stop('idle-suspend')
+      }
+    }, idleMinutes * 60_000)
+    live.idleTimer.unref?.()
+  }
+
+  private transition(state: VoiceControlState, endReason?: string): void {
     this.state = state
     traceVoiceStateTransition(state)
-    this.deps.emitState({ sessionId: this.sessionId, state })
+    this.deps.emitState({ sessionId: this.sessionId, state, ...(endReason ? { endReason } : {}) })
   }
 
   /** Runs `body`, converting any failure into the error state and a classified result. */
@@ -332,6 +374,10 @@ export class VoiceControlService {
       if (live.hangupTimer) {
         clearTimeout(live.hangupTimer)
       }
+      if (live.idleTimer) {
+        clearTimeout(live.idleTimer)
+      }
+      live.gate.dispose()
       live.backend.dispose()
       live.sideband.close()
     }

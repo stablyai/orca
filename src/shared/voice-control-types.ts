@@ -35,6 +35,8 @@ export type VoiceControlSettings = {
   agentVoiceMode: VoiceControlAgentVoiceMode
   /** Auto-hangup budget; realtime audio bills per minute. */
   maxSessionMinutes: number
+  /** Suspend after this many quiet minutes (no speech, no tools) — the in-use cost lever. 0 = never. */
+  idleSuspendMinutes: number
   /** Free-form persona/style notes appended after the core instructions; applies to new sessions. */
   customInstructions: string
 }
@@ -60,6 +62,8 @@ export type VoiceControlStateChangedEvent = {
   state: VoiceControlState
   errorKind?: VoiceControlErrorKind
   error?: string
+  /** Why the session ended, when it ended on its own ('idle-suspend', 'max-session-minutes'). */
+  endReason?: string
 }
 
 /**

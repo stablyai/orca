@@ -30,6 +30,7 @@ export const SETTINGS: VoiceControlSettings = {
   coordinatorVoice: 'marin',
   agentVoiceMode: 'per-agent',
   maxSessionMinutes: 0,
+  idleSuspendMinutes: 0,
   customInstructions: ''
 }
 

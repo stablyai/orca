@@ -1,5 +1,9 @@
 import type { VoiceControlToolActivityEvent } from '../../shared/voice-control-types'
-import { classifyRealtimeEvent, MalformedToolCallError } from './realtime-event-classification'
+import {
+  classifyRealtimeEvent,
+  MalformedToolCallError,
+  type ClassifiedRealtimeEvent
+} from './realtime-event-classification'
 import type { RealtimeResponseGate } from './realtime-response-gate'
 import type { VoiceControlSessionBackend } from './voice-control-session-backend'
 import type { VoiceTranscriptEntry } from './voice-control-transcript-log'
@@ -9,6 +13,7 @@ import { traceVoiceSidebandEvent, traceVoiceTranscript } from './voice-control-t
  * One sideband frame's route through the session: gate observation, classification,
  * backend observation/dispatch, and transcript recording. Provider-side records (refused
  * injections, note acks, response end states) are traced but otherwise ignored here.
+ * Returns the classification kind — the service's idle-suspend timer keys off it.
  */
 export function routeVoiceControlSidebandEvent(args: {
   sessionId: string
@@ -18,7 +23,7 @@ export function routeVoiceControlSidebandEvent(args: {
   emitToolActivity: (event: VoiceControlToolActivityEvent) => void
   recordTranscript: (entry: VoiceTranscriptEntry, options?: { durableText?: string }) => void
   event: Record<string, unknown>
-}): void {
+}): ClassifiedRealtimeEvent['kind'] {
   const { sessionId, gate, backend, event } = args
   gate.observe(event)
   traceVoiceSidebandEvent(event)
@@ -34,7 +39,7 @@ export function routeVoiceControlSidebandEvent(args: {
         tool: 'sideband',
         detail: `malformed tool call frame (${error.toolCallId ?? 'no call id'})`
       })
-      return
+      return 'ignored'
     }
     throw error
   }
@@ -48,4 +53,5 @@ export function routeVoiceControlSidebandEvent(args: {
     traceVoiceTranscript('assistant', classified.text)
     args.recordTranscript({ ts: Date.now(), kind: 'assistant', text: classified.text })
   }
+  return classified.kind
 }

@@ -144,6 +144,11 @@ export const voiceControlGateObserver: ResponseGateObserver = {
     startSpan('voice-control.gate', {
       attributes: { outcome, ...(queuedWaitMs !== null ? { queuedWaitMs } : {}) }
     }).end()
+  },
+  recordStallRecovery(ref, attempt, dropped) {
+    startSpan('voice-control.gate.stall', {
+      attributes: { ref, attempt, dropped }
+    }).end()
   }
 }
 

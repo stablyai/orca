@@ -182,3 +182,108 @@ describe('RealtimeResponseGate', () => {
     expect(flushed?.queuedWaitMs).toBe(0)
   })
 })
+
+describe('RealtimeResponseGate stall recovery', () => {
+  type ScheduledCallback = { cb: () => void; ms: number; cancelled: boolean }
+
+  function createStallHarness(stallMs = 20_000) {
+    const sent: RealtimeEvent[] = []
+    const outcomes: { outcome: string; queuedWaitMs: number | null }[] = []
+    const stalls: { ref: string; attempt: number; dropped: boolean }[] = []
+    const scheduled: ScheduledCallback[] = []
+    const observer: ResponseGateObserver = {
+      recordCreateOutcome: (outcome, queuedWaitMs) => outcomes.push({ outcome, queuedWaitMs }),
+      recordStallRecovery: (ref, attempt, dropped) => stalls.push({ ref, attempt, dropped })
+    }
+    const gate = new RealtimeResponseGate(
+      (event) => sent.push(event),
+      observer,
+      () => 1000,
+      {
+        stallMs,
+        scheduler: {
+          setTimeout: (cb, ms) => {
+            const entry: ScheduledCallback = { cb, ms, cancelled: false }
+            scheduled.push(entry)
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate only stores the handle and hands it back to clearTimeout.
+            return entry as unknown as ReturnType<typeof setTimeout>
+          },
+          clearTimeout: (handle) => {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handles this scheduler hands out are always ScheduledCallbacks.
+            ;(handle as unknown as ScheduledCallback).cancelled = true
+          }
+        }
+      }
+    )
+    const fireStall = () => {
+      const entry = scheduled.find((candidate) => !candidate.cancelled)
+      if (!entry) {
+        throw new Error('no armed stall timer')
+      }
+      entry.cancelled = true
+      entry.cb()
+    }
+    return { gate, sent, outcomes, stalls, scheduled, fireStall }
+  }
+
+  it('re-sends a pending create that saw no response lifecycle progress', () => {
+    const { gate, sent, stalls, fireStall } = createStallHarness()
+    gate.sendEvent(create())
+    const ref = String(sent[0].event_id)
+    expect(sent).toHaveLength(1)
+    // The wire answer never comes — the stall budget elapses.
+    fireStall()
+    expect(sent).toHaveLength(2)
+    expect(sent[1].event_id).toBe(ref)
+    expect(stalls).toEqual([{ ref, attempt: 1, dropped: false }])
+  })
+
+  it('drops a create that stays unanswered past the recovery cap, then moves the queue on', () => {
+    const { gate, sent, stalls, outcomes, fireStall } = createStallHarness()
+    gate.sendEvent(create())
+    const firstRef = String(sent[0].event_id)
+    gate.observe(created(firstRef, 'resp_a'))
+    gate.observe(done('resp_a'))
+    gate.sendEvent(create())
+    gate.sendEvent(create())
+    const stalledRef = String(sent[1].event_id)
+    fireStall()
+    fireStall()
+    fireStall()
+    // Third strike: the wedged create is dropped and reported failed; the queued one sends.
+    expect(stalls.at(-1)).toEqual({ ref: stalledRef, attempt: 3, dropped: true })
+    expect(outcomes.some((o) => o.outcome === 'failed')).toBe(true)
+    expect(sent.at(-1)?.event_id).not.toBe(stalledRef)
+    expect(gate.queuedCount).toBe(1)
+  })
+
+  it('does not fire while queued behind a genuinely active response', () => {
+    const { gate, sent, stalls, fireStall } = createStallHarness()
+    gate.observe(created(null, 'resp_talking'))
+    gate.sendEvent(create())
+    expect(sent).toHaveLength(0)
+    fireStall()
+    // A long answer is not a stall: nothing is re-sent, nothing is cleared.
+    expect(sent).toHaveLength(0)
+    expect(stalls).toHaveLength(0)
+    gate.observe(done('resp_talking'))
+    expect(sent).toHaveLength(1)
+  })
+
+  it('disarms once nothing is outstanding', () => {
+    const { gate, sent, scheduled } = createStallHarness()
+    gate.sendEvent(create())
+    const ref = String(sent[0].event_id)
+    gate.observe(created(ref, 'resp_a'))
+    gate.observe(done('resp_a'))
+    expect(gate.queuedCount).toBe(0)
+    expect(scheduled.every((entry) => entry.cancelled)).toBe(true)
+  })
+
+  it('stops arming after dispose', () => {
+    const { gate, scheduled } = createStallHarness()
+    gate.sendEvent(create())
+    gate.dispose()
+    expect(scheduled.every((entry) => entry.cancelled)).toBe(true)
+  })
+})

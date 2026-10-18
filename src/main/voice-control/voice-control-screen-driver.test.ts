@@ -114,7 +114,7 @@ describe('VoiceScreenDriver', () => {
     expect(dbg.attach).not.toHaveBeenCalled()
   })
 
-  it('excludes xterm panes from the tree and says so', async () => {
+  it('excludes xterm panes from the tree and folds in their visible tail', async () => {
     const withTerminal: AXNode[] = [
       ...AX_TREE,
       axNode('9', 'staticText', 'secret shell scrollback', 200)
@@ -128,10 +128,25 @@ describe('VoiceScreenDriver', () => {
     const driver = new VoiceScreenDriver({ getDebugger: () => dbg, settleMs: 0 })
     const tree = await driver.seeScreen()
     expect(tree).not.toContain('secret shell scrollback')
-    expect(tree).toContain('read_terminal shows their visible text')
+    // The tail grounds a terminal-dominated screen so it doesn't read as half-loaded.
+    expect(tree).toContain('$ npm test')
+    expect(tree).toContain('read_terminal shows their full visible text')
     expect(
       calls.some((c) => c.method === 'DOM.querySelectorAll' && c.params?.selector === '.xterm')
     ).toBe(true)
+  })
+
+  it('caps the folded-in terminal tail and falls back to the hint when the read fails', async () => {
+    const longTerminal = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')
+    const { driver } = driverWith({ xtermNodeIds: [55], terminalText: longTerminal })
+    const tree = await driver.seeScreen()
+    expect(tree).toContain('line 30')
+    expect(tree).toContain('line 23')
+    expect(tree).not.toContain('line 22')
+
+    const { driver: blankDriver } = driverWith({ xtermNodeIds: [55], terminalText: '   ' })
+    const blankTree = await blankDriver.seeScreen()
+    expect(blankTree).toContain('read_terminal shows their visible text')
   })
 
   it('click_element scrolls, then presses and releases at the element center', async () => {

@@ -10,9 +10,24 @@ export type VoiceControlTranscriptLine = {
 
 const USER_TRANSCRIPT_EVENT = 'conversation.item.input_audio_transcription.completed'
 const COORDINATOR_TRANSCRIPT_EVENT = 'response.output_audio_transcript.done'
+const RESPONSE_SETTLED_EVENT = 'response.done'
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
+}
+
+/**
+ * response.done ends a turn however it ended — answered, cancelled by a barge-in, or
+ * failed — so it is the one signal that always retires the pill's tool narration. (A
+ * cancelled answer never produces a transcript line to clear on.)
+ */
+export function isResponseSettledEvent(event: unknown): boolean {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'type' in event &&
+    event.type === RESPONSE_SETTLED_EVENT
+  )
 }
 
 export function classifyControlTranscriptEvent(event: unknown): VoiceControlTranscriptLine | null {

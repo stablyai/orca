@@ -104,6 +104,17 @@ export function publishVoiceControlTranscript(line: VoiceControlTranscriptLine):
   })
 }
 
+/**
+ * A provider turn ended — answered, cancelled, or failed. The tool narration ("Checking
+ * the roster…") belongs to the turn that ran the tool; past the turn's end it only ever
+ * reads as stuck. (A cancelled answer produces no transcript line to clear on.)
+ */
+export function publishVoiceControlTurnSettled(): void {
+  if (voiceControlStore.getState().toolActivity !== null) {
+    voiceControlStore.setState({ toolActivity: null })
+  }
+}
+
 /** One live transcript entry from main (the same feed the durable log records). */
 export function publishVoiceControlTranscriptEntry(entry: VoiceTranscriptEntry): void {
   const entries = [...voiceControlStore.getState().transcriptEntries, entry]

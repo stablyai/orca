@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { classifyControlTranscriptEvent } from './voice-control-transcript-events'
+import {
+  classifyControlTranscriptEvent,
+  isResponseSettledEvent
+} from './voice-control-transcript-events'
 
 describe('classifyControlTranscriptEvent', () => {
   it('reads a completed user transcription', () => {
@@ -39,5 +42,34 @@ describe('classifyControlTranscriptEvent', () => {
     ).toBeNull()
     expect(classifyControlTranscriptEvent(null)).toBeNull()
     expect(classifyControlTranscriptEvent('response.output_audio_transcript.done')).toBeNull()
+  })
+})
+
+describe('isResponseSettledEvent', () => {
+  it('matches response.done however the turn ended', () => {
+    expect(isResponseSettledEvent({ type: 'response.done' })).toBe(true)
+    expect(isResponseSettledEvent({ type: 'response.done', response: { status: 'cancelled' } })).toBe(
+      true
+    )
+  })
+
+  it('ignores transcript events, garbage, and null', () => {
+    expect(
+      isResponseSettledEvent({
+        type: 'response.output_audio_transcript.done',
+        transcript: 'oak is running the tests'
+      })
+    ).toBe(false)
+    expect(
+      isResponseSettledEvent({
+        type: 'conversation.item.input_audio_transcription.completed',
+        transcript: "who's running?"
+      })
+    ).toBe(false)
+    expect(isResponseSettledEvent({ type: 'response.done.done' })).toBe(false)
+    expect(isResponseSettledEvent({})).toBe(false)
+    expect(isResponseSettledEvent('response.done')).toBe(false)
+    expect(isResponseSettledEvent(null)).toBe(false)
+    expect(isResponseSettledEvent(undefined)).toBe(false)
   })
 })
