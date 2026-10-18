@@ -15,7 +15,8 @@ const MAX_REGISTRATIONS_PER_SEND = 20
 export type PushDispatcherRegistry = {
   listDevices(): readonly {
     deviceId: string
-    token: string
+    // Absent on device-key rows; their pushes cannot be sealed, so a sealed registration gets none.
+    token?: string
     pushRegistration?: MobilePushRegistration
   }[]
   setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean
@@ -29,7 +30,7 @@ type PushDispatcherOptions = {
   scheduleRetry?: (run: () => void, delayMs: number) => void
 }
 
-type PushTarget = { deviceId: string; token: string; registration: MobilePushRegistration }
+type PushTarget = { deviceId: string; token?: string; registration: MobilePushRegistration }
 
 export class PushDispatcher {
   private readonly recentNotifications = new Map<string, number>()
