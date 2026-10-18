@@ -10,7 +10,7 @@ import { clearWebRuntimeTerminalBuffer } from '@/runtime/web-runtime-terminal-bu
 import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
-} from '@/lib/terminal-pane-title-sanitization'
+} from '../../../../shared/terminal-pane-title-sanitization'
 import type { TerminalPaneStartupController } from './use-terminal-pane-startup-actions'
 import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

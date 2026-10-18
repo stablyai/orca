@@ -10173,7 +10173,7 @@
       "src/renderer/src/lib/terminal-links-cjk.test.ts": 72,
       "src/renderer/src/lib/terminal-links-redos.test.ts": 49,
       "src/renderer/src/lib/terminal-links.test.ts": 237,
-      "src/renderer/src/lib/terminal-pane-title-sanitization.test.ts": 40,
+      "src/shared/terminal-pane-title-sanitization.test.ts": 40,
       "src/renderer/src/lib/terminal-path-normalization.test.ts": 39,
       "src/renderer/src/lib/terminal-quick-command-project-scope.test.ts": 54,
       "src/renderer/src/lib/terminal-quick-command-score-budget.test.ts": 44,

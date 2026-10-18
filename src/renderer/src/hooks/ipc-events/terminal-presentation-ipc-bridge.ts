@@ -224,20 +224,22 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                 })
               )
             } else {
+              // Switch point: this title is the tab's name; main holds no pane title for it.
+              const paneTitle = ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : title
               // Why: CLI/runtime PTYs emit hook events before the tab mounts, so the leaf must exist in layout for paneKey validation.
               const existingLayout = reusedTab
                 ? activateExistingLeafInLayout(
                     store.terminalLayoutsByTabId?.[tab.id],
                     leafId,
                     ptyId,
-                    title
+                    paneTitle
                   )
                 : null
               if (existingLayout) {
                 store.updateTabPtyId(tab.id, ptyId)
                 store.setTabLayout(tab.id, existingLayout)
               } else {
-                store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, title))
+                store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId, paneTitle))
               }
             }
           }
