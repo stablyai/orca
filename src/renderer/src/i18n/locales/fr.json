@@ -1365,6 +1365,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "Aucun espace de travail ne requiert d'attention"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Cet hôte SSH n'a pas pu basculer vers un serveur Orca géré. La section Hôtes SSH des Paramètres en indique la raison."
         }

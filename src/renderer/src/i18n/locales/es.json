@@ -1260,6 +1260,9 @@
         }
       },
       "ipcEvents": {
+        "nextAttention": {
+          "none": "Ningún espacio de trabajo requiere atención"
+        },
         "sshManagedServer": {
           "refusedBlocked": "Este host SSH no pudo moverse a un servidor Orca gestionado. Hosts SSH en Ajustes muestra por qué."
         }

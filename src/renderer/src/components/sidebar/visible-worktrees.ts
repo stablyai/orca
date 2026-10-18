@@ -21,6 +21,7 @@ export {
 } from './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -71,8 +72,13 @@ export function getVisibleWorktreeIds(): string[] {
   if (_publishedVisibleIds) {
     return _publishedVisibleIds
   }
-
   const state = useAppStore.getState()
+  // Why the row pipeline: grouping, pinning and main-worktree hoisting reorder cards, so a flat sort numbers the wrong workspace.
+  return computeRenderedSidebarWorktreeOrder(state, computeLiveVisibleSidebarWorktrees(state))
+}
+
+/** Filtered, sorted sidebar worktrees from a live store snapshot, before row grouping. */
+export function computeLiveVisibleSidebarWorktrees(state: AppState): Worktree[] {
   const allWorktrees = getAllWorktreesFromState(state).filter((w) => !w.isArchived)
 
   // Hoist repoMap so it's built once and reused across all branches below.
@@ -116,8 +122,7 @@ export function getVisibleWorktreeIds(): string[] {
         worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
     )
     .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
-  // Why the row pipeline: grouping, pinning and main-worktree hoisting reorder cards, so a flat sort numbers the wrong workspace.
-  return computeRenderedSidebarWorktreeOrder(state, visibleWorktrees)
+  return visibleWorktrees
 }
 
 export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarget[] {
