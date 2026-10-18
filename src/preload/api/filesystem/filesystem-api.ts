@@ -2,6 +2,7 @@ import type { PathExistenceResult } from '../../../shared/file-access/path-exist
 import type { RuntimeFileReadChunkResult } from '../../../shared/file-content/runtime-file-read'
 import type { SearchOptions, SearchResult } from '../../../shared/file-search/code-search-types'
 import type { PdfExportResult } from '../../../shared/document-preview/pdf-export-failure-copy'
+import type { D2RenderRequest, D2RenderResult } from '../../../shared/d2-render-types'
 import type { DirEntry } from '../../../shared/file-listing/directory-entry'
 import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
@@ -42,6 +43,10 @@ import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
 } from '../../../shared/file-import/native-file-drop-preparation'
+
+export type D2Api = {
+  render: (args: D2RenderRequest) => Promise<D2RenderResult>
+}
 
 export type ExportApi = {
   htmlToPdf: (args: { html: string; title: string }) => Promise<PdfExportResult>
