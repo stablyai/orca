@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useMobileNativeChatKept } from './mobile-native-chat-kept-disclosures'
 import { Animated, Pressable, Text, View } from 'react-native'
 import { ChevronDown, SquareChevronRight, SquareTerminal, Wrench } from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
@@ -74,17 +75,24 @@ function ResultBody({
 function ToolLine({
   pair,
   line,
+  disclosureId,
   defaultExpanded,
   diffLineLimit,
   onOpenFile
 }: {
   pair: ToolPair
   line: string
+  disclosureId?: string
   defaultExpanded: boolean
   diffLineLimit: number
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const lineKey = disclosureId === undefined ? undefined : `line:${disclosureId}:${line}`
+  const [expanded, setExpanded] = useMobileNativeChatKept(
+    (kept) => kept.open,
+    lineKey,
+    defaultExpanded
+  )
   const { call, result } = pair
   const name = call ? call.name : 'Result'
   const inputDisplay = call ? createToolInputDisplay(call.input) : null
@@ -182,12 +190,15 @@ function linesAbove(blocks: readonly NativeChatBlock[], line: string): number {
  *  toolbar toggle drive every run at once while still allowing per-run override. */
 export function ToolRun({
   blocks,
+  disclosureId,
   defaultExpanded,
   expandChildren,
   activeCall,
   onOpenFile
 }: {
   blocks: NativeChatBlock[]
+  /** Keys the reader's open run, lines and Show more where rows outlive their mount. */
+  disclosureId?: string
   defaultExpanded: boolean
   /** Child tool lines stay collapsed when the turn caret drove the run open. */
   expandChildren: boolean
@@ -195,10 +206,11 @@ export function ToolRun({
   activeCall: ReturnType<typeof selectActiveToolCall>
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
-  const [open, setOpen] = useState(defaultExpanded)
+  const runKey = disclosureId === undefined ? undefined : `run:${disclosureId}`
+  const [open, setOpen] = useMobileNativeChatKept((kept) => kept.open, runKey, defaultExpanded)
   // `requested` is what Show more asked for; `before` the lines older calls added above the open
   // run's first line, so the lines the reader was on stay shown.
-  const [reveal, setReveal] = useState<{ requested: number; before: number; first?: string }>({
+  const [reveal, setReveal] = useMobileNativeChatKept((kept) => kept.reveal, disclosureId, {
     requested: TOOL_PAIR_REVEAL_PAGE,
     before: 0
   })
@@ -211,7 +223,7 @@ export function ToolRun({
   const first = head && nativeChatToolLineIdentity(head.call ?? head.result!, new Map(), true)
   if (first !== reveal.first) {
     const before = first && reveal.first ? reveal.before + linesAbove(blocks, reveal.first) : 0
-    setReveal({ ...reveal, before, first })
+    setReveal(() => ({ ...reveal, before, first }))
   }
   const visiblePairs = pairs.slice(0, shown)
   const seen = new Map<string, number>()
@@ -276,6 +288,7 @@ export function ToolRun({
                 key={line}
                 pair={pair}
                 line={line}
+                disclosureId={disclosureId}
                 defaultExpanded={expandChildren}
                 diffLineLimit={diffLineLimit}
                 onOpenFile={onOpenFile}

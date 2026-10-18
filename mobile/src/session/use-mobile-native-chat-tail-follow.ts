@@ -1,13 +1,7 @@
-import { createElement, useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import {
-  Platform,
-  type FlatList,
-  type FlatListProps,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  type ScrollViewProps
-} from 'react-native'
-import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { Platform, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native'
+import type { MobileNativeChatScrollNode } from './MobileNativeChatScrollHold'
+import type { MobileNativeChatPageObservation } from './mobile-native-chat-page-motion'
 
 /** Distance from the bottom, in points, still treated as "at the tail". */
 const AT_TAIL_SLOP = 80
@@ -30,18 +24,13 @@ export function mobileNativeChatRowAnchor(hasHeader: boolean): { minIndexForVisi
 }
 
 /** The list's scrollable node on the page, as RN Web's ScrollView decorates it. */
-type PageScroller = Element & {
-  scrollTop: number
-  scrollHeight: number
-  clientHeight: number
-  getInnerViewNode: () => Element
-}
+type PageScroller = Element & MobileNativeChatScrollNode & { getInnerViewNode: () => Element }
 
 /** RN Web reports content size a task after layout, so a frame can paint between growth and a pin
  *  driven by that report. An observer on the scroller and its content runs before that paint. */
 function observePageResize(
   scroller: PageScroller | null | undefined,
-  onResize: () => void
+  onResize: (entries: readonly ResizeObserverEntry[]) => void
 ): ResizeObserver | null {
   if (!scroller || typeof ResizeObserver === 'undefined') {
     return null
@@ -61,13 +50,37 @@ function isAtTail(event: NativeScrollEvent): boolean {
   return distanceFromTail(event) <= AT_TAIL_SLOP
 }
 
-export type MobileNativeChatTailFollow<TItem> = {
-  /** Spread on the list. `ref`: the hook scrolls through it alone; on the page it also watches the
-   *  list resize while mounted. The page's scroller keeps the end as the browser's anchor while
-   *  the reader follows. */
-  listProps: {
-    ref: (list: FlatList<TItem> | null) => () => void
-    renderScrollComponent: FlatListProps<TItem>['renderScrollComponent']
+/** What the owner and the place-hold use of a transcript list: native's FlatList, or the page's. */
+export type MobileNativeChatListHandle = {
+  getScrollableNode: () => PageScroller | null | undefined
+  scrollToOffset: (params: { animated: boolean; offset: number }) => void
+  scrollToEnd: (params: { animated: boolean }) => void
+  /** Page only: each resize, with the observer's entries; runs the end `pin` once it has counted a
+   *  move of the reader's no scroll event reported yet. */
+  afterResize?: (entries: readonly ResizeObserverEntry[], pin: () => void) => void
+  /** Page only: the list's rows join the one observer, so each reports its own height. */
+  observeWith?: (observer: ResizeObserver | null) => void
+  /** Page only: the place-hold's correction, written while the reader moves only for a regroup. */
+  keepInPlace?: (drift: number, regrouped: boolean) => void
+  /** Page only: resolves once the reader stops moving the list, or the list goes away. */
+  settled?: () => Promise<void>
+  /** Page only: each classified move, before any resize correction or end pin. */
+  watchMotion?: (fn: ((observation: MobileNativeChatPageObservation) => void) | null) => void
+  /** Page only: following changed, which decides whether the browser's anchoring may move it. */
+  syncAnchoring?: () => void
+  /** Page only: the place-hold takes the scroll from the browser's anchoring for its correction. */
+  holdPlace?: (on: boolean) => void
+}
+
+export type MobileNativeChatTailFollow = {
+  /** Spread on the native list. `ref`: the hook scrolls through it alone. */
+  listProps: { ref: (list: MobileNativeChatListHandle | null) => () => void }
+  /** Spread on the page list: the same `ref`, which also watches the list resize. */
+  pageListProps: {
+    ref: (list: MobileNativeChatListHandle | null) => () => void
+    endAnchored: boolean
+    isFollowing: () => boolean
+    pin: () => void
   }
   /** Render flag for the jump-to-latest control. */
   showJumpToTail: boolean
@@ -86,8 +99,10 @@ export type MobileNativeChatTailFollow<TItem> = {
    *  gets the place-hold's write while WebKit owns the scroll, and the list stops scrolling. */
   scrollMayLoadEarlier: () => boolean
   recordScrollMetrics: (event: NativeScrollEvent) => void
+  /** Page only: an older page waits for it, so it never lands under a reader who is scrolling. */
+  pageSettled: (() => Promise<void>) | undefined
   /** Read at commit by the page's place-hold: the list, and whether the reader follows the end. */
-  placeHold: { listRef: RefObject<FlatList<TItem> | null>; isFollowing: () => boolean }
+  placeHold: { listRef: RefObject<MobileNativeChatListHandle | null>; isFollowing: () => boolean }
 }
 
 /** Sole owner of transcript scroll position.
@@ -101,14 +116,17 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  Intent (`following`) is kept separate from geometry (at-tail): a programmatic
  *  scroll reports metrics like any other, so letting metrics decide intent let
  *  the view argue with itself. Only the user's own gestures and explicit jumps
- *  move intent; metrics only decide where a *released* gesture leaves us.
+ *  move native intent; metrics decide where a *released* gesture leaves us. On
+ *  the page, position resumes following; only reader input detaches it.
  */
-export function useMobileNativeChatTailFollow<TItem>(args: {
+export function useMobileNativeChatTailFollow(args: {
   /** Guards `scrollToEnd` against an empty list. */
   hasItems: boolean
-}): MobileNativeChatTailFollow<TItem> {
-  const { hasItems } = args
-  const listRef = useRef<FlatList<TItem> | null>(null)
+  /** The chat shown; another one opens following, whatever the reader did here. */
+  scopeKey: string
+}): MobileNativeChatTailFollow {
+  const { hasItems, scopeKey } = args
+  const listRef = useRef<MobileNativeChatListHandle | null>(null)
   const [following, setFollowingFlag] = useState(true)
   const [atTail, setAtTailFlag] = useState(true)
   // Event handlers read intent at event time, before a re-render lands.
@@ -116,8 +134,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   const atTailRef = useRef(true)
   const userScrollActiveRef = useRef(false)
   const userScrollSettleFrameRef = useRef<number | null>(null)
-  // Page only: what the offsets last said, in place of the gestures RN Web does not report.
-  const pageOffsetRef = useRef(0)
+  const scopeKeyRef = useRef(scopeKey)
 
   // Single writer, so the event-time ref and the render flag cannot disagree.
   const setFollowing = useCallback((next: boolean) => {
@@ -125,6 +142,8 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
       return
     }
     followingRef.current = next
+    // Before any write or commit: the browser's anchoring and the end pin never both hold the place.
+    listRef.current?.syncAnchoring?.()
     setFollowingFlag(next)
   }, [])
 
@@ -139,7 +158,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   // Live geometry: a size report arrives late and can name an end the view has already left.
   // Not `scrollToEnd`: its estimate can land short, and the page reads a move up as the reader's.
   const pinPageToEnd = useCallback(() => {
-    const scroller: PageScroller | null | undefined = listRef.current?.getScrollableNode()
+    const scroller = listRef.current?.getScrollableNode()
     if (!followingRef.current || !scroller) {
       return
     }
@@ -152,16 +171,45 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   }, [])
 
   const attachList = useCallback(
-    (list: FlatList<TItem> | null) => {
+    (list: MobileNativeChatListHandle | null) => {
       listRef.current = list
       const page = !listReportsGestures()
-      const observer = page ? observePageResize(list?.getScrollableNode(), pinPageToEnd) : null
+      // Resize geometry is authoritative only after the list restores a parked place.
+      const afterCorrection = () => {
+        const scroller = list?.getScrollableNode()
+        if (
+          scroller &&
+          scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= PAGE_MOVE_SLOP
+        ) {
+          setFollowing(true)
+        }
+        pinPageToEnd()
+      }
+      const observer = page
+        ? observePageResize(list?.getScrollableNode(), (entries) =>
+            list?.afterResize ? list.afterResize(entries, afterCorrection) : afterCorrection()
+          )
+        : null
+      list?.observeWith?.(observer)
+      list?.watchMotion?.(({ by, moved, fromEnd }) => {
+        if (by === 'reader' && fromEnd <= PAGE_MOVE_SLOP) {
+          setFollowing(true)
+        } else if (followingRef.current) {
+          if (by === 'reader' && moved < -PAGE_MOVE_SLOP && fromEnd > PAGE_MOVE_SLOP) {
+            setFollowing(false)
+          }
+        } else if (by !== 'own' && moved > PAGE_MOVE_SLOP && fromEnd <= AT_TAIL_SLOP) {
+          setFollowing(true)
+        }
+      })
       return () => {
+        list?.watchMotion?.(null)
+        list?.observeWith?.(null)
         observer?.disconnect()
         listRef.current = null
       }
     },
-    [pinPageToEnd]
+    [pinPageToEnd, setFollowing]
   )
 
   const pinToTail = useCallback(() => {
@@ -192,23 +240,9 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
 
   const recordScrollMetrics = useCallback(
     (event: NativeScrollEvent) => {
-      const endsAtTail = isAtTail(event)
-      setAtTail(endsAtTail)
-      if (listReportsGestures()) {
-        return
-      }
-      const moved = event.contentOffset.y - pageOffsetRef.current
-      pageOffsetRef.current = event.contentOffset.y
-      if (followingRef.current) {
-        // A pin only moves toward the end and a clamp lands on it: up and short of it is the reader.
-        if (moved < -PAGE_MOVE_SLOP && distanceFromTail(event) > PAGE_MOVE_SLOP) {
-          setFollowing(false)
-        }
-      } else if (moved > PAGE_MOVE_SLOP && endsAtTail) {
-        setFollowing(true)
-      }
+      setAtTail(isAtTail(event))
     },
-    [setAtTail, setFollowing]
+    [setAtTail]
   )
 
   const jumpToTail = useCallback(() => {
@@ -274,20 +308,23 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
   )
 
   const isFollowing = useCallback(() => followingRef.current, [])
+  const pageSettled = useCallback(() => listRef.current?.settled?.() ?? Promise.resolve(), [])
 
-  const renderPageScroll = useCallback(
-    (props: ScrollViewProps) =>
-      createElement(MobileNativeChatPageScroll, { ...props, endAnchored: following }),
-    [following]
-  )
+  // The view stays mounted across chats: before paint, so the next one never shows where the reader
+  // left the last.
+  useLayoutEffect(() => {
+    if (scopeKeyRef.current === scopeKey) {
+      return
+    }
+    scopeKeyRef.current = scopeKey
+    jumpToTail()
+  }, [scopeKey, jumpToTail])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
   return {
-    listProps: {
-      ref: attachList,
-      renderScrollComponent: listReportsGestures() ? undefined : renderPageScroll
-    },
+    listProps: { ref: attachList },
+    pageListProps: { ref: attachList, endAnchored: following, isFollowing, pin: pinPageToEnd },
     showJumpToTail: !following && !atTail,
     pinToTail,
     pinToTailAfterContentResize,
@@ -298,6 +335,7 @@ export function useMobileNativeChatTailFollow<TItem>(args: {
     endMomentum,
     scrollMayLoadEarlier,
     recordScrollMetrics,
+    pageSettled: listReportsGestures() ? undefined : pageSettled,
     placeHold: { listRef, isFollowing }
   }
 }

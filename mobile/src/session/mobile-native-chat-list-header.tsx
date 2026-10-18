@@ -7,13 +7,15 @@ import type { OlderPagePhase } from './use-mobile-older-page-loader'
 const LOAD_EARLIER_FAILED = "Couldn't load earlier messages. Tap to try again."
 const EARLIER_UNAVAILABLE = "Earlier messages can't be loaded."
 
-/** The "Load earlier messages" control, while older history remains. */
+/** The "Load earlier messages" control, while older history remains. `measuring`: the page has loaded
+ *  rows above it still to draw, so it shows loading until they are in. */
 export function mobileNativeChatListHeader(
   hasMore: boolean | undefined,
   olderPages: OlderPagePhase | undefined,
-  loadEarlier: () => void
+  loadEarlier: () => void,
+  measuring = false
 ): ReactElement | null {
-  if (olderPages === 'unavailable') {
+  if (olderPages === 'unavailable' && !measuring) {
     // No retry gets past it, so the control gives way to a line that says so.
     return (
       <View style={styles.loadEarlier}>
@@ -21,10 +23,10 @@ export function mobileNativeChatListHeader(
       </View>
     )
   }
-  if (!hasMore) {
+  if (!hasMore && !measuring) {
     return null
   }
-  const loadingEarlier = olderPages === 'loading'
+  const loadingEarlier = measuring || olderPages === 'loading'
   return (
     <Pressable style={styles.loadEarlier} onPress={loadEarlier} disabled={loadingEarlier}>
       {loadingEarlier ? (

@@ -30,6 +30,7 @@ import { mobileNativeChatRowId } from './MobileNativeChatScrollHold'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { ToolRun } from './MobileNativeChatToolRun'
+import { MobileNativeChatDisclosureEpochContext } from './mobile-native-chat-kept-disclosures'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
@@ -215,6 +216,7 @@ function MobileNativeChatMessageImpl({
   // Keep the memoized Markdown context stable as the message streams.
   const openActions = useCallback(() => setActionsOpen(true), [])
   const onLongPress = INLINE_TEXT_SELECTION ? undefined : openActions
+  const disclosureEpoch = useContext(MobileNativeChatDisclosureEpochContext)
   const renderVisual = useContext(MobileNativeChatVisualContext) ?? undefined
   // Structured replies grow in place: only the last block of the newest row may still be typing.
   const growingBlock =
@@ -317,6 +319,7 @@ function MobileNativeChatMessageImpl({
               // Why: a global toggle intentionally resets all per-run/per-line
               // overrides in one remount, avoiding an effect-driven second render.
               key={`${toolsExpanded ? 'expanded' : 'collapsed'}:${turnExpanded ? 'turn' : 'flat'}`}
+              disclosureId={`${rowKey ?? message.id}:${disclosureEpoch ?? `${toolsExpanded}:${turnExpanded}`}`}
               blocks={tools}
               defaultExpanded={turnExpanded || toolsExpanded}
               expandChildren={turnExpanded ? false : toolsExpanded}

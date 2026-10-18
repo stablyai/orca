@@ -9,6 +9,8 @@ import {
 /** Where each drawn row sits on the page. A folded row's id is its first message's, so older
  *  messages joining a run would replace the row; its key stays while what it is made of draws. */
 export type MobileNativeChatRowKeys = {
+  /** The chat the keys belong to; nothing they held carries into another. */
+  scope: string
   /** The source window's first message: it changes when a page, a cap trim or a replacement lands,
    *  even while every row keeps its key. */
   sourceHead: string | undefined
@@ -165,6 +167,7 @@ export function useMobileNativeChatRowKeys(
   return useMemo(() => {
     let idByKey: Map<string, string> | undefined
     return {
+      scope: assigned.scope,
       sourceHead: assigned.messages[0]?.id,
       keyOf: (message: NativeChatMessage) => assigned.keyById.get(message.id) ?? message.id,
       current: (key: string) => (assigned.moved.has(key) ? assigned.moved.get(key) : key),

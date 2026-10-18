@@ -15,9 +15,14 @@ import {
 } from './mobile-native-chat-row-keys'
 import { MobileNativeChatScrollHold, mobileNativeChatRowId } from './MobileNativeChatScrollHold'
 import { ToolRun } from './MobileNativeChatToolRun'
-import { useMobileNativeChatPageHistory } from './use-mobile-native-chat-page-history'
 
 const platform = vi.hoisted(() => ({ OS: 'web' }))
+// The page's own hold, as on iOS: where the browser has scroll anchoring it keeps these places
+// itself, and the hold runs only for a regroup or a move to another row.
+vi.stubGlobal('navigator', {
+  userAgent:
+    'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/604.1'
+})
 
 vi.mock('react-native', () => ({
   Platform: platform,
@@ -148,9 +153,6 @@ function Chat(props: {
   const folded = useMemo(() => foldMobileNativeChatMessages(props.messages), [props.messages])
   const keys = useMobileNativeChatRowKeys(folded, props.messages, 'chat')
   shownKeys = keys
-  const renderRow = ({ item }: { item: NativeChatMessage }) =>
-    h(Row, { message: item, rowKey: keys.keyOf(item) })
-  const history = useMobileNativeChatPageHistory(folded, renderRow, keys)
   return h(
     Fragment,
     null,
@@ -159,9 +161,9 @@ function Chat(props: {
       isFollowing: () => props.following,
       listRef: props.listRef
     }),
-    h('div', { testID: 'header' }, history.withHistory(h('span', null, 'Load earlier'))),
-    history.listRows.map((item, index) =>
-      h(Fragment, { key: keys.keyOf(item) }, history.renderListRow({ item, index }))
+    h('div', { testID: 'header' }, h('span', null, 'Load earlier')),
+    folded.map((item) =>
+      h(Row, { key: keys.keyOf(item), message: item, rowKey: keys.keyOf(item) })
     ),
     props.live ? h('span', null, 'Working') : null
   )
@@ -184,7 +186,11 @@ function mount(messages: NativeChatMessage[], options = { following: false, live
   const press = (id: string) => act(() => find(id).findAllByType('button')[0]!.props.onPress())
   const drawn = (id: string) => renderer.root.findAll((n) => n.props.testID === id).length
   const lines = (id: string) => find(id).findAllByType('span').length
-  return { scroller, show, press, drawn, lines, find }
+  const rows = () =>
+    renderer.root
+      .findAll((n) => n.type === 'div' && String(n.props.testID).startsWith('chat-row:'))
+      .map((n) => n.props.testID)
+  return { scroller, show, press, drawn, lines, find, rows }
 }
 
 it('keeps the line a reader was on, its run open, when older messages join the run from an old host', () => {
@@ -211,12 +217,7 @@ it('keeps the line a reader was on, its run open, when older messages join the r
     }
 
     // The run keeps its row, so the earlier turn sits above it and the run stays open.
-    expect(
-      chat0
-        .find('header')
-        .findAll((n) => String(n.props.testID).startsWith('chat-row:'))
-        .map((n) => n.props.testID)
-    ).toEqual(['u0', 'x0', 'u1'].map(mobileNativeChatRowId))
+    expect(chat0.rows().slice(0, 3)).toEqual(['u0', 'x0', 'u1'].map(mobileNativeChatRowId))
     expect(chat0.lines('chat-member:call:c34')).toBe(opened)
     expect(chat0.drawn('chat-member:call:c1')).toBe(1)
     // The result row the window opened on is now drawn by the run.

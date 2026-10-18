@@ -55,6 +55,11 @@ vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
 }))
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import {
+  MobileNativeChatDisclosureEpochContext,
+  MobileNativeChatKeptScope,
+  useMobileNativeChatDisclosureEpochs
+} from './mobile-native-chat-kept-disclosures'
 
 function message(blocks: NativeChatMessage['blocks']): NativeChatMessage {
   return { id: 'source', role: 'assistant', blocks, timestamp: 1, source: 'transcript' }
@@ -107,6 +112,60 @@ describe('mobile tool result availability', () => {
     })
     return renderer!
   }
+
+  it.each(['tools', 'turn'] as const)(
+    'invalidates evicted run, line and reveal overrides on %s resets',
+    (reset) => {
+      const row = message(
+        Array.from({ length: 8 }, (_, i) => ({
+          type: 'tool-result' as const,
+          callId: `c${i}`,
+          output: `preview ${i}\ndetail ${i}`
+        }))
+      )
+      function Window({ shown, expanded }: { shown: boolean; expanded: boolean }) {
+        const turn = reset === 'turn' && expanded
+        const tools = reset === 'tools' && expanded
+        const epochs = useMobileNativeChatDisclosureEpochs(
+          [row],
+          (m) => m.id,
+          () => ({ turnExpanded: turn }),
+          tools,
+          'chat'
+        )
+        return (
+          <MobileNativeChatKeptScope>
+            {shown && (
+              <MobileNativeChatDisclosureEpochContext.Provider value={epochs.get(row.id)?.epoch}>
+                <MobileNativeChatMessage message={row} toolsExpanded={tools} turnExpanded={turn} />
+              </MobileNativeChatDisclosureEpochContext.Provider>
+            )}
+          </MobileNativeChatKeptScope>
+        )
+      }
+      act(() => {
+        renderer = create(<Window shown={false} expanded />)
+      })
+      const draw = (shown: boolean, expanded = true) =>
+        act(() => {
+          renderer!.update(<Window shown={shown} expanded={expanded} />)
+        })
+      draw(true)
+      press(button(renderer!.root, 'preview 0'))
+      press(button(renderer!.root, 'Show more'))
+      draw(false)
+      draw(true)
+      expect(toolLines(renderer!.root)).toHaveLength(8)
+      expect(textIn(renderer!.root).includes('preview 0\ndetail 0')).toBe(reset === 'turn')
+      press(button(renderer!.root, '8×'))
+      draw(false)
+      draw(false, false)
+      draw(false)
+      draw(true)
+      expect(toolLines(renderer!.root)).toHaveLength(6)
+      expect(textIn(renderer!.root).includes('preview 0\ndetail 0')).toBe(reset === 'tools')
+    }
+  )
 
   it('counts every orphan and lets the reader reveal the seventh output and hide it again', () => {
     const raw = message(
