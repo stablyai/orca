@@ -6,10 +6,14 @@ import {
   subscribeToNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { useRestoredNativeChatComposerDraftImageCheck } from './native-chat-composer-draft-image-check'
-import { useNativeChatPendingAttachments } from './native-chat-pending-attachment-cache'
+import {
+  nativeChatImageRow,
+  useNativeChatPendingAttachments
+} from './native-chat-pending-attachment-cache'
 import { useNativeChatComposerAttachmentPreviews } from './use-native-chat-composer-attachment-previews'
 
-/** The composer's image chips: the draft's settled images, then those still on their way. */
+/** The composer's image chips: the draft's images and those still on their way, in the order they
+ *  were attached, each with the clipboard preview this composer minted for it. */
 export function useNativeChatComposerImageChips(attachmentScopeKey: string): {
   imageAttachments: NativeChatComposerImageAttachment[]
 } & Omit<ReturnType<typeof useNativeChatComposerAttachmentPreviews>, 'previews'> {
@@ -27,23 +31,18 @@ export function useNativeChatComposerImageChips(attachmentScopeKey: string): {
   // Chips still on their way live outside the composer, so one a prompt card unmounted comes back
   // still pending and settles into the draft whichever composer is showing.
   const pending = useNativeChatPendingAttachments(attachmentScopeKey)
-  const { previews, setPreview, releasePreview, releaseAllPreviews } =
-    useNativeChatComposerAttachmentPreviews(settled, pending)
-  const imageAttachments = useMemo(
-    () => [
-      ...settled.map((image) => {
-        const previewUrl = previews.get(image.id)
-        if (restoring && isKeptLocalPaste(image)) {
-          return { ...image, pending: true }
-        }
-        return previewUrl ? { ...image, previewUrl } : image
-      }),
-      ...pending.map((chip) => {
-        const previewUrl = previews.get(chip.id)
-        return previewUrl ? { ...chip, previewUrl } : chip
-      })
-    ],
-    [pending, previews, restoring, settled]
-  )
-  return { imageAttachments, setPreview, releasePreview, releaseAllPreviews }
+  const { previews, ...previewActions } = useNativeChatComposerAttachmentPreviews(settled, pending)
+  const imageAttachments = useMemo(() => {
+    const withPreview = <T extends NativeChatComposerImageAttachment>(image: T): T => {
+      const previewUrl = previews.get(image.id)
+      return previewUrl ? { ...image, previewUrl } : image
+    }
+    return nativeChatImageRow(
+      settled.map((image) =>
+        restoring && isKeptLocalPaste(image) ? { ...image, pending: true } : withPreview(image)
+      ),
+      pending.map(withPreview)
+    )
+  }, [pending, previews, restoring, settled])
+  return { imageAttachments, ...previewActions }
 }

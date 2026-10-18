@@ -318,7 +318,7 @@ it.each([false, true])(
     render(composer(acceptsImages))
     await act(async () => vi.advanceTimersByTimeAsync(24 * 60 * 60 * 1000))
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(true)
-    expect(screen.getByRole('button', { name: 'Saving pasted image…' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeTruthy()
     await act(async () =>
       fireEvent.click(screen.getByRole('button', { name: 'Remove attachment' }))
     )
@@ -348,7 +348,7 @@ it.each([true, false])(
     render(composer(acceptsImages, handle))
     await act(async () => handle.current?.pasteFromClipboard())
     expect(screen.getByRole('textbox').textContent).toContain('ordinary text')
-    expect(screen.queryByRole('button', { name: 'Saving pasted image…' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Image #1: Saving pasted image…' })).toBeNull()
     expect(mocks.state.fieldProps?.sendButtonDisabled).toBe(false)
     expect(mocks.save).not.toHaveBeenCalled()
   }

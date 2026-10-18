@@ -9,6 +9,7 @@ import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import {
   clearNativeChatComposerDraftsForTests,
+  deleteNativeChatComposerDraftsOwnedBy,
   hydrateNativeChatComposerDrafts,
   nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
@@ -71,6 +72,7 @@ async function fixture(acceptsImages = true, source: 'menu' | 'event' = 'menu') 
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: scope('menu'),
       allowWithoutTarget: true,
+      imageReferences: true,
       acceptsImages,
       caret: 0,
       disabled: false,
@@ -136,13 +138,19 @@ it.each(
         attachmentScopeKey: scope('menu'),
         acceptsImages,
         allowWithoutTarget: true,
+        imageReferences: true,
         caret: 0,
         disabled: false,
         isComposing: () => false,
         resolveTarget: () => null,
         textareaRef: createRef<NativeChatComposerInput>(),
         setCaret: () => {},
-        setDraft: () => {},
+        setDraft: (update) =>
+          updateNativeChatComposerDraft(
+            scope('menu'),
+            { text: update(readNativeChatComposerDraft(scope('menu')).text) },
+            'immediate'
+          ),
         setNotice: () => {}
       })
     )
@@ -222,8 +230,10 @@ it.each([true, false])(
     for (const end of ['remove', 'workspace', 'failure'] as const) {
       const { view, save, thumbnail, path } = await fixture(acceptsImages)
       if (end === 'remove') {
-        await act(async () => view.result.current.attachments.clearImageAttachments())
+        const { attachments } = view.result.current
+        await act(async () => attachments.removeImageAttachment(attachments.imageAttachments[0].id))
       } else if (end === 'workspace') {
+        deleteNativeChatComposerDraftsOwnedBy(draftOwner)
         dropNativeChatPendingAttachmentsOwnedBy(draftOwner)
       }
       view.unmount()

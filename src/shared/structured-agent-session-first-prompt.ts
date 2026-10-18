@@ -2,6 +2,7 @@ import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from './structured-agent-session-command-entry'
 import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
+import { stripSentImagePromptMarkers } from './native-chat-image-transcript-markers'
 
 export const STRUCTURED_CHAT_NAME_PROMPT_LIMIT = 4000
 
@@ -28,8 +29,9 @@ export function firstStructuredAgentSessionPrompt(
         if (prompt) {
           prompt += '\n'
         }
+        // A title names what was asked; `[Image #N]` only says where an image sat.
         prompt += sliceAtCodeUnitLimit(
-          block.text,
+          stripSentImagePromptMarkers(block.text),
           STRUCTURED_CHAT_NAME_PROMPT_LIMIT - prompt.length
         )
         if (prompt.length >= STRUCTURED_CHAT_NAME_PROMPT_LIMIT) {

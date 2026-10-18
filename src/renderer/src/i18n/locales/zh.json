@@ -18197,6 +18197,8 @@
         "removeImagesToSend": "有些图片无法恢复。请将其移除后再发送。",
         "imageAttachAgainLabel": "重新附加",
         "pastedImageNotKeptLabel": "未保留",
+        "imageNumber": "图片 #{{number}}",
+        "imageReferenceMissing": "图片已移除",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
         "pasteUnavailable": "无法粘贴 — 此聊天当前不接受输入。",

@@ -18196,6 +18196,8 @@
         "removeImagesToSend": "No se pudieron recuperar algunas imágenes. Quítalas para enviar.",
         "imageAttachAgainLabel": "Adjuntar de nuevo",
         "pastedImageNotKeptLabel": "No se conservó",
+        "imageNumber": "Imagen #{{number}}",
+        "imageReferenceMissing": "Imagen quitada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
         "pasteUnavailable": "No se puede pegar — este chat no acepta entradas en este momento.",

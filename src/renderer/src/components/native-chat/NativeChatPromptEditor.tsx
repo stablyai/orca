@@ -19,6 +19,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import {
   fileReferenceContent,
   NativeChatFileReference,
+  NativeChatImageReference,
   NativeChatSkill,
   promptLeafText,
   promptText,
@@ -27,9 +28,12 @@ import {
   promptTextPosition
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 
 type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   scopeKey?: string
+  /** The composer's thumbnail ids, in order, which number its image chips. */
+  imageRow?: readonly string[]
   inputRef: RefObject<NativeChatComposerInput | null>
   initialValue: string
   disabled: boolean
@@ -38,8 +42,11 @@ type Props = Omit<HTMLAttributes<HTMLDivElement>, 'onChange' | 'onSelect'> & {
   onSelect: (input: NativeChatComposerInput) => void
 }
 
+const NO_IMAGES: readonly string[] = []
+
 export function NativeChatPromptEditor({
   scopeKey,
+  imageRow = NO_IMAGES,
   inputRef,
   initialValue,
   disabled,
@@ -74,6 +81,7 @@ export function NativeChatPromptEditor({
         }),
         NativeChatSkill,
         NativeChatFileReference,
+        NativeChatImageReference,
         Placeholder.configure({ placeholder: () => placeholderRef.current })
       ],
       content:
@@ -255,6 +263,24 @@ export function NativeChatPromptEditor({
                 .run()
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
+            removeImageReferences: (attachmentId) => {
+              const { tr } = editor.state
+              editor.state.doc.descendants((node, position) => {
+                if (
+                  node.type.name === NativeChatImageReference.name &&
+                  node.attrs.attachmentId === attachmentId
+                ) {
+                  // With the space inserted after it, so no gap is left where it sat.
+                  const from = tr.mapping.map(position)
+                  const to = from + node.nodeSize
+                  tr.delete(from, tr.doc.textBetween(to, to + 1) === ' ' ? to + 1 : to)
+                }
+              })
+              // Undo must not bring back a chip whose image is gone.
+              if (tr.docChanged) {
+                editor.view.dispatch(tr.setMeta('addToHistory', false))
+              }
+            },
             insertFileReferences: (paths) => {
               editor.commands.insertContentAt(
                 editor.state.selection.from,
@@ -267,5 +293,9 @@ export function NativeChatPromptEditor({
   )
   useImperativeHandle(inputRef, () => input!, [input])
 
-  return <EditorContent editor={editor} {...events} />
+  return (
+    <NativeChatImageRowProvider value={imageRow}>
+      <EditorContent editor={editor} {...events} />
+    </NativeChatImageRowProvider>
+  )
 }

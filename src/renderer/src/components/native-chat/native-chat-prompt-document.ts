@@ -1,6 +1,9 @@
 import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
 import { NativeChatSkillPill } from './NativeChatSkillPill'
+import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
+import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import { IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 export { promptTextContent } from './native-chat-prompt-document-text'
@@ -40,6 +43,22 @@ export const NativeChatFileReference = Node.create({
   renderHTML: ({ node }) => ['span', { 'data-native-chat-file-reference': node.attrs.path }]
 })
 
+/** An attached image named at its place in the prompt; the thumbnail row gives its number. */
+export const NativeChatImageReference = Node.create({
+  name: IMAGE_REFERENCE_NODE,
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addNodeView: () => ReactNodeViewRenderer(NativeChatImageReferencePill),
+  addAttributes: () => ({ attachmentId: { default: '' } }),
+  renderText: ({ node }) => imageReferenceToken(node.attrs.attachmentId),
+  renderHTML: ({ node }) => [
+    'span',
+    { 'data-native-chat-image-reference': node.attrs.attachmentId }
+  ]
+})
+
 export function fileReferenceContent(path: string): JSONContent {
   return {
     type: NativeChatFileReference.name,
@@ -49,6 +68,9 @@ export function fileReferenceContent(path: string): JSONContent {
 
 /** A pill reads as its token and a hard break as a newline, so the text is what the agent receives. */
 export function promptLeafText(node: ProseMirrorNode): string {
+  if (node.type.name === IMAGE_REFERENCE_NODE) {
+    return imageReferenceToken(String(node.attrs.attachmentId))
+  }
   return node.type.name === 'hardBreak' ? '\n' : String(node.attrs.token ?? '')
 }
 

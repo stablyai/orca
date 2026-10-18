@@ -387,7 +387,7 @@ describe('native-chat composer draft store', () => {
     expect(reloaded.attachments.readNativeChatAttachmentCache('agent-session:s1')).toEqual([stored])
   })
 
-  it('puts a re-attached image in the place of the one to attach again', async () => {
+  it('puts a re-attached image in the place of the one to attach again, under its id', async () => {
     storage.drafts.set('tab-1:pane', {
       text: 'see',
       images: [{ id: 'm', path: '', unavailableName: 'shot.png' }, IMAGES[0]],
@@ -400,8 +400,9 @@ describe('native-chat composer draft store', () => {
       [{ id: 'again', path: '/Users/me/Desktop/shot.png' }],
       { fromUser: true }
     )
+    // The prompt's chips name the placeholder's id, so they stay bound to the image.
     expect(reloaded.attachments.readNativeChatAttachmentCache('tab-1:pane')).toEqual([
-      { id: 'again', path: '/Users/me/Desktop/shot.png' },
+      { id: 'm', path: '/Users/me/Desktop/shot.png' },
       IMAGES[0]
     ])
   })

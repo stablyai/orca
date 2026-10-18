@@ -17,6 +17,7 @@ import {
   queuedMessageWithEditedText
 } from '../../../../shared/queued-message-text-edit'
 import { appendNativeChatDraftCache } from './native-chat-draft-cache'
+import { stripSentImagePromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
 import { queuedEditNotice } from './queued-message-edit-notices'
 import { structuredSessionOperationId } from './structured-agent-session-operation-id'
 import {
@@ -61,6 +62,11 @@ type Edit = {
   lease: QueuedEditLease
 }
 
+/** Unsaved typing goes to the chat box without the card's images, so no marker may name one. */
+function handOffEditText(edit: Edit): void {
+  appendNativeChatDraftCache(edit.draftKey, stripSentImagePromptMarkers(edit.text))
+}
+
 export function useStructuredAgentSessionQueuedEdit(args: {
   transport: QueuedEditTransport
   /** The host's published cards, for each card's full body. */
@@ -101,7 +107,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
         return
       }
       if (edit.text !== edit.originalText) {
-        appendNativeChatDraftCache(edit.draftKey, edit.text)
+        handOffEditText(edit)
         toast.error(queuedEditNotice(latest.current.promptOpen ? 'editGonePrompt' : 'editGone'))
       }
       close()
@@ -117,7 +123,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
       active.current = null
       reopen.current = null
       if (edit && edit.text !== edit.originalText) {
-        appendNativeChatDraftCache(edit.draftKey, edit.text)
+        handOffEditText(edit)
       }
       edit?.lease.end()
     }
@@ -224,7 +230,7 @@ export function useStructuredAgentSessionQueuedEdit(args: {
       } else if (status === 'changed') {
         // Someone else's edit landed first: the typing goes to the chat box, and the editor
         // opens again on the newer text.
-        appendNativeChatDraftCache(edit.draftKey, edit.text)
+        handOffEditText(edit)
         toast.error(
           queuedEditNotice(latest.current.promptOpen ? 'editChangedPrompt' : 'editChanged')
         )

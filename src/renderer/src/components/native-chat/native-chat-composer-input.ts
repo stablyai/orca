@@ -12,6 +12,8 @@ export type NativeChatComposerInput = Pick<
   contains?: (node: Node | null) => boolean
   insertText?: (text: string) => void
   insertSkill?: (from: number, to: number, token: string) => void
+  /** Deletes every chip of one image, as when its thumbnail goes. */
+  removeImageReferences?: (attachmentId: string) => void
   /** Inserts each file at the caret as a pill; its text stays the `@path` reference. */
   insertFileReferences?: (paths: string[]) => void
   /** Whether a collapsed caret sits on the first (`start`) or last (`end`) visual line,

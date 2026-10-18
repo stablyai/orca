@@ -42,6 +42,7 @@ vi.mock('./NativeChatComposer', () => ({
   NativeChatComposer: () => (
     <>
       <NativeChatImageAttachmentPreview
+        number={1}
         attachment={{ id: 'image-menu', path: '/tmp/original.png', previewUrl: 'data:thumbnail' }}
         onRemove={vi.fn()}
       />
@@ -113,7 +114,7 @@ describe('NativeChatResolvedView image menu ownership', () => {
   it('refuses image capture from a portaled preview while its retained owner is hidden', async () => {
     mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
     const view = render(<RetainedBridgeChat />)
-    fireEvent.click(screen.getByRole('button', { name: 'View image: original.png' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
     const preview = screen.getByRole('dialog')
     expect(screen.getByTestId('retained-owner').contains(preview)).toBe(false)
 
@@ -129,7 +130,7 @@ describe('NativeChatResolvedView image menu ownership', () => {
   it('closes the image preview on the first Close click while its copy menu is open', async () => {
     mocks.fetch.mockResolvedValue({ ok: true, blob: async () => new Blob(['original image']) })
     render(<RetainedBridgeChat />)
-    fireEvent.click(screen.getByRole('button', { name: 'View image: original.png' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Image #1: View image: original.png' }))
     const preview = screen.getByRole('dialog', { name: 'original.png' })
     fireEvent.contextMenu(within(preview).getByRole('img'))
     await screen.findByRole('menuitem', { name: 'Copy image' })

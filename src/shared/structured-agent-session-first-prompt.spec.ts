@@ -83,6 +83,15 @@ describe('first structured chat prompt', () => {
     expect(firstStructuredAgentSessionPrompt([prompt])).toBe(prefix)
   })
 
+  it('names a chat by what was asked, not by where its images sat', () => {
+    expect(
+      firstStructuredAgentSessionPrompt([
+        message('[Image #1] '),
+        message('compare [Image #1] with [Image #2]', { itemId: 'second' })
+      ])
+    ).toBe('compare  with')
+  })
+
   it('skips punctuation-only entries in favor of the first text request', () => {
     expect(
       firstStructuredAgentSessionPrompt([message('?!'), message('修复登录'), message('Later')])

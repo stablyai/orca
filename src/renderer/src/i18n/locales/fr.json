@@ -18317,6 +18317,8 @@
         "removeImagesToSend": "Certaines images n'ont pas pu être récupérées. Retirez-les pour envoyer.",
         "imageAttachAgainLabel": "Joindre à nouveau",
         "pastedImageNotKeptLabel": "Non conservée",
+        "imageNumber": "Image #{{number}}",
+        "imageReferenceMissing": "Image retirée",
         "imagePasteFailed": "Échec du collage de l'image.",
         "worktreeNotReady": "Worktree pas encore prêt — réessayez dans un instant.",
         "pasteUnavailable": "Impossible de coller — ce chat n'accepte pas de saisie pour le moment.",
