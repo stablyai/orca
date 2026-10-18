@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
 import type {
   VoiceControlSettings,
@@ -24,6 +24,8 @@ const SETTINGS: VoiceControlSettings = {
   coordinatorVoice: 'marin',
   agentVoiceMode: 'per-agent',
   maxSessionMinutes: 0,
+  // 0 disables idle auto-suspend so only the dedicated tests arm that timer.
+  idleSuspendMinutes: 0,
   customInstructions: ''
 }
 
@@ -493,5 +495,82 @@ describe('VoiceControlService', () => {
     expect(connectDeferred.closed).toBe(true)
     expect(service.getState()).toEqual({ state: 'idle', sessionId: null })
     expect(states.some((s) => s.state === 'live')).toBe(false)
+  })
+
+  describe('idle auto-suspend', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const idleSettings = (idleSuspendMinutes: number): VoiceControlSettings => ({
+      ...SETTINGS,
+      idleSuspendMinutes
+    })
+
+    it('stops a live session after the idle budget with endReason idle-suspend', async () => {
+      const { service, states } = createHarness({ getSettings: () => idleSettings(5) })
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      await vi.advanceTimersByTimeAsync(5 * 60_000 - 1)
+      expect(service.getState().state).toBe('live')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(service.getState()).toEqual({ state: 'idle', sessionId: null })
+      expect(states.at(-1)).toEqual({ sessionId: null, state: 'idle', endReason: 'idle-suspend' })
+    })
+
+    it('a user-transcript sideband event restarts the idle clock', async () => {
+      const { service, sideband, states } = createHarness({ getSettings: () => idleSettings(5) })
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      await vi.advanceTimersByTimeAsync(4 * 60_000)
+      sideband.state.handler?.onEvent({
+        type: 'conversation.item.input_audio_transcription.completed',
+        transcript: 'still here'
+      })
+      // 4 min past the activity — past the original deadline, inside the new budget.
+      await vi.advanceTimersByTimeAsync(4 * 60_000)
+      expect(service.getState().state).toBe('live')
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(states.at(-1)).toEqual({ sessionId: null, state: 'idle', endReason: 'idle-suspend' })
+    })
+
+    it('sendUserText restarts the idle clock', async () => {
+      const { service, states } = createHarness({ getSettings: () => idleSettings(5) })
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      await vi.advanceTimersByTimeAsync(4 * 60_000)
+      expect(service.sendUserText('s1', 'ping')).toBe(true)
+      await vi.advanceTimersByTimeAsync(4 * 60_000)
+      expect(service.getState().state).toBe('live')
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(states.at(-1)).toEqual({ sessionId: null, state: 'idle', endReason: 'idle-suspend' })
+    })
+
+    it('idleSuspendMinutes 0 never suspends', async () => {
+      const { service, states } = createHarness({ getSettings: () => idleSettings(0) })
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
+      expect(service.getState().state).toBe('live')
+      expect(states.at(-1)?.state).toBe('live')
+    })
+
+    it('the max-session hangup still ends with endReason max-session-minutes', async () => {
+      const { service, states } = createHarness({
+        getSettings: () => ({ ...idleSettings(0), maxSessionMinutes: 10 })
+      })
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(service.getState()).toEqual({ state: 'idle', sessionId: null })
+      expect(states.at(-1)).toEqual({
+        sessionId: null,
+        state: 'idle',
+        endReason: 'max-session-minutes'
+      })
+    })
   })
 })

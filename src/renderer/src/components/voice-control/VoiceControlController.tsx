@@ -16,6 +16,7 @@ import {
   publishVoiceControlToolActivity,
   publishVoiceControlTranscript,
   publishVoiceControlTranscriptEntry,
+  publishVoiceControlTurnSettled,
   resetVoiceControl
 } from './voice-control-store'
 import {
@@ -115,6 +116,7 @@ export function VoiceControlController() {
           void stopControl()
         },
         onTranscript: publishVoiceControlTranscript,
+        onTurnSettled: publishVoiceControlTurnSettled,
         onRemoteStream: (stream) => {
           stopOutputMeterRef.current?.()
           stopOutputMeterRef.current = startVoiceControlOutputMeter(stream)
@@ -143,6 +145,15 @@ export function VoiceControlController() {
   useEffect(() => {
     const cleanupState = window.api.voiceControl.onStateChanged((event) => {
       publishVoiceControlState(event)
+      if (event.state === 'idle' && event.endReason === 'idle-suspend') {
+        // Main hung up a quiet session on its own; say why the mic closed.
+        toast.message(
+          translate(
+            'auto.components.voice.control.VoiceControlController.a9794457e5',
+            'Voice control paused after a few quiet minutes.'
+          )
+        )
+      }
       if (event.state === 'error' || event.state === 'idle') {
         // Main ended the session (hangup budget, sideband loss). Tear down local audio
         // without a stop round-trip: on error it would erase the classified error state

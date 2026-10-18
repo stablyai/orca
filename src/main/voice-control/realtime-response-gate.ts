@@ -9,6 +9,11 @@
  *
  * Port of otto-voice's ResponseGate. A queued create is never cancelled or coalesced:
  * cancelling would cut the user off mid-sentence.
+ *
+ * Stall recovery: a create that sees no response lifecycle progress within the stall
+ * budget died on the wire (or its rejection did) — waiting longer wedges the session
+ * with the mic open and the pill spinning. The gate re-sends it (bounded; then dropped)
+ * so a lost turn costs seconds, not the session.
  */
 
 import { asWireRecord } from './realtime-wire-record'
@@ -21,9 +26,37 @@ export type ResponseGateCreateOutcome = 'sent' | 'requeued' | 'failed'
 
 export type ResponseGateObserver = {
   recordCreateOutcome(outcome: ResponseGateCreateOutcome, queuedWaitMs: number | null): void
+  /** A create sat unanswered past the stall budget and the gate force-resumed itself. */
+  recordStallRecovery?(ref: string, attempt: number, dropped: boolean): void
+}
+
+/** Injectable so tests drive the stall timer synchronously. */
+export type ResponseGateScheduler = {
+  setTimeout: (callback: () => void, ms: number) => ReturnType<typeof setTimeout>
+  clearTimeout: (handle: ReturnType<typeof setTimeout>) => void
+}
+
+export type ResponseGateOptions = {
+  /** Silence budget for an outstanding create before the gate re-sends it. 0 disables. */
+  stallMs?: number
+  scheduler?: ResponseGateScheduler
 }
 
 const ACTIVE_RESPONSE_REJECTION = 'conversation_already_has_active_response'
+
+/** A create unanswered this long on a live socket died on the wire — waiting longer wedges the session. */
+const DEFAULT_STALL_MS = 20_000
+/** Per-create resend cap; past it the create is dropped so the session outlives the turn. */
+const MAX_STALL_RECOVERIES = 2
+
+const defaultScheduler: ResponseGateScheduler = {
+  setTimeout: (callback, ms) => {
+    const handle = setTimeout(callback, ms)
+    handle.unref?.()
+    return handle
+  },
+  clearTimeout: (handle) => clearTimeout(handle)
+}
 
 let refCounter = 0
 
@@ -45,17 +78,32 @@ function readResponseRef(event: RealtimeEvent): string | null {
   return typeof ref === 'string' ? ref : null
 }
 
+type QueuedCreate = {
+  event: RealtimeEvent
+  ref: string
+  enqueuedAt: number
+  /** Stall-recovery resends so far — capped so a dead create can't loop forever. */
+  recoveries: number
+}
+
 export class RealtimeResponseGate {
-  private pending: { event: RealtimeEvent; ref: string; enqueuedAt: number } | null = null
-  private queue: { event: RealtimeEvent; ref: string; enqueuedAt: number }[] = []
+  private pending: QueuedCreate | null = null
+  private queue: QueuedCreate[] = []
   private activeResponseIds = new Set<string>()
   private mutedRejectionStreak = 0
+  private stallTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly stallMs: number
+  private readonly scheduler: ResponseGateScheduler
 
   constructor(
     private readonly send: (event: RealtimeEvent) => void,
     private readonly observer: ResponseGateObserver,
-    private readonly clock: () => number = () => Date.now()
-  ) {}
+    private readonly clock: () => number = () => Date.now(),
+    options: ResponseGateOptions = {}
+  ) {
+    this.stallMs = options.stallMs ?? DEFAULT_STALL_MS
+    this.scheduler = options.scheduler ?? defaultScheduler
+  }
 
   /**
    * Every outbound sideband event goes through here; non-creates pass immediately.
@@ -68,19 +116,29 @@ export class RealtimeResponseGate {
       return null
     }
     const ref = tagResponseCreate(event)
-    const entry = { event, ref, enqueuedAt: this.clock() }
+    const entry: QueuedCreate = { event, ref, enqueuedAt: this.clock(), recoveries: 0 }
     if (this.pending !== null || this.activeResponseIds.size > 0) {
       this.queue.push(entry)
+      this.syncStallTimer()
       return { outcome: 'queued', ref }
     }
     this.pending = entry
     this.send(event)
     this.observer.recordCreateOutcome('sent', null)
+    this.syncStallTimer()
     return { outcome: 'sent', ref }
   }
 
   /** Feed every inbound sideband event. */
   observe(event: RealtimeEvent): void {
+    try {
+      this.observeEvent(event)
+    } finally {
+      this.syncStallTimer()
+    }
+  }
+
+  private observeEvent(event: RealtimeEvent): void {
     switch (event.type) {
       case 'response.created': {
         const id = asWireRecord(event.response)?.id
@@ -154,6 +212,66 @@ export class RealtimeResponseGate {
 
   get queuedCount(): number {
     return this.queue.length + (this.pending === null ? 0 : 1)
+  }
+
+  /** Stops the stall timer; the session teardown owns the call. */
+  dispose(): void {
+    this.disarmStallTimer()
+  }
+
+  /**
+   * Armed while any create is outstanding (pending or queued). Not reset by unrelated
+   * events — the budget is "silence toward this create", not "socket quiet".
+   */
+  private syncStallTimer(): void {
+    if (this.stallMs <= 0) {
+      return
+    }
+    if (this.pending === null && this.queue.length === 0) {
+      this.disarmStallTimer()
+      return
+    }
+    if (this.stallTimer === null) {
+      this.stallTimer = this.scheduler.setTimeout(() => this.onStall(), this.stallMs)
+    }
+  }
+
+  private disarmStallTimer(): void {
+    if (this.stallTimer !== null) {
+      this.scheduler.clearTimeout(this.stallTimer)
+      this.stallTimer = null
+    }
+  }
+
+  private onStall(): void {
+    this.stallTimer = null
+    if (this.pending !== null) {
+      const stalled = this.pending
+      stalled.recoveries += 1
+      if (stalled.recoveries > MAX_STALL_RECOVERIES) {
+        // The provider will never answer this create — drop it so the turns behind it
+        // can move; the session outlives the lost answer.
+        this.pending = null
+        this.observer.recordStallRecovery?.(stalled.ref, stalled.recoveries, true)
+        this.observer.recordCreateOutcome('failed', this.clock() - stalled.enqueuedAt)
+        this.flushQueue()
+      } else {
+        this.observer.recordStallRecovery?.(stalled.ref, stalled.recoveries, false)
+        // Resend from the head: the first send died unacknowledged. Active ids may be
+        // zombies (their done never arrived) — cleared so the resend can go; if one was
+        // real, the rejection comes back as active-response and the requeue self-heals.
+        this.pending = null
+        this.activeResponseIds.clear()
+        this.mutedRejectionStreak = 0
+        this.queue.unshift(stalled)
+        this.flushQueue()
+      }
+    } else if (this.queue.length > 0 && this.activeResponseIds.size === 0) {
+      // A wedged flush — no response is active yet the queue never moved.
+      this.flushQueue()
+    }
+    // Queued behind a genuinely active response is normal flow, not a stall.
+    this.syncStallTimer()
   }
 
   private flushQueue(): void {

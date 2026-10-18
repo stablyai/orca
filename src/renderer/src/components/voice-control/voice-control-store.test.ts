@@ -7,6 +7,7 @@ import {
   publishVoiceControlState,
   publishVoiceControlToolActivity,
   publishVoiceControlTranscript,
+  publishVoiceControlTurnSettled,
   resetVoiceControl,
   useVoiceControlUi
 } from './voice-control-store'
@@ -98,6 +99,24 @@ describe('voice-control-store', () => {
       publishVoiceControlToolActivity({ sessionId: 's1', tool: 'list_agents' })
       publishVoiceControlTranscript({ speaker: 'user', text: 'never mind' })
     })
+    expect(result.current.toolActivity).toBeNull()
+  })
+
+  it('retires tool narration when a turn settles, without touching the agents map', () => {
+    const { result } = harness()
+    act(() => {
+      publishVoiceControlState({ sessionId: 's1', state: 'live' })
+      publishVoiceControlAgentActivity({ sessionId: 's1', paneKey: 'p1', activity: 'thinking' })
+      publishVoiceControlToolActivity({ sessionId: 's1', tool: 'run_command' })
+    })
+    expect(result.current.toolActivity).not.toBeNull()
+
+    act(() => publishVoiceControlTurnSettled())
+    expect(result.current.toolActivity).toBeNull()
+    expect(result.current.agents).toEqual({ p1: { activity: 'thinking', spokenName: undefined } })
+
+    // A settle with nothing showing is a no-op.
+    act(() => publishVoiceControlTurnSettled())
     expect(result.current.toolActivity).toBeNull()
   })
 

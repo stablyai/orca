@@ -20,6 +20,7 @@ type VoiceControlSettingsSectionProps = {
 }
 
 const MAX_SESSION_MINUTE_OPTIONS = [0, 15, 30, 60, 120] as const
+const IDLE_SUSPEND_MINUTE_OPTIONS = [0, 2, 5, 15] as const
 
 function formatCoordinatorVoiceName(voice: OpenAiRealtimeVoice): string {
   return voice.slice(0, 1).toUpperCase() + voice.slice(1)
@@ -46,6 +47,28 @@ function maxSessionMinutesLabel(minutes: number): string {
         'auto.components.settings.VoiceControlSettingsSection.0e2029a54e',
         'Unlimited'
       )
+  }
+}
+
+function idleSuspendMinutesLabel(minutes: number): string {
+  switch (minutes) {
+    case 2:
+      return translate(
+        'auto.components.settings.VoiceControlSettingsSection.c6b7942f95',
+        '2 minutes'
+      )
+    case 5:
+      return translate(
+        'auto.components.settings.VoiceControlSettingsSection.33b29f0de3',
+        '5 minutes'
+      )
+    case 15:
+      return translate(
+        'auto.components.settings.VoiceControlSettingsSection.f20cc19e9c',
+        '15 minutes'
+      )
+    default:
+      return translate('auto.components.settings.VoiceControlSettingsSection.f6ba2a270c', 'Off')
   }
 }
 
@@ -212,6 +235,45 @@ export function VoiceControlSettingsSection({
             {MAX_SESSION_MINUTE_OPTIONS.map((minutes) => (
               <SelectItem key={minutes} value={String(minutes)}>
                 {maxSessionMinutesLabel(minutes)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="min-w-0 space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.VoiceControlSettingsSection.0605aacbb4',
+              'Suspend when quiet'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.VoiceControlSettingsSection.22db9fce48',
+              'Ends the session after this many minutes with no speech or tool activity. Realtime audio bills per connected minute, so a quiet session hangs up instead of idling.'
+            )}
+          </p>
+        </div>
+        <Select
+          value={String(control.idleSuspendMinutes)}
+          onValueChange={(value) => updateControl({ idleSuspendMinutes: Number(value) })}
+        >
+          <SelectTrigger
+            size="sm"
+            className="w-52 shrink-0"
+            aria-label={translate(
+              'auto.components.settings.VoiceControlSettingsSection.0605aacbb4',
+              'Suspend when quiet'
+            )}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {IDLE_SUSPEND_MINUTE_OPTIONS.map((minutes) => (
+              <SelectItem key={minutes} value={String(minutes)}>
+                {idleSuspendMinutesLabel(minutes)}
               </SelectItem>
             ))}
           </SelectContent>

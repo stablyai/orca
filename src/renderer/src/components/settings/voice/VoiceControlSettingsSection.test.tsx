@@ -44,6 +44,9 @@ describe('VoiceControlSettingsSection', () => {
     expect(screen.getByRole('combobox', { name: 'Max session length' })).toHaveTextContent(
       '30 minutes'
     )
+    expect(screen.getByRole('combobox', { name: 'Suspend when quiet' })).toHaveTextContent(
+      '5 minutes'
+    )
     expect(screen.getByText('Realtime audio is billed per minute of session time.')).toBeVisible()
   })
 
@@ -103,6 +106,22 @@ describe('VoiceControlSettingsSection', () => {
 
     expect(onUpdateVoiceSettings).toHaveBeenCalledWith({
       control: { ...getDefaultVoiceControlSettings(), maxSessionMinutes: 0 }
+    })
+  })
+
+  it('merges the quiet-suspend limit onto the control, with Off as zero minutes', async () => {
+    const { user, onUpdateVoiceSettings } = renderSection()
+
+    await user.click(screen.getByRole('combobox', { name: 'Suspend when quiet' }))
+
+    for (const label of ['Off', '2 minutes', '5 minutes', '15 minutes']) {
+      expect(screen.getByRole('option', { name: label })).toBeVisible()
+    }
+
+    await user.click(screen.getByRole('option', { name: 'Off' }))
+
+    expect(onUpdateVoiceSettings).toHaveBeenCalledWith({
+      control: { ...getDefaultVoiceControlSettings(), idleSuspendMinutes: 0 }
     })
   })
 
