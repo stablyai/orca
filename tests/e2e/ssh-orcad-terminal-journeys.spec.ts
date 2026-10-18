@@ -194,3 +194,5 @@ test('a managed pane outlives a dropped SSH link and a frozen host', async (// o
     await page.screenshot({ path: testInfo.outputPath('managed-fault-recovery.png') })
   })
 })
+
+// CI probe: main baseline for the managed-orcad Docker lane (not for merge).
