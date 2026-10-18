@@ -23,11 +23,14 @@ function enqueueRender(fn: () => Promise<void>): void {
  */
 export default function D2Block({
   content,
-  isDark
+  isDark,
+  showSource = true
 }: {
   content: string
   isDark: boolean
-}): React.JSX.Element {
+  // Why: the rich editor already shows the editable source right above.
+  showSource?: boolean
+}): React.JSX.Element | null {
   const [result, setResult] = useState<D2RenderResult | null>(null)
 
   useEffect(() => {
@@ -62,25 +65,31 @@ export default function D2Block({
   if (result?.ok) {
     return <div className="d2-block" dangerouslySetInnerHTML={{ __html: result.svg }} />
   }
+  const notice =
+    result?.reason === 'error' ? (
+      <div className="d2-error">
+        {translate('auto.components.editor.D2Block.diagramError', 'Diagram error:')}{' '}
+        {result.message}
+      </div>
+    ) : result?.reason === 'missing' ? (
+      <div className="d2-hint">
+        {translate(
+          'auto.components.editor.D2Block.installHint',
+          'Install the d2 CLI to render this diagram.'
+        )}
+      </div>
+    ) : null
+  if (!notice && !showSource) {
+    return null
+  }
   return (
     <div className="d2-block">
-      {result?.reason === 'error' && (
-        <div className="d2-error">
-          {translate('auto.components.editor.D2Block.diagramError', 'Diagram error:')}{' '}
-          {result.message}
-        </div>
+      {notice}
+      {showSource && (
+        <pre>
+          <code>{content}</code>
+        </pre>
       )}
-      {result?.reason === 'missing' && (
-        <div className="d2-hint">
-          {translate(
-            'auto.components.editor.D2Block.installHint',
-            'Install the d2 CLI to render this diagram.'
-          )}
-        </div>
-      )}
-      <pre>
-        <code>{content}</code>
-      </pre>
     </div>
   )
 }

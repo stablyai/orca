@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
+import D2Block from '../../diagrams/D2Block'
 import MermaidBlock from '../../diagrams/MermaidBlock'
 import { useMermaidDiagramExpand } from '../../diagrams/use-mermaid-diagram-expand'
 import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
@@ -144,6 +145,11 @@ export function RichMarkdownCodeBlock({
             isDark={isDark}
             onExpand={expandMermaidDiagram}
           />
+        </div>
+      )}
+      {language === 'd2' && node.textContent.trim() && (
+        <div contentEditable={false} className="d2-preview">
+          <D2Block content={node.textContent.trim()} isDark={isDark} showSource={false} />
         </div>
       )}
     </NodeViewWrapper>

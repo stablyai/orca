@@ -52,4 +52,14 @@ describe('D2Block', () => {
     expect(screen.getByText('a -> b')).toBeVisible()
     expect(container.querySelector('.d2-hint, .d2-error')).toBeNull()
   })
+
+  it('omits the source and renders nothing when there is nothing to report', async () => {
+    renderD2.mockResolvedValue({ ok: false, reason: 'error', message: 'bad' })
+    const { container, rerender } = render(<D2Block content="a ->" isDark showSource={false} />)
+    expect(await screen.findByText(/bad/)).toBeVisible()
+    expect(container.querySelector('pre')).toBeNull()
+    renderD2.mockResolvedValue({ ok: false, reason: 'unavailable' })
+    rerender(<D2Block content="a -> b" isDark showSource={false} />)
+    await waitFor(() => expect(container).toBeEmptyDOMElement())
+  })
 })
