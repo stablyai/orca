@@ -288,9 +288,8 @@ describe('foldMobileNativeChatMessages', () => {
     expect(folded.map((message) => message.id)).toEqual(['a1'])
   })
 
-  // Mobile draws no task list, so a hidden plan update must not split the run around it.
-  it('keeps one tool run across a Codex plan update it does not draw', () => {
-    const plan: NativeChatMessage = {
+  function planFrame(head: string): NativeChatMessage {
+    return {
       id: 'plan',
       role: 'system',
       timestamp: 0,
@@ -302,21 +301,33 @@ describe('foldMobileNativeChatMessages', () => {
           providerFrame: {
             provider: 'codex',
             kind: 'notification:turn/plan/updated',
-            payload: { head: '{}', byteLength: 2, digest: 'digest', truncated: false }
+            payload: { head, byteLength: head.length, digest: 'digest', truncated: false }
           }
         }
       ]
     }
+  }
+
+  // Desktop draws a Codex plan update in place, as its task list.
+  it('draws a Codex plan update where it happened, as an update_plan call', () => {
     const folded = fold([
       assistant('a1', 'Working.'),
       toolCall('c1'),
       toolResult('r1', 'ok'),
-      plan,
+      planFrame('{"plan":[{"step":"Port rows","status":"inProgress"}]}'),
       toolCall('c2'),
       toolResult('r2', 'ok')
     ])
+    expect(folded.map((message) => message.id)).toEqual(['a1', 'plan', 'c2'])
+    expect(folded[1]).toMatchObject({
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'update_plan', state: 'completed' }]
+    })
+  })
+
+  it('draws nothing for a plan update it cannot read', () => {
+    const folded = fold([assistant('a1', 'Working.'), planFrame('{}')])
     expect(folded.map((message) => message.id)).toEqual(['a1'])
-    expect(folded[0]?.blocks.filter((block) => block.type === 'tool-call')).toHaveLength(2)
   })
 
   it('still folds a result whose call is inside the window', () => {

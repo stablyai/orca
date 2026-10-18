@@ -35,6 +35,13 @@ export const colors = {
   gitDecorationDeleted: '#c74e39',
   diffAddedBg: 'rgba(129, 184, 139, 0.1)',
   diffDeletedBg: 'rgba(199, 78, 57, 0.11)',
+  // Desktop's `--diff-*-gutter`: a tinted row's line-number column.
+  diffAddedGutter: 'rgba(129, 184, 139, 0.3)',
+  diffDeletedGutter: 'rgba(199, 78, 57, 0.32)',
+  // Desktop's `--chat-diff-*`: diff text in the chat, mixed toward the foreground so it reads on a
+  // tinted row where the git decoration colours would not.
+  chatDiffAdded: '#a5ccac',
+  chatDiffRemoved: '#d68273',
 
   syntaxComment: '#6a9955',
   syntaxKeyword: '#569cd6',

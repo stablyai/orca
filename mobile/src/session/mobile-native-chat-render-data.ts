@@ -7,7 +7,11 @@ import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journa
 import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import { nativeChatStreamingMessage } from '../../../src/shared/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../src/shared/native-chat-provider-frame-summary'
-import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
+import {
+  foldToolMessages,
+  isUndrawnProviderFrameMessage
+} from '../../../src/shared/native-chat-tool-fold'
+import { projectNativeChatTaskListFrames } from '../../../src/shared/native-chat-task-list-frames'
 import { foldSubagentItems } from '../../../src/shared/native-chat-subagent-items'
 import { prepareNativeChatMessages } from '../../../src/shared/native-chat-message-preparation'
 import {
@@ -66,21 +70,25 @@ export function foldMobileNativeChatMessages(
   // The conversation only: a subagent's rows are that subagent's, and mobile shows
   // each spawn as its roster row (one line per child) rather than the child's own rows.
   // Prepared as desktop prepares them, so a skill turn and an image marker turn draw as the
-  // user's message. An unrecognised event with no words of its own is stored, not drawn;
-  // mobile draws no task list, so a plan update goes too, before folding, so it never splits
-  // a tool run.
-  return stripNoiseMessages(
-    foldToolMessages(
-      foldSubagentItems(
-        prepareNativeChatMessages(
-          messages.filter(
-            (message) => isRootAgentJournalItem(message) && !isWordlessProviderFrameMessage(message)
-          ),
-          agent
+  // user's message. An unrecognised event with no words of its own is stored, not drawn, so
+  // it goes before folding and never splits a tool run. A Codex plan update draws as its task
+  // list, projected after folding as desktop does, so it never takes another call's result; one
+  // whose payload cannot be read draws nothing, as on desktop.
+  return projectNativeChatTaskListFrames(
+    stripNoiseMessages(
+      foldToolMessages(
+        foldSubagentItems(
+          prepareNativeChatMessages(
+            messages.filter(
+              (message) =>
+                isRootAgentJournalItem(message) && !isUndrawnProviderFrameMessage(message)
+            ),
+            agent
+          )
         )
       )
     )
-  )
+  ).filter((message) => !isWordlessProviderFrameMessage(message))
 }
 
 /** Assemble the folded transcript, streaming text, and optimistic user echoes. */

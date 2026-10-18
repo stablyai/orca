@@ -13,6 +13,8 @@ import {
 } from '../../../src/shared/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../src/shared/native-chat-messages-waiting-behind-live-turn'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../src/shared/native-chat-streaming'
+import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
+import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -34,6 +36,17 @@ export type MobileNativeChatTurnRow = {
   /** Set only on a settled turn — the one row that has activity to disclose. */
   turnKey?: string
   activeTurnIsWorking: boolean
+  /** The live frontier: the last row where the agent spoke or acted. Only its run is live. */
+  trailingRun: boolean
+  /** Desktop parity: an unbroken stretch of tool rows and finished thoughts draws as one run,
+   *  at its first row. Set on that row: every member, in order. */
+  workRun?: readonly NativeChatMessage[]
+  /** A later member of a work run, which its first row draws. */
+  joinsWorkRun?: boolean
+  /** A settled turn folded behind its "Worked for" row hides every row but its answer. */
+  foldedAway?: boolean
+  /** The reasoning disclosures the reader opened, for the thoughts drawn inside a work run. */
+  openReasoning?: ReadonlySet<string>
   /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
   mayStillGrow: boolean
   /** The live activity line discloses this open reasoning block, so its row draws nothing. */
@@ -94,6 +107,7 @@ export function useMobileNativeChatTurnDisclosure({
   activityText = null,
   stopping = false,
   lineYields = false,
+  receipts,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
@@ -112,6 +126,8 @@ export function useMobileNativeChatTurnDisclosure({
   stopping?: boolean
   /** A prompt the reader must answer replaces the live activity line. */
   lineYields?: boolean
+  /** Resolved prompts by row; an approval's receipt does not move the agent past its run. */
+  receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   /** Host/worktree/tab identity for timing and disclosure isolation. */
   scopeKey: string
 }): {
@@ -208,6 +224,15 @@ export function useMobileNativeChatTurnDisclosure({
       },
     [expandedReasoning, line]
   )
+  const { fold, trailingRunIndex, workRuns } = useMobileNativeChatTranscriptRows({
+    enabled,
+    rows,
+    turnKeys,
+    receipts,
+    completedByTurn,
+    expandedTurnKeys: expandedTurnIds,
+    liveReasoningId
+  })
   const latestAssistantId = useMemo(
     () => waiting.listMessages.findLast((row) => row.role === 'assistant')?.id ?? null,
     [waiting.listMessages]
@@ -233,12 +258,21 @@ export function useMobileNativeChatTurnDisclosure({
         // closure per row would be a new identity every render of a streaming
         // transcript, defeating the row's memo; caching one per turn would mean
         // writing a ref during render, which react-freeze can discard.
-        turnKey: turnKey && turnStatus?.workedSeconds != null ? turnKey : undefined,
+        // Offered only where the fold hides something, as on desktop.
+        turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
+        ...(fold.foldedRows.has(index) ? { foldedAway: true } : {}),
         // With no user boundary at all, the session's working state stays authoritative. The bridge
         // lane has no turns: only its synthetic streaming row is known to be in the live one.
         activeTurnIsWorking: enabled
           ? inLiveWorkingTurn(index)
           : isWorking && message.id === NATIVE_CHAT_STREAMING_ID,
+        trailingRun:
+          index === trailingRunIndex ||
+          (workRuns.heads.get(index)?.includes(rows[trailingRunIndex]!) ?? false),
+        ...(workRuns.heads.has(index)
+          ? { workRun: workRuns.heads.get(index), openReasoning: expandedReasoning }
+          : {}),
+        ...(workRuns.joined.has(index) ? { joinsWorkRun: true } : {}),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
         reasoningIsLive: message.id === liveReasoningId,
         reasoningExpanded:
@@ -263,6 +297,10 @@ export function useMobileNativeChatTurnDisclosure({
       completedByTurn,
       expandedTurnIds,
       inLiveWorkingTurn,
+      trailingRunIndex,
+      workRuns,
+      fold,
+      rows,
       latestAssistantId,
       lineYields,
       liveReasoningId,

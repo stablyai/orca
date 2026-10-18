@@ -1,4 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
+import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat-task-list-history'
+import {
+  MobileNativeChatDisclosureContext,
+  useMobileNativeChatDisclosures
+} from './mobile-native-chat-disclosure-store'
 import {
   ActivityIndicator,
   FlatList,
@@ -297,11 +302,16 @@ export function MobileNativeChatView({
     // The display status, decided once in the session hook.
     stopping: turnIndicator?.stopping === true,
     lineYields: ask != null || permission != null || question != null,
+    receipts,
     scopeKey: sendSurfaceId
   })
 
+  // What the reader opened in this chat's runs, kept above the rows the list recycles.
+  const disclosures = useMobileNativeChatDisclosures(sendSurfaceId)
+  const taskListPredecessors = useMemo(() => nativeChatTaskListPredecessors(data), [data])
   const renderItem = useMobileNativeChatRowRenderer({
     toolsExpanded,
+    taskListPredecessors,
     fontScale,
     onOpenFile,
     structuredActivityUi,
@@ -353,39 +363,41 @@ export function MobileNativeChatView({
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
-          <MobileNativeChatScrollHold headKey={turns.listMessages[0]?.id} listRef={listRef} />
-          <GestureDetector gesture={pinchGesture}>
-            <FlatList
-              ref={listRef}
-              data={history.listRows}
-              keyExtractor={(item) => item.id}
-              renderItem={history.renderListRow}
-              contentContainerStyle={
-                toolCallCount > 0 ? styles.listContentUnderFloatingControls : styles.listContent
-              }
-              // Let link/file taps land while the composer keyboard is up
-              // instead of being swallowed by the dismiss gesture.
-              keyboardShouldPersistTaps="handled"
-              onScroll={onScroll}
-              onScrollBeginDrag={beginUserScroll}
-              onScrollEndDrag={endUserDrag}
-              onMomentumScrollBegin={beginMomentum}
-              onMomentumScrollEnd={endMomentum}
-              scrollEventThrottle={32}
-              onContentSizeChange={pinToTailAfterContentResize}
-              onLayout={pinToTail}
-              maintainVisibleContentPosition={mobileNativeChatRowAnchor(hasMore === true)}
-              ListHeaderComponent={history.withHistory(
-                mobileNativeChatListHeader(hasMore, loadingEarlier, loadEarlier)
-              )}
-              ListFooterComponent={mobileNativeChatListFooter(
-                liveStatus,
-                turns.waitingRows,
-                renderItem
-              )}
-              ListEmptyComponent={emptyStateView}
-            />
-          </GestureDetector>
+          <MobileNativeChatDisclosureContext.Provider value={disclosures}>
+            <MobileNativeChatScrollHold headKey={turns.listMessages[0]?.id} listRef={listRef} />
+            <GestureDetector gesture={pinchGesture}>
+              <FlatList
+                ref={listRef}
+                data={history.listRows}
+                keyExtractor={(item) => item.id}
+                renderItem={history.renderListRow}
+                contentContainerStyle={
+                  toolCallCount > 0 ? styles.listContentUnderFloatingControls : styles.listContent
+                }
+                // Let link/file taps land while the composer keyboard is up
+                // instead of being swallowed by the dismiss gesture.
+                keyboardShouldPersistTaps="handled"
+                onScroll={onScroll}
+                onScrollBeginDrag={beginUserScroll}
+                onScrollEndDrag={endUserDrag}
+                onMomentumScrollBegin={beginMomentum}
+                onMomentumScrollEnd={endMomentum}
+                scrollEventThrottle={32}
+                onContentSizeChange={pinToTailAfterContentResize}
+                onLayout={pinToTail}
+                maintainVisibleContentPosition={mobileNativeChatRowAnchor(hasMore === true)}
+                ListHeaderComponent={history.withHistory(
+                  mobileNativeChatListHeader(hasMore, loadingEarlier, loadEarlier)
+                )}
+                ListFooterComponent={mobileNativeChatListFooter(
+                  liveStatus,
+                  turns.waitingRows,
+                  renderItem
+                )}
+                ListEmptyComponent={emptyStateView}
+              />
+            </GestureDetector>
+          </MobileNativeChatDisclosureContext.Provider>
           <MobileNativeChatFloatingControls
             toolCallCount={toolCallCount}
             toolsExpanded={toolsExpanded}

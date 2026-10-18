@@ -2,17 +2,29 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../../../shared/native-chat-types'
-import {
-  editFilesFromToolPair,
-  isEditToolName
-} from '../../../../shared/native-chat-edit-normalize'
-import type { NativeChatEditFile } from '../../../../shared/native-chat-edit-model'
+} from './native-chat-types'
+import { editFilesFromToolPair, isEditToolName } from './native-chat-edit-normalize'
+import type { NativeChatEditFile, NativeChatEditLine } from './native-chat-edit-model'
 import {
   editFilesFromPatchText,
   type NativeChatEditFileSummary
-} from '../../../../shared/native-chat-edit-patch-files'
+} from './native-chat-edit-patch-files'
 import { pairToolBlocks } from './native-chat-tool-fold'
+
+/** A diff card's own words. Desktop maps these onto `translate`; mobile renders them. */
+export const NATIVE_CHAT_DIFF_CARD_COPY = {
+  diffTruncated: 'Diff truncated',
+  diffGap: 'Lines not shown',
+  copyDiff: 'Copy diff'
+} as const
+
+/** A card's rows as unified patch text, for its copy button. */
+export function nativeChatEditFilePatchText(lines: readonly NativeChatEditLine[]): string {
+  return lines
+    .filter((line) => line.kind !== 'gap')
+    .map((line) => `${line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}${line.text}`)
+    .join('\n')
+}
 
 const normalizedEdits = new WeakMap<
   NativeChatBlock,

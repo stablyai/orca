@@ -1,5 +1,5 @@
-import { unwrapLoginShellCommand } from '../../../../shared/native-chat-tool-preview-prefix'
-import { normalizeToolInput } from '../../../../shared/native-chat-tool-summary'
+import { unwrapLoginShellCommand } from './native-chat-tool-preview-prefix'
+import { normalizeToolInput } from './native-chat-tool-summary'
 
 type NativeChatTextInputKey = 'command' | 'cmd' | 'description' | 'url'
 type NativeChatTextInput = Partial<Record<NativeChatTextInputKey, unknown>>

@@ -4,7 +4,10 @@ import type {
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
-import { buildDiffSummaries, normalizedToolEditFiles } from './native-chat-edit-cards'
+import {
+  buildDiffSummaries,
+  normalizedToolEditFiles
+} from '../../../../shared/native-chat-edit-cards'
 
 export type NativeChatDiffTarget = {
   messageId: string

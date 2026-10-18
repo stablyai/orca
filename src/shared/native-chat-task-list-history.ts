@@ -3,12 +3,12 @@ import {
   normalizeNativeChatTaskList,
   type NativeChatTaskList,
   type NativeChatTaskListTool
-} from '../../../../shared/native-chat-task-list'
+} from './native-chat-task-list'
 import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock
-} from '../../../../shared/native-chat-types'
+} from './native-chat-types'
 import { pairToolBlocks } from './native-chat-tool-fold'
 
 export type NativeChatTaskListPredecessors = Partial<
