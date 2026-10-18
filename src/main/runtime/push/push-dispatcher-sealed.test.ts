@@ -64,11 +64,12 @@ describe('PushDispatcher sealed content', () => {
     expect(dismissB?.notification.notificationId).toBe(alertB?.notification.notificationId)
   })
 
-  it('never sends readable text to a sealed phone without a pairing token', async () => {
+  it.each([
+    ['an empty token', ''],
+    ['a device-key row', undefined]
+  ])('never sends readable text to a sealed phone with %s', async (_label, token) => {
     const harness = createHarness({
-      devices: [
-        { deviceId: 'a', token: '', pushRegistration: registration({ sealedContent: 'e2e1' }) }
-      ]
+      devices: [{ deviceId: 'a', token, pushRegistration: registration({ sealedContent: 'e2e1' }) }]
     })
 
     harness.dispatcher.enqueue(notification())

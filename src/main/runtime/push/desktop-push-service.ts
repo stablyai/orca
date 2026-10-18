@@ -119,10 +119,14 @@ export class DesktopPushService {
     if (this.stopped || this.deliveryMode === 'disabled') {
       return { accepted: false, reason: 'unavailable' }
     }
+    // Fail closed like real pushes: a sealed phone with no token to seal with never gets readable text.
+    if (registration.sealedContent && !device.token) {
+      return { accepted: false, reason: 'rejected' }
+    }
     // Explicit tests target only the caller and bypass automatic activity filters.
     const result = await this.client.send({
       registrationIds: [registration.registrationId],
-      notification: buildTestPushNotification(registration, device.token)
+      notification: buildTestPushNotification(registration, device.token ?? '')
     })
     if (!result.ok) {
       return {

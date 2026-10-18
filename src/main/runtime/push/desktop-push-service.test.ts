@@ -173,7 +173,10 @@ it('keeps a phone that asked for sealed pushes sealed, test push included', asyn
   const { service, registry, deviceId, send, dispatch } = createService()
   await service.register({ ...REGISTER_INPUT, deviceId, sealedContent: 'e2e1' })
   expect(registry.getDevice(deviceId)?.pushRegistration?.sealedContent).toBe('e2e1')
-  const token = registry.getDevice(deviceId)!.token
+  const token = registry.getDevice(deviceId)?.token
+  if (!token) {
+    throw new Error('expected a token-authenticated phone')
+  }
 
   send.mockResolvedValue({ ok: true, results: [{ registrationId: 'reg-1', status: 'queued' }] })
   await expect(service.test(deviceId)).resolves.toEqual({ accepted: true })
@@ -196,6 +199,24 @@ it('keeps a phone that asked for sealed pushes sealed, test push included', asyn
     title: 'feat/x - Claude finished',
     body: 'Done.'
   })
+})
+
+it('refuses a sealed test push for a device-key row, which has no token to seal with', async () => {
+  const { service, registry, deviceId, send } = createService()
+  const keyed = registry.forkDeviceKey(
+    deviceId,
+    'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+    'phone'
+  )
+  expect(keyed.token).toBeUndefined()
+  await service.register({ ...REGISTER_INPUT, deviceId: keyed.deviceId, sealedContent: 'e2e1' })
+  expect(registry.getDevice(keyed.deviceId)?.pushRegistration?.sealedContent).toBe('e2e1')
+
+  await expect(service.test(keyed.deviceId)).resolves.toEqual({
+    accepted: false,
+    reason: 'rejected'
+  })
+  expect(send).not.toHaveBeenCalled()
 })
 
 it('does not claim success for missing registrations or failed gateway sends', async () => {
