@@ -33,6 +33,8 @@ export type VoiceScreenDriverDeps = {
 
 const TREE_LINE_LIMIT = 320
 const TERMINAL_LINE_LIMIT = 120
+/** Lines of each visible terminal's tail folded into see_screen — enough to ground "what's on screen" without re-reading scrollback. */
+const TERMINAL_SNAPSHOT_LINE_LIMIT = 8
 const XTERM_SELECTOR = '.xterm'
 
 /** Names the failing CDP method in the error — a bare "Invalid parameters" with no method attached cost a whole live session of guesswork. */
@@ -66,9 +68,16 @@ export class VoiceScreenDriver {
         lines.length > TREE_LINE_LIMIT
           ? `${lines.slice(0, TREE_LINE_LIMIT).join('\n')}\n… (${lines.length - TREE_LINE_LIMIT} more lines not shown — scroll or narrow the view)`
           : result.snapshot
-      return exclude.size > 0
-        ? `${capped}\n(One or more terminal panes are visible but not in this tree; read_terminal shows their visible text.)`
-        : capped
+      if (exclude.size === 0) {
+        return capped
+      }
+      // Why fold the tail in: a terminal-dominated window otherwise reads as an empty,
+      // half-loaded view, and the model improvises ("still loading — I'll wait") instead
+      // of answering from what's actually on screen.
+      const tail = await this.terminalTail()
+      return tail
+        ? `${capped}\n(Terminal pane(s) are on screen but excluded from the tree above. Their visible tail:\n${tail}\nread_terminal shows their full visible text.)`
+        : `${capped}\n(One or more terminal panes are visible but not in this tree; read_terminal shows their visible text.)`
     } catch (error) {
       // A detach mid-snapshot (user opened DevTools) reads as "can't see it", not a crash.
       this.attachedTo = null
@@ -191,6 +200,18 @@ export class VoiceScreenDriver {
       traceVoiceScreenDriver('read-terminal-failed', errorDetail(error))
       return null
     }
+  }
+
+  /** The last lines of the visible terminal text, for see_screen's grounding footer. */
+  private async terminalTail(): Promise<string | null> {
+    const text = await this.readTerminalText()
+    if (!text || text.trim().length === 0) {
+      return null
+    }
+    const lines = text.split('\n')
+    return lines.length > TERMINAL_SNAPSHOT_LINE_LIMIT
+      ? lines.slice(-TERMINAL_SNAPSHOT_LINE_LIMIT).join('\n')
+      : text
   }
 
   private senderOrNull(): CdpCommandSender | null {

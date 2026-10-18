@@ -7,6 +7,7 @@
 import { e2eConfig } from '@/lib/e2e-config'
 import {
   classifyControlTranscriptEvent,
+  isResponseSettledEvent,
   type VoiceControlTranscriptLine
 } from './voice-control-transcript-events'
 
@@ -26,6 +27,8 @@ export type VoiceControlSessionOptions = {
   onLocalTrackEnded: () => void
   /** Completed transcript lines from the event channel (user + coordinator). */
   onTranscript: (line: VoiceControlTranscriptLine) => void
+  /** A provider turn settled (answered, cancelled, failed) — stale tool narration clears. */
+  onTurnSettled?: () => void
   /** Fires when the coordinator's audio track arrives (after the SDP answer). */
   onRemoteStream: (stream: MediaStream) => void
 }
@@ -97,9 +100,13 @@ export async function createVoiceControlSession(
       return
     }
     try {
-      const line = classifyControlTranscriptEvent(JSON.parse(message.data))
+      const parsed: unknown = JSON.parse(message.data)
+      const line = classifyControlTranscriptEvent(parsed)
       if (line) {
         options.onTranscript(line)
+      }
+      if (isResponseSettledEvent(parsed)) {
+        options.onTurnSettled?.()
       }
     } catch {
       // A malformed frame is the sideband's problem to log; transcripts are best-effort.

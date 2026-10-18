@@ -23,6 +23,15 @@ describe('buildCoordinatorInstructions', () => {
     expect(instructions).toContain('You kicked the work off; you find out.')
   })
 
+  // Live failure this guards: see_screen on a terminal-dominated window produced "It's
+  // still loading that view — I'll proceed once the screen data comes through", and the
+  // session sat waiting on a push that does not exist.
+  it('pins tools as synchronous — never "waiting for data to come through"', () => {
+    const instructions = buildCoordinatorInstructions({ roster: [], coordinatorVoice: 'marin' })
+    expect(instructions).toContain('Your tools answer synchronously')
+    expect(instructions).toContain('call it again right now')
+  })
+
   // Live failure this guards: "are you sure it's not done?" was "double-checked" by
   // re-running list_agents — the same surface that had just misled it — while the pane's
   // own last words ("Task complete. Summary of what was done…") would have settled it.

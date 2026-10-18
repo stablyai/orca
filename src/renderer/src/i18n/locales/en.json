@@ -4350,7 +4350,8 @@
             "7423b7184a": "Hide transcript"
           },
           "VoiceControlController": {
-            "e34835dab1": "Microphone disconnected. Voice control stopped."
+            "e34835dab1": "Microphone disconnected. Voice control stopped.",
+            "a9794457e5": "Voice control paused after a few quiet minutes."
           },
           "VoiceControlStatusSegment": {
             "5672a03f58": "Voice control is stopping.",
@@ -10271,7 +10272,12 @@
           "2ab4f49ef3": "Realtime audio is billed per minute of session time.",
           "95d6edeaf0": "Custom instructions",
           "6103f118f5": "Persona and style notes for the control, appended to its built-in rules. Applies to new sessions.",
-          "0173d1898d": "Example: keep every answer to one sentence."
+          "0173d1898d": "Example: keep every answer to one sentence.",
+          "c6b7942f95": "2 minutes",
+          "33b29f0de3": "5 minutes",
+          "f6ba2a270c": "Off",
+          "0605aacbb4": "Suspend when quiet",
+          "22db9fce48": "Ends the session after this many minutes with no speech or tool activity. Realtime audio bills per connected minute, so a quiet session hangs up instead of idling."
         },
         "VoicePane": {
           "6fa734ed95": "Delete {{value0}}",

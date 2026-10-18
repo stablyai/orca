@@ -3302,7 +3302,8 @@
             "7423b7184a": "Ocultar transcripción"
           },
           "VoiceControlController": {
-            "e34835dab1": "Micrófono desconectado. El control de voz se detuvo."
+            "e34835dab1": "Micrófono desconectado. El control de voz se detuvo.",
+            "a9794457e5": "Control de voz en pausa tras unos minutos de silencio."
           },
           "VoiceControlStatusSegment": {
             "5672a03f58": "El control de voz se está deteniendo.",
@@ -9162,7 +9163,12 @@
           "95d6edeaf0": "Instrucciones personalizadas",
           "6103f118f5": "Notas de persona y estilo para el control, añadidas después de sus reglas integradas. Se aplica a las sesiones nuevas.",
           "0173d1898d": "Ejemplo: que cada respuesta sea de una sola frase.",
-          "2ab4f49ef3": "El audio en tiempo real se factura por minuto de sesión."
+          "2ab4f49ef3": "El audio en tiempo real se factura por minuto de sesión.",
+          "c6b7942f95": "2 minutos",
+          "33b29f0de3": "5 minutos",
+          "f6ba2a270c": "Desactivado",
+          "0605aacbb4": "Suspender cuando no se hable",
+          "22db9fce48": "Termina la sesión tras estos minutos sin voz ni actividad de herramientas. El audio en tiempo real se factura por minuto conectado, así que una sesión en silencio cuelga en lugar de quedar inactiva."
         },
         "VoicePane": {
           "68de13f72c": "No se pudo eliminar el modelo.",

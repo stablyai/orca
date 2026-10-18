@@ -3572,7 +3572,8 @@
             "7423b7184a": "Masquer la transcription"
           },
           "VoiceControlController": {
-            "e34835dab1": "Microphone déconnecté. Le contrôle vocal s’est arrêté."
+            "e34835dab1": "Microphone déconnecté. Le contrôle vocal s’est arrêté.",
+            "a9794457e5": "Contrôle vocal mis en pause après quelques minutes de silence."
           },
           "VoiceControlStatusSegment": {
             "5672a03f58": "Le contrôle vocal s’arrête.",
@@ -9478,7 +9479,12 @@
           "95d6edeaf0": "Instructions personnalisées",
           "6103f118f5": "Notes de persona et de style pour le contrôle, ajoutées à la suite de ses règles intégrées. S’applique aux nouvelles sessions.",
           "0173d1898d": "Exemple : limitez chaque réponse à une seule phrase.",
-          "2ab4f49ef3": "L'audio en temps réel est facturé à la minute de session."
+          "2ab4f49ef3": "L'audio en temps réel est facturé à la minute de session.",
+          "c6b7942f95": "2 min",
+          "33b29f0de3": "5 min",
+          "f6ba2a270c": "Désactivé",
+          "0605aacbb4": "Suspendre en l'absence de parole",
+          "22db9fce48": "Met fin à la session après ce nombre de minutes sans parole ni activité d'outil. L'audio en temps réel est facturé à la minute de connexion : une session silencieuse raccroche au lieu de rester inactive."
         },
         "VoicePane": {
           "6fa734ed95": "Supprimer {{value0}}",
