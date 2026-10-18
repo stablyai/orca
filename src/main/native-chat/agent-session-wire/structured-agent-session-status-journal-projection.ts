@@ -1,3 +1,10 @@
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
+import {
+  isBackgroundTaskBlock,
+  isSubagentBlock,
+  isSubagentGroupBlock
+} from '../../../shared/native-chat-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../../../shared/structured-agent-session-command-entry'
@@ -28,6 +35,8 @@ export type StructuredAgentSessionJournalProjection = {
   /** `StructuredAgentSessionCurrentWork.revision`: what this host saw end with no row or lease
    *  write still changes the row. */
   workRevision: number
+  workView: string
+  unobservedChildren: ReadonlyMap<string, string | undefined>
   /** The Stop marks' settle revision: a settle edge writes no row, so it is a key of its own. */
   stopRevision: number
   state: StructuredAgentSessionStatusState
@@ -82,11 +91,12 @@ export class StructuredAgentSessionJournalProjections {
       projection.fence !== fence ||
       projection.liveFence !== work.liveFence ||
       projection.workRevision !== work.revision ||
+      projection.workView !== work.viewKey() ||
       projection.stopRevision !== stopRevision
     ) {
       // A journalled submission bumps `lastSequence`, so the send-time working
       // signal reaches the cache; the lease fence does not, hence the extra key.
-      const snapshot = journal.snapshot()
+      const snapshot = work.formSnapshot(journal.snapshot())
       let firstInputSubmissionKey =
         projection?.epoch === cursor.epoch ? projection.firstInputSubmissionKey : null
       const start = projection?.epoch === cursor.epoch ? projection.submissionCount : 0
@@ -116,6 +126,8 @@ export class StructuredAgentSessionJournalProjections {
         fence,
         liveFence: work.liveFence,
         workRevision: work.revision,
+        workView: work.viewKey(),
+        unobservedChildren: unobservedJournalChildren(snapshot, journal, work.observedExecution),
         stopRevision,
         // The host's projection of current work: an ended generation's is not Working.
         state: withDiedTurnVerdict(
@@ -155,4 +167,53 @@ function withDiedTurnVerdict(
     request.turnState === 'running'
     ? { ...state, summary: { ...state.summary, turnOutcome: 'interruption' } }
     : state
+}
+
+/** Unobserved journal owners supply display state without changing reported record outcomes. */
+function unobservedJournalChildren(
+  snapshot: AgentJournalSnapshot,
+  journal: Pick<AgentSessionJournal, 'itemFence'>,
+  observed: number | null | undefined
+): Map<string, string | undefined> {
+  const children = new Map<string, string | undefined>()
+  for (const item of snapshot.items) {
+    if (item.body.kind !== 'message') {
+      continue
+    }
+    const owner = journal.itemFence(item.itemId)
+    const unseen = observed !== undefined && owner !== undefined && owner !== observed
+    const keep = (key: string, state: string, run?: string): void => {
+      if (unseen && state === 'unverifiable') {
+        children.set(key, run)
+      } else {
+        children.delete(key)
+      }
+    }
+    for (const block of item.body.blocks) {
+      if (isSubagentBlock(block)) {
+        keep(`agent:${block.id}`, block.state, block.run)
+      } else if (isBackgroundTaskBlock(block)) {
+        keep(`${block.kind}:${block.taskId}`, block.state)
+      } else if (isSubagentGroupBlock(block)) {
+        for (const child of block.agents) {
+          keep(`agent:${child.id}`, child.state)
+        }
+      }
+    }
+  }
+  return children
+}
+
+/** Keep reported outcomes intact while an unobserved live owner reads as unverifiable. */
+export function observedStatusChildWork(
+  view: AgentChildWorkView,
+  unseen: ReadonlyMap<string, string | undefined>
+): AgentChildWorkView {
+  const key = `${view.kind}:${view.providerId}`
+  const run = unseen.get(key)
+  return view.membership === 'live' &&
+    unseen.has(key) &&
+    (run === undefined || run === view.invocation.invocationId)
+    ? { ...view, state: 'unverifiable' }
+    : view
 }

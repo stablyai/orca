@@ -19,11 +19,21 @@ import { rewindRefusal } from './structured-rewind-refusal'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import { isSqliteContentionFailure } from '../../sqlite/sqlite-read-failure'
+import type {
+  BackgroundJournalWrites,
+  BackgroundStoreWrites
+} from './structured-agent-session-background-writes'
 
-type RewindRecoveryDeps = { store: AgentSessionRecordStore; logger: StructuredAgentSessionLogger }
+type RewindRecoveryDeps = {
+  store: AgentSessionRecordStore
+  logger: StructuredAgentSessionLogger
+  /** The retry's own recovery writes through its handles: another connection's lock throws. */
+  background?: { store: BackgroundStoreWrites; journal: BackgroundJournalWrites }
+}
 
 export function persistRewindRecord(
-  store: AgentSessionRecordStore,
+  store: Pick<AgentSessionRecordStore, 'transitionHandoff'>,
   sessionId: string,
   fence: number,
   rewind: AgentSessionRewindRecord
@@ -41,12 +51,13 @@ export function persistRewindRecord(
  * settled refused rather than proven. Bookkeeping only: the chat is already attached either way.
  */
 async function settleUnsupportedClaudeRewind(
-  { store, logger }: RewindRecoveryDeps,
+  { store: reads, logger, background }: RewindRecoveryDeps,
   sessionId: string,
   fence: number,
   rewind: AgentSessionRewindRecord
 ): Promise<void> {
   const refusal = rewindRefusal('unsupported').refusal
+  const store = background?.store ?? reads
   try {
     await persistRewindRecord(store, sessionId, fence, {
       ...rewind,
@@ -60,6 +71,9 @@ async function settleUnsupportedClaudeRewind(
       outcome: { status: 'failed', code: refusal.code, rewindReason: 'unsupported' }
     })
   } catch (error) {
+    if (background && isSqliteContentionFailure(error)) {
+      throw error
+    }
     logger.warn('a pending Claude rewind was not settled', {
       scope: 'rewind-unsupported-settlement',
       sessionId,
@@ -67,6 +81,17 @@ async function settleUnsupportedClaudeRewind(
       error
     })
   }
+}
+
+/** A rewind in doubt that only its provider's history can settle: an unverified Codex revert. */
+export function structuredRewindNeedsProvider(
+  rewind: AgentSessionRewindRecord | undefined
+): boolean {
+  if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
+    return false
+  }
+  const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
+  return target?.provider === 'codex' && !rewind.hydrationVerified
 }
 
 /** Recovery observes provider state; it never repeats an ambiguous native mutation. */
@@ -85,8 +110,10 @@ export async function recoverStructuredRewind(
   signal?: AbortSignal
 ): Promise<void> {
   signal?.throwIfAborted()
-  const { store } = deps
-  let rewind = store.getRecord(sessionId)?.rewind
+  const { store: reads } = deps
+  const store = deps.background?.store ?? reads
+  const writes = deps.background?.journal ?? journal
+  let rewind = reads.getRecord(sessionId)?.rewind
   if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
     return
   }
@@ -166,7 +193,7 @@ export async function recoverStructuredRewind(
   const replacement = rewind.retained.map(retainedRowReplacement)
   if (rewind.contextClearOperationId && rewind.contextClearSequence) {
     if (
-      store.getRecord(sessionId)?.providerContextBoundary?.operationId !==
+      reads.getRecord(sessionId)?.providerContextBoundary?.operationId !==
         rewind.contextClearOperationId ||
       journal.cursor().epoch !== rewind.expectedEpoch ||
       journal.context.floor()?.sequence !== rewind.contextClearSequence
@@ -174,13 +201,13 @@ export async function recoverStructuredRewind(
       throw new Error('agent_session_rewind:stale-context')
     }
     const completed = rewind
-    await journal.context.rewind(
+    await writes.context.rewind(
       { epoch: completed.expectedEpoch, sequence: completed.contextClearSequence! },
       fence,
       replacement,
       (cursor) =>
         receipt?.(completed, fence, cursor) ??
-        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+        reads.conversationReceipts.rewind(sessionId, fence, completed, cursor)
     )
     return
   }
@@ -209,7 +236,7 @@ export async function recoverStructuredRewind(
   }
   const cursor = alreadyReplaced
     ? journal.cursor()
-    : await journal.replaceEpochItems('handle_forked', fence, replacement)
+    : await writes.replaceEpochItems('handle_forked', fence, replacement)
   await persistRewindRecord(store, sessionId, fence, {
     ...rewind,
     phase: 'completed',

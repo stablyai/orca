@@ -14,6 +14,7 @@ import {
   type ProviderChildSessions
 } from './structured-agent-session-provider-child'
 import { resolveStructuredSessionRecovery } from './structured-agent-session-recovery-resolution'
+import type { StructuredAgentSessionLeaseWrites } from './structured-agent-session-lease-release'
 import { recordAgentSessionStartup } from '../../observability/agent-session-instrumentation'
 import {
   StructuredAgentSessionStartupAttempts,
@@ -32,7 +33,7 @@ export class StructuredAgentSessionHostRuntimeState {
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
     /** Required: a child held here renews its lease without a PID probe. */
-    sessions: ProviderChildSessions,
+    private readonly sessions: ProviderChildSessions,
     onEventSinkFailure?: (sessionId: string, error: unknown) => void,
     /** A published child's start passed its startup limit; one still acquiring is aborted here. */
     onStartupExpired?: (expired: StructuredAgentSessionExpiredStartup) => void
@@ -63,6 +64,22 @@ export class StructuredAgentSessionHostRuntimeState {
 
   startLeaseRenewal(): void {
     this.leaseRenewer.start()
+  }
+
+  observedExecution = (sessionId: string): number | null => {
+    const lease = this.deps.store.getRecord(sessionId)?.lease
+    if (!lease) {
+      return null
+    }
+    if (this.sessions.get(sessionId)?.child?.fence === lease.runtimeFence) {
+      return lease.runtimeFence
+    }
+    const attempt = this.startupAttempts.observation(sessionId)
+    const token =
+      lease.claimStatus === 'reserved' ? lease.reservedSpawnToken : lease.ownerProcess?.spawnToken
+    return attempt?.fence === lease.runtimeFence && attempt.spawnToken === token
+      ? attempt.fence
+      : null
   }
 
   /** Resolves once a renewal tick already in flight has finished writing. */
@@ -151,10 +168,14 @@ export class StructuredAgentSessionHostRuntimeState {
   }
 
   /** Exit from a latched recovery stage when present-time evidence permits one. */
-  resolveRecovery(sessionId: string): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
+  resolveRecovery(
+    sessionId: string,
+    writes?: StructuredAgentSessionLeaseWrites
+  ): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
     return resolveStructuredSessionRecovery(
       {
         store: this.deps.store,
+        ...(writes ? { writes } : {}),
         probeRecord: (record) => this.probeRecord(record),
         now: () => this.deps.now?.() ?? Date.now(),
         ...(this.deps.stopOwnerProcess ? { stopOwnerProcess: this.deps.stopOwnerProcess } : {})

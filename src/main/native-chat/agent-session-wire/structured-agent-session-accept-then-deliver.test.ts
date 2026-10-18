@@ -1,4 +1,3 @@
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A send is accepted, then delivered: the host answers once the message is recorded, and the
 // session's delivery loop starts a provider child for it and hands it over. Against the real host,
 // store and journal; each assertion reads what an open chat or the journal's next reader sees.
@@ -10,15 +9,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionSubscribeEvent,
-  AgentSessionTurnCompletionEvent
-} from '../../../shared/agent-session-wire'
 import {
-  classifyDispatchRejection,
-  DISPATCH_REJECTED_CANCELLED
-} from '../../../shared/structured-agent-session-dispatch-rejection'
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
+import type * as TestWire from '../../../shared/agent-session-wire'
+import * as rejection from '../../../shared/structured-agent-session-dispatch-rejection'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -50,6 +46,7 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import { StructuredAgentArgumentsError } from '../structured-agent-arguments-error'
 import { USER_MESSAGE_SOURCE } from '../../../shared/agent-session-message-source'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { startUpHost } from './structured-agent-session-leftover-settlement.test-fixture'
 import { structuredAgentSessionHeldStarts } from './structured-agent-session-held-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
@@ -209,8 +206,8 @@ async function errorFailures(): Promise<(AgentSessionFailureFact | undefined)[]>
 
 let subscriptions = 0
 
-async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
-  const events: AgentSessionSubscribeEvent[] = []
+async function subscribe(): Promise<TestWire.AgentSessionSubscribeEvent[]> {
+  const events: TestWire.AgentSessionSubscribeEvent[] = []
   subscriptions += 1
   // Cloned as received: a frame shares the journal's live objects, which later rows revise.
   await host.subscribe({
@@ -222,7 +219,7 @@ async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
 }
 
 /** What an open chat was told about one message, in frame order. */
-function framedStates(events: AgentSessionSubscribeEvent[], id: string): string[] {
+function framedStates(events: TestWire.AgentSessionSubscribeEvent[], id: string): string[] {
   let previous: string | undefined
   return events.flatMap((event) =>
     event.type === 'batch'
@@ -263,6 +260,9 @@ async function writeAsEarlierProcess(
   })
   await write(journal, record.lease.runtimeFence)
   await journal.close()
+  // The next host is a new process, which has not opened the chat yet.
+  await host.flushAllStreamedEvents()
+  await startHost()
 }
 
 function earlierSubmission(id: string, text: string, handoverRecorded?: true) {
@@ -413,7 +413,7 @@ describe('a start the chat needed and did not get', () => {
   it('notifies failed once for the queued messages one start failure refused', async () => {
     await host.close(SESSION, 'evict')
     acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
-    const completions: AgentSessionTurnCompletionEvent[] = []
+    const completions: TestWire.AgentSessionTurnCompletionEvent[] = []
     host.subscribeTurnCompletions({ id: 'dot-1', emit: (event) => completions.push(event) })
     await accept('first')
     const second = await accept('second')
@@ -568,8 +568,7 @@ describe('what an earlier host process left behind', () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('queued', 'q', true), fence })
     })
-
-    await host.revealSession(SESSION)
+    await startUpHost(host)
 
     expect(await submission('queued')).toMatchObject({
       dispatchState: 'rejected',
@@ -593,10 +592,7 @@ describe('what an earlier host process left behind', () => {
         turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     })
-    await host.flushAllStreamedEvents()
-    await startHost()
-
-    await host.revealSession(SESSION)
+    await startUpHost(host)
 
     expect(await submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
     expect(await submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
@@ -685,7 +681,7 @@ describe('a start that fails while messages wait on it', () => {
 })
 
 describe('Stop withdraws what is queued', () => {
-  it('never meets a crash leftover: the open it runs settles it first (W17a)', async () => {
+  it('never meets a crash leftover: its first open settles it first (W17a)', async () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({
         ...earlierSubmission('person', 'p', true),
@@ -695,6 +691,7 @@ describe('Stop withdraws what is queued', () => {
       })
       await journal.appendSubmission({ ...earlierSubmission('leftover', 'l', true), fence })
     })
+    await startUpHost(host)
 
     expect(await stop()).toMatchObject({ ok: true })
 
@@ -729,7 +726,7 @@ describe('Stop withdraws what is queued', () => {
     starting.resolve()
     expect(await stopped).toMatchObject({ ok: true })
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
-    expect(await submission(id)).toMatchObject({ reason: DISPATCH_REJECTED_CANCELLED })
+    expect(await submission(id)).toMatchObject({ reason: rejection.DISPATCH_REJECTED_CANCELLED })
     expect((await submission(id))?.handedOverAt).toBeUndefined()
     expect(dispatch).not.toHaveBeenCalled()
   })
@@ -749,7 +746,7 @@ describe('Stop withdraws what is queued', () => {
 
     expect(await reopened(id)).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_CANCELLED
+      reason: rejection.DISPATCH_REJECTED_CANCELLED
     })
     expect(closeSession).toHaveBeenCalled()
     const next = await accept('after stop')
@@ -864,7 +861,7 @@ describe('a close that stops the child and then a wind-down step fails', () => {
       await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
       const rejected = (await submission(id))!
       expect(rejected.rejection).toMatchObject({ kind })
-      expect(classifyDispatchRejection(rejected).verdict).toBe(verdict)
+      expect(rejection.classifyDispatchRejection(rejected).verdict).toBe(verdict)
       expect(dispatch).not.toHaveBeenCalled()
     }
   )

@@ -57,6 +57,29 @@ function abortableAcquisition() {
   return entered.promise
 }
 
+it('a create replay after restart recovers the committed first prompt before publishing it', async () => {
+  const first = firstMessage()
+  const params = createTestParams(first)
+  await rig.host.create(CALLER, params, {
+    firstMessage: first,
+    publishTab: async () => {
+      throw new Error('tab unavailable')
+    }
+  })
+  await rig.restart()
+  expect(await rig.host.create(CALLER, params, { firstMessage: first })).toMatchObject({
+    ok: true,
+    replayed: true,
+    value: {
+      firstMessage: { dispatchState: 'rejected', keptAsQueuedMessageId: first.clientMessageId }
+    }
+  })
+  expect(
+    rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.list()
+  ).toMatchObject([{ messageId: first.clientMessageId, state: 'waiting', body: first.body }])
+  expect(rig.adapter.acquire).not.toHaveBeenCalled()
+})
+
 it('commits the record, tab, operation and first message together and returns while acquire is unresolved', async () => {
   const first = firstMessage()
   const params = createTestParams(first, { surfaceTabId: 'chat-create-tab' })

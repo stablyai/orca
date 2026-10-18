@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   hostTestState,
   adapter,
@@ -82,6 +82,13 @@ describe('prompt delivery after host recovery', () => {
       notificationSeq: delivered.notificationSeq
     }
     unsubscribe()
+    // The crashed host's last write landed before the new process opens the chat: two live
+    // processes never share one journal.
+    await vi.waitFor(async () =>
+      expect((await h.host.journalSnapshot(SESSION)).submissions).toEqual([
+        expect.objectContaining({ dispatchState: 'accepted' })
+      ])
+    )
     await original.closeDismissals()
     const restarted = new RuntimeMobileNotificationController()
     restarted.configureDismissalStore(h.root)
@@ -103,6 +110,7 @@ describe('prompt delivery after host recovery', () => {
     try {
       await host.reconcileRestartLeases()
       await host.restoreReadableSessions()
+      await host.startupSettled()
       const history = await host.history({ sessionId: SESSION, direction: 'tail' })
       expect(history.ok).toBe(true)
       expect(

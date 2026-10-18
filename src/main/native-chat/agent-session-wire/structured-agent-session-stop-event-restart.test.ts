@@ -74,7 +74,7 @@ async function runningTurn(
 async function restartAndSettle(
   proof: 'pid-absent' | 'exit-observed' | 'unproven' = 'pid-absent'
 ): Promise<void> {
-  rig.crashRestartHostProcess()
+  await rig.crashRestartHostProcess()
   await rig.host.journalSnapshot(HOST_TEST_SESSION)
   const now = Date.now()
   const deathEvidence: AgentSessionDeathEvidence | null =

@@ -109,15 +109,18 @@ export async function rejectJournalQueuedSubmissions(
 export function journalQueuedRejectionRowBuilders(
   state: () => JournalReducerState,
   fence: number,
-  rejection: AgentJournalDispatchRejection
+  rejection: AgentJournalDispatchRejection,
+  which: (submission: AgentJournalSubmission) => boolean = () => true
 ): ((seq: number, ts: number) => JournalRow)[] {
-  return [...state().submissions.values()].filter(isQueuedAgentJournalSubmission).map((entry) =>
-    journalDispatchRowBuilder(state, {
-      clientMessageId: entry.clientMessageId,
-      state: 'rejected',
-      ...rejection,
-      fence,
-      recovered: true
-    })
-  )
+  return [...state().submissions.values()]
+    .filter((entry) => isQueuedAgentJournalSubmission(entry) && which(entry))
+    .map((entry) =>
+      journalDispatchRowBuilder(state, {
+        clientMessageId: entry.clientMessageId,
+        state: 'rejected',
+        ...rejection,
+        fence,
+        recovered: true
+      })
+    )
 }

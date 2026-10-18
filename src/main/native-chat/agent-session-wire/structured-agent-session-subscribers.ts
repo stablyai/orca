@@ -6,12 +6,7 @@ import type { CurrentRequestsSubscriber } from './agent-session-current-requests
 // Nothing raw reaches a subscriber — every event carries reducer output.
 
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionHistoryPage,
-  AgentSessionSlashCommand,
-  AgentSessionSubscribeEvent,
-  AgentSessionTurnActivity
-} from '../../../shared/agent-session-wire'
+import type * as SubscriberWire from '../../../shared/agent-session-wire'
 import {
   backgroundTaskFingerprint,
   emitSubscriberFrame,
@@ -34,7 +29,7 @@ import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
 import { refreshPublishedWork } from './agent-session-work-refresh'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
-export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
+export type AgentSessionSubscriberEmit = (event: SubscriberWire.AgentSessionSubscribeEvent) => void
 export type AgentSessionSubscribeInput = {
   id: string
   sessionId: string
@@ -57,7 +52,7 @@ export type Subscriber = CurrentRequestsSubscriber & {
   boundedFrames: boolean
   projectQueuePublication?: SubscriberFieldState['projectQueuePublication']
   snapshotCatchUp?: boolean
-  commands?: AgentSessionSlashCommand[] | null
+  commands?: SubscriberWire.AgentSessionSlashCommand[] | null
   /** Canonical publication last sent — never advanced on a page that withheld
    *  it, or the final replacement would be suppressed by the identity dedup. */
   queuePublication?: QueuePublication
@@ -69,7 +64,7 @@ export type Subscriber = CurrentRequestsSubscriber & {
 }
 
 export type AgentSessionSubscribersHooks = {
-  readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
+  readCommands?: (sessionId: string) => SubscriberWire.AgentSessionSlashCommand[] | undefined
   /** Revision-stable per emit: an unchanged list keeps its reference, so token
    *  streams never re-serialize it; any draft-table write changes it. */
   readQueuePublication?: (sessionId: string) => QueuePublication | undefined
@@ -87,7 +82,7 @@ export type AgentSessionSubscribersHooks = {
 
 export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
-  private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
+  private readonly activityBySession = new Map<string, SubscriberWire.AgentSessionTurnActivity>()
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
@@ -134,7 +129,8 @@ export class AgentSessionSubscribers {
         readAgentSessionHydrationPage(
           input.journal,
           input.fence,
-          subscriberHistoryReader(subscriber)
+          subscriberHistoryReader(subscriber),
+          work?.formSnapshot
         ),
         work
       )
@@ -174,7 +170,7 @@ export class AgentSessionSubscribers {
   publish(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null
+    activity?: SubscriberWire.AgentSessionTurnActivity | null
   ): void {
     if (activity !== undefined) {
       if (activity) {
@@ -198,7 +194,7 @@ export class AgentSessionSubscribers {
   deliverFrames(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null
+    activity?: SubscriberWire.AgentSessionTurnActivity | null
   ): void {
     const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
@@ -210,14 +206,19 @@ export class AgentSessionSubscribers {
   snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
     const work = this.hooks.readCurrentWork?.(sessionId, journal)
     // Read once per item form, since bounded-frame subscribers size their page by theirs.
-    let storedPage: AgentSessionHistoryPage | undefined
-    let boundedPage: AgentSessionHistoryPage | undefined
-    const read = (subscriber: Subscriber): AgentSessionHistoryPage =>
+    let storedPage: SubscriberWire.AgentSessionHistoryPage | undefined
+    let boundedPage: SubscriberWire.AgentSessionHistoryPage | undefined
+    const read = (subscriber: Subscriber): SubscriberWire.AgentSessionHistoryPage =>
       withPublishedWork(
-        readAgentSessionHydrationPage(journal, fence, subscriberHistoryReader(subscriber)),
+        readAgentSessionHydrationPage(
+          journal,
+          fence,
+          subscriberHistoryReader(subscriber),
+          work?.formSnapshot
+        ),
         work
       )
-    const pageFor = (subscriber: Subscriber): AgentSessionHistoryPage =>
+    const pageFor = (subscriber: Subscriber): SubscriberWire.AgentSessionHistoryPage =>
       subscriber.boundedFrames
         ? (boundedPage ??= read(subscriber))
         : (storedPage ??= read(subscriber))
@@ -295,12 +296,15 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     hostNow: number,
     emitCheckpoint = false,
-    activity?: AgentSessionTurnActivity | null
+    activity?: SubscriberWire.AgentSessionTurnActivity | null
   ): void {
-    deliverToSubscriber(
-      this.deliveryPort(),
-      { subscriber, journal, hostNow, emitCheckpoint, activity }
-    )
+    deliverToSubscriber(this.deliveryPort(), {
+      subscriber,
+      journal,
+      hostNow,
+      emitCheckpoint,
+      activity
+    })
   }
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
@@ -321,7 +325,7 @@ export class AgentSessionSubscribers {
    *  unknown outcome or poison every later publication. */
   private emit(
     subscriber: Subscriber,
-    event: AgentSessionSubscribeEvent,
+    event: SubscriberWire.AgentSessionSubscribeEvent,
     options?: Parameters<SubscriberDeliveryPort['emit']>[2]
   ): void {
     try {
@@ -339,7 +343,9 @@ export class AgentSessionSubscribers {
     }
   }
 
-  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
+  private activityField(sessionId: string): {
+    activity: SubscriberWire.AgentSessionTurnActivity | null
+  } {
     return { activity: this.activityBySession.get(sessionId) ?? null }
   }
 }

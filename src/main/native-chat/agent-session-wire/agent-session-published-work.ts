@@ -22,7 +22,8 @@ export type AgentSessionPublishedWork = Pick<
   | 'publishedSubmission'
   | 'restatedSubmissions'
   | 'requestProjection'
->
+> &
+  Partial<Pick<StructuredAgentSessionCurrentWork, 'formSnapshot'>>
 
 type PublishedWorkFields = Pick<
   AgentSessionHistoryPage,

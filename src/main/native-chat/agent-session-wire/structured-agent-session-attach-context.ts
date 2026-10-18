@@ -16,7 +16,6 @@ import type {
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
-import type { StructuredAgentSessionConversationOpenOptions } from './structured-agent-session-conversation-open'
 
 export type StructuredAgentSessionAttachContext = {
   deps: StructuredAgentSessionHostDeps
@@ -44,8 +43,6 @@ export type StructuredAgentSessionAttachContext = {
   endExitedChild: StructuredAgentSessionLifetimeContext['endExitedChild']
   wakeDelivery?: StructuredAgentSessionLifetimeContext['wakeDelivery']
   /** The conversation's one open journal, opened when closed; see `conversation-open`. */
-  openConversation: (
-    sessionId: string,
-    options?: StructuredAgentSessionConversationOpenOptions
-  ) => Promise<StructuredAgentSessionHostSession | null>
+  openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
+  prepareConversation: (sessionId: string, journal: AgentSessionJournal) => Promise<void>
 }

@@ -64,8 +64,10 @@ function createParams(operationId = OPERATION, sessionId = SESSION) {
   const fields = {
     worktree: `id:${WORKSPACE}`,
     agent: 'codex' as const,
-    resumeFrom: { providerSessionId: THREAD,
-      cliSource: { workspaceId: WORKSPACE, paneKey: 'source-pane' } }
+    resumeFrom: {
+      providerSessionId: THREAD,
+      cliSource: { workspaceId: WORKSPACE, paneKey: 'source-pane' }
+    }
   }
   return {
     envelope: {
@@ -156,12 +158,20 @@ describe('committed adopting create RPC replay', () => {
       { prepareCodexStructuredLaunch: selectAccountHome }
     )
     const sourceRow = {
-      paneKey: 'source-pane', worktreeId: WORKSPACE, agentType: 'codex',
-      connectionId: null, receivedAt: 1, stateStartedAt: 1, state: 'waiting' as const, prompt: '',
+      paneKey: 'source-pane',
+      worktreeId: WORKSPACE,
+      agentType: 'codex',
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1,
+      state: 'waiting' as const,
+      prompt: '',
       providerSession: { key: 'session_id' as const, id: THREAD, transcriptPath }
     }
     let rows: AgentStatusIpcPayload[] = [sourceRow]
-    const sourceRows = vi.spyOn(runtime, 'getAgentProviderSessionRows').mockImplementation(() => rows)
+    const sourceRows = vi
+      .spyOn(runtime, 'getAgentProviderSessionRows')
+      .mockImplementation(() => rows)
     // The structured surface is settings-gated for every caller, not just mobile; this test
     // probes durable-identity replay, which only runs once the gate admits the call.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The RPC gate reads only this setting from the test double.
@@ -214,11 +224,15 @@ describe('committed adopting create RPC replay', () => {
     })
     const params = createParams()
 
-    rows = unary ? [] : [{ ...sourceRow, providerSession: { ...sourceRow.providerSession, id: 'replaced' } }]
-    const route = vi.spyOn(runtime, 'routeClientHostedBrowserRpc').mockImplementationOnce(async () => {
-      rows = [sourceRow]
-      return { handled: false }
-    })
+    rows = unary
+      ? []
+      : [{ ...sourceRow, providerSession: { ...sourceRow.providerSession, id: 'replaced' } }]
+    const route = vi
+      .spyOn(runtime, 'routeClientHostedBrowserRpc')
+      .mockImplementationOnce(async () => {
+        rows = [sourceRow]
+        return { handled: false }
+      })
     expect(await call(dispatcher, params, CLIENT, unary)).toMatchObject({
       ok: true,
       result: { ok: false, refusal: { details: { reason: 'transcriptUnreadable' } } }
@@ -286,9 +300,15 @@ describe('committed adopting create RPC replay', () => {
     expect(selectAccountHome).toHaveBeenCalledTimes(1)
     expect(await call(dispatcher, createParams(OPERATION, 'another-chat'))).toMatchObject({
       ok: true,
-      result: { ok: false, refusal: { details: {
-        reason: 'conversationHeldElsewhere', owner: { sessionId: SESSION, workspaceId: WORKSPACE }
-      } } }
+      result: {
+        ok: false,
+        refusal: {
+          details: {
+            reason: 'conversationHeldElsewhere',
+            owner: { sessionId: SESSION, workspaceId: WORKSPACE }
+          }
+        }
+      }
     })
 
     const otherOperation = createParams(`${Date.now()}-00000000000000000000000000000002`)

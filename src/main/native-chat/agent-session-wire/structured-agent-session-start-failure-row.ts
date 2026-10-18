@@ -2,7 +2,6 @@ import { failedProviderChildStart } from './structured-agent-session-provider-ch
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../shared/structured-agent-session-start-failure-row-key'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -10,6 +9,7 @@ import type {
   StructuredAgentSessionStartFailureWords,
   StructuredAgentSessionStartFailureCause
 } from './structured-agent-session-failure-text'
+import { structuredAgentSessionHandsOver } from './structured-agent-session-current-work'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -85,22 +85,33 @@ export async function recordStructuredAgentSessionStartFailure(
   if (startKey === undefined) {
     return
   }
-  await session.journal.appendLifecycleBatch({
+  const { journal } = session
+  await journal.appendLifecycleBatch({
     settlementId: `start-failure:${startKey}`,
     fence: session.fence,
     recovered: true,
     mutations: [structuredAgentSessionStartFailureRow(startKey, failure)],
-    ...(oldest ? { rejectsQueued: { reason: failure.reason, rejection: failure.rejection } } : {})
+    ...(oldest
+      ? {
+          rejectsQueued: { reason: failure.reason, rejection: failure.rejection },
+          // The start was for this process's sends; an earlier process's is the reconciliation
+          // pass's to keep.
+          rejectsQueuedOnly: (submission: Parameters<typeof structuredAgentSessionHandsOver>[1]) =>
+            structuredAgentSessionHandsOver(journal, submission)
+        }
+      : {})
   })
 }
 
+/** The oldest send this process may hand over (`structuredAgentSessionHandsOver`): an earlier host
+ *  process's unhanded send is never handed over, whether or not its bookkeeping landed. */
 export function oldestQueuedSubmission(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>
 ): ReturnType<StructuredAgentSessionHostSession['journal']['submissions']>[number] | undefined {
   let oldest: ReturnType<typeof oldestQueuedSubmission>
   for (const submission of session.journal.submissions()) {
     if (
-      isQueuedAgentJournalSubmission(submission) &&
+      structuredAgentSessionHandsOver(session.journal, submission) &&
       (oldest === undefined || (submission.acceptedSequence ?? 0) < (oldest.acceptedSequence ?? 0))
     ) {
       oldest = submission

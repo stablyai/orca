@@ -19,7 +19,10 @@ import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
 import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import { ensureJcodeRuntimeDir, JCODE_RUNTIME_DIR_ENV_KEY } from '../../../../shared/jcode-runtime-dir'
+import {
+  ensureJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY
+} from '../../../../shared/jcode-runtime-dir'
 
 export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState

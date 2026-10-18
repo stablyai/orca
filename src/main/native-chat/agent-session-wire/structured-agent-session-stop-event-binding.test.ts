@@ -183,7 +183,7 @@ describe('a Stop of a start that never landed binds no later turn', () => {
     await stopOfStart()
     await mailTurn()
     const owner = fence()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await rig.host.journalSnapshot(HOST_TEST_SESSION)
 
     await settleStaleStructuredAgentSessionState({

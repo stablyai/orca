@@ -9,11 +9,13 @@ import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { classifyStoreFailure } from './structured-agent-session-attach'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { JournalWriteOptions } from '../agent-session-journal/journal-database'
 
 const MAX_RECONCILIATION_PASSES = 8
 
-/** Adjudicates leases loaded by this process.
- *  Answers with the refusal attach owes its caller, or null once settled. */
+/** Adjudicates leases loaded by this process: one chat's, or with no id every chat's on this host.
+ *  One run per target is in flight. Answers with the refusal attach owes its caller, or null once
+ *  settled. */
 export function createRestartReconciler(deps: {
   store: AgentSessionRecordStore
   probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
@@ -21,29 +23,48 @@ export function createRestartReconciler(deps: {
     records: readonly AgentSessionRecord[]
   ) => Promise<Map<string, AgentSessionOwnerProbe>>
   now: () => number
-}): (sessionId?: string) => Promise<AgentSessionWireRefusal | null> {
+}): (sessionId?: string, options?: JournalWriteOptions) => Promise<AgentSessionWireRefusal | null> {
   const pending = new Map<string | undefined, Promise<void>>()
-  return async (sessionId) => {
+  const background = new Map<string | undefined, Promise<void>>()
+  return async (sessionId, options) => {
     if (!hasUnreconciledLease(deps.store, sessionId)) {
       return null
     }
-    if (!pending.has(sessionId)) {
-      const run = reconcileCurrentLease(deps, sessionId)
-      pending.set(
-        sessionId,
-        run.finally(() => {
-          pending.delete(sessionId)
-        })
-      )
+    // Background bookkeeping joins a person's run for its target, or another background one, never
+    // the reverse: no person's run inherits its refusal to wait for another connection's lock.
+    if (options?.background && !pending.has(sessionId)) {
+      await inFlight(background, sessionId, async () => {
+        // The every-chat pass lets chat checks already under way finish first, so no chat is
+        // probed twice by it.
+        if (sessionId === undefined) {
+          await Promise.allSettled(pending.values())
+        }
+        await reconcileCurrentLease(deps, sessionId, options)
+      })
+      return null
     }
     try {
-      await pending.get(sessionId)
+      await inFlight(pending, sessionId, () => reconcileCurrentLease(deps, sessionId))
       return null
     } catch (error) {
       const record = sessionId === undefined ? undefined : deps.store.getRecord(sessionId)
       return classifyStoreFailure(error, record?.lease.runtimeFence ?? null, record)
     }
   }
+}
+
+/** The target's run in flight, started when none is. */
+function inFlight(
+  runs: Map<string | undefined, Promise<void>>,
+  sessionId: string | undefined,
+  start: () => Promise<void>
+): Promise<void> {
+  let run = runs.get(sessionId)
+  if (!run) {
+    run = start().finally(() => runs.delete(sessionId))
+    runs.set(sessionId, run)
+  }
+  return run
 }
 
 /** Reports each distinct failure once, until `clear` says the bookkeeping settled again: the
@@ -54,8 +75,8 @@ export type ReaderBookkeepingFailures = {
   clear: () => void
 }
 
-/** Startup and the read carry on past a failure: the next attach or send reconciles and resolves
- *  recovery again before it acts. */
+/** Startup and the read carry on past a failure: the host's retry tries it again with a backoff,
+ *  and the next attach or send reconciles and resolves recovery again before it acts. */
 export function reportEachFailureOnce(
   logger: StructuredAgentSessionLogger
 ): ReaderBookkeepingFailures {
@@ -122,15 +143,19 @@ async function reconcileCurrentLease(
     ) => Promise<Map<string, AgentSessionOwnerProbe>>
     now: () => number
   },
-  sessionId?: string
+  sessionId?: string,
+  options?: JournalWriteOptions
 ): Promise<void> {
   for (let pass = 0; pass < MAX_RECONCILIATION_PASSES; pass += 1) {
-    await deps.store.reconcileOnRestart({
-      ...(sessionId === undefined ? {} : { sessionId }),
-      probe: deps.probe,
-      ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
-      now: deps.now()
-    })
+    await deps.store.reconcileOnRestart(
+      {
+        ...(sessionId === undefined ? {} : { sessionId }),
+        probe: deps.probe,
+        ...(deps.probeMany ? { probeMany: deps.probeMany } : {}),
+        now: deps.now()
+      },
+      options
+    )
     if (!hasUnreconciledLease(deps.store, sessionId)) {
       return
     }

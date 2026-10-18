@@ -8,6 +8,11 @@ export class StructuredAgentSessionTaskQueue {
     return runKeyedSerializedOperation(this.chains, sessionId, task)
   }
 
+  /** Whether anything holds or waits for the chat's lane now. */
+  busy(sessionId: string): boolean {
+    return this.chains.has(sessionId)
+  }
+
   trackAttach<T>(operation: Promise<T>): Promise<T> {
     this.attaching.add(operation)
     void operation.then(

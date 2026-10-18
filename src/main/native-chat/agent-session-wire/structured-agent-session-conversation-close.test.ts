@@ -19,6 +19,7 @@ import {
   type RestTestRig
 } from './structured-agent-session-rest-test-rig'
 import { hostTestAttachParams } from './structured-agent-session-host-test-data'
+import { openAndSettle } from './structured-agent-session-retry.test-fixture'
 
 let rig: RestTestRig
 
@@ -208,9 +209,12 @@ describe('the sweep and the lease (P2-20)', () => {
       rig.host.collaboratorsForTests().runtimeState,
       'resolveRecovery'
     )
-    // Open, at rest, on a lease still recovering.
-    await rig.host.journalSnapshot(SESSION)
+    // Open, at rest, on a lease still recovering. The open's background settlement may decide the
+    // lease; the sweep never does.
+    await openAndSettle(rig.host, SESSION)
     expect(rig.host.hasSession(SESSION)).toBe(true)
+    probeOwner.mockClear()
+    resolveRecovery.mockClear()
     rig.clock.now += IDLE_MS + 1
 
     await sweepOnce(rig.host)

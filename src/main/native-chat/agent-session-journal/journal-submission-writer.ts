@@ -6,6 +6,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalQueuedMessages } from './journal-queued-messages'
+import { backgroundWrite } from './journal-database'
 import { journalSubmissionHook, type JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalReducerState } from './journal-reducer'
 import { journalDispatchRowBuilder, journalSubmissionRowBuilder } from './journal-row-builders'
@@ -48,7 +49,8 @@ export class JournalSubmissionWriter {
     return rowWriter.append(
       journalSubmissionRowBuilder(state, identity, input, consume),
       journalSubmissionHook(queuedMessages, claimAttachments, input, consume),
-      receipt
+      receipt,
+      backgroundWrite(consume?.background)
     )
   }
 
@@ -64,6 +66,11 @@ export class JournalSubmissionWriter {
     input: ResolveDispatchInput,
     hook?: JournalRowTransactionHook
   ): Promise<AgentJournalCursor> {
-    return this.deps.rowWriter.append(journalDispatchRowBuilder(this.deps.state, input), hook)
+    return this.deps.rowWriter.append(
+      journalDispatchRowBuilder(this.deps.state, input),
+      hook,
+      undefined,
+      backgroundWrite(input.background)
+    )
   }
 }

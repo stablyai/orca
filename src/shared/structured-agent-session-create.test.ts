@@ -163,15 +163,32 @@ describe('the tab id a create reserves', () => {
 })
 
 it('negotiates a strict pane identity and includes it in the create fingerprint without accepting paths', () => {
-  const source = { providerSessionId: 'thread-abc', cliSource: { workspaceId: 'folder', paneKey: 'tab:leaf' } }
+  const source = {
+    providerSessionId: 'thread-abc',
+    cliSource: { workspaceId: 'folder', paneKey: 'tab:leaf' }
+  }
   expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_CLI_SOURCE_RUNTIME_CAPABILITY)
   expect(ResumeSource.parse(source)).toEqual(source)
   expect(ResumeSource.safeParse({ ...source, transcriptPath: '/client/path' }).success).toBe(false)
-  expect(ResumeSource.safeParse({ ...source, cliSource: { ...source.cliSource, accountHome: '/client/home' } }).success).toBe(false)
+  expect(
+    ResumeSource.safeParse({
+      ...source,
+      cliSource: { ...source.cliSource, accountHome: '/client/home' }
+    }).success
+  ).toBe(false)
   const first = createParams({ resumeFrom: source })
-  expect(first.envelope.payloadFingerprint).not.toBe(createParams({ resumeFrom: RESUME }).envelope.payloadFingerprint)
-  expect(first.envelope.payloadFingerprint).toBe(createParams({ resumeFrom: source }).envelope.payloadFingerprint)
-  expect(first.envelope.payloadFingerprint).not.toBe(createParams({ resumeFrom: {
-    ...source, cliSource: { ...source.cliSource, paneKey: 'other:leaf' }
-  } }).envelope.payloadFingerprint)
+  expect(first.envelope.payloadFingerprint).not.toBe(
+    createParams({ resumeFrom: RESUME }).envelope.payloadFingerprint
+  )
+  expect(first.envelope.payloadFingerprint).toBe(
+    createParams({ resumeFrom: source }).envelope.payloadFingerprint
+  )
+  expect(first.envelope.payloadFingerprint).not.toBe(
+    createParams({
+      resumeFrom: {
+        ...source,
+        cliSource: { ...source.cliSource, paneKey: 'other:leaf' }
+      }
+    }).envelope.payloadFingerprint
+  )
 })

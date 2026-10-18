@@ -20,6 +20,7 @@ import type {
   JournalResolvedLifecycleBatchInput
 } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
+import { backgroundWrite, type JournalWriteOptions } from './journal-database'
 import { journalQueuedRejectionRowBuilders } from './journal-pending-submission-recovery'
 
 export class JournalLifecycleBatchAppender {
@@ -28,7 +29,8 @@ export class JournalLifecycleBatchAppender {
       state: () => JournalReducerState
       cursor: () => AgentJournalCursor
       enqueueRows: (
-        plan: () => readonly ((seq: number, ts: number) => JournalRow)[]
+        plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
+        options?: JournalWriteOptions
       ) => Promise<JournalRow[]>
     }
   ) {}
@@ -40,7 +42,8 @@ export class JournalLifecycleBatchAppender {
           const rejections = journalQueuedRejectionRowBuilders(
             this.deps.state,
             input.fence,
-            input.rejectsQueued
+            input.rejectsQueued,
+            input.rejectsQueuedOnly
           )
           if (rejections.length > 0 && input.mutations.length === 0) {
             throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
@@ -74,7 +77,7 @@ export class JournalLifecycleBatchAppender {
           ...dispatches.map((dispatch) => journalDispatchRowBuilder(this.deps.state, dispatch)),
           ...this.planMutations(input, mutations)
         ]
-      })
+      }, backgroundWrite(input.background))
       .then((rows) => this.cursorAfter(rows))
   }
 

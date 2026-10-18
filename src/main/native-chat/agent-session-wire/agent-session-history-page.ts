@@ -152,13 +152,14 @@ export function readAgentSessionHistory(
  */
 export function createAgentSessionCatchUpReader(
   journal: AgentSessionJournal,
-  reader: HistoryReader = STORED_HISTORY_READER
+  reader: HistoryReader = STORED_HISTORY_READER,
+  form?: (snapshot: AgentJournalSnapshot) => AgentJournalSnapshot
 ): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
-  let snapshot = journal.snapshot()
+  let snapshot = form?.(journal.snapshot()) ?? journal.snapshot()
   return (request) => {
     const live = journal.cursor()
     if (live.epoch !== snapshot.cursor.epoch || live.sequence !== snapshot.cursor.sequence) {
-      snapshot = journal.snapshot()
+      snapshot = form?.(journal.snapshot()) ?? journal.snapshot()
     }
     return readAgentSessionHistory(journal, request, { snapshot, reader })
   }
@@ -167,9 +168,10 @@ export function createAgentSessionCatchUpReader(
 export function readAgentSessionHydrationPage(
   journal: AgentSessionJournal,
   fence?: number,
-  reader: HistoryReader = STORED_HISTORY_READER
+  reader: HistoryReader = STORED_HISTORY_READER,
+  form?: (snapshot: AgentJournalSnapshot) => AgentJournalSnapshot
 ): AgentSessionHistoryPage {
-  return buildHydrationPage(journal.snapshot(), fence, reader)
+  return buildHydrationPage(form?.(journal.snapshot()) ?? journal.snapshot(), fence, reader)
 }
 
 function buildHydrationPage(

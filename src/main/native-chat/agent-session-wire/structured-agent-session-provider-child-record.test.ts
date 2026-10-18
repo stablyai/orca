@@ -44,6 +44,7 @@ import { openTestJournalHostDatabase } from '../agent-session-journal/journal-ho
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
+import { retryIdle } from './structured-agent-session-retry.test-fixture'
 import { structuredAgentSessionHeldStarts } from './structured-agent-session-held-start.test-support'
 
 const CALLER = { callerKey: 'client-1' }
@@ -132,6 +133,10 @@ beforeEach(async () => {
   startHost()
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   await host.close(SESSION, 'evict')
+  // The stop's release wakes the host's retry, which opens the chat and closes it again; the
+  // tests below write its journal directly, so it must be shut first.
+  await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
+  await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
 })
 
 afterEach(async () => {
@@ -335,11 +340,17 @@ describe('Stop on a child still proving its start', () => {
 describe('settling an earlier child before the next one takes its message', () => {
   it("settles the earlier child's turn from its death evidence and leaves the queued message to the new child (R1)", async () => {
     // The earlier child exited mid-turn; the released lease keeps only its death evidence.
+    const ownerFence = store.getRecord(SESSION)!.lease.deathEvidence!.ownerFence!
     await store.transitionHandoff(SESSION, (record) => ({
       ...record,
       lease: {
         ...record.lease,
-        deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: NOW - 1_000 }
+        deathEvidence: {
+          kind: 'exit-observed',
+          detail: 'provider exited',
+          observedAt: NOW - 1_000,
+          ownerFence
+        }
       }
     }))
     const releasedFence = store.getRecord(SESSION)!.lease.runtimeFence
@@ -356,13 +367,19 @@ describe('settling an earlier child before the next one takes its message', () =
     await journal.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'earlier-turn', ordinal: 0 },
       { kind: 'turn', turnId: 'earlier-turn', state: 'running', startedAt: NOW - 5_000 },
-      { fence: releasedFence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      { fence: ownerFence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.close()
+    // The process died between that release and its settlement: the next open settles it, in the
+    // background, from the evidence the release kept, even after the send's reservation clears it.
+    await restartHost()
+    await host.reconcileRestartLeases()
+    await host.startupSettled()
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
     const id = await accept('for the next child')
 
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    // The exit was observed, so its receipt ends the turn, and the chat says why it stopped.
+    // The exit was observed, so its evidence ends the turn, and the chat says why it stopped.
     const items = conversation()!.journal.snapshot().items
     expect(items.map((item) => readAgentJournalTurn(item.body)).filter(Boolean)).toContainEqual(
       expect.objectContaining({
@@ -621,10 +638,15 @@ describe('a quit with a message still queued', () => {
     surface: 'rejection'
   })
 
-  /** Read by the next launch, through the same open any reader takes. */
+  /** Read after the next launch's startup, then the restore of the chat's tab, whose open settles
+   *  what the quit left unsent. */
   async function afterRelaunch(id: string): Promise<AgentJournalSubmission | undefined> {
     startHost()
-    await host.revealSession(SESSION)
+    await host.reconcileRestartLeases()
+    await host.startupSettled()
+    await host.restoreReadableSessions([SESSION])
+    // A released chat settles on its first open, which the restore is.
+    await retryIdle(host.collaboratorsForTests().reconciliation, SESSION)
     return await submission(id)
   }
 

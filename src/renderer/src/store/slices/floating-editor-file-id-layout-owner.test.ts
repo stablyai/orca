@@ -36,18 +36,16 @@ function openFloatingFile(): string {
     activeGroupIdByWorktree: { [WT]: 'g1' },
     unifiedTabsByWorktree: { [WT]: [] }
   })
-  return store
-    .getState()
-    .openFile(
-      {
-        filePath: '/notes/a.md',
-        relativePath: 'a.md',
-        worktreeId: WT,
-        language: 'md',
-        mode: 'edit'
-      },
-      { preview: false }
-    )
+  return store.getState().openFile(
+    {
+      filePath: '/notes/a.md',
+      relativePath: 'a.md',
+      worktreeId: WT,
+      language: 'md',
+      mode: 'edit'
+    },
+    { preview: false }
+  )
 }
 
 beforeEach(() => {

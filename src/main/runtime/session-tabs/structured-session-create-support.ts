@@ -1,34 +1,20 @@
-import {
-  captureStructuredAgentCliSource,
-  structuredAgentCliSourcePathFromEvidence
-} from '../../native-chat/structured-agent-cli-source'
+import * as cliSource from '../../native-chat/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  resolveCommittedStructuredAgentSessionAdoptionIntent,
-  requireUnownedStructuredAgentSessionAdoption,
-  resolveStructuredAgentSessionAdoptionForCreate,
-  type StructuredAgentSessionCreateIntentInput
-} from '../structured-agent-session-create-adoption'
+import * as createAdoption from '../structured-agent-session-create-adoption'
 import { isNativeLocalLocation, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../project-runtime-git-options'
 import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
-import {
-  resolveHostStructuredAgentCreateSupport,
-  resolveHostStructuredAgentLaunchEnvironment
-} from '../structured-agent-launch-support'
+import * as launchSupport from '../structured-agent-launch-support'
 import { structuredAgentRuntimeMetadata } from '../structured-agent-runtime-metadata'
 import { structuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../structured-agent-session-runtime'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
-import {
-  isFloatingWorkspaceId,
-  isFloatingWorkspaceSelector
-} from '../../../shared/floating-workspace-worktree'
+import * as floating from '../../../shared/floating-workspace-worktree'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
@@ -46,7 +32,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     worktreeSelector: string,
     agent: StructuredAgentId
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
-    return resolveHostStructuredAgentCreateSupport({
+    return launchSupport.resolveHostStructuredAgentCreateSupport({
       agent,
       worktreeSelector,
       location: await this.resolveStructuredAgentSessionLocation(worktreeSelector),
@@ -117,7 +103,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     // The floating workspace is a plain directory with no repo git options, which is exactly what
     // `folder` denotes here — it describes how Orca manages the place, not whether git is in it.
     const folderWorkspace =
-      folderScope?.type === 'folder' || isFloatingWorkspaceId(target.worktree.id)
+      folderScope?.type === 'folder' || floating.isFloatingWorkspaceId(target.worktree.id)
     // WSL routing describes *this* machine; no remote or runtime host may inherit
     // it. Both branches key on executionHostId: the target no longer carries a
     // connectionId, which used to spell remote, unresolved and local alike.
@@ -151,21 +137,22 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   async resolveStructuredAgentSessionCreateIntent(
-    input: StructuredAgentSessionCreateIntentInput
+    input: createAdoption.StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     if (input.resumeFrom) {
-      requireUnownedStructuredAgentSessionAdoption({
+      createAdoption.requireUnownedStructuredAgentSessionAdoption({
         host: getStructuredAgentSessionHost(),
         agent: input.agent,
         providerSessionId: input.resumeFrom.providerSessionId,
         selfSessionId: input.envelope.sessionId
       })
     }
-    const structuredAgentCliSourceEvidence = input.structuredAgentCliSourceEvidence ??
+    const structuredAgentCliSourceEvidence =
+      input.structuredAgentCliSourceEvidence ??
       (input.resumeFrom?.cliSource
-        ? captureStructuredAgentCliSource(() => this.getAgentProviderSessionRows())
+        ? cliSource.captureStructuredAgentCliSource(() => this.getAgentProviderSessionRows())
         : undefined)
-    const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
+    const hostLaunchDirectory = floating.isFloatingWorkspaceSelector(input.worktree)
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
       : undefined
     const resolveAccountHome = this.structuredAgentAccountHomeResolver(
@@ -205,7 +192,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   protected async resolveStructuredAgentSessionIntent(
-    input: StructuredAgentSessionCreateIntentInput,
+    input: createAdoption.StructuredAgentSessionCreateIntentInput,
     resolveAccountHome: (context: {
       launchEnv: NodeJS.ProcessEnv
       location: {
@@ -231,7 +218,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
     const host = getStructuredAgentSessionHost()
-    const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
+    const committedReplay = createAdoption.resolveCommittedStructuredAgentSessionAdoptionIntent({
       host,
       ...input,
       location,
@@ -241,7 +228,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       return committedReplay
     }
     const resumeFrom = input.resumeFrom
-    const workspaceCwd = resumeFrom ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path : ''
+    const workspaceCwd = resumeFrom
+      ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
+      : ''
     const selectedAccountHome = await resolveAccountHome({ launchEnv, location })
     // Adopting pins the account home to wherever the conversation actually lives, which is not
     // necessarily the one a fresh create would pick: Codex resolves its rollout under
@@ -249,18 +238,24 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     // the wrong home finds nothing and lands the user in a blank chat wearing the old chat's name.
     const adoption =
       resumeFrom && transcriptImport
-        ? await resolveStructuredAgentSessionAdoptionForCreate({
+        ? await createAdoption.resolveStructuredAgentSessionAdoptionForCreate({
             settings,
             agent: input.agent,
             transcriptImport,
             providerSessionId: resumeFrom.providerSessionId,
-            resolveTranscriptPath: () => structuredAgentCliSourcePathFromEvidence({
-              agent: input.agent, resumeFrom, workspaceId: location.workspaceId,
-              evidence: input.structuredAgentCliSourceEvidence
-            }),
+            resolveTranscriptPath: () =>
+              cliSource.structuredAgentCliSourcePathFromEvidence({
+                agent: input.agent,
+                resumeFrom,
+                workspaceId: location.workspaceId,
+                evidence: input.structuredAgentCliSourceEvidence
+              }),
             prepareCodexResume: this.prepareAiVaultSessionResumeFn ?? undefined,
             selectedAccountHome,
-            launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
+            launchEnv: await launchSupport.resolveHostStructuredAgentLaunchEnvironment(
+              input.agent,
+              settings
+            ),
             workspaceCwd: workspaceCwd
           })
         : null

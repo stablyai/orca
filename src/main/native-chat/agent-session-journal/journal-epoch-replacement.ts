@@ -14,7 +14,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalHostDatabase, JournalWriteOptions } from './journal-host-database'
 import type { JournalLoad } from './journal-open'
 import {
   applyJournalRow,
@@ -70,6 +70,7 @@ export function replaceJournalEpoch(input: {
   mintEpoch: () => string
   /** Called the instant the transaction commits, before any fallible follow-up. */
   onPublished: (loaded: JournalLoad) => void
+  options?: JournalWriteOptions
 }): void {
   const epoch = input.mintEpoch()
   const state = createJournalReducerState(input.identity.sessionId, epoch)
@@ -154,7 +155,7 @@ export function replaceJournalEpoch(input: {
       insertJournalRow(db, sessionId, row)
     }
     publishJournalSessionEpoch(db, input.identity, epoch)
-  })
+  }, input.options)
 
   // COMMIT landed: on disk the superseded rows are gone and this epoch is the
   // live one. The caller adopts that immediately, or a later failure leaves the

@@ -34,3 +34,12 @@ export async function pinnedAgentSessionLaunchArgs(
   const launchArgs = params.launchArgs ?? (await resolver?.(params.provider))
   return launchArgs ? { launchArgs: [...launchArgs] } : {}
 }
+
+/** The model and effort the chat was created with, which its opening message runs on as a send's
+ *  carried ones do. */
+export function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
+  options?: Readonly<Record<string, string>>
+} {
+  const { model, effort } = options ?? {}
+  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
+}

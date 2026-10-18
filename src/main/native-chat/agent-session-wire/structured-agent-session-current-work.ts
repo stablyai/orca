@@ -18,6 +18,7 @@ import { currentRequestsProjection } from './agent-session-current-requests'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
+  type AgentJournalSnapshot,
   type AgentJournalSubmission,
   type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
@@ -28,13 +29,28 @@ import type { AgentSessionLatestTurn } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionWorkScope } from '../../../shared/structured-agent-session-main-agent-working'
 import { isUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { lostLiveWorkJournalBody } from '../agent-session-journal/journal-subagent-liveness'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { structuredAgentSessionHandingOver } from './structured-agent-session-handing-over'
 
 export type StructuredAgentSessionCurrentWorkJournal = Pick<
   AgentSessionJournal,
   'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
->
+> &
+  Partial<Pick<AgentSessionJournal, 'observedExecution'>>
+
+export function observedStructuredAgentSessionItem(
+  journal: Pick<AgentSessionJournal, 'itemFence'>,
+  item: AgentJournalRenderItem,
+  observed: number | null | undefined
+): AgentJournalRenderItem {
+  const owner = journal.itemFence(item.itemId)
+  if (observed === undefined || owner === undefined || owner === observed) {
+    return item
+  }
+  const body = lostLiveWorkJournalBody(item.body)
+  return body ? { ...item, body } : item
+}
 
 /** What the host knows of who runs the chat now. */
 export type StructuredAgentSessionWorkEvidence = {
@@ -105,7 +121,7 @@ export function structuredAgentSessionReplacedRuntimeEnded(
 }
 
 /** `StructuredAgentSessionCurrentWork.handsOver`, for a reader that needs no other answer. */
-function structuredAgentSessionHandsOver(
+export function structuredAgentSessionHandsOver(
   journal: Pick<AgentSessionJournal, 'wroteBeforeOpen'>,
   submission: Pick<
     AgentJournalSubmission,
@@ -146,16 +162,24 @@ export class StructuredAgentSessionCurrentWork {
     /** `structuredAgentSessionOwnerUnverifiable`. */
     private readonly ownerUnverifiable = false,
     /** The live child's `heldSends`; absent, or answering undefined, every unanswered send is held. */
-    private readonly heldSends?: () => ReadonlySet<string> | undefined
+    private readonly heldSends?: () => ReadonlySet<string> | undefined,
+    readonly observedExecution = journal.observedExecution?.()
   ) {}
 
   /** What a reader that published this answer compares to learn it changed with no row: the live
    *  generation, since every answer here is the journal read through it. Not the revision, which
    *  moves on every generation-end signal: an end that changed nothing is published once. */
   viewKey(): string {
-    return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}`
+    return `${this.liveFence}${this.ownerUnverifiable ? ':unverifiable' : ''}:${this.observedExecution}`
   }
 
+  formItem = (item: AgentJournalRenderItem): AgentJournalRenderItem =>
+    observedStructuredAgentSessionItem(this.journal, item, this.observedExecution)
+
+  formSnapshot = (snapshot: AgentJournalSnapshot): AgentJournalSnapshot => ({
+    ...snapshot,
+    items: snapshot.items.map(this.formItem)
+  })
   /** What a subscriber was last told of current work: the view, whether the agent works, and which
    *  unanswered sends it holds. Not `viewKey`, which also owns the published requests marker. */
   workViewKey(): string {

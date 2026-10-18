@@ -62,6 +62,7 @@ it('keeps a resumed subagent and background task working when the run that creat
     stateDirectory: root
   })
   let fence = 1
+  journal.observeExecutionWith(() => fence)
   const rows = new StructuredAgentSessionSubagentRows({
     journal: () => journal,
     fence: () => fence,

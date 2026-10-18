@@ -1,6 +1,7 @@
 /** Durable single-writer session records and their operation ledger, as rows in the host's chat
  *  journal database. */
 
+import type { JournalWriteOptions } from '../native-chat/agent-session-journal/journal-database'
 import { backfillAgentSessionPermissionModes } from './agent-session-permission-backfill'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { createAgentSessionConversationReceipts } from './agent-session-conversation-receipts'
@@ -28,6 +29,14 @@ import {
   retireAgentSessionClaimKey
 } from './agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
+import {
+  agentSessionGenerationEnds,
+  agentSessionLeasesBefore,
+  reservationSupersessionEvidence,
+  AgentSessionGenerationEndListeners,
+  type AgentSessionGenerationEnd,
+  type AgentSessionGenerationEndOptions
+} from './agent-session-generation-end'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
 import {
   agentSessionScopeKey,
@@ -70,7 +79,6 @@ import {
   showAgentSessionTabs
 } from './agent-session-tab-table'
 import type { JournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database'
-import type { JournalOperationReceipt } from '../native-chat/agent-session-journal/journal-row-writer'
 import { agentSessionOperationOutcomeReceipt } from './agent-session-operation-receipt'
 import { loadAgentSessionStoreRows } from './agent-session-record-rows'
 import { AgentSessionStoreTransactions } from './agent-session-store-transactions'
@@ -85,7 +93,7 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
   AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
 export class AgentSessionRecordStore {
-  private readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
+  private readonly generationEnds = new AgentSessionGenerationEndListeners()
   private readonly firstRecordListeners = new Set<() => void>()
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
 
@@ -152,8 +160,8 @@ export class AgentSessionRecordStore {
 
   /** Shows each session that still has a record, in one write: an index written part way would
    *  read as complete at the next launch and drop the rest. */
-  showSessionTabs(sessionIds: readonly string[]): Promise<void> {
-    return this.transact((draft) => showAgentSessionTabs(draft, sessionIds))
+  showSessionTabs(sessionIds: readonly string[], options?: JournalWriteOptions): Promise<void> {
+    return this.transact((draft) => showAgentSessionTabs(draft, sessionIds), options)
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
@@ -199,8 +207,9 @@ export class AgentSessionRecordStore {
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
 
   reserveOwner = (request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> =>
-    this.transact((draft) =>
-      commitAgentSessionReservation(draft, request, AGENT_SESSION_LEASE_TTL_MS)
+    this.transact(
+      (draft) => commitAgentSessionReservation(draft, request, AGENT_SESSION_LEASE_TTL_MS),
+      { supersessionEvidence: reservationSupersessionEvidence(request.probe, request.now) }
     )
 
   readonly founding: ReturnType<typeof createAgentSessionFoundingStore>
@@ -256,12 +265,11 @@ export class AgentSessionRecordStore {
     return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
   }
 
-  async transitionHandoff(
+  transitionHandoff = (
     sessionId: string,
-    transition: (record: AgentSessionRecord) => AgentSessionRecord
-  ): Promise<AgentSessionRecord> {
-    return this.mutate(sessionId, transition)
-  }
+    transition: (record: AgentSessionRecord) => AgentSessionRecord,
+    options?: JournalWriteOptions
+  ): Promise<AgentSessionRecord> => this.mutate(sessionId, transition, options)
 
   /**
    * Adjudicate loaded leases, or only the addressed session. No lease grants a writer until it
@@ -269,12 +277,12 @@ export class AgentSessionRecordStore {
    * start, and none grants a writer there, since every grant is a write.
    */
   async reconcileOnRestart(
-    args: AgentSessionRestartProbeArgs
+    args: AgentSessionRestartProbeArgs,
+    options?: JournalWriteOptions
   ): Promise<Map<string, AgentSessionRecord>> {
     const probes = await collectAgentSessionRestartProbes(this, args)
-    return this.transact((draft) => applyAgentSessionRestartProbes(draft, probes, args.now), {
-      inMemoryWhenReadOnly: true
-    })
+    const write = { inMemoryWhenReadOnly: true, ...options }
+    return this.transact((draft) => applyAgentSessionRestartProbes(draft, probes, args.now), write)
   }
 
   /** Admits one non-reservation mutation through the durable ledger. */
@@ -307,16 +315,17 @@ export class AgentSessionRecordStore {
   ) => this.transact((draft) => admitAndClaimAgentSessionOperationInto(draft, args, claimAfter))
 
   recordOperationOutcome = (
-    args: Parameters<typeof settleAgentSessionOperationInto>[1]
-  ): Promise<void> => this.transact((draft) => settleAgentSessionOperationInto(draft, args))
+    args: Parameters<typeof settleAgentSessionOperationInto>[1],
+    options?: JournalWriteOptions
+  ) => this.transact((draft) => settleAgentSessionOperationInto(draft, args), options)
 
   /** That settlement, or an accepted row inserted if absent, committed by the journal write that
    *  makes it true. It changes only the ledger, so no record listener is owed. */
   operationOutcomeReceipt = (args: Parameters<typeof agentSessionOperationOutcomeReceipt>[1]) =>
     agentSessionOperationOutcomeReceipt(this.transactions, args)
 
-  commitOperationReceipt = (receipt: JournalOperationReceipt) =>
-    this.transactions.commitReceipt(receipt)
+  commitOperationReceipt = (...args: Parameters<AgentSessionStoreTransactions['commitReceipt']>) =>
+    this.transactions.commitReceipt(...args)
 
   readCommandReceipt = (...args: Parameters<AgentSessionStoreTransactions['readCommandReceipt']>) =>
     this.transactions.readCommandReceipt(...args)
@@ -330,7 +339,8 @@ export class AgentSessionRecordStore {
 
   private async mutate(
     sessionId: string,
-    apply: (record: AgentSessionRecord) => AgentSessionRecord
+    apply: (record: AgentSessionRecord) => AgentSessionRecord,
+    options?: JournalWriteOptions
   ): Promise<AgentSessionRecord> {
     return this.transact((draft) => {
       const record = draft.records.get(sessionId)
@@ -342,15 +352,13 @@ export class AgentSessionRecordStore {
       const next = apply(record)
       draft.records.set(sessionId, next)
       return next
-    })
+    }, options)
   }
 
-  /** Told, once committed, of each session a transaction wrote a proof of death for — whichever
-   *  transition wrote it, since every one lands here. Must not throw. */
-  onDeathEvidence(listener: (sessionId: string) => void): () => void {
-    this.deathEvidenceListeners.add(listener)
-    return () => this.deathEvidenceListeners.delete(listener)
-  }
+  /** Told once, after commit, of each generation a transaction revoked or superseded, whichever
+   *  transition wrote it, since every lease write lands here (`agentSessionGenerationEnds`). Must not
+   *  throw. */
+  onGenerationEnded = this.generationEnds.on
 
   /** Told, once committed, when the store records its first chat. Must not throw. */
   onFirstRecord(listener: () => void): () => void {
@@ -362,27 +370,19 @@ export class AgentSessionRecordStore {
    *  once its rows have committed. */
   private transact = async <T>(
     apply: (draft: AgentSessionStoreState) => T,
-    options?: { inMemoryWhenReadOnly?: boolean }
+    options?: { inMemoryWhenReadOnly?: boolean } & AgentSessionGenerationEndOptions &
+      JournalWriteOptions
   ): Promise<T> => {
-    let proven: string[] = []
+    let ended: AgentSessionGenerationEnd[] = []
     let heldBefore = true
     const result = await this.transactions.transact((draft) => {
       heldBefore = this.holdsRecords()
-      if (this.deathEvidenceListeners.size === 0) {
-        return apply(draft)
-      }
-      const before = new Map(
-        [...draft.records].map(([id, record]) => [id, record.lease.deathEvidence])
-      )
+      const before = agentSessionLeasesBefore(draft.records)
       const applied = apply(draft)
-      proven = [...draft.records]
-        .filter(([id, { lease }]) => lease.deathEvidence && lease.deathEvidence !== before.get(id))
-        .map(([id]) => id)
+      ended = agentSessionGenerationEnds(before, draft.records, options?.supersessionEvidence)
       return applied
     }, options)
-    for (const sessionId of proven) {
-      this.deathEvidenceListeners.forEach((listener) => listener(sessionId))
-    }
+    this.generationEnds.emit(ended)
     if (!heldBefore && this.holdsRecords()) {
       this.firstRecordListeners.forEach((listener) => listener())
     }

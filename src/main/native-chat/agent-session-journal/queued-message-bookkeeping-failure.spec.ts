@@ -92,7 +92,7 @@ export function registerQueuedMessageBookkeepingFailureTests(): void {
   })
 
   describe('draft bookkeeping inside a journal append', () => {
-    it('a throwing draft transition still commits the rejection row, and the next open recovers the draft', async () => {
+    it('a throwing draft transition still commits the rejection row, and the next startup recovers the draft', async () => {
       let journal = await open()
       await queueAndConsume(journal, 'draft-1')
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -114,6 +114,9 @@ export function registerQueuedMessageBookkeepingFailureTests(): void {
       )
       await journal.close()
       journal = await open()
+      // An open only reads; the retry's pass recovers it with `repairAndPrune`.
+      expect(journal.queuedMessages.get('draft-1')?.state).toBe('dispatched')
+      await journal.queuedMessages.repairAndPrune()
       expect(journal.submission('sub-draft-1')?.dispatchState).toBe('rejected')
       expect(journal.queuedMessages.get('draft-1')).toMatchObject({
         state: 'returned',

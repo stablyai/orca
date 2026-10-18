@@ -53,7 +53,10 @@ export function absoluteConversationStore(path: string | null | undefined): stri
 }
 
 export function directoryTranscriptImport(directories: {
-  conversationStore: (input: { accountHomePath: string; launchEnv: NodeJS.ProcessEnv }) => string | null
+  conversationStore: (input: {
+    accountHomePath: string
+    launchEnv: NodeJS.ProcessEnv
+  }) => string | null
   accountHomeCandidates: (input: {
     settings: StructuredAgentTranscriptImportSettings
     selectedAccountHomePath: string

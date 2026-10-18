@@ -114,9 +114,10 @@ async function closeWhileStarting(cause: 'user-close' | 'evict'): Promise<void> 
   await closed
 }
 
-/** The app quits: delivery stops first, so the held spawn finishing hands nothing over. */
-async function quitRestart(): Promise<void> {
-  const quit = rig.quitRestartHostProcess()
+/** The app quits: delivery stops first, so the held spawn finishing hands nothing over.
+ *  `beforeStartup` reads the state directory before the next process starts. */
+async function quitRestart(beforeStartup?: () => unknown): Promise<void> {
+  const quit = rig.quitRestartHostProcess(beforeStartup)
   releaseStart()
   releaseStart = () => {}
   await quit
@@ -145,6 +146,7 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
     async ({ restart }) => {
       const id = await acceptWhileStarting(sendRequest('hello after restart'))
       await restart()
+      expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
 
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
       // Nothing runs in the chat, so no paused row: it waits for the chat's next turn.
@@ -165,17 +167,19 @@ describe('a message accepted while the agent starts, then Orca stops', () => {
       })
       // Nothing is sent on its own, however many times the chat reopens.
       await rig.host.close(SESSION, 'evict')
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
       expect(rig.dispatch).not.toHaveBeenCalled()
     }
   )
 
-  it('quit writes nothing for it: no closed-chat rejection, still queued until the next open', async () => {
+  it('quit writes nothing for it: no closed-chat rejection, still pending until the next startup', async () => {
     const id = await acceptWhileStarting(sendRequest('kept through quit'))
-    await quitRestart()
-    // Read beside the host, without opening the chat through it: the row the quit left.
-    const leftover = await peekSubmission(id)
+    let leftover: Awaited<ReturnType<typeof peekSubmission>> | undefined
+    // Read beside the host, between the two processes: the row the quit left.
+    await quitRestart(async () => {
+      leftover = await peekSubmission(id)
+    })
     expect(leftover).toMatchObject({ dispatchState: 'pending', handoverRecorded: true })
     expect(leftover?.handedOverAt).toBeUndefined()
   })
@@ -276,13 +280,25 @@ describe('the next accepted turn releases a kept card', () => {
     expect(await rig.drafts()).toEqual([])
   })
 
-  it('a Stop on the reopened chat leaves its card waiting: the open settles it before the Stop runs', async () => {
+  it('a first Stop leaves an earlier process send for recovery even before its card is saved', async () => {
     const id = await acceptWhileStarting(sendRequest('survives a stop'))
-    await rig.crashRestartHostProcess()
+    const resolve = AgentSessionJournal.prototype.resolveDispatch
+    const recovery = vi
+      .spyOn(AgentSessionJournal.prototype, 'resolveDispatch')
+      .mockImplementation(function (this: AgentSessionJournal, input, hook) {
+        return input.clientMessageId === id
+          ? Promise.reject(Object.assign(new Error('database is locked'), { errcode: 5 }))
+          : resolve.call(this, input, hook)
+      })
+    await rig.crashReloadHostProcess()
 
-    expect(await rig.stop()).toMatchObject({ ok: true })
+    expect(await rig.stop()).toMatchObject({ ok: true, value: { cancelled: false } })
+    expect(journal().submission(id)).toMatchObject({ dispatchState: 'pending' })
+    expect(rig.dispatch).not.toHaveBeenCalled()
 
-    expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
+    recovery.mockRestore()
+    await observationClock.observe(2_100)
+    await eventually(async () => expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }]))
     expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected', ...HOST_RESTARTED })
   })
 
@@ -292,7 +308,7 @@ describe('the next accepted turn releases a kept card', () => {
     const id = await acceptWhileStarting(sendRequest('kept twice over'))
     await quitRestart()
     expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await observationClock.observe(100)
     expect(rig.dispatch).not.toHaveBeenCalled()
     const working = await rig.workingSend()
@@ -354,11 +370,7 @@ describe('cards queued behind a working turn, then Orca stops', () => {
         ok: true,
         value: { queued: { state: 'waiting' } }
       })
-      if (how === 'quit') {
-        await quitRestart()
-      } else {
-        rig.crashRestartHostProcess()
-      }
+      await (how === 'quit' ? quitRestart() : rig.crashRestartHostProcess())
 
       expect(await rig.drafts()).toEqual([
         { messageId: first.id, state: 'waiting' },
@@ -431,7 +443,7 @@ describe('the queue at a quit', () => {
       }
       owed.mockRestore()
       healing.mockRestore()
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
 
       expect(await rig.drafts()).toEqual([{ messageId: queued.id, state: 'waiting' }])
       expect(await rig.queuePause()).toBeNull()
@@ -472,7 +484,7 @@ describe('a message accepted while the agent starts, then the chat closes', () =
     async (cause) => {
       const id = await acceptWhileStarting(sendRequest('kept at close'))
       await closeWhileStarting(cause)
-      rig.crashRestartHostProcess()
+      await rig.crashRestartHostProcess()
 
       expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected', ...CHAT_CLOSED })
       expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }])
@@ -584,7 +596,7 @@ describe('what is not kept', () => {
     vi.spyOn(JournalQueuedMessages.prototype, 'holdInTransaction').mockImplementation(() => {
       throw new Error('disk full')
     })
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
 
     await eventually(async () =>
       expect(await rig.submission(id)).toMatchObject({
@@ -601,7 +613,7 @@ describe('what is not kept', () => {
     )
   })
 
-  it('the delivery step keeps one the open could not settle, and hands nothing over', async () => {
+  it('a failed keep rejects nothing: a fresh send is delivered, the earlier one is never handed over, and the retry keeps it', async () => {
     const id = await acceptWhileStarting(sendRequest('open write failed'))
     const resolve = AgentSessionJournal.prototype.resolveDispatch
     // The open's keep and its plain-rejection fallback both fail.
@@ -618,12 +630,20 @@ describe('what is not kept', () => {
       return resolve.apply(this, args)
     })
     await quitRestart()
-    // The open's write failed; a new send wakes the delivery loop, whose first step settles it.
+    // The open's keep failed. Delivery does not wait on that bookkeeping: what may be handed over
+    // is derived from where each send sits, so only this process's own send goes.
     const next = rig.send('wakes the loop')
-    await next.result
-    await eventually(async () => expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }]))
+    expect(await next.result).toMatchObject({ ok: true })
     await eventually(() => expect(dispatchedTexts()).toEqual(['wakes the loop']))
-    expect(await rig.submission(id)).toMatchObject({ dispatchState: 'rejected', ...HOST_RESTARTED })
+    // The retry's next round lands the bookkeeping in this process and keeps it as a card.
+    await eventually(async () => expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }]))
+    const earlier = await rig.submission(id)
+    expect(earlier).toMatchObject({ dispatchState: 'rejected', ...HOST_RESTARTED })
+    expect(earlier).not.toHaveProperty('handedOverAt')
+    // The next open finds it kept, and nothing hands it over.
+    await quitRestart()
+    await eventually(async () => expect(await rig.drafts()).toEqual([{ messageId: id, ...KEPT }]))
+    expect(dispatchedTexts()).toEqual(['wakes the loop'])
   })
 })
 
@@ -760,7 +780,7 @@ describe("the reopen's mark", () => {
     await queued.result
     void working
     const sent = rig.dispatch.mock.calls.length
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     await rig.host.restoreReadableSessions([SESSION])
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     await observationClock.observe(100)

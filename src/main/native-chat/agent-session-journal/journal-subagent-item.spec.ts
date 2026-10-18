@@ -12,6 +12,7 @@ import { isSubagentBlock, type NativeChatSubagentBlock } from '../../../shared/n
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
+import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-stale-state-settlement'
 import {
   journaledSubagent,
   subagentJournalBody,
@@ -135,7 +136,7 @@ export function registerJournalSubagentItemTests(): void {
       expect(revised.turnScope).toEqual({ kind: 'turn', turnItemId: 'turn-1' })
     })
 
-    it('reads unverifiable once a host that died left it working, twin and all', async () => {
+    it('reads unverifiable once the settlement after a host that died left it working, twin and all', async () => {
       const live = await open()
       await live.appendItem(subagentJournalItemIdentity('child-1'), subagentJournalBody(child()), {
         fence: 0,
@@ -144,6 +145,15 @@ export function registerJournalSubagentItemTests(): void {
       await live.close()
 
       const reopened = await open()
+      // The next ownership event's settlement, once the generation that wrote at fence 0 is gone.
+      await settleStaleStructuredAgentSessionState({
+        journal: reopened,
+        sessionId: 'session-1',
+        fence: 1,
+        acquisitionGeneration: null,
+        deathEvidence: null,
+        below: 1
+      })
       const row = reopened.snapshot().items.at(-1)!
       expect(row.recovered).toBe(true)
       expect(row.body).toMatchObject({

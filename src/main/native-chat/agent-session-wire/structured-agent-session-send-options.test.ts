@@ -29,6 +29,7 @@ import {
   REST_TEST_CALLER,
   restTestSend
 } from './structured-agent-session-rest-test-rig'
+import { openAndSettle } from './structured-agent-session-retry.test-fixture'
 
 const PICKED = { model: 'gpt-picked', effort: 'high' }
 
@@ -154,9 +155,10 @@ describe('an opening message created with a model and effort', () => {
     try {
       const { first } = await createWhileStarting(rest)
       const host = await rest.restart()
-      expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
-        ok: true
-      })
+      // Keeping an earlier process's unsent send as a card is the settlement its first open signals.
+      await host.reconcileRestartLeases()
+      await host.startupSettled()
+      await openAndSettle(host, SESSION)
       const journal = host.collaboratorsForTests().sessions.get(SESSION)?.journal
       expect(journal?.queuedMessages.list()).toMatchObject([
         { messageId: first.clientMessageId, options: OPENED }

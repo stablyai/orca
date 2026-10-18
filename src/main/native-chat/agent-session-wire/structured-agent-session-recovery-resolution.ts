@@ -17,13 +17,19 @@ import {
 } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
-import { releaseUnprovenAgentSessionOwner } from '../../runtime/agent-session-lease-transitions'
+import {
+  evictAgentSessionOwner,
+  releaseUnprovenAgentSessionOwner
+} from '../../runtime/agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type { StructuredAgentSessionLeaseWrites } from './structured-agent-session-lease-release'
 
 export type StructuredSessionRecoveryStopSignal = 'SIGTERM' | 'SIGKILL'
 
 export type StructuredSessionRecoveryResolutionDeps = {
   store: AgentSessionRecordStore
+  /** The store itself, or a startup restore's background handle (`backgroundLeaseWrites`). */
+  writes?: StructuredAgentSessionLeaseWrites
   probeRecord: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   now: () => number
   stopOwnerProcess?: (pid: number, signal: StructuredSessionRecoveryStopSignal) => void
@@ -69,21 +75,14 @@ export async function resolveStructuredSessionRecovery(
       probe = await stopOwnerAndReprobe(deps, record, owner.pid)
     }
   }
+  const expectedFence = record.lease.runtimeFence
+  const now = deps.now()
   try {
-    await (owner && !isProvenDeadProbe(probe)
-      ? deps.store.transitionHandoff(sessionId, (latest) =>
-          releaseUnprovenAgentSessionOwner({
-            record: latest,
-            expectedFence: record.lease.runtimeFence,
-            now: deps.now()
-          })
-        )
-      : deps.store.evictProvenDeadOwner({
-          sessionId,
-          expectedFence: record.lease.runtimeFence,
-          probe,
-          now: deps.now()
-        }))
+    await (deps.writes ?? deps.store).transitionHandoff(sessionId, (latest) =>
+      owner && !isProvenDeadProbe(probe)
+        ? releaseUnprovenAgentSessionOwner({ record: latest, expectedFence, now })
+        : evictAgentSessionOwner({ record: latest, expectedFence, probe, now })
+    )
     return 'resolved'
   } catch (error) {
     const code = error instanceof Error ? error.message : String(error)

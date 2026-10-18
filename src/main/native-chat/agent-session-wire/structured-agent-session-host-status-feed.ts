@@ -40,7 +40,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
       const records = new Map(
         feed.readChildWorkRecords(sessionId)?.map((record) => [record.childWorkId, record])
       )
-      return feed.readChildWork(sessionId)?.map((view) => {
+      return feed.readChildWork(sessionId, true)?.map((view) => {
         const { residency, outcomeBasis } = records.get(view.id) ?? {}
         return {
           ...view,

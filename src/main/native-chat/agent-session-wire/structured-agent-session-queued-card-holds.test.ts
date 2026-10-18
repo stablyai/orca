@@ -220,7 +220,7 @@ describe('after a restart, nothing sends by itself', () => {
     await rig.workingSend()
     const first = await queuedDraft('A')
     const second = await queuedDraft('B')
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     // The new host opens the chat for its first reader.
     await published()
     return { first, second }
@@ -378,7 +378,7 @@ describe('after a restart, nothing sends by itself', () => {
     await eventually(async () => expect(await rig.handoff(first)).toBeDefined())
     const cutShort = await rig.handoffId(first)
     expect((await rig.handoff(first))?.handedOverAt).toBeUndefined()
-    rig.crashRestartHostProcess()
+    await rig.crashRestartHostProcess()
     release()
     await published()
     // The new host refuses the leftover hand-off, and A waits again in its own place.
@@ -540,7 +540,8 @@ describe('where the host would refuse the send', () => {
     }
     // The clear's generation end wakes the drain, which would send the card; holding the session's
     // lane keeps it waiting while the test reads the gate (`release` lets the drain run).
-    // The gate exists before the task runs: other work may be queued ahead of it on the lane.
+    // The gate exists before the task runs: the clear's end may have queued the chat's
+    // reconciliation pass ahead of it on the lane.
     let release = (): void => undefined
     const gate = new Promise<void>((resolve) => (release = resolve))
     const held = rig.host.collaboratorsForTests().serialize(HOST_TEST_SESSION, () => gate)

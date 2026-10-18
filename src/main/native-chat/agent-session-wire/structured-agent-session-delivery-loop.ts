@@ -9,8 +9,10 @@
 // that arrives while a start holds the queue withdraw the queued messages before the handover that
 // would have written them. Stop and the conversation's close are the only other writers of a
 // queued message: a child's exit only ends the child, and this loop reads why. A message an
-// earlier host process left queued is never handed over: the open, or this loop's first step,
-// settles it first (`journal-unsent-send-hold.ts`).
+// earlier host process left queued is never handed over: the loop hands over only what this
+// process accepted (`structuredAgentSessionHandsOver`), read off the journal, so nothing has to be
+// written first. Foreground adoption keeps earlier sends as cards before publication; failed
+// conversion opens anyway and the background retry completes it.
 
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
@@ -37,7 +39,6 @@ import { structuredAgentSessionNextHandover } from './structured-agent-session-o
 import { structuredAgentSessionCommandRunning } from './structured-agent-session-command-turn'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type { StructuredAgentSessionStartReadiness } from './structured-agent-session-startup-attempt'
-import { holdRestartedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 import { structuredAgentSessionEndedChildFailure } from './structured-agent-session-ended-child-failure'
 
@@ -197,21 +198,12 @@ export class StructuredAgentSessionDeliveryLoop {
     }
   }
 
-  /** Settles what an earlier host process left queued, then makes the session ready. */
+  /** Makes the session ready for the oldest send this process may hand over. */
   private async prepare(sessionId: string): Promise<Prepared> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.disposed) {
       return this.stop(sessionId)
     }
-    // The open already did, unless its write failed: a row an earlier handle wrote is never handed
-    // over, whether it outlived a quit or a crash. A failure here throws, so none is: this run then
-    // fails, which rejects every queued send, this process's own too.
-    await holdRestartedStructuredAgentSessionSends(
-      this.deps.logger,
-      sessionId,
-      session.journal,
-      this.deps.conversationFence(sessionId)
-    )
     if (!(await this.closeWhatTheUserClosed(sessionId, session))) {
       // Never start an agent for a message the user closed; the next wake re-derives and retries.
       return this.stop(sessionId)

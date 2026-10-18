@@ -6,15 +6,13 @@
 import type Database from '../../sqlite/sync-database'
 import type { QueuedMessageHoldReason } from './queued-message-table'
 
+export type QueuedMessageHold = { messageIds: readonly string[]; reason: QueuedMessageHoldReason }
+
 /** Hold waiting drafts from auto-sending. The hold retires with the row: consume
  *  and withdraw clear it in their own UPDATE. Returns how many rows it newly reached. */
 export function holdQueuedMessages(
   db: Database.Database,
-  input: {
-    sessionId: string
-    messageIds: readonly string[]
-    reason: QueuedMessageHoldReason
-  }
+  input: QueuedMessageHold & { sessionId: string }
 ): number {
   const update = db.prepare(
     `UPDATE queued_messages SET hold_reason = ?

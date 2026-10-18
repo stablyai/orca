@@ -4,8 +4,8 @@
 // the children, and sweeps whatever is still `working` when the provider goes
 // away. A host that DIED — crash, quit, force-restart — does neither: its last
 // revision goes on saying `working`, and nothing replays those children, so no
-// later event can ever settle them. Opening the journal is the one moment a new
-// host can state the truth about the old one: contact was lost. That is
+// later event can ever settle them. The leftover settlement at the next ownership
+// event states the truth about the old one: contact was lost. That is
 // `unverifiable`, never a synthesized exit — see
 // `docs/reference/ssh-execution-boundary.md`.
 //
@@ -13,15 +13,7 @@
 // finds by key after this revision, so a later run starts from the verdict, not the dead host's
 // `working`.
 
-import {
-  agentJournalItemKey,
-  parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import {
   isSubagentGroupFallbackText,
   normalizeSubagentState,
@@ -42,33 +34,6 @@ import {
   type NativeChatSubagentBlock,
   type NativeChatSubagentGroupBlock
 } from '../../../shared/native-chat-types'
-
-export type JournalSubagentLivenessRevision = {
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
-}
-
-/** The revisions a reopened journal owes: one per row still claiming a live
- *  child. Empty — the common case — when nothing was left mid-flight. */
-export function staleSubagentRosterRevisions(
-  items: Iterable<AgentJournalRenderItem>
-): JournalSubagentLivenessRevision[] {
-  const revisions: JournalSubagentLivenessRevision[] = []
-  for (const item of items) {
-    const body = lostLiveWorkJournalBody(item.body)
-    if (!body) {
-      continue
-    }
-    // A key that will not parse cannot be re-addressed, and appending under a
-    // fresh identity would duplicate the row rather than revise it.
-    const identity = parseAgentJournalItemKey(item.itemId)
-    if (!identity || agentJournalItemKey(identity) !== item.itemId) {
-      continue
-    }
-    revisions.push({ identity, body })
-  }
-  return revisions
-}
 
 /** The row once the host lost the session running its live work: every working child and
  *  in-flight background task `unverifiable`, plain-text twins restated. Null when none is live.

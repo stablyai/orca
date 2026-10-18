@@ -35,6 +35,7 @@ import {
 import { settledRootTurnScope } from './structured-agent-session-exit-turn-scope'
 import { isUnverifiableTurn, staleStopRow } from './structured-agent-session-stale-stop-row'
 import { isInProgressStructuredAgentSessionItem } from './structured-agent-session-unfinished-work'
+import { observedStructuredAgentSessionItem } from './structured-agent-session-current-work'
 
 /** What the settlement reads and writes of a chat's journal. */
 export type StaleStructuredAgentSessionStateJournal = Pick<
@@ -47,7 +48,8 @@ export type StaleStructuredAgentSessionStateJournal = Pick<
   | 'lastProviderActivityAt'
   | 'cursor'
   | 'appendPlannedLifecycleBatch'
->
+> &
+  Partial<Pick<AgentSessionJournal, 'observedExecution'>>
 
 export type StaleStructuredAgentSessionStateInput = {
   journal: StaleStructuredAgentSessionStateJournal
@@ -96,7 +98,8 @@ export function planStaleStructuredAgentSessionState(
   const { journal, below } = input
   const ended = (fence: number | undefined) =>
     below === undefined || (fence !== undefined && fence < below)
-  const items = journal.snapshot().items.filter((item) => ended(journal.itemFence(item.itemId)))
+  const snapshot = journal.snapshot()
+  const items = snapshot.items.filter((item) => ended(journal.itemFence(item.itemId)))
   const dispatches =
     below === undefined
       ? []
@@ -106,7 +109,23 @@ export function planStaleStructuredAgentSessionState(
           // Doubt, never non-delivery: what a gone owner was handed and never answered.
           { reason: DISPATCH_DOUBT_PROVIDER_EXITED }
         )
-  return { mutations: staleMutations(input, items), dispatches }
+  const mutations = staleMutations(input, items)
+  const observed = journal.observedExecution?.()
+  for (const item of snapshot.items) {
+    if (ended(journal.itemFence(item.itemId))) {
+      continue
+    }
+    const next = observedStructuredAgentSessionItem(journal, item, observed)
+    if (next !== item) {
+      mutations.push({
+        kind: 'item',
+        itemId: item.itemId,
+        body: next.body,
+        turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+      })
+    }
+  }
+  return { mutations, dispatches }
 }
 
 function staleMutations(

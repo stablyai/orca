@@ -19,7 +19,8 @@ import {
 } from './structured-agent-session-adopted-import'
 import {
   pinnedAgentSessionLaunchArgs,
-  pinnedAgentSessionLaunchEnv
+  pinnedAgentSessionLaunchEnv,
+  openingMessageOptions
 } from './structured-agent-session-launch-env'
 import {
   adapterSupportsCreateIfDeclared,
@@ -29,6 +30,8 @@ import { performSend } from './structured-agent-session-turns'
 import { observedReceipt } from './structured-agent-session-operation-settlement'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
+import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
+import { withPublishedWork } from './agent-session-published-work'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 
 export type StructuredAgentSessionCreateOptions = {
@@ -179,6 +182,9 @@ async function foundConversation(
   const fence = candidate.record.lease.runtimeFence
   let committed = replayed
   try {
+    if (!existing) {
+      await context.prepareConversation(sessionId, session.journal)
+    }
     if (!replayed) {
       await importAdoptedTranscript(
         params,
@@ -252,6 +258,10 @@ async function foundConversation(
     const firstMessage = options.firstMessage
       ? session.journal.submission(options.firstMessage.clientMessageId)
       : undefined
+    const work = hostStructuredAgentSessionCurrentWork(
+      { store, sessions: context.sessions },
+      sessionId
+    )
     const result = {
       ok: true as const,
       replayed,
@@ -260,7 +270,10 @@ async function foundConversation(
       value: {
         sessionId,
         fence,
-        page: readAgentSessionHydrationPage(session.journal, fence),
+        page: withPublishedWork(
+          readAgentSessionHydrationPage(session.journal, fence, undefined, work?.formSnapshot),
+          work ?? undefined
+        ),
         unconfirmedClientMessageIds: [],
         ...(firstMessage ? { firstMessage } : {}),
         ...(tabId ? { tabId } : {})
@@ -291,13 +304,4 @@ export function structuredAgentSessionEntryDelegates(
       options?: StructuredAgentSessionCreateOptions
     ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
   }
-}
-
-/** The model and effort the chat was created with, which its opening message runs on as a send's
- *  carried ones do. */
-function openingMessageOptions(options: Readonly<Record<string, string>> | undefined): {
-  options?: Readonly<Record<string, string>>
-} {
-  const { model, effort } = options ?? {}
-  return model ? { options: { model, ...(effort ? { effort } : {}) } } : {}
 }

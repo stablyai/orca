@@ -225,6 +225,7 @@ describe('a waiting card when the generation ahead of it ends', () => {
       kind: 'submission',
       queuedMessageId: card?.messageId
     })
+    await vi.waitFor(() => expect(current.dispatch).toHaveBeenCalledTimes(2))
   })
 })
 

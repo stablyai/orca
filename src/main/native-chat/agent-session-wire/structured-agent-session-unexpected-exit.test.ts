@@ -436,7 +436,10 @@ describe('provider-exit settlement', () => {
     // write once the journal takes it.
     expect(generationEnded).toHaveBeenCalledTimes(2)
     expect(generationEnded).toHaveBeenNthCalledWith(1, SESSION)
-    expect(generationEnded).toHaveBeenLastCalledWith(SESSION, { restate: true })
+    expect(generationEnded).toHaveBeenLastCalledWith(SESSION, {
+      restate: true,
+      exit: expect.objectContaining({ ownerFence: 7, showUnexpectedExitOutcome: true })
+    })
     expect(log.scopes()).toEqual(['exit-lifecycle-barrier', 'exit-settlement'])
   })
 })

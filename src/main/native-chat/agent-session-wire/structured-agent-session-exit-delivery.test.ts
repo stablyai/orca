@@ -52,15 +52,19 @@ function refuseReleases(current: QueuedMessageTestRig): () => number {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
   const transition = current.store.transitionHandoff.bind(current.store)
   let refused = 0
-  vi.spyOn(current.store, 'transitionHandoff').mockImplementation((sessionId, change) =>
-    transition(sessionId, (record) => {
-      const next = change(record)
-      if (next.lease.claimStatus === 'released') {
-        refused += 1
-        throw new Error('disk full')
-      }
-      return next
-    })
+  vi.spyOn(current.store, 'transitionHandoff').mockImplementation((sessionId, change, options) =>
+    transition(
+      sessionId,
+      (record) => {
+        const next = change(record)
+        if (next.lease.claimStatus === 'released') {
+          refused += 1
+          throw new Error('disk full')
+        }
+        return next
+      },
+      options
+    )
   )
   return () => refused
 }

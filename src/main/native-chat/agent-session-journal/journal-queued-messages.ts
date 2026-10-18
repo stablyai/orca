@@ -10,10 +10,11 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from '../../../shared/agent-session-host-authority'
+import type { JournalWriteOptions } from './journal-host-database'
 import type { JournalRow } from './journal-row-schema'
 import { writeReceiptIfChanged, type JournalOperationReceipt } from './journal-row-writer'
 import type { JournalQueuedMessagesDeps, JournalSubmissionConsume } from './journal-store-contracts'
-import { holdQueuedMessages } from './queued-message-holds'
+import { holdQueuedMessages, type QueuedMessageHold } from './queued-message-holds'
 import {
   deriveQueuePauses,
   journalUserStopInForce,
@@ -92,8 +93,7 @@ export class JournalQueuedMessages {
     return this.transact(
       (db) => updateQueuedMessageText(db, this.deps.sessionId, input),
       (result) => result.status === 'updated',
-      undefined,
-      () => this.editLeases.retire(input.messageId)
+      { adopted: () => this.editLeases.retire(input.messageId) }
     )
   }
 
@@ -138,17 +138,18 @@ export class JournalQueuedMessages {
         return row
       },
       () => inserted,
-      receipt
+      { receipt }
     )
   }
 
   /** Hold one waiting draft whose conversion failed. Stored on the row, so it
    *  survives handle eviction and restart; withdraw and consume clear it in their
    *  own UPDATE. */
-  hold(input: { messageIds: readonly string[]; reason: QueuedMessageHoldReason }): Promise<void> {
+  hold(input: QueuedMessageHold & JournalWriteOptions): Promise<void> {
     return this.transact(
       (db) => holdQueuedMessages(db, { ...input, sessionId: this.deps.sessionId }),
-      (held) => held > 0
+      (held) => held > 0,
+      input
     ).then(() => undefined)
   }
 
@@ -217,7 +218,7 @@ export class JournalQueuedMessages {
           now: this.deps.now()
         }),
       (withdrawn) => withdrawn.length > 0,
-      receipt
+      { receipt }
     )
   }
 
@@ -241,12 +242,17 @@ export class JournalQueuedMessages {
   private transact<T>(
     run: (db: Database.Database) => JournalWriteResult<T>,
     changed: (result: T) => boolean,
-    receipt?: JournalOperationReceipt,
-    adopted?: () => void
+    {
+      receipt,
+      adopted,
+      background
+    }: { receipt?: JournalOperationReceipt; adopted?: () => void } & JournalWriteOptions = {}
   ): Promise<T> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
-      const result = this.deps.database().transaction(writeReceiptIfChanged(run, changed, receipt))
+      const result = this.deps
+        .database()
+        .transaction(writeReceiptIfChanged(run, changed, receipt), background ? { background } : {})
       if (changed(result)) {
         receipt?.committed()
         adopted?.()
@@ -314,27 +320,13 @@ export class JournalQueuedMessages {
   }
 
   /** Applies owed settlements now, so a skipped live transition heals without a reopen. */
-  settleOwed(): Promise<void> {
+  settleOwed(options?: JournalWriteOptions): Promise<void> {
+    const { sessionId, state, now } = this.deps
     return this.transact(
-      (db) =>
-        settleOwedQueuedMessages(db, {
-          sessionId: this.deps.sessionId,
-          state: this.deps.state(),
-          now: this.deps.now()
-        }),
-      (settled) => settled > 0
+      (db) => settleOwedQueuedMessages(db, { sessionId, state: state(), now: now() }),
+      (settled) => settled > 0,
+      options
     ).then(() => undefined)
-  }
-
-  /** Bookkeeping at open: a failure is reported and retried at the next open,
-   *  never allowed to fail opening the chat. */
-  repairAndPruneAtOpen(): Promise<void> {
-    return this.repairAndPrune().catch((error: unknown) => {
-      console.warn('[journal-open] queued-message repair skipped:', {
-        sessionId: this.deps.sessionId,
-        error: error instanceof Error ? error.message : String(error)
-      })
-    })
   }
 
   /**
@@ -343,7 +335,7 @@ export class JournalQueuedMessages {
    * crash → downgrade → upgrade, where the old build rejected the leftover with
    * no hook), then retention runs.
    */
-  repairAndPrune(): Promise<void> {
+  repairAndPrune(options?: JournalWriteOptions): Promise<void> {
     // No draft, no work, and no write.
     if (this.deps.readOnly() || this.list().length === 0) {
       return Promise.resolve()
@@ -362,7 +354,8 @@ export class JournalQueuedMessages {
           })
         )
       },
-      (changed) => changed > 0
+      (changed) => changed > 0,
+      options
     ).then(() => undefined)
   }
 }

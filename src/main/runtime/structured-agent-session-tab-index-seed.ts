@@ -3,6 +3,7 @@
 // the next launch and drop the rest. With an index present, every restored chat is already listed.
 
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import { BACKGROUND_WRITE } from '../native-chat/agent-session-wire/structured-agent-session-background-writes'
 import type { Tab } from '../../shared/tab-types'
 import type { ChatTabChange } from './agent-session-tab-layout'
 import { savedSessionId } from './saved-structured-agent-session-restoration'
@@ -29,7 +30,8 @@ export async function seedStructuredAgentSessionTabIndex(
     (sessionId) => opened.has(sessionId) && !listed.has(sessionId)
   )
   if (unlisted.length > 0) {
-    await host.showSessionTabs(unlisted).catch((error: unknown) =>
+    // Startup's bookkeeping: another connection's lock fails it at once, and the next launch seeds.
+    await host.showSessionTabs(unlisted, BACKGROUND_WRITE).catch((error: unknown) =>
       host.deps.logger.warn('recording restored chat tabs failed', {
         scope: 'tab-index-seed',
         sessionIds: unlisted,

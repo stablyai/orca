@@ -3,7 +3,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalHostDatabase, JournalWriteOptions } from './journal-host-database'
 import { replaceJournalEpoch, type JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalQueuePauseRestatement } from './queued-message-pause'
 import { publishNewEpoch } from './journal-epoch-rollover'
@@ -60,7 +60,8 @@ export class JournalEpochController {
   replace(
     reason: AgentJournalEpochReason,
     fence: number,
-    items: readonly JournalReplacementItem[]
+    items: readonly JournalReplacementItem[],
+    options?: JournalWriteOptions
   ): Promise<AgentJournalCursor> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
@@ -75,7 +76,8 @@ export class JournalEpochController {
         queuePause: this.deps.queuePauseRestatement(),
         now: this.deps.now,
         mintEpoch: this.deps.mintEpoch,
-        onPublished: this.deps.adopt
+        onPublished: this.deps.adopt,
+        options
       })
       return this.deps.cursor()
     })

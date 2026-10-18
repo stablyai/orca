@@ -1,7 +1,10 @@
 // The pane identity a new PTY's env carries, stamped from the spawn's own ids, for both spawn lanes.
 
 import { mkdirSync } from 'node:fs'
-import { buildJcodeRuntimeDirEnv, JCODE_RUNTIME_DIR_ENV_KEY } from '../../../shared/jcode-runtime-dir'
+import {
+  buildJcodeRuntimeDirEnv,
+  JCODE_RUNTIME_DIR_ENV_KEY
+} from '../../../shared/jcode-runtime-dir'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
 import type { TuiAgent } from '../../../shared/tui-agent'

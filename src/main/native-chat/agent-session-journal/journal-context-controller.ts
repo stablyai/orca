@@ -7,6 +7,7 @@ import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalOperationReceipt, JournalRowWriter } from './journal-row-writer'
 import type { JournalReducerState } from './journal-reducer'
 import type { JournalQueuedMessages } from './journal-queued-messages'
+import type { JournalWriteOptions } from './journal-host-database'
 
 export class JournalContextController {
   constructor(
@@ -35,8 +36,9 @@ export class JournalContextController {
     floor: AgentJournalCursor,
     fence: number,
     items: readonly JournalReplacementItem[],
-    receipt: (cursor: AgentJournalCursor) => JournalOperationReceipt
+    receipt: (cursor: AgentJournalCursor) => JournalOperationReceipt,
+    options?: JournalWriteOptions
   ) {
-    return rewindJournalContext({ ...this.deps, floor, fence, items, receipt })
+    return rewindJournalContext({ ...this.deps, floor, fence, items, receipt, options })
   }
 }

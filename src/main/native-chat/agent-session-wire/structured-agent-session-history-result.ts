@@ -31,7 +31,10 @@ export function readStructuredAgentSessionHistoryResult(input: {
   work?: AgentSessionPublishedWork
 }): AgentSessionHistoryResult {
   const result = withPublishedWorkResult(
-    readAgentSessionHistory(input.journal, input.request, { scope: input.scope }),
+    readAgentSessionHistory(input.journal, input.request, {
+      scope: input.scope,
+      snapshot: input.work?.formSnapshot?.(input.journal.snapshot())
+    }),
     input.work
   )
   const fence = input.record?.lease.runtimeFence

@@ -244,6 +244,15 @@ export class StructuredAgentSessionStartupAttempts {
     return this.open.has(sessionId)
   }
 
+  observation(sessionId: string) {
+    const tracked = this.open.get(sessionId)
+    if (this.disposed || !tracked || tracked.expired || tracked.attempt.signal?.aborted) {
+      return null
+    }
+    const { attemptId, fence, spawnToken } = tracked.attempt
+    return { attemptId, fence, spawnToken, spawnedAt: tracked.spawnedAt }
+  }
+
   /** Quit: no limit fires after this. */
   dispose(): void {
     this.disposed = true

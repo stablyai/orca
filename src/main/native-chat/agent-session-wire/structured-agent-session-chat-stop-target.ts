@@ -3,7 +3,6 @@
 // acceptance commits, the Stop acts only while that target still stands, read again from state,
 // so a newer turn or a newer child is never this Stop's.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { stopReachesUnrecordedWork } from './structured-agent-session-queued-stop'
 import { isMainAgentWorking } from './structured-agent-session-turns-cancel'
@@ -52,7 +51,8 @@ export function captureChatStopTarget(
   if (reached === 'late') {
     return null
   }
-  const queued = ctx.journal.submissions().some(isQueuedAgentJournalSubmission)
+  const work = contextStructuredAgentSessionCurrentWork(ctx)
+  const queued = ctx.journal.submissions().some((submission) => work.handsOver(submission))
   const target = {
     child,
     turnId: structuredAgentSessionStoppedTurnId(

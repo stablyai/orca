@@ -1,10 +1,7 @@
 import { openOpenCodeDatabaseReadonly } from '../ai-vault/session-scanner-opencode-sqlite-open'
 import { zcodeVisibleMessageFilter } from '../ai-vault/session-scanner-zcode-visibility'
 import { zcodeTranscriptOrder } from '../ai-vault/session-scanner-zcode-order'
-import {
-  readOpenCode2TranscriptPage,
-  readOpenCode2TranscriptSignal
-} from './transcript-opencode2-sqlite'
+import * as openCode2 from './transcript-opencode2-sqlite'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
@@ -13,10 +10,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 
 type BindValue = SyncDatabase.BindValue
 type SqliteStatement = SyncDatabase.Statement
-import {
-  opencodeMessages,
-  OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
-} from './transcript-opencode-part-blocks'
+import * as partBlocks from './transcript-opencode-part-blocks'
 // Cursors are opaque provider order: SQLite rowid in v1, session sequence in v2.
 
 export type OpenCodeTranscriptItem = {
@@ -79,7 +73,7 @@ export function readOpenCodeTranscriptSignal(
 ): OpenCodeTranscriptSignal | null {
   const db = openOpenCodeDatabaseReadonly(dbPath)
   try {
-    const v2 = readOpenCode2TranscriptSignal(db, sessionId)
+    const v2 = openCode2.readOpenCode2TranscriptSignal(db, sessionId)
     if (v2) {
       return v2
     }
@@ -117,7 +111,8 @@ export function readOpenCodeTranscriptSignal(
     return {
       cwd: columnExists(db, 'session', 'directory')
         ? extractString(
-            asRecord(db.prepare('SELECT directory FROM session WHERE id = ?').get(sessionId))?.directory
+            asRecord(db.prepare('SELECT directory FROM session WHERE id = ?').get(sessionId))
+              ?.directory
           )
         : null,
       messageCount: messageRow?.message_count ?? 0,
@@ -142,7 +137,7 @@ export function readOpenCodeTranscriptPage(args: {
 }): OpenCodeTranscriptPage | null {
   const db = openOpenCodeDatabaseReadonly(args.dbPath)
   try {
-    const v2 = readOpenCode2TranscriptPage(db, args)
+    const v2 = openCode2.readOpenCode2TranscriptPage(db, args)
     if (v2) {
       return v2
     }
@@ -173,7 +168,7 @@ export function readOpenCodeTranscriptPage(args: {
     // so the statement cannot vary with `beforeMessageRowId`'s presence.
     // MAX_SAFE_INTEGER is the "from the newest row" sentinel.
     const select = db.prepare(
-      `${ordered} SELECT m.rowid AS message_rowid, ${orderColumn} AS transcript_order, m.id, m.time_created, m.time_updated, CASE WHEN length(CAST(m.data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN m.data ELSE NULL END AS data
+      `${ordered} SELECT m.rowid AS message_rowid, ${orderColumn} AS transcript_order, m.id, m.time_created, m.time_updated, CASE WHEN length(CAST(m.data AS BLOB)) <= ${partBlocks.OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN m.data ELSE NULL END AS data
          FROM message m ${ranked ? 'JOIN ordered ON ordered.storage_rowid = m.rowid' : ''}
          WHERE m.session_id = ? AND ${orderColumn} < ${ranked ? 'COALESCE((SELECT transcript_order FROM ordered WHERE storage_rowid = ?), 9007199254740991)' : '?'} ${zcodeVisibleMessageFilter(args.agent ?? 'opencode')}
          ORDER BY ${orderColumn} DESC
@@ -268,7 +263,7 @@ function mapMessageRows(
     const placeholders = batch.map(() => '?').join(', ')
     const partRows = rowsWithinBudget<PartRow>(
       db.prepare(
-        `SELECT message_id, time_updated, CASE WHEN length(CAST(data AS BLOB)) <= ${OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN data ELSE NULL END AS data FROM part p
+        `SELECT message_id, time_updated, CASE WHEN length(CAST(data AS BLOB)) <= ${partBlocks.OPENCODE_TRANSCRIPT_MAX_ROW_BYTES} THEN data ELSE NULL END AS data FROM part p
          WHERE session_id = ? AND message_id IN (${placeholders})
          ORDER BY ${agent === 'zcode' ? zcodeTranscriptOrder(db, agent, 'part', 'p', 'ASC') : 'rowid'} LIMIT 10001`
       ),
@@ -293,7 +288,7 @@ function mapMessageRows(
     const partList = partsByMessage.get(row.id) ?? []
     const record = row.data === null ? null : parseJsonObject(row.data)
     const role = extractString(record?.role)
-    const messages = opencodeMessages(
+    const messages = partBlocks.opencodeMessages(
       {
         id: row.id,
         role: role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'system',
@@ -303,7 +298,10 @@ function mapMessageRows(
         ? [{ message_id: row.id, time_updated: row.time_updated, data: null }]
         : partList
     )
-    const updated = partList.reduce((max, row) => (row.time_updated > max ? row.time_updated : max), 0)
+    const updated = partList.reduce(
+      (max, row) => (row.time_updated > max ? row.time_updated : max),
+      0
+    )
     for (const message of messages.toReversed()) {
       items.push({
         rowid: row.message_rowid,

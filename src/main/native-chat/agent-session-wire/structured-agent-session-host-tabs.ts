@@ -1,6 +1,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import type { JournalWriteOptions } from '../agent-session-journal/journal-database'
 
 /**
  * Chat-tab visibility is the deletion funnel: every path that removes a chat as a user-facing
@@ -97,7 +98,8 @@ export function createStructuredAgentSessionTabSurface(
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),
-    showSessionTabs: (sessionIds: readonly string[]) => host.deps.store.showSessionTabs(sessionIds),
+    showSessionTabs: (sessionIds: readonly string[], options?: JournalWriteOptions) =>
+      host.deps.store.showSessionTabs(sessionIds, options),
     notifySessionTabHidden: (sessionId: string): void => notifyTabHidden(host, sessionId),
     setSessionTabVisibility: async (
       sessionId: string,

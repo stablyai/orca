@@ -8,10 +8,12 @@
 //
 // Owed work is derived on every tick, never stored, so there is nothing to disagree with it.
 
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import {
+  structuredAgentSessionHandsOver,
+  type StructuredAgentSessionCurrentWork
+} from './structured-agent-session-current-work'
 import {
   heldStructuredAgentSessionCurrentWork,
   type StructuredAgentSessionCurrentWorkHost
@@ -155,7 +157,10 @@ export class StructuredAgentSessionIdleSweep {
   private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
     return (
       this.deps.deliveryActive(sessionId) ||
-      session.journal.submissions().some(isQueuedAgentJournalSubmission)
+      // Only a send this process may hand over: an earlier one's is bookkeeping, owed to no child.
+      session.journal
+        .submissions()
+        .some((submission) => structuredAgentSessionHandsOver(session.journal, submission))
     )
   }
 

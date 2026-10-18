@@ -79,7 +79,7 @@ export function deliverToSubscriber(
     return
   }
   const reader = subscriberHistoryReader(subscriber)
-  const readPage = createAgentSessionCatchUpReader(journal, reader)
+  const readPage = createAgentSessionCatchUpReader(journal, reader, work?.formSnapshot)
   while (true) {
     const result = withPublishedWorkResult(
       readPage({
@@ -116,7 +116,7 @@ export function deliverToSubscriber(
     // Replaying an unbounded gap blocks the host; older rows remain available on scroll.
     if (page.hasNewer && subscriber.snapshotCatchUp !== false) {
       const tail = withPublishedWork(
-        readAgentSessionHydrationPage(journal, subscriber.fence, reader),
+        readAgentSessionHydrationPage(journal, subscriber.fence, reader, work?.formSnapshot),
         work
       )
       emit(subscriber, {
@@ -186,12 +186,7 @@ function emitCaughtUp(
     refreshPublishedWork(port, subscriber, current.journal, work, shared)
     return
   }
-  if (
-    emitCheckpoint ||
-    shared.activity !== undefined ||
-    commandsChanged ||
-    queuedChanged
-  ) {
+  if (emitCheckpoint || shared.activity !== undefined || commandsChanged || queuedChanged) {
     port.emit(
       subscriber,
       {

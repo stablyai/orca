@@ -12,6 +12,7 @@ import { buildJournalQueueClearRow } from './journal-stop-and-resume-rows'
 import { journalQueuePauseRestatement } from './queued-message-pause'
 import type { JournalQueuedMessages } from './journal-queued-messages'
 import type { JournalRow } from './journal-row-schema'
+import type { JournalWriteOptions } from './journal-host-database'
 
 export async function rewindJournalContext(input: {
   state: () => JournalReducerState
@@ -21,6 +22,7 @@ export async function rewindJournalContext(input: {
   fence: number
   items: readonly JournalReplacementItem[]
   receipt: (cursor: AgentJournalCursor) => JournalOperationReceipt
+  options?: JournalWriteOptions | undefined
 }): Promise<AgentJournalCursor> {
   let receipt: JournalOperationReceipt | undefined
   const rows = await input.writer.enqueueRows(
@@ -86,6 +88,7 @@ export async function rewindJournalContext(input: {
             seq,
             ts: item.observedAt ?? ts,
             fence: input.fence,
+            ownerFence: item.ownerFence,
             turnScope: item.turnScope ?? { kind: 'thread' }
           }),
           revision
@@ -100,7 +103,9 @@ export async function rewindJournalContext(input: {
     {
       write: (db) => receipt!.write(db),
       committed: () => receipt!.committed()
-    }
+    },
+    undefined,
+    input.options
   )
   const last = rows.at(-1)!
   return { epoch: last.epoch, sequence: last.seq }

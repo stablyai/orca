@@ -1,6 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 import { insertJournalRow } from './journal-row-table'
 import type { JournalHostDatabase } from './journal-host-database'
+import type { JournalWriteOptions } from './journal-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from './journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
@@ -71,7 +72,8 @@ export class JournalRowWriter {
   enqueue(
     build: (seq: number, ts: number) => JournalRow,
     hook?: JournalRowTransactionHook,
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    options?: JournalWriteOptions
   ): Promise<JournalRow> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
@@ -87,7 +89,7 @@ export class JournalRowWriter {
             receipt?.write(db, row)
             this.runBookkeeping(db, row)
           },
-          !hook && !receipt && this.streamed([row])
+          { ...options, streamed: !hook && !receipt && this.streamed([row]) }
         )
       } catch (error) {
         this.deps.rolledBack?.()
@@ -108,16 +110,18 @@ export class JournalRowWriter {
   enqueueRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalOperationReceipt,
-    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
+    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined,
+    options?: JournalWriteOptions
   ): Promise<JournalRow[]> {
-    return this.deps.serialize(() => this.writeRows(plan, receipt, receiptRow))
+    return this.deps.serialize(() => this.writeRows(plan, receipt, receiptRow, options))
   }
 
   /** `enqueueRows`' write, for a caller already running at its own turn in the queue. */
   writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
     receipt?: JournalOperationReceipt,
-    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
+    receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined,
+    options?: JournalWriteOptions
   ): JournalRow[] {
     assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
     const first = this.deps.nextSequence()
@@ -138,7 +142,7 @@ export class JournalRowWriter {
           }
           receipt?.write(db, receiptRow?.(rows))
         },
-        !receipt && this.streamed(rows)
+        { ...options, streamed: !receipt && this.streamed(rows) }
       )
     } catch (error) {
       this.deps.rolledBack?.()
@@ -154,9 +158,10 @@ export class JournalRowWriter {
   append(
     build: (seq: number, ts: number) => JournalRow,
     hook?: JournalRowTransactionHook,
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    options?: JournalWriteOptions
   ): Promise<AgentJournalCursor> {
-    return this.enqueue(build, hook, receipt).then((row) => ({
+    return this.enqueue(build, hook, receipt, options).then((row) => ({
       epoch: row.epoch,
       sequence: row.seq
     }))

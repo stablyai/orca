@@ -1,6 +1,7 @@
 // The context every client mutation of a session runs with, and the one path each takes: admit the
 // envelope against the lease, then run its plan inside the session's serialize.
 
+import type { StructuredAgentSessionRetry } from './structured-agent-session-reconciliation-retry'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type {
   AgentSessionMutationEnvelope,
@@ -34,10 +35,7 @@ export type StructuredAgentSessionMutationContext = {
   /** The session's child records, as the strip reads them; what command admission decides on. */
   readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined
   publishChildWork: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
-  captureChildWorkStops: (
-    sessionId: string,
-    handleIds: readonly string[]
-  ) => CapturedChildWorkStops
+  captureChildWorkStops: (sessionId: string, handleIds: readonly string[]) => CapturedChildWorkStops
   /** Some of the session's running child work has no record. */
   childWorkOpen: (sessionId: string) => boolean
   childWorkIncomplete: (sessionId: string) => boolean
@@ -53,6 +51,8 @@ export type StructuredAgentSessionMutationContext = {
   joinChildClose: (sessionId: string) => Promise<AgentSessionMutationSessionPreparation>
   /** A message was accepted: the session's delivery loop hands it over. */
   wakeDelivery: (sessionId: string) => void
+  /** The host's retry of background bookkeeping (`StructuredAgentSessionRetry`). */
+  retry: Pick<StructuredAgentSessionRetry, 'signal' | 'sendWaits'>
   /** Stops the session's provider child, keeping its conversation; inside the caller's serialize.
    *  Each caller names why (`ending`). */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>

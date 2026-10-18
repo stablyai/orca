@@ -198,7 +198,9 @@ describe('a Codex send whose turn completes without taking it', () => {
       .flatMap((event) => (event.type === 'batch' ? event.batch.submissions : []))
       .filter((entry) => entry.clientMessageId === compact.clientMessageId)
     expect(states.length).toBeGreaterThan(0)
-    expect(states.every((entry) => entry.dispatchState !== 'unknown' && !entry.recovered)).toBe(true)
+    expect(states.every((entry) => entry.dispatchState !== 'unknown' && !entry.recovered)).toBe(
+      true
+    )
 
     handlers?.onNotification?.('turn/started', {
       threadId: THREAD,

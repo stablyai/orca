@@ -108,10 +108,7 @@ export class StructuredAgentSessionStatusOwnership {
   }
 
   /** A Stop's callback closes only lifetimes captured before the provider call can await. */
-  captureChildWorkStops(
-    sessionId: string,
-    handleIds: readonly string[]
-  ): CapturedChildWorkStops {
+  captureChildWorkStops(sessionId: string, handleIds: readonly string[]): CapturedChildWorkStops {
     const captured = new Map<string, ChildWorkLifetimeToken | undefined>()
     for (const handleId of handleIds) {
       captured.set(handleId, this.open.capture(sessionId, handleId))

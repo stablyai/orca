@@ -10,8 +10,10 @@ import type Database from '../../sqlite/sync-database'
 import {
   openJournalDatabase,
   runJournalTransaction,
+  type JournalWriteOptions,
   type OpenJournalDatabase
 } from './journal-database'
+export type { JournalWriteOptions } from './journal-database'
 import { journalOpenRefusalError } from './journal-open-failure'
 import { AgentSessionJournalError } from './journal-write-guards'
 
@@ -60,22 +62,24 @@ export class JournalHostDatabase {
     return connection
   }
 
-  /** One IMMEDIATE transaction; see `runJournalTransaction`. `streamed` commits without the per-commit
-   *  fsync: only for rows an OS crash may lose (`isJournalStreamedTextRevision`); the next FULL
-   *  commit makes them durable, so a crash can only lose a suffix of them. */
-  transaction<T>(run: (db: Database.Database) => T, streamed = false): T {
+  /** One IMMEDIATE transaction; see `runJournalTransaction`. `streamed` commits without the
+   *  per-commit fsync: only for rows an OS crash may lose (`isJournalStreamedTextRevision`); the
+   *  next FULL commit makes them durable, so a crash can only lose a suffix of them. */
+  transaction<T>(
+    run: (db: Database.Database) => T,
+    { streamed, ...options }: JournalWriteOptions & { streamed?: boolean } = {}
+  ): T {
     const db = this.db
+    const strand = () => {
+      this.stranded = true
+    }
     if (!streamed) {
-      return runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
+      return runJournalTransaction(db, run, strand, options)
     }
     // The level can change only outside a transaction; a stranded one restores FULL on recovery.
     db.pragma('synchronous = NORMAL')
     try {
-      return runJournalTransaction(db, run, () => {
-        this.stranded = true
-      })
+      return runJournalTransaction(db, run, strand, options)
     } finally {
       if (!db.isTransaction) {
         db.pragma('synchronous = FULL')

@@ -298,10 +298,12 @@ describe('performCancel', () => {
     const accepting = new Promise<void>((resolve) => {
       acceptStop = resolve
     })
-    const stopBackgroundTasks = vi.fn(async (request: { acknowledge: (value: { taskId: string }) => void }) => {
-      request.acknowledge({ taskId: 'helper' })
-      return { cancelled: true }
-    })
+    const stopBackgroundTasks = vi.fn(
+      async (request: { acknowledge: (value: { taskId: string }) => void }) => {
+        request.acknowledge({ taskId: 'helper' })
+        return { cancelled: true }
+      }
+    )
     const ctx = acceptedStop({
       logger: createStructuredAgentSessionLogger(),
       sessionId: 'session-1',
@@ -320,8 +322,14 @@ describe('performCancel', () => {
     const stopping = runTargetedCancel(ctx, {
       clientOperationId: 'stop-earlier-lifetime',
       scope: 'background-tasks',
-      childWork: () => [liveTask('helper', { invocation: { invocationId: 'spawn-a', generation: 1 } })],
-      captureStops: (targets) => owner.captureChildWorkStops('session-1', targets.map((target) => target.providerId)),
+      childWork: () => [
+        liveTask('helper', { invocation: { invocationId: 'spawn-a', generation: 1 } })
+      ],
+      captureStops: (targets) =>
+        owner.captureChildWorkStops(
+          'session-1',
+          targets.map((target) => target.providerId)
+        ),
       acknowledgeStops: (evidence) => owner.publishChildWork('session-1', evidence, 'claude')
     })
     expect(stopBackgroundTasks).not.toHaveBeenCalled()
@@ -414,7 +422,10 @@ describe('performCancel', () => {
       scope: 'background-tasks',
       childWork: () => owner.readChildWork('session-1'),
       captureStops: (targets) =>
-        owner.captureChildWorkStops('session-1', targets.map((target) => target.providerId)),
+        owner.captureChildWorkStops(
+          'session-1',
+          targets.map((target) => target.providerId)
+        ),
       acknowledgeStops: (evidence) => owner.publishChildWork('session-1', evidence, 'claude'),
       unlisted: { present: () => owner.childWorkIncomplete('session-1'), stop: stopAgent }
     })

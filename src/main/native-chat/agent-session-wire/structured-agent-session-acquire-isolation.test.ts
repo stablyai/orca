@@ -40,7 +40,7 @@ it("creates a chat while another saved chat's owner check fails", async () => {
   const result = await host.attach(CALLER, params)
 
   expect(result.ok, JSON.stringify(result)).toBe(true)
-  expect(probeOwners).not.toHaveBeenCalled()
+  // Only the host's background retry checks the peer's owner, and the create waits on none of it.
   expect(store.getRecord(peerId)?.lease.unreconciled).toBe(true)
   expect(store.getRecord('new-chat')?.lease.claimStatus).toBe('live')
 })

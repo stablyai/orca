@@ -18,7 +18,8 @@ import type {
 import { subagentGroupFallbackText } from '../../../shared/native-chat-subagent-summary'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-host-database-test-support'
-import { lostLiveWorkJournalBody, staleSubagentRosterRevisions } from './journal-subagent-liveness'
+import { lostLiveWorkJournalBody } from './journal-subagent-liveness'
+import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-stale-state-settlement'
 import { endedUnseenMessageBody } from './journal-terminal-settlement'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
@@ -50,6 +51,26 @@ export function registerJournalSubagentLivenessTests(): void {
       now: tick,
       mintEpoch: () => `epoch-${clock}`,
       ...overrides
+    })
+  }
+
+  /** The revisions a gone host's rows owe: one per row still claiming a live child. */
+  function lostLiveWork(items: readonly AgentJournalRenderItem[]) {
+    return items.flatMap((item) => {
+      const body = lostLiveWorkJournalBody(item.body)
+      return body ? [{ body }] : []
+    })
+  }
+
+  /** What the next ownership event settles once the generation that wrote at fence 0 is gone. */
+  async function settleGoneGeneration(journal: Awaited<ReturnType<typeof open>>): Promise<void> {
+    await settleStaleStructuredAgentSessionState({
+      journal,
+      sessionId: 'session-1',
+      fence: 1,
+      acquisitionGeneration: null,
+      deathEvidence: null,
+      below: 1
     })
   }
 
@@ -131,9 +152,9 @@ export function registerJournalSubagentLivenessTests(): void {
     await rm(root, { recursive: true, force: true })
   })
 
-  describe('staleSubagentRosterRevisions', () => {
+  describe('lostLiveWorkJournalBody', () => {
     it('settles a child the previous host left working, and moves the twin with it', () => {
-      const revisions = staleSubagentRosterRevisions([
+      const revisions = lostLiveWork([
         renderItem([
           { id: 'a', label: 'read_readme', state: 'working', startedAt: 10 },
           { id: 'b', label: 'read_package', state: 'completed', startedAt: 10, settledAt: 20 }
@@ -151,7 +172,7 @@ export function registerJournalSubagentLivenessTests(): void {
 
     it('settles a background task the previous host left live, and moves the twin with it', () => {
       const row = backgroundTaskRow()
-      const revisions = staleSubagentRosterRevisions([
+      const revisions = lostLiveWork([
         {
           itemId: agentJournalItemKey(row.identity),
           revision: 1,
@@ -169,7 +190,7 @@ export function registerJournalSubagentLivenessTests(): void {
     // The child stopped being observable at an unknown moment. A stamp taken now
     // would report the time the app was down as how long the child ran.
     it('records no terminal timestamp for a child whose run length is unknown', () => {
-      const revisions = staleSubagentRosterRevisions([
+      const revisions = lostLiveWork([
         renderItem([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
       ])
 
@@ -178,7 +199,7 @@ export function registerJournalSubagentLivenessTests(): void {
 
     it('records no terminal timestamp for a background task whose run length is unknown', () => {
       const row = backgroundTaskRow(backgroundTaskBlock({ settledAt: 20 }))
-      const revisions = staleSubagentRosterRevisions([
+      const revisions = lostLiveWork([
         {
           itemId: agentJournalItemKey(row.identity),
           revision: 1,
@@ -193,15 +214,13 @@ export function registerJournalSubagentLivenessTests(): void {
 
     it('owes nothing for a roster whose children all settled', () => {
       expect(
-        staleSubagentRosterRevisions([
-          renderItem([{ id: 'a', label: 'read', state: 'completed', settledAt: 20 }])
-        ])
+        lostLiveWork([renderItem([{ id: 'a', label: 'read', state: 'completed', settledAt: 20 }])])
       ).toEqual([])
     })
 
     it('leaves rows that carry no roster alone', () => {
       expect(
-        staleSubagentRosterRevisions([
+        lostLiveWork([
           {
             itemId: 'orca:plain',
             revision: 1,
@@ -212,19 +231,9 @@ export function registerJournalSubagentLivenessTests(): void {
         ])
       ).toEqual([])
     })
-
-    // Appending under a fresh identity would add a second row rather than revise
-    // the one on disk, so an unaddressable key is left exactly as it is.
-    it('skips a row whose key cannot be parsed back to its identity', () => {
-      expect(
-        staleSubagentRosterRevisions([
-          { ...renderItem([{ id: 'a', label: 'r', state: 'working' }]), itemId: 'not-a-key' }
-        ])
-      ).toEqual([])
-    })
   })
 
-  describe('journal reopen after the writing host is gone', () => {
+  describe('the settlement after the writing host is gone', () => {
     it('writes composed roster, task, reasoning and text-twin corrections as one settlement step', async () => {
       const journal = await open()
       const roster = rosterRow([
@@ -317,6 +326,7 @@ export function registerJournalSubagentLivenessTests(): void {
       clock += 3_600_000
 
       const reopened = await open()
+      await settleGoneGeneration(reopened)
       const afterRestart = reopened.snapshot().items.at(-1)!
       expect(afterRestart.itemId).toBe(beforeRestart.itemId)
       expect(afterRestart.recovered).toBe(true)
@@ -338,6 +348,7 @@ export function registerJournalSubagentLivenessTests(): void {
       await live.close()
 
       const reopened = await open()
+      await settleGoneGeneration(reopened)
       expect(reopened.snapshot().items).toHaveLength(before)
       expect(reopened.snapshot().items.at(-1)?.revision).toBe(2)
     })
@@ -355,13 +366,14 @@ export function registerJournalSubagentLivenessTests(): void {
       await live.close()
 
       const reopened = await open()
+      await settleGoneGeneration(reopened)
       const afterRestart = reopened.snapshot().items.at(-1)!
       expect(afterRestart.itemId).toBe(beforeRestart.itemId)
       expect(taskOf(afterRestart.body)).toMatchObject({ state: 'unverifiable' })
       expect(twinOf(afterRestart.body)).toBe('Background command "sleep 20" stopped reporting')
     })
 
-    it('writes nothing on a second reopen once every child is settled', async () => {
+    it('writes nothing on a second settlement once every child is settled', async () => {
       const live = await open()
       const row = rosterRow([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
       await live.appendItem(row.identity, row.body, {
@@ -371,10 +383,12 @@ export function registerJournalSubagentLivenessTests(): void {
       await live.close()
 
       const once = await open()
+      await settleGoneGeneration(once)
       const revision = once.snapshot().items.at(-1)?.revision
       await once.close()
 
       const twice = await open()
+      await settleGoneGeneration(twice)
       expect(twice.snapshot().items.at(-1)?.revision).toBe(revision)
     })
   })

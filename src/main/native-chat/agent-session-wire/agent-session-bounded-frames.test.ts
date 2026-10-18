@@ -174,7 +174,15 @@ describe('frames to a bounded-frame subscriber', () => {
     let held: ReadonlySet<string> = new Set()
     const subscribers = new AgentSessionSubscribers({
       readCurrentWork: () =>
-        new StructuredAgentSessionCurrentWork(journal, 1, 0, undefined, undefined, false, () => held)
+        new StructuredAgentSessionCurrentWork(
+          journal,
+          1,
+          0,
+          undefined,
+          undefined,
+          false,
+          () => held
+        )
     })
     const frames: AgentSessionSubscribeEvent[] = []
     const emit = (event: AgentSessionSubscribeEvent) => frames.push(event)
@@ -197,9 +205,9 @@ describe('frames to a bounded-frame subscriber', () => {
         }
       }
       expect([...delivered.keys()].sort()).toEqual([...ids].sort())
-      expect([...delivered.values()].every((submission) => submission.dispatchState === state)).toBe(
-        true
-      )
+      expect(
+        [...delivered.values()].every((submission) => submission.dispatchState === state)
+      ).toBe(true)
     }
     const close = subscribers.open({
       id: 'phone',
