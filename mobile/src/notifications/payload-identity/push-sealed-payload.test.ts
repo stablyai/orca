@@ -41,6 +41,13 @@ it('restores the real fields for the host the fingerprint names', async () => {
   expect(opened?.data).not.toHaveProperty('paneKey')
 })
 
+it("keeps a server workspace's executionHost beside the opened fields", async () => {
+  const executionHost = 'runtime:3f0c2a9e-5b1d-4c7e-9a8f-1e2d3c4b5a69'
+  const opened = await openSealedPushData({ ...SEALED_VECTOR.fcmData, executionHost })
+  expect(opened?.opened).toBe(true)
+  expect(opened?.data).toMatchObject({ executionHost, worktreeId: 'repo::wt' })
+})
+
 it('strips an envelope it cannot open instead of passing ciphertext on as a pane', async () => {
   hosts.value = [sealedVectorHost('e'.repeat(48))]
   const opened = await openSealedPushData(SEALED_VECTOR.fcmData)

@@ -132,11 +132,19 @@ describe('sealPushNotification', () => {
         body: '🙂'.repeat(90),
         worktreeId: `repo::${'п'.repeat(600)}`,
         notificationId: `agent:${'%D0%BF'.repeat(300)}`,
-        notificationEpoch: 'e'.repeat(128)
+        notificationEpoch: 'e'.repeat(128),
+        executionHost: `runtime:${'0'.repeat(36)}`
       }),
       TOKEN
     )
     expectWithinGatewayLimits(wire)
     expect(openSealedPushNotification(wire, TOKEN).title).toBe('Ж'.repeat(80))
+  })
+
+  it("leaves a server workspace's executionHost readable so the tap still routes to it", () => {
+    const executionHost = 'runtime:3f0c2a9e-5b1d-4c7e-9a8f-1e2d3c4b5a69' as const
+    const wire = sealPushNotification(alert({ executionHost }), TOKEN)
+    expect(wire.executionHost).toBe(executionHost)
+    expect(openSealedPushNotification(wire, TOKEN).worktreeId).toBe('repo::/home/me/secret-project')
   })
 })
