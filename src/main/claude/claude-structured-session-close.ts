@@ -17,6 +17,7 @@ import type { ClaudeJournalTranslator } from './claude-journal-translator-contra
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { closeProcessRegistry } from '@orca/process-host/close-process-registry'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
+import { claudeHeldSends } from './claude-command-lifecycle'
 import { settledClaudeTurnEndLeaf } from './claude-structured-resume-point'
 import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -95,6 +96,7 @@ async function finalizeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput,
   session: ClaudeSession
 ): Promise<boolean> {
+  session.events?.observeExit?.(claudeHeldSends(session))
   retireClaudeDispatchWaiters(session)
   settleClaudeTurnEndWaiters(session)
   // Settle every in-flight permission callback so closing leaves no dangling promise; `null`
@@ -139,6 +141,8 @@ async function finalizeClaudePublishedSession(
   }
   if (!session.closeEnded) {
     session.closeEnded = true
+    const observedAt = Date.now()
+    session.events?.observeExit?.(undefined, observedAt)
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId: input.sessionId,
@@ -147,7 +151,7 @@ async function finalizeClaudePublishedSession(
       cause: 'requested-close',
       fence: session.fence,
       acquisitionGeneration: session.acquisitionGeneration,
-      observedAt: Date.now()
+      observedAt
     }
     try {
       try {

@@ -42,10 +42,12 @@ let claude: ReturnType<typeof fakeClaude>
 let log: ReturnType<typeof recordingStructuredAgentSessionLogger>
 let persistHandle: ReturnType<typeof vi.fn<() => Promise<void>>>
 let childWork: string[]
+let now: number
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-stop-exit-ends-record-'))
   resetHostTestOperationIds()
+  now = NOW
   log = recordingStructuredAgentSessionLogger()
   persistHandle = vi.fn(async () => undefined)
   childWork = []
@@ -80,7 +82,7 @@ beforeEach(async () => {
     },
     openConnection: claude.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
-    now: () => NOW
+    now: () => now
   })
   store = await openTestAgentSessionRecordStore(root)
   host = new StructuredAgentSessionHost({
@@ -93,7 +95,7 @@ beforeEach(async () => {
     logger: log.logger,
     // Ticked by hand only, and with no idle window: a tick reaps whatever is at rest.
     idleSweep: { intervalMs: 3_600_000, idleMs: 0 },
-    now: () => NOW
+    now: () => now
   })
   const params = hostTestAttachParams(null, {
     provider: 'claude',
@@ -107,6 +109,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
@@ -522,17 +525,49 @@ it('has the idle reaper join a close still unverifiable, ending the record with 
   expect(host.hasSession(SESSION)).toBe(false)
 })
 
-it("ends a Claude journal-sink failure as Orca's own fault, never a quiet rest", async () => {
+it("retains exit ownership and time when final-tail failure forces Orca's own recovery", async () => {
   const connection = claude.connections[0]!
   await openTurn(connection)
-
-  host['eventRecovery'].recoverAfterSinkFailure(SESSION, new Error('journal write failed'))
-
-  await eventually(() => expect(child()).toBeNull())
+  const pending = await send('also held at exit')
+  await eventually(() => expect(wrote(connection, 'also held at exit')).toBe(true))
+  const exiting = child()!
+  const lateEvent = deferred<void>()
+  const handle = host.handleAdapterEvent.bind(host)
+  vi.spyOn(host, 'handleAdapterEvent').mockImplementation((event) =>
+    event.type === 'ended' ? lateEvent.promise.then(() => handle(event)) : handle(event)
+  )
+  const journal = host['sessions'].get(SESSION)!.journal
+  const append = journal.appendSteps.bind(journal)
+  vi.spyOn(journal, 'appendSteps').mockImplementationOnce(async (steps) => {
+    await append(steps)
+    now += 30_000
+    throw new Error('final journal write acknowledgement lost')
+  })
+  connection.exitVerdict = { root: 'exited', tree: 'unverifiable' }
+  connection.handlers.onExit?.(new Error('claude exited'))
+  try {
+    await eventually(() => expect(child()).toBeNull())
+  } finally {
+    lateEvent.resolve()
+  }
   expect(host['sessions'].get(SESSION)?.lastEndedChild).toMatchObject({
     cause: 'exit',
     failure: { kind: 'hostFault' }
   })
+  expect(exiting.exitObservation?.()).toMatchObject({ observedAt: NOW })
+  expect(exiting.exitObservation?.().heldSends).toContain(pending)
+  expect(adapter.heldSends(SESSION)?.size).toBe(0)
+  const snapshot = await host.journalSnapshot(SESSION)
+  expect(snapshot.items).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({ kind: 'status', failure: { kind: 'hostFault' } })
+    })
+  )
+  expect(snapshot.items).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({ kind: 'turn', state: 'interrupted', completedAt: NOW })
+    })
+  )
   expect(connection.closeCount).toBe(1)
 })
 

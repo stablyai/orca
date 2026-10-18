@@ -146,7 +146,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
         )
       }
     }
-    return session.turns.submit(
+    return session.submit(
       input.clientMessageId,
       input.requestedAt ?? Date.now(),
       { ...prompt },
@@ -233,6 +233,9 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   }
   holdsDispatch(id: string): boolean {
     return this.sessions.get(id)?.turns.holdsDispatch ?? false
+  }
+  heldSends(id: string): ReadonlySet<string> | undefined {
+    return this.sessions.get(id)?.heldSends
   }
   /** Started with no model listed: Pi keeps a placeholder, so every prompt this child takes fails
    *  as not signed in, even after a sign-in, which only a new Pi reads. */

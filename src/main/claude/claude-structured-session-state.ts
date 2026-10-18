@@ -95,8 +95,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */
   onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
-  /** The CLI reported `session_state_changed idle`: its turn is over. */
-  onSessionIdle?: (input: { sessionId: string }) => void
   /** What the session's child work did, delivered after the journal handled the frame. */
   /** `producer`: the reporting child's own sink, which writes what the report changes. */
   onChildWorkEvidence?: (
@@ -226,6 +224,7 @@ export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAda
  * what the ladder observed, not an absence it would otherwise report as proven.
  */
 export type ClaudeSessionExit = {
+  observedAt: number
   connection: ClaudeStreamJsonConnection
   /** Full session identity retained until the exit settles. */
   session: ClaudeSession

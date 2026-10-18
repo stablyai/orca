@@ -42,9 +42,6 @@ function rejectingHost(error: Error) {
   return {
     settleLateDispatch: vi.fn(async () => {
       throw error
-    }),
-    releaseUnansweredDispatches: vi.fn(async () => {
-      throw error
     })
   }
 }
@@ -72,25 +69,6 @@ describe('failures the desktop host used to drop', () => {
           message: 'settling a dispatch the provider answered late failed',
           fields: { scope: 'late-settlement', sessionId: SESSION, error }
         }
-      ])
-    )
-  })
-
-  it('logs releasing the sends an idle provider never answered when that fails', async () => {
-    const log = recordingStructuredAgentSessionLogger()
-    const error = new Error('release write failed')
-    const followUps = createStructuredAgentSessionDispatchFollowUps({
-      host: () => rejectingHost(error),
-      logger: log.logger
-    })
-
-    followUps.releaseUnansweredDispatches({ sessionId: SESSION })
-
-    await vi.waitFor(() =>
-      expect(log.entries).toEqual([
-        expect.objectContaining({
-          fields: { scope: 'unanswered-dispatch', sessionId: SESSION, error }
-        })
       ])
     )
   })

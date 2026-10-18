@@ -285,3 +285,29 @@ describe('closing or stopping a Grok chat while it starts', () => {
     expect(await rig.adapter.closeSession(SESSION)).toBe(true)
   })
 })
+
+describe('a Grok send whose acceptance could not be written', () => {
+  it('is Working while Grok holds it, and stops once Grok lets it go', async () => {
+    const { rig, host } = await openAttachedHostRig()
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const write = journal.resolveDispatch.bind(journal)
+    vi.spyOn(journal, 'resolveDispatch').mockImplementation((input, hook) =>
+      input.state === 'accepted' ? Promise.reject(new Error('disk full')) : write(input, hook)
+    )
+    const sent = await send(host, 'hello')
+    const prompt = await rig.frame('session/prompt')
+    // Grok names the prompt only with its first frame: until then it holds the send.
+    await waitFor(() => expect(host.currentWork(SESSION)?.working()).toBe(true))
+
+    rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'hi'))
+    rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+    await rig.settle()
+
+    await waitFor(() => expect(host.currentWork(SESSION)?.working()).toBe(false))
+    // The acceptance never landed: the row is still the handover's alone.
+    expect(
+      (await host.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === sent)
+    ).toMatchObject({ dispatchState: 'pending' })
+    await host.close(SESSION, 'user-close')
+  })
+})

@@ -114,8 +114,7 @@ async function setup(
   const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
   const connections: FakeConnection[] = []
   const lifecycle = vi.fn(),
-    settled = vi.fn(),
-    idle = vi.fn()
+    settled = vi.fn()
   const onSpawned = vi.fn(async (_process: AgentSessionProcessIdentity) => {
     expect(connections.at(-1)?.requests).toEqual([])
   })
@@ -152,7 +151,6 @@ async function setup(
     openConnection,
     onLifecycle: lifecycle,
     onSettled: settled,
-    onIdle: idle,
     logger: { warn: vi.fn(), error: vi.fn() }
   })
   const acquired = await adapter.acquire(input)
@@ -173,7 +171,6 @@ async function setup(
     onSpawned,
     lifecycle,
     settled,
-    idle,
     input,
     resolveLaunch,
     openConnection,
@@ -340,6 +337,27 @@ describe('Pi RPC session ownership and delivery', () => {
       }
     })
     expect(h.connection.sent[0]).toMatchObject({ type: 'prompt', message: 'hello' })
+  })
+
+  it('holds each send from its handover until it settles, and none whose write failed', async () => {
+    const h = await setup()
+    const send = (clientMessageId: string) =>
+      h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: clientMessageId }] }
+      })
+    vi.spyOn(h.connection, 'send').mockRejectedValueOnce(new Error('stdin closed'))
+    await expect(send('lost')).resolves.toMatchObject({ state: 'unknown' })
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set())
+
+    await send('first')
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['first']))
+    h.connection.receive({ type: 'agent_start' })
+    await send('steer')
+    // The first is accepted; the steer waits behind its running turn.
+    expect(h.adapter.heldSends(sessionId)).toEqual(new Set(['steer']))
   })
 
   it('rejects stale fences and a Stop for a different turn before sending abort', async () => {

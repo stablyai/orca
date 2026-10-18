@@ -193,7 +193,6 @@ async function piHost() {
       },
       onLifecycle: vi.fn(),
       onSettled: vi.fn(),
-      onIdle: vi.fn(),
       logger: { warn: vi.fn(), error: vi.fn() }
     })
     adapters.push(adapter)

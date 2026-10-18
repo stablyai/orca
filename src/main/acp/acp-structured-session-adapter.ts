@@ -246,6 +246,9 @@ export class AcpStructuredSessionAdapter implements StructuredAgentSessionAdapte
 
   readCommands = (sessionId: string) => this.sessions.get(sessionId)?.options.readCommands()
 
+  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
+    this.sessions.get(sessionId)?.turns.heldSends
+
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
   ) => stopAcpChildren(this.live(input.sessionId), input.fence, input.taskIds, input.acknowledge)
