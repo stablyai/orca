@@ -1,16 +1,16 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type { AppState } from '@/store/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { isSyntheticAgentPermissionTitle } from '../../../../shared/synthetic-agent-title'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { collectLeafIds } from '../terminal-pane/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
 import {
   createTitleFallbackLeafResolver,
   titleStatusToRowState
