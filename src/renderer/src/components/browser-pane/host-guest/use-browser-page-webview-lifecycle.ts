@@ -7,7 +7,6 @@ import {
   type Dispatch,
   type DragEvent,
   type MutableRefObject,
-  type RefObject,
   type SetStateAction
 } from 'react'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -44,7 +43,6 @@ export function useBrowserPageWebviewLifecycle({
   isPaintable,
   slotViewport,
   viewportPresetId,
-  addressBarInputRef,
   addressBarValueRef,
   browserTabUrlRef,
   keepAddressBarFocusRef,
@@ -53,7 +51,7 @@ export function useBrowserPageWebviewLifecycle({
   dismissAddressBarSuggestionsRef,
   onUpdatePageState,
   onSetUrl,
-  setAddressBarValue,
+  setAddressBarValueFromPage,
   cancelPendingBrowserCapture,
   setBrowserOverlayViewport,
   setFindOpen,
@@ -85,7 +83,6 @@ export function useBrowserPageWebviewLifecycle({
   isPaintable: boolean
   slotViewport: HTMLDivElement | null
   viewportPresetId: BrowserViewportPresetId | null
-  addressBarInputRef: RefObject<HTMLInputElement | null>
   addressBarValueRef: MutableRefObject<string>
   browserTabUrlRef: MutableRefObject<string>
   keepAddressBarFocusRef: MutableRefObject<boolean>
@@ -94,7 +91,7 @@ export function useBrowserPageWebviewLifecycle({
   dismissAddressBarSuggestionsRef: MutableRefObject<(() => void) | null>
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter
-  setAddressBarValue: Dispatch<SetStateAction<string>>
+  setAddressBarValueFromPage: (value: string) => void
   cancelPendingBrowserCapture: () => void
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setFindOpen: Dispatch<SetStateAction<boolean>>
@@ -265,13 +262,12 @@ export function useBrowserPageWebviewLifecycle({
       syncNavigationState,
       syncBrowserAnnotationViewportBridge,
       faviconUrlRef,
-      addressBarInputRef,
       lastKnownWebviewUrlRef,
       trackNextLoadingEventRef,
       invalidateBrowserAnnotationDocumentRef,
       onSetUrlRef,
       setBrowserOverlayViewport,
-      setAddressBarValue,
+      setAddressBarValueFromPage,
       addBrowserHistoryEntryRef,
       annotationViewportBridgeTokenRef,
       initialBrowserUrlRef,

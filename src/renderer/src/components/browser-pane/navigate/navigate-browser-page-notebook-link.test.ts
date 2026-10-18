@@ -34,7 +34,7 @@ function openNotebookUrl(url: string): void {
     webviewRef: ref(null),
     onSetUrlRef: ref(vi.fn()),
     onUpdatePageStateRef: ref(vi.fn()),
-    setAddressBarValue: vi.fn(),
+    setAddressBarValueFromSubmit: vi.fn(),
     setResourceNotice: vi.fn(),
     focusWebviewNow: () => true
   })

@@ -30,10 +30,12 @@ export function DocPreviewAddressEdit({
   const dismissSuggestionsRef = useRef<(() => void) | null>(null)
   const exitTimerRef = useRef<number | null>(null)
 
+  const documentPath = `${identity.directoryPrefix}${identity.fileName}`
+
   const beginEdit = useCallback((): void => {
-    setValue(`${identity.directoryPrefix}${identity.fileName}`)
+    setValue(documentPath)
     setEditing(true)
-  }, [identity.directoryPrefix, identity.fileName])
+  }, [documentPath])
 
   const exitEdit = useCallback((): void => {
     if (exitTimerRef.current !== null) {
@@ -111,11 +113,6 @@ export function DocPreviewAddressEdit({
   return (
     <div
       className="flex min-w-0 flex-1"
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          exitEdit()
-        }
-      }}
       onBlur={(event) => {
         // Why a grace timer and not an immediate exit: a suggestion click blurs the input before
         // its own click lands, and unmounting the list mid-gesture would swallow the commit.
@@ -136,6 +133,8 @@ export function DocPreviewAddressEdit({
         onChange={setValue}
         onSubmit={submit}
         onNavigate={navigateToUrl}
+        committedAddress={documentPath}
+        onLeaveAddressBar={exitEdit}
         onOpenWorkspaceDoc={(docLocation) => {
           convertBrowserPageToWorkspaceDoc(previewId, docLocation)
           exitEdit()

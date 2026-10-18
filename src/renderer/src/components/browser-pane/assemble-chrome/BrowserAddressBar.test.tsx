@@ -52,14 +52,19 @@ function historyEntry(overrides: Partial<BrowserHistoryEntry>): BrowserHistoryEn
   }
 }
 
+const COMMITTED_ADDRESS = 'localhost:3000/current'
+const noop = (): void => {}
+
 function AddressBarHarness({
   initialValue,
   onNavigate,
-  onSubmit
+  onSubmit,
+  onLeaveAddressBar = noop
 }: {
   initialValue: string
   onNavigate: (url: string) => void
   onSubmit: () => void
+  onLeaveAddressBar?: () => void
 }): React.ReactElement {
   const [value, setValue] = useState(initialValue)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -71,6 +76,8 @@ function AddressBarHarness({
         onChange={setValue}
         onSubmit={onSubmit}
         onNavigate={onNavigate}
+        committedAddress={COMMITTED_ADDRESS}
+        onLeaveAddressBar={onLeaveAddressBar}
         inputRef={inputRef}
       />
       <span data-current-address-value="true">{value}</span>
@@ -177,39 +184,177 @@ describe('BrowserAddressBar autocomplete preview', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('dismisses suggestions when Escape is pressed outside React input handling', async () => {
-    const onNavigate = vi.fn()
-    const onSubmit = vi.fn()
-
+  async function renderPreviewingBar(onLeaveAddressBar: () => void): Promise<HTMLInputElement> {
     await act(async () => {
       root.render(
-        <AddressBarHarness initialValue="local" onNavigate={onNavigate} onSubmit={onSubmit} />
+        <AddressBarHarness
+          initialValue="local"
+          onNavigate={vi.fn()}
+          onSubmit={vi.fn()}
+          onLeaveAddressBar={onLeaveAddressBar}
+        />
       )
     })
-
     const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
-    expect(input).not.toBeNull()
-
+    if (!input) {
+      throw new Error('address bar input missing')
+    }
     await act(async () => {
-      input?.focus()
+      input.focus()
+    })
+    input.setSelectionRange(2, 2)
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+    expect(input.value).toBe('http://localhost:3000/review-one')
+    return input
+  }
+
+  async function pressEscape(target: EventTarget, init: KeyboardEventInit = {}): Promise<Event> {
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+      ...init
     })
     await act(async () => {
-      input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+      target.dispatchEvent(event)
     })
+    return event
+  }
 
-    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
-      'http://localhost:3000/review-one'
-    )
+  it('walks Chrome omnibox Escape: restore, close, revert and select, then leave', async () => {
+    const onLeaveAddressBar = vi.fn()
+    const input = await renderPreviewingBar(onLeaveAddressBar)
+
+    await pressEscape(input)
+    expect(input.value).toBe('local')
+    expect(input.getAttribute('aria-expanded')).toBe('true')
+    expect([input.selectionStart, input.selectionEnd]).toEqual([2, 2])
+
+    await pressEscape(input)
+    expect(input.value).toBe('local')
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+
+    await pressEscape(input)
+    expect(input.value).toBe(COMMITTED_ADDRESS)
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, COMMITTED_ADDRESS.length])
+    expect(input.selectionDirection).toBe('backward')
+    expect(onLeaveAddressBar).not.toHaveBeenCalled()
+
+    await pressEscape(input)
+    expect(input.value).toBe(COMMITTED_ADDRESS)
+    expect(onLeaveAddressBar).toHaveBeenCalledTimes(1)
+  })
+
+  it('reverts an edit that had no dropdown rows with the dropdown closed', async () => {
+    mocks.browserUrlHistory = [
+      historyEntry({
+        url: `http://${COMMITTED_ADDRESS}`,
+        normalizedUrl: `http://${COMMITTED_ADDRESS}`,
+        title: 'Current'
+      })
+    ]
+    const onLeaveAddressBar = vi.fn()
+    await act(async () => {
+      root.render(
+        <AddressBarHarness
+          initialValue="javascript:void"
+          onNavigate={vi.fn()}
+          onSubmit={vi.fn()}
+          onLeaveAddressBar={onLeaveAddressBar}
+        />
+      )
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    if (!input) {
+      throw new Error('address bar input missing')
+    }
+    await act(async () => {
+      input.focus()
+    })
+    expect(input.getAttribute('aria-expanded')).toBe('true')
+    expect(document.querySelector('[role="option"]')).toBeNull()
+
+    await pressEscape(input)
+    expect(input.value).toBe(COMMITTED_ADDRESS)
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+
+    await pressEscape(input)
+    expect(onLeaveAddressBar).toHaveBeenCalledTimes(1)
+  })
+
+  it('consumes Escape so no bubble-phase listener behind the bar handles it', async () => {
+    const input = await renderPreviewingBar(vi.fn())
+    const bubbleListener = vi.fn()
+    window.addEventListener('keydown', bubbleListener)
+    try {
+      const event = await pressEscape(input)
+      expect(event.defaultPrevented).toBe(true)
+      expect(bubbleListener).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener('keydown', bubbleListener)
+    }
+  })
+
+  // Recorded with the macOS Korean IME in Chrome: one Escape mid-syllable fires a marked
+  // Escape/229 keydown, then an unmarked Escape/27 one.
+  it('closes the dropdown on a composing Escape, ignores its redispatch, then reverts', async () => {
+    const onLeaveAddressBar = vi.fn()
+    await act(async () => {
+      root.render(
+        <AddressBarHarness
+          initialValue="local"
+          onNavigate={vi.fn()}
+          onSubmit={vi.fn()}
+          onLeaveAddressBar={onLeaveAddressBar}
+        />
+      )
+    })
+    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    if (!input) {
+      throw new Error('address bar input missing')
+    }
+    await act(async () => {
+      input.focus()
+    })
+    expect(input.getAttribute('aria-expanded')).toBe('true')
+
+    const marked = await pressEscape(input, { keyCode: 229, isComposing: true })
+    expect(input.getAttribute('aria-expanded')).toBe('false')
+    expect(input.value).toBe('local')
+    expect(marked.defaultPrevented).toBe(false)
+
+    await pressEscape(input, { keyCode: 27 })
+    expect(input.value).toBe('local')
 
     await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', keyCode: 27, bubbles: true }))
+      vi.advanceTimersToNextFrame()
     })
+    await pressEscape(input, { keyCode: 27 })
+    expect(input.value).toBe(COMMITTED_ADDRESS)
+    expect(onLeaveAddressBar).not.toHaveBeenCalled()
+  })
 
-    expect(container.querySelector('[data-current-address-value="true"]')?.textContent).toBe(
-      'local'
-    )
-    expect(onNavigate).not.toHaveBeenCalled()
-    expect(onSubmit).not.toHaveBeenCalled()
+  it('leaves a composing Escape over a previewed suggestion to the IME', async () => {
+    const onLeaveAddressBar = vi.fn()
+    const input = await renderPreviewingBar(onLeaveAddressBar)
+
+    await pressEscape(input, { isComposing: true })
+
+    expect(input.value).toBe('http://localhost:3000/review-one')
+    expect(input.getAttribute('aria-expanded')).toBe('true')
+    expect(onLeaveAddressBar).not.toHaveBeenCalled()
+  })
+
+  it('ignores an Escape that was not typed in the bar', async () => {
+    const input = await renderPreviewingBar(vi.fn())
+
+    await pressEscape(window)
+
+    expect(input.value).toBe('http://localhost:3000/review-one')
+    expect(input.getAttribute('aria-expanded')).toBe('true')
   })
 
   it('dismisses suggestions when focus moves into an Electron webview guest', async () => {

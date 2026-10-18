@@ -5,10 +5,21 @@ export type BrowserAddressBarSelection = {
   direction: 'forward' | 'backward' | 'none'
 }
 
+export function readBrowserAddressBarSelection(
+  input: HTMLInputElement
+): BrowserAddressBarSelection {
+  return {
+    start: input.selectionStart ?? input.value.length,
+    end: input.selectionEnd ?? input.value.length,
+    direction: input.selectionDirection ?? 'none'
+  }
+}
+
 /** A highlighted suggestion standing in the input in place of what the user typed. */
 export type BrowserAddressBarPreview = {
   /** The typed query the input showed before the preview replaced it; what Escape goes back to. */
   typedQuery: string
+  selection: BrowserAddressBarSelection
   /** The suggestion URL currently filling the input. */
   previewedUrl: string
 }

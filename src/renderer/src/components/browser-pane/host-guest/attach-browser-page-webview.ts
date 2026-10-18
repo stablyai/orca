@@ -1,4 +1,4 @@
-import type { Dispatch, DragEvent, MutableRefObject, RefObject, SetStateAction } from 'react'
+import type { Dispatch, DragEvent, MutableRefObject, SetStateAction } from 'react'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -48,13 +48,12 @@ export type AttachBrowserPageWebviewArgs = {
   syncNavigationState: (webview: Electron.WebviewTag) => void
   syncBrowserAnnotationViewportBridge: () => void
   faviconUrlRef: MutableRefObject<string | null>
-  addressBarInputRef: RefObject<HTMLInputElement | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   trackNextLoadingEventRef: MutableRefObject<boolean>
   invalidateBrowserAnnotationDocumentRef: MutableRefObject<() => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
-  setAddressBarValue: Dispatch<SetStateAction<string>>
+  setAddressBarValueFromPage: (value: string) => void
   addBrowserHistoryEntryRef: MutableRefObject<
     (url: string, title: string, faviconUrl?: string | null) => void
   >

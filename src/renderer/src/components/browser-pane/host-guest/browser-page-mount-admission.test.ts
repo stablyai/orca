@@ -25,7 +25,6 @@ function createLoadingHandlers(currentUrl: string) {
     faviconUrlRef: ref(null),
     browserTabUrlRef: ref(currentUrl),
     addressBarValueRef: ref(currentUrl),
-    addressBarInputRef: ref(null),
     activeLoadFailureRef: ref(null),
     lastKnownWebviewUrlRef: ref<string | null>(null),
     trackNextLoadingEventRef: ref(true),
@@ -35,7 +34,7 @@ function createLoadingHandlers(currentUrl: string) {
     onUpdatePageStateRef: ref(vi.fn()),
     onSetUrlRef: ref(vi.fn()),
     setBrowserOverlayViewport: vi.fn(),
-    setAddressBarValue: vi.fn(),
+    setAddressBarValueFromPage: vi.fn(),
     focusAddressBarNow: () => false
   })
 }

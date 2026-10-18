@@ -19,81 +19,77 @@ export function isImeOwnedKeyboardEvent<KeyEvent extends ImeKeyboardEvent>(
   )
 }
 
-type ImeEnterGestureEvent = Pick<
+type ImeKeyGestureEvent = Pick<
   ReactKeyboardEvent,
   'key' | 'keyCode' | 'nativeEvent' | 'preventDefault' | 'shiftKey'
 > & { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }
 
 /**
- * Why: the confirming Enter of a CJK composition arrives as two keydowns, and the
- * two orderings differ by platform. Windows/Linux redispatch the unmarked
- * `Enter`/13 *before* keyup; macOS delivers keyup first and redispatches after.
+ * Why: the key that ends a CJK composition arrives as two keydowns: Enter confirming a
+ * candidate, and Escape in macOS Korean. The two orderings differ by platform. Windows/Linux
+ * redispatch the unmarked key *before* keyup; macOS delivers keyup first and redispatches after.
  * A token that expires synchronously on keyup therefore regresses macOS, so the
  * carry survives until the next animation frame. Identity-scoped so an older
  * gesture's expiry cannot clear a newer one.
  */
-export function useImeEnterGestureOwnership(): {
+export function useImeKeyGestureOwnership(key: 'Enter' | 'Escape'): {
   isComposing: () => boolean
-  ownsKeyDown: (event: ImeEnterGestureEvent) => boolean
-  onKeyUp: (event: ImeEnterGestureEvent) => void
+  ownsKeyDown: (event: ImeKeyGestureEvent) => boolean
+  onKeyUp: (event: Pick<ImeKeyGestureEvent, 'key' | 'keyCode'>) => void
   onCompositionEnd: () => void
   reset: () => void
   setComposing: (active: boolean) => void
 } {
-  const stateRef = useRef<{ composing: boolean; pendingEnter: object | null }>({
+  const stateRef = useRef<{ composing: boolean; pendingKey: object | null }>({
     composing: false,
-    pendingEnter: null
+    pendingKey: null
   })
 
   return useMemo(() => {
     const reset = (): void => {
-      stateRef.current = { composing: false, pendingEnter: null }
+      stateRef.current = { composing: false, pendingKey: null }
     }
-    const expirePendingEnter = (): void => {
-      const pendingEnter = stateRef.current.pendingEnter
-      if (pendingEnter) {
+    const expirePendingKey = (): void => {
+      const pendingKey = stateRef.current.pendingKey
+      if (pendingKey) {
         requestAnimationFrame(() => {
-          if (stateRef.current.pendingEnter === pendingEnter) {
-            stateRef.current.pendingEnter = null
+          if (stateRef.current.pendingKey === pendingKey) {
+            stateRef.current.pendingKey = null
           }
         })
       }
     }
     // Shift+Enter is a newline, never a submit — it must never be owned or swallowed.
-    const isPlainEnter = (event: ImeEnterGestureEvent): boolean =>
-      event.key === 'Enter' && event.keyCode === 13 && !event.shiftKey
+    const isPlainKey = (event: ImeKeyGestureEvent): boolean =>
+      event.key === key && event.keyCode === KEY_CODES[key] && !event.shiftKey
     // The redispatched Enter of a confirm carries no modifiers, so a chorded one is the
     // user's own submit aimed past the IME. It must still ARM, and must never be swallowed.
-    const hasChordModifier = (event: ImeEnterGestureEvent): boolean =>
+    const hasChordModifier = (event: ImeKeyGestureEvent): boolean =>
       Boolean(event.altKey || event.ctrlKey || event.metaKey)
     return {
       isComposing: () => stateRef.current.composing,
-      ownsKeyDown: (event: ImeEnterGestureEvent): boolean => {
-        const markedEnter =
+      ownsKeyDown: (event: ImeKeyGestureEvent): boolean => {
+        const markedKey =
           (isImeOwnedKeyboardEvent(event) || stateRef.current.composing) &&
-          (isPlainEnter(event) ||
-            (event.key === 'Enter' && event.keyCode === 229) ||
+          (isPlainKey(event) ||
+            (event.key === key && event.keyCode === 229) ||
             (event.key === 'Process' && event.keyCode === 229))
-        if (markedEnter) {
-          stateRef.current.pendingEnter = {}
+        if (markedKey) {
+          stateRef.current.pendingKey = {}
           return true
         }
         // Continued typing ends the confirmation even when hidden renderers delay the frame.
         if (
           !stateRef.current.composing &&
           !isImeOwnedKeyboardEvent(event) &&
-          !['Enter', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key)
+          ![key, 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key)
         ) {
-          stateRef.current.pendingEnter = null
+          stateRef.current.pendingKey = null
         }
-        if (
-          stateRef.current.pendingEnter &&
-          isPlainEnter(event) &&
-          !event.nativeEvent.isComposing
-        ) {
+        if (stateRef.current.pendingKey && isPlainKey(event) && !event.nativeEvent.isComposing) {
           // The gesture resolves either way, so the carry is spent either way; only a bare
           // Enter is also swallowed, because a chorded one is the user's own submit.
-          stateRef.current.pendingEnter = null
+          stateRef.current.pendingKey = null
           if (hasChordModifier(event)) {
             return false
           }
@@ -104,15 +100,15 @@ export function useImeEnterGestureOwnership(): {
       },
       onKeyUp: (): void => {
         // Any keyup can precede the redispatch, including an IME-owned Process/229 release.
-        expirePendingEnter()
+        expirePendingKey()
       },
       onCompositionEnd: () => {
         const compositionWasActive = stateRef.current.composing
         stateRef.current.composing = false
-        if (compositionWasActive && !stateRef.current.pendingEnter) {
+        if (compositionWasActive && !stateRef.current.pendingKey) {
           // IBus can finish composition before its only unmarked confirming Enter.
-          stateRef.current.pendingEnter = {}
-          expirePendingEnter()
+          stateRef.current.pendingKey = {}
+          expirePendingKey()
         }
       },
       reset,
@@ -120,7 +116,13 @@ export function useImeEnterGestureOwnership(): {
         stateRef.current.composing = active
       }
     }
-  }, [])
+  }, [key])
+}
+
+const KEY_CODES = { Enter: 13, Escape: 27 } as const
+
+export function useImeEnterGestureOwnership(): ReturnType<typeof useImeKeyGestureOwnership> {
+  return useImeKeyGestureOwnership('Enter')
 }
 
 /**

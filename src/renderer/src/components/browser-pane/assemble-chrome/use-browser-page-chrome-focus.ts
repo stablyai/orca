@@ -37,6 +37,7 @@ export function useBrowserPageChromeFocus({
 }): {
   focusAddressBarNow: (selection?: BrowserAddressBarSelection) => boolean
   focusGuestNow: () => boolean
+  leaveAddressBarForPage: () => void
   /**
    * Takes the address bar and holds it against whatever re-grabs focus a frame later. Pass a
    * selection to resume an edit already in progress instead of selecting the bar's whole text.
@@ -83,6 +84,12 @@ export function useBrowserPageChromeFocus({
     addressBarInputRef.current?.blur()
     return guestFocus.focus()
   }, [addressBarInputRef, guestFocus])
+
+  const leaveAddressBarForPage = useCallback((): void => {
+    cancelAddressBarFocusGrab()
+    // Why no blur first: a dying guest can refuse focus, and the bar must keep it rather than body.
+    guestFocus.focus()
+  }, [cancelAddressBarFocusGrab, guestFocus])
 
   /**
    * Takes the address bar and holds it for a few frames, because whatever activated the pane
@@ -250,5 +257,11 @@ export function useBrowserPageChromeFocus({
     }
   }, [browserTabId, cancelAddressBarFocusGrab, focusGuestNow, isActive, startAddressBarFocusGrab])
 
-  return { focusAddressBarNow, focusGuestNow, startAddressBarFocusGrab, keepAddressBarFocusRef }
+  return {
+    focusAddressBarNow,
+    focusGuestNow,
+    leaveAddressBarForPage,
+    startAddressBarFocusGrab,
+    keepAddressBarFocusRef
+  }
 }

@@ -1,4 +1,4 @@
-import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
@@ -29,7 +29,6 @@ export type BrowserPageWebviewLoadingHandlersArgs = {
   faviconUrlRef: MutableRefObject<string | null>
   browserTabUrlRef: MutableRefObject<string>
   addressBarValueRef: MutableRefObject<string>
-  addressBarInputRef: RefObject<HTMLInputElement | null>
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   trackNextLoadingEventRef: MutableRefObject<boolean>
@@ -39,7 +38,7 @@ export type BrowserPageWebviewLoadingHandlersArgs = {
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
-  setAddressBarValue: Dispatch<SetStateAction<string>>
+  setAddressBarValueFromPage: (value: string) => void
   focusAddressBarNow: () => boolean
 }
 
@@ -55,7 +54,6 @@ export function createBrowserPageWebviewLoadingHandlers({
   faviconUrlRef,
   browserTabUrlRef,
   addressBarValueRef,
-  addressBarInputRef,
   activeLoadFailureRef,
   lastKnownWebviewUrlRef,
   trackNextLoadingEventRef,
@@ -65,7 +63,7 @@ export function createBrowserPageWebviewLoadingHandlers({
   onUpdatePageStateRef,
   onSetUrlRef,
   setBrowserOverlayViewport,
-  setAddressBarValue,
+  setAddressBarValueFromPage,
   focusAddressBarNow
 }: BrowserPageWebviewLoadingHandlersArgs): BrowserPageWebviewLoadingHandlers {
   const handleDidStartLoading = (): void => {
@@ -143,10 +141,7 @@ export function createBrowserPageWebviewLoadingHandlers({
     lastKnownWebviewUrlRef.current =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
     rememberLiveBrowserUrl(browserTabId, browserModelUrl)
-    // Why: don't overwrite in-progress typing (see the browserTab.url sync effect above).
-    if (document.activeElement !== addressBarInputRef.current) {
-      setAddressBarValue(toDisplayUrl(browserModelUrl))
-    }
+    setAddressBarValueFromPage(toDisplayUrl(browserModelUrl))
     onSetUrlRef.current(browserTabId, browserModelUrl)
     if (keepAddressBarFocusRef.current && currentUrl === ORCA_BROWSER_BLANK_URL) {
       focusAddressBarNow()

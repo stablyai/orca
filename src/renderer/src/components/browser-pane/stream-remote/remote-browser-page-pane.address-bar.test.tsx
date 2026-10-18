@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
@@ -290,6 +290,24 @@ describe('RemoteBrowserPagePane address bar parity', () => {
     // Why: a blank tab paints its first frame while the user is still typing the URL, so the
     // handover only applies to focus that is sitting on the viewport with nowhere better to go.
     expect(document.activeElement).toBe(addressBar())
+  })
+
+  it('hands Escape on an unedited bar to the screencast frame', () => {
+    mocks.frameUrl.current = 'blob:frame-1'
+    useAppStore.setState({
+      pendingAddressBarFocusByPageId: { [PAGE_ID]: true },
+      pendingAddressBarFocusByTabId: { [PAGE_ID]: true }
+    })
+    renderPane()
+    const input = addressBar()
+    expect(document.activeElement).toBe(input)
+
+    act(() => {
+      fireEvent.keyDown(input, { key: 'Escape' })
+    })
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(screen.getByTestId('frame'))
   })
 
   it('prefers the screencast frame over the viewport once one has painted', () => {

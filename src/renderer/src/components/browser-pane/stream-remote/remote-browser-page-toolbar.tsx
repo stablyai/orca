@@ -14,6 +14,8 @@ export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId,
   addressBarValue,
   onAddressBarChange,
+  committedAddress,
+  onLeaveAddressBar,
   onSubmitAddressBar,
   onNavigateToUrl,
   onOpenWorkspaceDoc,
@@ -31,6 +33,8 @@ export function RemoteBrowserPageToolbar({
   runtimeEnvironmentId: string
   addressBarValue: string
   onAddressBarChange: (value: string) => void
+  committedAddress: string
+  onLeaveAddressBar: () => void
   onSubmitAddressBar: () => void
   onNavigateToUrl: (url: string) => void
   /** A previewed-document suggestion opens on a fresh grant instead of navigating the remote guest. */
@@ -65,6 +69,8 @@ export function RemoteBrowserPageToolbar({
           onChange={onAddressBarChange}
           onSubmit={onSubmitAddressBar}
           onNavigate={onNavigateToUrl}
+          committedAddress={committedAddress}
+          onLeaveAddressBar={onLeaveAddressBar}
           onOpenWorkspaceDoc={onOpenWorkspaceDoc}
           inputRef={addressBarInputRef}
           editSession={addressBarEditSession}
