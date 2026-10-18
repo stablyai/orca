@@ -66,6 +66,8 @@ export function useHostScreenState(
   const [showWorkspaceOptions, setShowWorkspaceOptions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
+  // The long-press sheet's Worktree Settings page, drawn in place of the action list.
+  const [worktreeSettingsTarget, setWorktreeSettingsTarget] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [showNewWorktree, setShowNewWorktree] = useState(false)
   // Why the ref too: the catalog poll reads it from callbacks that outlive this render.
@@ -134,6 +136,7 @@ export function useHostScreenState(
     setWorktrees,
     setWorktreesLoaded,
     showNewWorktree,
+    setWorktreeSettingsTarget,
     showWorkspaceOptions,
     showPinnedInGroups,
     setView,
@@ -142,7 +145,8 @@ export function useHostScreenState(
     sleptIds,
     worktreeCatalogRef,
     worktrees,
-    worktreesLoaded
+    worktreesLoaded,
+    worktreeSettingsTarget
   }
 }
 
