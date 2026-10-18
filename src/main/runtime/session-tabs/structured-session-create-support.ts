@@ -10,6 +10,7 @@ import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   requireUnownedStructuredAgentSessionAdoption,
   resolveStructuredAgentSessionAdoptionForCreate,
+  structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../structured-agent-session-create-adoption'
 import { isNativeLocalLocation, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -161,7 +162,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         selfSessionId: input.envelope.sessionId
       })
     }
-    const structuredAgentCliSourceEvidence = input.structuredAgentCliSourceEvidence ??
+    const structuredAgentCliSourceEvidence =
+      input.structuredAgentCliSourceEvidence ??
       (input.resumeFrom?.cliSource
         ? captureStructuredAgentCliSource(() => this.getAgentProviderSessionRows())
         : undefined)
@@ -241,7 +243,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       return committedReplay
     }
     const resumeFrom = input.resumeFrom
-    const workspaceCwd = resumeFrom ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path : ''
+    const workspaceCwd = resumeFrom
+      ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
+      : ''
     const selectedAccountHome = await resolveAccountHome({ launchEnv, location })
     // Adopting pins the account home to wherever the conversation actually lives, which is not
     // necessarily the one a fresh create would pick: Codex resolves its rollout under
@@ -254,10 +258,13 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             agent: input.agent,
             transcriptImport,
             providerSessionId: resumeFrom.providerSessionId,
-            resolveTranscriptPath: () => structuredAgentCliSourcePathFromEvidence({
-              agent: input.agent, resumeFrom, workspaceId: location.workspaceId,
-              evidence: input.structuredAgentCliSourceEvidence
-            }),
+            resolveTranscriptPath: () =>
+              structuredAgentCliSourcePathFromEvidence({
+                agent: input.agent,
+                resumeFrom,
+                workspaceId: location.workspaceId,
+                evidence: input.structuredAgentCliSourceEvidence
+              }),
             prepareCodexResume: this.prepareAiVaultSessionResumeFn ?? undefined,
             selectedAccountHome,
             launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
@@ -278,23 +285,13 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       ...(options ? { options } : {}),
       ...(input.resumeFrom && adoption
         ? {
-            // `adopt` is what makes the reservation seed the handle chain. Presence of
-            // `providerHandle` alone must not: `agentSession.ensure` already passes one today
-            // without adopting anything.
-            adopt: {
-              providerHandle: {
-                transport: definition.handleTransport,
-                agent: definition.agent,
-                nativeId: transcriptImport!.handleNamesTranscript
-                  ? adoption.transcriptPath
-                  : input.resumeFrom.providerSessionId
-              },
+            adopt: structuredAgentSessionAdoptAttach({
+              definition,
+              handleNamesTranscript: transcriptImport!.handleNamesTranscript,
               transcriptPath: adoption.transcriptPath,
-              source: {
-                providerSessionId: input.resumeFrom.providerSessionId,
-                workspaceCwd: workspaceCwd
-              }
-            }
+              providerSessionId: input.resumeFrom.providerSessionId,
+              workspaceCwd
+            })
           }
         : {}),
       runtimeKind: 'native'
