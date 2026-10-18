@@ -1,13 +1,17 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { buildNativeChatPickerItems } from './native-chat-picker-items'
+import { buildNativeChatPickerItems, classifyPickerCommands } from './native-chat-picker-items'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
-import { structuredSlashCommands } from '../../../../shared/structured-agent-session-composer'
+import {
+  isStructuredAgentSessionComposerCommand,
+  structuredSlashCommands
+} from '../../../../shared/structured-agent-session-composer'
+import type { DiscoveredSkill } from '../../../../shared/skills'
 
 function transport(sessionCommands?: NativeChatStructuredComposerTransport['sessionCommands']) {
   return { sessionCommands } as NativeChatStructuredComposerTransport
@@ -156,4 +160,82 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
   rerender({ activeSuggestion: 0 })
   result.current(enter)
   expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ name: 'clear', kind: 'command' }))
+})
+
+describe('OpenCode chat skills', () => {
+  function skill(name: string, description: string): DiscoveredSkill {
+    return {
+      id: name,
+      name,
+      description,
+      providers: ['agent-skills'],
+      sourceKind: 'home',
+      sourceLabel: 'OpenCode home',
+      rootPath: '/Users/test/.config/opencode/skills',
+      directoryPath: `/Users/test/.config/opencode/skills/${name}`,
+      skillFilePath: `/Users/test/.config/opencode/skills/${name}/SKILL.md`,
+      installed: true,
+      updatedAt: null
+    }
+  }
+  const scanned = [skill('release-notes', 'Write release notes')]
+  // What the composer's picker builds: the reported catalog, classified against the scan.
+  function items(
+    agent: 'opencode' | 'opencode2' | 'claude',
+    reported: { name: string; description?: string; kindUnspecified?: true }[],
+    skills: DiscoveredSkill[] = scanned
+  ) {
+    const report = reported.map((command) => ({ ...command, kind: 'command' as const }))
+    const { result } = renderHook(() => useNativeChatComposerCatalog(agent, transport(report)))
+    const commands = classifyPickerCommands(result.current.agentCommands, skills, {
+      reportMayListSkills: agent !== 'claude',
+      isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
+    })
+    return buildNativeChatPickerItems(commands, skills, '', '/', result.current.sessionSkillNames)
+  }
+  const rows = (...args: Parameters<typeof items>) =>
+    items(...args).map((item) => `${item.kind}:${item.name}`)
+
+  // 2.x reports only these commands, so its running chats listed no skills at all.
+  it('keeps the scanned skills once an OpenCode 2.x chat reports its commands', () => {
+    expect(rows('opencode2', [{ name: 'init' }, { name: 'review' }])).toContain(
+      'skill:release-notes'
+    )
+  })
+
+  // 1.x reports each skill as a command too, under the skill's own description.
+  it('shows a skill OpenCode 1.x also reports as a command once, as the skill', () => {
+    expect(
+      rows('opencode', [
+        { name: 'init' },
+        { name: 'release-notes', description: 'Write release notes' }
+      ]).filter((row) => row.endsWith(':release-notes'))
+    ).toEqual(['skill:release-notes'])
+  })
+
+  // OpenCode runs its own command before a skill of the same name, on either line.
+  it.each(['opencode', 'opencode2'] as const)(
+    'keeps %s’s own command when a skill shares its name, and marks the collision',
+    (agent) => {
+      const picked = items(
+        agent,
+        [{ name: 'review', description: 'review changes [commit|branch|pr]' }],
+        [skill('review', 'My review checklist')]
+      )
+      expect(picked).toEqual([
+        expect.objectContaining({ kind: 'command', name: 'review', skillCollision: true })
+      ])
+    }
+  )
+
+  // The chat's send runs `/compact` as compaction whichever row inserted it.
+  it.each([
+    ['opencode2', { name: 'compact', description: 'compact the session' }],
+    ['opencode', { name: 'compact', description: 'Squash my notes' }],
+    ['claude', { name: 'compact', kindUnspecified: true as const }]
+  ] as const)('never lets a skill stand in for %s’s /compact', (agent, reported) => {
+    const picked = items(agent, [reported], [skill('compact', 'Squash my notes')])
+    expect(picked.map((item) => `${item.kind}:${item.name}`)).toEqual(['command:compact'])
+    expect(isStructuredAgentSessionComposerCommand(picked[0]!.token, agent)).toBe(true)
+  })
 })

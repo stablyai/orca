@@ -15,6 +15,7 @@ import {
 } from './agent-model-catalog-store'
 import { AgentModelCatalogUnavailableError } from './agent-model-catalog-unavailable'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { agentSessionRecordFixture } from '../../../shared/agent-session-record.test-fixture'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 
 // Why a chat cannot start, as the probe found it: the reason rides every catalog answer until a
@@ -150,6 +151,7 @@ describe('a chat that starts under the account', () => {
     const { store, probe, probed, answerWith, service } = rig()
     await probed()
     service.providerStarted({
+      ...agentSessionRecordFixture(),
       provider: 'codex',
       accountHome: { variable: 'CODEX_HOME', path: HOME },
       location: {

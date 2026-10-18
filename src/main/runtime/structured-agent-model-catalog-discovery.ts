@@ -3,7 +3,7 @@
 // or env could list models the user's sessions cannot see.
 
 import { createAcpModelCatalogProbe } from '../acp/acp-model-catalog-probe'
-import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
+import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../acp/acp-launch-specs'
 import {
   createClaudeModelCatalogProbe,
   type ClaudeModelCatalogProbeDeps
@@ -77,6 +77,7 @@ export function acpModelCatalogDiscovery(
   return {
     kind: 'probe',
     listingNamesConfiguredModel: discovery.listingNamesConfiguredModel,
+    ...(acpListingNeedsChatFolder(discovery) ? { listsInChatFolder: true as const } : {}),
     probe: createAcpModelCatalogProbe(spec, {
       resolveEnvironment: environment.resolveBaseEnvironment,
       refreshEnvironmentAfterMiss: environment.refreshAfterMissingProgram,

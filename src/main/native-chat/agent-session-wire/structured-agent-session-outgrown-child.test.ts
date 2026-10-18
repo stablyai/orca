@@ -319,7 +319,7 @@ describe('retireOutgrownStructuredAgentSessionChild', () => {
           fetchedAt: 1,
           models: rows.map((row) => ({ ...row, label: row.id, efforts: [] }))
         })),
-        retainedLiveModelIds: vi.fn(() => []),
+        retainedLiveModelIds: vi.fn(async () => []),
         recordLiveListing: vi.fn(),
         prewarm: vi.fn(async () => undefined),
         stop: vi.fn(),

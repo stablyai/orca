@@ -135,4 +135,33 @@ describe('copying a chat conversation for the CLI', () => {
     ).rejects.toThrow('OMP could not copy this chat')
     expect(children.map((child) => child.closes)).toEqual([1])
   })
+
+  // A copy lands in this host's OpenCode store; a CLI sent to a server would not find it.
+  it.each(['opencode', 'opencode2'] as const)(
+    'refuses to copy a %s chat whose arguments route to a server, before starting OpenCode',
+    async (agent) => {
+      const spec = acpLaunchSpecFor(agent)!
+      const connect = vi.fn()
+      await expect(
+        copyAcpConversation(
+          {
+            spec,
+            dataDirectory: '/orca-data',
+            resolveLaunchArgs: () => ['--server', 'https://other-host:4096'],
+            readLaunch: async () => {
+              throw new Error('not reached')
+            },
+            connect
+          },
+          {
+            ...input,
+            identity: { ...input.identity, agent },
+            accountHome: { kind: 'opencode', locator: { kind: 'unmanaged' } }
+          },
+          { track: () => {} }
+        )
+      ).rejects.toThrow('--server')
+      expect(connect).not.toHaveBeenCalled()
+    }
+  )
 })

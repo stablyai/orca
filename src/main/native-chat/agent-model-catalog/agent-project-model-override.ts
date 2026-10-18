@@ -73,6 +73,21 @@ const files = (
   mayPickModel: (text: string) => boolean
 ): ProjectModelFile[] => paths.map((path) => ({ path, mayPickModel }))
 
+// OpenCode 2.x discovers `opencode.json(c)` and `.opencode/` in every ancestor of the workspace.
+const OPENCODE_PROJECT_MODEL_LAYERS: ProjectModelLayers = {
+  wholeAncestry: true,
+  files: files(
+    ['opencode.json', 'opencode.jsonc', '.opencode/opencode.json', '.opencode/opencode.jsonc'],
+    openCodeConfigMayPickModel
+  ),
+  agentFolders: [
+    { path: '.opencode/agent', recursive: true },
+    { path: '.opencode/agents', recursive: true },
+    { path: '.opencode/mode', recursive: false },
+    { path: '.opencode/modes', recursive: false }
+  ]
+}
+
 // The project files each agent's CLI reads a model from.
 const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
   codex: { files: files(['.codex/config.toml'], codexConfigMayPickModel) },
@@ -82,20 +97,9 @@ const PROJECT_MODEL_LAYERS: Readonly<Record<string, ProjectModelLayers>> = {
       claudeSettingsMayPickModel
     )
   },
-  // OpenCode 2.x discovers `opencode.json(c)` and `.opencode/` in every ancestor of the workspace.
-  opencode: {
-    wholeAncestry: true,
-    files: files(
-      ['opencode.json', 'opencode.jsonc', '.opencode/opencode.json', '.opencode/opencode.jsonc'],
-      openCodeConfigMayPickModel
-    ),
-    agentFolders: [
-      { path: '.opencode/agent', recursive: true },
-      { path: '.opencode/agents', recursive: true },
-      { path: '.opencode/mode', recursive: false },
-      { path: '.opencode/modes', recursive: false }
-    ]
-  },
+  opencode: OPENCODE_PROJECT_MODEL_LAYERS,
+  // The same program under its other command name.
+  opencode2: OPENCODE_PROJECT_MODEL_LAYERS,
   // OMP merges its own `.omp` files and these other agents' project settings into its settings.
   omp: {
     files: [

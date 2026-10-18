@@ -42,6 +42,7 @@ import { GROK_SESSION_HISTORY } from '../grok/grok-session-history'
 import { GROK_TRANSCRIPT_IMPORT } from '../grok/grok-transcript-import'
 import { OPENCODE_SESSION_HISTORY } from '../opencode/opencode-session-history'
 import { OPENCODE_TRANSCRIPT_IMPORT } from '../opencode/opencode-transcript-import'
+import { assertOpenCodeCopyUsesLocalStore } from '../../shared/opencode-launch-command'
 import { OMP_SESSION_HISTORY } from '../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../omp/omp-transcript-import'
 import {
@@ -54,8 +55,9 @@ import {
 } from '../antigravity/antigravity-acp-environment'
 import { AcpLaunchGate } from './acp-launch-gate'
 
-/** How an agent lists its models without a session: from its `initialize` answer (plus extension
- *  requests), from a listing command, or not at all. Never `authenticate` or `session/new`. */
+/** How an agent lists its models before a chat: from its `initialize` answer (plus extension
+ *  requests), from a listing command, from a session it opens and deletes, or not at all. Never
+ *  `authenticate`. */
 export type AcpModelDiscovery =
   | {
       kind: 'initialize'
@@ -73,8 +75,28 @@ export type AcpModelDiscovery =
       args: readonly string[]
       parse(stdout: string): AgentSessionModelOption[]
       listingNamesConfiguredModel: boolean
+      /** The releases whose listing matches what their chats offer; any other lists in a session
+       *  when `otherReleasesListInSession`, else not at all and its chats' own lists fill the
+       *  catalog. Absent lists on every release. */
+      supportsVersion?(version: string): boolean
+      otherReleasesListInSession?: true
     }
+  | AcpSessionModelDiscovery
   | { kind: 'unavailable'; reason: string }
+
+/** What a new chat offers, read from a session opened in the asking chat's folder and then
+ *  deleted. An agent that cannot delete one is not asked, and with no chat folder (a
+ *  prewarm) none is opened, so no conversation or new project is left in its history. */
+export type AcpSessionModelDiscovery = { kind: 'session'; listingNamesConfiguredModel: boolean }
+
+/** Whether some release lists in a session in the asking chat's folder, so the listing needs one
+ *  and reads that folder's project config. */
+export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean {
+  return (
+    discovery.kind === 'session' ||
+    (discovery.kind === 'command' && discovery.otherReleasesListInSession === true)
+  )
+}
 
 export type AcpLaunchSpec = {
   /** The Orca agent id, which names the agent's records, its catalog label and its settings. */
@@ -121,6 +143,9 @@ export type AcpLaunchSpec = {
   imagePrompts?: true
   /** The agent compacts its conversation when sent `/compact` as a prompt; off hides `/compact`. */
   compaction?: true
+  /** Throws when the chat's own arguments would send a copied conversation's CLI elsewhere than
+   *  the store the copy is written to. */
+  assertCopyLaunchArgs?: (args: readonly string[]) => void
   /** The agent's own store of a session's user messages, read for restart recovery only. */
   readStoredUserMessages?: AcpStoredUserMessagesReader
   modelDiscovery: AcpModelDiscovery
@@ -173,45 +198,65 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: GROK_SESSION_HISTORY
 }
 
+// The release the recorded sessions capture.
+const OPENCODE_1X_LINE = { major: 1, floor: '1.18.31' } as const
+// The 2.x release verified to start the private child below.
+const OPENCODE_2X_LINE = { major: 2, floor: '2.0.14' } as const
+
 // `opencode acp` on 1.x serves in-process; on 2.x it starts a private `opencode serve --stdio` child
 // with this environment and ends it with stdin, so both lines run the chat's own account.
-const OPENCODE_ACP_RELEASE_LINES = [
-  // The release the recorded sessions capture.
-  { major: 1, floor: '1.18.31' },
-  // The 2.x release verified to start that private child.
-  { major: 2, floor: '2.0.14' }
-] as const
+function openCodeLaunchSpec(
+  row: Pick<AcpLaunchSpec, 'agent' | 'command' | 'supportsVersion' | 'modelDiscovery'>
+): AcpLaunchSpec {
+  return {
+    ...row,
+    // OpenCode has no bypass flag: full access answers each permission request yes.
+    args: () => ['acp'],
+    // Applied last: the client name ACP sessions report, and no question tool, since Orca shows no
+    // question form yet (1.x would wait on one forever; 2.x drops it).
+    env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
+    scrubEnvironment: scrubOpenCodeAcpEnvironment,
+    dialect: OPENCODE_ACP_DIALECT,
+    loginCommand: agentSessionSignInFor(row.agent)?.loginCommand ?? [],
+    account: openCodeAcpAccountBinding(),
+    installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
+    imagePrompts: true,
+    readStoredUserMessages: openCodeStoredUserMessagesReader(),
+    visualsSkill: loadOpenCodeVisualsSkill,
+    compaction: true,
+    assertCopyLaunchArgs: assertOpenCodeCopyUsesLocalStore,
+    // Finds a conversation of either line in the one database both lines write.
+    transcriptImport: OPENCODE_TRANSCRIPT_IMPORT,
+    sessionHistory: OPENCODE_SESSION_HISTORY
+  }
+}
 
-const OPENCODE_LAUNCH_SPEC: AcpLaunchSpec = {
+const OPENCODE_LAUNCH_SPEC = openCodeLaunchSpec({
   agent: 'opencode',
   command: 'opencode',
-  // OpenCode has no bypass flag: full access answers each permission request yes.
-  args: () => ['acp'],
-  // Applied last: the client name ACP sessions report, and no question tool, which ACP cannot
-  // answer (it would wait forever).
-  env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
-  scrubEnvironment: scrubOpenCodeAcpEnvironment,
-  dialect: OPENCODE_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('opencode')?.loginCommand ?? [],
-  account: openCodeAcpAccountBinding(),
-  installDirectories: ({ homePath }) => [join(homePath, '.opencode', 'bin')],
   supportsVersion: (version) =>
-    OPENCODE_ACP_RELEASE_LINES.some((line) => isStableCliVersionOnLine(version, line)),
-  imagePrompts: true,
-  readStoredUserMessages: openCodeStoredUserMessagesReader(),
-  // Its `initialize` names no models and `session/new` stores a session; the listing does neither.
+    [OPENCODE_1X_LINE, OPENCODE_2X_LINE].some((line) => isStableCliVersionOnLine(version, line)),
+  // Its `initialize` names no models; 1.x lists them with a command, 2.x in a session it deletes.
   modelDiscovery: {
     kind: 'command',
     args: OPENCODE_MODEL_LISTING_ARGS,
     parse: parseOpenCodeModelListing,
     // The listing marks no default; a chat started with no pick names it.
-    listingNamesConfiguredModel: false
-  },
-  visualsSkill: loadOpenCodeVisualsSkill,
-  compaction: true,
-  transcriptImport: OPENCODE_TRANSCRIPT_IMPORT,
-  sessionHistory: OPENCODE_SESSION_HISTORY
-}
+    listingNamesConfiguredModel: false,
+    // 2.x rejects `--verbose`, and its own listings omit providers that report after startup.
+    supportsVersion: (version) => isStableCliVersionOnLine(version, OPENCODE_1X_LINE),
+    otherReleasesListInSession: true
+  }
+})
+
+// Since 2.0.0 `opencode2` is an alias OpenCode's installer writes beside `opencode`, and the only
+// name for 2.x where `opencode` is still 1.x. Its chats share OpenCode's account and history rows.
+const OPENCODE2_LAUNCH_SPEC = openCodeLaunchSpec({
+  agent: 'opencode2',
+  command: 'opencode2',
+  supportsVersion: (version) => isStableCliVersionOnLine(version, OPENCODE_2X_LINE),
+  modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false }
+})
 
 // OMP serves ACP through `omp acp`; its environment reaches it as the user set it.
 const OMP_LAUNCH_SPEC: AcpLaunchSpec = {
@@ -289,6 +334,7 @@ const ANTIGRAVITY_LAUNCH_SPEC: AcpLaunchSpec = {
 export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   GROK_LAUNCH_SPEC,
   OPENCODE_LAUNCH_SPEC,
+  OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC
 ]

@@ -199,3 +199,38 @@ it('materializes legacy Codex into the system home and pins a verified selected 
   await expect(prepareCodexAdoption(source, id, async () => { throw new Error('EACCES selected account') },
     [source.accountHome])).rejects.toThrow('EACCES selected account')
 })
+
+// A 2.x terminal started as `opencode` reports `opencode`; either OpenCode chat opens its conversation.
+it.each([
+  ['opencode', true],
+  ['opencode2', true],
+  ['claude', false]
+] as const)('lets a %s chat take over an `opencode` pane: %s', (agent, allowed) => {
+  const sourcePath = () =>
+    structuredAgentCliSourcePath({
+      agent,
+      workspaceId: 'folder',
+      resumeFrom: {
+        providerSessionId: 'ses_1',
+        cliSource: { workspaceId: 'folder', paneKey: 'tab:leaf' }
+      },
+      rows: [
+        {
+          paneKey: 'tab:leaf',
+          worktreeId: 'folder',
+          agentType: 'opencode',
+          state: 'waiting',
+          prompt: '',
+          connectionId: null,
+          receivedAt: 1,
+          stateStartedAt: 1,
+          providerSession: { key: 'session_id', id: 'ses_1', transcriptPath: '/data/opencode.db' }
+        }
+      ]
+    })
+  if (allowed) {
+    expect(sourcePath()).toBe('/data/opencode.db')
+  } else {
+    expect(sourcePath).toThrow('agent_session_identity_required')
+  }
+})

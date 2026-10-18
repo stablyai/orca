@@ -47,9 +47,11 @@ export function registeredModelCatalogDiscovery(
 ): {
   probes: Record<string, AgentModelCatalogProbe>
   listingNamesConfiguredModel: Set<string>
+  listsInChatFolder: Set<string>
 } {
   const probes: Record<string, AgentModelCatalogProbe> = {}
   const listingNamesConfiguredModel = new Set<string>()
+  const listsInChatFolder = new Set<string>()
   for (const registration of registrations) {
     const { agent } = registration.definition
     const discovery = registration.modelCatalog(context)
@@ -58,9 +60,12 @@ export function registeredModelCatalogDiscovery(
       if (discovery.listingNamesConfiguredModel) {
         listingNamesConfiguredModel.add(agent)
       }
+      if (discovery.listsInChatFolder) {
+        listsInChatFolder.add(agent)
+      }
     }
   }
-  return { probes, listingNamesConfiguredModel }
+  return { probes, listingNamesConfiguredModel, listsInChatFolder }
 }
 
 /**

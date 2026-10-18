@@ -15,7 +15,7 @@ describe('a live Grok listing', () => {
   it('is saved through the host catalog when the chat reads its options', async () => {
     const modelCatalog: AgentModelCatalogService = {
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
-      retainedLiveModelIds: vi.fn(() => []),
+      retainedLiveModelIds: vi.fn(async () => []),
       recordLiveListing: vi.fn(),
       prewarm: vi.fn(async () => {}),
       stop: vi.fn(),
@@ -39,7 +39,7 @@ describe('a live Grok listing', () => {
   it('starts the chat even when saving its start listing throws', async () => {
     const modelCatalog: AgentModelCatalogService = {
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
-      retainedLiveModelIds: vi.fn(() => []),
+      retainedLiveModelIds: vi.fn(async () => []),
       recordLiveListing: vi.fn().mockImplementationOnce(() => {
         throw new Error('catalog unavailable')
       }),

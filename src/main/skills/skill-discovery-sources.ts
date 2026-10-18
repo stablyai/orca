@@ -209,7 +209,16 @@ export function buildSkillDiscoverySources(
         ['agent-skills'],
         null
       ),
-      ...providerRepoSources(repoPath, label, pathApi)
+      ...providerRepoSources(repoPath, label, pathApi),
+      // OpenCode also reads its own project folder; it installs into the canonical root above.
+      source(
+        `repo-opencode-${stablePathId(repoPath)}`,
+        `${label} .opencode`,
+        pathApi.join(repoPath, '.opencode', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'opencode'
+      )
     )
   }
 

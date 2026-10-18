@@ -143,7 +143,7 @@ export function resolveAcpLaunchCommand(
 
 /** Whether `command` is a release the spec runs a structured chat on (true when it names none),
  *  and the version it printed. Asked only when the spec names releases or `wantVersion`. */
-async function probeAcpLaunchVersion(
+export async function probeAcpLaunchVersion(
   spec: AcpLaunchSpec,
   launch: { command: string; cwd: string; env: Record<string, string> },
   wantVersion: boolean,

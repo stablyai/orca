@@ -21,6 +21,7 @@ import {
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS,
+  cliConversationRowsShareAgent,
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { agentForksConversations } from '../../../../shared/agent-resume-argv'
@@ -94,14 +95,16 @@ export function canPaneOfferResumeInNewChat(
   // The row gate's launch-route half, so a project the chat route refuses (WSL, repair) hides it.
   return (
     canHostOfferTabSessionMove('cli', hostScope) &&
-    structuredAgentSessionLaunchFeasible(state, {
-      agent: CLI_CONVERSATION_ADOPTING_AGENTS[conversation.agent],
-      workspace: {
-        kind: workspaceKindForWorktreeId(conversation.worktreeId),
-        worktreeId: conversation.worktreeId
-      },
-      settings: state.settings
-    })
+    CLI_CONVERSATION_ADOPTING_AGENTS[conversation.agent].some((agent) =>
+      structuredAgentSessionLaunchFeasible(state, {
+        agent,
+        workspace: {
+          kind: workspaceKindForWorktreeId(conversation.worktreeId),
+          worktreeId: conversation.worktreeId
+        },
+        settings: state.settings
+      })
+    )
   )
 }
 
@@ -174,11 +177,10 @@ export function findTabSessionHistoryRow(
         return session.structuredSession?.sessionId === subject.sessionId
       }
       // A chat-owned row still matches: the move's gate refuses it, and the caller can open that chat.
-      // By the chat agent that takes it over: an OpenCode 2.x pane reports `opencode`, its row `opencode2`.
+      // By the chats that take it over: an OpenCode 2.x pane reports `opencode`, its row `opencode2`.
       return (
         adoptsCliConversations(session.agent) &&
-        CLI_CONVERSATION_ADOPTING_AGENTS[session.agent] ===
-          CLI_CONVERSATION_ADOPTING_AGENTS[subject.agent] &&
+        cliConversationRowsShareAgent(session.agent, subject.agent) &&
         session.sessionId === subject.providerSessionId
       )
     }) ?? null

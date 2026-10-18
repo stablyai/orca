@@ -435,6 +435,9 @@ export type AgentSessionModelCatalogResult = {
       /** The named default holds in every workspace: the agent reads no project config for its
        *  model, so an answer naming no workspace serves any new chat. Absent from an older host. */
       defaultHoldsInEveryWorkspace?: true
+      /** The models are this workspace's: its own config adds or removes some, so the answer serves
+       *  no other workspace. Absent from an older host. */
+      modelsDifferByWorkspace?: true
     }
 )
 

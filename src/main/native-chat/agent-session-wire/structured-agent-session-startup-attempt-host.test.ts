@@ -88,7 +88,7 @@ async function startHost(): Promise<void> {
     },
     modelCatalog: {
       read: vi.fn(async () => ({ origin: 'unknown' as const })),
-      retainedLiveModelIds: vi.fn(() => []),
+      retainedLiveModelIds: vi.fn(async () => []),
       recordLiveListing: vi.fn(),
       prewarm: vi.fn(async () => {}),
       stop: vi.fn(),

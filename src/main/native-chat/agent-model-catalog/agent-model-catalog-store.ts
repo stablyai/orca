@@ -48,11 +48,12 @@ export type { AgentModelCatalogFailure }
 export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
-/** Lists an agent's models without a session, under the account a launch would pin. `signal`
- *  stops the listing and its child once the host that asked is going away. */
+/** Lists an agent's models before a chat, under the account a launch would pin. `signal` stops
+ *  the listing and its child once the host that asked is going away; `workspacePath` is the folder
+ *  of the chat that asked, where a listing that opens a session runs. */
 export type AgentModelCatalogProbe = (
   accountHome: AgentSessionAccountHome,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; workspacePath?: string }
 ) => Promise<AgentModelCatalogSuccess>
 
 /** Who lists, by identity: a live session's per-spawn handle, or the session-less probe. */

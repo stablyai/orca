@@ -240,7 +240,7 @@ export async function readStructuredAgentSessionOptions(
     if (catalogListing) {
       // Check prior membership before saving: a launch-added row cannot verify itself.
       const listedModelIds = context.deps.modelCatalog
-        ? context.deps.modelCatalog.retainedLiveModelIds(sessionId, catalogListing)
+        ? await context.deps.modelCatalog.retainedLiveModelIds(sessionId, catalogListing)
         : retainedAgentModelCatalogModels(undefined, catalogListing).map((model) => model.id)
       saveStructuredAgentSessionListing(context, sessionId, catalogListing)
       options = { ...answer, listedModelIds }
