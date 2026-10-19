@@ -52,6 +52,11 @@ export function installMainWindowCloseLifecycle(args: {
     }, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS)
     quitRendererAckTimer.unref?.()
   }
+  // Why: on Windows/Linux closing the main window quits through `window-all-closed`, so the
+  // renderer must weigh running work as for a quit — otherwise the X button warns about paired
+  // server terminals that outlive the quit, which File > Quit already skips (#30006).
+  const closeEndsApp = (): boolean => opts?.getWindowCloseEndsApp?.() ?? false
+
   const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: number): void => {
     if (event.sender.id === rendererWebContentsId && requestId === quitRendererAckRequestId) {
       clearQuitRendererAckTimer()
@@ -121,7 +126,7 @@ export function installMainWindowCloseLifecycle(args: {
     }
     // The always-mounted App subscription can confirm even before a workspace exists (#5144).
     mainWindow.webContents.send('window:close-requested', {
-      isQuitting,
+      isQuitting: isQuitting || closeEndsApp(),
       requestId
     })
   })
@@ -174,7 +179,7 @@ export function installMainWindowCloseLifecycle(args: {
     if (hideToTrayIfEnabled()) {
       return
     }
-    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    mainWindow.webContents.send('window:close-requested', { isQuitting: closeEndsApp() })
   }
   // Custom titlebar menu replaces Alt reveal of the hidden Windows/Linux menu.
   const popupMenuChannel = 'menu:popup'

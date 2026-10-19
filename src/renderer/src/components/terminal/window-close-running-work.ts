@@ -14,6 +14,7 @@ export type WindowCloseRunningWork =
 
 /** Quit consents to local process termination (#524); warn for SSH relay work that may die after detach grace, including unverifiable hosts. Paired runtimes retain terminals independently (#29916), and local probe failures have no transport ambiguity. */
 export async function assessWindowCloseRunningWork(params: {
+  /** A quit, or a close that ends the app (the last window on Windows/Linux). */
   isQuitting: boolean
 }): Promise<WindowCloseRunningWork> {
   const state = useAppStore.getState()
