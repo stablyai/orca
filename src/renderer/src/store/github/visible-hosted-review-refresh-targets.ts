@@ -107,6 +107,7 @@ export function getVisibleHostedReviewRefreshTargets(
     const prEntry = state.prCache[candidate.cacheKey]
     const hints = {
       linkedGitHubPR: worktree.linkedPR,
+      linkedGitHubPRRepository: candidate.linkedPRRepository,
       linkedGitLabMR: worktree.linkedGitLabMR,
       linkedBitbucketPR: worktree.linkedBitbucketPR,
       linkedAzureDevOpsPR: worktree.linkedAzureDevOpsPR,

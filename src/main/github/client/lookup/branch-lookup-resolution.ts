@@ -24,7 +24,7 @@ import {
 } from './pull-request-lookup-data'
 import { lookupPRByBranchName } from './pr-branch-lookup'
 import { lookupPRByNumber } from './pr-number-lookup'
-import { linkedPRRepositoryOutsideRemotes } from './linked-pr-repository'
+import { linkedPRLookupRepository } from './linked-pr-repository'
 import { derivePRRefreshData } from './branch-lookup-derived-data'
 import { assemblePRRefreshFoundOutcome } from './pr-refresh-outcome-assembly'
 import { shouldRetryTrackedUpstreamBranch } from './tracked-upstream-cache'
@@ -67,10 +67,10 @@ export async function resolvePRForBranchOutcome(input: {
   if (connectionId && candidates.length === 0) {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
-  const otherRepository =
-    typeof linkedPRNumber === 'number'
-      ? linkedPRRepositoryOutsideRemotes(options.linkedPRRepository, candidates)
-      : null
+  const otherRepository = linkedPRLookupRepository(linkedPRNumber, options, candidates)
+  if (otherRepository === 'refused') {
+    return { kind: 'no-pr', fetchedAt: Date.now() }
+  }
   // Why (#11532): account every lookup, not just the coordinator's queue —
   // `hostedReview:forBranch` reaches this directly from renderer polling and
   // was spending the shared quota invisibly. headRepo is `origin`, the same

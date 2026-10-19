@@ -31,6 +31,17 @@ describe('cross-repository PR links in workspace metadata', () => {
     expect(result.linkedPR).toBe(2383)
   })
 
+  it('set --pr <url> upgrades a bare link with the same number instead of hiding behind it', () => {
+    for (const existing of [
+      { linkedPR: 2383 },
+      { linkedPR: 2383, linkedItems: [{ ...sameRepoPR, number: 2383 }] }
+    ]) {
+      const result = normalizeWorkspaceAttachmentUpdate(existing, setPRUrl)
+      expect(result.linkedItems).toEqual([crossRepoPR])
+      expect(result.linkedPR).toBe(2383)
+    }
+  })
+
   it('set --pr <url> is idempotent for an already linked URL', () => {
     const result = normalizeWorkspaceAttachmentUpdate(
       { linkedPR: 2383, linkedItems: [crossRepoPR] },

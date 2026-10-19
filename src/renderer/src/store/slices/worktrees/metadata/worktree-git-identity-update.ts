@@ -60,7 +60,11 @@ export function createUpdateWorktreeGitIdentity(
           canonicalHostedReviewBranchIdentity(nextBranch) !==
           canonicalHostedReviewBranchIdentity(worktree.branch)
         const shouldClearHostedReviewContext =
-          hostedReviewBranchChanged && hasBranchScopedHostedReviewContext(worktree)
+          hostedReviewBranchChanged &&
+          hasBranchScopedHostedReviewContext(
+            worktree,
+            s.repos.find((repo) => repo.id === repoId)
+          )
         if (shouldClearHostedReviewContext) {
           shouldPersistHostedReviewClear = true
           clearedBranch = nextBranch

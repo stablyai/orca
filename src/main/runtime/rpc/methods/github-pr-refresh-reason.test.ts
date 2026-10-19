@@ -35,6 +35,14 @@ describe('github.prForBranch refresh reason', () => {
         reason: 'next-generation-refresh'
       })
     )
+    await dispatcher.dispatch(
+      makeRequest('github.prForBranch', {
+        repo: 'repo-1',
+        branch: 'main',
+        linkedPRNumber: 2383,
+        linkedPRRepository: { owner: 'relayto', repo: 'relayto-frontend' }
+      })
+    )
 
     expect(runtime.getRepoPRForBranch).toHaveBeenNthCalledWith(
       1,
@@ -44,12 +52,14 @@ describe('github.prForBranch refresh reason', () => {
       undefined,
       undefined,
       undefined,
-      'manual'
+      'manual',
+      undefined
     )
     expect(runtime.getRepoPRForBranch).toHaveBeenNthCalledWith(
       2,
       'repo-1',
       'feature/legacy',
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -64,7 +74,19 @@ describe('github.prForBranch refresh reason', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
+    )
+    expect(runtime.getRepoPRForBranch).toHaveBeenNthCalledWith(
+      4,
+      'repo-1',
+      'main',
+      2383,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { owner: 'relayto', repo: 'relayto-frontend' }
     )
   })
 })

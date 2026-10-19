@@ -15,7 +15,10 @@ export function createEnsureHostedReviewPushTarget(
     if (!worktree || worktree.pushTarget) {
       return
     }
-    const lookup = getHostedReviewPushTargetLookup(worktree)
+    const lookup = getHostedReviewPushTargetLookup(
+      worktree,
+      get().repos.find((repo) => repo.id === worktree.repoId)
+    )
     if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return
     }

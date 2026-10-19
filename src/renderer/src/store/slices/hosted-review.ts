@@ -33,7 +33,10 @@ import {
   type HostedReviewFetchOptions
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
-import { withLinkedGitHubPRRepository } from '../github/linked-pr-repository'
+import {
+  reviewForLinkedRepository,
+  withLinkedGitHubPRRepository
+} from '../github/linked-pr-repository'
 import {
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
@@ -166,8 +169,12 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
         repo?.executionHostId,
         repo !== undefined
       )
+    // Exact-key requests name their own attachment; branch requests share one cache entry.
+    const hints = options?.exactReviewKey
+      ? options
+      : withLinkedGitHubPRRepository(get(), repo, branch, options)
     const cached = get().hostedReviewCache[cacheKey]
-    const hintKey = linkedReviewHintKey(options)
+    const hintKey = linkedReviewHintKey(hints)
     const requestKey = hostedReviewRequestKey(cacheKey, hintKey)
     const linkedRefetch = shouldRefetchForLinkedHint(cached, hintKey)
     const scopedResultRefetch = shouldRefetchGitHubScopedResultForNoHint(cached, hintKey)
@@ -198,14 +205,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
       const request = (async () => {
         try {
-          // Exact-key requests name their own attachment; branch requests share one cache entry.
-          const args = hostedReviewBranchLookupArgs(
-            branch,
-            options?.exactReviewKey
-              ? options
-              : withLinkedGitHubPRRepository(get(), repo, branch, options)
-          )
-          const review =
+          const args = hostedReviewBranchLookupArgs(branch, hints)
+          const lookedUp =
             target.kind === 'environment'
               ? await callRuntimeRpc<HostedReviewInfo | null>(
                   target,
@@ -222,6 +223,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   ...hostedReviewOwnerIpcArgs(options),
                   ...args
                 })
+          const review = reviewForLinkedRepository(lookedUp, hints?.linkedGitHubPRRepository)
           if (requestGenerations.get(cacheKey) === generation) {
             set((state) => {
               if (

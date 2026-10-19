@@ -182,7 +182,11 @@ export function mergeFetchedWorktrees(
       current: s.worktreesByRepo[args.repoId],
       incoming,
       matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
-      hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
+      hasBranchScopedReviewContext: (worktree) =>
+        hasBranchScopedHostedReviewContext(
+          worktree,
+          s.repos.find((repo) => repo.id === args.repoId)
+        ),
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity
     })
     const worktrees = sanitizeHostedReviewLinksForBranchClears(

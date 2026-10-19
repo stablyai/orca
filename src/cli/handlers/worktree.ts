@@ -49,6 +49,7 @@ import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-contex
 import {
   assertReferenceWritesSupported,
   getCreateReferenceInputs,
+  getLinkedPRReferenceUpdates,
   resolveReferenceInputs
 } from '../reference-input'
 
@@ -234,15 +235,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    if (linkedPRReference) {
-      await assertReferenceWritesSupported(client)
-    }
+    const linkedPRUpdates = linkedPRReference
+      ? await getLinkedPRReferenceUpdates(client, worktree, linkedPRReference)
+      : {}
     const result = await client.call<RuntimeWorktreeSetResult>('worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
       ...reviewLinks,
-      // Why: an add-only delta keeps the URL (and so the PR's repository); linkedPR selects it.
-      ...(linkedPRReference ? { linkedItemsBase: [], linkedItems: [linkedPRReference] } : {}),
+      ...linkedPRUpdates,
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),

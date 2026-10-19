@@ -10,10 +10,21 @@ import {
 import { isStaleMergedGitHubReviewForHead } from '../slices/hosted-review-cache-state'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { buildPRRefreshCandidate } from './worktree-refresh'
-import { findLinkedGitHubPRRepository, getLinkedGitHubPRRepository } from './linked-pr-repository'
+import {
+  findLinkedGitHubPRRepository,
+  foundPRForLinkedRepository,
+  getLinkedGitHubPRRepository,
+  isCachedPRForLinkedRepository
+} from './linked-pr-repository'
+import {
+  getHostedReviewCacheKey,
+  githubPRHintKey,
+  linkedReviewHintKey
+} from '../slices/hosted-review-cache-identity'
 
 const FRONTEND_URL = 'https://github.com/relayto/relayto-frontend/pull/2383'
 const FRONTEND = { owner: 'relayto', repo: 'relayto-frontend' }
+const API = { owner: 'relayto', repo: 'relayto-api' }
 
 const repo: Repo = {
   id: 'repo-1',
@@ -149,5 +160,89 @@ describe('cross-repository PR links in renderer refreshes', () => {
     })
     expect(isStaleMergedGitHubReviewForHead(entry(false), 'row-head')).toBe(true)
     expect(isStaleMergedGitHubReviewForHead(entry(true), 'row-head')).toBe(false)
+  })
+})
+
+describe('repository identity in renderer review caches', () => {
+  const store = createTestStore()
+  const cacheKey = getHostedReviewCacheKey(repo.path, 'main', null, repo.id, null, null, true)
+  const reviewFrom = (slug: string) =>
+    hostedReviewInfoFromGitHubPRInfo(
+      makePR({ number: 2383, url: `https://github.com/${slug}/pull/2383` })
+    )
+  const fetchRowReview = () =>
+    store
+      .getState()
+      .fetchHostedReviewForBranch(repo.path, 'main', { repoId: repo.id, linkedGitHubPR: 2383 })
+
+  beforeEach(() => {
+    mockApi.hostedReview.forBranch.mockReset().mockResolvedValue(null)
+    store.setState({
+      repos: [repo],
+      worktreesByRepo: { [repo.id]: [linkedRow(FRONTEND_URL)] },
+      hostedReviewCache: {},
+      prCache: {},
+      settings: null
+    })
+  })
+
+  it('a resolved PR answers the hint of the request that linked it', () => {
+    const request = linkedReviewHintKey({
+      linkedGitHubPR: 2383,
+      linkedGitHubPRRepository: FRONTEND
+    })
+    expect(request).not.toBe(
+      linkedReviewHintKey({ linkedGitHubPR: 2383, linkedGitHubPRRepository: API })
+    )
+    expect(githubPRHintKey({ number: 2383, linkedFromOtherRepository: true }, FRONTEND)).toBe(
+      request
+    )
+    expect(githubPRHintKey({ number: 2383 }, FRONTEND)).toBe(
+      linkedReviewHintKey({ linkedGitHubPR: 2383 })
+    )
+  })
+
+  it('never serves a fresh review of the same number from another repository', async () => {
+    const cached = (repository: typeof FRONTEND) => ({
+      [cacheKey]: {
+        data: reviewFrom(`${repository.owner}/${repository.repo}`),
+        fetchedAt: Date.now(),
+        linkedReviewHintKey: linkedReviewHintKey({
+          linkedGitHubPR: 2383,
+          linkedGitHubPRRepository: repository
+        })
+      }
+    })
+    store.setState({ hostedReviewCache: cached(API) })
+    await fetchRowReview()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(1)
+
+    mockApi.hostedReview.forBranch.mockClear()
+    store.setState({ hostedReviewCache: cached(FRONTEND) })
+    await fetchRowReview()
+    expect(mockApi.hostedReview.forBranch).not.toHaveBeenCalled()
+  })
+
+  it('discards an older host’s answer with this repository’s PR of the same number', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValue(reviewFrom('relayto/relayto-docker'))
+
+    await expect(fetchRowReview()).resolves.toBeNull()
+    expect(store.getState().hostedReviewCache[cacheKey]?.data).toBeNull()
+  })
+
+  it('applies the same guards to direct PR lookups and cached PRs', () => {
+    const docker = makePR({
+      number: 2383,
+      url: 'https://github.com/relayto/relayto-docker/pull/2383'
+    })
+    const frontend = makePR({ number: 2383, url: FRONTEND_URL, linkedFromOtherRepository: true })
+    const found = (pr: typeof docker) => ({ kind: 'found' as const, pr, fetchedAt: 1 })
+    expect(foundPRForLinkedRepository(found(docker), FRONTEND)).toBeNull()
+    expect(foundPRForLinkedRepository(found(frontend), FRONTEND)).toBe(frontend)
+    expect(foundPRForLinkedRepository(found(docker), null)).toBe(docker)
+    expect(isCachedPRForLinkedRepository(docker, 2383, FRONTEND)).toBe(false)
+    expect(isCachedPRForLinkedRepository(frontend, 2383, FRONTEND)).toBe(true)
+    // Relinking the same number back into this repository refetches too.
+    expect(isCachedPRForLinkedRepository(frontend, 2383, null)).toBe(false)
   })
 })

@@ -16,6 +16,7 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../sha
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { inflightPRRequests, prRequestGenerations } from './request-coordination'
 import { getRuntimeRepoTarget } from './repository-routing'
+import { foundPRForLinkedRepository } from './linked-pr-repository'
 import { applyCachedChecksStatus } from './pr-check-status-cache'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import {
@@ -134,7 +135,7 @@ export function startPullRequestLookup(args: {
                 })
             return normalizeGitHubPRForBranchOutcome(response)
           })()
-      const pr = outcome.kind === 'found' ? outcome.pr : null
+      const pr = foundPRForLinkedRepository(outcome, linkedPRRepository)
       if (outcome.kind === 'upstream-error') {
         // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
         if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {

@@ -26,7 +26,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
 )
 
 import { getPRForBranchOutcome } from './client/lookup/pr-for-branch-outcome'
-import { linkedPRRepositoryOutsideRemotes } from './client/lookup/linked-pr-repository'
+import { linkedPRLookupRepository } from './client/lookup/linked-pr-repository'
 import { resetPRForBranchMocks } from './client-test-harness'
 
 const { ghExecFileAsyncMock, getOwnerRepoMock, resolvePRRepositoryCandidatesMock } = clientMocks
@@ -142,19 +142,22 @@ describe('URL-linked PRs from another repository', () => {
   it.each([
     ['another GitHub host', { ...FRONTEND, host: 'ghe.example.com' }],
     ['a malformed owner', { owner: 'not an owner', repo: 'relayto-frontend' }]
-  ])('ignores a linked repository on %s', async (_label, linkedPRRepository) => {
-    servePRFrom('relayto/relayto-docker', {
-      ...frontendPR('OPEN'),
-      url: 'https://github.com/relayto/relayto-docker/pull/2383'
-    })
+  ])(
+    'reports no PR for a link to %s instead of the row repo’s same number',
+    async (_label, linkedPRRepository) => {
+      servePRFrom('relayto/relayto-docker', {
+        ...frontendPR('OPEN'),
+        url: 'https://github.com/relayto/relayto-docker/pull/2383'
+      })
 
-    const outcome = await getPRForBranchOutcome('/docker', 'main', 2383, null, null, {
-      linkedPRRepository
-    })
+      const outcome = await getPRForBranchOutcome('/docker', 'main', 2383, null, null, {
+        linkedPRRepository
+      })
 
-    expect(reposQueried()).toEqual(['relayto/relayto-docker'])
-    expect(outcome.kind === 'found' && outcome.pr.linkedFromOtherRepository).toBeFalsy()
-  })
+      expect(outcome.kind).toBe('no-pr')
+      expect(reposQueried()).toEqual([])
+    }
+  )
 
   it('does not coalesce the same PR number linked from two repositories', async () => {
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -187,7 +190,7 @@ describe('URL-linked PRs from another repository', () => {
   })
 })
 
-describe('linkedPRRepositoryOutsideRemotes', () => {
+describe('linkedPRLookupRepository', () => {
   it.each([
     ['a repository outside the remotes', FRONTEND, [DOCKER], FRONTEND],
     ['a remote (any case)', { owner: 'Relayto', repo: 'Relayto-Docker' }, [DOCKER], null],
@@ -198,10 +201,14 @@ describe('linkedPRRepositoryOutsideRemotes', () => {
       [{ ...DOCKER, host: 'ghe.example.com' }],
       { ...FRONTEND, host: 'ghe.example.com' }
     ],
-    ['a host none of the remotes use', { ...FRONTEND, host: 'evil.example' }, [DOCKER], null],
-    ['a worktree with no GitHub remote', FRONTEND, [], null],
-    ['no link', null, [DOCKER], null]
-  ])('%s', (_label, linked, candidates, expected) => {
-    expect(linkedPRRepositoryOutsideRemotes(linked, candidates)).toEqual(expected)
+    ['a host none of the remotes use', { ...FRONTEND, host: 'evil.example' }, [DOCKER], 'refused'],
+    ['a worktree with no GitHub remote', FRONTEND, [], 'refused'],
+    ['no link (bare number)', null, [DOCKER], null]
+  ])('%s', (_label, linkedPRRepository, candidates, expected) => {
+    expect(linkedPRLookupRepository(2383, { linkedPRRepository }, candidates)).toEqual(expected)
+  })
+
+  it('applies only to an exact linked number', () => {
+    expect(linkedPRLookupRepository(null, { linkedPRRepository: FRONTEND }, [DOCKER])).toBeNull()
   })
 })

@@ -1,5 +1,7 @@
 import type { AppState } from '../types'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
@@ -84,4 +86,51 @@ export function withLinkedGitHubPRRepository<T extends LinkedReviewHints>(
     hints.linkedGitHubPR
   )
   return linkedGitHubPRRepository ? { ...hints, linkedGitHubPRRepository } : hints
+}
+
+function isPRFromRepository(url: string, repository: GitHubOwnerRepo): boolean {
+  const link = parseGitHubIssueOrPRLink(url)
+  return link !== null && githubRepoIdentityKey(link.slug) === githubRepoIdentityKey(repository)
+}
+
+/**
+ * The found PR only when it lives in the linked repository: an older host that
+ * ignores the repository answers with the row's own PR of that number.
+ */
+export function foundPRForLinkedRepository(
+  outcome: PRRefreshOutcome,
+  linkedPRRepository: GitHubOwnerRepo | null
+): PRInfo | null {
+  if (outcome.kind !== 'found') {
+    return null
+  }
+  return !linkedPRRepository || isPRFromRepository(outcome.pr.url, linkedPRRepository)
+    ? outcome.pr
+    : null
+}
+
+/** Same guard for provider-neutral review results. */
+export function reviewForLinkedRepository(
+  review: HostedReviewInfo | null,
+  linkedGitHubPRRepository: GitHubOwnerRepo | null | undefined
+): HostedReviewInfo | null {
+  return review?.provider === 'github' &&
+    linkedGitHubPRRepository &&
+    !isPRFromRepository(review.url, linkedGitHubPRRepository)
+    ? null
+    : review
+}
+
+/** Whether a cached linked PR still answers the link, whose repository can change while its number stays. */
+export function isCachedPRForLinkedRepository(
+  pr: PRInfo | null | undefined,
+  linkedPRNumber: number | null,
+  linkedPRRepository: GitHubOwnerRepo | null
+): boolean {
+  if (!pr || pr.number !== linkedPRNumber) {
+    return true
+  }
+  return linkedPRRepository
+    ? isPRFromRepository(pr.url, linkedPRRepository)
+    : pr.linkedFromOtherRepository !== true
 }

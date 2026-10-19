@@ -213,11 +213,12 @@ describe('worktree issue and review metadata flags', () => {
       url: 'https://github.com/relayto/relayto-frontend/pull/2383'
     }
 
-    function routeCalls(capabilities: string[]) {
+    function routeCalls(capabilities: string[], linkedItems: unknown[] = []) {
+      const worktree = { ...buildWorktree('/tmp/repo/child', 'linked-task'), linkedItems }
       callMock.mockImplementation(async (method: string) =>
         method === 'status.get'
           ? okFixture('status', { capabilities })
-          : okFixture('set', { worktree: buildWorktree('/tmp/repo/child', 'linked-task') })
+          : okFixture(method, { worktree })
       )
       vi.spyOn(console, 'log').mockImplementation(() => {})
       vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -246,6 +247,21 @@ describe('worktree issue and review metadata flags', () => {
         linkedItems: [crossRepoPR]
       })
       expect(set).not.toHaveProperty('linkedPRReference')
+    })
+
+    it('refuses to hide the requested PR behind another linked URL with its number', async () => {
+      const other = { ...crossRepoPR, url: 'https://github.com/relayto/relayto-api/pull/2383' }
+      routeCalls([WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY], [other])
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        ['worktree', 'set', ...targetArgs('set'), '--pr', crossRepoPR.url, '--json'],
+        '/tmp/repo'
+      )
+
+      expect(callMock).not.toHaveBeenCalledWith('worktree.set', expect.anything())
+      expect(logSpy.mock.calls.flat().join('\n')).toContain(`orca reference remove ${other.url}`)
+      expect(process.exitCode).toBe(1)
     })
 
     it('refuses a host that would replace every link instead of merging one in', async () => {

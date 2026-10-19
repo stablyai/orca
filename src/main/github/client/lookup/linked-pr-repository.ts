@@ -11,16 +11,23 @@ function hostKey(host: string | undefined): string {
 }
 
 /**
- * The repository of a URL-linked PR when it is none of the row's own GitHub
- * remotes (e.g. a submodule's repo). Null keeps the remote-candidate lookup, so
- * links into origin/upstream behave exactly as bare numbers.
+ * Where an exact linked-PR lookup may look. Null: the row's remotes (no URL
+ * repository, or it names one of them, so it behaves exactly as a bare number).
+ * A repository: the URL's own repository, e.g. a submodule's. 'refused': the URL
+ * names a repository this row may not query, so report no PR rather than the
+ * row's own, unrelated PR with the same number.
  */
-export function linkedPRRepositoryOutsideRemotes(
-  linked: GitHubOwnerRepo | null | undefined,
+export function linkedPRLookupRepository(
+  linkedPRNumber: number | null | undefined,
+  options: { linkedPRRepository?: GitHubOwnerRepo | null },
   candidates: readonly OwnerRepo[]
-): OwnerRepo | null {
-  if (!isValidGitHubApiRepository(linked)) {
+): OwnerRepo | null | 'refused' {
+  const linked = options.linkedPRRepository
+  if (typeof linkedPRNumber !== 'number' || !linked) {
     return null
+  }
+  if (!isValidGitHubApiRepository(linked)) {
+    return 'refused'
   }
   const key = githubRepoIdentityKey(linked)
   if (candidates.some((candidate) => githubRepoIdentityKey(candidate) === key)) {
@@ -29,7 +36,7 @@ export function linkedPRRepositoryOutsideRemotes(
   // Why: a stored URL may only point gh at a GitHub server this row already uses.
   const sameHost = candidates.find((candidate) => hostKey(candidate.host) === hostKey(linked.host))
   if (!sameHost) {
-    return null
+    return 'refused'
   }
   return {
     owner: linked.owner,

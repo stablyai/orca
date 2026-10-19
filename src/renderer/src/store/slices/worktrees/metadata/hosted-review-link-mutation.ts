@@ -4,6 +4,8 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import { applyWorktreeUpdates } from '../../worktree-helpers'
 import { branchName } from '@/lib/git-utils'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { Repo } from '../../../../../../shared/repo-types'
+import { getLinkedGitHubPRRepository } from '../../../github/linked-pr-repository'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
 import type {
@@ -42,8 +44,12 @@ export function hasHostedReviewLinks(worktree: Worktree): boolean {
   return HOSTED_REVIEW_LINK_KEYS.some((key) => worktree[key] != null)
 }
 
-export function hasBranchScopedHostedReviewContext(worktree: Worktree): boolean {
-  return hasHostedReviewLinks(worktree) || worktree.pushTarget !== undefined
+export function hasBranchScopedHostedReviewContext(worktree: Worktree, repo?: Repo): boolean {
+  return (
+    worktree.pushTarget !== undefined ||
+    // Why: a PR linked from another repository names no branch of this worktree.
+    (hasHostedReviewLinks(worktree) && !(repo && getLinkedGitHubPRRepository(worktree, repo)))
+  )
 }
 
 export function hasHostedReviewLinkUpdates(updates: Partial<WorktreeMeta>): boolean {
