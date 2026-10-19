@@ -22,6 +22,7 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/tui-agent-launch-defaults'
+import { normalizeAgentPermissionPreference } from '../../../../shared/tui-agent-permissions'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
@@ -166,6 +167,9 @@ export function mergeSettings(
       updates.agentDefaultArgs ?? base.agentDefaultArgs
     ),
     agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
+    agentPermissionMode: normalizeAgentPermissionPreference(
+      updates.agentPermissionMode ?? base.agentPermissionMode
+    ),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice

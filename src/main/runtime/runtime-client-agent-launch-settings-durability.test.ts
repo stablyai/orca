@@ -157,6 +157,24 @@ describe('durable execution-host launch settings', () => {
     expect(readState().settings.agentDefaultArgs.claude).toBe('--retry-marker')
   })
 
+  it('rolls back an explicit permission selection when its durable write fails', async () => {
+    const { store, authority, readState } = await fixture()
+    const controller = new RuntimeClientSettingsController(store)
+    authority.failNextWrite()
+    try {
+      await expect(
+        controller.mutateAgentLaunch({ type: 'permissions', mode: 'manual' })
+      ).rejects.toThrow('profile_state_write_failed')
+    } finally {
+      await store.flushPendingOrThrowAsync().catch(() => {})
+    }
+    expect(store.getSettings().agentPermissionMode).toBeUndefined()
+    expect(readState().settings.agentPermissionMode).toBeUndefined()
+
+    await controller.mutateAgentLaunch({ type: 'permissions', mode: 'manual' })
+    expect(readState().settings.agentPermissionMode).toBe('manual')
+  })
+
   it('recomputes queued intents after a failed write instead of persisting its stale map', async () => {
     const { store, authority, readState } = await fixture()
     const controller = new RuntimeClientSettingsController(store)

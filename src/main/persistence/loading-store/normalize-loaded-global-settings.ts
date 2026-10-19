@@ -11,6 +11,7 @@ import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/s
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
 import { loadedChatPermissionSetting } from '../../../shared/agent-chat-permission-mode'
+import { normalizeAgentPermissionPreference } from '../../../shared/tui-agent-permissions'
 import {
   savedChatUiWithTerminalDefaultView,
   stripRetiredGlobalSettings
@@ -145,6 +146,7 @@ export function normalizeLoadedGlobalSettings(
       },
       process.platform
     ),
+    agentPermissionMode: normalizeAgentPermissionPreference(parsed.settings?.agentPermissionMode),
     defaultTaskSource: taskProviderSettings.defaultTaskSource,
     visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
     visibleTaskProvidersDefaultedForJira: true,

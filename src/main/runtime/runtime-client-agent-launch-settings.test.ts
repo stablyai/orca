@@ -116,6 +116,7 @@ describe('execution-host agent launch settings', () => {
     await controller.mutateAgentLaunch({ type: 'permissions', mode: 'manual' })
     expect(host.agentDefaultArgs?.claude).toBe('')
     expect(host.agentDefaultEnv?.claude).toEqual({ API_KEY: 'host-secret', KEEP: 'host-only' })
+    expect(host.agentPermissionMode).toBe('manual')
     expect(JSON.stringify(controller.getAgentLaunch())).not.toContain('host-only')
   })
 

@@ -56,12 +56,16 @@ type AgentsPaneProps = AgentSettingProps & {
 
 export function AgentPermissionsSetting({
   mode,
+  hasCustomOverrides = false,
   onChange
 }: {
   mode: AgentPermissionMode
+  hasCustomOverrides?: boolean
   onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
 }): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
+  const mixedHintId = 'agent-permissions-mixed-hint'
+  const showMixedHint = mode === 'mixed' || hasCustomOverrides
+
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader
@@ -96,7 +100,7 @@ export function AgentPermissionsSetting({
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>
-            value={visibleMode}
+            value={mode}
             onChange={(nextMode) => {
               if (nextMode !== 'mixed') {
                 onChange(nextMode)
@@ -106,6 +110,7 @@ export function AgentPermissionsSetting({
               'auto.components.settings.AgentsPane.agentPermissions',
               'Agent Permissions'
             )}
+            ariaDescribedBy={showMixedHint ? mixedHintId : undefined}
             size="sm"
             options={[
               {
@@ -123,6 +128,14 @@ export function AgentPermissionsSetting({
           />
         }
       />
+      {showMixedHint ? (
+        <p id={mixedHintId} className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.AgentsPane.agentPermissionsMixedHint',
+            'Some agents have custom launch arguments, so they keep their own permission settings. Picking a mode applies it to the remaining agents.'
+          )}
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -178,9 +191,16 @@ export function AgentsPane({
 
 function renderAgentPermissions(
   mode: AgentPermissionMode,
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
+  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void,
+  hasCustomOverrides = false
 ): React.ReactNode {
-  return <AgentPermissionsSetting mode={mode} onChange={onChange} />
+  return (
+    <AgentPermissionsSetting
+      mode={mode}
+      hasCustomOverrides={hasCustomOverrides}
+      onChange={onChange}
+    />
+  )
 }
 
 export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {

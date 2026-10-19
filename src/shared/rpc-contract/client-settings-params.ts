@@ -106,6 +106,7 @@ export const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizeTuiAgentEnvRecord(value))
       .optional(),
+    agentPermissionMode: z.enum(['yolo', 'manual']).optional(),
     defaultTaskSource: TaskProviderParam.optional(),
     visibleTaskProviders: z.array(TaskProviderParam).optional(),
     defaultTaskViewPreset: z

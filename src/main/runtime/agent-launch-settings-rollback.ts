@@ -34,6 +34,10 @@ export function agentLaunchSettingsRollbackUpdates(
     ...(Object.hasOwn(updates, 'agentDefaultEnv') &&
     Object.is(current.agentDefaultEnv, applied.agentDefaultEnv)
       ? { agentDefaultEnv: before.agentDefaultEnv ?? {} }
+      : {}),
+    ...(Object.hasOwn(updates, 'agentPermissionMode') &&
+    Object.is(current.agentPermissionMode, applied.agentPermissionMode)
+      ? { agentPermissionMode: before.agentPermissionMode }
       : {})
   }
 }

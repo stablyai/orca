@@ -130,6 +130,7 @@ type SettingsSegmentedControlProps<T extends string | number> = {
   onChange: (value: T) => void
   options: readonly SegmentedOption<T>[]
   ariaLabel?: string
+  ariaDescribedBy?: string
   size?: 'sm' | 'md'
   equalWidth?: boolean
   wrap?: boolean
@@ -141,6 +142,7 @@ export function SettingsSegmentedControl<T extends string | number>({
   onChange,
   options,
   ariaLabel,
+  ariaDescribedBy,
   size = 'md',
   equalWidth = false,
   wrap = false
@@ -149,6 +151,7 @@ export function SettingsSegmentedControl<T extends string | number>({
     <div
       role="radiogroup"
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
       className={cn(
         'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
         equalWidth && 'w-full',

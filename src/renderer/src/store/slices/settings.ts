@@ -22,6 +22,7 @@ import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
 } from '../../../../shared/tui-agent-launch-defaults'
+import { normalizeAgentPermissionPreference } from '../../../../shared/tui-agent-permissions'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
@@ -113,6 +114,11 @@ function normalizeSettingsUpdates(
   if ('agentDefaultEnv' in updates) {
     sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
     sanitizedUpdates.agentYoloDefaultsMigrated = true
+  }
+  if ('agentPermissionMode' in updates) {
+    sanitizedUpdates.agentPermissionMode = normalizeAgentPermissionPreference(
+      updates.agentPermissionMode
+    )
   }
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)

@@ -8,7 +8,7 @@ import {
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
 import {
   applyAgentPermissionMode,
-  resolveAgentPermissionModeSummary,
+  resolveAgentPermissionControlState,
   type AgentPermissionMode
 } from './tui-agent-permissions'
 
@@ -21,6 +21,7 @@ export type AgentLaunchSettingsSource = Partial<
     | 'agentCmdOverrides'
     | 'agentDefaultArgs'
     | 'agentDefaultEnv'
+    | 'agentPermissionMode'
   >
 >
 
@@ -32,6 +33,8 @@ export type AgentLaunchSettings = {
   agentDefaultArgs: NonNullable<GlobalSettings['agentDefaultArgs']>
   environmentNames: Partial<Record<TuiAgent, string[]>>
   permissionMode: AgentPermissionMode
+  /** Optional so older hosts can keep serving settings to newer clients. */
+  permissionHasCustomOverrides?: boolean
 }
 
 export type AgentLaunchSettingsMutation =
@@ -46,6 +49,7 @@ export type AgentLaunchSettingsMutation =
 export function projectAgentLaunchSettings(
   settings: AgentLaunchSettingsSource
 ): AgentLaunchSettings {
+  const permissions = resolveAgentPermissionControlState(settings)
   return {
     defaultTuiAgent: settings.defaultTuiAgent ?? null,
     newWorkspaceSetupOnly: false,
@@ -58,7 +62,8 @@ export function projectAgentLaunchSettings(
         Object.keys(env ?? {}).sort()
       ])
     ),
-    permissionMode: resolveAgentPermissionModeSummary(settings)
+    permissionMode: permissions.mode,
+    permissionHasCustomOverrides: permissions.hasCustomOverrides
   }
 }
 
@@ -80,7 +85,10 @@ export function agentLaunchSettingsMutationUpdates(
         mutation.enabled
       )
     case 'permissions':
-      return applyAgentPermissionMode({ ...settings, mode: mutation.mode })
+      return {
+        ...applyAgentPermissionMode({ ...settings, mode: mutation.mode }),
+        agentPermissionMode: mutation.mode
+      }
     case 'command': {
       const commands = { ...settings.agentCmdOverrides }
       if (mutation.value.trim()) {
