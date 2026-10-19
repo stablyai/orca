@@ -18,7 +18,8 @@ export class PiRpcMessages {
   private ordinal = 0
   private active?: number
   private readonly text = new Map<string, { index: number; channel: 'assistant' | 'reasoning' }>()
-  private readonly tools = new Map<string, AgentJournalToolCallItem>()
+  private readonly tools = new Map<string, { body: AgentJournalToolCallItem; bytes: number }>()
+  private toolBytes = 0
 
   constructor(
     private readonly generation: string,
@@ -29,6 +30,7 @@ export class PiRpcMessages {
     this.active = undefined
     this.text.clear()
     this.tools.clear()
+    this.toolBytes = 0
   }
 
   message(value: unknown, at: number): ProviderTimelineEvent[] {
@@ -119,12 +121,12 @@ export class PiRpcMessages {
       callId: event.toolCallId,
       input:
         event.args === undefined
-          ? (previous?.input ?? null)
+          ? (previous?.body.input ?? null)
           : boundToolInput(event.args, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       state,
       ...(output === undefined
-        ? previous?.output
-          ? { output: previous.output }
+        ? previous?.body.output
+          ? { output: previous.body.output }
           : {}
         : {
             output: boundPayload(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
@@ -134,18 +136,15 @@ export class PiRpcMessages {
       if (this.tools.size >= 128 && !previous) {
         throw new Error('Pi tool stream capacity exceeded')
       }
-      this.tools.set(event.toolCallId, body)
-      if (
-        [...this.tools.values()].reduce(
-          (bytes, tool) => bytes + Buffer.byteLength(JSON.stringify(tool)),
-          0
-        ) >
-        1024 * 1024
-      ) {
+      const bytes = Buffer.byteLength(JSON.stringify(body))
+      this.tools.set(event.toolCallId, { body, bytes })
+      this.toolBytes += bytes - (previous?.bytes ?? 0)
+      if (this.toolBytes > 1024 * 1024) {
         throw new Error('Pi tool stream byte capacity exceeded')
       }
     } else {
       this.tools.delete(event.toolCallId)
+      this.toolBytes -= previous?.bytes ?? 0
     }
     return [
       {
