@@ -28,6 +28,11 @@ export type LinearIssueNode = {
     name?: string | null
     key?: string | null
   } | null
+  project?: {
+    id: string
+    name: string
+    color?: string | null
+  } | null
   assignee?: {
     id: string
     displayName: string
@@ -84,6 +89,11 @@ export const LINEAR_ISSUE_NODE_FIELDS = `
     id
     name
     key
+  }
+  project {
+    id
+    name
+    color
   }
   assignee {
     id

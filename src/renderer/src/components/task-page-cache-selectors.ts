@@ -14,6 +14,7 @@ import {
 export {
   findTaskPageLinearDrawerIssue,
   findTaskPageLinearIssue,
+  preferFreshTaskPageLinearIssue,
   reconcileTaskPageLinearIssuesAfterLandingRefresh,
   shouldReplaceTaskPageLinearIssuesAfterRefresh
 } from './task-page-linear-cache-selectors'
@@ -231,6 +232,7 @@ export function reconcileTaskPagePagesAfterLandingRefresh(
   return [nextFirstPage, ...pages.slice(1)]
 }
 
+
 export function findTaskPageDialogWorkItem(
   workItemsCache: WorkItemsCache,
   dialogWorkItemKey: TaskPageDialogWorkItemKey
@@ -252,3 +254,5 @@ export function findTaskPageDialogWorkItem(
   }
   return null
 }
+
+
