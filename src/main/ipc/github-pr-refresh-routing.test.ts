@@ -183,3 +183,63 @@ describe('registerGitHubHandlers', () => {
     expect(reportVisiblePRRefreshCandidatesMock).toHaveBeenCalledWith([], 2, 8)
   })
 })
+
+describe('linked PR repositories at the GitHub IPC boundary', () => {
+  const harness = createGitHubIpcHarness(mocks)
+  const { handlers, store, stats } = harness
+
+  beforeEach(harness.reset)
+
+  const candidate = (linkedPRRepository: unknown) => ({
+    cacheKey: '/workspace/repo::feature/live',
+    repoPath: '/workspace/repo',
+    repoId: 'repo-1',
+    branch: 'feature/live',
+    repoKind: 'git',
+    linkedPRNumber: 2383,
+    linkedPRRepository
+  })
+
+  it('forwards a well-formed linked repository and drops anything else', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+    const extra = { owner: 'relayto', repo: 'relayto-frontend', token: 'x' }
+
+    await handlers['gh:enqueuePRRefresh'](null, {
+      candidate: candidate(extra),
+      reason: 'active'
+    })
+    await handlers['gh:enqueuePRRefresh'](null, {
+      candidate: candidate({ owner: 'not an owner', repo: 'x' }),
+      reason: 'active'
+    })
+
+    expect(enqueuePRRefreshMock.mock.calls[0]?.[0].linkedPRRepository).toEqual({
+      owner: 'relayto',
+      repo: 'relayto-frontend'
+    })
+    expect(enqueuePRRefreshMock.mock.calls[1]?.[0]).not.toHaveProperty('linkedPRRepository')
+  })
+
+  it('passes the linked repository to the direct PR lookup', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+
+    await handlers['gh:prForBranch'](null, {
+      repoPath: '/workspace/repo',
+      repoId: 'repo-1',
+      branch: 'feature/live',
+      linkedPRNumber: 2383,
+      linkedPRRepository: { owner: 'relayto', repo: 'relayto-frontend' }
+    })
+
+    expect(mocks.client.getPRForBranch).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'feature/live',
+      2383,
+      null,
+      null,
+      expect.objectContaining({
+        linkedPRRepository: { owner: 'relayto', repo: 'relayto-frontend' }
+      })
+    )
+  })
+})

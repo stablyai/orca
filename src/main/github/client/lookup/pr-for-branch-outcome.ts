@@ -41,6 +41,7 @@ export async function getPRForBranchOutcome(
     fallbackPRNumber ?? null,
     options.acceptMergedFallbackPR ?? false,
     options.currentHeadOid ?? null,
+    options.linkedPRRepository ?? null,
     githubReadExecutionScope(ghOptions)
   ])
   return runCoalescedProbe(

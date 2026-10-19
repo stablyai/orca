@@ -14,6 +14,7 @@ import { prCacheKey } from './cache-identity'
 import { settingsForGitHubRepoOwner } from './work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from './pr-result-routing'
 import type { GitHubPRFallbackSource } from './cache-model'
+import { getLinkedGitHubPRRepository } from './linked-pr-repository'
 
 export function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
   return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
@@ -167,6 +168,8 @@ export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   return (
     linkedPRNumber != null &&
     pr?.number === linkedPRNumber &&
+    // Why: another repository's PR branch never names this worktree's branch.
+    pr.linkedFromOtherRepository !== true &&
     // Draft reviews are open PRs too; don't let their distinct renderer state leave a stale durable link wedged after a branch switch.
     (pr.state === 'open' || pr.state === 'draft') &&
     requestHeadOid !== null &&
@@ -251,6 +254,7 @@ export function buildPRRefreshCandidate(
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
+  const linkedPRRepository = getLinkedGitHubPRRepository(worktree, repo)
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,
@@ -263,6 +267,7 @@ export function buildPRRefreshCandidate(
     isSelected: state.activeWorktreeId === worktree.id,
     // Why: persisted linked PR metadata is exact; PR cache numbers are only fallback hints after branch-lookup misses.
     linkedPRNumber: worktree.linkedPR ?? null,
+    ...(linkedPRRepository ? { linkedPRRepository } : {}),
     fallbackPRNumber,
     fallbackPRSource,
     isBare: worktree.isBare,

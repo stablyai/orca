@@ -3,7 +3,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GitHubOwnerRepo, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from './cache-model'
 import type { PRRefreshStateClearToken } from './pr-refresh-state'
 
@@ -40,6 +40,7 @@ export function startPullRequestLookup(args: {
   cacheKey: string
   cached: CacheEntry<PRInfo> | undefined
   linkedPRNumber: number | null
+  linkedPRRepository: GitHubOwnerRepo | null
   fallbackPRNumber: number | null
   fallbackPRSource: GitHubPRFallbackSource | null
   generation: number
@@ -60,6 +61,7 @@ export function startPullRequestLookup(args: {
     cacheKey,
     cached,
     linkedPRNumber,
+    linkedPRRepository,
     fallbackPRNumber,
     fallbackPRSource,
     generation,
@@ -82,6 +84,7 @@ export function startPullRequestLookup(args: {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
+              ...(linkedPRRepository ? { linkedPRRepository } : {}),
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(fallbackPRNumber !== null
@@ -100,6 +103,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
+              ...(linkedPRRepository ? { linkedPRRepository } : {}),
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
@@ -123,6 +127,7 @@ export function startPullRequestLookup(args: {
                   repoId,
                   branch,
                   linkedPRNumber,
+                  ...(linkedPRRepository ? { linkedPRRepository } : {}),
                   fallbackPRNumber,
                   acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
                   currentHeadOid: requestHeadOid

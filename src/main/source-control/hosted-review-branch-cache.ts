@@ -1,5 +1,7 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
+import { githubRepoIdentityKey } from '../../shared/github/repository-identity-key'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -79,6 +81,7 @@ export type HostedReviewBranchCacheIdentity = {
   executionHostId: ExecutionHostId
   branch: string
   linkedGitHubPR?: number | null
+  linkedGitHubPRRepository?: GitHubOwnerRepo | null
   fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null
@@ -101,6 +104,9 @@ export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIden
     identity.branch,
     // Each linked id selects a different lookup, so it belongs in the identity.
     identity.linkedGitHubPR ?? '',
+    identity.linkedGitHubPRRepository
+      ? githubRepoIdentityKey(identity.linkedGitHubPRRepository)
+      : '',
     identity.fallbackGitHubPR ?? '',
     identity.linkedGitLabMR ?? '',
     identity.linkedBitbucketPR ?? '',

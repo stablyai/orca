@@ -67,6 +67,7 @@ function reportIdentity(state: AppState): string {
         candidate?.connectionState,
         candidate?.executionHostId,
         candidate?.cacheKey,
+        candidate?.linkedPRRepository ?? null,
         getIndexedRepoMap(state.repos).get(worktree.repoId)?.gitRemoteIdentity?.canonicalKey,
         Boolean(candidate && state.prCache[candidate.cacheKey]?.data),
         key ? state.hostedReviewCache[key]?.data?.provider : null

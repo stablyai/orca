@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import {
   getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,
@@ -7,6 +8,8 @@ import {
 
 export type LinkedReviewHints = {
   linkedGitHubPR?: number | null
+  /** Repository of a URL-linked GitHub PR outside this repo; see getLinkedGitHubPRRepository. */
+  linkedGitHubPRRepository?: GitHubOwnerRepo | null
   fallbackGitHubPR?: number | null
   linkedGitLabMR?: number | null
   linkedBitbucketPR?: number | null

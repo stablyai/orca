@@ -15,6 +15,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { isValidGitHubApiRepository } from '../github/github-api-repository-validation'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
@@ -118,6 +119,9 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       executionHostId: getRepoHostedReviewExecutionHostId(repo),
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
+      ...(args.linkedGitHubPR != null && isValidGitHubApiRepository(args.linkedGitHubPRRepository)
+        ? { linkedGitHubPRRepository: args.linkedGitHubPRRepository }
+        : {}),
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
@@ -128,7 +132,11 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       ...(args.force === true ? { force: true } : {}),
       localGitExecOptions: localGitOptions
     })
-    if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
+    if (
+      review?.provider === 'github' &&
+      !review.linkedFromOtherRepository &&
+      !stats.hasCountedPR(review.url)
+    ) {
       stats.record({
         type: 'pr_created',
         at: Date.now(),

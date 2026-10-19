@@ -73,7 +73,8 @@ export class RuntimeHostedReviewCommands {
     fallbackPRNumber?: number | null,
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null,
-    reason?: GitHubPRRefreshReason
+    reason?: GitHubPRRefreshReason,
+    linkedPRRepository?: GitHubOwnerRepo | null
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -87,6 +88,9 @@ export class RuntimeHostedReviewCommands {
     }
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
+    }
+    if (linkedPRNumber != null && linkedPRRepository) {
+      lookupOptions.linkedPRRepository = linkedPRRepository
     }
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
@@ -108,6 +112,7 @@ export class RuntimeHostedReviewCommands {
     active?: boolean
     force?: boolean
     linkedGitHubPR?: number | null
+    linkedGitHubPRRepository?: GitHubOwnerRepo | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null
@@ -124,6 +129,9 @@ export class RuntimeHostedReviewCommands {
       ...(args.active === true ? { active: true } : {}),
       ...(args.force === true ? { force: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
+      ...(args.linkedGitHubPR != null && args.linkedGitHubPRRepository
+        ? { linkedGitHubPRRepository: args.linkedGitHubPRRepository }
+        : {}),
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
@@ -131,7 +139,7 @@ export class RuntimeHostedReviewCommands {
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       ...executionOptions
     })
-    if (review?.provider === 'github') {
+    if (review?.provider === 'github' && !review.linkedFromOtherRepository) {
       this.deps.recordCreated(repo.id, review.number, review.url)
     }
     return review

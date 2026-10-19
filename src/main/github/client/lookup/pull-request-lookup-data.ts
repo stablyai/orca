@@ -1,4 +1,5 @@
 import type {
+  GitHubOwnerRepo,
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
   PRMergeableState,
@@ -86,6 +87,8 @@ export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
   // Why: compare merged implicit PRs against the worktree HEAD, not main repo HEAD, without a worktree-scoped git call.
   currentHeadOid?: string | null
+  /** Repository named by the linked PR's stored URL; used only when it is none of the repo's remotes. */
+  linkedPRRepository?: GitHubOwnerRepo | null
 }
 
 export function mapRestPRMergeable(pr: RestPullRequest): PRMergeableState {

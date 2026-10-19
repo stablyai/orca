@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { requiredString } from './rpc-param-primitives'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
+import { SlugRepo } from './github-repo-target-params'
 
 export const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
@@ -11,6 +12,7 @@ export const HostedReviewForBranch = z.object({
   // Only the caller's selected worktree; the host caps how many earn the fast tier.
   active: z.boolean().optional(),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
+  linkedGitHubPRRepository: SlugRepo.nullable().optional(),
   fallbackGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),

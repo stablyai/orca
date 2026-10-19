@@ -11,6 +11,7 @@ import {
   type PRRefreshValidationDenialReason
 } from '../github/pr-refresh-validation-backoff'
 import type { Store } from '../persistence'
+import { isValidGitHubApiRepository } from '../github/github-api-repository-validation'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
@@ -111,8 +112,19 @@ export function applyRegisteredRepoToPRRefreshCandidate(
   delete appliedCandidate.connectionId
   delete appliedCandidate.executionHostId
   delete appliedCandidate.connectionState
+  delete appliedCandidate.linkedPRRepository
+  const linked = candidate.linkedPRRepository
   return {
     ...appliedCandidate,
+    ...(isValidGitHubApiRepository(linked)
+      ? {
+          linkedPRRepository: {
+            owner: linked.owner,
+            repo: linked.repo,
+            ...(linked.host ? { host: linked.host } : {})
+          }
+        }
+      : {}),
     repoPath: repo.path,
     repoId: repo.id,
     ...(localGitOptions ? { localGitOptions } : {}),

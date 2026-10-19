@@ -18,6 +18,7 @@ import {
   shouldClearDivergedLinkedMergedPR
 } from './worktree-refresh'
 import { startPullRequestLookup } from './pull-request-execution'
+import { findLinkedGitHubPRRepository } from './linked-pr-repository'
 
 export const createPullRequestActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -138,6 +139,7 @@ export const createPullRequestActions = (
       cacheKey,
       cached,
       linkedPRNumber,
+      linkedPRRepository: findLinkedGitHubPRRepository(get(), repo, branch, linkedPRNumber),
       fallbackPRNumber,
       fallbackPRSource,
       generation,

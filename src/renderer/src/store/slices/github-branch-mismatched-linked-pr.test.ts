@@ -45,6 +45,15 @@ describe('shouldClearBranchMismatchedLinkedOpenPR', () => {
     ).toBe(true)
   })
 
+  it('keeps a PR linked from another repository, whose branches never name this worktree', () => {
+    expect(
+      shouldClearBranchMismatchedLinkedOpenPR({
+        ...baseArgs,
+        pr: basePR({ linkedFromOtherRepository: true })
+      })
+    ).toBe(false)
+  })
+
   it('keeps the link when the branch matches the PR head', () => {
     expect(shouldClearBranchMismatchedLinkedOpenPR({ ...baseArgs, branch: 'feature-one' })).toBe(
       false

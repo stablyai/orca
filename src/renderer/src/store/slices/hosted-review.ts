@@ -33,6 +33,7 @@ import {
   type HostedReviewFetchOptions
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
+import { withLinkedGitHubPRRepository } from '../github/linked-pr-repository'
 import {
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
@@ -197,7 +198,13 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
       const request = (async () => {
         try {
-          const args = hostedReviewBranchLookupArgs(branch, options)
+          // Exact-key requests name their own attachment; branch requests share one cache entry.
+          const args = hostedReviewBranchLookupArgs(
+            branch,
+            options?.exactReviewKey
+              ? options
+              : withLinkedGitHubPRRepository(get(), repo, branch, options)
+          )
           const review =
             target.kind === 'environment'
               ? await callRuntimeRpc<HostedReviewInfo | null>(

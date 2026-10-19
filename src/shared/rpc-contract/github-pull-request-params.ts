@@ -20,6 +20,7 @@ export const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   reason: OptionalPRRefreshReason,
   linkedPRNumber: z.number().int().positive().nullable().optional(),
+  linkedPRRepository: SlugRepo.nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
   acceptMergedFallbackPR: z.boolean().optional(),
   currentHeadOid: z.string().nullable().optional()

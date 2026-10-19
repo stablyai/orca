@@ -87,6 +87,9 @@ export type PRInfo = {
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
+  /** A URL link resolved this PR in a repository that is none of the worktree's
+   *  remotes, so its head and branches never describe the worktree's checkout. */
+  linkedFromOtherRepository?: boolean
 }
 
 export type IssueInfo = {
