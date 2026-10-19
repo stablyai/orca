@@ -32,6 +32,7 @@ export function SmartWorkspaceSourceResultList({
     | 'jiraConnectionStatus'
     | 'reserveLinearLoadingResults'
     | 'showLinearUrlLoadingFeedback'
+    | 'refreshingResults'
   >
   onSelect: (row: RowEntry) => void
   isLinked?: (row: RowEntry) => boolean
@@ -53,7 +54,8 @@ export function SmartWorkspaceSourceResultList({
     showJiraSiteContext,
     jiraConnectionStatus,
     reserveLinearLoadingResults,
-    showLinearUrlLoadingFeedback
+    showLinearUrlLoadingFeedback,
+    refreshingResults
   } = model
   return (
     <>
@@ -129,36 +131,44 @@ export function SmartWorkspaceSourceResultList({
                 : (emptyHint ?? getSmartWorkspaceEmptyHint(mode))}
           </div>
         ) : searchResultRows.length > 0 ? (
-          <CommandGroup className="p-1">
-            {searchResultRows.map((row) => (
-              <CommandItem
-                selection="palette"
-                key={row.value}
-                value={row.value}
-                disabled={isLinked?.(row) || isRowDisabled?.(row)}
-                onSelect={() => onSelect(row)}
-                className={getRowItemClassName(row)}
-              >
-                <RowIcon row={row} />
-                <RowLabel
-                  row={row}
-                  jiraSite={
-                    showJiraSiteContext && row.kind === 'jira'
-                      ? (jiraConnectionStatus?.sites?.find(
-                          (site) => site.id === row.issue.siteId
-                        ) ?? null)
-                      : null
-                  }
-                  showJiraSiteContext={showJiraSiteContext}
-                />
-                {isLinked?.(row) ? (
-                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {translate('workspace.links.linkedResult', 'Linked')}
-                  </span>
-                ) : null}
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          <div
+            aria-busy={refreshingResults}
+            className={cn(
+              'transition-opacity motion-reduce:transition-none',
+              refreshingResults && 'opacity-60'
+            )}
+          >
+            <CommandGroup className="p-1">
+              {searchResultRows.map((row) => (
+                <CommandItem
+                  selection="palette"
+                  key={row.value}
+                  value={row.value}
+                  disabled={isLinked?.(row) || isRowDisabled?.(row)}
+                  onSelect={() => onSelect(row)}
+                  className={getRowItemClassName(row)}
+                >
+                  <RowIcon row={row} />
+                  <RowLabel
+                    row={row}
+                    jiraSite={
+                      showJiraSiteContext && row.kind === 'jira'
+                        ? (jiraConnectionStatus?.sites?.find(
+                            (site) => site.id === row.issue.siteId
+                          ) ?? null)
+                        : null
+                    }
+                    showJiraSiteContext={showJiraSiteContext}
+                  />
+                  {isLinked?.(row) ? (
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                      {translate('workspace.links.linkedResult', 'Linked')}
+                    </span>
+                  ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </div>
         ) : null}
       </CommandList>
     </>
