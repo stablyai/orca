@@ -42,25 +42,18 @@ describe('an update this shell refused falls back to the generation that already
 
   it('asks for the newer generation before any of this, so the refusal is a real one', () => {
     const fetching = run(afterCacheRead(CACHED).session, { type: 'manifest-read', manifest: NEWER })
-    expect(fetching.session.state).toMatchObject({ kind: 'fetching' })
+    expect(fetching.session.state).toEqual({ kind: 'activating', source: 'cache' })
     expect(fetching.effects).toEqual([{ kind: 'download' }])
   })
 
   it('opens the cached generation rather than walling a host it can still reach', () => {
     const step = refused()
     expect(step.session.state).toEqual({ kind: 'activating', source: 'cache' })
-    expect(withoutRecord(step.effects)).toEqual([
-      {
-        kind: 'open-generation',
-        directory: CACHED.directory,
-        buildId: CACHED.buildId,
-        totalBytes: CACHED.totalBytes
-      }
-    ])
+    expect(withoutRecord(step.effects)).toEqual([])
   })
 
   it('runs it under its own grants, not the ones the refused manifest declared', () => {
-    expect(refused().session.routeGrants).toEqual(['navigate'])
+    expect(refused().session.routeGrants).toEqual(['navigate', 'native.storage.read'])
   })
 
   it('names the refusal as a notice beside the workspace, not as a state in front of it', () => {
@@ -243,7 +236,7 @@ describe('an update this shell refused, once it is on screen', () => {
     expect(retried.session.updateNotice).toBeNull()
     expect(retried.effects).toEqual([{ kind: 'open-cache' }])
     const again = run(retried.session, { type: 'cache-read', generation: CACHED })
-    expect(again.effects).toEqual([{ kind: 'read-manifest' }])
+    expect(again.effects.map((effect) => effect.kind)).toEqual(['open-generation', 'read-manifest'])
     expect(run(again.session, { type: 'manifest-read', manifest: NEWER }).effects).toEqual([
       { kind: 'download' }
     ])

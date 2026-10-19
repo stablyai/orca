@@ -36,7 +36,12 @@ import { isHostRouteOf } from './page-route-policy'
 import { PageRouteUnavailableScreen } from './PageRouteUnavailableScreen'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
-import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
+import {
+  SHELL_HOST_OPENING_LABEL,
+  SHELL_OPENING_LABEL,
+  ShellPageCover,
+  ShellWaitingFrame
+} from './ShellWaitingFrame'
 import { ShellDownloadProgress } from './ShellDownloadProgress'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
@@ -350,6 +355,9 @@ export function MobileWebShellScreen({
     }
   }, [hostId, unreadable])
 
+  const openingLabel = isHostRouteOf(route.pathname, hostId)
+    ? SHELL_HOST_OPENING_LABEL
+    : SHELL_OPENING_LABEL
   if (state.kind === 'route-unavailable') {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
@@ -376,7 +384,7 @@ export function MobileWebShellScreen({
     )
   }
   if (state.kind !== 'ready') {
-    return <Waiting label={state.kind === 'activating' ? SHELL_OPENING_LABEL : 'Checking host'} />
+    return <Waiting label={state.kind === 'activating' ? openingLabel : 'Checking host'} />
   }
   return (
     <View
@@ -435,7 +443,7 @@ export function MobileWebShellScreen({
           }
         }}
       />
-      <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
+      <ShellPageCover label={openingLabel} visible={pageFrame === 'unpainted'} />
       <DevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
     </View>
   )
