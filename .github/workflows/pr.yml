@@ -60,7 +60,6 @@ jobs:
       e2e_needs_build: ${{ steps.e2e_filter.outputs.e2e_needs_build }}
       native_ime_source_changed: ${{ steps.e2e_filter.outputs.native_ime_source_changed }}
       wsl_source_changed: ${{ steps.e2e_filter.outputs.wsl_source_changed }}
-      layout_owner_switch_on: ${{ steps.e2e_filter.outputs.layout_owner_switch_on }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -85,7 +84,6 @@ jobs:
             /config/scripts/pr-code-change-scope.mjs
             /config/scripts/pr-package-test-paths.mjs
             /config/scripts/pr-layout-oracle-route.mjs
-            /config/scripts/pr-layout-owner-switch-on-route.mjs
             /config/scripts/pr-e2e-source-routing.mjs
             /config/scripts/ci-e2e-job-selection.mjs
             /config/scripts/pr-ready-check-reuse.mjs
@@ -166,8 +164,6 @@ jobs:
           WSL_CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR "$DIFF_BASE" HEAD)"
           WSL_SOURCE_CHANGED="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --wsl-source)"
           echo "wsl_source_changed=$WSL_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
-          LAYOUT_OWNER_SWITCH_ON="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-layout-owner-switch-on-route.mjs)"
-          echo "layout_owner_switch_on=$LAYOUT_OWNER_SWITCH_ON" >> "$GITHUB_OUTPUT"
           echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
           SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --reusable-workflow "${E2E_SCOPE_ARGS[@]}")"
           if [ "$SHOULD_RUN" = true ]; then
@@ -1577,28 +1573,6 @@ jobs:
       run_changed_e2e: true
       needs_build: true
       artifact_suffix: -layout-oracle
-
-  # Why not in verify's needs: the layout-owner switch is off in shipped builds, and some of these
-  # specs fail with it on until that work lands. It reports a red X without blocking the merge.
-  layout_owner_switch_on:
-    name: layout owner (switch on)
-    needs: [code_paths, preflight]
-    if: >-
-      !cancelled() &&
-      needs.code_paths.result == 'success' &&
-      needs.code_paths.outputs.layout_owner_switch_on == 'true' &&
-      needs.preflight.result == 'success'
-    permissions:
-      contents: read
-    uses: ./.github/workflows/e2e.yml
-    with:
-      ref: ${{ github.sha }}
-      # LAYOUT_OWNER_SWITCH_ON_E2E_SPECS in config/scripts/pr-layout-owner-switch-on-route.mjs.
-      test_files: '["tests/e2e/workspace-layout-oracle-headless.spec.ts","tests/e2e/workspace-layout-oracle.spec.ts","tests/e2e/cli-file-open-position.spec.ts","tests/e2e/relaunch-first-terminal.spec.ts","tests/e2e/relaunch-sleeping-agents-resume-on-view.spec.ts","tests/e2e/terminal-cold-activation-deferral.spec.ts","tests/e2e/cli-first-worktree-single-terminal.spec.ts","tests/e2e/unopened-workspace-agent-single-resume.spec.ts","tests/e2e/terminal-pane-close-layout-consistency.spec.ts","tests/e2e/golden-file-open-edit-save.spec.ts","tests/e2e/golden-source-control-open-diff.spec.ts","tests/e2e/paired-cli-terminal-graph-sync-tab-retention.spec.ts","tests/e2e/floating-workspace-pane-height.spec.ts","tests/e2e/editor-model-host-isolation.spec.ts","tests/e2e/editor-tab-selection-restore.spec.ts","tests/e2e/finished-agent-ghost-resume.spec.ts","tests/e2e/live-background-terminal-mount-authority.spec.ts","tests/e2e/workspace-back-forward-navigation.spec.ts","tests/e2e/worktree-lineage-toggle-shortcut.spec.ts","tests/e2e/local-cli-terminal-retention.spec.ts","tests/e2e/default-tabs-mark-crash-relaunch.spec.ts","tests/e2e/terminal-cli-split-closed-before-mount.spec.ts","tests/e2e/layout-stream-loss-reopen.spec.ts","tests/e2e/terminal-tab-close-restart-persistence.spec.ts","tests/e2e/artificial-opencode-terminal-load.spec.ts","tests/e2e/ssh-orcad-"]'
-      run_changed_e2e: true
-      needs_build: true
-      artifact_suffix: -layout-owner-switch-on
-      layout_owner: main
 
   # Why this is not in verify's needs: it is the first PR-gate run of a harness whose reliability
   # is only known from nightly main runs (20/20 green, 2026-08-09..2026-08-29, p50 3m25s). It
