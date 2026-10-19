@@ -186,9 +186,15 @@ async function stageFileEntry(
 }
 
 async function readImageExtension(fileHandle: FileHandle): Promise<string | undefined> {
-  const header = Buffer.alloc(IMAGE_SIGNATURE_BYTES)
-  const { bytesRead } = await fileHandle.read(header, 0, IMAGE_SIGNATURE_BYTES, 0)
-  return detectImageFileSignature(header.subarray(0, bytesRead))?.extension
+  // Why: the probe only picks a nicer name. A failed header read must stage the
+  // file under its original name, not fail a drop that would otherwise succeed.
+  try {
+    const header = Buffer.alloc(IMAGE_SIGNATURE_BYTES)
+    const { bytesRead } = await fileHandle.read(header, 0, IMAGE_SIGNATURE_BYTES, 0)
+    return detectImageFileSignature(header.subarray(0, bytesRead))?.extension
+  } catch {
+    return undefined
+  }
 }
 
 async function assertRealPathInsideRoot(
