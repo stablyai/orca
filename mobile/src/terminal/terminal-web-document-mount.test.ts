@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createElement } from 'react'
+import { createElement, createRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { terminalDocumentDouble } from './document/document-terminal-double.test-support'
 import type { TerminalDocumentHost } from './document/document-host-seams'
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
+import type { TuiWheelProfile } from './document/tui-wheel-pacing'
+import type { TerminalWebViewHandle } from './terminal-webview-contract'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
 import { TerminalPaneView } from '../session/TerminalPaneView'
@@ -647,5 +649,79 @@ describe("the page pushes its terminal frame's box into the document", () => {
     await framesUntil(() => scales.length > hidden)
     expect(scales.at(-1)).toBe(1)
     mounted.dispose()
+  })
+})
+
+const ESC = '\u001b'
+/** A full-screen program with SGR wheel tracking, as Codex runs it. */
+const WHEEL_PROGRAM = `${ESC}[?1049h${ESC}[?1000h${ESC}[?1006h`
+const WHEEL_REPORT_ROW = new RegExp(`${ESC}\\[<6[45];\\d+;(\\d+)M`, 'g')
+
+/** A one-finger drag up the surface, a pixel a move, starting at `fromY` in the host. */
+function dragSurface(host: HTMLElement, fromY: number, steps: number) {
+  const surface = host.querySelector('#terminal-surface')!
+  const fire = (type: string, y: number | null) => {
+    const event = new Event(type, { bubbles: true, cancelable: true })
+    const touches = y === null ? [] : [{ identifier: 0, clientX: 40, clientY: y, target: surface }]
+    Object.defineProperty(event, 'touches', { value: touches })
+    surface.dispatchEvent(event)
+  }
+  fire('touchstart', fromY)
+  for (let step = 1; step <= steps; step++) {
+    fire('touchmove', fromY - step)
+  }
+  fire('touchend', null)
+}
+
+describe('a wheel profile on the page', () => {
+  /** The view over a measured grid running a wheel program, and the rows its reports named. */
+  async function mountedWheelProgram(profile?: TuiWheelProfile) {
+    gridTerminal = () => gridDouble({ measurable: true })
+    const host = plantHost()
+    host.getBoundingClientRect = () => new DOMRect(0, 0, 390, 600)
+    const inputs: string[] = []
+    const ref = createRef<TerminalWebViewHandle>()
+    const view = (wheelProfile?: TuiWheelProfile) =>
+      createElement(TerminalWebView, {
+        ref,
+        tuiWheelProfile: wheelProfile,
+        onTerminalInput: (bytes: string) => inputs.push(bytes)
+      })
+    act(() => {
+      renderer = create(view(profile), { createNodeMock: () => host })
+    })
+    act(() => {
+      ref.current?.init({ cols: 55, rows: 40, initialData: WHEEL_PROGRAM, frame: null })
+    })
+    await settle()
+    const reportedRows = () =>
+      [...inputs.join('').matchAll(WHEEL_REPORT_ROW)].map((match) => Number(match[1]))
+    const learnProfile = (next: TuiWheelProfile) => act(() => renderer?.update(view(next)))
+    return { host, reportedRows, learnProfile }
+  }
+
+  // 40 rows of 14.2px in a 600px host: y 500 is row 35, below Codex's middle row 20 (one-based).
+  it('reaches the document the view mounts, through the readiness it reports while mounting', async () => {
+    const { host, reportedRows } = await mountedWheelProgram('codex')
+
+    dragSurface(host, 500, 60)
+
+    expect(reportedRows().length).toBeGreaterThan(0)
+    expect(new Set(reportedRows())).toEqual(new Set([20]))
+  })
+
+  it('reaches the live document when the pane learns its program after mounting', async () => {
+    const { host, reportedRows, learnProfile } = await mountedWheelProgram()
+    dragSurface(host, 500, 60)
+    // The control: one row a report, named where the finger is.
+    expect(reportedRows().length).toBeGreaterThan(0)
+    expect(Math.min(...reportedRows())).toBeGreaterThan(20)
+
+    learnProfile('codex')
+    const before = reportedRows().length
+    dragSurface(host, 500, 60)
+
+    expect(reportedRows().length).toBeGreaterThan(before)
+    expect(new Set(reportedRows().slice(before))).toEqual(new Set([20]))
   })
 })

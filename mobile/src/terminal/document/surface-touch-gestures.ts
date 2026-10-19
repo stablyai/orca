@@ -1,14 +1,21 @@
-import { getCellHeight, getTotalScale } from './cell-metrics'
+import { getTotalScale } from './cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
-import { cancelDocumentFrame, scheduleDocumentFrame } from './document-frame-registry'
+import { cancelDocumentFrame } from './document-frame-registry'
 import { touchesInRoot } from './document-host-seams'
 import { clampPan } from './fit-scale'
 import { notify } from './host-notify'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
-import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
+import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
-  applyNormalBufferScrollDelta,
+  catchNormalBufferOverscroll,
+  easeNormalBufferOverscroll,
+  isNormalBufferOverscrolled,
+  releaseNormalBufferOverscroll,
+  settleNormalBufferOverscroll,
+  stretchNormalBufferOverscroll
+} from './normal-buffer-overscroll'
+import {
   cancelPendingNormalScroll,
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
@@ -20,11 +27,11 @@ import {
   MIN_TEXT_SCALE,
   snapToTextScalePreset
 } from './text-scaling'
+import { releaseTouchMomentum, updateTouchVelocity } from './touch-momentum'
+import { cancelPendingTouchTravel, routeTouchTravelToTerminal } from './tui-wheel-pacing'
 import { updateTransform } from './viewport-transform'
 import { viewportPoint } from './viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
-
-const RELEASE_VELOCITY_MAX_AGE_MS = 100
 
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
@@ -38,28 +45,17 @@ export type TerminalTouchState = {
   lastTime: number
   velY: number
   accumDelta: number
+  /** The direction of the last wheel report this gesture sent a program, 0 before any. */
+  wheelDirection: number
   momentumId: number | null
+  /** `tui-wheel-pacing`: the frame that delivers travel a paced program is still owed. */
+  pendingWheelFrameId: number | null
   isPinching: boolean
   scrollDragActive: boolean
   pinchDist: number
   pinchScale: number
   pinchSurfX: number
   pinchSurfY: number
-}
-
-export function updateTouchVelocity(scope: TerminalDocumentScope, deltaY: number, dt: number) {
-  if (dt <= 0) {
-    return
-  }
-  const instantVelocity = deltaY / dt
-  if (!Number.isFinite(instantVelocity)) {
-    return
-  }
-  // Smooth uneven WebView event cadence so momentum does not inherit a one-frame spike or pause.
-  scope.touchGesture.velY =
-    scope.touchGesture.velY === 0
-      ? instantVelocity
-      : scope.touchGesture.velY * 0.55 + instantVelocity * 0.45
 }
 
 export function getDistance(a: Touch, b: Touch) {
@@ -116,6 +112,11 @@ export function attachSurfaceEventHandlers(
       }
       // Why: a new touch holds the text where it is drawn, so travel the last one queued is dropped.
       cancelPendingNormalScroll(scope)
+      cancelPendingTouchTravel(scope)
+      // Why: a touch catches a bounce mid-flight, as UIScrollView does, and carries on from there.
+      if (catchNormalBufferOverscroll(scope)) {
+        scope.tapCandidate = null
+      }
       if (scope.term) {
         scope.pixelScrollActive =
           scope.term.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope)) ===
@@ -127,6 +128,7 @@ export function attachSurfaceEventHandlers(
         stopSurfaceTouchGestures(scope)
         resetSmoothScrollOffset(scope)
         scope.touchGesture.isPinching = true
+        settleNormalBufferOverscroll(scope)
         scope.touchGesture.pinchDist = getDistance(touches[0], touches[1])
         scope.touchGesture.pinchScale = scope.userScale
         const mid = pinchMidpoint(scope, touches[0], touches[1])
@@ -140,6 +142,7 @@ export function attachSurfaceEventHandlers(
         scope.touchGesture.lastTime = Date.now()
         scope.touchGesture.velY = 0
         scope.touchGesture.accumDelta = 0
+        scope.touchGesture.wheelDirection = 0
       }
       scope.touchGesture.active = touches.length > 0
     },
@@ -219,19 +222,18 @@ export function attachSurfaceEventHandlers(
         if (shouldRouteScrollToTerminalInput(scope)) {
           updateTouchVelocity(scope, deltaY, dt)
           resetSmoothScrollOffset(scope)
-          const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
+          settleNormalBufferOverscroll(scope)
           scope.touchGesture.accumDelta += deltaY
-          const lines = Math.trunc(scope.touchGesture.accumDelta / effectiveCellH)
-          if (lines !== 0) {
-            scope.touchGesture.accumDelta -= lines * effectiveCellH
-            routeScrollLines(scope, lines, x, y)
-            // Moving a row counts as scroll even inside tap slop.
-            scope.tapCandidate = null
-          }
+          routeTouchTravelToTerminal(scope, x, y)
         } else {
-          if (enqueueNormalBufferScrollDelta(scope, deltaY)) {
+          const rest = easeNormalBufferOverscroll(scope, deltaY)
+          if (rest !== 0 && enqueueNormalBufferScrollDelta(scope, rest)) {
             updateTouchVelocity(scope, deltaY, dt)
           } else {
+            if (rest !== 0) {
+              // Why: the buffer is at its end, so the content follows the finger on a rubber band.
+              stretchNormalBufferOverscroll(scope, rest)
+            }
             scope.touchGesture.velY = 0
           }
         }
@@ -279,41 +281,12 @@ export function attachSurfaceEventHandlers(
 
       if (touches.length === 0) {
         scope.touchGesture.active = false
-        // A finger resting after its last move has no remaining momentum to launch.
-        const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
-        let vel = rested ? 0 : scope.touchGesture.velY
-        const FRICTION = 0.972
-        const MIN_VEL = 0.012
-        let lastMomentumTime = performance.now()
-        function momentumStep(frameTime: number) {
-          const elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime))
-          lastMomentumTime = frameTime
-          vel *= FRICTION ** (elapsed / 16)
-          if (Math.abs(vel) < MIN_VEL) {
-            scope.touchGesture.momentumId = null
-            return
-          }
-          const delta = vel * elapsed
-          if (shouldRouteScrollToTerminalInput(scope)) {
-            resetSmoothScrollOffset(scope)
-            const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
-            scope.touchGesture.accumDelta += delta
-            const lines = Math.trunc(scope.touchGesture.accumDelta / effectiveCellH)
-            if (lines !== 0) {
-              scope.touchGesture.accumDelta -= lines * effectiveCellH
-              routeScrollLines(scope, lines, scope.touchGesture.lastX, scope.touchGesture.lastY)
-            }
-          } else {
-            if (!applyNormalBufferScrollDelta(scope, delta)) {
-              scope.touchGesture.momentumId = null
-              return
-            }
-          }
-          scope.touchGesture.momentumId = scheduleDocumentFrame(scope, momentumStep)
+        if (isNormalBufferOverscrolled(scope)) {
+          // Why: a pull past an end springs back; it never launches a coast.
+          releaseNormalBufferOverscroll(scope)
+          return
         }
-        if (Math.abs(vel) > MIN_VEL) {
-          scope.touchGesture.momentumId = scheduleDocumentFrame(scope, momentumStep)
-        }
+        releaseTouchMomentum(scope)
       }
     },
     { capture: true, passive: true }
@@ -336,6 +309,10 @@ export function startSurfaceTouchGestures(scope: TerminalDocumentScope) {
   attachSurfaceEventHandlers(scope, scope.surface!)
 }
 
+/**
+ * Ruling 21: the momentum loop, the paced wheel travel and the rubber band's spring, each of which
+ * would keep moving the terminal that replaced it.
+ */
 export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
   const interruptedPinch = scope.touchGesture.isPinching
   scope.touchGesture.active = false
@@ -343,6 +320,8 @@ export function stopSurfaceTouchGestures(scope: TerminalDocumentScope) {
     cancelDocumentFrame(scope, scope.touchGesture.momentumId)
     scope.touchGesture.momentumId = null
   }
+  cancelPendingTouchTravel(scope)
+  settleNormalBufferOverscroll(scope)
   scope.touchGesture.velY = 0
   scope.touchGesture.accumDelta = 0
   scope.touchGesture.isPinching = false

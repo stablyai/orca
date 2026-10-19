@@ -15,6 +15,7 @@ import { applyTerminalTheme } from './terminal-theme'
 import { init, resize, write } from './terminal-init'
 import { applyTextScale } from './text-scaling'
 import { resetWriteQueue } from './write-queue'
+import { setTuiWheelProfile } from './tui-wheel-pacing'
 
 export type TerminalHostMessage = {
   active?: boolean
@@ -30,6 +31,7 @@ export type TerminalHostMessage = {
   kittyKeyboardFlags?: unknown
   data?: string
   frame?: { width: number; height: number } | null
+  profile?: unknown
 }
 
 function hostFrameOf(msg: TerminalHostMessage) {
@@ -126,6 +128,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
       notify(scope, { type: 'selection-evicted' })
       cancelSelect(scope)
     }
+  } else if (msg.type === 'set-tui-wheel-profile') {
+    setTuiWheelProfile(scope, msg.profile)
   } else if (msg.type === 'reset-zoom') {
     applyFitScale(scope, 'reset-zoom-msg')
   } else if (msg.type === 'set-interaction-active') {

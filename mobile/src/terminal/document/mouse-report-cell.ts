@@ -62,3 +62,19 @@ export function viewportToMouseReportCell(
   }
   return { col: col, row: row, x: Math.floor(sx), y: Math.floor(sy) }
 }
+
+/** The viewport y that `viewportToMouseReportCell` maps to the middle of `row`, or null without a grid. */
+export function mouseReportRowClientY(scope: TerminalDocumentScope, row: number): number | null {
+  if (!scope.term) {
+    return null
+  }
+  const cellH = getCellHeight(scope)
+  if (cellH <= 0) {
+    return null
+  }
+  let total = getTotalScale(scope)
+  if (total <= 0) {
+    total = 1
+  }
+  return scope.viewportRect().top + scope.panY + (row + 0.5) * cellH * total
+}
