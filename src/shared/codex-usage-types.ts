@@ -1,5 +1,7 @@
+import type { UsageRange } from './usage-range'
+
 export type CodexUsageScope = 'orca' | 'all'
-export type CodexUsageRange = '7d' | '30d' | '90d' | 'all'
+export type CodexUsageRange = UsageRange
 export type CodexUsageBreakdownKind = 'model' | 'project'
 
 export type CodexUsageScanState = {

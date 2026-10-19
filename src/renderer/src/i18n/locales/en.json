@@ -20473,5 +20473,15 @@
       "errorTitle": "Space hit an error.",
       "errorDescription": "Close and reopen Space to try again."
     }
+  },
+  "usage": {
+    "range": {
+      "today": "Today"
+    },
+    "overview": {
+      "loadingRange": "Loading usage for this range…",
+      "rangeError": "Unable to load usage for this range.",
+      "range": "Usage time range"
+    }
   }
 }

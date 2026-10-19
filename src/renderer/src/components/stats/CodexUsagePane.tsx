@@ -11,7 +11,7 @@ import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { unpricedCostLabel } from './unpriced-cost-label'
 import { translate } from '@/i18n/i18n'
 
-const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
+const RANGE_OPTIONS: CodexUsageRange[] = ['today', '7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: CodexUsageScope; label: string }[] = [
   {
     value: 'orca',
@@ -27,6 +27,9 @@ const SCOPE_OPTIONS: { value: CodexUsageScope; label: string }[] = [
   }
 ]
 const RANGE_LABELS: Record<CodexUsageRange, string> = {
+  get today() {
+    return translate('usage.range.today', 'Today')
+  },
   get '7d'() {
     return translate('auto.components.stats.CodexUsagePane.rangeLast7Days', 'Last 7 days')
   },
@@ -41,6 +44,7 @@ const RANGE_LABELS: Record<CodexUsageRange, string> = {
   }
 }
 
+/** Presents Codex usage with provider-specific scope and local-calendar range controls. */
 export function CodexUsagePane(): React.JSX.Element {
   const scanState = useAppStore((state) => state.codexUsageScanState)
   const summary = useAppStore((state) => state.codexUsageSummary)
