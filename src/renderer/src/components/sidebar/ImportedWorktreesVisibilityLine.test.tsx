@@ -1,11 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import ImportedWorktreesVisibilityLine, {
   groupWorktreesByParentPath
 } from './ImportedWorktreesVisibilityLine'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { i18n } from '@/i18n/i18n'
 
 const hiddenWorktrees = [
   {
@@ -93,6 +94,15 @@ describe('ImportedWorktreesVisibilityLine', () => {
     expect(markup).toContain('Hiding 4 discovered worktrees in orca on openclaw')
   })
 
+  it('uses the singular noun for one hidden worktree', () => {
+    const markup = renderLine({ hiddenWorktrees: hiddenWorktrees.slice(0, 1) })
+
+    expect(markup).toContain('Hiding 1 discovered worktree<')
+    expect(markup).toContain(
+      'Keep 1 discovered worktree hidden for orca; recover from the project menu'
+    )
+  })
+
   it('scopes pinned fallback copy to the repo name without a dismiss action', () => {
     const markup = renderLine({ placement: 'pinned-fallback', onKeepHidden: undefined })
 
@@ -155,5 +165,32 @@ describe('ImportedWorktreesVisibilityLine', () => {
     expect(markup).toContain('disabled=""')
     expect(markup).toContain('role="alert"')
     expect(markup).toContain('Could not show imported worktrees.')
+  })
+})
+
+describe('ImportedWorktreesVisibilityLine in Japanese', () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage('ja')
+  })
+
+  afterAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('translates the hidden worktrees line and its actions', () => {
+    const markup = renderLine({ hostContextLabel: 'openclaw' })
+
+    expect(markup).toContain('4 件のワークツリーを非表示中')
+    expect(markup).toContain('orca（openclaw） の非表示のワークツリー一覧を展開')
+    expect(markup).toContain(
+      'orca（openclaw） で検出されたワークツリー 4 件を非表示のままにする（プロジェクトメニューから再表示できます）'
+    )
+    expect(markup).not.toContain('Hiding')
+  })
+
+  it('translates the pinned fallback line', () => {
+    const markup = renderLine({ placement: 'pinned-fallback', onKeepHidden: undefined })
+
+    expect(markup).toContain('orca の 4 件のワークツリーを非表示中')
   })
 })

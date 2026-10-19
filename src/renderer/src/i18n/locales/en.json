@@ -5622,7 +5622,10 @@
           "loadedPathsNotice": "Loaded paths may be incomplete or out of date.",
           "loadedChangedPaths": "Loaded changed paths",
           "unresolvedConflict": "Unresolved conflict",
-          "moreLoadedPaths": "and {{value0}} more loaded paths"
+          "moreLoadedPaths": "and {{value0}} more loaded paths",
+          "changeCount_one": "1 uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes",
+          "changes": "Uncommitted or untracked changes"
         },
         "DeleteWorktreeLineageNotice": {
           "ad407c2d55": "more",
@@ -5645,9 +5648,18 @@
           "b2bc47c080": "more locations",
           "b47ba1a9d2": "{{value0}} preview",
           "2251d41ebb": "Hidden worktree groups",
-          "f54f2bec5d": "{{value0}} hidden worktrees for {{value1}}",
           "5a9688802a": "Show {{value0}} more",
-          "294de4aeb2": "Show fewer"
+          "294de4aeb2": "Show fewer",
+          "collapseAriaLabel": "Collapse hidden worktrees for {{repo}}",
+          "expandAriaLabel": "Expand hidden worktrees for {{repo}}",
+          "hiding_one": "Hiding 1 discovered worktree",
+          "hiding_other": "Hiding {{count}} discovered worktrees",
+          "hidingInRepo_one": "Hiding 1 discovered worktree in {{repo}}",
+          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
+          "keepHiddenAriaLabel_one": "Keep 1 discovered worktree hidden for {{repo}}; recover from the project menu",
+          "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu",
+          "keepHiddenTooltip": "Keep hidden - recover from the project menu",
+          "repoOnHost": "{{repo}} on {{host}}"
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "Open as Folder",
@@ -5675,7 +5687,8 @@
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
-          "188f6922a0": "Cancel"
+          "188f6922a0": "Cancel",
+          "creationFailed": "Creation failed"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancel",
@@ -5704,7 +5717,8 @@
           "51001182e3": "Empty directory",
           "971d85cc84": "Opens as a project on this host · {{value0}}",
           "00c4235c10": "No matches for '{{value0}}'",
-          "largeInputNoMatches": "No matches for this long input"
+          "largeInputNoMatches": "No matches for this long input",
+          "fileHint": "Files can't be opened as a project"
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
@@ -5736,7 +5750,10 @@
           "a49196d538": "Runs when Orca creates a new worktree.",
           "d9f2db2738": "project's settings",
           "a5bb8c5135": "Saved in this",
-          "dcaa645da5": "ok"
+          "dcaa645da5": "ok",
+          "savedSetupCommand": "Saved the setup command.",
+          "savedWithSkippedFields_one": "1 unsupported field skipped. Saved the setup command.",
+          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command."
         },
         "SetupScriptPromptCardViews": {
           "96a7f4198c": "Save local setup",
@@ -5976,7 +5993,8 @@
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
           "3611d1ae7f": "Resize workspace board columns",
-          "2df01a03ff": "No matches"
+          "2df01a03ff": "No matches",
+          "newWorkspaceIn": "New workspace in {{status}}"
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "Set {{value0}} color to {{value1}}",
@@ -6016,7 +6034,8 @@
           "ef18787206": "Queued for deletion"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agents"
+          "1b0a156717": "Agents",
+          "agentUnavailable": "Agent is not available"
         },
         "WorktreeCardReviewDetailSection": {
           "copyLink": "Copy link",
@@ -6083,7 +6102,8 @@
           "5d1a5d51bb": "Stopped process on {{value0}}",
           "c89f290e25": "Copied {{value0}}",
           "d1113f4660": "Failed to open browser",
-          "fed49903c9": "{{value0}} live {{value1}}"
+          "fed49903c9": "{{value0}} live {{value1}}",
+          "unknownProcess": "Unknown process"
         },
         "WorktreeContextMenu": {
           "c39c37676a": "Create a group and move this project into it.",
@@ -6445,11 +6465,19 @@
           }
         },
         "CacheTimer": {
-          "07729cc155": "expired"
+          "07729cc155": "expired",
+          "expired": "The next message will re-send the full context as uncached tokens",
+          "expiresIn": "Prompt cache expires in {{time}}"
         },
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "Cancel",
-          "cf95e3b5bb": "Close"
+          "cf95e3b5bb": "Close",
+          "deleteCount_one": "Delete 1 Workspace",
+          "deleteCount_other": "Delete {{count}} Workspaces",
+          "deleteWorkspace": "Delete Workspace",
+          "deleting": "Deleting...",
+          "forceDelete": "Force Delete",
+          "forceDeleting": "Force Deleting..."
         },
         "index": {
           "b826a98b6f": "busy"
@@ -6566,7 +6594,9 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Branch",
-          "sleeping": "Sleeping"
+          "sleeping": "Sleeping",
+          "markAsRead": "Mark as read",
+          "markAsUnread": "Mark as unread"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
@@ -6873,6 +6903,42 @@
           "outsideDistro": "Pick a folder inside {{value0}}.",
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}.",
           "windowsDrive": "Folders on a Windows drive stay on this computer. Choose this computer as the host to add one."
+        },
+        "RemoteFileBrowserEntryList": {
+          "emptyDirectory": "Empty directory",
+          "pathEmpty": "{{path}} is empty"
+        },
+        "importedWorktreesCardActions": {
+          "keepHiddenError": "Could not keep discovered worktrees hidden. Try again.",
+          "showError": "Could not show discovered worktrees. Try again."
+        },
+        "repoHeaderProjectActions": {
+          "hideNonOrcaWorktrees": "Hide non-Orca worktrees",
+          "showHiddenWorktrees": "Show hidden worktrees"
+        },
+        "useWorktreeCardLinkedDetails": {
+          "issueUnavailable": "Issue details unavailable",
+          "linearIssueUnavailable": "Linear issue details unavailable",
+          "loadingIssue": "Loading issue...",
+          "loadingLinearIssue": "Loading Linear issue..."
+        },
+        "useWorktreeCardWorkspaceActions": {
+          "markRead": "Mark read",
+          "markUnread": "Mark unread"
+        },
+        "useWorktreeContextMenuModel": {
+          "deleteCount_one": "Delete 1 Workspace",
+          "deleteCount_other": "Delete {{count}} Workspaces",
+          "deleteSelected": "Delete Selected",
+          "sleep": "Sleep",
+          "sleepCount_one": "Sleep 1 Workspace",
+          "sleepCount_other": "Sleep {{count}} Workspaces"
+        },
+        "addRepoBusyLabels": {
+          "scanningRepositories": "Scanning for repositories...",
+          "openingProject": "Opening project...",
+          "openingFolder": "Opening folder...",
+          "chooseFolder": "Choose a folder..."
         }
       },
       "shared": {

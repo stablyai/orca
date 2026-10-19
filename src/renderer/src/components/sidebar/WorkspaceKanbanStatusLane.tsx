@@ -92,7 +92,11 @@ function WorkspaceKanbanStatusLane({
       undefined
     )
   }, [fullWorktreeIds, hasQuery, items])
-  const createTooltip = `New workspace in ${status.label}`
+  const createTooltip = translate(
+    'auto.components.sidebar.WorkspaceKanbanStatusLane.newWorkspaceIn',
+    'New workspace in {{status}}',
+    { status: status.label }
+  )
   const createButton = (
     <Button
       type="button"

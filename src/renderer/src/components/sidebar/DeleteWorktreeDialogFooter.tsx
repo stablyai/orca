@@ -5,6 +5,20 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 
+function formatDeleteCountLabel(count: number): string {
+  return count === 1
+    ? translate(
+        'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteCount_one',
+        'Delete 1 Workspace',
+        { count }
+      )
+    : translate(
+        'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteCount_other',
+        'Delete {{count}} Workspaces',
+        { count }
+      )
+}
+
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
   isDeleting,
@@ -34,15 +48,24 @@ export function DeleteWorktreeDialogFooter({
 }): JSX.Element {
   const label = isDeleting
     ? canForceDelete
-      ? 'Force Deleting...'
-      : 'Deleting...'
+      ? translate(
+          'auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting',
+          'Force Deleting...'
+        )
+      : translate('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
     : isBatchDelete
-      ? `Delete ${worktreeCount} Workspaces`
+      ? formatDeleteCountLabel(worktreeCount)
       : canDeleteAllLineage
-        ? `Delete ${lineageDeleteTargetCount} Workspaces`
+        ? formatDeleteCountLabel(lineageDeleteTargetCount)
         : canForceDelete
-          ? 'Force Delete'
-          : 'Delete Workspace'
+          ? translate(
+              'auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete',
+              'Force Delete'
+            )
+          : translate(
+              'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
+              'Delete Workspace'
+            )
 
   return (
     <>

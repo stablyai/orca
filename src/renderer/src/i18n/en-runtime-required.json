@@ -1945,8 +1945,14 @@
         "CacheTimer": {
           "07729cc155": "expired"
         },
+        "DeleteWorktreeDialogFooter": {
+          "deleteCount_one": "Delete 1 Workspace",
+          "deleteCount_other": "Delete {{count}} Workspaces"
+        },
         "DeleteWorktreeDirtyChangeHint": {
-          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk."
+          "8e2994ce28": "Deleting this workspace permanently removes these changes from disk.",
+          "changeCount_one": "1 uncommitted or untracked change",
+          "changeCount_other": "{{count}} uncommitted or untracked changes"
         },
         "FolderWorkspaceComposerDialog": {
           "chooseSourceProject": "Choose task source",
@@ -1957,6 +1963,14 @@
         },
         "HostSectionHeaderMenu": {
           "63f36455cc": "Reconnect"
+        },
+        "ImportedWorktreesVisibilityLine": {
+          "hidingInRepo_one": "Hiding 1 discovered worktree in {{repo}}",
+          "hidingInRepo_other": "Hiding {{count}} discovered worktrees in {{repo}}",
+          "hiding_one": "Hiding 1 discovered worktree",
+          "hiding_other": "Hiding {{count}} discovered worktrees",
+          "keepHiddenAriaLabel_one": "Keep 1 discovered worktree hidden for {{repo}}; recover from the project menu",
+          "keepHiddenAriaLabel_other": "Keep {{count}} discovered worktrees hidden for {{repo}}; recover from the project menu"
         },
         "LinearAgentSkillSetupPrompt": {
           "missingBoth": "Orca CLI and Linear agent skill are missing.",
@@ -1982,7 +1996,9 @@
           "e8c1f4a2b9": "in workspace options."
         },
         "SetupScriptPromptCard": {
-          "dcaa645da5": "ok"
+          "dcaa645da5": "ok",
+          "savedWithSkippedFields_one": "1 unsupported field skipped. Saved the setup command.",
+          "savedWithSkippedFields_other": "{{count}} unsupported fields skipped. Saved the setup command."
         },
         "SidebarHeader": {
           "49f62c5665": "Workspace board",
@@ -2126,6 +2142,12 @@
               }
             }
           }
+        },
+        "useWorktreeContextMenuModel": {
+          "deleteCount_one": "Delete 1 Workspace",
+          "deleteCount_other": "Delete {{count}} Workspaces",
+          "sleepCount_one": "Sleep 1 Workspace",
+          "sleepCount_other": "Sleep {{count}} Workspaces"
         },
         "worktree": {
           "card": {
