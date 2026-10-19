@@ -31,10 +31,7 @@ import { useNativeChatComposerAppMenuSelection } from './use-native-chat-compose
 import { useNativeChatComposerSubmit } from './use-native-chat-composer-submit'
 import { useNativeChatComposerCommandPicker } from './use-native-chat-composer-command-picker'
 
-export type {
-  NativeChatComposerHandle,
-  NativeChatComposerProps
-} from './native-chat-composer-types'
+export type { NativeChatComposerHandle, NativeChatComposerProps }
 
 /**
  * Rich native input for the chat view. Sends prompts into the running agent
@@ -62,6 +59,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       optimisticSendOutcome,
       onOptimisticSendCanceled,
       onSlashCommand,
+      onBtw,
       onSubmitted,
       answerCommandLocally,
       onSwitchToTerminal,
@@ -267,6 +265,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       isDispatchingSessionOption,
       resolveTarget,
       onSlashCommand,
+      onBtw,
       onSubmitted,
       answerCommandLocally,
       sessionOptionsSurface: ptySessionOptionsSurface,

@@ -27,7 +27,11 @@ const COMMAND = {
   skillCollision: false
 }
 
-function renderDispatch(agent: 'codex' | 'claude' | 'openclaude', onSubmitted = vi.fn()) {
+function renderDispatch(
+  agent: 'codex' | 'claude' | 'openclaude',
+  onSubmitted = vi.fn(),
+  extra: { onBtw?: (question: string) => void } = {}
+) {
   return renderHook(() =>
     useNativeChatPickerCommandDispatch({
       agent,
@@ -42,7 +46,8 @@ function renderDispatch(agent: 'codex' | 'claude' | 'openclaude', onSubmitted = 
       setActiveSuggestion: vi.fn(),
       clearSkillOrigin: vi.fn(),
       clearImageAttachments: vi.fn(),
-      setNotice: vi.fn()
+      setNotice: vi.fn(),
+      ...extra
     })
   )
 }
@@ -70,6 +75,24 @@ describe('useNativeChatPickerCommandDispatch', () => {
     act(() => hook.result.current(COMMAND))
 
     expect(sendNativeChatMessage).toHaveBeenCalledWith('pty-1', '/status')
+    expect(sendNativeChatTypedCommand).not.toHaveBeenCalled()
+  })
+
+  it('opens /btw in the overlay instead of typing it into the PTY', () => {
+    const onBtw = vi.fn()
+    const hook = renderDispatch('claude', vi.fn(), { onBtw })
+    act(() =>
+      hook.result.current({
+        kind: 'command',
+        id: 'command:btw',
+        name: 'btw',
+        token: '/btw',
+        skillCollision: false
+      })
+    )
+
+    expect(onBtw).toHaveBeenCalledWith('')
+    expect(sendNativeChatMessage).not.toHaveBeenCalled()
     expect(sendNativeChatTypedCommand).not.toHaveBeenCalled()
   })
 })

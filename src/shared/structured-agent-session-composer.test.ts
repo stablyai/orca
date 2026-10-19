@@ -42,6 +42,7 @@ describe('structuredSlashCommands', () => {
     expect(offered.map((command) => command.name)).toEqual([
       'model',
       'effort',
+      'btw',
       'clear',
       'compact',
       'goal'
@@ -57,24 +58,31 @@ describe('structuredSlashCommands', () => {
     expect(structuredSlashCommands(['clear', 'compact'], 'claude').map((c) => c.name)).toEqual([
       'model',
       'effort',
+      'btw',
       'clear',
       'compact'
     ])
   })
 
   it('offers only the commands a chat session can carry out', () => {
-    expect(structuredSlashCommands().map((command) => command.name)).toEqual(['model', 'effort'])
+    expect(structuredSlashCommands().map((command) => command.name)).toEqual([
+      'model',
+      'effort',
+      'btw'
+    ])
   })
   it('adds only implemented host-supported conversation commands', () => {
     expect(structuredSlashCommands(['clear', 'compact']).map((command) => command.name)).toEqual([
       'model',
       'effort',
+      'btw',
       'clear',
       'compact'
     ])
     expect(structuredSlashCommands(['compact']).map((command) => command.name)).toEqual([
       'model',
       'effort',
+      'btw',
       'compact'
     ])
   })
@@ -167,7 +175,7 @@ describe('agent-implemented commands pass through to the agent', () => {
     }
   )
 
-  it.each(['clear', 'compact', 'model', 'effort'] as const)(
+  it.each(['clear', 'compact', 'model', 'effort', 'btw'] as const)(
     'still claims the host-owned /%s on Claude',
     async (name) => {
       expect(isStructuredAgentSessionComposerCommand(`/${name}`, 'claude')).toBe(true)

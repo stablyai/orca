@@ -17,6 +17,16 @@ export type StructuredAgentSessionReadFailureNotice = {
   final: boolean
 }
 
+export function structuredSessionReadFailure(
+  controller: { status: string; readRefusal: AgentSessionRefusalReference | undefined },
+  hostOutage: unknown
+): StructuredAgentSessionReadFailureNotice | null {
+  if (controller.status !== 'error' || (hostOutage && !controller.readRefusal)) {
+    return null
+  }
+  return structuredAgentSessionReadFailureNotice(controller.readRefusal)
+}
+
 export function structuredAgentSessionReadFailureNotice(
   refusal: AgentSessionRefusalReference | undefined
 ): StructuredAgentSessionReadFailureNotice {

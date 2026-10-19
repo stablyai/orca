@@ -47,4 +47,12 @@ export const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
 })
 
+export const NativeChatAskSideQuestion = z.object({
+  agent: z.string().min(1),
+  question: z.string().min(1),
+  prompt: z.string().min(1),
+  cwd: z.string().min(1),
+  model: z.string().min(1).optional()
+})
+
 export const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000

@@ -27,10 +27,13 @@ export function useNativeChatStructuredComposerTransport(args: {
   onSubmitted: () => void
   /** Present while this chat's host may not take a turn; Send is held and a send refused. */
   sendBlockedReason?: string | null
+  /** Opens the Chat UI `/btw` overlay. */
+  runBtw?: (question: string) => void
 }): NativeChatStructuredComposerTransport {
   const { props, controller, sendThroughLaunch, starting, worktreeId, optionPickerRequest } = args
   const { setOptionPickerRequest, onError, onSubmitted } = args
   const sendBlockedReason = args.sendBlockedReason ?? null
+  const runBtw = args.runBtw
   const acceptsImages = useStructuredAgentAcceptsImages(
     props.target,
     props.agent,
@@ -68,7 +71,8 @@ export function useNativeChatStructuredComposerTransport(args: {
           setOption: controller.setStructuredOption,
           conversationCommands: controller.conversationCommands,
           runConversationCommand: controller.runConversationCommand,
-          ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
+          ...(setThreadGoalObjective ? { setThreadGoalObjective } : {}),
+          ...(runBtw ? { runBtw } : {})
         }),
       ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       sendOut: controller.sendOut || starting,
@@ -99,6 +103,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.sessionId,
     props.target,
     sendBlockedReason,
+    runBtw,
     sendThroughLaunch,
     setOptionPickerRequest,
     starting

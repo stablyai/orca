@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 
-type Respond = ReturnType<typeof useStructuredAgentSession>['respond']
+type Session = ReturnType<typeof useStructuredAgentSession>
+type Respond = Session['respond']
 type PromptItem = Parameters<Respond>[0]
 
 const promptKey = (item: PromptItem): string => `${item.itemId}:${item.revision}`
@@ -10,6 +11,20 @@ const promptKey = (item: PromptItem): string => `${item.itemId}:${item.revision}
  * Holds a prompt card from the press until the host refuses the response. An accepted one stays
  * held: the host retires that prompt, and a second response to it would only be refused.
  */
+export function cancelStructuredSessionPrompt(
+  prompt: { itemId: string; revision: number } | null,
+  agent: string,
+  turnId: string | null,
+  cancel: Session['cancel']
+): void {
+  if (prompt && (turnId || agent === 'pi')) {
+    void cancel(turnId ?? undefined, {
+      itemId: prompt.itemId,
+      expectedRevision: prompt.revision
+    })
+  }
+}
+
 export function useStructuredPromptResponseHold(respond: Respond): {
   respond: Respond
   holds: (item: PromptItem) => boolean

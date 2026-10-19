@@ -16,6 +16,8 @@ import {
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { agentHookServer } from '../agent-hooks/server'
 import { nativeChatTranscriptPathOnExecutionHost } from '../native-chat/ssh-transcript-path'
+import { NativeChatAskSideQuestion } from '../../shared/rpc-contract/native-chat-params'
+import { generateNativeChatSideQuestion } from '../native-chat/native-chat-side-question'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -327,6 +329,12 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
 }
 
 export function registerNativeChatHandlers(): void {
+  ipcMain.handle('nativeChat:askSideQuestion', (_event, args: unknown) => {
+    const parsed = NativeChatAskSideQuestion.safeParse(args)
+    return parsed.success
+      ? generateNativeChatSideQuestion(parsed.data)
+      : { success: false as const, error: 'Invalid side question request.' }
+  })
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
   )

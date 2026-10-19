@@ -4,6 +4,7 @@ import {
 } from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
+import { NATIVE_CHAT_BTW_COMMAND } from './native-chat-btw'
 import type { SlashCommandSuggestion } from './native-chat-slash-commands'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 
@@ -25,7 +26,8 @@ const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
 /** Session options remain available on hosts predating conversation commands. */
 export const STRUCTURED_AGENT_SESSION_SLASH_COMMANDS: readonly SlashCommandSuggestion[] = [
   MODEL_COMMAND,
-  EFFORT_COMMAND
+  EFFORT_COMMAND,
+  NATIVE_CHAT_BTW_COMMAND
 ]
 
 export type StructuredAgentSessionComposerOptions = {
@@ -40,6 +42,8 @@ export type StructuredAgentSessionComposerOptions = {
   /** Present only where the host can set this session's goal; otherwise `/goal`
    *  stays message text the agent acts on itself. */
   setThreadGoalObjective?: (objective: string) => Promise<boolean>
+  /** Opens the Chat UI `/btw` overlay. The question may be empty. */
+  runBtw?: (question: string) => void | Promise<void>
 }
 
 /** What the chat shows a refused command waiting on: the agent working, a pending prompt, its
@@ -196,6 +200,17 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       }
     }
     return { handled: true, ...(await controller.runConversationCommand(command.name)) }
+  }
+  if (command.name === 'btw') {
+    if (!controller.runBtw) {
+      return {
+        handled: true,
+        accepted: false,
+        error: '/btw is not available in this chat session.'
+      }
+    }
+    await controller.runBtw(command.argument)
+    return { handled: true, accepted: true, error: null }
   }
   if (command.name !== 'model' && command.name !== 'effort') {
     return unavailable(command.name)

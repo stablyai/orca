@@ -8,6 +8,7 @@ import {
 } from '../../../native-chat/transcript-watch'
 import { nativeChatTranscriptPathOnExecutionHost } from '../../../native-chat/ssh-transcript-path'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import { generateNativeChatSideQuestion } from '../../../native-chat/native-chat-side-question'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
   boundNativeChatRpcPageByBytes,
@@ -15,9 +16,11 @@ import {
 } from './native-chat-rpc-page-bounds'
 import {
   MOBILE_NATIVE_CHAT_MAX_WINDOW,
+  NativeChatAskSideQuestion,
   NativeChatSession,
   NativeChatUnsubscribe
 } from '../../../../shared/rpc-contract/native-chat-params'
+
 
 // Why: a long agent session can hold thousands of turns (with full tool I/O).
 // Shipping all of them over the paired connection and rendering them at once
@@ -236,6 +239,12 @@ export const NATIVE_CHAT_METHODS = [
       }
       unsubscribe = subscription.unsubscribe
     }
+  }),
+  defineMethod({
+    name: 'nativeChat.askSideQuestion',
+    permission: 'workspace',
+    params: NativeChatAskSideQuestion,
+    handler: async (params) => generateNativeChatSideQuestion(params)
   }),
   defineMethod({
     name: 'nativeChat.unsubscribe',

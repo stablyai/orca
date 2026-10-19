@@ -175,7 +175,14 @@ describe("a Claude chat whose Claude isn't running shows the `/` surface from it
     const menu = await menuOf(replacement)
     expect(namesOf(menu, 'skill')).toEqual(['review-pr'])
     // Everything the menu offered before a list existed, then what the folders add.
-    expect(namesOf(menu, 'command')).toEqual(['model', 'effort', 'clear', 'compact', 'deploy'])
+    expect(namesOf(menu, 'command')).toEqual([
+      'model',
+      'effort',
+      'btw',
+      'clear',
+      'compact',
+      'deploy'
+    ])
   })
 
   it('keeps a slow scan once it answers, never a staler one after a newer, and runs at most two', async () => {
@@ -348,6 +355,7 @@ describe("a Claude chat whose Claude isn't running shows the `/` surface from it
       expect(namesOf(await menuOf(SESSION), 'command')).toEqual([
         'model',
         'effort',
+        'btw',
         'clear',
         'compact',
         'deploy'

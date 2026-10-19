@@ -141,6 +141,7 @@ export const EXECUTION_HOST_METHODS = [
   'linear.resolveCurrentIssue',
   'markdown.readTab',
   'markdown.saveTab',
+  'nativeChat.askSideQuestion',
   'nativeChat.readSession',
   'nativeChat.subscribe',
   'nativeChat.unsubscribe',

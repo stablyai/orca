@@ -8,6 +8,7 @@ import type {
 import type { AgentType } from '../../shared/native-chat-types'
 
 export const nativeChatApi = {
+  askSideQuestion: (request) => ipcRenderer.invoke('nativeChat:askSideQuestion', request),
   readSession: (
     agent: AgentType,
     sessionId: string,

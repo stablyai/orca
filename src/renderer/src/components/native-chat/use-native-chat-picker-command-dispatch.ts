@@ -34,6 +34,7 @@ export function useNativeChatPickerCommandDispatch(args: {
   clearSkillOrigin: () => void
   clearImageAttachments: () => void
   setNotice: (notice: string | null) => void
+  onBtw?: (question: string) => void
 }): (command: Extract<NativeChatPickerItem, { kind: 'command' }>) => void {
   const {
     agent,
@@ -41,6 +42,7 @@ export function useNativeChatPickerCommandDispatch(args: {
     isDispatchingSessionOption,
     resolveTarget,
     onSlashCommand,
+    onBtw,
     answerCommandLocally,
     onSubmitted,
     sessionOptionsSurface,
@@ -57,6 +59,18 @@ export function useNativeChatPickerCommandDispatch(args: {
       const text = `/${command.name}`
       const target = resolveTarget()
       if (!target || disabled || isDispatchingSessionOption) {
+        return
+      }
+      if (command.name === 'btw') {
+        onBtw?.('')
+        emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
+        emitNativeChatSendClassified({ agent, outcome: 'command' })
+        onSubmitted?.()
+        setDraft('')
+        setCaret(0)
+        setActiveSuggestion(0)
+        clearSkillOrigin()
+        setNotice(null)
         return
       }
       if (
@@ -108,6 +122,7 @@ export function useNativeChatPickerCommandDispatch(args: {
       clearSkillOrigin,
       disabled,
       isDispatchingSessionOption,
+      onBtw,
       onSlashCommand,
       onSubmitted,
       resolveTarget,

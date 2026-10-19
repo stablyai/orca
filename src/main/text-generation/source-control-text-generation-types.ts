@@ -45,6 +45,7 @@ export type TextGenerationOperation =
   | 'branch-name'
   | 'jira-issue-summary'
   | 'conversation-name'
+  | 'side-question'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }

@@ -56,7 +56,20 @@ export type NativeChatSubscribeArgs = {
   limit?: number
 }
 
+export type NativeChatSideQuestionRequest = {
+  agent: string
+  question: string
+  prompt: string
+  cwd: string
+  model?: string
+}
+
+export type NativeChatSideQuestionResult =
+  | { success: true; answer: string }
+  | { success: false; error: string }
+
 export type NativeChatApi = {
+  askSideQuestion: (request: NativeChatSideQuestionRequest) => Promise<NativeChatSideQuestionResult>
   /** Read the on-disk transcript for an agent + session id, windowed to the most recent `limit`
    *  turns. `transcriptPath` is the hook-reported authoritative path, preferred over the id glob. */
   readSession: (

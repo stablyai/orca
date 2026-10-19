@@ -13,6 +13,7 @@ import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
+import { parseNativeChatBtwCommand } from '../../../../shared/native-chat-btw'
 import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
@@ -37,6 +38,7 @@ export function useNativeChatPtyComposerSend(args: {
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string, output?: string) => void
+  onBtw?: (question: string) => void
   answerCommandLocally?: NativeChatLocalCommandAnswer
   onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
@@ -63,6 +65,16 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     const classification = args.classifySend(text)
+    const btw = parseNativeChatBtwCommand(text)
+    if (btw && args.onBtw) {
+      args.onBtw(btw.question)
+      args.onSubmitted?.()
+      args.setDraft('')
+      args.setCaret(0)
+      args.clearSkillOrigin()
+      args.setNotice(null)
+      return
+    }
     if (classification === 'command' && answerNativeChatCommandInComposer(args)) {
       return
     }

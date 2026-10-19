@@ -10,6 +10,7 @@ import {
   type NativeChatSessionSkill,
   type SlashCommandSuggestion
 } from '../../../../shared/native-chat-slash-commands'
+import { withNativeChatBtwCommand } from '../../../../shared/native-chat-btw'
 import { structuredSlashCommands } from '../../../../shared/structured-agent-session-composer'
 import { withNativeChatResumeCommand } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
@@ -35,14 +36,12 @@ export function useNativeChatComposerCatalog(
   const conversationCommands = structuredTransport?.conversationCommands
   const keepsScannedSkills = getNativeChatAgentProfile(agent)?.keepsScannedSkills === true
   const agentCommands = useMemo(() => {
-    if (!structured) {
-      return getVerifiedNativeChatCommands(agent)
-    }
-    return withNativeChatResumeCommand(
-      reported === undefined
+    const commands = !structured
+      ? getVerifiedNativeChatCommands(agent)
+      : reported === undefined
         ? structuredSlashCommands(conversationCommands, agent)
         : sessionSlashCommandSuggestions(agent, reported)
-    )
+    return withNativeChatBtwCommand(structured ? withNativeChatResumeCommand(commands) : commands)
   }, [agent, conversationCommands, reported, structured])
   const sessionSkills = useMemo(
     () =>

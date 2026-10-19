@@ -69,6 +69,9 @@ export async function runRemoteSourceControlPlan(input: {
     outputFormat: plan.outputFormat,
     emptyResultName: input.emptyResultName,
     includeLocalMacDnsHint: false,
-    includeStdoutDetail: operation !== 'branch-name' && operation !== 'conversation-name'
+    includeStdoutDetail:
+      operation !== 'branch-name' &&
+      operation !== 'conversation-name' &&
+      operation !== 'side-question'
   })
 }
