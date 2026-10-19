@@ -27,7 +27,8 @@ export function viewportToCell(scope: TerminalDocumentScope, clientX: number, cl
   }
   const point = viewportPoint(scope, clientX, clientY)
   const sx = (point.x - scope.panX) / total
-  const sy = (point.y - scope.panY) / total
+  const sy =
+    (point.y - scope.panY - (scope.pixelScrollActive ? scope.smoothScrollOffsetY : 0)) / total
   let col = Math.floor(sx / cellW)
   let viewportRow = Math.floor(sy / cellH)
   if (col < 0) {
@@ -39,8 +40,11 @@ export function viewportToCell(scope: TerminalDocumentScope, clientX: number, cl
   if (viewportRow < 0) {
     viewportRow = 0
   }
-  if (viewportRow > scope.term.rows - 1) {
-    viewportRow = scope.term.rows - 1
+  // Why: a grid shifted up by a fraction shows part of the row below its last one.
+  const lastRow =
+    scope.term.rows - 1 + (scope.pixelScrollActive && scope.smoothScrollOffsetY < 0 ? 1 : 0)
+  if (viewportRow > lastRow) {
+    viewportRow = lastRow
   }
   const viewportY = scope.term.buffer.active.viewportY
   return { col: col, row: viewportRow + viewportY }

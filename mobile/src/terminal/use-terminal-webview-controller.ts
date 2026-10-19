@@ -14,6 +14,7 @@ import { dispatchTerminalWebViewNotification } from './terminal-webview-notifica
 import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 import { useTerminalWebViewReadyPromises } from './terminal-webview-ready-promises'
 import { createTerminalWriteCoalescer } from './terminal-write-coalescer'
+import { useTerminalWheelProfile } from './use-terminal-wheel-profile'
 
 /**
  * Everything `TerminalWebView` does that is not about `react-native-webview`.
@@ -52,6 +53,7 @@ export function useTerminalWebViewController(
 ) {
   const {
     terminalTheme,
+    tuiWheelProfile = 'one-row',
     textScale = 1,
     onWebReady,
     onEngineError,
@@ -98,6 +100,12 @@ export function useTerminalWebViewController(
     [post]
   )
 
+  const announceWheelProfile = useTerminalWheelProfile(
+    tuiWheelProfile,
+    isWebReadyRef,
+    sendToDocument
+  )
+
   const flushPendingMessages = useCallback(() => {
     pendingMessages.flush(sendToDocument)
   }, [pendingMessages, sendToDocument])
@@ -138,9 +146,12 @@ export function useTerminalWebViewController(
       // Why: reload clears queued commands, so readiness must always restore the
       // native-selected theme even when its value did not change in React.
       sendToDocument({ type: 'set-theme', terminalTheme })
+      // Why: a reloaded document has forgotten the pane's program as well.
+      announceWheelProfile()
       flushPendingMessages()
     },
     [
+      announceWheelProfile,
       clearEngineError,
       clearWebReadyWatchdog,
       flushPendingMessages,

@@ -3,6 +3,9 @@ import type { TerminalDocumentScope } from './document-scope'
 import { ESC } from './escape-introducers'
 import { viewportToMouseReportCell } from './mouse-report-cell'
 
+/** The most wheel or arrow reports one scroll writes to the program. */
+export const MAX_TUI_SCROLL_REPORTS = 32
+
 export function isAlternateBufferActive(scope: TerminalDocumentScope) {
   try {
     return !!(
@@ -191,7 +194,7 @@ export function buildMouseWheelScrollInput(
   clientX: number,
   clientY: number
 ) {
-  const count = Math.min(Math.abs(lines), 32)
+  const count = Math.min(Math.abs(lines), MAX_TUI_SCROLL_REPORTS)
   if (count === 0) {
     return ''
   }
@@ -208,7 +211,7 @@ export function buildTuiScrollInput(
   clientX: number,
   clientY: number
 ) {
-  const count = Math.min(Math.abs(lines), 32)
+  const count = Math.min(Math.abs(lines), MAX_TUI_SCROLL_REPORTS)
   if (count === 0) {
     return ''
   }
@@ -243,6 +246,9 @@ export function routeScrollLines(
     // scrollback, even if the app stays on the normal buffer.
     const mouseInput = buildMouseWheelScrollInput(scope, lines, clientX, clientY)
     if (mouseInput) {
+      // Why: Claude Code reads a report's rows from the gap since the last one (tui-wheel-pacing).
+      scope.lastTuiWheelReportAt = performance.now()
+      scope.term.beginRemoteScrollPresentation?.(lines)
       notify(scope, { type: 'terminal-input', bytes: mouseInput })
       return
     }
@@ -251,6 +257,7 @@ export function routeScrollLines(
     // scrollback/no-op while a mouse-aware app owns scroll gestures.
     const fallbackInput = buildTuiScrollInput(scope, lines, clientX, clientY)
     if (fallbackInput) {
+      scope.term.beginRemoteScrollPresentation?.(lines)
       notify(scope, { type: 'terminal-input', bytes: fallbackInput })
     }
     return
@@ -260,6 +267,7 @@ export function routeScrollLines(
     // scrollback there, so mobile scroll gestures must become terminal input.
     const input = buildTuiScrollInput(scope, lines, clientX, clientY)
     if (input) {
+      scope.term.beginRemoteScrollPresentation?.(lines)
       notify(scope, { type: 'terminal-input', bytes: input })
     }
     return

@@ -1,3 +1,4 @@
+import type { TuiWheelProfile } from './document/tui-wheel-pacing'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
@@ -86,6 +87,8 @@ export type TerminalSelectionEvents = {
 export type TerminalWebViewProps = {
   style?: StyleProp<ViewStyle>
   terminalTheme?: MobileTerminalTheme
+  // Why: how the pane's program reads a wheel report decides how touch scrolling reports to it.
+  tuiWheelProfile?: TuiWheelProfile
   // Why: baseline zoom multiplier applied on top of fit-to-width scale; raw
   // xterm fontSize alone cannot drive apparent size because fitting cancels it.
   textScale?: number

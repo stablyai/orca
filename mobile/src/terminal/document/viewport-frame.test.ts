@@ -9,6 +9,7 @@ import { viewportToMouseReportCell } from './mouse-report-cell'
 import { handleDragMove } from './selection-overlay'
 import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-markup'
 import { viewportToCell } from './viewport-cell'
+import { cellToViewportPx } from './cell-geometry'
 import { computeFitScale } from './viewport-transform'
 
 /** The session header above the page's terminal, in CSS px; the WebView has none above it. */
@@ -88,6 +89,28 @@ const pageHost = (): TerminalDocumentHost => ({
 })
 
 describe("the document's frame on the page", () => {
+  it('keeps a selected cell under the finger after fractional scroll, zoom and pan', () => {
+    const scope = scopeWithGrid(pageHost())
+    scope.pixelScrollActive = true
+    scope.smoothScrollOffsetY = -8
+    scope.userScale = 1.5
+    scope.panX = 12
+    scope.panY = 5
+    const pixel = cellToViewportPx(scope, 4, 10)
+    const hit = viewportToCell(scope, pixel.x + 1, HEADER + pixel.y + 1)
+    expect(hit).toEqual({ col: 4, row: 10 })
+    expect(pixel.y).toBe(10 * CELL.height * 1.5 + 5 - 8)
+  })
+
+  it('can select the partially visible row below the logical grid during fractional scrolling', () => {
+    const scope = scopeWithGrid()
+    scope.pixelScrollActive = true
+    scope.smoothScrollOffsetY = -8
+    expect(viewportToCell(scope, 30, 40 * CELL.height - 4)).toEqual({ col: 4, row: 40 })
+    scope.smoothScrollOffsetY = 0
+    expect(viewportToCell(scope, 30, 40 * CELL.height - 4)).toEqual({ col: 4, row: 39 })
+  })
+
   it('maps a tap below a header to the cell the WebView reports for the same spot', () => {
     // Row 10, column 4 of the grid: at (30, 150) in the WebView, and HEADER lower on the page.
     const native = viewportToCell(scopeWithGrid(), 30, 150)
