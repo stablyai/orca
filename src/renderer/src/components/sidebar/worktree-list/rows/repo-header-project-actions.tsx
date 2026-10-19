@@ -70,15 +70,20 @@ export type RepoHeaderProjectActions = {
 
 export function RepoHeaderProjectActionsMenu({
   repo,
+  projectGroupRepo,
   label,
   projectGroups,
   actions
 }: {
   repo: Repo
+  /** The member row whose Project Group places this header, when it is not `repo`. */
+  projectGroupRepo?: Repo
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
 }): React.JSX.Element {
+  // Why: group actions follow the row that put the project in its group, so they match where it is drawn.
+  const groupRepo = projectGroupRepo ?? repo
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -150,8 +155,8 @@ export function RepoHeaderProjectActionsMenu({
               {projectGroups.map((group) => (
                 <DropdownMenuItem
                   key={group.id}
-                  disabled={repo.projectGroupId === group.id}
-                  onSelect={() => actions.onMoveProjectToGroup(repo, group.id)}
+                  disabled={groupRepo.projectGroupId === group.id}
+                  onSelect={() => actions.onMoveProjectToGroup(groupRepo, group.id)}
                 >
                   <span className="max-w-48 truncate">{group.name}</span>
                 </DropdownMenuItem>
@@ -159,8 +164,8 @@ export function RepoHeaderProjectActionsMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         ) : null}
-        {repo.projectGroupId ? (
-          <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(repo)}>
+        {groupRepo.projectGroupId ? (
+          <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(groupRepo)}>
             <CircleX className="size-3.5" />
             {translate('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>
