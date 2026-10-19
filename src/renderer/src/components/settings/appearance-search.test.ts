@@ -14,7 +14,7 @@ describe('getLanguageEntries', () => {
     await i18n.changeLanguage('en')
   })
 
-  it.each(['en', 'zh', 'ko', 'ja', 'es', 'fr'])(
+  it.each(['en', 'zh', 'zh-Hant', 'ko', 'ja', 'es', 'fr'])(
     'indexes every native word for "language" under the %s UI locale',
     async (locale) => {
       await i18n.changeLanguage(locale)

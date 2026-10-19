@@ -222,6 +222,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
 export const NATIVE_PICKER_LABELS = {
   zh: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -229,6 +230,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   ko: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -236,6 +238,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   ja: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -243,6 +246,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   es: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',
@@ -250,6 +254,7 @@ export const NATIVE_PICKER_LABELS = {
   },
   fr: {
     chinese: '中文（简体）',
+    chineseTraditional: '中文（繁體）',
     korean: '한국어',
     japanese: '日本語',
     spanish: 'Español',

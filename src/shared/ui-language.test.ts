@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_JAPANESE,
@@ -16,6 +17,7 @@ describe('normalizeUiLanguage', () => {
     expect(normalizeUiLanguage(UI_LANGUAGE_SYSTEM)).toBe('system')
     expect(normalizeUiLanguage(UI_LANGUAGE_ENGLISH)).toBe('en')
     expect(normalizeUiLanguage(UI_LANGUAGE_CHINESE)).toBe('zh')
+    expect(normalizeUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)).toBe('zh-Hant')
     expect(normalizeUiLanguage(UI_LANGUAGE_KOREAN)).toBe('ko')
     expect(normalizeUiLanguage(UI_LANGUAGE_JAPANESE)).toBe('ja')
     expect(normalizeUiLanguage(UI_LANGUAGE_SPANISH)).toBe('es')
