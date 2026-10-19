@@ -20,7 +20,7 @@ import {
 } from './hosted-review-link-mutation'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
-import { findRepoForHost } from '../../repo-host-identity'
+import { findWorktreeRepo } from '../../../github/linked-pr-repository'
 
 export function createUpdateWorktreeGitIdentity(
   set: WorktreeSliceSet,
@@ -63,11 +63,7 @@ export function createUpdateWorktreeGitIdentity(
           canonicalHostedReviewBranchIdentity(nextBranch) !==
           canonicalHostedReviewBranchIdentity(worktree.branch)
         const branchSwitchClear = hostedReviewBranchChanged
-          ? getBranchSwitchHostedReviewClear(
-              worktree,
-              findRepoForHost(s.repos, repoId, { hostId: worktree.hostId, settings: s.settings }) ??
-                undefined
-            )
+          ? getBranchSwitchHostedReviewClear(worktree, findWorktreeRepo(s.repos, worktree))
           : null
         if (branchSwitchClear) {
           shouldPersistHostedReviewClear = true

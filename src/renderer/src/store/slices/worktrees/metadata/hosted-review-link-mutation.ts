@@ -61,7 +61,7 @@ export function getBranchSwitchHostedReviewClear(
   repo?: Repo
 ): HostedReviewLinkClear | null {
   const hasPushTarget = worktree.pushTarget !== undefined
-  if (repo && getLinkedGitHubPRRepository(worktree, repo)) {
+  if (getLinkedGitHubPRRepository(worktree, repo)) {
     return hasPushTarget ? CLEARED_PUSH_TARGET_UPDATES : null
   }
   return hasHostedReviewLinks(worktree) || hasPushTarget ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : null

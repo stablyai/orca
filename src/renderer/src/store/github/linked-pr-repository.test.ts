@@ -11,6 +11,7 @@ import { isStaleMergedGitHubReviewForHead } from '../slices/hosted-review-cache-
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { buildPRRefreshCandidate, isStaleExactLinkedPRLookup } from './worktree-refresh'
 import {
+  findWorktreeRepo,
   findLinkedGitHubPRRepository,
   foundPRForLinkedRepository,
   getLinkedGitHubPRRepository,
@@ -118,6 +119,43 @@ describe('getLinkedGitHubPRRepository', () => {
     }
     expect(findLinkedGitHubPRRepository(state, local, 'main', 2383)).toEqual(FRONTEND)
     expect(findLinkedGitHubPRRepository(state, remote, 'main', 2383)).toEqual(FRONTEND)
+  })
+})
+
+describe('findWorktreeRepo', () => {
+  const local = { ...repo, executionHostId: 'local' as const }
+  const paired = { ...repo, executionHostId: 'runtime:env-1' as const, connectionId: 'target' }
+  const at = (owner: Partial<Worktree>) => linkedRow(FRONTEND_URL, owner)
+
+  it('reads each row under its own host, including SSH behind a paired server', () => {
+    const repos = [local, paired]
+    expect(findWorktreeRepo(repos, at({ hostId: 'local' }))).toBe(local)
+    expect(
+      findWorktreeRepo(repos, at({ hostId: 'ssh:target', runtimeOwnerEnvironmentId: 'env-1' }))
+    ).toBe(paired)
+    // A pre-host row resolves only when its repo id has a single owner.
+    expect(findWorktreeRepo([local], at({}))).toBe(local)
+    expect(findWorktreeRepo(repos, at({}))).toBeUndefined()
+  })
+
+  it('a row on a second host is judged against that host’s repository', () => {
+    // Same repo id on two hosts; the paired one is relayto-frontend itself.
+    const frontend = {
+      ...paired,
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/relayto/relayto-frontend',
+        remoteName: 'origin',
+        remoteUrl: 'git@github.com:relayto/relayto-frontend.git'
+      }
+    }
+    const remoteRow = at({ hostId: 'runtime:env-1', runtimeOwnerEnvironmentId: 'env-1' })
+    const store = createTestStore()
+    store.setState({ repos: [local, frontend], worktreesByRepo: { [repo.id]: [remoteRow] } })
+
+    expect(buildPRRefreshCandidate(store.getState(), remoteRow)).not.toHaveProperty(
+      'linkedPRRepository'
+    )
+    expect(isStaleExactLinkedPRLookup(store.getState(), remoteRow.id, 2383, null)).toBe(false)
   })
 })
 
@@ -252,6 +290,22 @@ describe('repository identity in renderer review caches', () => {
 
     await expect(fetchRowReview()).resolves.toBeNull()
     expect(store.getState().hostedReviewCache[cacheKey]?.data).toBeNull()
+  })
+
+  it('does not cache a review that finished after the row moved its link elsewhere', async () => {
+    const pending = Promise.withResolvers<ReturnType<typeof reviewFrom> | null>()
+    mockApi.hostedReview.forBranch.mockReturnValueOnce(pending.promise)
+
+    const request = fetchRowReview()
+    store.setState({
+      worktreesByRepo: {
+        [repo.id]: [linkedRow('https://github.com/relayto/relayto-api/pull/2383')]
+      }
+    })
+    pending.resolve(reviewFrom('relayto/relayto-frontend'))
+    await request
+
+    expect(store.getState().hostedReviewCache[cacheKey]).toBeUndefined()
   })
 
   it('applies the same guards to direct PR lookups and cached PRs', () => {

@@ -8,7 +8,7 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { getLinkedGitHubPRRepository } from '../../../github/linked-pr-repository'
+import { findWorktreeRepo, getLinkedGitHubPRRepository } from '../../../github/linked-pr-repository'
 
 export const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 
@@ -75,20 +75,21 @@ export async function resolveGitLabReviewPushTarget(
  * PR linked from another repository would name this repository's unrelated PR.
  */
 function isLinkedFromOtherRepository(worktree: Worktree, repo: Repo | undefined): boolean {
-  return Boolean(repo && getLinkedGitHubPRRepository(worktree, repo))
+  return getLinkedGitHubPRRepository(worktree, repo) !== null
 }
 
 /** The PR number an update links, when Push should target that PR's head branch. */
 export function pushTargetPR(
   worktree: Worktree | undefined,
   updates: Partial<WorktreeMeta>,
-  repo: Repo | undefined
+  repos: readonly Repo[]
 ): number | null {
   const linkedPR = updates.linkedPR
   if (!isPositiveHostedReviewNumber(linkedPR)) {
     return null
   }
-  return worktree && isLinkedFromOtherRepository({ ...worktree, ...updates }, repo)
+  return worktree &&
+    isLinkedFromOtherRepository({ ...worktree, ...updates }, findWorktreeRepo(repos, worktree))
     ? null
     : linkedPR
 }
@@ -97,8 +98,9 @@ export function pushTargetPR(
 export function isHostedReviewPushTargetStale(
   worktree: Worktree,
   updates: Partial<WorktreeMeta>,
-  repo: Repo | undefined
+  repos: readonly Repo[]
 ): boolean {
+  const repo = findWorktreeRepo(repos, worktree)
   const existing = getHostedReviewPushTargetLookup(worktree, repo)
   return (
     existing !== null &&

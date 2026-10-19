@@ -34,6 +34,7 @@ import {
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
 import {
+  isLinkMovedToOtherRepository,
   reviewForLinkedRepository,
   withLinkedGitHubPRRepository
 } from '../github/linked-pr-repository'
@@ -224,7 +225,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   ...args
                 })
           const review = reviewForLinkedRepository(lookedUp, hints?.linkedGitHubPRRepository)
-          if (requestGenerations.get(cacheKey) === generation) {
+          // Why: the row may have relinked this number to another repository meanwhile.
+          const relinked = isLinkMovedToOtherRepository(get(), repo, branch, options, hints)
+          if (requestGenerations.get(cacheKey) === generation && !relinked) {
             set((state) => {
               if (
                 hasNewerHostedReviewCacheEntry(

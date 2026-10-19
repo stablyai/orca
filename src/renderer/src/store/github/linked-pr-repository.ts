@@ -12,16 +12,47 @@ import {
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments'
 import { isWorkspaceRepositoryAttachment } from '@/components/sidebar/worktree-attachment-editing'
 import type { LinkedReviewHints } from '../slices/hosted-review-cache-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host'
+import {
+  findIndexedRepoOwnerForHost,
+  resolveIndexedRepoOwner
+} from '@/lib/worktree-runtime-owner-index'
 import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
 } from '../slices/worktrees/listing/worktree-host-ownership'
 
 /**
+ * The row's own Repo. SSH rows reached through a paired server live under that
+ * server's runtime host; pre-host rows only under a repo id's single owner.
+ */
+export function findWorktreeRepo(
+  repos: readonly Repo[] | undefined,
+  worktree: Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+): Repo | undefined {
+  let hostId = worktree.runtimeOwnerEnvironmentId
+    ? toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
+    : normalizeExecutionHostId(worktree.hostId)
+  if (!hostId) {
+    const only = resolveIndexedRepoOwner(repos, worktree.repoId)
+    if (only.kind !== 'resolved') {
+      return undefined
+    }
+    hostId = getRepoExecutionHostId(only.owner)
+  }
+  return findIndexedRepoOwnerForHost(repos, worktree.repoId, hostId) ?? undefined
+}
+
+/**
  * The repository of the row's selected GitHub PR when its stored URL points
  * outside the row's own repository. Null (bare numbers, same-repo URLs) keeps
  * the lookup against the row's remotes; the host re-checks against its remotes.
+ * Without a known repo a URL link counts as another repository's, so destructive
+ * rules (branch-switch clears, push targets) fail closed.
  */
 export function getLinkedGitHubPRRepository(
   worktree: Worktree,
@@ -142,4 +173,26 @@ export function isCachedPRForLinkedRepository(
   return linkedPRRepository
     ? isPRFromRepository(pr.url, linkedPRRepository)
     : pr.linkedFromOtherRepository !== true
+}
+
+function repositoryKey(repository: GitHubOwnerRepo | null | undefined): string | null {
+  return repository ? githubRepoIdentityKey(repository) : null
+}
+
+/** Whether the branch's row moved a branch lookup's link to another repository while it ran. */
+export function isLinkMovedToOtherRepository(
+  state: Pick<AppState, 'worktreesByRepo' | 'repos'>,
+  repo: Repo | undefined,
+  branch: string,
+  requested: (LinkedReviewHints & { exactReviewKey?: string }) | undefined,
+  sent: LinkedReviewHints | undefined
+): boolean {
+  if (requested?.exactReviewKey) {
+    return false
+  }
+  const current = withLinkedGitHubPRRepository(state, repo, branch, requested)
+  return (
+    repositoryKey(current?.linkedGitHubPRRepository) !==
+    repositoryKey(sent?.linkedGitHubPRRepository)
+  )
 }

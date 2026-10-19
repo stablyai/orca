@@ -10,7 +10,11 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
-import { getHostedReviewPushTargetLookup } from './worktrees/metadata/hosted-review-push-target'
+import {
+  getHostedReviewPushTargetLookup,
+  pushTargetPR
+} from './worktrees/metadata/hosted-review-push-target'
+import { findWorktreeRepo } from '../github/linked-pr-repository'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
@@ -160,5 +164,26 @@ describe('a PR linked from another repository', () => {
     })
     expect(store.getState().worktreesByRepo.repo1[0].pushTarget).toBeUndefined()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'an SSH checkout behind a paired server',
+      [{ ...repo, executionHostId: 'runtime:env-1' as const, connectionId: 'target' }],
+      { hostId: 'ssh:target' as const, runtimeOwnerEnvironmentId: 'env-1' }
+    ],
+    // Without its Repo the row cannot prove the URL is its own, so nothing destructive runs.
+    ['a row whose repository is unknown', [], {}]
+  ])('keeps the link and derives no push target for %s', async (_label, repos, owner) => {
+    const store = createTestStore()
+    const linked = { ...row(OTHER_REPO_PR), ...owner }
+    store.setState({ repos, worktreesByRepo: { repo1: [linked] } })
+
+    store.getState().updateWorktreeGitIdentity('repo1::/path/wt1', { branch: 'refs/heads/other' })
+    await Promise.resolve()
+
+    expect(store.getState().worktreesByRepo.repo1[0].linkedPR).toBe(2383)
+    expect(pushTargetPR(linked, { linkedPR: 2383 }, repos)).toBeNull()
+    expect(getHostedReviewPushTargetLookup(linked, findWorktreeRepo(repos, linked))).toBeNull()
   })
 })

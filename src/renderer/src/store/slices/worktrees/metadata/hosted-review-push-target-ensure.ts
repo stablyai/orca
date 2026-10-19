@@ -5,7 +5,7 @@ import {
   hostedReviewPushTargetLookupsInFlight
 } from './hosted-review-push-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { findRepoForHost } from '../../repo-host-identity'
+import { findWorktreeRepo } from '../../../github/linked-pr-repository'
 
 export function createEnsureHostedReviewPushTarget(
   _set: WorktreeSliceSet,
@@ -16,11 +16,7 @@ export function createEnsureHostedReviewPushTarget(
     if (!worktree || worktree.pushTarget) {
       return
     }
-    const repo =
-      findRepoForHost(get().repos, worktree.repoId, {
-        hostId: worktree.hostId,
-        settings: get().settings
-      }) ?? undefined
+    const repo = findWorktreeRepo(get().repos, worktree)
     const lookup = getHostedReviewPushTargetLookup(worktree, repo)
     if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return
