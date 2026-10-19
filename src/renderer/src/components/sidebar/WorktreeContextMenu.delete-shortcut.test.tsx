@@ -100,7 +100,7 @@ const defaultStoreState = {
   ptyIdsByTabId: {},
   browserTabsByWorktree: {},
   worktreesByRepo: {},
-  repos: []
+  repos: ['repo', 'repo-1'].map((id) => ({ id, name: id, displayName: id }))
 }
 
 vi.mock('@/store', () => ({
