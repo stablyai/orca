@@ -41,12 +41,21 @@ function oscLinkAt(terminal: Terminal, row: number, col: number): OscLinkData | 
 
 describe('OSC 8 hyperlink snapshot round-trip', () => {
   it('exports displayed OSC 8 underlines without adding them to ANSI snapshots', async () => {
-    const terminal = new BrowserTerminal({ cols: 20, rows: 1, allowProposedApi: true, linkUnderlines: true })
+    const terminal = new BrowserTerminal({
+      cols: 20,
+      rows: 1,
+      allowProposedApi: true,
+      linkUnderlines: true
+    })
     const addon = new SerializeAddon()
     terminal.loadAddon(addon)
     try {
-      await new Promise<void>((resolve) => terminal.write('\x1b]8;;https://example.com\x1b\\linked\x1b]8;;\x1b\\', resolve))
-      expect(addon.serializeAsHTML()).toContain('text-decoration: underline dashed;')
+      await new Promise<void>((resolve) =>
+        terminal.write('\x1b]8;;https://example.com\x1b\\linked\x1b]8;;\x1b\\', resolve)
+      )
+      expect(addon.serializeAsHTML()).toMatch(
+        /<span style='[^']*text-decoration: underline[^']*'>linked<\/span>/
+      )
       expect(addon.serialize()).not.toContain('\x1b[4:5m')
       terminal.options.linkUnderlines = false
       expect(addon.serializeAsHTML()).not.toContain('text-decoration:')
@@ -75,9 +84,18 @@ describe('OSC 8 hyperlink snapshot round-trip', () => {
         restored = await replay(snapshot)
         expect(restored.buffer.active.getLine(0)?.translateToString(true)).toBe('0.1.2.3.')
         for (const [index, style] of [0, 1, 2, 3].entries()) {
-          const cell = restored.buffer.active.getLine(0)?.getCell(index * 2) as unknown as {
-            fg: number
-            extended: { _ext: number }
+          const cell = restored.buffer.active.getLine(0)?.getCell(index * 2)
+          if (
+            !cell ||
+            !('fg' in cell) ||
+            typeof cell.fg !== 'number' ||
+            !('extended' in cell) ||
+            typeof cell.extended !== 'object' ||
+            cell.extended === null ||
+            !('_ext' in cell.extended) ||
+            typeof cell.extended._ext !== 'number'
+          ) {
+            throw new Error('Replay cell has no raw attributes')
           }
           expect((cell.fg & (1 << 28)) !== 0).toBe(style !== 0)
           expect((cell.extended._ext >>> 26) & 7).toBe(style)

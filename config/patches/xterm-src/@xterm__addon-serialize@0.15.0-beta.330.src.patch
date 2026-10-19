@@ -1,5 +1,5 @@
 diff --git a/src/SerializeAddon.ts b/src/SerializeAddon.ts
-index 1bfa6f01567b50437cd7bdbd83ba17cd79af83af..80613e95d978f883ae5593185241683f175c9607 100644
+index 1bfa6f01567b50437cd7bdbd83ba17cd79af83af..dfe24ed4718599477601ca438e09b08490338846 100644
 --- a/src/SerializeAddon.ts
 +++ b/src/SerializeAddon.ts
 @@ -5,12 +5,71 @@
@@ -311,3 +311,14 @@ index 1bfa6f01567b50437cd7bdbd83ba17cd79af83af..80613e95d978f883ae5593185241683f
      return content;
    }
  
+@@ -743,7 +881,9 @@ export class HTMLSerializeHandler extends BaseSerializeHandler {
+ 
+     const fgChanged = !equalFg(cell, oldCell);
+     const bgChanged = !equalBg(cell, oldCell);
+-    const flagsChanged = !equalFlags(cell, oldCell);
++    const flagsChanged = !equalFlags(cell, oldCell)
++      || cell.isUnderline() !== oldCell.isUnderline()
++      || cell.getUnderlineStyle() !== oldCell.getUnderlineStyle();
+ 
+     if (fgChanged || bgChanged || flagsChanged) {
+       const fgHexColor = this._getHexColor(cell, true);

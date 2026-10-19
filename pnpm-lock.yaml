@@ -179,7 +179,7 @@ patchedDependencies:
   '@xterm/addon-image@0.10.0-beta.331': f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34
   '@xterm/addon-ligatures@0.11.0-beta.330': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.330': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
-  '@xterm/addon-serialize@0.15.0-beta.330': 98d1107254f5df8d2973067015be7f355d0e4a7bc295ae15a39e6277ab3ad6ba
+  '@xterm/addon-serialize@0.15.0-beta.330': e3485e370041ac21dda80aec43f88da72e0f27ba7ae577386ffd7bf6fe302e78
   '@xterm/addon-webgl@0.20.0-beta.329': 3ee97834cfea40170579a67787eca5795747dde9e7580400ed124a4061027f45
   '@xterm/xterm@6.1.0-beta.336': ea4c517a8355b6fb8f7ff542061180c86eb32ecc52e264ca3b45014e0cad3621
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
@@ -214,7 +214,7 @@ importers:
         version: 2.5.6
       '@xterm/addon-serialize':
         specifier: 0.15.0-beta.330
-        version: 0.15.0-beta.330(patch_hash=98d1107254f5df8d2973067015be7f355d0e4a7bc295ae15a39e6277ab3ad6ba)(@xterm/xterm@6.1.0-beta.336(patch_hash=ea4c517a8355b6fb8f7ff542061180c86eb32ecc52e264ca3b45014e0cad3621))
+        version: 0.15.0-beta.330(patch_hash=e3485e370041ac21dda80aec43f88da72e0f27ba7ae577386ffd7bf6fe302e78)(@xterm/xterm@6.1.0-beta.336(patch_hash=ea4c517a8355b6fb8f7ff542061180c86eb32ecc52e264ca3b45014e0cad3621))
       '@xterm/headless':
         specifier: 6.1.0-beta.334
         version: 6.1.0-beta.334
@@ -11154,7 +11154,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.336(patch_hash=ea4c517a8355b6fb8f7ff542061180c86eb32ecc52e264ca3b45014e0cad3621)
 
-  '@xterm/addon-serialize@0.15.0-beta.330(patch_hash=98d1107254f5df8d2973067015be7f355d0e4a7bc295ae15a39e6277ab3ad6ba)(@xterm/xterm@6.1.0-beta.336(patch_hash=ea4c517a8355b6fb8f7ff542061180c86eb32ecc52e264ca3b45014e0cad3621))':
+  '@xterm/addon-serialize@0.15.0-beta.330(patch_hash=e3485e370041ac21dda80aec43f88da72e0f27ba7ae577386ffd7bf6fe302e78)(@xterm/xterm@6.1.0-beta.336(patch_hash=ea4c517a8355b6fb8f7ff542061180c86eb32ecc52e264ca3b45014e0cad3621))':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.336(patch_hash=ea4c517a8355b6fb8f7ff542061180c86eb32ecc52e264ca3b45014e0cad3621)
 
