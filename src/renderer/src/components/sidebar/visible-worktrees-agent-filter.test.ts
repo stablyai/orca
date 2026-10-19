@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
   return {
@@ -145,5 +146,28 @@ describe('computeVisibleWorktreeIds agent filter', () => {
     )
 
     expect(result).toEqual([claudeCreated.id, other.id])
+  })
+
+  it('does not apply one host terminal evidence to the other host workspace', () => {
+    const sharedId = 'wt-shared'
+    const local = { ...makeWorktree(sharedId), hostId: 'local' as const }
+    const ssh = { ...makeWorktree(sharedId), hostId: 'ssh:box' as const }
+    const claudeTab = {
+      ...makeTab('tab-claude', sharedId, 'pty-1'),
+      launchAgent: 'claude' as const
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [local, ssh] },
+      [sharedId],
+      visibleOptions({
+        filterAgentIds: ['claude'],
+        visibleWorkspaceHostIds: ['ssh:box'],
+        tabsByWorktree: { [sharedId]: [claudeTab] },
+        agentTypesByWorktree: { [getWorktreeHostIdentity(local)]: ['claude'] }
+      })
+    )
+
+    expect(result).toEqual([])
   })
 })
