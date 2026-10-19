@@ -8,6 +8,7 @@ import { useNativeChatRetainedSession } from './use-native-chat-retained-session
 import { isNativeChatTranscriptUnsettled } from './native-chat-live-session-contract'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatComposerInsertHost } from './native-chat-composer-insert-context'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -24,7 +25,7 @@ import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-ca
 import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
+import { useNativeChatWorkingEpochSync } from './use-native-chat-working-epoch-sync'
 import { resolveNativeChatTerminalTurn } from './native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
 import {
@@ -274,24 +275,13 @@ export function NativeChatResolvedView({
   const viewState = selectNativeChatViewState(sessionWithPending)
 
   const isConversation = viewState.kind === 'ready'
-  useEffect(() => {
-    if (
-      shouldClearNativeChatWorkingSuppression({
-        working: liveWorking,
-        interrupted: workingInterrupted,
-        workingEpoch: hookWorkingEpoch,
-        previousWorkingEpoch: previousWorkingEpochRef.current
-      })
-    ) {
-      setWorkingInterrupted(false)
-    }
-    if (liveWorking && hookWorkingEpoch != null) {
-      previousWorkingEpochRef.current = hookWorkingEpoch
-    }
-    if (!liveWorking) {
-      previousWorkingEpochRef.current = null
-    }
-  }, [liveWorking, workingInterrupted, hookWorkingEpoch])
+  useNativeChatWorkingEpochSync({
+    liveWorking,
+    workingInterrupted,
+    hookWorkingEpoch,
+    previousWorkingEpochRef,
+    setWorkingInterrupted
+  })
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,
     working: liveWorking,
@@ -383,18 +373,20 @@ export function NativeChatResolvedView({
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={agent} />
         ) : (
-          <NativeChatMessageList
-            ref={messageListRef}
-            session={sessionWithPending}
-            isVisible={isVisible}
-            isWorking={turnActive}
-            expandSignal={false}
-            {...turnTiming}
-            awaitingInput={awaitingInput}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks={fileLinkContext !== null}
-            deliveryNotices={deliveryNotices}
-          />
+          <NativeChatComposerInsertHost composerRef={composerRef}>
+            <NativeChatMessageList
+              ref={messageListRef}
+              session={sessionWithPending}
+              isVisible={isVisible}
+              isWorking={turnActive}
+              expandSignal={false}
+              {...turnTiming}
+              awaitingInput={awaitingInput}
+              onLinkClick={onLinkClick}
+              allowFileUriLinks={fileLinkContext !== null}
+              deliveryNotices={deliveryNotices}
+            />
+          </NativeChatComposerInsertHost>
         )}
       </div>
       {/* A collapsed card stays mounted but hidden, so a partly answered question survives. */}
