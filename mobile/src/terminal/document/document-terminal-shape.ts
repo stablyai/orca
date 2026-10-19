@@ -108,6 +108,10 @@ export type TerminalDocumentTerminal = {
   scrollLines: (amount: number) => void
   /** Shifts the drawn rows by a sub-row offset in unscaled CSS px; false when no renderer can. */
   setViewportPixelOffset?: (offset: number) => boolean
+  /** Shows the program's redraw for `lines` of wheel input sliding into place, where it can. */
+  beginRemoteScrollPresentation?: (lines: number) => void
+  /** Whether the touch that just landed only stopped such a slide. */
+  consumeRemoteScrollTouchCatch?: () => boolean
 }
 
 export type TerminalDocumentDisposable = { dispose?: () => void }

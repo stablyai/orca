@@ -41,6 +41,7 @@ async function buildEngineJs() {
         import { Unicode11Addon } from '@xterm/addon-unicode11'
         import { WebglAddon } from '@xterm/addon-webgl'
         import { createSmoothTerminal, createSmoothWebglAddon } from './src/terminal/smooth-viewport-renderer.mjs'
+        import { createRemoteScrollTerminal } from './src/terminal/remote-scroll-compositor.mjs'
 
         // Why: xterm reaches for these runtime APIs on the terminal-bringup path,
         // and esbuild lowers syntax but not runtime APIs. Guarded shims let the
@@ -70,7 +71,7 @@ async function buildEngineJs() {
           }
         }
 
-        window.Terminal = createSmoothTerminal(Terminal)
+        window.Terminal = createRemoteScrollTerminal(createSmoothTerminal(Terminal))
         window.Unicode11Addon = { Unicode11Addon }
         window.WebglAddon = { WebglAddon: createSmoothWebglAddon(WebglAddon) }
       `,

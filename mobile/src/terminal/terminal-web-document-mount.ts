@@ -14,6 +14,7 @@ import { terminalNerdFontCss } from './terminal-font-face-css.mjs'
 import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createSmoothTerminal, createSmoothWebglAddon } from './smooth-viewport-renderer.mjs'
+import { createRemoteScrollTerminal } from './remote-scroll-compositor.mjs'
 
 // Mount the native document factory with page-owned seams and fresh scope so overlapping terminals cannot share state.
 
@@ -25,9 +26,14 @@ export type TerminalWebDocument = {
 
 const STYLE_ELEMENT_ID = 'orca-terminal-document-style'
 
-// The page imports xterm itself rather than the WebView bundle, so wrap the same two classes.
-// Without them scrollback moves only in whole rows.
-const SmoothTerminal = createSmoothTerminal(Terminal)
+/**
+ * The engine with the scroll seams the WebView's bundle gives it.
+ *
+ * The page imports xterm itself rather than loading that bundle, so it wraps the same two classes
+ * here; without them its scrollback moves only in whole rows and a program's redraw jumps a row a
+ * wheel report.
+ */
+const SmoothTerminal = createRemoteScrollTerminal(createSmoothTerminal(Terminal))
 const SmoothWebglAddon = createSmoothWebglAddon(WebglAddon)
 
 const HOST_CLASS = 'orca-terminal-document-host'

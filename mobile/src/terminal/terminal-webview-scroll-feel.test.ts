@@ -34,6 +34,7 @@ describe('terminal WebView scroll feel', () => {
   let reports: { at: number; count: number; down: boolean; rows: number[] }[]
   let inputs: string[]
   let scrollLines: ReturnType<typeof vi.fn<(lines: number) => void>>
+  let presented: ReturnType<typeof vi.fn<(lines: number) => void>>
 
   function makeTerminal(): TerminalDocumentTerminal {
     let openedOn: HTMLElement | undefined
@@ -67,7 +68,8 @@ describe('terminal WebView scroll feel', () => {
       open(surface: HTMLElement) {
         openedOn = surface
       },
-      scrollLines
+      scrollLines,
+      beginRemoteScrollPresentation: presented
     }
   }
 
@@ -147,6 +149,7 @@ describe('terminal WebView scroll feel', () => {
     now = 1_000
     reports = []
     inputs = []
+    presented = vi.fn<(lines: number) => void>()
     scrollLines = vi.fn<(lines: number) => void>((lines) => {
       buffer.viewportY = Math.max(0, Math.min(buffer.baseY, buffer.viewportY + lines))
     })
@@ -390,5 +393,32 @@ describe('terminal WebView scroll feel', () => {
     fireTouch('touchend', null)
     runFrames(30)
     expect(type === 'normal' ? scrolledRows() : inputs.join('').length).toBeGreaterThan(before)
+  })
+
+  it.each(['one-row', 'codex'] as const)(
+    'asks the renderer to present each %s wheel write it sends a program',
+    (profile) => {
+      bootWheelProgram(profile)
+      fireTouch('touchstart', { x: 40, y: 400 })
+      drag(400, 30, 4)
+      // Each write names the rows the finger moved, toward the newest row as a positive count.
+      expect(presented.mock.calls.map(([lines]) => lines)).toEqual(reports.map((r) => r.count))
+      expect(presented).toHaveBeenCalledTimes(reports.length)
+    }
+  )
+
+  it('asks the renderer to present arrow scrolling sent to an alternate-screen program', () => {
+    bootRestingCase('alternate')
+    fireTouch('touchstart', { x: 40, y: 400 })
+    drag(400, 30, 2)
+    expect(presented.mock.calls.map(([lines]) => lines)).toEqual([2, 2])
+  })
+
+  it('leaves scrollback of the normal buffer to the renderer of its own', () => {
+    bootRestingCase('normal')
+    fireTouch('touchstart', { x: 40, y: 400 })
+    drag(400, 30, 2)
+    expect(scrolledRows()).toBe(4)
+    expect(presented).not.toHaveBeenCalled()
   })
 })

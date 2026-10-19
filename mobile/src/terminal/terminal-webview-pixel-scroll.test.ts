@@ -243,4 +243,31 @@ describe('terminal WebView pixel scrolling of the normal buffer', () => {
     }
     expect(drawnOffset()).toBe(0)
   })
+
+  it('lets a touch that stops a program scroll slide only stop it, then taps again', () => {
+    let caught = true
+    Object.assign(window, {
+      Terminal: function () {
+        return Object.assign(makeTerminal(), {
+          consumeRemoteScrollTouchCatch() {
+            const value = caught
+            caught = false
+            return value
+          }
+        })
+      }
+    })
+    boot()
+    postMessage.mockClear()
+    const taps = () =>
+      postMessage.mock.calls.filter(([raw]) => JSON.parse(raw).type === 'terminal-tap')
+    fireTouch('touchstart', { x: 40, y: 400 })
+    now += 16
+    fireTouch('touchend', null)
+    expect(taps()).toHaveLength(0)
+    fireTouch('touchstart', { x: 40, y: 400 })
+    now += 16
+    fireTouch('touchend', null)
+    expect(taps()).toHaveLength(1)
+  })
 })

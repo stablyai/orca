@@ -331,6 +331,19 @@ describe('the engine the page builds', () => {
     terminal.dispose()
     mounted.dispose()
   })
+
+  it("carries the WebView engine's seams for a program's scroll slide", () => {
+    const mounted = mountTerminalWebDocument(plantHost(), () => {})
+    const terminal = mountedSeams[0]!.createTerminal!({ cols: 40, rows: 24 })
+
+    // Unopened, there is no WebGL frame to slide, so the input goes out with nothing presented.
+    expect(terminal.beginRemoteScrollPresentation).toBeTypeOf('function')
+    expect(() => terminal.beginRemoteScrollPresentation?.(3)).not.toThrow()
+    expect(terminal.consumeRemoteScrollTouchCatch?.()).toBe(false)
+
+    terminal.dispose()
+    mounted.dispose()
+  })
 })
 
 describe('a start that throws gives the host back', () => {
