@@ -1,6 +1,6 @@
 export const VOICE_CONTROL_ACTION_EVENT = 'voice-control:control'
 
-export type VoiceControlAction = 'toggle' | 'start' | 'stop'
+export type VoiceControlAction = 'toggle' | 'start' | 'stop' | 'toggle-mute'
 
 export function dispatchVoiceControlAction(action: VoiceControlAction): void {
   document.dispatchEvent(

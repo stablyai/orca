@@ -31,6 +31,7 @@ export const SETTINGS: VoiceControlSettings = {
   agentVoiceMode: 'per-agent',
   maxSessionMinutes: 0,
   idleSuspendMinutes: 0,
+  voiceSpeed: 1,
   customInstructions: ''
 }
 

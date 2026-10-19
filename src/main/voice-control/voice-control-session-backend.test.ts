@@ -501,6 +501,33 @@ describe('VoiceControlSessionBackendImpl', () => {
     )
   })
 
+  it('speaks replies that arrived while no session was live (wake-on-reply)', async () => {
+    const { deps, sent, transcript } = harness()
+    const backend = new VoiceControlSessionBackendImpl({
+      ...deps,
+      wakeMessages: [
+        {
+          id: 'm1',
+          fromHandle: 'term_abc',
+          type: 'worker_done',
+          subject: 'done',
+          body: 'login fix shipped',
+          senderPaneKey: PANE,
+          dispatchId: 'd1'
+        }
+      ]
+    })
+    backend.start()
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(JSON.stringify(sent.find((e) => e.type === 'conversation.item.create'))).toContain(
+      'login fix shipped'
+    )
+    expect(sent.some((e) => e.type === 'response.create')).toBe(true)
+    expect(transcript).toContainEqual(
+      expect.objectContaining({ kind: 'update', text: 'login fix shipped' })
+    )
+  })
+
   it('clears the pane chip with an idle event once the spoken reply settles', async () => {
     const { deps, sent, agentActivity } = harness({
       mail: [mailRow({ sender_pane_key: PANE, body: 'login fix shipped' })]

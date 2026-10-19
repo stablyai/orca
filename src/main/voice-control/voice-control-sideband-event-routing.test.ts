@@ -24,6 +24,8 @@ function harness() {
     observeEvent: (event) => {
       observed.push(event)
     },
+    hasOutstandingWork: () => false,
+    runId: () => 'run-1',
     dispose: () => {}
   }
   const toolActivity: VoiceControlToolActivityEvent[] = []

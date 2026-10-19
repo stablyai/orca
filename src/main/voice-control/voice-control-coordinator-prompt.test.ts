@@ -32,6 +32,14 @@ describe('buildCoordinatorInstructions', () => {
     expect(instructions).toContain('call it again right now')
   })
 
+  // Live feedback this guards: the ack-then-answer double utterance on instant reads and
+  // preambled relay updates read as oversharing next to hands-free assistants like AMP's.
+  it('trims chatter: no acks on instant reads, one-sentence relays', () => {
+    const instructions = buildCoordinatorInstructions({ roster: [], coordinatorVoice: 'marin' })
+    expect(instructions).toContain('skip the acknowledgment entirely')
+    expect(instructions).toContain('one sentence, outcome only')
+  })
+
   // Live failure this guards: "are you sure it's not done?" was "double-checked" by
   // re-running list_agents — the same surface that had just misled it — while the pane's
   // own last words ("Task complete. Summary of what was done…") would have settled it.

@@ -5,7 +5,7 @@ import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { Mic, Square, X } from 'lucide-react'
+import { Mic, MicOff, Square, X } from 'lucide-react'
 import { DictationGrapes } from '../dictation/DictationGrapes'
 import type { VoiceControlErrorKind } from '../../../../shared/voice-control-types'
 import { dispatchVoiceControlAction } from './voice-control-events'
@@ -13,6 +13,7 @@ import {
   setVoiceControlTranscriptPanelOpen,
   useVoiceControlErrorKind,
   useVoiceControlMicLevel,
+  useVoiceControlMicMuted,
   useVoiceControlOutputLevel,
   useVoiceControlState,
   useVoiceControlToolActivity,
@@ -79,6 +80,7 @@ export function VoiceControlIndicator() {
   const state = useVoiceControlState()
   const errorKind = useVoiceControlErrorKind()
   const toolActivity = useVoiceControlToolActivity()
+  const micMuted = useVoiceControlMicMuted()
   const micLevel = useVoiceControlMicLevel()
   const outputLevel = useVoiceControlOutputLevel()
   const transcriptPanelOpen = useVoiceControlTranscriptPanelOpen()
@@ -98,6 +100,15 @@ export function VoiceControlIndicator() {
   const transcriptToggleLabel = transcriptPanelOpen
     ? translate('auto.components.voice.control.VoiceControlIndicator.7423b7184a', 'Hide transcript')
     : translate('auto.components.voice.control.VoiceControlIndicator.de37e25e2e', 'Show transcript')
+  const muteLabel = micMuted
+    ? translate(
+        'auto.components.voice.control.VoiceControlIndicator.d666fd4996',
+        'Unmute microphone'
+      )
+    : translate(
+        'auto.components.voice.control.VoiceControlIndicator.c78204a814',
+        'Mute microphone'
+      )
 
   const isError = state === 'error'
   const label =
@@ -247,6 +258,27 @@ export function VoiceControlIndicator() {
               </span>
             ) : null}
             <span aria-hidden className="ml-0.5 h-4 w-px shrink-0 bg-border" />
+            {state === 'live' ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={muteLabel}
+                    aria-pressed={micMuted}
+                    className="shrink-0"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => dispatchVoiceControlAction('toggle-mute')}
+                  >
+                    {micMuted ? <MicOff className="size-3" /> : <Mic className="size-3" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {muteLabel}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

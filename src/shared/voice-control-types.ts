@@ -37,6 +37,8 @@ export type VoiceControlSettings = {
   maxSessionMinutes: number
   /** Suspend after this many quiet minutes (no speech, no tools) — the in-use cost lever. 0 = never. */
   idleSuspendMinutes: number
+  /** Coordinator speech rate — the provider's audio post-processing (0.25–1.5; 1 = normal). Applies to new sessions. */
+  voiceSpeed: number
   /** Free-form persona/style notes appended after the core instructions; applies to new sessions. */
   customInstructions: string
 }

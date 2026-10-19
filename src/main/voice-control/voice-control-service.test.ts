@@ -26,6 +26,7 @@ const SETTINGS: VoiceControlSettings = {
   maxSessionMinutes: 0,
   // 0 disables idle auto-suspend so only the dedicated tests arm that timer.
   idleSuspendMinutes: 0,
+  voiceSpeed: 1,
   customInstructions: ''
 }
 
@@ -73,13 +74,19 @@ function fakeBackendFactory() {
     disposed: boolean
     toolCalls: { name: string; args: string; callId: string }[]
     observed: Record<string, unknown>[]
+    outstanding: boolean
+    runId: string
   } = {
     started: false,
     disposed: false,
     toolCalls: [],
-    observed: []
+    observed: [],
+    outstanding: false,
+    runId: 'run-1'
   }
-  const create: VoiceControlServiceDeps['createBackend'] = () => {
+  const createCalls: Parameters<VoiceControlServiceDeps['createBackend']>[0][] = []
+  const create: VoiceControlServiceDeps['createBackend'] = (args) => {
+    createCalls.push(args)
     const backend: VoiceControlSessionBackend = {
       start: () => {
         state.started = true
@@ -91,13 +98,15 @@ function fakeBackendFactory() {
       observeEvent: (event) => {
         state.observed.push(event)
       },
+      hasOutstandingWork: () => state.outstanding,
+      runId: () => state.runId,
       dispose: () => {
         state.disposed = true
       }
     }
     return backend
   }
-  return { create, state }
+  return { create, state, createCalls }
 }
 
 function createHarness(overrides: Partial<VoiceControlServiceDeps> = {}) {
@@ -571,6 +580,106 @@ describe('VoiceControlService', () => {
         state: 'idle',
         endReason: 'max-session-minutes'
       })
+    })
+  })
+
+  it('passes a chosen voice speed to the mint body and omits it at the default', async () => {
+    const { service, mintBodies } = createHarness({
+      getSettings: () => ({ ...SETTINGS, voiceSpeed: 1.5 })
+    })
+    await service.start('s1')
+    const audio =
+      typeof mintBodies[0]?.session === 'object' && mintBodies[0].session !== null
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: object-checked test read of the mint body this harness serialized.
+          (mintBodies[0].session as Record<string, unknown>).audio
+        : null
+    expect(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same harness-serialized shape; audio.output.speed is the field under test.
+      (audio as Record<string, unknown> | null)?.output
+    ).toMatchObject({ voice: 'marin', speed: 1.5 })
+
+    const second = createHarness()
+    await second.service.start('s2')
+    expect(JSON.stringify(second.mintBodies[0])).not.toContain('"speed"')
+  })
+
+  describe('dormant watcher (wake-on-reply)', () => {
+    const REPLY = {
+      id: 'm1',
+      fromHandle: 'term_oak',
+      type: 'worker_done',
+      subject: 'done',
+      body: 'login fix is done — tests green',
+      senderPaneKey: 'wt-1:1',
+      dispatchId: 'd1'
+    }
+
+    function dormantHarness() {
+      const watchers: {
+        runId: string
+        onMessages: (messages: typeof REPLY[]) => void
+        stopped: boolean
+      }[] = []
+      const wakes: number[] = []
+      const transcript: VoiceTranscriptEntry[] = []
+      const harness = createHarness({
+        openDormantWatcher: (runId, onMessages) => {
+          const watcher = { runId, onMessages, stopped: false }
+          watchers.push(watcher)
+          return {
+            stop: () => {
+              watcher.stopped = true
+            }
+          }
+        },
+        emitWakeForReply: () => wakes.push(Date.now()),
+        recordTranscript: (entry) => transcript.push(entry)
+      })
+      return { ...harness, watchers, wakes, transcript }
+    }
+
+    it('watches the dead session’s mailbox when work is outstanding, and wakes for a reply', async () => {
+      const { service, backend, watchers, wakes } = dormantHarness()
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      backend.state.outstanding = true
+      await service.stop()
+      expect(watchers).toHaveLength(1)
+      expect(watchers[0].runId).toBe('run-1')
+
+      watchers[0].onMessages([REPLY])
+      expect(watchers[0].stopped).toBe(true)
+      expect(wakes).toHaveLength(1)
+
+      // The woken session's backend receives the reply to speak on start.
+      await service.start('s2')
+      await service.exchangeSdp('s2', 'v=0 offer')
+      expect(backend.createCalls.at(-1)?.wakeMessages).toEqual([REPLY])
+    })
+
+    it('does not watch when nothing is outstanding', async () => {
+      const { service, watchers } = dormantHarness()
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      await service.stop()
+      expect(watchers).toHaveLength(0)
+    })
+
+    it('records without waking when a session is already live', async () => {
+      const { service, backend, watchers, wakes, transcript } = dormantHarness()
+      await service.start('s1')
+      await service.exchangeSdp('s1', 'v=0 offer')
+      backend.state.outstanding = true
+      await service.stop()
+      await service.start('s2')
+      await service.exchangeSdp('s2', 'v=0 offer')
+      wakes.length = 0
+
+      watchers[0].onMessages([REPLY])
+      expect(wakes).toHaveLength(0)
+      expect(transcript).toEqual([
+        expect.objectContaining({ kind: 'update', text: REPLY.body })
+      ])
     })
   })
 })

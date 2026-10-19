@@ -25,6 +25,8 @@ export type RealtimeSessionDeclaration = {
   instructions: string
   tools: RealtimeToolSchema[]
   voice: OpenAiRealtimeVoice
+  /** Spoken-output rate (0.25–1.5, 1 = normal) — provider-side post-processing. */
+  speed?: number
 }
 
 export type MintedRealtimeClientSecret = {
@@ -60,7 +62,14 @@ export async function mintRealtimeClientSecret(
               },
               noise_reduction: { type: 'far_field' }
             },
-            output: { voice: declaration.voice }
+            output: {
+              voice: declaration.voice,
+              // Between-turns knob per the wire contract; 1 (normal) is the default, so
+              // omit it unless the user chose a pace.
+              ...(declaration.speed !== undefined && declaration.speed !== 1
+                ? { speed: declaration.speed }
+                : {})
+            }
           },
           tools: declaration.tools
         }

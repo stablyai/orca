@@ -65,5 +65,10 @@ export const voiceControlApi = {
     const listener = (): void => callback()
     ipcRenderer.on('voice-control:systemResume', listener)
     return () => ipcRenderer.removeListener('voice-control:systemResume', listener)
+  },
+  onWakeForReply: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('voice-control:wakeForReply', listener)
+    return () => ipcRenderer.removeListener('voice-control:wakeForReply', listener)
   }
 } satisfies PreloadApi['voiceControl']

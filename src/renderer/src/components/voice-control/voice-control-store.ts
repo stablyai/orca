@@ -24,6 +24,8 @@ export type VoiceControlUiState = {
   error: string | null
   /** Latest tool-dispatch narration, shown in the pill while live. */
   toolActivity: string | null
+  /** Mic muted mid-session (tracks disabled, session still live). */
+  micMuted: boolean
   /** Local mic level 0..1 for the live meter. */
   micLevel: number
   /** Remote (coordinator voice) level 0..1 for the output waveform. */
@@ -49,6 +51,7 @@ const IDLE: VoiceControlUiState = {
   errorKind: null,
   error: null,
   toolActivity: null,
+  micMuted: false,
   micLevel: 0,
   outputLevel: 0,
   agents: {},
@@ -68,6 +71,7 @@ export function publishVoiceControlState(event: VoiceControlStateChangedEvent): 
     error: event.error ?? null,
     // Clear live-only fields when a session ends so nothing stale lingers.
     toolActivity: ending ? null : voiceControlStore.getState().toolActivity,
+    micMuted: ending ? false : voiceControlStore.getState().micMuted,
     agents: ending ? {} : voiceControlStore.getState().agents,
     ...(event.state === 'idle' ? { transcript: [] } : {})
   })
@@ -113,6 +117,10 @@ export function publishVoiceControlTurnSettled(): void {
   if (voiceControlStore.getState().toolActivity !== null) {
     voiceControlStore.setState({ toolActivity: null })
   }
+}
+
+export function publishVoiceControlMicMuted(muted: boolean): void {
+  voiceControlStore.setState({ micMuted: muted })
 }
 
 /** One live transcript entry from main (the same feed the durable log records). */
@@ -172,6 +180,10 @@ export function useVoiceControlErrorKind(): VoiceControlErrorKind | null {
 
 export function useVoiceControlToolActivity(): string | null {
   return useStore(voiceControlStore, (state) => state.toolActivity)
+}
+
+export function useVoiceControlMicMuted(): boolean {
+  return useStore(voiceControlStore, (state) => state.micMuted)
 }
 
 export function useVoiceControlMicLevel(): number {
