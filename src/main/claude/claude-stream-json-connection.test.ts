@@ -13,14 +13,13 @@ import {
   type ClaudeStreamJsonConnection,
   type ClaudeStreamJsonLaunch
 } from './claude-stream-json-connection'
-import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeAuthDiagnostic } from './claude-structured-init-proof'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
@@ -42,12 +41,14 @@ type ScriptedCliReport = {
 const scratchDirs: string[] = []
 const openConnections: ClaudeStreamJsonConnection[] = []
 const childClosures: Promise<void>[] = []
+const journals = createTrackedJournalOpener()
 
 afterEach(async () => {
   for (const connection of openConnections.splice(0)) {
     await connection.close()
   }
   await Promise.all(childClosures.splice(0))
+  await journals.closeAll()
   for (const dir of scratchDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
@@ -392,7 +393,7 @@ describe('Claude stream-json connection', () => {
       }
     ]
     const scenario = scriptScenario([...frames.map((frame) => ({ emit: frame })), HOLD_OPEN])
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity: {
         sessionId: 'session-1',
         workspaceId: 'workspace-1',
@@ -400,7 +401,7 @@ describe('Claude stream-json connection', () => {
         agent: 'claude',
         providerHandle: claudeProviderHandle(SESSION_ID, 'leaf-1')
       },
-      database: openTestJournalHostDatabase(join(scenario.cwd, 'journal')),
+      stateDirectory: join(scenario.cwd, 'journal'),
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
@@ -434,9 +435,6 @@ describe('Claude stream-json connection', () => {
         item.body.kind === 'status' && item.body.providerFrame ? [item.body.providerFrame.kind] : []
       )
     ).toEqual([])
-    // The journal owns a SQLite connection now; afterEach removes this temp root and an open
-    // handle blocks that on Windows.
-    await journal.close()
   })
 
   it('feeds an inbound permission request to canUseTool and writes its answer back on the same id', async () => {
