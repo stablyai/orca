@@ -6,8 +6,10 @@ import {
   GitLabIntegrationCard
 } from './source-control-integration-cards'
 import { JiraIntegrationCard, LinearIntegrationCard } from './task-tracker-integration-cards'
+import { DiscordPresenceIntegrationCard } from './discord-presence-integration-card'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { translate } from '@/i18n/i18n'
+import { isWebClientLocation } from '@/lib/web-client-location'
 export { getIntegrationsPaneSearchEntries } from './integrations-search'
 
 export function IntegrationsPane(): React.JSX.Element {
@@ -53,6 +55,29 @@ export function IntegrationsPane(): React.JSX.Element {
           <JiraIntegrationCard />
         </div>
       </section>
+
+      {/* Why: presence talks to the Discord app on this computer, which a browser client cannot reach. */}
+      {isWebClientLocation() ? null : (
+        <section className="space-y-3">
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-foreground">
+              {translate(
+                'auto.components.settings.IntegrationsPane.activitySharing',
+                'Activity sharing'
+              )}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.IntegrationsPane.activitySharingDescription',
+                'Let other apps on this computer show what Orca is doing.'
+              )}
+            </p>
+          </div>
+          <div className="space-y-3">
+            <DiscordPresenceIntegrationCard />
+          </div>
+        </section>
+      )}
     </div>
   )
 }

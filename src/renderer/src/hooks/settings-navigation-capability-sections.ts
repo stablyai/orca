@@ -195,7 +195,9 @@ export function buildSetupSettingsSections({
         'Connect GitHub, GitLab, Linear, and source-hosting services.'
       ),
       icon: Blocks,
-      searchEntries: getIntegrationsPaneSearchEntries(),
+      searchEntries: getIntegrationsPaneSearchEntries({
+        includeDiscordPresence: showDesktopOnlySettings
+      }),
       group: 'setup'
     },
     ...(showDesktopOnlySettings
