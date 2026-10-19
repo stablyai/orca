@@ -1,7 +1,7 @@
 import { repositionOverlay } from './selection-overlay'
 import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import type { TerminalDocumentScope } from './document-scope'
-import { getCellWidth, getTotalScale } from './cell-metrics'
+import { getCellWidth, getMeasuredCellHeight, getTotalScale } from './cell-metrics'
 
 // Why: after init() the initial scrollback applyFitScale may have run
 // against an empty buffer (or one without the widest line yet). Re-fit
@@ -49,8 +49,18 @@ export function computeFitScale(scope: TerminalDocumentScope) {
 }
 
 export function updateTransform(scope: TerminalDocumentScope) {
+  // Why: a rubber-band pull past an end of the buffer rides on the pan without changing it.
   scope.surface!.style.transform =
-    'translate(' + scope.panX + 'px,' + scope.panY + 'px) scale(' + getTotalScale(scope) + ')'
+    'translate(' +
+    scope.panX +
+    'px,' +
+    (scope.panY + scope.overscrollY) +
+    'px) scale(' +
+    getTotalScale(scope) +
+    ')'
+  if (scope.pixelScrollActive) {
+    scope.term?.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope))
+  }
   updateScrollIndicator(scope, false)
   if (scope.selMode === 'select') {
     repositionOverlay(scope)
@@ -80,7 +90,11 @@ export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: bool
   }
   const thumbHeight = Math.max(24, (trackHeight * (scope.term.rows || 0)) / totalRows)
   const maxTop = Math.max(0, trackHeight - thumbHeight)
-  const top = maxViewportY > 0 ? (buffer.viewportY / maxViewportY) * maxTop : 0
+  const cellHeight = getMeasuredCellHeight(scope) * getTotalScale(scope)
+  const fraction =
+    scope.pixelScrollActive && cellHeight > 0 ? -scope.smoothScrollOffsetY / cellHeight : 0
+  const viewportY = Math.max(0, Math.min(maxViewportY, buffer.viewportY + fraction))
+  const top = maxViewportY > 0 ? (viewportY / maxViewportY) * maxTop : 0
   scope.scrollThumb.style.height = thumbHeight + 'px'
   scope.scrollThumb.style.transform = 'translateY(' + top + 'px)'
   if (!reveal) {
