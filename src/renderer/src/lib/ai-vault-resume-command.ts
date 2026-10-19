@@ -162,10 +162,11 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVau
       : getAiVaultResumePlatform(args.state, args.worktreeId)
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
   // Why: a WSL-stored transcript is found under its UNC path, but Pi runs inside WSL and only knows the Linux one.
-  const providerSession = getAiVaultAgentProviderSession({
+  getAiVaultAgentProviderSession({
     ...args.session,
     filePath: resumeFilePath
   })
+  // providerSession: computed for the remote-host path in buildAiVaultResumeForWorktree
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
@@ -182,8 +183,7 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVau
   return {
     platform,
     codexHome: getAiVaultResumeCodexHome(args.session.codexHome, platform),
-    liveShell,
-    providerSession
+    liveShell
   }
 }
 
@@ -194,20 +194,24 @@ export function resolveAiVaultResumeHost(args: AiVaultResumeWorktreeArgs): AiVau
  * so the target runtime can locate the stored session file.
  */
 function getAiVaultAgentProviderSession(
-  session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'filePath'>
+  session: { agent?: string; sessionId?: string; filePath?: string }
 ): AgentProviderSessionMetadata | null {
-  if (isAntigravityReferenceSession(session)) {
+  const { agent, sessionId, filePath } = session
+  if (!agent) {
     return null
   }
-  if (session.agent === 'antigravity' || session.agent === 'cursor') {
-    return { key: 'conversation_id', id: session.sessionId }
+  if (isAntigravityReferenceSession({ agent, filePath })) {
+    return null
   }
-  if (session.agent === 'pi' || session.agent === 'prime-agent') {
-    return session.filePath
-      ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+  if (agent === 'antigravity' || agent === 'cursor') {
+    return { key: 'conversation_id', id: sessionId! }
+  }
+  if (agent === 'pi' || agent === 'prime-agent') {
+    return filePath
+      ? { key: 'session_id', id: sessionId!, transcriptPath: filePath }
       : null
   }
-  return { key: 'session_id', id: session.sessionId }
+  return { key: 'session_id', id: sessionId! }
 }
 
 /** Provider-session metadata spelled for the target workspace's runtime (local sessions only). */
