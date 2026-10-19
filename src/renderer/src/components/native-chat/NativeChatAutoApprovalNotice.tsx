@@ -32,7 +32,7 @@ export function NativeChatAutoApprovalNotice({
   )
   return (
     <Collapsible open={disclosure.open} onOpenChange={disclosure.setOpen}>
-      <CollapsibleTrigger className="group/auto-approval flex min-h-6 w-full items-center gap-1.5 rounded-md py-0.5 text-left text-sm leading-relaxed text-chat-foreground-faint hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+      <CollapsibleTrigger variant="transcript" className="group/auto-approval">
         <Check aria-hidden="true" className="size-4 shrink-0" />
         <span>
           {translate(
