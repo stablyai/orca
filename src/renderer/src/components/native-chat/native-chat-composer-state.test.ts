@@ -117,6 +117,28 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     expect(result.items.map((entry) => entry.token)).toEqual(['$typescript'])
   })
 
+  it('tokenises Pi skills as `/skill:<name>`, before and after its session reports them', () => {
+    const pi = getNativeChatAgentProfile('pi')
+    const scanned = [skill({ name: 'caveman', description: 'On disk', sourceKind: 'home' })]
+    const tokens = (sessionSkills?: { name: string }[]) => {
+      const result = deriveComposerAutocomplete(
+        '/cave',
+        5,
+        [],
+        scanned,
+        pi,
+        undefined,
+        null,
+        sessionSkills
+      )
+      return result.mode === 'slash'
+        ? result.items.map((entry) => [entry.token, entry.kind === 'skill' && entry.description])
+        : []
+    }
+    expect(tokens()).toEqual([['/skill:caveman', 'On disk']])
+    expect(tokens([{ name: 'skill:caveman' }])).toEqual([['/skill:caveman', 'On disk']])
+  })
+
   it('opens only Codex skills under `$`, and a pick keeps Codex `$` token', () => {
     for (const [draft, query] of [
       ['use $type', 'type'],
